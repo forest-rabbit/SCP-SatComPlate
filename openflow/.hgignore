@@ -1,0 +1,16 @@
+\.rej$
+\.orig$
+\.o$
+~$
+^build
+^include/openflow/private
+^\.lock-waf_linux_build
+^\.lock-wscript
+.*\.py[co]$
+^\.waf3-2*
+ms_print.*
+massif.*
+\.patch$
+\.diff$
+\.tr$
+\#[^\#/]+\#$

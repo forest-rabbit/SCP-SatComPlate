@@ -1,0 +1,10 @@
+## -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
+
+def build(bld):
+   obj = bld.create_ns3_program('link-test',
+                                [ 'csma', 'antenna', 'mobility', 'internet', 'applications', 'netanim', 'point-to-point', 'cluster', 'flow-monitor'])
+   obj.source = ['link-test.cc', 'topo.cc', 'para.cc', 'cluster.cc', 'access.cc','satrouting.cc']
+
+   # 添加头文件搜索路径
+   obj.include = ['./', ]
+

@@ -1,0 +1,361 @@
+#include "topo.h"
+#include "ns3/boolean.h"
+#include "ns3/integer.h"
+#include "ns3/net-device.h"
+#include "ns3/node-container.h"
+#include "ns3/point-to-point-module.h"
+#include "ns3/traffic-control-module.h"
+#include "access.h"
+#include "para.h"
+
+// #include "ns3/core-module.h"
+#include "ns3/simulator.h"
+#include "ns3/nstime.h"
+#include <cstdint>
+#include <mutex>
+#include <ns3/ipv4-address.h>
+#include <ns3/node.h>
+#include <ns3/object.h>
+#include <ns3/ptr.h>
+#include <sys/types.h>
+#include <unordered_map>
+
+NS_LOG_COMPONENT_DEFINE ("OpenFlowSDNExample-topo");
+
+namespace ns3{
+  NodeContainer sates;       // 所有卫星节点
+  std::vector<NodeContainer> sateNodes;  // 所有卫星节点，按照轨道和轨道内的卫星排列
+  std::vector<uint32_t>      NodesSlaveID;  // 保存所有卫星节点中子控制器ID，按照node.GetID()来索引元素
+  std::vector<uint32_t>      changeClusterID;  // 记录所有卫星节点簇ID变化次数
+  NetDeviceContainer p2pDevices; 
+  NodeContainer Gnodes;      // 地面网络节点
+
+
+
+  // 激光链路分配文件的时间戳和链路配置映射
+  typedef std::pair<int, int> Link; // 链路，存储链路的两个节点
+  typedef std::vector<Link> LinkSet; // 链路集合，存储链路的节点对
+  std::map<int, LinkSet> timeLinksMap; // 时间戳到链路集合的映射
+  std::set<Link> currentLinks; // 当前活跃链路集合
+  std::map<Link, NetDeviceContainer> linkDevices; // 记录每条链路对应的设备，避免重复安装
+
+  // 跟踪每个节点已经使用的接口索引
+  std::map<uint32_t, std::set<uint32_t>> nodeUsedIndices;
+
+
+
+  // 函数功能：输出卫星节点信息以及网卡信息
+  void print_node_info(){
+    AsciiTraceHelper ascii;
+    Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("examples/link-selection/output/node-info-tables.txt");
+    *stream->GetStream() <<  Simulator::Now().GetSeconds() << "s" << std::endl;
+    for(uint32_t i=0; i<sates.GetN(); i++){
+      uint32_t size = sates.Get(i)->GetNDevices();
+      for(uint32_t j=0; j<size; j++){
+        // 获取目的地址
+        Ptr<Node> nodep =sates.Get(i);
+        Ptr<NetDevice> dev = nodep->GetDevice(j);
+        // 获取网卡的 IPv4 接口列表
+        Ptr<Ipv4> ipv4 = nodep->GetObject<Ipv4>();
+        uint32_t interfaceIndex = dev->GetIfIndex();
+        // 获取 IPv4 地址
+        Ipv4Address Address = ipv4->GetAddress(interfaceIndex, 0).GetLocal();
+        Mac48Address mac = Mac48Address::ConvertFrom(dev->GetAddress());
+        *stream->GetStream() <<"node："<< nodep->GetId() << " netdevice：" << j << " interface index：" << interfaceIndex 
+                              << " IPv4地址：" << Address 
+                              << " mac地址：" << mac
+                              << std::endl;
+
+        Ptr<PointToPointNetDevice> p2p_dev = DynamicCast<PointToPointNetDevice>(dev);
+        if(p2p_dev != nullptr && p2p_dev->IsLinkUp()){
+          Ptr<Channel> channel = p2p_dev->GetChannel();
+          for(uint32_t k = 0; k < channel->GetNDevices(); k++){
+            Ptr<NetDevice> adj_device = channel->GetDevice(k);
+            if( adj_device != dev)
+            {
+              Ptr<Node> adj_node = adj_device->GetNode();
+              *stream->GetStream() <<  "adj_node:" << adj_node->GetId() ;
+            }
+          }
+        }
+        *stream->GetStream() <<  endl;
+        // ipv4AddrMaps[Address] = nodep->GetId();
+      }
+    }
+  }
+
+  //获取邻接表
+  void print_adjacency_list(NodeContainer allnodes){
+    std::cout << "\n邻接表输出:" << std::endl;
+    for (uint32_t nodeAId = 0; nodeAId < allnodes.GetN(); ++nodeAId)
+    {
+        Ptr<Node> nodeA = allnodes.Get(nodeAId);
+        std::cout << "Node " << nodeA->GetId() << ": ";
+        // 遍历节点A的设备
+        for (uint32_t devA = 0; devA < nodeA->GetNDevices(); ++devA)
+        {
+            Ptr<NetDevice> netDeviceA = nodeA->GetDevice(devA);
+            Ptr<PointToPointNetDevice> p2pNetDeviceA = DynamicCast<PointToPointNetDevice>(netDeviceA);
+
+            // 检查设备是否为 PointToPointNetDevice
+            if (p2pNetDeviceA && p2pNetDeviceA->IsLinkUp())
+            {
+                Ptr<Channel> channelA = p2pNetDeviceA->GetChannel();
+                // 遍历通道上的所有设备，找出与 nodeA 连接的其他节点
+                for (uint32_t devB = 0; devB < channelA->GetNDevices(); ++devB)
+                {
+                    Ptr<NetDevice> netDeviceB = channelA->GetDevice(devB);
+                    // 跳过自身的设备
+                    if (netDeviceB != netDeviceA)
+                    {
+                        Ptr<PointToPointNetDevice> p2pNetDeviceB = DynamicCast<PointToPointNetDevice>(netDeviceB);
+                        // 确定连接的节点
+                        Ptr<Node> nodeB = netDeviceB->GetNode();
+                        std::cout << nodeB->GetId() << ",";
+                    }
+                }
+            }
+        }
+
+        std::cout << std::endl;
+    }
+}
+
+
+  void initTopo(){
+    // #ifdef NS3_OPENFLOW
+
+    //创建卫星节点
+		for(uint32_t i = 0; i < orbit_num; i++){
+			NodeContainer nodes;
+			for(uint32_t j=0; j<sate_num; j++){
+				Ptr<Node> node = CreateObject<Node> ();
+        // node->SetBeginId(5);
+				nodes.Add(node);
+			}
+      sates.Add(nodes);
+			sateNodes.push_back(nodes);
+		}
+    
+    // 配置 PointToPoint 信道属性
+    PointToPointHelper pointToPoint;
+    if(linkBandwidth == 10000000000) pointToPoint.SetDeviceAttribute ("DataRate", StringValue("10Gbps"));
+    else if(linkBandwidth == 100000000) pointToPoint.SetDeviceAttribute ("DataRate", StringValue("100Mbps"));
+    else if(linkBandwidth == 500000000) pointToPoint.SetDeviceAttribute ("DataRate", StringValue("500Mbps"));
+    else pointToPoint.SetDeviceAttribute ("DataRate", StringValue("100Mbps"));
+
+    pointToPoint.SetChannelAttribute ("Delay", StringValue("100ms"));  
+
+    pointToPoint.SetQueue("ns3::DropTailQueue","MaxSize",StringValue("8000p"));//队列容量K=1000
+
+    // 配置 同轨链路 PointToPoint 信道属性
+    PointToPointHelper intraPlanePointToPoint;
+    if(linkBandwidth == 10000000000) intraPlanePointToPoint.SetDeviceAttribute ("DataRate", StringValue("10Gbps"));
+    else if(linkBandwidth == 100000000000) intraPlanePointToPoint.SetDeviceAttribute ("DataRate", StringValue("100Gbps"));
+    else if(linkBandwidth == 100000000) intraPlanePointToPoint.SetDeviceAttribute ("DataRate", StringValue("100Mbps"));
+    else if(linkBandwidth == 500000000) intraPlanePointToPoint.SetDeviceAttribute ("DataRate", StringValue("500Mbps"));
+    else intraPlanePointToPoint.SetDeviceAttribute ("DataRate", StringValue("100Mbps"));
+
+    if(_isSate == 1)    intraPlanePointToPoint.SetChannelAttribute ("Delay", StringValue("15.56ms"));        // Sat1 同轨链路时延
+    else if(_isSate == 2)   intraPlanePointToPoint.SetChannelAttribute ("Delay", StringValue("17.16ms"));    // Sat2 同轨链路时延
+    else if(_isSate == 3)   intraPlanePointToPoint.SetChannelAttribute ("Delay", StringValue("7.85ms"));     // Sat3 同轨链路时延
+    else if(_isSate == 4)   intraPlanePointToPoint.SetChannelAttribute ("Delay", StringValue("8.71ms"));     // Sat4 同轨链路时延
+
+    intraPlanePointToPoint.SetQueue("ns3::DropTailQueue","MaxSize",StringValue("8000p"));                    // 队列容量K=1000
+
+    // 配置 异轨链路 PointToPoint 信道属性
+    PointToPointHelper interPlanePointToPoint;
+    if(linkBandwidth == 10000000000) interPlanePointToPoint.SetDeviceAttribute ("DataRate", StringValue("10Gbps"));
+    else if(linkBandwidth == 100000000000) interPlanePointToPoint.SetDeviceAttribute ("DataRate", StringValue("100Gbps"));
+    else if(linkBandwidth == 100000000) interPlanePointToPoint.SetDeviceAttribute ("DataRate", StringValue("100Mbps"));
+    else if(linkBandwidth == 500000000) interPlanePointToPoint.SetDeviceAttribute ("DataRate", StringValue("500Mbps"));
+    else interPlanePointToPoint.SetDeviceAttribute ("DataRate", StringValue("100Mbps"));
+
+    if(_isSate == 1)    interPlanePointToPoint.SetChannelAttribute ("Delay", StringValue("8.93ms"));         // Sat1 异轨链路时延
+    else if(_isSate == 2)   interPlanePointToPoint.SetChannelAttribute ("Delay", StringValue("9.18ms"));     // Sat2 异轨链路时延
+    else if(_isSate == 3)   interPlanePointToPoint.SetChannelAttribute ("Delay", StringValue("5.42ms"));     // Sat3 异轨链路时延
+    else if(_isSate == 4)   interPlanePointToPoint.SetChannelAttribute ("Delay", StringValue("5.61ms"));     // Sat4 异轨链路时延
+
+    interPlanePointToPoint.SetQueue("ns3::DropTailQueue","MaxSize",StringValue("1000p"));//队列容量K=1000
+
+    InternetStackHelper stack;
+    stack.Install(sates);
+    cout<<sates.GetN()<<" 个卫星节点创建完成！"<<endl;
+
+    //搭建非mesh拓扑
+    if(!_isMesh){
+      std::vector<LinkInfo> links = ReadTopologyFile("examples/link-selection/topo(324).csv");
+      BuildNetworkTopology(sates, links);
+    }
+    
+    //搭建mesh拓扑
+    else{
+
+    NetDeviceContainer tmpDevices;
+
+    // 搭建p2p拓扑
+		// 轨道内链路连接
+		for(uint32_t i=0; i<orbit_num; i++){
+			for(uint32_t j=0; j<sate_num; j++){
+				Ptr<Node> node = sateNodes[i].Get(j);
+				Ptr<Node> next = sateNodes[i].Get((j+1)%sate_num);
+        tmpDevices = intraPlanePointToPoint.Install(NodeContainer(node, next));
+				p2pDevices.Add(tmpDevices);
+			}
+		}
+
+
+
+    if(!_scenario) //正常场景
+    {
+      cout<<"搭建mesh拓扑-正常场景！"<<endl;
+      // 轨道间链路连接
+      for(uint32_t j=0; j<sate_num; j++){
+        for(uint32_t i=0; i<orbit_num; i++){
+          Ptr<Node> node = sateNodes[i].Get(j);
+          Ptr<Node> next = sateNodes[(i+1)%orbit_num].Get(j);
+          tmpDevices = interPlanePointToPoint.Install(NodeContainer(node, next));
+          p2pDevices.Add(tmpDevices);
+        }
+      }
+
+      // 普通卫星设置ip
+      for(uint32_t i = 0; i < sateNodes.size(); ++i){
+        Ipv4AddressHelper sipv4Helper;
+        std::string str;
+        str = "10." + std::to_string(i+1);
+        for(uint32_t j = 0; j < sateNodes[i].GetN(); j++){
+          std::string temp = str + "." + std::to_string(j+1) + ".0";
+          Ipv4Address addr (temp.c_str ());
+          sipv4Helper.SetBase(addr, "255.255.255.0");
+          uint32_t size = sateNodes[i].Get(j)->GetNDevices();
+          for(uint32_t k=0; k < size; k++){
+            sipv4Helper.Assign(sateNodes[i].Get(j)->GetDevice(k));
+          }
+        }
+      }
+      //print_node_info();
+    }
+    else //激光链路分配场景
+    {
+      // 读取链路配置文件
+    }
+  } //mesh拓扑结束
+
+    // 基于链路可用度的链路变化
+    // if(!_sim) SetLinkAvaAvailability(sates);
+
+    // 调用初始分簇算法
+    // 启动动态分簇算法
+    // ActiveCluster(sates, satClusterNodes);
+
+    //打印邻接表
+    //print_adjacency_list(sates);
+
+
+    
+    // 打印节点信息
+    //print_node_info();
+    Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+
+    if(_SDNRoute){
+      //Ipv4GlobalRoutingHelper::SDNRoutingTables(Gnodes, sates);   //OSPF最短路由
+      //experiment.InitialSatRouter(Gnodes, sates, satClusterNodes, monitors, _consType, orbit_num, sate_num); // 初始化卫星路由策略
+   }
+
+    // 打印所有节点的路由表
+    AsciiTraceHelper ascii;
+    Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("examples/link-selection/output/routing-tables-6s.txt");
+    Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (6), stream, Time::S);
+    Ptr<OutputStreamWrapper> stream2 = ascii.CreateFileStream ("examples/link-selection/output/routing-tables-11s.txt");
+    Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (11), stream2, Time::S);
+    Ptr<OutputStreamWrapper> stream3 = ascii.CreateFileStream ("examples/link-selection/output/routing-tables-16s.txt");
+    Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (16), stream3, Time::S);
+
+    Simulator::Schedule(Seconds(1.0), &updateTopo);
+
+
+
+    NS_LOG_INFO ("Configure Tracing.");
+
+  }
+  // 更新拓扑
+  void updateTopo(){
+    // 获取当前模拟时间（取整到秒）
+    int currentTime = Simulator::Now().GetSeconds();
+    std::cout << "当前时间: " << currentTime << "s" << std::endl;
+   
+    if(!_isMesh) {
+      Simulator::Schedule(Seconds(1.0), &updateTopo);
+      return;
+    } // 非mesh拓扑不更新链路
+
+    if(_isMesh && timeLinksMap.empty()) {
+      Simulator::Schedule(Seconds(1.0), &updateTopo);
+      return; 
+    }// mesh拓扑但无链路变化配置不更新链路
+    
+    // 调度下一次更新
+    Simulator::Schedule(Seconds(1.0), &updateTopo);
+  } 
+
+
+// 读取CSV文件并解析链路信息
+std::vector<LinkInfo> ReadTopologyFile(const std::string& filename) {
+    std::vector<LinkInfo> links;
+    std::ifstream file(filename);
+    
+    if (!file.is_open()) {
+        NS_FATAL_ERROR("无法打开文件: " << filename);
+    }
+    
+    std::string line;
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string token;
+        LinkInfo link;
+        
+        // 解析CSV格式: 源节点,目的节点,时延(ms),带宽(Gbps)
+        std::getline(ss, token, ',');
+        link.source = std::stoi(token) - 1; // 转换为0索引
+        
+        std::getline(ss, token, ',');
+        link.destination = std::stoi(token) - 1;
+        
+        std::getline(ss, token, ',');
+        link.delay_ms = std::stoi(token);
+        
+        std::getline(ss, token, ',');
+        link.bandwidth_gbps = std::stoi(token);
+        
+        links.push_back(link);
+    }
+    
+    file.close();
+    return links;
+}
+
+void BuildNetworkTopology(NodeContainer& satellites,  const std::vector<LinkInfo>& links){
+    Ipv4AddressHelper ipv4;
+    ipv4.SetBase("10.0.0.0", "255.255.255.252");
+    
+    PointToPointHelper p2p;
+    for (size_t i = 0; i < links.size(); i++) {
+        p2p.SetDeviceAttribute("DataRate", StringValue(std::to_string(links[i].bandwidth_gbps) + "Gbps"));
+        p2p.SetChannelAttribute("Delay", StringValue(std::to_string(links[i].delay_ms) + "ms"));
+        p2p.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("1000p"));
+        
+        cout<<satellites.Get(links[i].source)->GetId()<<" <--> "<<satellites.Get(links[i].destination)->GetId()
+            <<" , delay: "<<links[i].delay_ms<<" ms"
+            <<" , bandwidth: "<<links[i].bandwidth_gbps<<" Gbps"
+            <<endl;
+        NetDeviceContainer devices = p2p.Install(NodeContainer(satellites.Get(links[i].source), satellites.Get(links[i].destination)));
+        p2pDevices.Add(devices);
+        ipv4.NewNetwork();
+        ipv4.Assign(devices);
+  }
+}
+
+
+
+}
