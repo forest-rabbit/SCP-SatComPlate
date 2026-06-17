@@ -25,7 +25,7 @@ struct Ipv4AddressEqual
   }
 };
 
-// 链路信息结构体
+// 链路信息结构体 - XW
 struct LinkInfo {
     uint32_t source;
     uint32_t destination;

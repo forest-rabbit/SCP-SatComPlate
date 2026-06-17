@@ -1,0 +1,15 @@
+# Editor settings
+.vscode/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Waf/Python transient caches
+.waf3-*/**/__pycache__/
+waf-tools/__pycache__/
+
+# Local build locks and transient metadata
+.lock-waf_linux_build
+build/.lock-waf_linux_build
+build/.wafpickle-*

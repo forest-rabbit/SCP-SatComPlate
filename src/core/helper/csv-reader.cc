@@ -26,6 +26,7 @@
 #include <cctype>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -179,13 +180,15 @@ CsvReader::GetValueAs (std::string input, signed char& value) const
   std::int16_t tempOutput = 0;
   tempStream >> tempOutput;
 
-  if (tempOutput >= std::numeric_limits<byte_type>::min ()
-      || tempOutput <= std::numeric_limits<byte_type>::max () )
+  bool success = static_cast<bool> (tempStream);
+  success = success
+            && tempOutput >= std::numeric_limits<byte_type>::min ()
+            && tempOutput <= std::numeric_limits<byte_type>::max ();
+
+  if (success)
     {
       value = static_cast<byte_type> (tempOutput);
     }
-
-  bool success = static_cast<bool> (tempStream);
 
   NS_LOG_DEBUG ("Input='" << input
                           << "', output=" << tempOutput
@@ -250,13 +253,15 @@ CsvReader::GetValueAs (std::string input, unsigned char& value) const
   std::uint16_t tempOutput = 0;
   tempStream >> tempOutput;
 
-  if (tempOutput >= std::numeric_limits<byte_type>::min ()
-      || tempOutput <= std::numeric_limits<byte_type>::max () )
+  bool success = static_cast<bool> (tempStream);
+  success = success
+            && tempOutput >= std::numeric_limits<byte_type>::min ()
+            && tempOutput <= std::numeric_limits<byte_type>::max ();
+
+  if (success)
     {
       value = static_cast<byte_type> (tempOutput);
     }
-
-  bool success = static_cast<bool> (tempStream);
 
   NS_LOG_DEBUG ("Input='" << input
                           << "', output=" << tempOutput
@@ -477,4 +482,3 @@ CsvReader::ParseColumn (std::string::const_iterator begin, std::string::const_it
 }
 
 }   // namespace ns3
-

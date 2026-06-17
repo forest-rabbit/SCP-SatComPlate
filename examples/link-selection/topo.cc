@@ -182,13 +182,13 @@ namespace ns3{
     stack.Install(sates);
     cout<<sates.GetN()<<" 个卫星节点创建完成！"<<endl;
 
-    //搭建非mesh拓扑
+    //搭建非mesh拓扑 - XW
     if(!_isMesh){
       std::vector<LinkInfo> links = ReadTopologyFile("examples/link-selection/topo(324).csv");
       BuildNetworkTopology(sates, links);
     }
     
-    //搭建mesh拓扑
+    //搭建mesh拓扑 - 普通的
     else{
 
     NetDeviceContainer tmpDevices;
@@ -258,10 +258,11 @@ namespace ns3{
     //print_node_info();
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
+    // 添加簇内簇间路由
     if(_SDNRoute){
       //Ipv4GlobalRoutingHelper::SDNRoutingTables(Gnodes, sates);   //OSPF最短路由
       //experiment.InitialSatRouter(Gnodes, sates, satClusterNodes, monitors, _consType, orbit_num, sate_num); // 初始化卫星路由策略
-   }
+    }
 
     // 打印所有节点的路由表
     AsciiTraceHelper ascii;
@@ -335,6 +336,8 @@ std::vector<LinkInfo> ReadTopologyFile(const std::string& filename) {
     return links;
 }
 
+
+// 搭建非mesh网络
 void BuildNetworkTopology(NodeContainer& satellites,  const std::vector<LinkInfo>& links){
     Ipv4AddressHelper ipv4;
     ipv4.SetBase("10.0.0.0", "255.255.255.252");
