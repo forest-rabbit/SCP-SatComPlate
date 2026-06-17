@@ -3,8 +3,7 @@
 def build(bld):
    obj = bld.create_ns3_program('link-test',
                                 [ 'csma', 'antenna', 'mobility', 'internet', 'applications', 'netanim', 'point-to-point', 'cluster', 'flow-monitor'])
-   obj.source = ['link-test.cc', 'topo.cc', 'para.cc', 'cluster.cc', 'access.cc','satrouting.cc']
+   obj.source = ['link-test.cc', 'topo.cc', 'topo-json.cc', 'para.cc', 'cluster.cc', 'access.cc','satrouting.cc']
 
    # 添加头文件搜索路径
    obj.include = ['./', ]
-

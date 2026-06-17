@@ -2,38 +2,48 @@
 #include <cstdint>
 
 namespace ns3{
-  /* 主要修改参数 */
-  int _SDNRoute = 0;                    // 路由方案， 0:OSPF  1: 簇内簇间路由
-  int _isSate = 1;                      // 星座构型， 1：324颗卫星
-  bool _consType = 0;                   // 星座构型， 0: Walker Star    1: Walker Delta
-  double clusterUpdateStep = 5;         // 时间步参数： 簇更新频率(s) 
-  const double routeUpdateStep = 5;     // 时间步参数： 路由更新频率(s) 
-  const double totalTimeStep = 110;      // 时间步参数： 仿真时间步总长(s) 
-  double offeredload = 0.1;             // 流量参数：   负载率，范围 0.5-6.0
-  bool _trafficMode = 0;                // 流量参数：   流量模式，0表示区域热点流量，1表示均匀流量
-  int _tranProc = 0;                    // 传输协议，0:UDP，1:TCP
-  const double linkAvailability = 1.0;  // 链路可用度, 范围 0.8~1.0
-  bool _scenario = 0;                   // 定义仿真场景，0表示正常场景，1表示激光链路分配场景
-  //int link_change = 2;                  // 链路切换模式： 0表示无罚函数 1表示罚函数 2表示NSGAII
-  bool _isMesh = false;                 // 是否为mesh拓扑，true表示mesh拓扑，false表示非mesh拓扑
+  /*
+   * JSON拓扑模式开关。
+   *
+   * true:
+   *   - 节点、链路、簇归属、簇首、运行期拓扑变化均来自 examples/link-selection/Topodata。
+   *   - _isSate、orbit_num、sate_num、_isMesh、_scenario、linkAvailability 等传统拓扑参数不再决定拓扑。
+   *   - 仿真结束时间仍由totalTimeStep控制；最后一个JSON时间片之后拓扑保持最后状态继续运行。
+   * false:
+   *   - 使用原有星座参数、CSV拓扑和内置动态更新逻辑。
+   */
+  bool _useJsonTopo = true;
 
-  /* 管控 */
-  int _mode = 0;            // 定义管控场景模式，0表示正常管控场景，1表示地面主控到地面备份主控的迁移场景，
-                            // 2表示星地链路断连场景，3表示从控制器失效场景
-  uint32_t _clusterMode = 2; // 0: 双层分簇 1: 链路利用率分簇 2: 轨道分簇 3: 连通性分簇
+  /* JSON模式仍然建议修改的实验参数：这些控制仿真和业务，不控制拓扑结构 */
+  const double totalTimeStep = 110;     // 仿真总时长(s)，JSON模式仍有效
+  double offeredload = 0.0001;             // 业务负载率，范围 0.5-6.0
+  bool _trafficMode = 0;                // 业务流量模式：0区域热点，1均匀流量
+  int _tranProc = 0;                    // 传输协议：0 UDP，1 TCP
+  long int linkBandwidth = 10000000000; // 默认链路带宽；JSON链路未写带宽时作为兜底值
+
+  /* 路由/管控参数；当前默认使用OSPF，SDN路由逻辑仍保留 */
+  int _SDNRoute = 0;                    // 路由方案：0 OSPF，1 簇内/簇间路由
+  int _mode = 0;                        // 管控场景：0正常，1主备迁移，2星地断连，3控制器失效
+  uint32_t _clusterMode = 2;            // 传统动态分簇模式：0双层，1链路利用率，2轨道，3连通性
   
+  /* 仅传统拓扑模式使用；JSON模式下不作为拓扑真值 */
+  int _isSate = 1;                      // 传统星座构型：1=324，2=351，3=500，4=432
+  bool _consType = 0;                   // 传统星座轨道类型：0 Walker Star，1 Walker Delta
+  bool _scenario = 0;                   // 传统mesh场景：0正常，1激光链路分配场景
+  bool _isMesh = false;                 // 传统拓扑模式：true mesh，false CSV/JSON非mesh
+  const double linkAvailability = 1.0;  // 传统动态链路可用度；JSON模式下动态链路更新关闭
+  double clusterUpdateStep = 5;         // 传统动态分簇频率(s)；JSON模式下动态分簇关闭
+  const double routeUpdateStep = 5;     // 传统路由更新频率(s)
 
-  /* 星座参数 */
-  uint32_t sates_num = _isSate == 1 ? 324 : (_isSate == 2 ? 351 : (_isSate == 3 ? 500 : 432));  // N: LEO卫星总数 324/18
-  uint32_t orbit_num = _isSate == 1 ? 18 : (_isSate == 2 ? 27 : (_isSate == 3 ? 25 : 24));      // No: 轨道数
-  uint32_t sate_num;        // Ns:每个轨道上卫星数量
-  uint32_t sateBegID = 0; //卫星起始ID
-  const uint32_t ISLNum = 4;            // 卫星节点星间链路条数
+  /* 兼容旧代码的派生状态；JSON模式初始化后会由nodes_0s.json覆盖 */
+  uint32_t sates_num = _isSate == 1 ? 324 : (_isSate == 2 ? 351 : (_isSate == 3 ? 500 : 432));
+  uint32_t orbit_num = _isSate == 1 ? 18 : (_isSate == 2 ? 27 : (_isSate == 3 ? 25 : 24));
+  uint32_t sate_num = sates_num / orbit_num; // 传统每轨卫星数；JSON模式初始化后由节点文件覆盖/修正
+  uint32_t sateBegID = 0;               // 卫星节点起始编号
+  const uint32_t ISLNum = 4;            // 传统1星4连假设；JSON模式按文件链路为准
   
   /* 其他固定参数 */
-  const double timeStepSize = 1;   // 时间步长度（s）
-  long int linkBandwidth = 10000000000;   // 链路带宽 10Gbps
-  //long int linkBandwidth = 100000000;   // 链路带宽 100Mbps
-  const uint8_t CUSTOM_PROTOCOL_NUMBER = 253; // 自定义协议编号
+  const double timeStepSize = 1;        // 时间步长度(s)
+  const uint8_t CUSTOM_PROTOCOL_NUMBER = 253;
 
 }

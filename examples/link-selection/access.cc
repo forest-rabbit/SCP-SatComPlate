@@ -94,7 +94,10 @@ GetDevicesFromNodes(Ptr<Node> node1, Ptr<Node> node2)
 void 
 LinkDown(Ptr<Node> node1, Ptr<Node> node2)
 {
-    cout<<"时间: "<<Simulator::Now().GetSeconds()<< " "<<node1->GetId()<<" "<<node2->GetId()<<" 两个节点断开"<<endl;
+    if (!_useJsonTopo)
+    {
+        cout<<"时间: "<<Simulator::Now().GetSeconds()<< " "<<node1->GetId()<<" "<<node2->GetId()<<" 两个节点断开"<<endl;
+    }
     d_flag = 1;//更新链路断开
     std::pair<Ptr<PointToPointNetDevice>, Ptr<PointToPointNetDevice>> P2Pdevices = GetDevicesFromNodes(node1, node2);
     Ptr<PointToPointNetDevice> dev1 = P2Pdevices.first;
@@ -117,7 +120,10 @@ LinkDown(Ptr<Node> node1, Ptr<Node> node2)
 void
 LinkUp(Ptr<Node> node1, Ptr<Node> node2)
 {
-    cout<<"时间: "<<Simulator::Now().GetSeconds()<< " "<<node1->GetId()<<" "<<node2->GetId()<<" 两个节点连接"<<endl;
+    if (!_useJsonTopo)
+    {
+        cout<<"时间: "<<Simulator::Now().GetSeconds()<< " "<<node1->GetId()<<" "<<node2->GetId()<<" 两个节点连接"<<endl;
+    }
     c_flag = 1;
     std::pair<Ptr<PointToPointNetDevice>, Ptr<PointToPointNetDevice>> P2Pdevices = GetDevicesFromNodes(node1, node2);
     Ptr<PointToPointNetDevice> dev1 = P2Pdevices.first;
@@ -142,6 +148,7 @@ LinkUp(Ptr<Node> node1, Ptr<Node> node2)
 void 
 LinkChange(NodeContainer& nodes,std::string name)
 {
+    if(_useJsonTopo) return;
     if(_mode == 3) return ;    // 在检测从控制器失效过程中，反向缝会对检测结果造成影响
     double* Data = GetData(name);
     cout<<"行数："<<" "<<rows<<" "<<"列数："<<cols<<endl;
@@ -160,6 +167,7 @@ LinkChange(NodeContainer& nodes,std::string name)
 void
 SetLinkAvaAvailability(NodeContainer& nodes)
 {
+    if(_useJsonTopo) return;
     if(abs(linkAvailability-1.0) < 1e-6) return;
 
     std::random_device rd;  // 用于获得种子

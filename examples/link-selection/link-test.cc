@@ -69,10 +69,14 @@ FlowMonitorHelper flowmonHelper;
 
 void GetData(vector<vector<double>>& data, const int destNum, std::string name)
 {
+  // destNum来自当前实际创建的卫星数量。JSON 66星模式下这里会按66列读取，
+  // 即使当前文件名仍是traffic_matrix(324).csv；后续若提供66星流量文件，应在buildApp中切换路径。
   vector<vector<double>> temp_data(destNum*100, vector<double>(destNum, 0.0));
 	std::ifstream inFile(name, std::ios::in);
 	std::string lineStr;
-  std::cout << "GET DATA FROM " << name << "\tsateNum:" << destNum << std::endl;
+  std::cout << "[TRAFFIC] 读取流量矩阵" << std::endl
+            << "  file      : " << name << std::endl
+            << "  sateNum   : " << destNum << std::endl;
   int i = 0;
   int j = 0;
 	while (getline(inFile, lineStr))
@@ -257,6 +261,8 @@ void buildApp(){
   // GetData(data, sates.GetN(), "examples/sdn-controller/traffic_matrix(Iridium).csv");
   if(_trafficMode == 0)
   {// 区域热点流量
+    // 目前JSON模式仍复用原324星流量矩阵文件，并按实际卫星数截取读取。
+    // 如果甲方提供traffic_matrix(66).csv，这里应优先改为读取66星文件。
     if(_isSate == 1){
       GetData(data, sates.GetN(), "examples/link-selection/traffic_matrix(324).csv");
     }
@@ -452,19 +458,27 @@ main (int argc, char *argv[])
   CommandLine cmd;
   cmd.AddValue ("offeredload", "范围：0.5-6.0", offeredload);
 
-  cmd.AddValue ("isSate", "1:66颗, 2:108颗, 3:500颗, 4:432颗", _isSate);
-  cmd.AddValue ("consType", "Some parameter", _consType);  
-  cmd.AddValue ("linkBandwidth", "Some parameter", linkBandwidth);
+  cmd.AddValue ("isSate", "传统拓扑模式使用：1=324, 2=351, 3=500, 4=432；JSON模式不决定节点数量", _isSate);
+  cmd.AddValue ("consType", "传统拓扑模式使用：0=Walker Star, 1=Walker Delta", _consType);
+  cmd.AddValue ("linkBandwidth", "默认链路带宽；JSON链路未写带宽时作为兜底值", linkBandwidth);
   cmd.AddValue("tranProtocol", "0:UDP, 1:TCP", _tranProc);
+  cmd.AddValue("useJsonTopo", "是否使用 examples/link-selection/Topodata 中的JSON拓扑", _useJsonTopo);
+  cmd.AddValue("nodesJson", "可选：初始节点JSON文件；默认Topodata/nodes_0s.json", nodesJsonFile);
+  cmd.AddValue("topologyJson", "可选：初始链路JSON文件；默认Topodata/topology_0s.json", topologyJsonFile);
+  cmd.AddValue("timeSlicesJson", "可选：时间片索引JSON文件；默认按Topodata文件名扫描", timeSlicesJsonFile);
   cmd.Parse (argc, argv);
-  std::cout << "offeredLoad:" << offeredload 
-            << "\tlinkBandwidth:" << linkBandwidth
-            << "\ttranProc:" << (_tranProc == 1 ? "TCP" : "UDP")
-            << std::endl;
+  std::cout << "[RUN] 实验参数" << std::endl
+            << "  offeredLoad   : " << offeredload << std::endl
+            << "  linkBandwidth : " << linkBandwidth << std::endl
+            << "  tranProc      : " << (_tranProc == 1 ? "TCP" : "UDP") << std::endl
+            << "  useJsonTopo   : " << (_useJsonTopo ? "true" : "false") << std::endl;
 
-  sates_num = _isSate == 1 ? 324 : (_isSate == 2 ? 351 : (_isSate == 3 ? 500 : 432));    // N: LEO卫星总数
-  orbit_num = _isSate == 1 ? 18 : (_isSate == 2 ? 27 : (_isSate == 3 ? 25 : 24));        // No: 轨道数
-  sate_num = sates_num / orbit_num;
+  if (!_useJsonTopo)
+  {
+    sates_num = _isSate == 1 ? 324 : (_isSate == 2 ? 351 : (_isSate == 3 ? 500 : 432));
+    orbit_num = _isSate == 1 ? 18 : (_isSate == 2 ? 27 : (_isSate == 3 ? 25 : 24));
+    sate_num = sates_num / orbit_num;
+  }
   
   // 记录开始时间
   clock_t start = clock();
@@ -507,7 +521,7 @@ main (int argc, char *argv[])
     }
   }
 
-  std::cout << "开始测试数据包发送！" << std::endl;
+  std::cout << "[TRAFFIC] 开始创建业务流" << std::endl;
   
   // 构建并启动应用
   buildApp();

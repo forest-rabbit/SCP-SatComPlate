@@ -4,12 +4,22 @@
 # Python caches
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 
 # Waf/Python transient caches
+.waf3-*/
 .waf3-*/**/__pycache__/
 waf-tools/__pycache__/
 
-# Local build locks and transient metadata
+# ns-3/waf build outputs and transient metadata
+build/
 .lock-waf_linux_build
 build/.lock-waf_linux_build
 build/.wafpickle-*
+
+# Local simulation outputs
+examples/link-selection/output/
+*.pcap
+*.tr
+*.log

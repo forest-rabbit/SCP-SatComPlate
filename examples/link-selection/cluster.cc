@@ -104,6 +104,7 @@ namespace ns3
   // 轨道分簇定时回调：静态划分，但周期性记录指标
   void OrbitClusterTick(NodeContainer node)
   {
+    if (_useJsonTopo) return;
     if (Simulator::Now() >= Seconds(totalTimeStep)) return;
 
     LogClusterMetrics("Orbit", node);
@@ -113,6 +114,7 @@ namespace ns3
   // 双层分簇定时回调
   void TwoLayerClusterTick(NodeContainer node)
   {
+    if (_useJsonTopo) return;
     if (Simulator::Now() >= Seconds(totalTimeStep)) return;
 
     // 处理 max_utilization
@@ -177,6 +179,7 @@ namespace ns3
   // 连通性分簇定时回调
   void ConnectivityClusterTick(NodeContainer node, uint32_t minSize, uint32_t maxSize)
   {
+    if (_useJsonTopo) return;
     if (Simulator::Now() >= Seconds(totalTimeStep)) return;
 
     std::vector<NodeContainer> nodes;
@@ -192,6 +195,7 @@ namespace ns3
   // 基于最大链路利用率的动态分簇回调函数
   void UseMaxUtilization(const vector<Ptr<LinkUtilizationMonitor>> &monitors, NodeContainer node, const vector<vector<int>> &adj, vector<NodeContainer> &nodes)
   {
+    if (_useJsonTopo) return;
     if (Simulator::Now() >= Seconds(totalTimeStep)) return; // 终止递归调度
     cout<<"Time: "<<Simulator::Now().GetSeconds()<<endl;
 
@@ -316,6 +320,7 @@ namespace ns3
 //sim==1——面向连接的动态分簇接口（仿真中心对接）
   void UpdateCluster(NodeContainer node)
   {
+    if (_useJsonTopo) return;
     std::vector<NodeContainer> nodes; //新的分簇结果
     // 用于存储每个节点的最大 DataLoad 值（单位为 Kbps）
     std::unordered_map<uint32_t, uint32_t> maxDataLoadMap;
@@ -396,6 +401,13 @@ namespace ns3
 //初始分簇--基于sim值判断否启动动态分簇
   void ActiveCluster(NodeContainer node, std::vector<NodeContainer> &nodes)
   {
+    if (_useJsonTopo)
+    {
+      nodes.assign(satClusterNodes.begin(), satClusterNodes.end());
+      std::cout << "[Cluster] JSON topology mode: skip built-in dynamic clustering" << std::endl;
+      return;
+    }
+
     // 初始化分簇阶段
     std::vector<vector<int>>adj = sat.AdjacenyList(node); 
     // for(uint32_t i = 0; i < adj.size(); i++)
@@ -517,6 +529,11 @@ namespace ns3
   // 簇首重选举，新的分簇结果更新到satClusterNodes
   // 输入参数可以调整
   void RelectCluster(uint32_t breakID, NodeContainer node, vector<NodeContainer> &nodes){
+    if (_useJsonTopo)
+    {
+      nodes.assign(satClusterNodes.begin(), satClusterNodes.end());
+      return;
+    }
     // 这里调用新的簇首选择策略/分簇策略
     // 需要确认分簇结果是否更新到管控架构中
     nodes.clear();
@@ -540,6 +557,11 @@ namespace ns3
   // 基于轨道索引的分簇：按轨道 (satPerOrbit) 将节点分组
   void OrbitPartitionCluster(NodeContainer node, uint32_t satPerOrbit, std::vector<NodeContainer> &nodes)
   {
+    if (_useJsonTopo)
+    {
+      nodes.assign(satClusterNodes.begin(), satClusterNodes.end());
+      return;
+    }
     nodes.clear();
     if (satPerOrbit == 0) return;
     std::map<uint32_t, NodeContainer> orbitMap;
@@ -561,6 +583,11 @@ namespace ns3
   // 基于图连通性的分簇：按照连通分量分组，可选最小/最大簇规模约束
   void ConnectivityPartition(NodeContainer node, std::vector<NodeContainer> &nodes, uint32_t minSize, uint32_t maxSize)
   {
+    if (_useJsonTopo)
+    {
+      nodes.assign(satClusterNodes.begin(), satClusterNodes.end());
+      return;
+    }
     nodes.clear();
     auto adj = sat.AdjacenyList(node);
     uint32_t n = adj.size();

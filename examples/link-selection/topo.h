@@ -2,12 +2,15 @@
 #define TOPO_H
 
 #include "ns3/node-container.h"
+#include "topo-data.h"
 #include "cluster.h"
 #include "ns3/log.h"
 #include <cstdint>
 #include <ns3/ipv4-address.h>
 #include <ns3/mac48-address.h>
 #include "satrouting.h"  
+#include <string>
+#include <vector>
 
 struct Ipv4AddressHash
 {
@@ -25,19 +28,17 @@ struct Ipv4AddressEqual
   }
 };
 
-// 链路信息结构体 - XW
-struct LinkInfo {
-    uint32_t source;
-    uint32_t destination;
-    uint32_t delay_ms;
-    uint32_t bandwidth_gbps;
-};
-
 namespace ns3 {
   extern NodeContainer sates;       // 所有卫星节点
+  extern NodeContainer Gnodes;      // 地面网络节点
+  extern NodeContainer topoNodes;   // JSON拓扑中的所有节点，包含卫星和地面站
   extern std::vector<NodeContainer> sateNodes;  // 所有卫星节点，按照轨道和轨道内的卫星排列
   extern std::vector<NodeContainer> satClusterNodes;   // 所有卫星节点，数组中的一行表示一簇，nodeContainer中的第一个表示簇首 
   extern std::vector<uint32_t>      changeClusterID;  // 记录所有卫星节点簇ID变化次数
+  extern std::vector<TopologyNodeInfo> topoNodeInfos;
+  extern std::string nodesJsonFile;
+  extern std::string topologyJsonFile;
+  extern std::string timeSlicesJsonFile;
 
 
   void initTopo();

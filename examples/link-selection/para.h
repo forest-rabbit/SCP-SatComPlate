@@ -16,31 +16,32 @@
 #define _trafficDown    0   // 屏蔽远距离流量
 
 namespace ns3 {
-  extern int _SDNRoute;        // 采用本方案路由方案的标志，0表示采用OSPF
-  extern int _isSate;          // 星座构型，1表示66星座，2表示108星座，3表示500星座
-  extern bool _consType;       // 定义星座轨道类型（影响路由策略）0: Walker Star    1: Walker Delta
-  extern int _mode;            // 定义管控场景模式，0表示正常管控场景，1表示地面主控到地面备份主控的迁移场景，
-                               // 2表示星地链路断连场景，3表示从控制器失效场景
-  extern uint32_t _clusterMode; // 0: 双层分簇 1: 链路利用率分簇 2: 轨道分簇 3: 连通性分簇
-  extern int _tranProc;        // 传输协议，0表示UDP，1表示TCP
-  extern bool _trafficMode;    // 流量模式，0表示区域热点流量，1表示均匀流量
-  extern bool _scenario;       // 定义仿真场景，0表示正常场景，1表示最少异轨链路场景
-  //extern int link_change;   // 链路切换模式： 0表示无罚函数 1表示罚函数
-  extern bool _isMesh;        // 是否为mesh拓扑，true表示mesh拓扑，false表示非mesh拓扑
+  extern bool _useJsonTopo;    // true: 使用Topodata JSON作为拓扑真值；false: 使用传统星座/CSV逻辑
 
+  extern const double totalTimeStep; // 仿真总时长(s)，JSON模式仍有效
+  extern double offeredload;         // 业务负载率
+  extern bool _trafficMode;          // 业务流量模式：0区域热点，1均匀流量
+  extern int _tranProc;              // 传输协议：0 UDP，1 TCP
+  extern long int linkBandwidth;     // 默认链路带宽；JSON链路未写带宽时作为兜底值
 
-  extern uint32_t sates_num;   // N: LEO卫星总数
-  extern uint32_t orbit_num;   // No: 轨道数
-  extern uint32_t sate_num;    // Ns:每个轨道上卫星数量
-  extern uint32_t sateBegID;      // 卫星节点开始编号
-  extern const uint32_t ISLNum;     // 卫星节点星间链路条数
-  extern const double timeStepSize;   // 时间步长度（s）
-  extern const double totalTimeStep;    // 仿真时间步总长(s)
-  extern double clusterUpdateStep;   // 簇更新频率(s)
-  extern const double routeUpdateStep;     // 路由更新频率(s)  
-  extern long int linkBandwidth;   // 链路带宽
-  extern double offeredload;  // 负载率，范围1-10
-  extern const double linkAvailability;     // 链路可用度, 范围0.8~1.0
+  extern int _SDNRoute;              // 路由方案：0 OSPF，1 簇内/簇间路由
+  extern int _mode;                  // 管控场景：0正常，1主备迁移，2星地断连，3控制器失效
+  extern uint32_t _clusterMode;      // 传统动态分簇模式：0双层，1链路利用率，2轨道，3连通性
+
+  extern int _isSate;                // 仅传统模式使用；JSON模式下不决定拓扑
+  extern bool _consType;             // 仅传统模式使用；0 Walker Star，1 Walker Delta
+  extern bool _scenario;             // 仅传统mesh模式使用
+  extern bool _isMesh;               // 仅传统拓扑模式使用
+  extern const double linkAvailability; // 仅传统动态链路逻辑使用；JSON模式下关闭
+  extern double clusterUpdateStep;   // 仅传统动态分簇逻辑使用；JSON模式下关闭
+  extern const double routeUpdateStep; // 仅传统动态路由逻辑使用
+
+  extern uint32_t sates_num;         // JSON模式初始化后由nodes_0s.json覆盖
+  extern uint32_t orbit_num;         // JSON模式只作为旧算法兼容值
+  extern uint32_t sate_num;          // JSON模式只作为旧算法兼容值
+  extern uint32_t sateBegID;         // 卫星节点开始编号
+  extern const uint32_t ISLNum;      // 传统1星4连假设；JSON模式按文件链路为准
+  extern const double timeStepSize;  // 时间步长度(s)
   extern const uint8_t CUSTOM_PROTOCOL_NUMBER;
 }
 
