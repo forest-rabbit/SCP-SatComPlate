@@ -2,55 +2,131 @@
 
 基于 ns-3.33 的卫星网络仿真项目。当前主要开发分支是 `jsontopo`，主线实验位于 `examples/link-selection`，用于基于 JsonTopo 动态拓扑运行 `link-test`，并统计业务流性能。
 
+数据说明：当前 `examples/link-selection/Topodata/` 中的 JSON 文件是为了调试 JsonTopo 流程自行生成的测试/示例数据，不是甲方提供的真实数据。后续接入甲方真实拓扑数据时，应将符合 JsonTopo 格式的节点、链路和时间片文件放入该目录，或通过 `--nodesJson`、`--topologyJson`、`--timeSlicesJson` 显式指定数据路径。
+
+甲方数据建议放置与命名：
+
+```text
+examples/link-selection/Topodata/
+├── nodes_0s.json        # 必需：初始节点状态
+├── topology_0s.json     # 必需：初始链路状态
+├── nodes_5s.json        # 可选：5s 节点状态更新
+├── topology_5s.json     # 可选：5s 链路状态更新
+├── nodes_10s.json       # 可选：10s 节点状态更新
+├── topology_10s.json    # 可选：10s 链路状态更新
+└── time_slices.json     # 可选：显式时间片索引
+```
+
+推荐命名规则：
+
+```text
+nodes_<time>s.json
+topology_<time>s.json
+```
+
+其中 `<time>` 是仿真秒数，例如 `5s`、`7s`、`10s`。如果不提供 `time_slices.json`，程序会自动扫描 `Topodata/`，按上述命名规则配对时间片。
+
+节点文件基本格式：
+
+```json
+{
+  "nodes": [
+    {
+      "node_id": 0,
+      "node_type": "sat",
+      "is_cluster": 1,
+      "cluster_id": 1,
+      "is_cluster_head": 0
+    }
+  ]
+}
+```
+
+链路文件基本格式：
+
+```json
+{
+  "links": [
+    {
+      "node1_id": 0,
+      "node2_id": 1,
+      "type": "sat",
+      "delay": 8000,
+      "link_bandwidth": 10000000,
+      "link_load_up": 0,
+      "link_load_down": 0
+    }
+  ]
+}
+```
+
+字段约定：
+
+```text
+node_id             节点 ID。链路中的 node1_id/node2_id 应引用这里的 node_id
+node_type           节点类型，推荐使用 sat 或 ground/gs
+is_cluster          是否参与分簇，0 或 1
+cluster_id          簇编号
+is_cluster_head     是否为簇首，0 或 1
+node1_id/node2_id   链路两端节点 ID
+type                链路类型，例如 sat、feeder、ground
+delay               链路时延，单位为微秒 us
+link_bandwidth      链路带宽，单位为 kbps
+link_load_up        上行负载，单位为 kbps，可填 0
+link_load_down      下行负载，单位为 kbps，可填 0
+```
+
+运行期的 `nodes_*.json` 用于更新已有节点的簇信息；当前代码不支持在仿真运行中途通过时间片新增 ns-3 节点。
+
 ## 项目结构
 
 ```text
 xw/
-├── README.md
-├── VERSION
-├── waf
-├── wscript
+├── README.md                    # 项目总说明：部署、构建、运行、目录和分支约定
+├── VERSION                      # ns-3 版本号，当前为 3.33
+├── waf                          # ns-3 waf 构建入口
+├── wscript                      # ns-3 顶层构建脚本
 ├── docs/
-│   └── dev-setup.md
+│   └── dev-setup.md             # Ubuntu / VS Code / clangd 开发环境说明
 ├── examples/
 │   ├── link-selection/
-│   │   ├── link-test.cc
-│   │   ├── topo.cc
-│   │   ├── topo.h
-│   │   ├── topo-json.cc
-│   │   ├── topo-json.h
-│   │   ├── topo-data.h
-│   │   ├── para.cc
-│   │   ├── para.h
-│   │   ├── cluster.cc
-│   │   ├── cluster.h
-│   │   ├── access.cc
-│   │   ├── access.h
-│   │   ├── satrouting.cc
-│   │   ├── satrouting.h
-│   │   ├── wscript
-│   │   ├── readme.txt
-│   │   ├── topo(324).csv
-│   │   ├── traffic_matrix(324).csv
-│   │   └── Topodata/
-│   │       ├── nodes_0s.json
-│   │       ├── topology_0s.json
-│   │       ├── nodes_5s.json
-│   │       ├── topology_5s.json
-│   │       ├── nodes_7s.json
-│   │       ├── topology_7s.json
-│   │       └── time_slices.json
-│   └── sdn-controller/
+│   │   ├── link-test.cc         # 当前主线仿真入口，负责解析参数、构建应用、运行仿真和输出统计
+│   │   ├── topo.cc              # 拓扑创建、链路安装、路由生成和 JsonTopo 时间片更新
+│   │   ├── topo.h               # topo.cc 的接口声明
+│   │   ├── topo-json.cc         # JsonTopo 节点、链路、时间片文件解析
+│   │   ├── topo-json.h          # topo-json.cc 的接口声明
+│   │   ├── topo-data.h          # JsonTopo 使用的数据结构定义
+│   │   ├── para.cc              # 默认实验参数，例如负载、带宽、协议、是否启用 JsonTopo
+│   │   ├── para.h               # 全局参数声明
+│   │   ├── cluster.cc           # link-selection 实验中的分簇相关逻辑
+│   │   ├── cluster.h            # cluster.cc 的接口声明
+│   │   ├── access.cc            # 接入/辅助逻辑
+│   │   ├── access.h             # access.cc 的接口声明
+│   │   ├── satrouting.cc        # 卫星路由相关逻辑
+│   │   ├── satrouting.h         # satrouting.cc 的接口声明
+│   │   ├── wscript              # link-test 的 waf 构建脚本
+│   │   ├── README.md            # link-test 运行细节说明
+│   │   ├── topo(324).csv        # 传统 CSV 拓扑模式使用的拓扑输入
+│   │   ├── traffic_matrix(324).csv # 当前实验默认读取的流量矩阵
+│   │   └── Topodata/            # JsonTopo 示例数据：当前为自行生成的测试数据，不是甲方真实数据
+│   │       ├── nodes_0s.json    # 0s 节点状态示例
+│   │       ├── topology_0s.json # 0s 链路状态示例
+│   │       ├── nodes_5s.json    # 5s 节点状态示例
+│   │       ├── topology_5s.json # 5s 链路状态示例
+│   │       ├── nodes_7s.json    # 7s 节点状态示例
+│   │       ├── topology_7s.json # 7s 链路状态示例
+│   │       └── time_slices.json # 可选时间片索引文件
+│   └── sdn-controller/          # 旧 SDN/OpenFlow/OSPF 相关实验，暂时保留
 ├── archive/
 │   ├── legacy-code/
-│   │   ├── runSim1.py
-│   │   ├── runSim2.py
-│   │   └── ospf.py
+│   │   ├── runSim1.py          # 旧批量运行脚本，暂不作为当前主线入口
+│   │   ├── runSim2.py          # 旧批量运行脚本，暂不作为当前主线入口
+│   │   └── ospf.py             # 旧 OSPF 批量运行脚本，暂时保留
 │   └── local-output/      # 本地输出归档，不提交
 ├── src/
-│   └── cluster/
-├── scratch/
-└── build/              # 本地生成，不提交
+│   └── cluster/                  # 项目自定义 ns-3 cluster 模块
+├── scratch/                      # 临时实验代码
+└── build/                        # 本地构建产物，不提交
 ```
 
 关键目录：
@@ -79,7 +155,7 @@ examples/link-selection/topo.cc        拓扑构建与动态更新
 examples/link-selection/topo-json.cc   JsonTopo 文件解析
 examples/link-selection/para.cc        默认实验参数
 examples/link-selection/wscript        link-test 构建目标
-examples/link-selection/readme.txt     link-test 细节说明
+examples/link-selection/README.md     link-test 细节说明
 ```
 
 当前默认参数位于 `examples/link-selection/para.cc`：
@@ -241,7 +317,7 @@ PATH="$PWD/.venv/bin:$PATH" ./waf --run "link-test --useJsonTopo=false"
 更多 `link-test` 运行细节见：
 
 ```text
-examples/link-selection/readme.txt
+examples/link-selection/README.md
 ```
 
 ## VS Code 开发
