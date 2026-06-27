@@ -6,6 +6,7 @@
 compile_commands.json
 
 # Python caches
+.venv/
 __pycache__/
 **/__pycache__/
 *.py[cod]
