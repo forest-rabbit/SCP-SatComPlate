@@ -41,10 +41,12 @@ xw/
 │   │       ├── topology_7s.json
 │   │       └── time_slices.json
 │   └── sdn-controller/
-├── legacy/
-│   ├── runSim1.py
-│   ├── runSim2.py
-│   └── ospf.py
+├── archive/
+│   ├── legacy-code/
+│   │   ├── runSim1.py
+│   │   ├── runSim2.py
+│   │   └── ospf.py
+│   └── local-output/      # 本地输出归档，不提交
 ├── src/
 │   └── cluster/
 ├── scratch/
@@ -56,7 +58,7 @@ xw/
 ```text
 examples/link-selection/   当前主线实验：JsonTopo + link-test
 examples/sdn-controller/   旧的 SDN/OpenFlow/OSPF 相关实验，暂时保留
-legacy/                    旧实验批量运行脚本，暂时保留作参考
+archive/                   暂不使用但保留的旧代码和本地输出
 src/cluster/               项目自定义 ns-3 cluster 模块
 docs/dev-setup.md          Ubuntu / VS Code / clangd 开发环境说明
 scratch/                   临时实验代码
@@ -287,17 +289,25 @@ build/compile_commands.json
 
 ## 旧实验与保留内容
 
-`legacy/` 中的脚本暂时保留，不作为当前主线入口：
+`archive/legacy-code/` 中的脚本暂时保留，不作为当前主线入口：
 
 ```text
-legacy/runSim1.py
-legacy/runSim2.py
-legacy/ospf.py
+archive/legacy-code/runSim1.py
+archive/legacy-code/runSim2.py
+archive/legacy-code/ospf.py
 ```
 
 其中 `ospf.py` 以及 `examples/sdn-controller/ospf.cc` 先保留，后续确认用途后再决定是否整理或删除。
 
 `examples/sdn-controller/` 是旧 SDN/OpenFlow/OSPF 实验目录，也暂时保留。
+
+本地旧输出统一放在：
+
+```text
+archive/local-output/
+```
+
+该目录已被 `.gitignore` 忽略，不会提交到远程仓库。
 
 ## 分支约定
 
@@ -376,4 +386,3 @@ PATH="$PWD/.venv/bin:$PATH" ./waf build
 ### Gitee 提示存在大文件
 
 当前仓库中 `examples/link-selection/traffic_matrix(324).csv` 约 86 MB。它是主线实验输入文件，目前保留在 Git 中。
-
