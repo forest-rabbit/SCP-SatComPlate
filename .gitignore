@@ -32,6 +32,7 @@ build-*/
 *.pc
 
 # Local simulation outputs
+local-output/
 *.pcap
 !src/**/test/**/*.pcap
 !src/test/**/response-vectors/*.pcap
