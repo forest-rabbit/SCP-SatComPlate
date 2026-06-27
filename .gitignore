@@ -1,25 +1,51 @@
-# Editor settings
+# Editors and language servers
 .vscode/
+.idea/
+.cache/
+.clangd/
+compile_commands.json
 
 # Python caches
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 
-# Waf/Python transient caches
+# Waf caches and lock files
 .waf3-*/
-.waf3-*/**/__pycache__/
-waf-tools/__pycache__/
+**/.waf3-*/
+.lock-waf*
+**/.lock-waf*
+.wafpickle-*
+**/.wafpickle-*
 
-# ns-3/waf build outputs and transient metadata
+# ns-3 build outputs
 build/
-.lock-waf_linux_build
-build/.lock-waf_linux_build
-build/.wafpickle-*
+build-*/
+**/build/
+**/build-*/
+*.o
+*.a
+*.so
+*.pc
 
 # Local simulation outputs
-examples/link-selection/output/
 *.pcap
+!src/**/test/**/*.pcap
+!src/test/**/response-vectors/*.pcap
 *.tr
 *.log
+output/
+**/output/
+output.txt
+output1.txt
+RlinkUtilization.csv
+clusterNetworkInf.csv
+adj_list.txt
+no_cluster.txt
+
+# Temporary files
+*.tmp
+*.swp
+*~
