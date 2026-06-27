@@ -1,76 +1,109 @@
-link-test 运行逻辑说明（基于当前代码）
+link-test 运行说明（JsonTopo 版本）
 
-1) 入口与参数
+1) 入口文件
   - 主程序：examples/link-selection/link-test.cc
   - 拓扑构建：examples/link-selection/topo.cc
+  - JSON拓扑解析：examples/link-selection/topo-json.cc
   - 全局参数：examples/link-selection/para.cc
-  - 默认命令：./waf --run link-test
-  - 可覆盖参数（命令行）：
-    --offeredload=<double>
-    --isSate=<1|2|3|4>
-    --consType=<0|1>
-    --linkBandwidth=<bps>
-    --tranProtocol=<0|1>   (0=UDP, 1=TCP)
+  - waf目标：link-test
 
-2) 编译运行指令
-  - 编译：
-    ./waf clean
-    ./waf configure --enable-examples --enable-test
-    ./waf build
-  - 运行：
-    ./waf --run link-test
+2) 当前推荐运行方式
+  在仓库根目录执行：
 
-3) 当前默认配置（para.cc）
-  - _isSate = 1：324 星座
-  - _scenario = 0：正常场景
-  - _isMesh = false：采用“非 mesh 拓扑”
-  - _tranProc = 0：UDP
-  - offeredload = 0.1
-  - linkBandwidth = 10Gbps
-  - totalTimeStep = 110s
+    PATH="$PWD/.venv/bin:$PATH" ./waf --run link-test
 
-4) 主流程（main）
+  当前 para.cc 中默认启用 JsonTopo：
+
+    _useJsonTopo = true
+    offeredload = 0.0001
+    _tranProc = 0  // UDP
+    linkBandwidth = 10000000000  // 10Gbps
+    totalTimeStep = 110
+
+  这组默认参数已经可以作为快速自检配置。实测输出应包含：
+
+    [JSON-TOPO] 节点创建完成
+    [JSON-TOPO] 初始化完成
+    [TRAFFIC] 读取流量矩阵
+    Simulation real - time cost
+
+3) 首次构建
+  如果 build 目录不存在，或者修改了 waf / wscript / 模块依赖，可以重新配置：
+
+    PATH="$PWD/.venv/bin:$PATH" ./waf configure --enable-examples --enable-tests
+    PATH="$PWD/.venv/bin:$PATH" ./waf build
+
+  如果需要完全清理后重建：
+
+    PATH="$PWD/.venv/bin:$PATH" ./waf clean
+    PATH="$PWD/.venv/bin:$PATH" ./waf configure --enable-examples --enable-tests
+    PATH="$PWD/.venv/bin:$PATH" ./waf build
+
+4) 可覆盖的命令行参数
+  - --offeredload=<double>
+      业务负载。当前快速验证推荐使用默认值 0.0001。
+  - --linkBandwidth=<bps>
+      链路带宽；当 JSON 链路未写带宽时作为兜底值。
+  - --tranProtocol=<0|1>
+      0=UDP，1=TCP。
+  - --useJsonTopo=<true|false>
+      是否使用 JsonTopo。默认 true。
+  - --nodesJson=<path>
+      初始节点 JSON 文件；默认 examples/link-selection/Topodata/nodes_0s.json。
+  - --topologyJson=<path>
+      初始链路 JSON 文件；默认 examples/link-selection/Topodata/topology_0s.json。
+  - --timeSlicesJson=<path>
+      时间片索引 JSON 文件；不指定时默认扫描 examples/link-selection/Topodata/。
+  - --isSate=<1|2|3|4>
+      传统拓扑模式使用；JsonTopo 模式下不决定节点数量。
+  - --consType=<0|1>
+      传统拓扑模式使用；0=Walker Star，1=Walker Delta。
+
+5) JsonTopo 输入文件
+  默认目录：
+
+    examples/link-selection/Topodata/
+
+  默认初始拓扑：
+
+    nodes_0s.json
+    topology_0s.json
+
+  当前会自动扫描并加载后续时间片，例如：
+
+    nodes_5s.json
+    topology_5s.json
+    nodes_7s.json
+    topology_7s.json
+
+  运行时日志会显示实际加载的时间片和文件路径。
+
+6) 流量输入
+  热点流量模式下（_trafficMode=0），程序读取：
+
+    examples/link-selection/traffic_matrix(324).csv
+
+  当前 JsonTopo 默认节点规模为 66 颗卫星和 10 个地面节点。流量矩阵按卫星业务源宿关系读取。
+
+7) 主流程
   (1) 解析命令行参数并打印关键配置。
-  (2) 根据 isSate 推导：
-      sates_num / orbit_num / sate_num。
-  (3) 调用 initTopo() 构建网络拓扑并分配路由。
+  (2) 调用 initTopo() 创建节点、安装协议栈、创建链路并分配地址。
+  (3) JsonTopo 模式下加载初始 JSON 拓扑，并按时间片更新节点和链路状态。
   (4) 调用 buildApp() 安装服务器与客户端应用。
   (5) 安装 FlowMonitor，运行仿真到 totalTimeStep。
   (6) 仿真结束后调用 dealSimInfo() 汇总业务流与控制流性能指标。
 
-5) 拓扑构建逻辑（initTopo）
-  (1) 根据轨道数(orbit_num)和卫星数(sate_num)创建所有卫星节点，并将它们存储在sates/sateNodes中。
-  (2) 为所有节点安装互联网协议栈，使它们能够通信。
-  (3) 由于使用非网格拓扑(_isMesh=false)，从文件中读取链路信息（包括源节点、目标节点、延迟和带宽），然后为每条链路设置网络设备，并分配IP地址。
-  (4) 生成全局路由表，以便数据包知道如何在网络中传输。
-  (5) 定期更新拓扑。
+8) 统计输出
+  终端会输出两类统计：
 
-6) 业务生成逻辑（buildApp / installClient）
-  (1) 初始化流量矩阵 data。
-  (2) 热点流量模式下（_trafficMode=0），读取
-      examples/link-selection/traffic_matrix(324).csv。
-  (3) 根据传输协议参数(_tranProc或--tranProtocol)给每个节点安装相应的服务端：
-      - UDP 模式(_tranProc=0)：UdpServer
-      - TCP 模式(_tranProc=1)：PacketSink
-  (4) installClient() 遍历源-宿对：
-      - 若 data[i][j] == 0 则跳过；
-      - 计算发送速率/包数；
-      - 创建 UDP/TCP 客户端并在 [0, totalTimeStep]（UDP 发送到 totalTimeStep-10）发包。
+    业务数据性能
+    控制信息性能
 
-7) 统计输出（dealSimInfo）
-  - 使用 FlowMonitor 统计：Tx/Rx 包数、丢包、时延、抖动、吞吐。
-  - 区分 packetPrio：
-    - 0：控制信息
-    - 1：业务数据
-  - 结果输出到终端。
+  指标包括 Tx/Rx 包数、字节数、丢包、时延、吞吐、抖动和丢包率。
 
-8) 当前注意事项（与运行错误相关）
-  - installClient() 当前按固定接口读取目的地址：
-    destIp->GetAddress(1, 0)
-  - 若某目的节点不存在接口 1 或该接口未配置地址，会触发 ns-3 断言：
-    Attempted to dereference zero pointer
-  - 建议改为“遍历接口并选择第一个可用 IPv4 地址”，避免固定索引导致崩溃。
+9) 传统 CSV 拓扑模式
+  如果通过 --useJsonTopo=false 切回传统拓扑，程序会使用：
 
-9) 关键输入/输出文件
-  - 输入拓扑：examples/link-selection/topo(324).csv
-  - 输入流量：examples/link-selection/traffic_matrix(324).csv
+    examples/link-selection/topo(324).csv
+
+  该模式主要保留兼容旧实验流程；当前新增拓扑数据优先使用 JsonTopo。
