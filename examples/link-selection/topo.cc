@@ -212,7 +212,7 @@ namespace ns3{
       }
       else
       {
-        std::vector<LinkInfo> links = ReadTopologyFile("examples/link-selection/topo(324).csv");
+        std::vector<LinkInfo> links = ReadTopologyFile("examples/link-selection/Topodata/csv/topo(324).csv");
         BuildNetworkTopology(sates, links);
       }
     }

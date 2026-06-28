@@ -463,11 +463,11 @@ main (int argc, char *argv[])
   cmd.AddValue ("consType", "传统拓扑模式使用：0=Walker Star, 1=Walker Delta", _consType);
   cmd.AddValue ("linkBandwidth", "默认链路带宽；JSON链路未写带宽时作为兜底值", linkBandwidth);
   cmd.AddValue("tranProtocol", "0:UDP, 1:TCP", _tranProc);
-  cmd.AddValue("useJsonTopo", "是否使用 examples/link-selection/Topodata 中的JSON拓扑", _useJsonTopo);
+  cmd.AddValue("useJsonTopo", "是否使用 examples/link-selection/Topodata/json 中的JSON拓扑", _useJsonTopo);
   cmd.AddValue("jsonTopoPatchMode", "JSON模式后续时间片：false=全量快照，true=patch增量", _jsonTopoPatchMode);
-  cmd.AddValue("nodesJson", "可选：初始节点JSON文件；默认Topodata/nodes_0s.json", nodesJsonFile);
-  cmd.AddValue("topologyJson", "可选：初始链路JSON文件；默认Topodata/topology_0s.json", topologyJsonFile);
-  cmd.AddValue("timeSlicesJson", "可选：时间片索引JSON文件；默认按Topodata文件名扫描", timeSlicesJsonFile);
+  cmd.AddValue("nodesJson", "可选：初始节点JSON文件；默认Topodata/json/nodes_0s.json", nodesJsonFile);
+  cmd.AddValue("topologyJson", "可选：初始链路JSON文件；默认Topodata/json/topology_0s.json", topologyJsonFile);
+  cmd.AddValue("timeSlicesJson", "可选：时间片索引JSON文件；默认按Topodata/json文件名扫描", timeSlicesJsonFile);
   cmd.Parse (argc, argv);
   std::cout << "[RUN] 实验参数" << std::endl
             << "  offeredLoad   : " << offeredload << std::endl

@@ -20,8 +20,8 @@ static std::vector<TopologyTimeSlice> g_topologyTimeSlices;
 static uint32_t g_topologyUpdateTotal = 0;
 static uint32_t g_topologyUpdateApplied = 0;
 
-// 固定JSON目录。默认情况下不需要命令行传参，甲方只需把文件放到Topodata。
-static const std::string kDefaultTopoDataDir = "examples/link-selection/Topodata/";
+// 固定JSON目录。默认情况下不需要命令行传参，甲方只需把JSON文件放到Topodata/json。
+static const std::string kDefaultTopoDataDir = "examples/link-selection/Topodata/json/";
 static const std::string kDefaultNodesJsonFile = kDefaultTopoDataDir + "nodes_0s.json";
 static const std::string kDefaultTopologyJsonFile = kDefaultTopoDataDir + "topology_0s.json";
 
@@ -97,7 +97,7 @@ ValidateInitialJsonTopologyFiles()
       << "\n  nodes    : " << nodesJsonFile << (nodesOk ? " [OK]" : " [缺失]")
       << "\n  topology : " << topologyJsonFile << (topologyOk ? " [OK]" : " [缺失]")
       << "\n处理方式："
-      << "\n  1. 将甲方交付的 nodes_0s.json 和 topology_0s.json 放到 examples/link-selection/Topodata/ 顶层；"
+      << "\n  1. 将甲方交付的 nodes_0s.json 和 topology_0s.json 放到 examples/link-selection/Topodata/json/；"
       << "\n  2. 或用 --nodesJson/--topologyJson 显式指定示例或真实文件；"
       << "\n  3. 如果不使用JsonTopo，运行时传入 --useJsonTopo=false。";
   std::cerr << oss.str() << std::endl;
@@ -247,8 +247,8 @@ ScheduleTopologyTimeSlices()
   }
   else if (_useJsonTopo)
   {
-    // 默认不依赖time_slices.json，直接从Topodata目录按文件名发现所有后续时间片。
-    g_topologyTimeSlices = ScanTopologyTimeSlicesDirectory(kDefaultTopoDataDir, _jsonTopoPatchMode);
+    // 默认不依赖time_slices.json，直接从初始文件所在目录按文件名发现后续时间片。
+    g_topologyTimeSlices = ScanTopologyTimeSlicesDirectory(TopologyDataLocation(), _jsonTopoPatchMode);
   }
 
   g_topologyUpdateApplied = 0;
