@@ -193,20 +193,24 @@ void installClient(vector<vector<double>> data, uint32_t numNodes, uint16_t port
         apps.Stop(Seconds(totalTimeStep));
       }
       else if( !_tranProc ){
-        int maxPacketCount;
+        int maxPacketCount = 0;
+        bool hasPacketRule = false;
         if ((_isSate == 1) && (_trafficMode == 0))
         {
+          hasPacketRule = true;
           maxPacketCount = int(data[i][j] * 1024.0 * 1024.0 * 1024.0 / (packetSize * 8.0));   // 数据包数量
           maxPacketCount /= 10000.0;
           //cout<<maxPacketCount<<endl;
         }
         else if ((_isSate == 1) && (_trafficMode == 1))
         {
+          hasPacketRule = true;
           maxPacketCount = int(data[i][j] * 1024.0 * 1024.0 * 1024.0 / (packetSize * 8.0));   // 数据包数量
           maxPacketCount /= 15.0;
         }
         else if ((_isSate == 2) && (_trafficMode == 0))
         {
+          hasPacketRule = true;
           //cout<<data[i][j]<<endl;
           maxPacketCount = (data[i][j] * 1024.0 * 1024.0 *1024.0 / (packetSize * 8.0));   // 数据包数量
           maxPacketCount /= 20.0;
@@ -214,28 +218,41 @@ void installClient(vector<vector<double>> data, uint32_t numNodes, uint16_t port
         }
         else if ((_isSate == 2) && (_trafficMode == 1))
         {
+          hasPacketRule = true;
           maxPacketCount = int(data[i][j] * 1024.0 * 1024.0 * 1024.0 / (packetSize * 8.0));   // 数据包数量
           maxPacketCount = maxPacketCount / 30.0;
         }        
         else if((_isSate == 3) && (_trafficMode == 0))
         {
+          hasPacketRule = true;
           maxPacketCount = int(data[i][j] * 1024.0 * 1024.0 * 1024.0 / (packetSize * 8.0));   // 数据包数量
           maxPacketCount /= 20.0;
         }
         else if((_isSate == 3) && (_trafficMode == 1))
         {
+          hasPacketRule = true;
           maxPacketCount = int(data[i][j] * 1024.0 * 1024.0 * 1024.0 / (packetSize * 8.0));   // 数据包数量
           maxPacketCount /= 200.0;
         }
         else if((_isSate == 4) && (_trafficMode == 0))
         {
+          hasPacketRule = true;
           maxPacketCount = int(data[i][j] * 1024.0 * 1024.0 * 1024.0 / (packetSize * 8.0));   // 数据包数量
           maxPacketCount /= 200.0;
         }
         else if((_isSate == 4) && (_trafficMode == 1))
         {
+          hasPacketRule = true;
           maxPacketCount = int(data[i][j] * 1024.0 * 1024.0 * 1024.0 / (packetSize * 8.0));   // 数据包数量
           maxPacketCount /= 200.0;
+        }
+        if (!hasPacketRule)
+        {
+          continue;
+        }
+        if (maxPacketCount <= 0)
+        {
+          maxPacketCount = 1;
         }
         // cout<<maxPacketCount<<endl;
         double interPacketInterval = (double)(100.0)/maxPacketCount;   // 数据包间隔 100s的流量
