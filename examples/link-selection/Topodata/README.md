@@ -41,7 +41,8 @@ patch_15.5s.json
 
 - `nodes_0s.json` 和 `topology_0s.json` 固定用于初始化。
 - 后续运行期时间必须大于 `0`。
-- 同一次运行不要混用同一时间戳的 `patch_5s.json` 和 `nodes_5s.json`/`topology_5s.json`。
+- 同一个 `Topodata/` 顶层目录建议一次只放一种运行方案：要么放全量快照文件，要么放 patch 文件。
+- 切换方案前先清理另一类后续时间片文件，避免交付内容和 `--jsonTopoPatchMode` 参数不一致。
 - `Topodata/` 顶层不要放无关 JSON 文件，避免被自动扫描。
 - 文档示例放在 `Topodata/examples/` 子目录；程序默认不会扫描该子目录。
 

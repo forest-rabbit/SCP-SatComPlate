@@ -107,6 +107,8 @@ nodes_<time>s.json + topology_<time>s.json  # 全量快照模式
 patch_<time>s.json                          # 增量 patch 模式
 ```
 
+建议同一个 `Topodata/` 顶层目录一次只放一种运行方案：要么放全量快照文件，要么放 patch 文件。切换方案前先清理另一类后续时间片文件。
+
 全量快照模式下，后续时间片的 `nodes_<time>s.json` 和 `topology_<time>s.json`
 可以只提供发生变化的一类；缺少的节点或链路部分会保持上一状态。
 
