@@ -95,7 +95,7 @@
       "node_id": 13,
       "node_type": "sat",
       "is_cluster": 1,
-      "cluster_id": 1,
+      "cluster_id": 2,
       "is_cluster_head": 0
     },
     {
@@ -186,7 +186,7 @@
       "node_id": 26,
       "node_type": "sat",
       "is_cluster": 1,
-      "cluster_id": 2,
+      "cluster_id": 3,
       "is_cluster_head": 0
     },
     {
@@ -277,7 +277,7 @@
       "node_id": 39,
       "node_type": "sat",
       "is_cluster": 1,
-      "cluster_id": 3,
+      "cluster_id": 4,
       "is_cluster_head": 0
     },
     {
@@ -368,7 +368,7 @@
       "node_id": 52,
       "node_type": "sat",
       "is_cluster": 1,
-      "cluster_id": 4,
+      "cluster_id": 5,
       "is_cluster_head": 0
     },
     {
@@ -496,41 +496,6 @@
       "is_cluster": 1,
       "cluster_id": 5,
       "is_cluster_head": 1
-    },
-    {
-      "node_id": 1005,
-      "node_type": "gs",
-      "is_cluster": 0,
-      "cluster_id": 0,
-      "is_cluster_head": 0
-    },
-    {
-      "node_id": 1006,
-      "node_type": "gs",
-      "is_cluster": 0,
-      "cluster_id": 0,
-      "is_cluster_head": 0
-    },
-    {
-      "node_id": 1007,
-      "node_type": "gs",
-      "is_cluster": 0,
-      "cluster_id": 0,
-      "is_cluster_head": 0
-    },
-    {
-      "node_id": 1008,
-      "node_type": "gs",
-      "is_cluster": 0,
-      "cluster_id": 0,
-      "is_cluster_head": 0
-    },
-    {
-      "node_id": 1009,
-      "node_type": "gs",
-      "is_cluster": 0,
-      "cluster_id": 0,
-      "is_cluster_head": 0
     }
   ]
 }

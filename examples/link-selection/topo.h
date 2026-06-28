@@ -2,7 +2,7 @@
 #define TOPO_H
 
 #include "ns3/node-container.h"
-#include "topo-data.h"
+#include "jsontopo/topo-data.h"
 #include "cluster.h"
 #include "ns3/log.h"
 #include <cstdint>

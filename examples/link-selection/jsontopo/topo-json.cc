@@ -1,5 +1,5 @@
 #include "topo-json.h"
-#include "../sdn-controller/json.hpp"
+#include "../../sdn-controller/json.hpp"
 #include "ns3/fatal-error.h"
 #include "ns3/log.h"
 
@@ -364,11 +364,14 @@ ParseTopologyLinkJson(const json& item,
   link.source = resolver(node1, zeroBasedFallback);
   link.destination = resolver(node2, zeroBasedFallback);
   link.type = GetStringField(item, {"type", "link_type"}, "sat");
+  link.has_type = FindJsonField(item, {"type", "link_type"}) != nullptr;
   link.delay_us = GetUint32Field(item, {"delay", "delay_us"}, 0);
   link.has_delay_us = FindJsonField(item, {"delay", "delay_us"}) != nullptr;
+  link.has_delay_ms = FindJsonField(item, {"delay_ms"}) != nullptr;
   link.delay_ms = link.has_delay_us ? (link.delay_us + 999) / 1000 : GetUint32Field(item, {"delay_ms"}, 0);
   link.link_bandwidth_kbps = GetUint32Field(item, {"link_bandwidth", "link_bandwidth_kbps"}, 0);
   link.has_link_bandwidth_kbps = FindJsonField(item, {"link_bandwidth", "link_bandwidth_kbps"}) != nullptr;
+  link.has_bandwidth_gbps = FindJsonField(item, {"bandwidth_gbps"}) != nullptr;
   link.bandwidth_gbps = link.has_link_bandwidth_kbps ? 0 : GetUint32Field(item, {"bandwidth_gbps"}, 0);
   link.link_load_up_kbps = GetUint32Field(item, {"link_load_up", "link_load_up_kbps"}, 0);
   link.has_link_load_up_kbps = FindJsonField(item, {"link_load_up", "link_load_up_kbps"}) != nullptr;
@@ -418,10 +421,191 @@ ReadTopologyLinksJsonFile(const std::string& filename,
   return ParseTopologyLinksJsonArray(linksArray, resolver, hasExplicitNodeIds);
 }
 
+static json
+GetArrayFieldOrEmpty(const json& root, const std::vector<std::string>& keys)
+{
+  if (root.is_array())
+  {
+    return root;
+  }
+  if (!root.is_object())
+  {
+    return json::array();
+  }
+  for (const auto& key : keys)
+  {
+    auto it = root.find(key);
+    if (it != root.end() && it->is_array())
+    {
+      return *it;
+    }
+  }
+  return json::array();
+}
+
+static TopologyNodePatch
+ParseTopologyNodePatchJson(const json& item)
+{
+  TopologyNodePatch patch;
+  patch.node_id = GetRequiredUint32Field(item, {"node_id", "hode_id", "id"});
+
+  if (FindJsonField(item, {"is_cluster", "s_cluster"}) != nullptr)
+  {
+    patch.is_cluster = GetBoolField(item, {"is_cluster", "s_cluster"}, false);
+    patch.has_is_cluster = true;
+  }
+  if (FindJsonField(item, {"cluster_id", "chuster id", "cluster id"}) != nullptr)
+  {
+    patch.cluster_id = GetUint32Field(item, {"cluster_id", "chuster id", "cluster id"}, 0);
+    patch.has_cluster_id = true;
+  }
+  if (FindJsonField(item, {"is_clusterhead", "is_cluster_head", "s_clusterhcad"}) != nullptr)
+  {
+    patch.is_cluster_head = GetBoolField(item,
+                                         {"is_clusterhead", "is_cluster_head", "s_clusterhcad"},
+                                         false);
+    patch.has_is_cluster_head = true;
+  }
+
+  return patch;
+}
+
+static bool
+DetectZeroBasedLinkIds(const json& items, bool hasExplicitNodeIds)
+{
+  if (hasExplicitNodeIds)
+  {
+    return false;
+  }
+  for (const auto& item : items)
+  {
+    uint32_t node1 = GetRequiredUint32Field(item, {"node1_id", "nodel_id", "node1 id", "source", "src"});
+    uint32_t node2 = GetRequiredUint32Field(item, {"node2_id", "node2 id", "destination", "dst", "dest"});
+    if (node1 == 0 || node2 == 0)
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+static TopologyLinkRemove
+ParseTopologyLinkRemoveJson(const json& item,
+                            const TopologyNodeResolver& resolver,
+                            bool zeroBasedFallback)
+{
+  uint32_t node1 = GetRequiredUint32Field(item, {"node1_id", "nodel_id", "node1 id", "source", "src"});
+  uint32_t node2 = GetRequiredUint32Field(item, {"node2_id", "node2 id", "destination", "dst", "dest"});
+
+  TopologyLinkRemove remove;
+  remove.source = resolver(node1, zeroBasedFallback);
+  remove.destination = resolver(node2, zeroBasedFallback);
+  return remove;
+}
+
+static void
+AppendTopologyNodePatches(const json& items, TopologyPatchInfo& patch)
+{
+  for (const auto& item : items)
+  {
+    patch.node_updates.push_back(ParseTopologyNodePatchJson(item));
+  }
+}
+
+static void
+AppendTopologyLinkUpserts(const json& items,
+                          const TopologyNodeResolver& resolver,
+                          bool hasExplicitNodeIds,
+                          TopologyPatchInfo& patch)
+{
+  std::vector<LinkInfo> links = ParseTopologyLinksJsonArray(items, resolver, hasExplicitNodeIds);
+  patch.link_upserts.insert(patch.link_upserts.end(), links.begin(), links.end());
+}
+
+static void
+AppendTopologyLinkRemoves(const json& items,
+                          const TopologyNodeResolver& resolver,
+                          bool hasExplicitNodeIds,
+                          TopologyPatchInfo& patch)
+{
+  bool zeroBasedFallback = DetectZeroBasedLinkIds(items, hasExplicitNodeIds);
+  for (const auto& item : items)
+  {
+    patch.link_removes.push_back(ParseTopologyLinkRemoveJson(item, resolver, zeroBasedFallback));
+  }
+}
+
+static TopologyPatchInfo
+ParseTopologyPatchJsonObject(const json& root,
+                             const TopologyNodeResolver& resolver,
+                             bool hasExplicitNodeIds)
+{
+  if (!root.is_object())
+  {
+    NS_FATAL_ERROR("patch JSON必须是对象，且包含nodes/links修改项");
+  }
+
+  TopologyPatchInfo patch;
+
+  auto nodesIt = root.find("nodes");
+  if (nodesIt != root.end())
+  {
+    if (nodesIt->is_array())
+    {
+      AppendTopologyNodePatches(*nodesIt, patch);
+    }
+    else if (nodesIt->is_object())
+    {
+      AppendTopologyNodePatches(GetArrayFieldOrEmpty(*nodesIt, {"update", "updates", "upsert"}), patch);
+    }
+  }
+  AppendTopologyNodePatches(GetArrayFieldOrEmpty(root, {"node_updates", "nodes_update"}), patch);
+
+  auto linksIt = root.find("links");
+  if (linksIt != root.end())
+  {
+    if (linksIt->is_array())
+    {
+      AppendTopologyLinkUpserts(*linksIt, resolver, hasExplicitNodeIds, patch);
+    }
+    else if (linksIt->is_object())
+    {
+      AppendTopologyLinkUpserts(GetArrayFieldOrEmpty(*linksIt, {"upsert", "upserts", "update", "updates", "add", "adds"}),
+                                resolver,
+                                hasExplicitNodeIds,
+                                patch);
+      AppendTopologyLinkRemoves(GetArrayFieldOrEmpty(*linksIt, {"remove", "removes", "delete", "deletes", "down"}),
+                                resolver,
+                                hasExplicitNodeIds,
+                                patch);
+    }
+  }
+  AppendTopologyLinkUpserts(GetArrayFieldOrEmpty(root, {"link_upserts", "links_upsert"}),
+                            resolver,
+                            hasExplicitNodeIds,
+                            patch);
+  AppendTopologyLinkRemoves(GetArrayFieldOrEmpty(root, {"link_removes", "links_remove"}),
+                            resolver,
+                            hasExplicitNodeIds,
+                            patch);
+
+  return patch;
+}
+
+TopologyPatchInfo
+ReadTopologyPatchJsonFile(const std::string& filename,
+                          const TopologyNodeResolver& resolver,
+                          bool hasExplicitNodeIds)
+{
+  json root = ReadJsonFile(filename);
+  return ParseTopologyPatchJsonObject(root, resolver, hasExplicitNodeIds);
+}
+
 std::vector<TopologyTimeSlice>
 ReadTopologyTimeSlicesJsonFile(const std::string& filename,
                                const TopologyNodeResolver& resolver,
-                               bool hasExplicitNodeIds)
+                               bool hasExplicitNodeIds,
+                               bool patchMode)
 {
   json root = ReadJsonFile(filename);
   json slicesArray = ExtractJsonArray(root, {"time_slices", "timeslices", "slices", "data"});
@@ -429,13 +613,28 @@ ReadTopologyTimeSlicesJsonFile(const std::string& filename,
   for (const auto& item : slicesArray)
   {
     TopologyTimeSlice slice;
-    slice.nodes_file = GetStringField(item, {"nodes_file", "node_file"}, "");
-    slice.nodes_file = ResolveRelativePath(filename, slice.nodes_file);
-    slice.links_file = GetStringField(item, {"links_file", "topology_file", "file"}, "");
-    slice.links_file = ResolveRelativePath(filename, slice.links_file);
+    slice.is_patch = patchMode;
+    if (patchMode)
+    {
+      slice.patch_file = GetStringField(item, {"patch_file", "file"}, "");
+      slice.patch_file = ResolveRelativePath(filename, slice.patch_file);
+    }
+    else
+    {
+      slice.nodes_file = GetStringField(item, {"nodes_file", "node_file"}, "");
+      slice.nodes_file = ResolveRelativePath(filename, slice.nodes_file);
+      slice.links_file = GetStringField(item, {"links_file", "topology_file", "file"}, "");
+      slice.links_file = ResolveRelativePath(filename, slice.links_file);
+      slice.has_nodes_update = !slice.nodes_file.empty();
+      slice.has_links_update = !slice.links_file.empty();
+    }
+
     if (FindJsonField(item, {"time", "time_s", "sim_time"}) != nullptr)
     {
       slice.time_s = GetDoubleField(item, {"time", "time_s", "sim_time"}, 0.0);
+    }
+    else if (!slice.patch_file.empty() && TryParseSecondsFromTimeSliceFilename(slice.patch_file, slice.time_s))
+    {
     }
     else if (!slice.links_file.empty() && TryParseSecondsFromTimeSliceFilename(slice.links_file, slice.time_s))
     {
@@ -448,19 +647,31 @@ ReadTopologyTimeSlicesJsonFile(const std::string& filename,
       NS_FATAL_ERROR("时间片缺少time字段，且文件名无法解析为xxx_5s.json格式");
     }
 
-    auto nodesIt = item.find("nodes");
-    if (nodesIt != item.end() && nodesIt->is_array())
+    if (patchMode)
     {
-      for (const auto& nodeItem : *nodesIt)
+      if (slice.patch_file.empty())
       {
-        slice.nodes.push_back(ParseTopologyNodeJson(nodeItem));
+        slice.patch = ParseTopologyPatchJsonObject(item, resolver, hasExplicitNodeIds);
       }
     }
-
-    auto linksIt = item.find("links");
-    if (linksIt != item.end() && linksIt->is_array())
+    else
     {
-      slice.links = ParseTopologyLinksJsonArray(*linksIt, resolver, hasExplicitNodeIds);
+      auto nodesIt = item.find("nodes");
+      if (nodesIt != item.end() && nodesIt->is_array())
+      {
+        slice.has_nodes_update = true;
+        for (const auto& nodeItem : *nodesIt)
+        {
+          slice.nodes.push_back(ParseTopologyNodeJson(nodeItem));
+        }
+      }
+
+      auto linksIt = item.find("links");
+      if (linksIt != item.end() && linksIt->is_array())
+      {
+        slice.has_links_update = true;
+        slice.links = ParseTopologyLinksJsonArray(*linksIt, resolver, hasExplicitNodeIds);
+      }
     }
 
     slices.push_back(slice);
@@ -472,7 +683,7 @@ ReadTopologyTimeSlicesJsonFile(const std::string& filename,
 }
 
 std::vector<TopologyTimeSlice>
-ScanTopologyTimeSlicesDirectory(const std::string& dirname)
+ScanTopologyTimeSlicesDirectory(const std::string& dirname, bool patchMode)
 {
   // 默认目录模式按文件名配对时间片：
   // nodes_5s.json 与 topology_5s.json 合并为同一个5s更新事件。
@@ -507,13 +718,23 @@ ScanTopologyTimeSlicesDirectory(const std::string& dirname)
     TopologyTimeSlice& slice = slicesByTime[seconds];
     slice.time_s = seconds;
     std::string fullPath = JoinPath(dirname, filename);
-    if (StartsWith(filename, "nodes_"))
+    slice.is_patch = patchMode;
+    if (patchMode)
+    {
+      if (StartsWith(filename, "patch_"))
+      {
+        slice.patch_file = fullPath;
+      }
+    }
+    else if (StartsWith(filename, "nodes_"))
     {
       slice.nodes_file = fullPath;
+      slice.has_nodes_update = true;
     }
     else if (StartsWith(filename, "topology_"))
     {
       slice.links_file = fullPath;
+      slice.has_links_update = true;
     }
   }
   closedir(dir);
@@ -522,7 +743,11 @@ ScanTopologyTimeSlicesDirectory(const std::string& dirname)
   for (const auto& item : slicesByTime)
   {
     const TopologyTimeSlice& slice = item.second;
-    if (slice.nodes_file.empty() && slice.links_file.empty())
+    if (slice.is_patch && slice.patch_file.empty())
+    {
+      continue;
+    }
+    if (!slice.is_patch && !slice.has_nodes_update && !slice.has_links_update)
     {
       continue;
     }

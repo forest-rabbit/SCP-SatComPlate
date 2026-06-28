@@ -13,6 +13,7 @@ namespace ns3{
    *   - 使用原有星座参数、CSV拓扑和内置动态更新逻辑。
    */
   bool _useJsonTopo = true;
+  bool _jsonTopoPatchMode = false;       // false=后续时间片为全量快照；true=后续时间片为patch增量
 
   /* JSON模式仍然建议修改的实验参数：这些控制仿真和业务，不控制拓扑结构 */
   const double totalTimeStep = 110;     // 仿真总时长(s)，JSON模式仍有效

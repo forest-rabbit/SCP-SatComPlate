@@ -1,0 +1,22 @@
+{
+  "links": [
+    {
+      "node1_id": 0,
+      "node2_id": 1,
+      "type": "sat",
+      "delay": 10000,
+      "link_bandwidth": 8000000,
+      "link_load_up": 1200,
+      "link_load_down": 900
+    },
+    {
+      "node1_id": 1,
+      "node2_id": 100,
+      "type": "feeder",
+      "delay": 14000,
+      "link_bandwidth": 5000000,
+      "link_load_up": 0,
+      "link_load_down": 0
+    }
+  ]
+}

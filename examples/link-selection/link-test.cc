@@ -76,7 +76,8 @@ void GetData(vector<vector<double>>& data, const int destNum, std::string name)
 	std::string lineStr;
   std::cout << "[TRAFFIC] 读取流量矩阵" << std::endl
             << "  file      : " << name << std::endl
-            << "  sateNum   : " << destNum << std::endl;
+            << "  sateNum   : " << destNum << std::endl
+            << std::endl;
   int i = 0;
   int j = 0;
 	while (getline(inFile, lineStr))
@@ -426,7 +427,7 @@ void dealSimInfo(Ptr<FlowMonitor> monitor, double ctlPkt){
                  "  Latency: " << Latency*1000 << " ms\n"
                  "  Throughput: "<< Throughput << " Gbps\n"
                  "  Jitter: " << Jitter*1000 << " ms\n"
-                 "  Loss Packet Ratio: " << (double)lostPackets * 100 / TxPackets << " %\n"
+                 "  Loss Packet Ratio: " << (double)lostPackets * 100 / TxPackets << " %\n\n"
 
                  ;
 
@@ -463,6 +464,7 @@ main (int argc, char *argv[])
   cmd.AddValue ("linkBandwidth", "默认链路带宽；JSON链路未写带宽时作为兜底值", linkBandwidth);
   cmd.AddValue("tranProtocol", "0:UDP, 1:TCP", _tranProc);
   cmd.AddValue("useJsonTopo", "是否使用 examples/link-selection/Topodata 中的JSON拓扑", _useJsonTopo);
+  cmd.AddValue("jsonTopoPatchMode", "JSON模式后续时间片：false=全量快照，true=patch增量", _jsonTopoPatchMode);
   cmd.AddValue("nodesJson", "可选：初始节点JSON文件；默认Topodata/nodes_0s.json", nodesJsonFile);
   cmd.AddValue("topologyJson", "可选：初始链路JSON文件；默认Topodata/topology_0s.json", topologyJsonFile);
   cmd.AddValue("timeSlicesJson", "可选：时间片索引JSON文件；默认按Topodata文件名扫描", timeSlicesJsonFile);
@@ -471,7 +473,9 @@ main (int argc, char *argv[])
             << "  offeredLoad   : " << offeredload << std::endl
             << "  linkBandwidth : " << linkBandwidth << std::endl
             << "  tranProc      : " << (_tranProc == 1 ? "TCP" : "UDP") << std::endl
-            << "  useJsonTopo   : " << (_useJsonTopo ? "true" : "false") << std::endl;
+            << "  useJsonTopo   : " << (_useJsonTopo ? "true" : "false") << std::endl
+            << "  jsonTopoMode  : " << (_jsonTopoPatchMode ? "patch" : "snapshot") << std::endl
+            << std::endl;
 
   if (!_useJsonTopo)
   {
@@ -552,7 +556,8 @@ main (int argc, char *argv[])
 
     // 计算时间差并转换为秒
     double duration = ((double)(end - start)) / CLOCKS_PER_SEC;
-    std::cout << "Simulation real - time cost: " << duration << " s" << std::endl;
+    std::cout << "Simulation real - time cost: " << duration << " s" << std::endl
+              << std::endl;
   Simulator::Destroy ();
 
   // 在 Simulator::Run() 之后

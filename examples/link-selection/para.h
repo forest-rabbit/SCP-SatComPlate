@@ -17,6 +17,7 @@
 
 namespace ns3 {
   extern bool _useJsonTopo;    // true: 使用Topodata JSON作为拓扑真值；false: 使用传统星座/CSV逻辑
+  extern bool _jsonTopoPatchMode; // true: 后续时间片读取patch_<time>s.json增量；false: 读取全量快照
 
   extern const double totalTimeStep; // 仿真总时长(s)，JSON模式仍有效
   extern double offeredload;         // 业务负载率
