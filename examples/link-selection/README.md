@@ -127,10 +127,15 @@ examples/link-selection/Topodata/json/README.md
 热点流量模式下（`_trafficMode=0`），程序读取：
 
 ```text
-examples/link-selection/traffic_matrix(324).csv
+examples/link-selection/Trafficdata/traffic_matrix(324).csv
 ```
 
 当前 JsonTopo 示例节点规模为 66 颗卫星和 5 个地面站。流量矩阵按卫星业务源宿关系读取。
+流量数据目录说明见：
+
+```text
+examples/link-selection/Trafficdata/README.md
+```
 
 ## 6. 主流程
 

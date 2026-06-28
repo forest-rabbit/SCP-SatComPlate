@@ -265,7 +265,7 @@ void buildApp(){
     // 目前JSON模式仍复用原324星流量矩阵文件，并按实际卫星数截取读取。
     // 如果甲方提供traffic_matrix(66).csv，这里应优先改为读取66星文件。
     if(_isSate == 1){
-      GetData(data, sates.GetN(), "examples/link-selection/traffic_matrix(324).csv");
+      GetData(data, sates.GetN(), "examples/link-selection/Trafficdata/traffic_matrix(324).csv");
     }
     else if(_isSate == 2)
     {

@@ -12,10 +12,11 @@ examples/link-selection/Topodata/README.md  # 拓扑数据总入口，区分 jso
 examples/link-selection/Topodata/json/README.md      # JsonTopo 文件构建、命名规则和交付规范
 examples/link-selection/Topodata/json/examples/      # 全量快照和增量 patch 的示例
 examples/link-selection/Topodata/csv/README.md       # 传统 CSV 拓扑输入说明
+examples/link-selection/Trafficdata/README.md        # 业务流量矩阵输入说明
 docs/dev-setup.md                           # 开发环境、VS Code 和 clangd 说明
 ```
 
-甲方通常只需要阅读本文件、`examples/link-selection/README.md` 和 `Topodata/` 下的数据说明；
+甲方通常只需要阅读本文件、`examples/link-selection/README.md`、`Topodata/` 和 `Trafficdata/` 下的数据说明；
 开发环境和仓库维护内容不放在本文件中。
 
 ## 主要目录
@@ -27,7 +28,7 @@ examples/link-selection/
 ├── para.cc                   # 默认实验参数
 ├── jsontopo/                 # JsonTopo 解析、状态维护和时间片调度
 ├── Topodata/                 # 拓扑数据目录；json/ 放 JsonTopo，csv/ 放传统 CSV
-├── traffic_matrix(324).csv   # 默认流量矩阵
+├── Trafficdata/              # 业务流量矩阵目录
 └── README.md                 # link-test 详细运行说明
 ```
 
