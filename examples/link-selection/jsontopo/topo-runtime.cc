@@ -9,6 +9,8 @@
 
 #include "ns3/simulator.h"
 
+#include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 
@@ -73,6 +75,35 @@ TopologyDataLocation()
   return kDefaultTopoDataDir;
 }
 
+static bool
+FileExists(const std::string& path)
+{
+  std::ifstream input(path.c_str());
+  return input.good();
+}
+
+static void
+ValidateInitialJsonTopologyFiles()
+{
+  bool nodesOk = FileExists(nodesJsonFile);
+  bool topologyOk = FileExists(topologyJsonFile);
+  if (nodesOk && topologyOk)
+  {
+    return;
+  }
+
+  std::ostringstream oss;
+  oss << "[TOPO:Error] JsonTopo已启用，但缺少初始化JSON文件。"
+      << "\n  nodes    : " << nodesJsonFile << (nodesOk ? " [OK]" : " [缺失]")
+      << "\n  topology : " << topologyJsonFile << (topologyOk ? " [OK]" : " [缺失]")
+      << "\n处理方式："
+      << "\n  1. 将甲方交付的 nodes_0s.json 和 topology_0s.json 放到 examples/link-selection/Topodata/ 顶层；"
+      << "\n  2. 或用 --nodesJson/--topologyJson 显式指定示例或真实文件；"
+      << "\n  3. 如果不使用JsonTopo，运行时传入 --useJsonTopo=false。";
+  std::cerr << oss.str() << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
 void
 ConfigureDefaultJsonTopologyFiles()
 {
@@ -89,6 +120,7 @@ ConfigureDefaultJsonTopologyFiles()
   {
     topologyJsonFile = kDefaultTopologyJsonFile;
   }
+  ValidateInitialJsonTopologyFiles();
 }
 
 static std::string

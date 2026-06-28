@@ -39,6 +39,10 @@ source .venv/bin/activate
 PATH="$PWD/.venv/bin:$PATH" ./waf --run "link-test --nodesJson=examples/link-selection/Topodata/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/Topodata/examples/constellation-66sat-5gs/topology_0s.json"
 ```
 
+如果直接运行 `./waf --run link-test`，需要先把 `nodes_0s.json` 和
+`topology_0s.json` 放到 `Topodata/` 顶层。缺少任一初始化文件时，程序会立即报错退出，
+不会继续进入仿真。
+
 默认参数位于 `para.cc`：
 
 ```text

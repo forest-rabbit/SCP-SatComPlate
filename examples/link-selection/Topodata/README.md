@@ -17,6 +17,8 @@ topology_0s.json
 不能在仿真中途新增节点。`topology_0s.json` 安装初始完整链路集合。
 
 如果只是测试格式，可以参考 `examples/constellation-66sat-5gs/` 中的 66 星 5 地面站示例。
+如果启用 JsonTopo 但 `Topodata/` 顶层缺少任一初始化文件，程序会立即报错退出；
+可将交付文件放到顶层，或通过 `--nodesJson`、`--topologyJson` 显式指定文件路径。
 
 ## 命名规则
 

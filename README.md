@@ -97,7 +97,7 @@ Simulation real - time cost
 
 若要自动加载 patch 时间片，请将 `patch_<time>s.json` 放到 `examples/link-selection/Topodata/` 顶层。
 
-如果已将甲方数据放入 `examples/link-selection/Topodata/` 顶层，也可以直接运行 `./waf --run link-test`。完整参数和仿真流程见 `examples/link-selection/README.md`。
+如果已将甲方数据放入 `examples/link-selection/Topodata/` 顶层，也可以直接运行 `./waf --run link-test`。如果顶层缺少 `nodes_0s.json` 或 `topology_0s.json`，程序会立即报错退出，并提示应放置的文件或可使用的命令行参数。完整参数和仿真流程见 `examples/link-selection/README.md`。
 
 ## JsonTopo 数据交付
 
