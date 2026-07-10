@@ -58,9 +58,11 @@ totalTimeStep = 110
 
 ```text
 [RUN] 实验参数
+[TOPO:Init] 开始拓扑初始化
 [TOPO:Nodes] 节点创建完成
+[TOPO:Clusters] 初始簇信息
 [TOPO:Links] 初始链路安装完成
-[TOPO:Init] JsonTopo 初始化完成
+[TOPO:Plan] JsonTopo 时间片计划
 [TRAFFIC] 读取流量矩阵
 Simulation real - time cost
 ```

@@ -15,32 +15,87 @@ namespace ns3 {
 
 static std::unordered_map<uint32_t, uint32_t> g_topologyNodeIndexByExternalId;
 
-static void
-AddSample(std::vector<std::string>& samples, const std::string& value)
+static bool
+IsGroundStation(const TopologyNodeInfo& info)
 {
-  static const uint32_t kMaxSamples = 3;
-  if (samples.size() < kMaxSamples)
-  {
-    samples.push_back(value);
-  }
+  return info.node_type == "gs" || info.node_type == "ground";
 }
 
-static void
-AppendSampleLines(std::ostringstream& oss, const std::vector<std::string>& samples)
+static std::string
+JoinNodeIds(const std::vector<uint32_t>& ids)
 {
-  if (samples.empty())
+  if (ids.empty())
   {
-    oss << " 无";
-    return;
+    return "无";
   }
-  oss << std::endl;
-  for (uint32_t i = 0; i < samples.size(); ++i)
+  std::ostringstream oss;
+  for (uint32_t i = 0; i < ids.size(); ++i)
   {
     if (i > 0)
     {
+      oss << ",";
+    }
+    oss << ids[i];
+  }
+  return oss.str();
+}
+
+static std::string
+BuildClusterSummary(const std::vector<TopologyNodeInfo>& nodeInfos)
+{
+  struct ClusterPrintInfo
+  {
+    std::vector<uint32_t> ground_stations;
+    std::vector<uint32_t> node_ids;
+  };
+
+  std::map<uint32_t, ClusterPrintInfo> clusters;
+  for (const auto& info : nodeInfos)
+  {
+    if (!info.is_cluster)
+    {
+      continue;
+    }
+    ClusterPrintInfo& cluster = clusters[info.cluster_id];
+    if (IsGroundStation(info))
+    {
+      cluster.ground_stations.push_back(info.node_id);
+    }
+    else
+    {
+      cluster.node_ids.push_back(info.node_id);
+    }
+  }
+
+  if (clusters.empty())
+  {
+    return "无";
+  }
+
+  std::ostringstream oss;
+  uint32_t index = 0;
+  for (const auto& item : clusters)
+  {
+    if (index > 0)
+    {
       oss << std::endl;
     }
-    oss << "  - " << samples[i];
+    oss << "簇" << item.first
+        << " 地面站:" << JoinNodeIds(item.second.ground_stations)
+        << " 节点:" << JoinNodeIds(item.second.node_ids);
+    ++index;
+  }
+  return oss.str();
+}
+
+static void
+PrintClusterSummary(const std::string& indent)
+{
+  std::istringstream input(BuildClusterSummary(topoNodeInfos));
+  std::string line;
+  while (std::getline(input, line))
+  {
+    std::cout << indent << line << std::endl;
   }
 }
 
@@ -162,9 +217,8 @@ BuildClusterNodesFromJsonInfo()
 }
 
 static std::string
-BuildNodeUpdateSummary(const std::vector<TopologyNodeInfo>& updatedInfos)
+BuildClusterUpdateSummary(const std::vector<TopologyNodeInfo>& updatedInfos)
 {
-  // 只打印摘要和少量样例，避免每次更新时间片刷屏。
   std::map<uint32_t, TopologyNodeInfo> oldInfos;
   for (const auto& info : topoNodeInfos)
   {
@@ -173,16 +227,12 @@ BuildNodeUpdateSummary(const std::vector<TopologyNodeInfo>& updatedInfos)
 
   uint32_t clusterChanged = 0;
   uint32_t headChanged = 0;
-  uint32_t addedNodes = 0;
-  std::vector<std::string> samples;
 
   for (const auto& info : updatedInfos)
   {
     auto oldIt = oldInfos.find(info.node_id);
     if (oldIt == oldInfos.end())
     {
-      ++addedNodes;
-      AddSample(samples, "新增节点:" + std::to_string(info.node_id));
       continue;
     }
 
@@ -190,26 +240,17 @@ BuildNodeUpdateSummary(const std::vector<TopologyNodeInfo>& updatedInfos)
     if (oldInfo.is_cluster != info.is_cluster || oldInfo.cluster_id != info.cluster_id)
     {
       ++clusterChanged;
-      AddSample(samples,
-                "节点" + std::to_string(info.node_id) + "簇:"
-                + std::to_string(oldInfo.cluster_id) + "->" + std::to_string(info.cluster_id));
     }
     if (oldInfo.is_cluster_head != info.is_cluster_head)
     {
       ++headChanged;
-      AddSample(samples,
-                "节点" + std::to_string(info.node_id)
-                + (info.is_cluster_head ? "成为簇首" : "取消簇首"));
     }
   }
 
   std::ostringstream oss;
-  oss << "节点总数   : " << updatedInfos.size() << std::endl
-      << "新增节点   : " << addedNodes << std::endl
-      << "簇归属变化 : " << clusterChanged << std::endl
+  oss << "簇归属变化 : " << clusterChanged << std::endl
       << "簇首变化   : " << headChanged << std::endl
-      << "变化示例   :";
-  AppendSampleLines(oss, samples);
+      << BuildClusterSummary(updatedInfos);
   return oss.str();
 }
 
@@ -250,16 +291,18 @@ CreateNodesFromJsonInfo(const std::vector<TopologyNodeInfo>& nodeInfos)
             << "  satellites : " << sates.GetN() << std::endl
             << "  ground     : " << Gnodes.GetN() << std::endl
             << "  total      : " << topoNodes.GetN() << std::endl
-            << "  clusters   : " << satClusterNodes.size() << std::endl
-            << std::endl;
+            << std::endl
+            << "[TOPO:Clusters] 初始簇信息" << std::endl;
+  PrintClusterSummary("  ");
+  std::cout << std::endl;
 }
 
-std::string
+TopologyNodeUpdateSummary
 ApplyTopologyNodeInfos(const std::vector<TopologyNodeInfo>& nodeInfos)
 {
   if (nodeInfos.empty())
   {
-    return "节点文件为空或本时间片未包含节点更新";
+    return {"节点文件为空或本时间片未包含节点更新", ""};
   }
 
   std::vector<TopologyNodeInfo> updatedInfos;
@@ -276,18 +319,18 @@ ApplyTopologyNodeInfos(const std::vector<TopologyNodeInfo>& nodeInfos)
     updatedInfos.push_back(info);
   }
 
-  std::string summary = BuildNodeUpdateSummary(updatedInfos);
+  std::string clusterSummary = BuildClusterUpdateSummary(updatedInfos);
   topoNodeInfos.assign(updatedInfos.begin(), updatedInfos.end());
   BuildClusterNodesFromJsonInfo();
-  return summary;
+  return {"已应用节点更新", clusterSummary};
 }
 
-std::string
+TopologyNodeUpdateSummary
 ApplyTopologyNodePatches(const std::vector<TopologyNodePatch>& patches)
 {
   if (patches.empty())
   {
-    return "节点patch为空或本时间片未包含节点更新";
+    return {"未提供节点更新，保持上一状态", ""};
   }
 
   std::map<uint32_t, uint32_t> nodeInfoIndexById;
@@ -321,10 +364,10 @@ ApplyTopologyNodePatches(const std::vector<TopologyNodePatch>& patches)
     }
   }
 
-  std::string summary = BuildNodeUpdateSummary(updatedInfos);
+  std::string clusterSummary = BuildClusterUpdateSummary(updatedInfos);
   topoNodeInfos.assign(updatedInfos.begin(), updatedInfos.end());
   BuildClusterNodesFromJsonInfo();
-  return summary;
+  return {"已应用节点更新", clusterSummary};
 }
 
 } // namespace ns3

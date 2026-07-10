@@ -9,6 +9,12 @@
 
 namespace ns3 {
 
+struct TopologyNodeUpdateSummary
+{
+  std::string node_summary;
+  std::string cluster_summary;
+};
+
 TopologyNodeResolver MakeTopologyNodeResolver();
 bool HasExplicitTopologyNodeIds();
 
@@ -16,8 +22,8 @@ std::vector<LinkInfo> ReadResolvedTopologyLinksJsonFile(const std::string& filen
 TopologyPatchInfo ReadResolvedTopologyPatchJsonFile(const std::string& filename);
 
 void CreateNodesFromJsonInfo(const std::vector<TopologyNodeInfo>& nodeInfos);
-std::string ApplyTopologyNodeInfos(const std::vector<TopologyNodeInfo>& nodeInfos);
-std::string ApplyTopologyNodePatches(const std::vector<TopologyNodePatch>& patches);
+TopologyNodeUpdateSummary ApplyTopologyNodeInfos(const std::vector<TopologyNodeInfo>& nodeInfos);
+TopologyNodeUpdateSummary ApplyTopologyNodePatches(const std::vector<TopologyNodePatch>& patches);
 
 } // namespace ns3
 

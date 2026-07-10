@@ -53,6 +53,26 @@ namespace ns3{
   // 跟踪每个节点已经使用的接口索引
   std::map<uint32_t, std::set<uint32_t>> nodeUsedIndices;
 
+  static void
+  LogTopologyInitStart()
+  {
+    std::cout << "[TOPO:Init] 开始拓扑初始化" << std::endl;
+    if (_useJsonTopo)
+    {
+      std::cout << "  source     : JsonTopo" << std::endl
+                << "  nodes      : " << nodesJsonFile << std::endl
+                << "  topology   : " << topologyJsonFile << std::endl;
+    }
+    else
+    {
+      std::cout << "  source     : Legacy" << std::endl
+                << "  satellites : " << sates_num << std::endl
+                << "  orbits     : " << orbit_num << std::endl
+                << "  per orbit  : " << sate_num << std::endl;
+    }
+    std::cout << std::endl;
+  }
+
   // 函数功能：输出卫星节点信息以及网卡信息
   void print_node_info(){
     AsciiTraceHelper ascii;
@@ -134,6 +154,7 @@ namespace ns3{
   void initTopo(){
     // #ifdef NS3_OPENFLOW
     ConfigureDefaultJsonTopologyFiles();
+    LogTopologyInitStart();
 
     if (!nodesJsonFile.empty())
     {

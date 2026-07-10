@@ -2,6 +2,7 @@
 
 #include "../access.h"
 #include "../para.h"
+#include "../topo.h"
 
 #include "ns3/ipv4-address-helper.h"
 #include "ns3/ipv4-global-routing-helper.h"
@@ -21,36 +22,6 @@ static std::map<Link, NetDeviceContainer> linkDevices;
 static std::map<Link, LinkInfo> g_currentTopologyLinksByKey;
 static uint32_t g_nextIpv4Network = 0;
 
-static void
-AddSample(std::vector<std::string>& samples, const std::string& value)
-{
-  static const uint32_t kMaxSamples = 3;
-  if (samples.size() < kMaxSamples)
-  {
-    samples.push_back(value);
-  }
-}
-
-static std::string
-JoinSamples(const std::vector<std::string>& samples)
-{
-  if (samples.empty())
-  {
-    return " 无";
-  }
-  std::ostringstream oss;
-  oss << std::endl;
-  for (uint32_t i = 0; i < samples.size(); ++i)
-  {
-    if (i > 0)
-    {
-      oss << std::endl;
-    }
-    oss << "    - " << samples[i];
-  }
-  return oss.str();
-}
-
 Link
 MakeLinkKey(uint32_t first, uint32_t second)
 {
@@ -61,10 +32,29 @@ MakeLinkKey(uint32_t first, uint32_t second)
   return Link(static_cast<int>(second), static_cast<int>(first));
 }
 
+static std::string
+DisplayNodeId(int nodeIndex)
+{
+  if (nodeIndex < 0)
+  {
+    return std::to_string(nodeIndex);
+  }
+
+  const uint32_t internalIndex = static_cast<uint32_t>(nodeIndex);
+  for (const auto& info : topoNodeInfos)
+  {
+    if (info.node_index == internalIndex)
+    {
+      return std::to_string(info.node_id);
+    }
+  }
+  return std::to_string(nodeIndex);
+}
+
 std::string
 FormatLinkKey(const Link& link)
 {
-  return std::to_string(link.first) + "<->" + std::to_string(link.second);
+  return DisplayNodeId(link.first) + "<->" + DisplayNodeId(link.second);
 }
 
 static Ipv4Address
@@ -182,17 +172,6 @@ FormatInitialTopologyLinkTypes(const std::vector<LinkInfo>& links)
       << "    ground : " << groundLinks << std::endl
       << "    other  : " << otherLinks;
   return oss.str();
-}
-
-std::string
-FormatInitialTopologyLinkSamples(const std::vector<LinkInfo>& links)
-{
-  std::vector<std::string> samples;
-  for (const auto& link : links)
-  {
-    AddSample(samples, FormatLinkKey(MakeLinkKey(link.source, link.destination)) + "(" + link.type + ")");
-  }
-  return JoinSamples(samples);
 }
 
 static void
@@ -367,12 +346,10 @@ ApplyFullTopologyLinks(NodeContainer& nodes, const std::vector<LinkInfo>& links,
     if (state == "新增")
     {
       ++summary.added_links;
-      AddSample(summary.samples, state + ":" + FormatLinkKey(key) + "(" + link.type + ")");
     }
     else if (state == "恢复")
     {
       ++summary.reenabled_links;
-      AddSample(summary.samples, state + ":" + FormatLinkKey(key) + "(" + link.type + ")");
     }
     else
     {
@@ -397,7 +374,6 @@ ApplyFullTopologyLinks(NodeContainer& nodes, const std::vector<LinkInfo>& links,
     }
     currentLinks.erase(link);
     ++summary.disabled_links;
-    AddSample(summary.samples, "断开:" + FormatLinkKey(link));
   }
 
   if (recomputeRoutes)

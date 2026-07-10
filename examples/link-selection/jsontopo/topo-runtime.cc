@@ -36,20 +36,6 @@ PrintIndentedBlock(const std::string& text, const std::string& indent)
   }
 }
 
-static void
-PrintSampleList(const std::vector<std::string>& samples, const std::string& indent)
-{
-  if (samples.empty())
-  {
-    std::cout << indent << "无" << std::endl;
-    return;
-  }
-  for (const auto& sample : samples)
-  {
-    std::cout << indent << "- " << sample << std::endl;
-  }
-}
-
 static std::string
 DirectoryName(const std::string& path)
 {
@@ -147,7 +133,7 @@ FormatTopologyUpdateTimes(const std::vector<TopologyTimeSlice>& slices)
 static void
 LogJsonTopologyPlan()
 {
-  std::cout << "[TOPO:Init] JsonTopo 初始化完成" << std::endl
+  std::cout << "[TOPO:Plan] JsonTopo 时间片计划" << std::endl
             << "  mode     : " << (_jsonTopoPatchMode ? "patch" : "snapshot") << std::endl
             << "  data dir : " << TopologyDataLocation() << std::endl
             << "  updates  : " << g_topologyTimeSlices.size() << std::endl
@@ -159,23 +145,35 @@ static void
 LogTopologyUpdate(uint32_t updateIndex,
                   uint32_t totalUpdates,
                   const std::string& nodeSummary,
+                  const std::string& clusterSummary,
                   const TopologyLinkUpdateSummary& linkSummary)
 {
   std::cout << "[TOPO:Update] " << updateIndex << "/" << totalUpdates
             << " @ " << Simulator::Now().GetSeconds() << "s" << std::endl
             << "  nodes:" << std::endl;
   PrintIndentedBlock(nodeSummary, "    ");
-  std::cout << "  links:" << std::endl
-            << "    目标链路 : " << linkSummary.desired_links << std::endl
-            << "    新增     : " << linkSummary.added_links << std::endl
+  if (!clusterSummary.empty())
+  {
+    std::cout << "  clusters:" << std::endl;
+    PrintIndentedBlock(clusterSummary, "    ");
+  }
+  std::cout << "  links:" << std::endl;
+  if (!linkSummary.note.empty()
+      && linkSummary.added_links == 0
+      && linkSummary.reenabled_links == 0
+      && linkSummary.disabled_links == 0)
+  {
+    std::cout << "    " << linkSummary.note << std::endl
+              << std::endl;
+    return;
+  }
+  std::cout << "    新增     : " << linkSummary.added_links << std::endl
             << "    恢复     : " << linkSummary.reenabled_links << std::endl
             << "    断开     : " << linkSummary.disabled_links << std::endl;
   if (!linkSummary.note.empty())
   {
     std::cout << "    说明     : " << linkSummary.note << std::endl;
   }
-  std::cout << "    变化示例 :" << std::endl;
-  PrintSampleList(linkSummary.samples, "      ");
   std::cout << std::endl;
 }
 
@@ -186,6 +184,7 @@ ApplyTopologyTimeSlice(TopologyTimeSlice slice)
   ++g_topologyUpdateApplied;
 
   std::string nodeSummary;
+  std::string clusterSummary;
   std::vector<LinkInfo> links;
   TopologyLinkUpdateSummary linkSummary;
   if (slice.is_patch)
@@ -195,9 +194,15 @@ ApplyTopologyTimeSlice(TopologyTimeSlice slice)
     {
       patch = ReadResolvedTopologyPatchJsonFile(slice.patch_file);
     }
-    nodeSummary = ApplyTopologyNodePatches(patch.node_updates);
+    TopologyNodeUpdateSummary nodeUpdateSummary = ApplyTopologyNodePatches(patch.node_updates);
+    nodeSummary = nodeUpdateSummary.node_summary;
+    clusterSummary = nodeUpdateSummary.cluster_summary;
     links = ApplyTopologyLinkPatchToState(patch);
     linkSummary = ApplyFullTopologyLinks(topoNodes, links, true);
+    if (patch.link_upserts.empty() && patch.link_removes.empty())
+    {
+      linkSummary.note = "未提供链路更新，保持上一状态";
+    }
   }
   else
   {
@@ -208,7 +213,9 @@ ApplyTopologyTimeSlice(TopologyTimeSlice slice)
       {
         nodes = ReadTopologyNodesJsonFile(slice.nodes_file);
       }
-      nodeSummary = ApplyTopologyNodeInfos(nodes);
+      TopologyNodeUpdateSummary nodeUpdateSummary = ApplyTopologyNodeInfos(nodes);
+      nodeSummary = nodeUpdateSummary.node_summary;
+      clusterSummary = nodeUpdateSummary.cluster_summary;
     }
     else
     {
@@ -233,6 +240,7 @@ ApplyTopologyTimeSlice(TopologyTimeSlice slice)
   LogTopologyUpdate(g_topologyUpdateApplied,
                     g_topologyUpdateTotal,
                     nodeSummary,
+                    clusterSummary,
                     linkSummary);
 }
 
