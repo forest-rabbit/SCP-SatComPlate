@@ -8,10 +8,13 @@
 #include "ns3/ipv4-global-routing-helper.h"
 #include "ns3/net-device-container.h"
 #include "ns3/point-to-point-module.h"
+#include "ns3/simulator.h"
 
+#include <iostream>
 #include <map>
 #include <set>
 #include <sstream>
+#include <vector>
 
 namespace ns3 {
 
@@ -20,6 +23,9 @@ extern NetDeviceContainer p2pDevices;
 static std::set<Link> currentLinks;
 static std::map<Link, NetDeviceContainer> linkDevices;
 static std::map<Link, LinkInfo> g_currentTopologyLinksByKey;
+static std::map<Link, uint64_t> g_linkHoldTimeGeneration;
+static std::vector<Link> g_pendingHoldTimeExpiredLinks;
+static bool g_holdTimeFlushScheduled = false;
 static uint32_t g_nextIpv4Network = 0;
 
 Link
@@ -97,6 +103,144 @@ LinkDelayTime(const LinkInfo& link)
     return MicroSeconds(link.delay_us);
   }
   return MilliSeconds(link.delay_ms);
+}
+
+static bool
+HasFeederHoldTime(const LinkInfo& link)
+{
+  return link.type == "feeder" && link.has_hold_time_s && link.hold_time_s > 0;
+}
+
+static void
+InvalidateLinkHoldTime(const Link& key)
+{
+  ++g_linkHoldTimeGeneration[key];
+}
+
+static std::string
+FormatHoldTimeLinkList(const std::vector<Link>& links)
+{
+  static const uint32_t kMaxLinksToShow = 8;
+  std::ostringstream oss;
+  for (uint32_t i = 0; i < links.size() && i < kMaxLinksToShow; ++i)
+  {
+    if (i > 0)
+    {
+      oss << ", ";
+    }
+    oss << FormatLinkKey(links[i]);
+  }
+  if (links.size() > kMaxLinksToShow)
+  {
+    oss << ", ... (+" << (links.size() - kMaxLinksToShow) << ")";
+  }
+  return oss.str();
+}
+
+static void
+FlushFeederHoldTimeExpirations()
+{
+  g_holdTimeFlushScheduled = false;
+  if (g_pendingHoldTimeExpiredLinks.empty())
+  {
+    return;
+  }
+
+  const uint32_t expiredLinks = g_pendingHoldTimeExpiredLinks.size();
+  std::cout << "[TOPO:HoldTime] " << expiredLinks
+            << " 条 feeder 链路到期断开 @ " << Simulator::Now().GetSeconds() << "s" << std::endl;
+  if (expiredLinks == 1)
+  {
+    std::cout << "  link      : " << FormatLinkKey(g_pendingHoldTimeExpiredLinks.front()) << std::endl;
+  }
+  else
+  {
+    std::cout << "  links     : " << FormatHoldTimeLinkList(g_pendingHoldTimeExpiredLinks) << std::endl;
+  }
+  std::cout << std::endl;
+
+  g_pendingHoldTimeExpiredLinks.clear();
+  Ipv4GlobalRoutingHelper::RecomputeRoutingTables();
+}
+
+static void
+RecordExpiredFeederHoldTime(const Link& key)
+{
+  g_pendingHoldTimeExpiredLinks.push_back(key);
+  if (!g_holdTimeFlushScheduled)
+  {
+    g_holdTimeFlushScheduled = true;
+    Simulator::ScheduleNow(&FlushFeederHoldTimeExpirations);
+  }
+}
+
+static void
+ExpireFeederHoldTime(NodeContainer nodes, Link key, uint64_t generation)
+{
+  auto generationIt = g_linkHoldTimeGeneration.find(key);
+  if (generationIt == g_linkHoldTimeGeneration.end() || generationIt->second != generation)
+  {
+    return;
+  }
+
+  if (currentLinks.find(key) == currentLinks.end())
+  {
+    return;
+  }
+
+  auto linkIt = g_currentTopologyLinksByKey.find(key);
+  if (linkIt == g_currentTopologyLinksByKey.end() || !HasFeederHoldTime(linkIt->second))
+  {
+    return;
+  }
+
+  if (linkDevices.find(key) == linkDevices.end())
+  {
+    return;
+  }
+
+  LinkDown(nodes.Get(static_cast<uint32_t>(key.first)),
+           nodes.Get(static_cast<uint32_t>(key.second)));
+  currentLinks.erase(key);
+  g_currentTopologyLinksByKey.erase(key);
+  InvalidateLinkHoldTime(key);
+  RecordExpiredFeederHoldTime(key);
+}
+
+static void
+UpdateFeederHoldTimeSchedule(NodeContainer& nodes,
+                             const Link& key,
+                             const LinkInfo& link,
+                             const std::string& linkState)
+{
+  if (!HasFeederHoldTime(link))
+  {
+    InvalidateLinkHoldTime(key);
+    return;
+  }
+
+  bool shouldSchedule = linkState == "新增" || linkState == "恢复";
+  auto previousIt = g_currentTopologyLinksByKey.find(key);
+  if (!shouldSchedule
+      && (previousIt == g_currentTopologyLinksByKey.end()
+          || !HasFeederHoldTime(previousIt->second)
+          || previousIt->second.hold_time_s != link.hold_time_s
+          || previousIt->second.type != link.type))
+  {
+    shouldSchedule = true;
+  }
+
+  if (!shouldSchedule)
+  {
+    return;
+  }
+
+  uint64_t generation = ++g_linkHoldTimeGeneration[key];
+  Simulator::Schedule(Seconds(link.hold_time_s),
+                      &ExpireFeederHoldTime,
+                      nodes,
+                      key,
+                      generation);
 }
 
 static void
@@ -192,6 +336,7 @@ EnsureLinkInstalledAndUp(NodeContainer& nodes, const LinkInfo& link)
 
   Link key = MakeLinkKey(link.source, link.destination);
   auto existing = linkDevices.find(key);
+  std::string linkState;
   if (existing == linkDevices.end())
   {
     // 第一次出现的链路需要安装NetDevice并分配独立/30网段。
@@ -207,18 +352,24 @@ EnsureLinkInstalledAndUp(NodeContainer& nodes, const LinkInfo& link)
     linkDevices[key] = devices;
     ConfigureRuntimeLinkAttributes(devices, link);
     currentLinks.insert(key);
-    return "新增";
+    linkState = "新增";
   }
   else if (currentLinks.find(key) == currentLinks.end())
   {
     ConfigureRuntimeLinkAttributes(existing->second, link);
     LinkUp(nodes.Get(link.source), nodes.Get(link.destination));
     currentLinks.insert(key);
-    return "恢复";
+    linkState = "恢复";
   }
-  ConfigureRuntimeLinkAttributes(existing->second, link);
-  currentLinks.insert(key);
-  return "保持";
+  else
+  {
+    ConfigureRuntimeLinkAttributes(existing->second, link);
+    currentLinks.insert(key);
+    linkState = "保持";
+  }
+
+  UpdateFeederHoldTimeSchedule(nodes, key, link, linkState);
+  return linkState;
 }
 
 static void
@@ -373,6 +524,7 @@ ApplyFullTopologyLinks(NodeContainer& nodes, const std::vector<LinkInfo>& links,
       LinkDown(nodes.Get(link.first), nodes.Get(link.second));
     }
     currentLinks.erase(link);
+    InvalidateLinkHoldTime(link);
     ++summary.disabled_links;
   }
 
