@@ -16,7 +16,8 @@
       "delay": 14000,
       "link_bandwidth": 5000000,
       "link_load_up": 0,
-      "link_load_down": 0
+      "link_load_down": 0,
+      "hold_time": 5
     }
   ]
 }

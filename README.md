@@ -64,10 +64,11 @@ PATH="$PWD/.venv/bin:$PATH" ./waf build
 
 ## 运行
 
-快速自检可以直接使用仓库内置的 66 星 5 地面站示例：
+快速自检可以直接使用仓库内置的 73 星 6 地面站客户尺度示例。`--offeredload=0`
+表示只检查拓扑加载、链路更新和 OSPF 路由收敛，不注入业务流量：
 
 ```bash
-./waf --run "link-test --nodesJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/topology_0s.json"
+./waf --run "link-test --offeredload=0 --nodesJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv"
 ```
 
 正常输出应包含：
@@ -79,6 +80,7 @@ PATH="$PWD/.venv/bin:$PATH" ./waf build
 [TOPO:Clusters] 初始簇信息
 [TOPO:Links] 初始链路安装完成
 [TOPO:Plan] JsonTopo 时间片计划
+[TOPO:HoldTime] ...
 [TRAFFIC] 读取流量矩阵
 Simulation real - time cost
 业务数据性能
@@ -98,10 +100,10 @@ Simulation real - time cost
 --topologyJson=<path>              初始链路文件
 ```
 
-示例：启用增量 patch 模式：
+最小示例：启用增量 patch 模式：
 
 ```bash
-./waf --run "link-test --jsonTopoPatchMode=true --nodesJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/topology_0s.json"
+./waf --run "link-test --offeredload=0 --jsonTopoPatchMode=true --nodesJson=examples/link-selection/input/topology/json/examples/patch/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/patch/topology_0s.json"
 ```
 
 若要自动加载 patch 时间片，请将 `patch_<time>s.json` 放到 `examples/link-selection/input/topology/json/` 目录。
@@ -119,7 +121,7 @@ examples/link-selection/input/topology/json/
 仓库不再提交默认读取的测试 JSON；该目录用于放置甲方交付的 JsonTopo 数据。可参考：
 
 ```text
-examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/
+examples/link-selection/input/topology/json/examples/customer-73sat-6gs/
 ```
 
 必需初始文件：

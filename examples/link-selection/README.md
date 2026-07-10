@@ -19,11 +19,11 @@
 source .venv/bin/activate
 ```
 
-然后构建并运行。仓库内置的 66 星 5 地面站示例可用于快速自检：
+然后构建并运行。仓库内置的 73 星 6 地面站客户尺度示例可用于快速自检：
 
 ```bash
 ./waf build
-./waf --run "link-test --nodesJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/topology_0s.json"
+./waf --run "link-test --offeredload=0 --nodesJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv"
 ```
 
 如果 `build/` 目录不存在，或修改了 waf / wscript / 模块依赖，先重新配置：
@@ -36,7 +36,7 @@ source .venv/bin/activate
 如果没有激活环境，或直接运行 `./waf` 出现 Python 环境相关错误，可以临时使用：
 
 ```bash
-PATH="$PWD/.venv/bin:$PATH" ./waf --run "link-test --nodesJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/topology_0s.json"
+PATH="$PWD/.venv/bin:$PATH" ./waf --run "link-test --offeredload=0 --nodesJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv"
 ```
 
 如果直接运行 `./waf --run link-test`，需要先把 `nodes_0s.json` 和
@@ -63,6 +63,7 @@ totalTimeStep = 110
 [TOPO:Clusters] 初始簇信息
 [TOPO:Links] 初始链路安装完成
 [TOPO:Plan] JsonTopo 时间片计划
+[TOPO:HoldTime] ...
 [TRAFFIC] 读取流量矩阵
 Simulation real - time cost
 ```
@@ -82,10 +83,10 @@ Simulation real - time cost
 - `--isSate=<1|2|3|4>`：传统拓扑模式使用；JsonTopo 模式下不决定节点数量。
 - `--consType=<0|1>`：传统拓扑模式使用；`0=Walker Star`，`1=Walker Delta`。
 
-示例：运行增量 patch 模式：
+示例：运行最小增量 patch 模式：
 
 ```bash
-./waf --run "link-test --jsonTopoPatchMode=true --nodesJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/topology_0s.json"
+./waf --run "link-test --offeredload=0 --jsonTopoPatchMode=true --nodesJson=examples/link-selection/input/topology/json/examples/patch/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/patch/topology_0s.json"
 ```
 
 若要自动加载 patch 时间片，请将 `patch_<time>s.json` 放到 `input/topology/json/`；`input/topology/json/examples/` 下的文件只作为格式示例。
@@ -134,8 +135,8 @@ examples/link-selection/input/topology/json/README.md
 examples/link-selection/input/traffic/traffic_matrix(324).csv
 ```
 
-当前 JsonTopo 示例节点规模为 66 颗卫星和 5 个地面站。流量矩阵按卫星业务源宿关系读取。
-可通过 `--trafficMatrix=<path>` 指定与当前卫星数量匹配的矩阵。
+客户尺度 JsonTopo 示例包含 73 颗卫星和 6 个地面站。运行该示例时应显式指定
+`--trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv`。
 流量数据目录说明见：
 
 ```text

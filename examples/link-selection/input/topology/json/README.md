@@ -16,7 +16,8 @@ topology_0s.json
 `nodes_0s.json` 创建全部 ns-3 节点；后续文件只能更新已有 `node_id`，
 不能在仿真中途新增节点。`topology_0s.json` 安装初始完整链路集合。
 
-如果只是测试格式，可以参考 `examples/constellation-66sat-5gs/` 中的 66 星 5 地面站示例。
+客户尺度运行可参考 `examples/customer-73sat-6gs/`；只测试格式时可使用
+`examples/snapshot/` 或 `examples/patch/` 中的最小示例。
 如果启用 JsonTopo 但 `input/topology/json/` 缺少任一初始化文件，程序会立即报错退出；
 可将交付文件放到该目录，或通过 `--nodesJson`、`--topologyJson` 显式指定文件路径。
 
@@ -141,7 +142,8 @@ link_bandwidth     kbps
 bandwidth_gbps     Gbps，可替代 link_bandwidth
 link_load_up       kbps
 link_load_down     kbps
-hold_time          秒，目前只记录，不会自动按该字段删除链路
+hold_time          秒；仅正数 feeder 生效，从链路安装、恢复或字段更新时开始计时。
+                   到期后链路自动断开并重算 OSPF；未填写、0 或非 feeder 不自动到期。
 ```
 
 ## time_slices.json
@@ -159,4 +161,5 @@ hold_time          秒，目前只记录，不会自动按该字段删除链路
 examples/snapshot/                  最小全量快照示例
 examples/patch/                     最小 patch 示例
 examples/constellation-66sat-5gs/   66颗卫星 + 5个地面站的星座级示例
+examples/customer-73sat-6gs/        73颗卫星 + 6个地面站的客户尺度示例
 ```

@@ -15,8 +15,17 @@ traffic_matrix(324).csv
 examples/link-selection/input/traffic/traffic_matrix(324).csv
 ```
 
-当前 JsonTopo 示例为 66 颗卫星和 5 个地面站。程序会按实际卫星数量读取矩阵前
-`sateNum` 列，因此现阶段仍可复用该 324 星流量矩阵做快速验证。
+客户尺度 JsonTopo 示例应使用：
+
+```text
+traffic_matrix(73).csv
+```
+
+运行时显式指定：
+
+```bash
+--trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv
+```
 
 ## 后续交付建议
 
