@@ -1,8 +1,8 @@
 # JsonTopo 数据构建说明
 
 本目录用于放置 `examples/link-selection/link-test` 的 JsonTopo 输入文件。
-仓库不再提交默认读取的测试 JSON；`Topodata/json/` 用于放置甲方交付数据。
-`Topodata/json/examples/` 只作为说明示例，不参与默认扫描。
+仓库不再提交默认读取的测试 JSON；`input/topology/json/` 用于放置甲方交付数据。
+`input/topology/json/examples/` 只作为说明示例，不参与默认扫描。
 
 ## 必需初始文件
 
@@ -17,7 +17,7 @@ topology_0s.json
 不能在仿真中途新增节点。`topology_0s.json` 安装初始完整链路集合。
 
 如果只是测试格式，可以参考 `examples/constellation-66sat-5gs/` 中的 66 星 5 地面站示例。
-如果启用 JsonTopo 但 `Topodata/json/` 缺少任一初始化文件，程序会立即报错退出；
+如果启用 JsonTopo 但 `input/topology/json/` 缺少任一初始化文件，程序会立即报错退出；
 可将交付文件放到该目录，或通过 `--nodesJson`、`--topologyJson` 显式指定文件路径。
 
 ## 命名规则
@@ -43,10 +43,10 @@ patch_15.5s.json
 
 - `nodes_0s.json` 和 `topology_0s.json` 固定用于初始化。
 - 后续运行期时间必须大于 `0`。
-- 同一个 `Topodata/json/` 目录建议一次只放一种运行方案：要么放全量快照文件，要么放 patch 文件。
+- 同一个 `input/topology/json/` 目录建议一次只放一种运行方案：要么放全量快照文件，要么放 patch 文件。
 - 切换方案前先清理另一类后续时间片文件，避免交付内容和 `--jsonTopoPatchMode` 参数不一致。
-- `Topodata/json/` 不要放无关 JSON 文件，避免被自动扫描。
-- 文档示例放在 `Topodata/json/examples/` 子目录；程序默认不会扫描该子目录。
+- `input/topology/json/` 不要放无关 JSON 文件，避免被自动扫描。
+- 文档示例放在 `input/topology/json/examples/` 子目录；程序默认不会扫描该子目录。
 
 ## 全量快照模式
 
@@ -55,7 +55,7 @@ patch_15.5s.json
 推荐目录：
 
 ```text
-Topodata/json/
+input/topology/json/
 ├── nodes_0s.json
 ├── topology_0s.json
 ├── nodes_5s.json
@@ -87,7 +87,7 @@ patch 模式用于只提交变化项。激活 Python 环境后，在仓库根目
 推荐目录：
 
 ```text
-Topodata/json/
+input/topology/json/
 ├── nodes_0s.json
 ├── topology_0s.json
 ├── patch_5s.json
@@ -147,7 +147,7 @@ hold_time          秒，目前只记录，不会自动按该字段删除链路
 ## time_slices.json
 
 `time_slices.json` 是可选索引文件，当前不推荐作为常规交付文件。默认情况下，
-程序会直接扫描 `Topodata/json/` 文件名并按时间排序加载。
+程序会直接扫描 `input/topology/json/` 文件名并按时间排序加载。
 
 只有在文件名无法遵守上述命名规则，或必须显式控制加载顺序时，才建议使用
 `--timeSlicesJson=<path>` 指定索引文件。全量快照索引项使用 `nodes_file` 和

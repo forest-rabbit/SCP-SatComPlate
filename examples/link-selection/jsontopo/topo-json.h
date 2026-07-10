@@ -47,7 +47,7 @@ std::vector<TopologyTimeSlice> ReadTopologyTimeSlicesJsonFile(const std::string&
                                                               const TopologyNodeResolver& resolver,
                                                               bool hasExplicitNodeIds,
                                                               bool patchMode);
-// 扫描Topodata/json目录，默认忽略0s文件；0s文件只用于初始化，后续时间片才调度更新。
+// 扫描input/topology/json目录，默认忽略0s文件；0s文件只用于初始化，后续时间片才调度更新。
 std::vector<TopologyTimeSlice> ScanTopologyTimeSlicesDirectory(const std::string& dirname,
                                                                bool patchMode);
 bool TryParseSecondsFromTimeSliceFilename(const std::string& path, double& seconds);

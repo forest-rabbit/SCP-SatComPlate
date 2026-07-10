@@ -12,12 +12,12 @@
 
 ## 2. 输入目录
 
-- [ ] 将 `Topodata/` 迁移到 `input/topology/`。
-- [ ] 将 `Trafficdata/` 迁移到 `input/traffic/`。
-- [ ] 更新 JsonTopo、CSV 拓扑和流量矩阵的运行时默认路径。
-- [ ] 提供最小的 `--trafficMatrix` 参数以选择匹配节点规模的流量矩阵。
-- [ ] 更新命令行帮助、README 和示例命令中的路径。
-- [ ] 确认不存在仍然生效的 `Topodata/` 或 `Trafficdata/` 引用。
+- [x] 将 `Topodata/` 迁移到 `input/topology/`。
+- [x] 将 `Trafficdata/` 迁移到 `input/traffic/`。
+- [x] 更新 JsonTopo、CSV 拓扑和流量矩阵的运行时默认路径。
+- [x] 提供最小的 `--trafficMatrix` 参数以选择匹配节点规模的流量矩阵。
+- [x] 更新命令行帮助、README 和示例命令中的路径。
+- [x] 确认不存在仍然生效的 `Topodata/` 或 `Trafficdata/` 引用。
 
 ## 3. JsonTopo 输出
 

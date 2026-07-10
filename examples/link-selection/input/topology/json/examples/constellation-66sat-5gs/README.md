@@ -1,7 +1,7 @@
 # 66星5地面站示例
 
 本目录给出一个接近真实交付规模的 JsonTopo 示例：66 颗卫星、5 个地面站、5 个簇。
-示例文件位于 `Topodata/json/examples/` 子目录，不会被程序默认扫描。
+示例文件位于 `input/topology/json/examples/` 子目录，不会被程序默认扫描。
 
 ## 结构
 
@@ -26,7 +26,7 @@ patch_15s.json     # 15s 增量 patch 示例
 
 ## 使用方式
 
-若要用该示例测试，请将需要的 JSON 文件复制到 `examples/link-selection/Topodata/json/`。
+若要用该示例测试，请将需要的 JSON 文件复制到 `examples/link-selection/input/topology/json/`。
 该目录才会被默认扫描；本目录只作为交付格式示例。
 
 全量快照模式可以测试：

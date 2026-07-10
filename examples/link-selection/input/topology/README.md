@@ -1,11 +1,11 @@
-# Topodata 拓扑数据目录
+# input/topology 拓扑数据目录
 
-`Topodata/` 是 `link-test` 的拓扑数据总目录，用于统一放置甲方提供的拓扑输入。
+`input/topology/` 是 `link-test` 的拓扑数据总目录，用于统一放置甲方提供的拓扑输入。
 
 ## 目录分工
 
 ```text
-Topodata/
+input/topology/
 ├── json/    # JsonTopo 数据交付目录
 └── csv/     # 传统 CSV 拓扑数据目录
 ```
@@ -17,13 +17,13 @@ Topodata/
 JsonTopo 默认扫描：
 
 ```text
-examples/link-selection/Topodata/json/
+examples/link-selection/input/topology/json/
 ```
 
 详细命名规则、snapshot/patch 格式和示例见：
 
 ```text
-examples/link-selection/Topodata/json/README.md
+examples/link-selection/input/topology/json/README.md
 ```
 
 ## 传统 CSV
@@ -31,11 +31,11 @@ examples/link-selection/Topodata/json/README.md
 传统拓扑模式默认读取：
 
 ```text
-examples/link-selection/Topodata/csv/topo(324).csv
+examples/link-selection/input/topology/csv/topo(324).csv
 ```
 
 说明见：
 
 ```text
-examples/link-selection/Topodata/csv/README.md
+examples/link-selection/input/topology/csv/README.md
 ```

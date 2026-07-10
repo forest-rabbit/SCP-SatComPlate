@@ -1,7 +1,7 @@
 # link-test 运行说明（JsonTopo 版本）
 
 本文件说明 `link-test` 的构建、运行参数、仿真流程和输出。JsonTopo 文件格式、
-命名规则、字段单位和甲方交付示例统一维护在 `Topodata/json/README.md`，避免多处重复。
+命名规则、字段单位和甲方交付示例统一维护在 `input/topology/json/README.md`，避免多处重复。
 
 ## 1. 入口文件
 
@@ -23,7 +23,7 @@ source .venv/bin/activate
 
 ```bash
 ./waf build
-./waf --run "link-test --nodesJson=examples/link-selection/Topodata/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/Topodata/json/examples/constellation-66sat-5gs/topology_0s.json"
+./waf --run "link-test --nodesJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/topology_0s.json"
 ```
 
 如果 `build/` 目录不存在，或修改了 waf / wscript / 模块依赖，先重新配置：
@@ -36,11 +36,11 @@ source .venv/bin/activate
 如果没有激活环境，或直接运行 `./waf` 出现 Python 环境相关错误，可以临时使用：
 
 ```bash
-PATH="$PWD/.venv/bin:$PATH" ./waf --run "link-test --nodesJson=examples/link-selection/Topodata/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/Topodata/json/examples/constellation-66sat-5gs/topology_0s.json"
+PATH="$PWD/.venv/bin:$PATH" ./waf --run "link-test --nodesJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/topology_0s.json"
 ```
 
 如果直接运行 `./waf --run link-test`，需要先把 `nodes_0s.json` 和
-`topology_0s.json` 放到 `Topodata/json/`。缺少任一初始化文件时，程序会立即报错退出，
+`topology_0s.json` 放到 `input/topology/json/`。缺少任一初始化文件时，程序会立即报错退出，
 不会继续进入仿真。
 
 默认参数位于 `para.cc`：
@@ -70,27 +70,28 @@ Simulation real - time cost
 - `--offeredload=<double>`：业务负载，快速验证可使用默认值 `0.0001`。
 - `--linkBandwidth=<bps>`：链路带宽；当 JSON 链路未写带宽时作为兜底值。
 - `--tranProtocol=<0|1>`：`0=UDP`，`1=TCP`。
+- `--trafficMatrix=<path>`：业务流量矩阵 CSV 文件，默认读取 `input/traffic/traffic_matrix(324).csv`。
 - `--useJsonTopo=<true|false>`：是否使用 JsonTopo，默认 `true`。
 - `--jsonTopoPatchMode=<true|false>`：后续时间片格式；`false=全量快照`，`true=增量 patch`。
 - `--nodesJson=<path>`：初始节点 JSON 文件。
 - `--topologyJson=<path>`：初始链路 JSON 文件。
-- `--timeSlicesJson=<path>`：可选索引文件；常规情况下不需要，默认按文件名扫描 `Topodata/json/`。
+- `--timeSlicesJson=<path>`：可选索引文件；常规情况下不需要，默认按文件名扫描 `input/topology/json/`。
 - `--isSate=<1|2|3|4>`：传统拓扑模式使用；JsonTopo 模式下不决定节点数量。
 - `--consType=<0|1>`：传统拓扑模式使用；`0=Walker Star`，`1=Walker Delta`。
 
 示例：运行增量 patch 模式：
 
 ```bash
-./waf --run "link-test --jsonTopoPatchMode=true --nodesJson=examples/link-selection/Topodata/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/Topodata/json/examples/constellation-66sat-5gs/topology_0s.json"
+./waf --run "link-test --jsonTopoPatchMode=true --nodesJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/constellation-66sat-5gs/topology_0s.json"
 ```
 
-若要自动加载 patch 时间片，请将 `patch_<time>s.json` 放到 `Topodata/json/`；`Topodata/json/examples/` 下的文件只作为格式示例。
+若要自动加载 patch 时间片，请将 `patch_<time>s.json` 放到 `input/topology/json/`；`input/topology/json/examples/` 下的文件只作为格式示例。
 
 示例：指定初始 JsonTopo 文件：
 
 ```bash
 ./waf --run \
-  "link-test --nodesJson=examples/link-selection/Topodata/json/nodes_0s.json --topologyJson=examples/link-selection/Topodata/json/topology_0s.json"
+  "link-test --nodesJson=examples/link-selection/input/topology/json/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/topology_0s.json"
 ```
 
 ## 4. JsonTopo 数据入口
@@ -98,10 +99,10 @@ Simulation real - time cost
 默认数据目录：
 
 ```text
-examples/link-selection/Topodata/json/
+examples/link-selection/input/topology/json/
 ```
 
-该目录中的 JSON 会被仿真读取；仓库不再提交默认读取的测试 JSON。`Topodata/json/examples/` 只放说明示例，不参与默认扫描。
+该目录中的 JSON 会被仿真读取；仓库不再提交默认读取的测试 JSON。`input/topology/json/examples/` 只放说明示例，不参与默认扫描。
 
 常规交付只需要遵守文件命名规则，程序会按时间自动加载：
 
@@ -111,7 +112,7 @@ nodes_<time>s.json + topology_<time>s.json  # 全量快照模式
 patch_<time>s.json                          # 增量 patch 模式
 ```
 
-建议同一个 `Topodata/json/` 目录一次只放一种运行方案：要么放全量快照文件，要么放 patch 文件。切换方案前先清理另一类后续时间片文件。
+建议同一个 `input/topology/json/` 目录一次只放一种运行方案：要么放全量快照文件，要么放 patch 文件。切换方案前先清理另一类后续时间片文件。
 
 全量快照模式下，后续时间片的 `nodes_<time>s.json` 和 `topology_<time>s.json`
 可以只提供发生变化的一类；缺少的节点或链路部分会保持上一状态。
@@ -119,22 +120,23 @@ patch_<time>s.json                          # 增量 patch 模式
 详细规范见：
 
 ```text
-examples/link-selection/Topodata/json/README.md
+examples/link-selection/input/topology/json/README.md
 ```
 
 ## 5. 流量输入
 
-热点流量模式下（`_trafficMode=0`），程序读取：
+热点流量模式下（`_trafficMode=0`），程序默认读取：
 
 ```text
-examples/link-selection/Trafficdata/traffic_matrix(324).csv
+examples/link-selection/input/traffic/traffic_matrix(324).csv
 ```
 
 当前 JsonTopo 示例节点规模为 66 颗卫星和 5 个地面站。流量矩阵按卫星业务源宿关系读取。
+可通过 `--trafficMatrix=<path>` 指定与当前卫星数量匹配的矩阵。
 流量数据目录说明见：
 
 ```text
-examples/link-selection/Trafficdata/README.md
+examples/link-selection/input/traffic/README.md
 ```
 
 ## 6. 主流程
@@ -162,7 +164,7 @@ examples/link-selection/Trafficdata/README.md
 如果通过 `--useJsonTopo=false` 切回传统拓扑，程序会使用：
 
 ```text
-examples/link-selection/Topodata/csv/topo(324).csv
+examples/link-selection/input/topology/csv/topo(324).csv
 ```
 
 该模式主要保留兼容旧实验流程；当前新增拓扑数据优先使用 JsonTopo。

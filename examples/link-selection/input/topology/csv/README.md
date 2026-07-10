@@ -12,4 +12,4 @@ topo(324).csv
 ./waf --run "link-test --useJsonTopo=false"
 ```
 
-该模式主要用于兼容旧实验流程。新增拓扑数据优先使用 `Topodata/json/` 下的 JsonTopo 格式。
+该模式主要用于兼容旧实验流程。新增拓扑数据优先使用 `input/topology/json/` 下的 JsonTopo 格式。

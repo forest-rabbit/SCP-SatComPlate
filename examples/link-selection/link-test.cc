@@ -66,11 +66,14 @@ ns3::Time timeout = ns3::Seconds (0);
 
 FlowMonitorHelper flowmonHelper;
 
+std::string trafficMatrixFile =
+  "examples/link-selection/input/traffic/traffic_matrix(324).csv";
+
 
 void GetData(vector<vector<double>>& data, const int destNum, std::string name)
 {
   // destNum来自当前实际创建的卫星数量。JSON 66星模式下这里会按66列读取，
-  // 即使当前文件名仍是traffic_matrix(324).csv；后续若提供66星流量文件，应在buildApp中切换路径。
+  // 即使当前文件名仍是traffic_matrix(324).csv；其他规模可通过--trafficMatrix指定。
   vector<vector<double>> temp_data(destNum*100, vector<double>(destNum, 0.0));
 	std::ifstream inFile(name, std::ios::in);
 	std::string lineStr;
@@ -279,10 +282,9 @@ void buildApp(){
   // GetData(data, sates.GetN(), "examples/sdn-controller/traffic_matrix(Iridium).csv");
   if(_trafficMode == 0)
   {// 区域热点流量
-    // 目前JSON模式仍复用原324星流量矩阵文件，并按实际卫星数截取读取。
-    // 如果甲方提供traffic_matrix(66).csv，这里应优先改为读取66星文件。
+    // 默认复用324星流量矩阵，并按实际卫星数截取；可通过--trafficMatrix覆盖。
     if(_isSate == 1){
-      GetData(data, sates.GetN(), "examples/link-selection/Trafficdata/traffic_matrix(324).csv");
+      GetData(data, sates.GetN(), trafficMatrixFile);
     }
     else if(_isSate == 2)
     {
@@ -480,16 +482,18 @@ main (int argc, char *argv[])
   cmd.AddValue ("consType", "传统拓扑模式使用：0=Walker Star, 1=Walker Delta", _consType);
   cmd.AddValue ("linkBandwidth", "默认链路带宽；JSON链路未写带宽时作为兜底值", linkBandwidth);
   cmd.AddValue("tranProtocol", "0:UDP, 1:TCP", _tranProc);
-  cmd.AddValue("useJsonTopo", "是否使用 examples/link-selection/Topodata/json 中的JSON拓扑", _useJsonTopo);
+  cmd.AddValue("trafficMatrix", "业务流量矩阵CSV文件", trafficMatrixFile);
+  cmd.AddValue("useJsonTopo", "是否使用 examples/link-selection/input/topology/json 中的JSON拓扑", _useJsonTopo);
   cmd.AddValue("jsonTopoPatchMode", "JSON模式后续时间片：false=全量快照，true=patch增量", _jsonTopoPatchMode);
-  cmd.AddValue("nodesJson", "可选：初始节点JSON文件；默认Topodata/json/nodes_0s.json", nodesJsonFile);
-  cmd.AddValue("topologyJson", "可选：初始链路JSON文件；默认Topodata/json/topology_0s.json", topologyJsonFile);
-  cmd.AddValue("timeSlicesJson", "可选：时间片索引JSON文件；默认按Topodata/json文件名扫描", timeSlicesJsonFile);
+  cmd.AddValue("nodesJson", "可选：初始节点JSON文件；默认input/topology/json/nodes_0s.json", nodesJsonFile);
+  cmd.AddValue("topologyJson", "可选：初始链路JSON文件；默认input/topology/json/topology_0s.json", topologyJsonFile);
+  cmd.AddValue("timeSlicesJson", "可选：时间片索引JSON文件；默认按input/topology/json文件名扫描", timeSlicesJsonFile);
   cmd.Parse (argc, argv);
   std::cout << "[RUN] 实验参数" << std::endl
             << "  offeredLoad   : " << offeredload << std::endl
             << "  linkBandwidth : " << linkBandwidth << std::endl
             << "  tranProc      : " << (_tranProc == 1 ? "TCP" : "UDP") << std::endl
+            << "  trafficMatrix : " << trafficMatrixFile << std::endl
             << "  useJsonTopo   : " << (_useJsonTopo ? "true" : "false") << std::endl
             << "  jsonTopoMode  : " << (_jsonTopoPatchMode ? "patch" : "snapshot") << std::endl
             << std::endl;
