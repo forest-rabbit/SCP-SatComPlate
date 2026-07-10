@@ -483,6 +483,7 @@ main (int argc, char *argv[])
   cmd.AddValue ("linkBandwidth", "默认链路带宽；JSON链路未写带宽时作为兜底值", linkBandwidth);
   cmd.AddValue("tranProtocol", "0:UDP, 1:TCP", _tranProc);
   cmd.AddValue("trafficMatrix", "业务流量矩阵CSV文件", trafficMatrixFile);
+  cmd.AddValue("writeRoutingTables", "是否输出调试用路由表文件", writeRoutingTables);
   cmd.AddValue("useJsonTopo", "是否使用 examples/link-selection/input/topology/json 中的JSON拓扑", _useJsonTopo);
   cmd.AddValue("jsonTopoPatchMode", "JSON模式后续时间片：false=全量快照，true=patch增量", _jsonTopoPatchMode);
   cmd.AddValue("nodesJson", "可选：初始节点JSON文件；默认input/topology/json/nodes_0s.json", nodesJsonFile);
@@ -494,6 +495,7 @@ main (int argc, char *argv[])
             << "  linkBandwidth : " << linkBandwidth << std::endl
             << "  tranProc      : " << (_tranProc == 1 ? "TCP" : "UDP") << std::endl
             << "  trafficMatrix : " << trafficMatrixFile << std::endl
+            << "  routeTables   : " << (writeRoutingTables ? "enabled" : "disabled") << std::endl
             << "  useJsonTopo   : " << (_useJsonTopo ? "true" : "false") << std::endl
             << "  jsonTopoMode  : " << (_jsonTopoPatchMode ? "patch" : "snapshot") << std::endl
             << std::endl;

@@ -21,6 +21,7 @@ namespace ns3{
   bool _trafficMode = 0;                // 业务流量模式：0区域热点，1均匀流量
   int _tranProc = 0;                    // 传输协议：0 UDP，1 TCP
   long int linkBandwidth = 10000000000; // 默认链路带宽；JSON链路未写带宽时作为兜底值
+  bool writeRoutingTables = false;      // 默认不生成调试用路由表文件
 
   /* 路由/管控参数；当前默认使用OSPF，SDN路由逻辑仍保留 */
   int _SDNRoute = 0;                    // 路由方案：0 OSPF，1 簇内/簇间路由

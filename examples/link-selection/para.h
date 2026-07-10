@@ -24,6 +24,7 @@ namespace ns3 {
   extern bool _trafficMode;          // 业务流量模式：0区域热点，1均匀流量
   extern int _tranProc;              // 传输协议：0 UDP，1 TCP
   extern long int linkBandwidth;     // 默认链路带宽；JSON链路未写带宽时作为兜底值
+  extern bool writeRoutingTables;    // 是否输出调试用路由表文件
 
   extern int _SDNRoute;              // 路由方案：0 OSPF，1 簇内/簇间路由
   extern int _mode;                  // 管控场景：0正常，1主备迁移，2星地断连，3控制器失效

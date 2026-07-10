@@ -316,14 +316,19 @@ namespace ns3{
       //experiment.InitialSatRouter(Gnodes, sates, satClusterNodes, monitors, _consType, orbit_num, sate_num); // 初始化卫星路由策略
     }
 
-    // 打印所有节点的路由表
-    AsciiTraceHelper ascii;
-    Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("examples/link-selection/output/routing-tables-6s.txt");
-    Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (6), stream, Time::S);
-    Ptr<OutputStreamWrapper> stream2 = ascii.CreateFileStream ("examples/link-selection/output/routing-tables-11s.txt");
-    Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (11), stream2, Time::S);
-    Ptr<OutputStreamWrapper> stream3 = ascii.CreateFileStream ("examples/link-selection/output/routing-tables-16s.txt");
-    Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (16), stream3, Time::S);
+    if (writeRoutingTables)
+    {
+      AsciiTraceHelper ascii;
+      Ptr<OutputStreamWrapper> stream =
+        ascii.CreateFileStream ("examples/link-selection/output/routing-tables-6s.txt");
+      Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (6), stream, Time::S);
+      Ptr<OutputStreamWrapper> stream2 =
+        ascii.CreateFileStream ("examples/link-selection/output/routing-tables-11s.txt");
+      Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (11), stream2, Time::S);
+      Ptr<OutputStreamWrapper> stream3 =
+        ascii.CreateFileStream ("examples/link-selection/output/routing-tables-16s.txt");
+      Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (16), stream3, Time::S);
+    }
 
     if (!_useJsonTopo)
     {

@@ -73,6 +73,7 @@ Simulation real - time cost
 - `--linkBandwidth=<bps>`：链路带宽；当 JSON 链路未写带宽时作为兜底值。
 - `--tranProtocol=<0|1>`：`0=UDP`，`1=TCP`。
 - `--trafficMatrix=<path>`：业务流量矩阵 CSV 文件，默认读取 `input/traffic/traffic_matrix(324).csv`。
+- `--writeRoutingTables=<true|false>`：是否输出调试用路由表文件，默认 `false`。
 - `--useJsonTopo=<true|false>`：是否使用 JsonTopo，默认 `true`。
 - `--jsonTopoPatchMode=<true|false>`：后续时间片格式；`false=全量快照`，`true=增量 patch`。
 - `--nodesJson=<path>`：初始节点 JSON 文件。

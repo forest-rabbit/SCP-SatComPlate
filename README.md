@@ -91,6 +91,7 @@ Simulation real - time cost
 --linkBandwidth=<bps>              JSON 未写带宽时的兜底链路带宽
 --tranProtocol=<0|1>               0=UDP，1=TCP
 --trafficMatrix=<path>             业务流量矩阵文件
+--writeRoutingTables=<bool>        是否输出调试用路由表，默认 false
 --useJsonTopo=<true|false>         是否使用 JsonTopo
 --jsonTopoPatchMode=<true|false>   false=全量快照，true=增量 patch
 --nodesJson=<path>                 初始节点文件
