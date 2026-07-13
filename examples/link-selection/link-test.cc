@@ -68,6 +68,8 @@ FlowMonitorHelper flowmonHelper;
 
 std::string trafficMatrixFile =
   "examples/link-selection/input/traffic/traffic_matrix(324).csv";
+std::vector<Ptr<UdpServer>> udpServers;
+std::vector<Ptr<PacketSink>> tcpSinks;
 
 
 void GetData(vector<vector<double>>& data, const int destNum, std::string name)
@@ -164,7 +166,7 @@ void GetData(vector<vector<double>>& data, const int destNum, std::string name)
   // cout<<"行：" <<data.size()<<"列："<<data[0].size()<<endl;
 }
 
-void installClient(vector<vector<double>> data, uint32_t numNodes, uint16_t portStart){
+void installClient(vector<vector<double>> data, uint32_t numNodes, uint16_t servicePort){
 //   double currentTime = Simulator::Now().GetSeconds(); // 单位为s
 //   if(currentTime >= totalTimeStep) return;
 
@@ -180,11 +182,10 @@ void installClient(vector<vector<double>> data, uint32_t numNodes, uint16_t port
       uint32_t packetSize = 1024;   // 字节
       double dataRate = (double) data[i][j] * 1024.0 * 1024.0 * 1024.0;
 
-      Ptr<Ipv4> destIp = sates.Get(j)->GetObject<Ipv4>(); //获取目的节点
-      Ipv4Address ip_address = destIp->GetAddress(1, 0).GetLocal(); //设置为第一个网卡的IP 
+      Ipv4Address ip_address = GetNodeServiceAddress(sates.Get(j));
 
       if(_tranProc){
-        OnOffHelper client("ns3::TcpSocketFactory", Address(InetSocketAddress(ip_address, portStart)));
+        OnOffHelper client("ns3::TcpSocketFactory", Address(InetSocketAddress(ip_address, servicePort)));
         if(_isSate == 4)
         {// 流量表格过大，软件调整
           dataRate /= 10.0;
@@ -260,7 +261,7 @@ void installClient(vector<vector<double>> data, uint32_t numNodes, uint16_t port
         // cout<<maxPacketCount<<endl;
         double interPacketInterval = (double)(100.0)/maxPacketCount;   // 数据包间隔 100s的流量
         // double interPacketInterval = 0.00004;
-        UdpClientHelper client(ip_address, portStart);
+        UdpClientHelper client(ip_address, servicePort);
 
         client.SetAttribute("MaxPackets", UintegerValue(maxPacketCount));
         client.SetAttribute("Interval", TimeValue(Seconds(interPacketInterval)));
@@ -320,39 +321,34 @@ void buildApp(){
     }
   }
 
-  // 预设端口号范围
-  uint16_t portStart = 9; // well-known echo port number
+  uint16_t servicePort = 9;
   uint32_t numNodes = sates.GetN();
-
-  // 为每个节点分配一个唯一的端口号
-  std::map<Ptr<Node>, uint16_t> nodePortMap;
-  for (uint32_t i = 0; i < sates_num; ++i)
-  {
-    uint16_t port = portStart + i; // 假设端口号从9开始，每个节点增加1
-    nodePortMap[sates.Get(i)] = port;
-  }
+  udpServers.clear();
+  tcpSinks.clear();
 
   // 安装服务器应用程序到每个节点
   if(_tranProc){
     // tcp
     for (uint32_t i = 0; i < numNodes; ++i)
     {
-      PacketSinkHelper server("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), nodePortMap[sates.Get(i)]));
+      PacketSinkHelper server("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), servicePort));
       ApplicationContainer apps = server.Install(sates.Get(i));
+      tcpSinks.push_back(DynamicCast<PacketSink>(apps.Get(0)));
       apps.Start(Seconds(0));
       apps.Stop(Seconds(totalTimeStep));
     }
   }else{ //udp
     for (uint32_t i = 0; i < numNodes; ++i)
     {
-      UdpServerHelper server(nodePortMap[sates.Get(i)]);
+      UdpServerHelper server(servicePort);
       ApplicationContainer apps = server.Install(sates.Get(i));
+      udpServers.push_back(DynamicCast<UdpServer>(apps.Get(0)));
       apps.Start(Seconds(0));
       apps.Stop(Seconds(totalTimeStep));
     }
   }
   
-  installClient(data, numNodes, portStart);
+  installClient(data, numNodes, servicePort);
 }
 
 
@@ -460,6 +456,21 @@ void dealSimInfo(Ptr<FlowMonitor> monitor, double ctlPkt){
                  "  Jitter: " << JitterCtl*1000 << " ms\n"
                  "  Loss Packet Ratio: " << (double)lostPacketsCtl * 100 / TxPacketsCtl << " %\n"
                  ;
+
+    uint64_t udpPacketsReceived = 0;
+    uint64_t tcpBytesReceived = 0;
+    for (const auto& server : udpServers)
+    {
+      udpPacketsReceived += server->GetReceived();
+    }
+    for (const auto& sink : tcpSinks)
+    {
+      tcpBytesReceived += sink->GetTotalRx();
+    }
+    std::cout << "--------------应用层业务接收--------------" << std::endl
+              << "  Server Applications: " << udpServers.size() + tcpSinks.size() << "\n"
+              << "  UDP Rx Packets: " << udpPacketsReceived << " p\n"
+              << "  TCP Rx Bytes: " << tcpBytesReceived << " bytes\n";
 
     // std::cout << "--------------Performance--------------" << std::endl;
     // std::cout << "  Average Link Utilization: " << AvgLinkUtil * 100 << " %\n"

@@ -4,6 +4,8 @@
 #include "jsontopo/topo-runtime.h"
 #include "jsontopo/topo-json.h"
 #include "ns3/boolean.h"
+#include "ns3/csma-net-device.h"
+#include "ns3/drop-tail-queue.h"
 #include "ns3/integer.h"
 #include "ns3/net-device.h"
 #include "ns3/node-container.h"
@@ -15,6 +17,7 @@
 // #include "ns3/core-module.h"
 #include "ns3/simulator.h"
 #include "ns3/nstime.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -43,8 +46,7 @@ namespace ns3{
   std::string nodesJsonFile;
   std::string topologyJsonFile;
   std::string timeSlicesJsonFile;
-
-
+  static std::map<uint32_t, Ipv4Address> g_serviceAddressesByNodeId;
 
   // 激光链路分配文件的时间戳和链路配置映射
   typedef std::vector<Link> LinkSet; // 链路集合，存储链路的节点对
@@ -52,6 +54,79 @@ namespace ns3{
 
   // 跟踪每个节点已经使用的接口索引
   std::map<uint32_t, std::set<uint32_t>> nodeUsedIndices;
+
+  static void
+  AssignStableServiceAddresses()
+  {
+    struct ServiceNode
+    {
+      uint32_t external_id;
+      Ptr<Node> node;
+    };
+
+    std::vector<ServiceNode> serviceNodes;
+    serviceNodes.reserve(topoNodes.GetN());
+    if (topoNodeInfos.size() == topoNodes.GetN())
+    {
+      for (const auto& info : topoNodeInfos)
+      {
+        serviceNodes.push_back({info.node_id, topoNodes.Get(info.node_index)});
+      }
+    }
+    else
+    {
+      for (uint32_t i = 0; i < topoNodes.GetN(); ++i)
+      {
+        serviceNodes.push_back({i, topoNodes.Get(i)});
+      }
+    }
+
+    std::sort(serviceNodes.begin(), serviceNodes.end(),
+              [](const ServiceNode& lhs, const ServiceNode& rhs) {
+                return lhs.external_id < rhs.external_id;
+              });
+
+    NS_ABORT_MSG_IF(serviceNodes.size() >= 0x000ffffe,
+                    "稳定服务地址空间172.16.0.0/12不足");
+    g_serviceAddressesByNodeId.clear();
+    for (uint32_t i = 0; i < serviceNodes.size(); ++i)
+    {
+      Ptr<Node> node = serviceNodes[i].node;
+      Ptr<CsmaNetDevice> device = CreateObject<CsmaNetDevice>();
+      device->SetAddress(Mac48Address::Allocate());
+      device->SetQueue(CreateObject<DropTailQueue<Packet>>());
+      node->AddDevice(device);
+
+      Ptr<Ipv4> ipv4 = node->GetObject<Ipv4>();
+      int32_t interface = ipv4->AddInterface(device);
+      Ipv4Address address(0xac100001u + i);
+      ipv4->AddAddress(interface, Ipv4InterfaceAddress(address, Ipv4Mask("255.255.255.255")));
+      ipv4->SetMetric(interface, 1);
+      ipv4->SetUp(interface);
+      g_serviceAddressesByNodeId[node->GetId()] = address;
+    }
+
+    std::cout << "[TOPO:Service] 稳定服务地址分配完成" << std::endl
+              << "  count     : " << serviceNodes.size() << std::endl
+              << "  range     : 172.16.0.1 - "
+              << Ipv4Address(0xac100000u + serviceNodes.size()) << std::endl
+              << std::endl;
+  }
+
+  Ipv4Address
+  GetNodeServiceAddress(Ptr<Node> node)
+  {
+    auto service = g_serviceAddressesByNodeId.find(node->GetId());
+    if (service != g_serviceAddressesByNodeId.end())
+    {
+      return service->second;
+    }
+
+    Ptr<Ipv4> ipv4 = node->GetObject<Ipv4>();
+    NS_ABORT_MSG_IF(ipv4 == nullptr || ipv4->GetNInterfaces() <= 1,
+                    "节点没有可用的IPv4业务地址: " << node->GetId());
+    return ipv4->GetAddress(1, 0).GetLocal();
+  }
 
   static void
   LogTopologyInitStart()
@@ -219,6 +294,10 @@ namespace ns3{
 
     InternetStackHelper stack;
     stack.Install(topoNodes);
+    if (_useJsonTopo && !_SDNRoute)
+    {
+      AssignStableServiceAddresses();
+    }
     if (!_useJsonTopo)
     {
       cout<<sates.GetN()<<" 个卫星节点创建完成！"<<endl;

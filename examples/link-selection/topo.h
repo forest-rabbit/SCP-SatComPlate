@@ -40,7 +40,7 @@ namespace ns3 {
   extern std::string topologyJsonFile;
   extern std::string timeSlicesJsonFile;
 
-
+  Ipv4Address GetNodeServiceAddress(Ptr<Node> node);
   void initTopo();
   void print_node_info();
   void updateTopo();
