@@ -6,6 +6,32 @@ int rows = 0;
 int cols = 0;
 int d_flag = 0;
 int c_flag = 0;
+
+static void
+SetIpv4InterfaceState(Ptr<Node> node, Ptr<NetDevice> device, bool isUp)
+{
+    Ptr<Ipv4> ipv4 = node->GetObject<Ipv4>();
+    if (ipv4 == nullptr)
+    {
+        return;
+    }
+
+    int32_t interface = ipv4->GetInterfaceForDevice(device);
+    if (interface < 0)
+    {
+        return;
+    }
+
+    if (isUp)
+    {
+        ipv4->SetUp(static_cast<uint32_t>(interface));
+    }
+    else
+    {
+        ipv4->SetDown(static_cast<uint32_t>(interface));
+    }
+}
+
 //获取excel数据
 double* GetData(std::string name)
 {
@@ -104,17 +130,8 @@ LinkDown(Ptr<Node> node1, Ptr<Node> node2)
     Ptr<PointToPointNetDevice> dev2 = P2Pdevices.second;
     dev1->DownTheLink();
     dev2->DownTheLink();
-    if(_SDNRoute)
-    {
-        uint32_t j = dev1->GetIfIndex();
-        uint32_t k = dev2->GetIfIndex();
-        
-        Ptr<Ipv4> ipv4;
-        ipv4 = node1->GetObject<Ipv4>();
-        if(ipv4)    ipv4->SetDown(j);
-        ipv4 = node2->GetObject<Ipv4>();
-        if(ipv4)    ipv4->SetDown(k);        
-    }
+    SetIpv4InterfaceState(node1, dev1, false);
+    SetIpv4InterfaceState(node2, dev2, false);
 }
 
 void
@@ -130,17 +147,8 @@ LinkUp(Ptr<Node> node1, Ptr<Node> node2)
     Ptr<PointToPointNetDevice> dev2 = P2Pdevices.second;
     dev1->UpTheLink();
     dev2->UpTheLink();
-    if(_SDNRoute)
-    {
-        uint32_t j = dev1->GetIfIndex();
-        uint32_t k = dev2->GetIfIndex();
-        
-        Ptr<Ipv4> ipv4;
-        ipv4 = node1->GetObject<Ipv4>();
-        if(ipv4)    ipv4->SetUp(j);
-        ipv4 = node2->GetObject<Ipv4>();
-        if(ipv4)    ipv4->SetUp(k);    
-    }
+    SetIpv4InterfaceState(node1, dev1, true);
+    SetIpv4InterfaceState(node2, dev2, true);
 }
 
 

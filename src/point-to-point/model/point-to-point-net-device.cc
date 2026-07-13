@@ -486,13 +486,25 @@ PointToPointNetDevice::GetAddress (void) const
 void
 PointToPointNetDevice::DownTheLink()
 {
+  NS_LOG_FUNCTION (this);
+  if (!m_linkUp)
+    {
+      return;
+    }
   m_linkUp = false;
+  m_linkChangeCallbacks ();
 }
 
 void
 PointToPointNetDevice::UpTheLink()
 {
+  NS_LOG_FUNCTION (this);
+  if (m_linkUp)
+    {
+      return;
+    }
   m_linkUp = true;
+  m_linkChangeCallbacks ();
 }
 
 bool
