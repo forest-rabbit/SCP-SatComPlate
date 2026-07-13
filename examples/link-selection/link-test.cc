@@ -33,6 +33,7 @@
 //	and port number corresponds to node number, so port 0 is connected to n0, for example.
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <fstream>
@@ -51,12 +52,12 @@
 #include "ns3/cluster-module.h"
 #include "ns3/log.h"
 #include "ns3/flow-monitor-module.h"
+#include "metrics/metrics.h"
 #include "para.h"
 #include "topo.h"
 
 #include <numeric>
 #include <random>
-#include <ctime>
 
 using namespace ns3;
 
@@ -64,12 +65,27 @@ NS_LOG_COMPONENT_DEFINE ("OpenFlowSDNExample");
 
 ns3::Time timeout = ns3::Seconds (0);
 
-FlowMonitorHelper flowmonHelper;
-
 std::string trafficMatrixFile =
   "examples/link-selection/input/traffic/traffic_matrix(324).csv";
+std::string metricsOutputDirectory = "examples/link-selection/output";
 std::vector<Ptr<UdpServer>> udpServers;
 std::vector<Ptr<PacketSink>> tcpSinks;
+
+TaskApplicationMetrics
+CollectTaskApplicationMetrics()
+{
+  TaskApplicationMetrics metrics = {};
+  metrics.server_applications = udpServers.size() + tcpSinks.size();
+  for (const auto& server : udpServers)
+  {
+    metrics.udp_packets_received += server->GetReceived();
+  }
+  for (const auto& sink : tcpSinks)
+  {
+    metrics.tcp_bytes_received += sink->GetTotalRx();
+  }
+  return metrics;
+}
 
 
 void GetData(vector<vector<double>>& data, const int destNum, std::string name)
@@ -353,132 +369,6 @@ void buildApp(){
 
 
 
-void dealSimInfo(Ptr<FlowMonitor> monitor, double ctlPkt){
-  monitor->CheckForLostPackets();
-  Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowmonHelper.GetClassifier());
-  std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
-
-
-  double SumDelayTime = 0;        //!<总时延.
-  double SumJitterTime = 0;       //!<总抖动.
-  double Latency = 0.0;           //!<平均端到端时延.  
-  double Jitter = 0.0;            //!<平均抖动.
-  double Throughput = 0.0;        //!< 吞吐量.
-
-
-  double SumDelayTimeCtl = 0;        //!<总时延.
-  double SumJitterTimeCtl = 0;       //!<总抖动.
-  double LatencyCtl = 0.0;           //!<平均端到端时延.           
-  double JitterCtl = 0.0;            //!<平均抖动.
-  double ThroughputCtl = 0.0;        //!< 吞吐量.
-
-  uint32_t lostPackets = 0;       //!< 丢失数据包数.
-  uint32_t TxPackets = 0;         //!< 发送数据包数.
-  uint32_t RxPackets = 0;         //!< 接收数据包数.
-  uint32_t lostPacketsCtl = 0;       //!< 丢失数据包数.
-  uint32_t TxPacketsCtl = 0;         //!< 发送数据包数.
-  uint32_t RxPacketsCtl = 0;         //!< 接收数据包数.
-  uint32_t TxBytes = 0;         //!< 发送字节数.
-  uint32_t TxBytesCtl = 0;         //!< 发送字节数.
-
-  for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i = stats.begin (); i != stats.end (); ++i)
-  {
-    if(i->second.packetPrio == 0)  // 控制信息
-    {
-      TxPacketsCtl += i->second.txPackets;
-      RxPacketsCtl += i->second.rxPackets;
-      lostPacketsCtl += i->second.lostPackets;
-      TxBytesCtl += i->second.txBytes;
-      SumDelayTimeCtl += i->second.delaySum.GetSeconds();
-      SumJitterTimeCtl += i->second.jitterSum.GetSeconds();
-      ThroughputCtl += i->second.rxBytes *8.0 / (totalTimeStep - 10.0) / 1000 / 1000;
-    }else if(i->second.packetPrio == 1){
-      // t = classifier->FindFlow(i->first);
-      // std::cout << "Flow " << i->first << " (" << t.sourceAddress << " -> "
-      //               << t.destinationAddress << ")\n";
-      TxPackets += i->second.txPackets;
-      RxPackets += i->second.rxPackets;
-      lostPackets += i->second.lostPackets;
-      TxBytes += i->second.txBytes;
-      SumDelayTime += i->second.delaySum.GetSeconds();
-      SumJitterTime += i->second.jitterSum.GetSeconds();
-      Throughput += i->second.rxBytes *8.0 / (totalTimeStep - 10.0) / 1000 / 1000;
-
-    }
-  }
-
-  Latency = SumDelayTime / double(RxPackets);    // s
-  Jitter = SumJitterTime / double(RxPackets);    // s
-
-  LatencyCtl = SumDelayTimeCtl / double(RxPacketsCtl);    // s
-  JitterCtl = SumJitterTimeCtl / double(RxPacketsCtl);    // s
-
-
-
-  // vector<long long> txBytes;
-  // vector<double> linkUtil;
-  // for(uint32_t i=0; i<monitors.size(); i++){
-  //   for(auto& iter : monitors[i]->m_totalDevice )
-  //     txBytes.push_back(iter.second);
-  //     //cout<<"txBytes size:"<<txBytes.size()<<endl;
-  // }
-  // for(uint32_t i=0; i<txBytes.size(); i++){
-  //   linkUtil.push_back((double)txBytes[i]*8.0 / totalTimeStep / linkBandwidth * 300.0);
-  //   // linkUtil.push_back((double)txBytes[i]*8.0 / (totalTimeStep) / linkBandwidth);
-  // }
-  // // 计算平均和最大链路利用率
-  // double sumLinkUtil = std::accumulate(linkUtil.begin(), linkUtil.end(), 0.0);
-  // double AvgLinkUtil = sumLinkUtil / linkUtil.size();
-  // double MaxLinkUtil = *std::max_element(linkUtil.begin(), linkUtil.end());
-
-
-
-
-    std::cout << "--------------业务数据性能--------------" << std::endl;
-    std::cout << "  Tx Packets: " << TxPackets << " p\n"
-                 "  Tx Bytes: " << TxBytes << " bytes\n"
-                 "  Rx Packets: " << RxPackets << " p\n"
-                 "  lostPackets: " << lostPackets << " p\n"
-                 "  Latency: " << Latency*1000 << " ms\n"
-                 "  Throughput: "<< Throughput << " Gbps\n"
-                 "  Jitter: " << Jitter*1000 << " ms\n"
-                 "  Loss Packet Ratio: " << (double)lostPackets * 100 / TxPackets << " %\n\n"
-
-                 ;
-
-    std::cout << "--------------控制信息性能--------------" << std::endl;
-    std::cout << "  Tx Packets: " << TxPacketsCtl << " p\n"
-                 "  Tx Bytes: " << TxBytesCtl << " bytes\n"
-                 "  Rx Packets: " << RxPacketsCtl << " p\n"
-                 "  lostPackets: " << lostPacketsCtl << " p\n"
-                 "  Latency: " << LatencyCtl*1000 << " ms\n"
-                 "  Throughput: "<< ThroughputCtl/1000 << " Gbps\n"
-                 "  Jitter: " << JitterCtl*1000 << " ms\n"
-                 "  Loss Packet Ratio: " << (double)lostPacketsCtl * 100 / TxPacketsCtl << " %\n"
-                 ;
-
-    uint64_t udpPacketsReceived = 0;
-    uint64_t tcpBytesReceived = 0;
-    for (const auto& server : udpServers)
-    {
-      udpPacketsReceived += server->GetReceived();
-    }
-    for (const auto& sink : tcpSinks)
-    {
-      tcpBytesReceived += sink->GetTotalRx();
-    }
-    std::cout << "--------------应用层业务接收--------------" << std::endl
-              << "  Server Applications: " << udpServers.size() + tcpSinks.size() << "\n"
-              << "  UDP Rx Packets: " << udpPacketsReceived << " p\n"
-              << "  TCP Rx Bytes: " << tcpBytesReceived << " bytes\n";
-
-    // std::cout << "--------------Performance--------------" << std::endl;
-    // std::cout << "  Average Link Utilization: " << AvgLinkUtil * 100 << " %\n"
-    //             "  Maximum Link Utilization: " << MaxLinkUtil * 100 << " %\n"
-    //              "  Control Overhead: " << ctlPkt << " \n"
-    //              ;
-}
-
 int
 main (int argc, char *argv[])
 {
@@ -494,6 +384,7 @@ main (int argc, char *argv[])
   cmd.AddValue ("linkBandwidth", "默认链路带宽；JSON链路未写带宽时作为兜底值", linkBandwidth);
   cmd.AddValue("tranProtocol", "0:UDP, 1:TCP", _tranProc);
   cmd.AddValue("trafficMatrix", "业务流量矩阵CSV文件", trafficMatrixFile);
+  cmd.AddValue("outputDir", "仿真指标输出目录", metricsOutputDirectory);
   cmd.AddValue("writeRoutingTables", "是否输出调试用路由表文件", writeRoutingTables);
   cmd.AddValue("useJsonTopo", "是否使用 examples/link-selection/input/topology/json 中的JSON拓扑", _useJsonTopo);
   cmd.AddValue("jsonTopoPatchMode", "JSON模式后续时间片：false=全量快照，true=patch增量", _jsonTopoPatchMode);
@@ -506,6 +397,7 @@ main (int argc, char *argv[])
             << "  linkBandwidth : " << linkBandwidth << std::endl
             << "  tranProc      : " << (_tranProc == 1 ? "TCP" : "UDP") << std::endl
             << "  trafficMatrix : " << trafficMatrixFile << std::endl
+            << "  outputDir     : " << metricsOutputDirectory << std::endl
             << "  routeTables   : " << (writeRoutingTables ? "enabled" : "disabled") << std::endl
             << "  useJsonTopo   : " << (_useJsonTopo ? "true" : "false") << std::endl
             << "  jsonTopoMode  : " << (_jsonTopoPatchMode ? "patch" : "snapshot") << std::endl
@@ -518,8 +410,7 @@ main (int argc, char *argv[])
     sate_num = sates_num / orbit_num;
   }
   
-  // 记录开始时间
-  clock_t start = clock();
+  std::chrono::steady_clock::time_point wallClockStart = std::chrono::steady_clock::now();
 
   if(_tranProc == 1){
     // 设置初始拥塞窗口大小为 2-10-20
@@ -581,21 +472,21 @@ main (int argc, char *argv[])
 
   NS_LOG_INFO ("Run Simulation.");
 
-  Ptr<FlowMonitor> monitor = flowmonHelper.InstallAll();
+  Ptr<FlowMonitor> monitor = InstallSimulationFlowMonitor();
 
   Simulator::Stop (Seconds (totalTimeStep)); // 设置仿真停止时间
   Simulator::Run ();
-    // 记录结束时间
-    clock_t end = clock();
+  double wallClockSeconds =
+    std::chrono::duration<double>(std::chrono::steady_clock::now() - wallClockStart).count();
+  std::cout << "[RUN] Simulation wall-clock cost: " << wallClockSeconds << " s" << std::endl
+            << std::endl;
 
-    // 计算时间差并转换为秒
-    double duration = ((double)(end - start)) / CLOCKS_PER_SEC;
-    std::cout << "Simulation real - time cost: " << duration << " s" << std::endl
-              << std::endl;
+  MetricsRecorder metricsRecorder(monitor,
+                                  wallClockSeconds,
+                                  CollectTaskApplicationMetrics(),
+                                  metricsOutputDirectory);
+  metricsRecorder.Record();
   Simulator::Destroy ();
-
-  // 在 Simulator::Run() 之后
-  dealSimInfo(monitor, 0);
 
   NS_LOG_INFO ("Done.");
 
