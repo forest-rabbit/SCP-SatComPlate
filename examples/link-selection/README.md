@@ -61,11 +61,14 @@ totalTimeStep = 110
 [TOPO:Init] 开始拓扑初始化
 [TOPO:Nodes] 节点创建完成
 [TOPO:Clusters] 初始簇信息
+[TOPO:Service] 稳定服务地址分配完成
 [TOPO:Links] 初始链路安装完成
 [TOPO:Plan] JsonTopo 时间片计划
 [TOPO:HoldTime] ...
 [TRAFFIC] 读取流量矩阵
-Simulation real - time cost
+[RUN] Simulation wall-clock cost
+[METRICS] 业务网络流
+[METRICS] 结构化结果
 ```
 
 ## 3. 命令行参数
@@ -74,6 +77,7 @@ Simulation real - time cost
 - `--linkBandwidth=<bps>`：链路带宽；当 JSON 链路未写带宽时作为兜底值。
 - `--tranProtocol=<0|1>`：`0=UDP`，`1=TCP`。
 - `--trafficMatrix=<path>`：业务流量矩阵 CSV 文件，默认读取 `input/traffic/traffic_matrix(324).csv`。
+- `--outputDir=<path>`：指标输出目录，默认 `examples/link-selection/output`。
 - `--writeRoutingTables=<true|false>`：是否输出调试用路由表文件，默认 `false`。
 - `--useJsonTopo=<true|false>`：是否使用 JsonTopo，默认 `true`。
 - `--jsonTopoPatchMode=<true|false>`：后续时间片格式；`false=全量快照`，`true=增量 patch`。
@@ -143,6 +147,10 @@ examples/link-selection/input/traffic/traffic_matrix(324).csv
 examples/link-selection/input/traffic/README.md
 ```
 
+JsonTopo 默认全局路由路径会为每个节点分配 `172.16.0.0/12` 范围内的独立 `/32`
+服务地址，地址按外部 `node_id` 排序后稳定映射。业务应用统一监听本地端口 `9`；
+链路 `/30` 地址只用于逐跳传输，不再作为节点业务身份。
+
 ## 6. 主流程
 
 1. 解析命令行参数并打印关键配置。
@@ -150,18 +158,17 @@ examples/link-selection/input/traffic/README.md
 3. JsonTopo 模式下加载初始 JSON 拓扑，并按时间片更新节点和链路状态。
 4. 调用 `buildApp()` 安装服务器与客户端应用。
 5. 安装 FlowMonitor，运行仿真到 `totalTimeStep`。
-6. 仿真结束后调用 `dealSimInfo()` 汇总业务流与控制流性能指标。
+6. 在 `Simulator::Destroy()` 前调用 `MetricsRecorder` 汇总并写出指标。
 
 ## 7. 统计输出
 
-终端会输出两类统计：
+终端会分别输出业务网络流、控制网络流和应用层接收统计。网络流吞吐量统一使用
+Mbps，测量区间来自实际 flow 首发和末次活动时间。
 
-```text
-业务数据性能
-控制信息性能
-```
+每次运行还会在 `--outputDir` 下生成：
 
-指标包括 Tx/Rx 包数、字节数、丢包、时延、吞吐、抖动和丢包率。
+- `network-flow-metrics.csv`：包数、字节数、真实测量区间、时延、抖动、吞吐量和丢包率。
+- `task-metrics.json`：仿真时长、墙钟时间、传输协议及 UDP/TCP 应用层接收量。
 
 ## 8. 传统 CSV 拓扑模式
 
