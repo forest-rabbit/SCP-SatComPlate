@@ -106,11 +106,6 @@ namespace ns3{
       g_serviceAddressesByNodeId[node->GetId()] = address;
     }
 
-    std::cout << "[TOPO:Service] 稳定服务地址分配完成" << std::endl
-              << "  count     : " << serviceNodes.size() << std::endl
-              << "  range     : 172.16.0.1 - "
-              << Ipv4Address(0xac100000u + serviceNodes.size()) << std::endl
-              << std::endl;
   }
 
   Ipv4Address

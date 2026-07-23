@@ -203,12 +203,6 @@ MetricsRecorder::Record()
   PrintNetworkMetrics("业务网络流", business);
   PrintNetworkMetrics("控制网络流", control);
 
-  std::cout << "[METRICS] 应用层业务接收" << std::endl
-            << "  Server Applications: " << m_applicationMetrics.server_applications << "\n"
-            << "  UDP Rx Packets: " << m_applicationMetrics.udp_packets_received << " p\n"
-            << "  TCP Rx Bytes: " << m_applicationMetrics.tcp_bytes_received << " bytes\n"
-            << "  Wall Clock: " << m_wallClockSeconds << " s\n";
-
   WriteNetworkMetricsCsv(business, control, m_outputDirectory);
   WriteTaskMetricsJson(m_applicationMetrics, m_wallClockSeconds, m_outputDirectory);
   std::cout << "[METRICS] 结构化结果" << std::endl

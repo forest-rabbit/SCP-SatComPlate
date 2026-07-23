@@ -61,7 +61,6 @@ totalTimeStep = 110
 [TOPO:Init] 开始拓扑初始化
 [TOPO:Nodes] 节点创建完成
 [TOPO:Clusters] 初始簇信息
-[TOPO:Service] 稳定服务地址分配完成
 [TOPO:Links] 初始链路安装完成
 [TOPO:Plan] JsonTopo 时间片计划
 [TOPO:HoldTime] ...
