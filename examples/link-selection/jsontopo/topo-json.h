@@ -32,6 +32,14 @@ struct TopologyTimeSlice
   }
 };
 
+// 甲方link_output单文件快照。节点在初始化阶段由首个文件一次性创建；
+// 后续文件只生成已有卫星的簇更新，链路始终按完整快照处理。
+struct LinkOutputSnapshot
+{
+  std::vector<TopologyNodePatch> node_updates;
+  std::vector<LinkInfo> links;
+};
+
 // topo-json只负责解析文件，不直接访问ns-3节点。
 // 解析链路时通过resolver把JSON里的node_id转换为topo.cc中的NodeContainer下标。
 typedef std::function<uint32_t(uint32_t, bool)> TopologyNodeResolver;
@@ -51,6 +59,10 @@ std::vector<TopologyTimeSlice> ReadTopologyTimeSlicesJsonFile(const std::string&
 std::vector<TopologyTimeSlice> ScanTopologyTimeSlicesDirectory(const std::string& dirname,
                                                                bool patchMode);
 bool TryParseSecondsFromTimeSliceFilename(const std::string& path, double& seconds);
+
+std::vector<TopologyNodeInfo> ReadLinkOutputInitialNodesJsonFile(const std::string& filename);
+LinkOutputSnapshot ReadLinkOutputSnapshotJsonFile(const std::string& filename,
+                                                  const TopologyNodeResolver& resolver);
 
 } // namespace ns3
 

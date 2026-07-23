@@ -4,11 +4,13 @@
 #include "ns3/log.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <dirent.h>
 #include <fstream>
 #include <limits>
 #include <map>
+#include <set>
 #include <stdexcept>
 
 using json = nlohmann::json;
@@ -287,6 +289,7 @@ GetDoubleField(const json& item, const std::vector<std::string>& keys, double de
   {
     NS_FATAL_ERROR("JSON字段无法解析为浮点数");
   }
+  NS_FATAL_ERROR("JSON字段无法解析为浮点数");
   return defaultValue;
 }
 
@@ -299,7 +302,14 @@ ReadJsonFile(const std::string& filename)
     NS_FATAL_ERROR("无法打开JSON文件: " << filename);
   }
   json data;
-  file >> data;
+  try
+  {
+    file >> data;
+  }
+  catch (const std::exception& error)
+  {
+    NS_FATAL_ERROR("JSON文件解析失败: " << filename << "\n  " << error.what());
+  }
   return data;
 }
 
@@ -353,7 +363,8 @@ ReadTopologyNodesJsonFile(const std::string& filename)
 static LinkInfo
 ParseTopologyLinkJson(const json& item,
                       const TopologyNodeResolver& resolver,
-                      bool zeroBasedFallback)
+                      bool zeroBasedFallback,
+                      bool linkOutputFormat = false)
 {
   uint32_t node1 = GetRequiredUint32Field(item, {"node1_id", "nodel_id", "node1 id", "source", "src"});
   uint32_t node2 = GetRequiredUint32Field(item, {"node2_id", "node2 id", "destination", "dst", "dest"});
@@ -365,10 +376,29 @@ ParseTopologyLinkJson(const json& item,
   link.destination = resolver(node2, zeroBasedFallback);
   link.type = GetStringField(item, {"type", "link_type"}, "sat");
   link.has_type = FindJsonField(item, {"type", "link_type"}) != nullptr;
-  link.delay_us = GetUint32Field(item, {"delay", "delay_us"}, 0);
-  link.has_delay_us = FindJsonField(item, {"delay", "delay_us"}) != nullptr;
-  link.has_delay_ms = FindJsonField(item, {"delay_ms"}) != nullptr;
-  link.delay_ms = link.has_delay_us ? (link.delay_us + 999) / 1000 : GetUint32Field(item, {"delay_ms"}, 0);
+  if (linkOutputFormat && FindJsonField(item, {"delay"}) != nullptr)
+  {
+    double delayMs = GetDoubleField(item, {"delay"}, 0.0);
+    double delayUs = delayMs * 1000.0;
+    if (!std::isfinite(delayUs)
+        || delayUs < 0.0
+        || delayUs > static_cast<double>(std::numeric_limits<uint32_t>::max()))
+    {
+      NS_FATAL_ERROR("link_output delay超出可解析范围");
+    }
+    link.delay_us = static_cast<uint32_t>(std::llround(delayUs));
+    link.delay_ms = static_cast<uint32_t>(std::ceil(delayMs));
+    link.has_delay_us = true;
+    link.has_delay_ms = false;
+  }
+  else
+  {
+    link.delay_us = GetUint32Field(item, {"delay", "delay_us"}, 0);
+    link.has_delay_us = FindJsonField(item, {"delay", "delay_us"}) != nullptr;
+    link.has_delay_ms = FindJsonField(item, {"delay_ms"}) != nullptr;
+    link.delay_ms =
+      link.has_delay_us ? (link.delay_us + 999) / 1000 : GetUint32Field(item, {"delay_ms"}, 0);
+  }
   link.link_bandwidth_kbps = GetUint32Field(item, {"link_bandwidth", "link_bandwidth_kbps"}, 0);
   link.has_link_bandwidth_kbps = FindJsonField(item, {"link_bandwidth", "link_bandwidth_kbps"}) != nullptr;
   link.has_bandwidth_gbps = FindJsonField(item, {"bandwidth_gbps"}) != nullptr;
@@ -385,7 +415,8 @@ ParseTopologyLinkJson(const json& item,
 static std::vector<LinkInfo>
 ParseTopologyLinksJsonArray(const json& linksArray,
                             const TopologyNodeResolver& resolver,
-                            bool hasExplicitNodeIds)
+                            bool hasExplicitNodeIds,
+                            bool linkOutputFormat = false)
 {
   std::vector<LinkInfo> links;
   bool zeroBasedFallback = false;
@@ -406,7 +437,10 @@ ParseTopologyLinksJsonArray(const json& linksArray,
   }
   for (const auto& item : linksArray)
   {
-    links.push_back(ParseTopologyLinkJson(item, resolver, zeroBasedFallback));
+    links.push_back(ParseTopologyLinkJson(item,
+                                          resolver,
+                                          zeroBasedFallback,
+                                          linkOutputFormat));
   }
   return links;
 }
@@ -419,6 +453,194 @@ ReadTopologyLinksJsonFile(const std::string& filename,
   json root = ReadJsonFile(filename);
   json linksArray = ExtractJsonArray(root, {"links", "data"});
   return ParseTopologyLinksJsonArray(linksArray, resolver, hasExplicitNodeIds);
+}
+
+struct LinkOutputJsonItems
+{
+  json links;
+  json satellites;
+
+  LinkOutputJsonItems()
+    : links(json::array()),
+      satellites(json::array())
+  {
+  }
+};
+
+static LinkOutputJsonItems
+ClassifyLinkOutputJsonItems(const json& root, const std::string& filename)
+{
+  if (!root.is_array())
+  {
+    NS_FATAL_ERROR("link_output文件顶层必须是数组: " << filename);
+  }
+
+  LinkOutputJsonItems result;
+  for (const auto& item : root)
+  {
+    if (!item.is_object())
+    {
+      NS_FATAL_ERROR("link_output数组元素必须是对象: " << filename);
+    }
+
+    bool isLink = FindJsonField(item, {"node1_id", "node2_id"}) != nullptr;
+    bool isSatellite = FindJsonField(item, {"sat_id", "clusterId"}) != nullptr;
+    if (isLink == isSatellite)
+    {
+      NS_FATAL_ERROR("link_output包含无法区分的数组元素: " << filename);
+    }
+    if (isLink)
+    {
+      result.links.push_back(item);
+    }
+    else
+    {
+      result.satellites.push_back(item);
+    }
+  }
+  return result;
+}
+
+struct LinkOutputSatelliteJsonInfo
+{
+  TopologyNodeInfo node;
+  bool has_is_cluster;
+  bool has_is_cluster_head;
+
+  LinkOutputSatelliteJsonInfo()
+    : has_is_cluster(false),
+      has_is_cluster_head(false)
+  {
+  }
+};
+
+static std::map<uint32_t, LinkOutputSatelliteJsonInfo>
+ParseLinkOutputSatelliteInfos(const json& satellites, const std::string& filename)
+{
+  std::map<uint32_t, LinkOutputSatelliteJsonInfo> satelliteInfos;
+  for (const auto& item : satellites)
+  {
+    uint32_t satelliteId = GetRequiredUint32Field(item, {"sat_id"});
+    LinkOutputSatelliteJsonInfo parsed;
+    parsed.node.node_id = satelliteId;
+    parsed.node.node_type = GetStringField(item, {"node_type", "type"}, "sat");
+    parsed.node.is_cluster = GetBoolField(item, {"is_cluster"}, true);
+    parsed.node.cluster_id = GetRequiredUint32Field(item, {"clusterId", "cluster_id"});
+    parsed.node.is_cluster_head =
+      GetBoolField(item, {"is_cluster_head", "is_clusterhead"}, false);
+    parsed.has_is_cluster = FindJsonField(item, {"is_cluster"}) != nullptr;
+    parsed.has_is_cluster_head =
+      FindJsonField(item, {"is_cluster_head", "is_clusterhead"}) != nullptr;
+    if (!satelliteInfos.insert(std::make_pair(satelliteId, parsed)).second)
+    {
+      NS_FATAL_ERROR("link_output卫星ID重复: " << satelliteId << "\n  file: " << filename);
+    }
+  }
+  if (satelliteInfos.empty())
+  {
+    NS_FATAL_ERROR("link_output文件没有sat_id节点项: " << filename);
+  }
+  return satelliteInfos;
+}
+
+std::vector<TopologyNodeInfo>
+ReadLinkOutputInitialNodesJsonFile(const std::string& filename)
+{
+  LinkOutputJsonItems items = ClassifyLinkOutputJsonItems(ReadJsonFile(filename), filename);
+  std::map<uint32_t, LinkOutputSatelliteJsonInfo> satelliteInfos =
+    ParseLinkOutputSatelliteInfos(items.satellites, filename);
+  std::set<uint32_t> satelliteIds;
+  std::set<uint32_t> groundIds;
+  for (const auto& item : satelliteInfos)
+  {
+    satelliteIds.insert(item.first);
+  }
+
+  for (const auto& item : items.links)
+  {
+    uint32_t node1 = GetRequiredUint32Field(item, {"node1_id"});
+    uint32_t node2 = GetRequiredUint32Field(item, {"node2_id"});
+    if (node1 == node2)
+    {
+      NS_FATAL_ERROR("link_output链路不能连接同一节点: " << node1 << "\n  file: " << filename);
+    }
+
+    std::string type = GetStringField(item, {"type", "link_type"}, "sat");
+    if (type != "feeder")
+    {
+      continue;
+    }
+    bool node1IsSatellite = satelliteIds.find(node1) != satelliteIds.end();
+    bool node2IsSatellite = satelliteIds.find(node2) != satelliteIds.end();
+    if (node1IsSatellite == node2IsSatellite)
+    {
+      NS_FATAL_ERROR("link_output feeder必须恰好连接一颗卫星和一个地面站"
+                     << "\n  link: " << node1 << "<->" << node2
+                     << "\n  file: " << filename);
+    }
+    groundIds.insert(node1IsSatellite ? node2 : node1);
+  }
+
+  std::set<uint32_t> knownNodeIds = satelliteIds;
+  knownNodeIds.insert(groundIds.begin(), groundIds.end());
+  for (const auto& item : items.links)
+  {
+    uint32_t node1 = GetRequiredUint32Field(item, {"node1_id"});
+    uint32_t node2 = GetRequiredUint32Field(item, {"node2_id"});
+    if (knownNodeIds.find(node1) == knownNodeIds.end()
+        || knownNodeIds.find(node2) == knownNodeIds.end())
+    {
+      NS_FATAL_ERROR("link_output链路引用了无法从sat_id或feeder推导的节点"
+                     << "\n  link: " << node1 << "<->" << node2
+                     << "\n  file: " << filename);
+    }
+  }
+
+  std::vector<TopologyNodeInfo> nodes;
+  nodes.reserve(satelliteIds.size() + groundIds.size());
+  for (const auto& item : satelliteInfos)
+  {
+    nodes.push_back(item.second.node);
+  }
+  for (uint32_t groundId : groundIds)
+  {
+    TopologyNodeInfo info;
+    info.node_id = groundId;
+    info.node_type = "ground";
+    nodes.push_back(info);
+  }
+  return nodes;
+}
+
+LinkOutputSnapshot
+ReadLinkOutputSnapshotJsonFile(const std::string& filename,
+                               const TopologyNodeResolver& resolver)
+{
+  LinkOutputJsonItems items = ClassifyLinkOutputJsonItems(ReadJsonFile(filename), filename);
+  std::map<uint32_t, LinkOutputSatelliteJsonInfo> satelliteInfos =
+    ParseLinkOutputSatelliteInfos(items.satellites, filename);
+
+  LinkOutputSnapshot snapshot;
+  for (const auto& item : satelliteInfos)
+  {
+    TopologyNodePatch patch;
+    patch.node_id = item.first;
+    patch.cluster_id = item.second.node.cluster_id;
+    patch.has_cluster_id = true;
+    if (item.second.has_is_cluster)
+    {
+      patch.is_cluster = item.second.node.is_cluster;
+      patch.has_is_cluster = true;
+    }
+    if (item.second.has_is_cluster_head)
+    {
+      patch.is_cluster_head = item.second.node.is_cluster_head;
+      patch.has_is_cluster_head = true;
+    }
+    snapshot.node_updates.push_back(patch);
+  }
+  snapshot.links = ParseTopologyLinksJsonArray(items.links, resolver, true, true);
+  return snapshot;
 }
 
 static json
