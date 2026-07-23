@@ -127,6 +127,102 @@ TryParseSecondsFromTimeSliceFilename(const std::string& path, double& seconds)
   return true;
 }
 
+static bool
+HasLinkOutputTimestampShape(const std::string& value)
+{
+  if (value.size() != 19
+      || value[4] != '-'
+      || value[7] != '-'
+      || value[10] != '_'
+      || value[13] != '-'
+      || value[16] != '-')
+  {
+    return false;
+  }
+
+  for (uint32_t i = 0; i < value.size(); ++i)
+  {
+    if (i == 4 || i == 7 || i == 10 || i == 13 || i == 16)
+    {
+      continue;
+    }
+    if (value[i] < '0' || value[i] > '9')
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+static uint32_t
+ParseTimestampNumber(const std::string& value, uint32_t position, uint32_t length)
+{
+  uint32_t result = 0;
+  for (uint32_t i = 0; i < length; ++i)
+  {
+    result = result * 10 + static_cast<uint32_t>(value[position + i] - '0');
+  }
+  return result;
+}
+
+static bool
+IsLeapYear(uint32_t year)
+{
+  return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+}
+
+bool
+TryParseLinkOutputTimestamp(const std::string& value, int64_t& timestampSeconds)
+{
+  if (!HasLinkOutputTimestampShape(value))
+  {
+    return false;
+  }
+
+  uint32_t year = ParseTimestampNumber(value, 0, 4);
+  uint32_t month = ParseTimestampNumber(value, 5, 2);
+  uint32_t day = ParseTimestampNumber(value, 8, 2);
+  uint32_t hour = ParseTimestampNumber(value, 11, 2);
+  uint32_t minute = ParseTimestampNumber(value, 14, 2);
+  uint32_t second = ParseTimestampNumber(value, 17, 2);
+  if (year == 0 || month == 0 || month > 12 || hour > 23 || minute > 59 || second > 59)
+  {
+    return false;
+  }
+
+  static const uint32_t daysInMonth[] =
+    {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  uint32_t maxDay = daysInMonth[month - 1];
+  if (month == 2 && IsLeapYear(year))
+  {
+    maxDay = 29;
+  }
+  if (day == 0 || day > maxDay)
+  {
+    return false;
+  }
+
+  uint32_t completedYears = year - 1;
+  int64_t days = static_cast<int64_t>(completedYears) * 365
+                 + completedYears / 4
+                 - completedYears / 100
+                 + completedYears / 400;
+  for (uint32_t currentMonth = 1; currentMonth < month; ++currentMonth)
+  {
+    days += daysInMonth[currentMonth - 1];
+    if (currentMonth == 2 && IsLeapYear(year))
+    {
+      ++days;
+    }
+  }
+  days += day - 1;
+  timestampSeconds = days * 24 * 60 * 60
+                     + static_cast<int64_t>(hour) * 60 * 60
+                     + static_cast<int64_t>(minute) * 60
+                     + second;
+  return true;
+}
+
 static const json*
 FindJsonField(const json& item, const std::vector<std::string>& keys)
 {
@@ -976,6 +1072,94 @@ ScanTopologyTimeSlicesDirectory(const std::string& dirname, bool patchMode)
     slices.push_back(slice);
   }
   return slices;
+}
+
+LinkOutputTimeWindow
+ScanLinkOutputSnapshotsDirectory(const std::string& dirname,
+                                 const std::string& startTime,
+                                 double simulationDuration)
+{
+  if (!std::isfinite(simulationDuration) || simulationDuration <= 0.0)
+  {
+    NS_FATAL_ERROR("simulationDuration必须是正数");
+  }
+
+  int64_t startTimestamp = 0;
+  if (!TryParseLinkOutputTimestamp(startTime, startTimestamp))
+  {
+    NS_FATAL_ERROR("linkOutputStartTime格式或日期无效，应为YYYY-MM-DD_HH-MM-SS: "
+                   << startTime);
+  }
+
+  std::map<int64_t, std::string> filesByTimestamp;
+  DIR* dir = opendir(dirname.c_str());
+  if (dir == nullptr)
+  {
+    NS_FATAL_ERROR("无法打开link_output目录: " << dirname);
+  }
+
+  struct dirent* entry = nullptr;
+  while ((entry = readdir(dir)) != nullptr)
+  {
+    std::string filename = entry->d_name;
+    if (!EndsWith(filename, ".json"))
+    {
+      continue;
+    }
+
+    std::string stem = filename.substr(0, filename.size() - 5);
+    int64_t timestamp = 0;
+    if (!TryParseLinkOutputTimestamp(stem, timestamp))
+    {
+      if (HasLinkOutputTimestampShape(stem))
+      {
+        NS_FATAL_ERROR("link_output文件名中的日期或时间无效: " << filename);
+      }
+      continue;
+    }
+
+    std::string fullPath = JoinPath(dirname, filename);
+    if (!filesByTimestamp.insert(std::make_pair(timestamp, fullPath)).second)
+    {
+      NS_FATAL_ERROR("link_output目录存在重复时间戳: " << stem);
+    }
+  }
+  closedir(dir);
+
+  if (filesByTimestamp.empty())
+  {
+    NS_FATAL_ERROR("link_output目录中没有YYYY-MM-DD_HH-MM-SS.json快照: " << dirname);
+  }
+
+  auto initial = filesByTimestamp.find(startTimestamp);
+  if (initial == filesByTimestamp.end())
+  {
+    NS_FATAL_ERROR("linkOutputStartTime没有精确对应的JSON快照: " << startTime
+                   << "\n  directory: " << dirname);
+  }
+
+  LinkOutputTimeWindow window;
+  window.initial_file = initial->second;
+  window.discovered_snapshot_count = filesByTimestamp.size();
+  for (auto item = initial; item != filesByTimestamp.end(); ++item)
+  {
+    double relativeTime = static_cast<double>(item->first - startTimestamp);
+    if (relativeTime > simulationDuration)
+    {
+      break;
+    }
+    ++window.selected_snapshot_count;
+    if (relativeTime == 0.0)
+    {
+      continue;
+    }
+
+    LinkOutputSnapshotFile snapshot;
+    snapshot.time_s = relativeTime;
+    snapshot.snapshot_file = item->second;
+    window.updates.push_back(snapshot);
+  }
+  return window;
 }
 
 } // namespace ns3

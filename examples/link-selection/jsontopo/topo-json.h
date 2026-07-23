@@ -2,6 +2,7 @@
 #define TOPO_JSON_H
 
 #include "topo-data.h"
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
@@ -40,6 +41,33 @@ struct LinkOutputSnapshot
   std::vector<LinkInfo> links;
 };
 
+// link_output目录扫描结果。initial_file在仿真0s读取；updates只保存相对时间和路径，
+// 到达对应仿真时间后才读取JSON内容。
+struct LinkOutputSnapshotFile
+{
+  double time_s;
+  std::string snapshot_file;
+
+  LinkOutputSnapshotFile()
+    : time_s(0.0)
+  {
+  }
+};
+
+struct LinkOutputTimeWindow
+{
+  std::string initial_file;
+  std::vector<LinkOutputSnapshotFile> updates;
+  uint32_t discovered_snapshot_count;
+  uint32_t selected_snapshot_count;
+
+  LinkOutputTimeWindow()
+    : discovered_snapshot_count(0),
+      selected_snapshot_count(0)
+  {
+  }
+};
+
 // topo-json只负责解析文件，不直接访问ns-3节点。
 // 解析链路时通过resolver把JSON里的node_id转换为topo.cc中的NodeContainer下标。
 typedef std::function<uint32_t(uint32_t, bool)> TopologyNodeResolver;
@@ -63,6 +91,10 @@ bool TryParseSecondsFromTimeSliceFilename(const std::string& path, double& secon
 std::vector<TopologyNodeInfo> ReadLinkOutputInitialNodesJsonFile(const std::string& filename);
 LinkOutputSnapshot ReadLinkOutputSnapshotJsonFile(const std::string& filename,
                                                   const TopologyNodeResolver& resolver);
+bool TryParseLinkOutputTimestamp(const std::string& value, int64_t& timestampSeconds);
+LinkOutputTimeWindow ScanLinkOutputSnapshotsDirectory(const std::string& dirname,
+                                                      const std::string& startTime,
+                                                      double simulationDuration);
 
 } // namespace ns3
 
