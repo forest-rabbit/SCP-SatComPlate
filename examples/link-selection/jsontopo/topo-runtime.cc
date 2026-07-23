@@ -344,7 +344,7 @@ ValidateLinkOutputSnapshot(const LinkOutputSnapshot& snapshot, const std::string
   }
   if (actualSatelliteIds != expectedSatelliteIds)
   {
-    NS_FATAL_ERROR("link_output运行期卫星集合必须与起始快照一致"
+    NS_FATAL_ERROR("link_output运行期卫星集合必须与最早快照一致"
                    << "\n  expected: " << expectedSatelliteIds.size()
                    << "\n  actual  : " << actualSatelliteIds.size()
                    << "\n  file    : " << filename);

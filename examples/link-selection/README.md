@@ -23,11 +23,11 @@ source .venv/bin/activate
 
 ```bash
 ./waf build
-./waf --run "link-test --routingMode=0 --offeredload=0 --linkOutputDir=examples/link-selection/input/topology/json/examples/link_output --linkOutputStartTime=2024-01-02_00-02-00 --simulationDuration=180 --outputDir=/tmp/link-output-smoke"
+./waf --run "link-test --routingMode=0 --offeredload=0 --linkOutputDir=examples/link-selection/input/topology/json/examples/link_output --simulationDuration=300 --outputDir=/tmp/link-output-smoke"
 ```
 
-该命令把 `2024-01-02_00-02-00.json` 映射为仿真 `0s`，并在
-`60s`、`120s`、`180s` 读取窗口内的三个后续快照。
+该命令自动把目录中最早的 `2024-01-02_00-00-00.json` 映射为仿真 `0s`，
+并读取其后 300 秒内的全部快照。
 
 仓库内置的传统 73 星 6 地面站 JsonTopo 示例也可用于兼容性自检：
 
@@ -94,8 +94,6 @@ totalTimeStep = 110
 - `--topologyJson=<path>`：初始链路 JSON 文件。
 - `--timeSlicesJson=<path>`：可选索引文件；常规情况下不需要，默认按文件名扫描 `input/topology/json/`。
 - `--linkOutputDir=<path>`：甲方绝对时间快照目录；设置后启用 `link_output` 模式。
-- `--linkOutputStartTime=<YYYY-MM-DD_HH-MM-SS>`：必须精确命中目录中的一个快照，
-  该快照映射为仿真 `0s`。
 - `--simulationDuration=<seconds>`：仿真时长。`link_output` 模式下必须为正数；
   其他模式下提供正数时可覆盖默认的 `110s`。
 - `--isSate=<1|2|3|4>`：传统拓扑模式使用；JsonTopo 模式下不决定节点数量。
@@ -121,10 +119,10 @@ totalTimeStep = 110
 ### 4.1 甲方 link_output 时间序列
 
 `link_output` 模式通过命令行显式指定目录，不要求把数据复制到默认目录。程序严格扫描
-`YYYY-MM-DD_HH-MM-SS.json`，起始时间必须精确命中快照，只选择闭区间
-`[start, start + simulationDuration]` 内的文件。
+`YYYY-MM-DD_HH-MM-SS.json`，自动选择目录中时间最早的快照作为仿真 `0s`，并只选择
+闭区间 `[最早快照, 最早快照 + simulationDuration]` 内的文件。
 
-起始快照中的 `sat_id` 用于创建任意规模的卫星节点；`feeder` 的非卫星端点自动推导为
+最早快照中的 `sat_id` 用于创建任意规模的卫星节点；`feeder` 的非卫星端点自动推导为
 地面站。后续文件作为完整快照处理，缺失链路会被断开。目录即使包含一天约 1440 个文件，
 内存中也只保留时间戳和路径，JSON 内容到对应仿真时间才读取。
 

@@ -12,18 +12,18 @@
 YYYY-MM-DD_HH-MM-SS.json
 ```
 
-运行时填写目录、精确起始时间和正数仿真时长：
+运行时只需填写目录和以秒为单位的正数仿真时长：
 
 ```bash
 ./waf --run "link-test \
   --linkOutputDir=examples/link-selection/input/topology/json/examples/link_output \
-  --linkOutputStartTime=2024-01-02_00-02-00 \
-  --simulationDuration=180 \
+  --simulationDuration=300 \
   --offeredload=0"
 ```
 
-程序从起始快照的 `sat_id` 推导卫星，从 `feeder` 的另一个端点推导地面站；
-节点数、链路数和文件数均不写死。后续文件是完整快照，并按相对起始时间调度。
+程序自动选择目录中时间最早的快照，从其中的 `sat_id` 推导卫星，从 `feeder`
+的另一个端点推导地面站；节点数、链路数和文件数均不写死。后续文件是完整快照，
+并按相对最早快照的时间调度。
 目录可包含一天约 1440 个文件，扫描阶段只保存时间和路径，到点才解析内容。
 
 该格式的 `delay` 是毫秒、`hold_time` 是秒、`clusterId` 是卫星簇编号。
