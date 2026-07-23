@@ -26,7 +26,8 @@ YYYY-MM-DD_HH-MM-SS.json
 并按相对最早快照的时间调度。
 目录可包含一天约 1440 个文件，扫描阶段只保存时间和路径，到点才解析内容。
 
-该格式的 `delay` 是毫秒、`hold_time` 是秒、`clusterId` 是卫星簇编号。
+该格式的 `delay` 是毫秒、`hold_time` 是秒。`clusterId=0` 表示未分簇，
+正数 `n` 表示内部簇 `n-1`；按 ID 数值升序排列的地面站依次作为各簇簇首。
 详细字段和约束见 `examples/link_output/README.md`。
 
 以下章节描述兼容保留的传统 `nodes_*.json/topology_*.json/patch_*.json` 协议。

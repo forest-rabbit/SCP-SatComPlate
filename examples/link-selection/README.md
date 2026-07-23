@@ -126,7 +126,9 @@ totalTimeStep = 110
 地面站。后续文件作为完整快照处理，缺失链路会被断开。目录即使包含一天约 1440 个文件，
 内存中也只保留时间戳和路径，JSON 内容到对应仿真时间才读取。
 
-新格式的 `delay` 单位是毫秒，`hold_time` 单位是秒，`clusterId` 是卫星簇编号。
+新格式的 `delay` 单位是毫秒，`hold_time` 单位是秒。`clusterId=0` 表示卫星
+未分簇，`clusterId=n (n≥1)` 映射到内部簇 `n-1`；地面站按 ID 数值升序依次
+作为簇 0、簇 1……的簇首。
 完整格式见 `input/topology/json/examples/link_output/README.md`。
 
 ### 4.2 传统 JsonTopo
