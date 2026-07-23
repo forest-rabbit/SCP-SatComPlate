@@ -19,7 +19,7 @@ namespace ns3 {
   extern bool _useJsonTopo;    // true: 使用input/topology JSON作为拓扑真值；false: 使用传统星座/CSV逻辑
   extern bool _jsonTopoPatchMode; // true: 后续时间片读取patch_<time>s.json增量；false: 读取全量快照
 
-  extern const double totalTimeStep; // 仿真总时长(s)，JSON模式仍有效
+  extern double totalTimeStep;       // 仿真总时长(s)，可由--simulationDuration覆盖
   extern double offeredload;         // 业务负载率
   extern bool _trafficMode;          // 业务流量模式：0区域热点，1均匀流量
   extern int _tranProc;              // 传输协议：0 UDP，1 TCP

@@ -46,6 +46,8 @@ namespace ns3{
   std::string nodesJsonFile;
   std::string topologyJsonFile;
   std::string timeSlicesJsonFile;
+  std::string linkOutputDir;
+  std::string linkOutputStartTime;
   static std::map<uint32_t, Ipv4Address> g_serviceAddressesByNodeId;
 
   // 激光链路分配文件的时间戳和链路配置映射

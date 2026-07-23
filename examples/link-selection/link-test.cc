@@ -34,7 +34,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <fstream>
 #include <ns3/nstime.h>
@@ -376,6 +378,7 @@ main (int argc, char *argv[])
 
   // offeredload = 6.0;
 
+  double requestedSimulationDuration = 0.0;
   CommandLine cmd;
   cmd.AddValue ("offeredload", "范围：0.5-6.0", offeredload);
 
@@ -391,9 +394,51 @@ main (int argc, char *argv[])
   cmd.AddValue("nodesJson", "可选：初始节点JSON文件；默认input/topology/json/nodes_0s.json", nodesJsonFile);
   cmd.AddValue("topologyJson", "可选：初始链路JSON文件；默认input/topology/json/topology_0s.json", topologyJsonFile);
   cmd.AddValue("timeSlicesJson", "可选：时间片索引JSON文件；默认按input/topology/json文件名扫描", timeSlicesJsonFile);
+  cmd.AddValue("linkOutputDir", "甲方时间序列JSON目录；设置后启用link_output模式", linkOutputDir);
+  cmd.AddValue("linkOutputStartTime", "link_output起始快照，格式YYYY-MM-DD_HH-MM-SS", linkOutputStartTime);
+  cmd.AddValue("simulationDuration", "仿真时长(s)；link_output模式下必须为正数", requestedSimulationDuration);
   cmd.Parse (argc, argv);
+
+  if (!std::isfinite(requestedSimulationDuration) || requestedSimulationDuration < 0.0)
+  {
+    std::cerr << "[RUN:Error] simulationDuration必须是有限的非负数" << std::endl;
+    return EXIT_FAILURE;
+  }
+  if (!linkOutputDir.empty())
+  {
+    if (!_useJsonTopo)
+    {
+      std::cerr << "[RUN:Error] linkOutputDir要求useJsonTopo=true" << std::endl;
+      return EXIT_FAILURE;
+    }
+    if (linkOutputStartTime.empty())
+    {
+      std::cerr << "[RUN:Error] link_output模式必须填写linkOutputStartTime" << std::endl;
+      return EXIT_FAILURE;
+    }
+    if (requestedSimulationDuration <= 0.0)
+    {
+      std::cerr << "[RUN:Error] link_output模式必须填写正数simulationDuration" << std::endl;
+      return EXIT_FAILURE;
+    }
+    totalTimeStep = requestedSimulationDuration;
+  }
+  else
+  {
+    if (!linkOutputStartTime.empty())
+    {
+      std::cerr << "[RUN:Error] linkOutputStartTime必须与linkOutputDir同时使用" << std::endl;
+      return EXIT_FAILURE;
+    }
+    if (requestedSimulationDuration > 0.0)
+    {
+      totalTimeStep = requestedSimulationDuration;
+    }
+  }
+
   std::cout << "[RUN] 实验参数" << std::endl
             << "  offeredLoad   : " << offeredload << std::endl
+            << "  duration      : " << totalTimeStep << " s" << std::endl
             << "  linkBandwidth : " << linkBandwidth << std::endl
             << "  tranProc      : " << (_tranProc == 1 ? "TCP" : "UDP") << std::endl
             << "  trafficMatrix : " << trafficMatrixFile << std::endl
@@ -401,6 +446,8 @@ main (int argc, char *argv[])
             << "  routeTables   : " << (writeRoutingTables ? "enabled" : "disabled") << std::endl
             << "  useJsonTopo   : " << (_useJsonTopo ? "true" : "false") << std::endl
             << "  jsonTopoMode  : " << (_jsonTopoPatchMode ? "patch" : "snapshot") << std::endl
+            << "  linkOutputDir : " << (linkOutputDir.empty() ? "disabled" : linkOutputDir) << std::endl
+            << "  startTime     : " << (linkOutputStartTime.empty() ? "-" : linkOutputStartTime) << std::endl
             << std::endl;
 
   if (!_useJsonTopo)

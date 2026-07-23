@@ -16,7 +16,7 @@ namespace ns3{
   bool _jsonTopoPatchMode = false;       // false=后续时间片为全量快照；true=后续时间片为patch增量
 
   /* JSON模式仍然建议修改的实验参数：这些控制仿真和业务，不控制拓扑结构 */
-  const double totalTimeStep = 110;     // 仿真总时长(s)，JSON模式仍有效
+  double totalTimeStep = 110;           // 仿真总时长(s)，可由--simulationDuration覆盖
   double offeredload = 0.0001;             // 业务负载率，范围 0.5-6.0
   bool _trafficMode = 0;                // 业务流量模式：0区域热点，1均匀流量
   int _tranProc = 0;                    // 传输协议：0 UDP，1 TCP
