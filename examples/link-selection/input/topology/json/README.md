@@ -4,7 +4,34 @@
 仓库不再提交默认读取的测试 JSON；`input/topology/json/` 用于放置甲方交付数据。
 `input/topology/json/examples/` 只作为说明示例，不参与默认扫描。
 
-## 必需初始文件
+## 甲方 link_output 时间序列
+
+当前甲方格式位于 `examples/link_output/`，每个文件名是绝对时间：
+
+```text
+YYYY-MM-DD_HH-MM-SS.json
+```
+
+运行时填写目录、精确起始时间和正数仿真时长：
+
+```bash
+./waf --run "link-test \
+  --linkOutputDir=examples/link-selection/input/topology/json/examples/link_output \
+  --linkOutputStartTime=2024-01-02_00-02-00 \
+  --simulationDuration=180 \
+  --offeredload=0"
+```
+
+程序从起始快照的 `sat_id` 推导卫星，从 `feeder` 的另一个端点推导地面站；
+节点数、链路数和文件数均不写死。后续文件是完整快照，并按相对起始时间调度。
+目录可包含一天约 1440 个文件，扫描阶段只保存时间和路径，到点才解析内容。
+
+该格式的 `delay` 是毫秒、`hold_time` 是秒、`clusterId` 是卫星簇编号。
+详细字段和约束见 `examples/link_output/README.md`。
+
+以下章节描述兼容保留的传统 `nodes_*.json/topology_*.json/patch_*.json` 协议。
+
+## 传统 JsonTopo 必需初始文件
 
 每次 JsonTopo 仿真都必须从 `0s` 的完整拓扑开始：
 
@@ -119,7 +146,7 @@ patch 文件只写修改项：
 表示新增、恢复或更新链路；`links.remove` 表示断开链路。链路按无向边处理，
 因此 `12-25` 和 `25-12` 表示同一条链路。
 
-## 字段与单位
+## 传统 JsonTopo 字段与单位
 
 节点字段：
 
@@ -162,4 +189,5 @@ examples/snapshot/                  最小全量快照示例
 examples/patch/                     最小 patch 示例
 examples/constellation-66sat-5gs/   66颗卫星 + 5个地面站的星座级示例
 examples/customer-73sat-6gs/        73颗卫星 + 6个地面站的客户尺度示例
+examples/link_output/               绝对时间命名的甲方完整快照示例
 ```
