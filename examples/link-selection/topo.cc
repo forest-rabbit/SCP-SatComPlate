@@ -129,7 +129,15 @@ namespace ns3{
   LogTopologyInitStart()
   {
     std::cout << "[TOPO:Init] 开始拓扑初始化" << std::endl;
-    if (_useJsonTopo)
+    if (IsLinkOutputMode())
+    {
+      std::cout << "  source     : link_output" << std::endl
+                << "  directory  : " << linkOutputDir << std::endl
+                << "  start      : " << linkOutputStartTime << std::endl
+                << "  duration   : " << totalTimeStep << "s" << std::endl
+                << "  initial    : " << GetLinkOutputInitialSnapshotFile() << std::endl;
+    }
+    else if (_useJsonTopo)
     {
       std::cout << "  source     : JsonTopo" << std::endl
                 << "  nodes      : " << nodesJsonFile << std::endl
@@ -228,7 +236,12 @@ namespace ns3{
     ConfigureDefaultJsonTopologyFiles();
     LogTopologyInitStart();
 
-    if (!nodesJsonFile.empty())
+    if (IsLinkOutputMode())
+    {
+      CreateNodesFromJsonInfo(
+        ReadLinkOutputInitialNodesJsonFile(GetLinkOutputInitialSnapshotFile()));
+    }
+    else if (!nodesJsonFile.empty())
     {
       CreateNodesFromJsonInfo(ReadTopologyNodesJsonFile(nodesJsonFile));
     }
@@ -302,7 +315,12 @@ namespace ns3{
 
     //搭建非mesh拓扑 - XW
     if(!_isMesh){
-      if (!topologyJsonFile.empty())
+      if (IsLinkOutputMode())
+      {
+        LinkOutputSnapshot snapshot = ReadConfiguredLinkOutputInitialSnapshot();
+        BuildNetworkTopology(topoNodes, snapshot.links);
+      }
+      else if (!topologyJsonFile.empty())
       {
         std::vector<LinkInfo> links = ReadResolvedTopologyLinksJsonFile(topologyJsonFile);
         BuildNetworkTopology(topoNodes, links);

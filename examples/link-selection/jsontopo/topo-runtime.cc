@@ -7,16 +7,20 @@
 #include "../para.h"
 #include "../topo.h"
 
+#include "ns3/fatal-error.h"
 #include "ns3/simulator.h"
 
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <set>
 #include <sstream>
 
 namespace ns3 {
 
 static std::vector<TopologyTimeSlice> g_topologyTimeSlices;
+static LinkOutputTimeWindow g_linkOutputTimeWindow;
 static uint32_t g_topologyUpdateTotal = 0;
 static uint32_t g_topologyUpdateApplied = 0;
 
@@ -50,6 +54,10 @@ DirectoryName(const std::string& path)
 static std::string
 TopologyDataLocation()
 {
+  if (IsLinkOutputMode())
+  {
+    return linkOutputDir;
+  }
   if (!timeSlicesJsonFile.empty())
   {
     return DirectoryName(timeSlicesJsonFile);
@@ -99,6 +107,20 @@ ConfigureDefaultJsonTopologyFiles()
   {
     return;
   }
+  if (IsLinkOutputMode())
+  {
+    if (!nodesJsonFile.empty() || !topologyJsonFile.empty() || !timeSlicesJsonFile.empty())
+    {
+      NS_FATAL_ERROR("link_output模式不能同时指定nodesJson、topologyJson或timeSlicesJson");
+    }
+    if (_jsonTopoPatchMode)
+    {
+      NS_FATAL_ERROR("link_output文件是完整快照，不能启用jsonTopoPatchMode");
+    }
+    g_linkOutputTimeWindow =
+      ScanLinkOutputSnapshotsDirectory(linkOutputDir, linkOutputStartTime, totalTimeStep);
+    return;
+  }
   if (nodesJsonFile.empty())
   {
     nodesJsonFile = kDefaultNodesJsonFile;
@@ -108,6 +130,22 @@ ConfigureDefaultJsonTopologyFiles()
     topologyJsonFile = kDefaultTopologyJsonFile;
   }
   ValidateInitialJsonTopologyFiles();
+}
+
+bool
+IsLinkOutputMode()
+{
+  return !linkOutputDir.empty();
+}
+
+std::string
+GetLinkOutputInitialSnapshotFile()
+{
+  if (!IsLinkOutputMode() || g_linkOutputTimeWindow.initial_file.empty())
+  {
+    NS_FATAL_ERROR("link_output时间窗口尚未配置");
+  }
+  return g_linkOutputTimeWindow.initial_file;
 }
 
 static std::string
@@ -130,9 +168,44 @@ FormatTopologyUpdateTimes(const std::vector<TopologyTimeSlice>& slices)
   return oss.str();
 }
 
+static std::string
+FormatLinkOutputUpdateTimes(const std::vector<LinkOutputSnapshotFile>& snapshots)
+{
+  if (snapshots.empty())
+  {
+    return "无";
+  }
+
+  std::ostringstream oss;
+  for (uint32_t i = 0; i < snapshots.size(); ++i)
+  {
+    if (i > 0)
+    {
+      oss << ", ";
+    }
+    oss << snapshots[i].time_s << "s";
+  }
+  return oss.str();
+}
+
 static void
 LogJsonTopologyPlan()
 {
+  if (IsLinkOutputMode())
+  {
+    std::cout << "[TOPO:Plan] link_output 时间窗口" << std::endl
+              << "  data dir   : " << TopologyDataLocation() << std::endl
+              << "  start      : " << linkOutputStartTime << std::endl
+              << "  duration   : " << totalTimeStep << "s" << std::endl
+              << "  discovered : " << g_linkOutputTimeWindow.discovered_snapshot_count << std::endl
+              << "  selected   : " << g_linkOutputTimeWindow.selected_snapshot_count << std::endl
+              << "  updates    : " << g_linkOutputTimeWindow.updates.size() << std::endl
+              << "  times      : "
+              << FormatLinkOutputUpdateTimes(g_linkOutputTimeWindow.updates) << std::endl
+              << std::endl;
+    return;
+  }
+
   std::cout << "[TOPO:Plan] JsonTopo 时间片计划" << std::endl
             << "  mode     : " << (_jsonTopoPatchMode ? "patch" : "snapshot") << std::endl
             << "  data dir : " << TopologyDataLocation() << std::endl
@@ -244,9 +317,109 @@ ApplyTopologyTimeSlice(TopologyTimeSlice slice)
                     linkSummary);
 }
 
+static bool
+IsGroundNodeInfo(const TopologyNodeInfo& info)
+{
+  return info.node_type == "gs" || info.node_type == "ground";
+}
+
+static void
+ValidateLinkOutputSnapshot(const LinkOutputSnapshot& snapshot, const std::string& filename)
+{
+  std::set<uint32_t> expectedSatelliteIds;
+  std::set<uint32_t> actualSatelliteIds;
+  std::map<uint32_t, bool> groundByNodeIndex;
+  for (const auto& info : topoNodeInfos)
+  {
+    bool isGround = IsGroundNodeInfo(info);
+    groundByNodeIndex[info.node_index] = isGround;
+    if (!isGround)
+    {
+      expectedSatelliteIds.insert(info.node_id);
+    }
+  }
+  for (const auto& patch : snapshot.node_updates)
+  {
+    actualSatelliteIds.insert(patch.node_id);
+  }
+  if (actualSatelliteIds != expectedSatelliteIds)
+  {
+    NS_FATAL_ERROR("link_output运行期卫星集合必须与起始快照一致"
+                   << "\n  expected: " << expectedSatelliteIds.size()
+                   << "\n  actual  : " << actualSatelliteIds.size()
+                   << "\n  file    : " << filename);
+  }
+
+  std::set<Link> uniqueLinks;
+  for (const auto& link : snapshot.links)
+  {
+    Link key = MakeLinkKey(link.source, link.destination);
+    if (!uniqueLinks.insert(key).second)
+    {
+      NS_FATAL_ERROR("link_output包含重复链路"
+                     << "\n  link: " << FormatLinkKey(key)
+                     << "\n  file: " << filename);
+    }
+
+    if (link.type == "feeder")
+    {
+      bool sourceIsGround = groundByNodeIndex[link.source];
+      bool destinationIsGround = groundByNodeIndex[link.destination];
+      if (sourceIsGround == destinationIsGround)
+      {
+        NS_FATAL_ERROR("link_output feeder必须恰好连接一颗卫星和一个地面站"
+                       << "\n  link: " << FormatLinkKey(key)
+                       << "\n  file: " << filename);
+      }
+    }
+  }
+}
+
+LinkOutputSnapshot
+ReadConfiguredLinkOutputInitialSnapshot()
+{
+  std::string filename = GetLinkOutputInitialSnapshotFile();
+  LinkOutputSnapshot snapshot =
+    ReadLinkOutputSnapshotJsonFile(filename, MakeTopologyNodeResolver());
+  ValidateLinkOutputSnapshot(snapshot, filename);
+  return snapshot;
+}
+
+static void
+ApplyLinkOutputSnapshot(LinkOutputSnapshotFile snapshotFile)
+{
+  ++g_topologyUpdateApplied;
+  LinkOutputSnapshot snapshot =
+    ReadLinkOutputSnapshotJsonFile(snapshotFile.snapshot_file, MakeTopologyNodeResolver());
+  ValidateLinkOutputSnapshot(snapshot, snapshotFile.snapshot_file);
+
+  TopologyNodeUpdateSummary nodeUpdateSummary =
+    ApplyTopologyNodePatches(snapshot.node_updates);
+  TopologyLinkUpdateSummary linkSummary =
+    ApplyFullTopologyLinks(topoNodes, snapshot.links, true);
+  LogTopologyUpdate(g_topologyUpdateApplied,
+                    g_topologyUpdateTotal,
+                    nodeUpdateSummary.node_summary,
+                    nodeUpdateSummary.cluster_summary,
+                    linkSummary);
+}
+
 void
 ScheduleTopologyTimeSlices()
 {
+  if (IsLinkOutputMode())
+  {
+    g_topologyUpdateApplied = 0;
+    g_topologyUpdateTotal =
+      static_cast<uint32_t>(g_linkOutputTimeWindow.updates.size());
+    LogJsonTopologyPlan();
+    for (const auto& snapshot : g_linkOutputTimeWindow.updates)
+    {
+      Simulator::Schedule(Seconds(snapshot.time_s), &ApplyLinkOutputSnapshot, snapshot);
+    }
+    return;
+  }
+
   if (!timeSlicesJsonFile.empty())
   {
     g_topologyTimeSlices = ReadTopologyTimeSlicesJsonFile(timeSlicesJsonFile,
