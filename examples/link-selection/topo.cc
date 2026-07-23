@@ -47,7 +47,6 @@ namespace ns3{
   std::string topologyJsonFile;
   std::string timeSlicesJsonFile;
   std::string linkOutputDir;
-  std::string linkOutputStartTime;
   static std::map<uint32_t, Ipv4Address> g_serviceAddressesByNodeId;
 
   // 激光链路分配文件的时间戳和链路配置映射
@@ -133,7 +132,6 @@ namespace ns3{
     {
       std::cout << "  source     : link_output" << std::endl
                 << "  directory  : " << linkOutputDir << std::endl
-                << "  start      : " << linkOutputStartTime << std::endl
                 << "  duration   : " << totalTimeStep << "s" << std::endl
                 << "  initial    : " << GetLinkOutputInitialSnapshotFile() << std::endl;
     }

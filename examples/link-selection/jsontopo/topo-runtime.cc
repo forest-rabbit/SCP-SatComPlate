@@ -118,7 +118,7 @@ ConfigureDefaultJsonTopologyFiles()
       NS_FATAL_ERROR("link_output文件是完整快照，不能启用jsonTopoPatchMode");
     }
     g_linkOutputTimeWindow =
-      ScanLinkOutputSnapshotsDirectory(linkOutputDir, linkOutputStartTime, totalTimeStep);
+      ScanLinkOutputSnapshotsDirectory(linkOutputDir, totalTimeStep);
     return;
   }
   if (nodesJsonFile.empty())
@@ -195,7 +195,7 @@ LogJsonTopologyPlan()
   {
     std::cout << "[TOPO:Plan] link_output 时间窗口" << std::endl
               << "  data dir   : " << TopologyDataLocation() << std::endl
-              << "  start      : " << linkOutputStartTime << std::endl
+              << "  initial    : " << g_linkOutputTimeWindow.initial_file << std::endl
               << "  duration   : " << totalTimeStep << "s" << std::endl
               << "  discovered : " << g_linkOutputTimeWindow.discovered_snapshot_count << std::endl
               << "  selected   : " << g_linkOutputTimeWindow.selected_snapshot_count << std::endl

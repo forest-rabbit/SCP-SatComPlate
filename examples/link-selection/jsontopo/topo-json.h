@@ -93,7 +93,6 @@ LinkOutputSnapshot ReadLinkOutputSnapshotJsonFile(const std::string& filename,
                                                   const TopologyNodeResolver& resolver);
 bool TryParseLinkOutputTimestamp(const std::string& value, int64_t& timestampSeconds);
 LinkOutputTimeWindow ScanLinkOutputSnapshotsDirectory(const std::string& dirname,
-                                                      const std::string& startTime,
                                                       double simulationDuration);
 
 } // namespace ns3

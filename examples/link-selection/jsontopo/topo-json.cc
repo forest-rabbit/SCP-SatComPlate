@@ -1076,19 +1076,11 @@ ScanTopologyTimeSlicesDirectory(const std::string& dirname, bool patchMode)
 
 LinkOutputTimeWindow
 ScanLinkOutputSnapshotsDirectory(const std::string& dirname,
-                                 const std::string& startTime,
                                  double simulationDuration)
 {
   if (!std::isfinite(simulationDuration) || simulationDuration <= 0.0)
   {
     NS_FATAL_ERROR("simulationDuration必须是正数");
-  }
-
-  int64_t startTimestamp = 0;
-  if (!TryParseLinkOutputTimestamp(startTime, startTimestamp))
-  {
-    NS_FATAL_ERROR("linkOutputStartTime格式或日期无效，应为YYYY-MM-DD_HH-MM-SS: "
-                   << startTime);
   }
 
   std::map<int64_t, std::string> filesByTimestamp;
@@ -1131,13 +1123,8 @@ ScanLinkOutputSnapshotsDirectory(const std::string& dirname,
     NS_FATAL_ERROR("link_output目录中没有YYYY-MM-DD_HH-MM-SS.json快照: " << dirname);
   }
 
-  auto initial = filesByTimestamp.find(startTimestamp);
-  if (initial == filesByTimestamp.end())
-  {
-    NS_FATAL_ERROR("linkOutputStartTime没有精确对应的JSON快照: " << startTime
-                   << "\n  directory: " << dirname);
-  }
-
+  auto initial = filesByTimestamp.begin();
+  int64_t startTimestamp = initial->first;
   LinkOutputTimeWindow window;
   window.initial_file = initial->second;
   window.discovered_snapshot_count = filesByTimestamp.size();

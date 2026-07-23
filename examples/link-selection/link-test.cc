@@ -402,7 +402,6 @@ main (int argc, char *argv[])
   cmd.AddValue("topologyJson", "可选：初始链路JSON文件；默认input/topology/json/topology_0s.json", topologyJsonFile);
   cmd.AddValue("timeSlicesJson", "可选：时间片索引JSON文件；默认按input/topology/json文件名扫描", timeSlicesJsonFile);
   cmd.AddValue("linkOutputDir", "甲方时间序列JSON目录；设置后启用link_output模式", linkOutputDir);
-  cmd.AddValue("linkOutputStartTime", "link_output起始快照，格式YYYY-MM-DD_HH-MM-SS", linkOutputStartTime);
   cmd.AddValue("simulationDuration", "仿真时长(s)；link_output模式下必须为正数", requestedSimulationDuration);
   cmd.Parse (argc, argv);
 
@@ -423,11 +422,6 @@ main (int argc, char *argv[])
       std::cerr << "[RUN:Error] linkOutputDir要求useJsonTopo=true" << std::endl;
       return EXIT_FAILURE;
     }
-    if (linkOutputStartTime.empty())
-    {
-      std::cerr << "[RUN:Error] link_output模式必须填写linkOutputStartTime" << std::endl;
-      return EXIT_FAILURE;
-    }
     if (requestedSimulationDuration <= 0.0)
     {
       std::cerr << "[RUN:Error] link_output模式必须填写正数simulationDuration" << std::endl;
@@ -437,11 +431,6 @@ main (int argc, char *argv[])
   }
   else
   {
-    if (!linkOutputStartTime.empty())
-    {
-      std::cerr << "[RUN:Error] linkOutputStartTime必须与linkOutputDir同时使用" << std::endl;
-      return EXIT_FAILURE;
-    }
     if (requestedSimulationDuration > 0.0)
     {
       totalTimeStep = requestedSimulationDuration;
@@ -460,7 +449,6 @@ main (int argc, char *argv[])
             << "  useJsonTopo   : " << (_useJsonTopo ? "true" : "false") << std::endl
             << "  jsonTopoMode  : " << (_jsonTopoPatchMode ? "patch" : "snapshot") << std::endl
             << "  linkOutputDir : " << (linkOutputDir.empty() ? "disabled" : linkOutputDir) << std::endl
-            << "  startTime     : " << (linkOutputStartTime.empty() ? "-" : linkOutputStartTime) << std::endl
             << std::endl;
 
   if (!_useJsonTopo)
