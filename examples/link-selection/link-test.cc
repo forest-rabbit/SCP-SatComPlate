@@ -57,6 +57,7 @@
 #include "metrics/metrics.h"
 #include "para.h"
 #include "topo.h"
+#include "jsontopo/topo-runtime.h"
 
 #include <numeric>
 #include <random>
@@ -396,13 +397,13 @@ main (int argc, char *argv[])
   cmd.AddValue("trafficMatrix", "业务流量矩阵CSV文件", trafficMatrixFile);
   cmd.AddValue("outputDir", "仿真指标输出目录", metricsOutputDirectory);
   cmd.AddValue("writeRoutingTables", "是否输出调试用路由表文件", writeRoutingTables);
-  cmd.AddValue("useJsonTopo", "是否使用 examples/link-selection/input/topology/json 中的JSON拓扑", _useJsonTopo);
+  cmd.AddValue("useJsonTopo", "是否使用JSON拓扑；默认读取link_output时间序列", _useJsonTopo);
   cmd.AddValue("jsonTopoPatchMode", "JSON模式后续时间片：false=全量快照，true=patch增量", _jsonTopoPatchMode);
-  cmd.AddValue("nodesJson", "可选：初始节点JSON文件；默认input/topology/json/nodes_0s.json", nodesJsonFile);
-  cmd.AddValue("topologyJson", "可选：初始链路JSON文件；默认input/topology/json/topology_0s.json", topologyJsonFile);
+  cmd.AddValue("nodesJson", "可选：显式启用传统JsonTopo的初始节点JSON", nodesJsonFile);
+  cmd.AddValue("topologyJson", "可选：显式启用传统JsonTopo的初始链路JSON", topologyJsonFile);
   cmd.AddValue("timeSlicesJson", "可选：时间片索引JSON文件；默认按input/topology/json文件名扫描", timeSlicesJsonFile);
-  cmd.AddValue("linkOutputDir", "甲方时间序列JSON目录；设置后启用link_output模式", linkOutputDir);
-  cmd.AddValue("simulationDuration", "仿真时长(s)；link_output模式下必须为正数", requestedSimulationDuration);
+  cmd.AddValue("linkOutputDir", "甲方时间序列JSON目录；不写时使用仓库内link_output示例", linkOutputDir);
+  cmd.AddValue("simulationDuration", "可选仿真时长(s)；不写时使用默认值", requestedSimulationDuration);
   cmd.Parse (argc, argv);
 
   if (!std::isfinite(offeredload) || offeredload < 0.0)
@@ -415,27 +416,16 @@ main (int argc, char *argv[])
     std::cerr << "[RUN:Error] simulationDuration必须是有限的非负数" << std::endl;
     return EXIT_FAILURE;
   }
-  if (!linkOutputDir.empty())
+  if (!linkOutputDir.empty() && !_useJsonTopo)
   {
-    if (!_useJsonTopo)
-    {
-      std::cerr << "[RUN:Error] linkOutputDir要求useJsonTopo=true" << std::endl;
-      return EXIT_FAILURE;
-    }
-    if (requestedSimulationDuration <= 0.0)
-    {
-      std::cerr << "[RUN:Error] link_output模式必须填写正数simulationDuration" << std::endl;
-      return EXIT_FAILURE;
-    }
+    std::cerr << "[RUN:Error] linkOutputDir要求useJsonTopo=true" << std::endl;
+    return EXIT_FAILURE;
+  }
+  if (requestedSimulationDuration > 0.0)
+  {
     totalTimeStep = requestedSimulationDuration;
   }
-  else
-  {
-    if (requestedSimulationDuration > 0.0)
-    {
-      totalTimeStep = requestedSimulationDuration;
-    }
-  }
+  ConfigureDefaultJsonTopologyFiles();
 
   std::cout << "[RUN] 实验参数" << std::endl
             << "  offeredLoad   : " << offeredload << std::endl

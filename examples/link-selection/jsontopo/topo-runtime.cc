@@ -23,11 +23,14 @@ static std::vector<TopologyTimeSlice> g_topologyTimeSlices;
 static LinkOutputTimeWindow g_linkOutputTimeWindow;
 static uint32_t g_topologyUpdateTotal = 0;
 static uint32_t g_topologyUpdateApplied = 0;
+static bool g_topologyInputsConfigured = false;
 
-// 固定JSON目录。默认情况下不需要命令行传参，甲方只需把JSON文件放到input/topology/json。
+// 无参数运行默认使用仓库内甲方link_output样例；显式nodes/topology参数保留旧格式兼容。
 static const std::string kDefaultTopoDataDir = "examples/link-selection/input/topology/json/";
 static const std::string kDefaultNodesJsonFile = kDefaultTopoDataDir + "nodes_0s.json";
 static const std::string kDefaultTopologyJsonFile = kDefaultTopoDataDir + "topology_0s.json";
+static const std::string kDefaultLinkOutputDir =
+  kDefaultTopoDataDir + "examples/link_output";
 
 static void
 PrintIndentedBlock(const std::string& text, const std::string& indent)
@@ -87,13 +90,12 @@ ValidateInitialJsonTopologyFiles()
   }
 
   std::ostringstream oss;
-  oss << "[TOPO:Error] JsonTopo已启用，但缺少初始化JSON文件。"
+  oss << "[TOPO:Error] 显式指定的传统JsonTopo缺少初始化JSON文件。"
       << "\n  nodes    : " << nodesJsonFile << (nodesOk ? " [OK]" : " [缺失]")
       << "\n  topology : " << topologyJsonFile << (topologyOk ? " [OK]" : " [缺失]")
       << "\n处理方式："
-      << "\n  1. 将甲方交付的 nodes_0s.json 和 topology_0s.json 放到 "
-      << "examples/link-selection/input/topology/json/；"
-      << "\n  2. 或用 --nodesJson/--topologyJson 显式指定示例或真实文件；"
+      << "\n  1. 检查 --nodesJson 和 --topologyJson 指定的旧格式文件；"
+      << "\n  2. 使用甲方新格式时，移除上述参数并通过 --linkOutputDir 指定目录；"
       << "\n  3. 如果不使用JsonTopo，运行时传入 --useJsonTopo=false。";
   std::cerr << oss.str() << std::endl;
   std::exit(EXIT_FAILURE);
@@ -102,11 +104,23 @@ ValidateInitialJsonTopologyFiles()
 void
 ConfigureDefaultJsonTopologyFiles()
 {
-  // JSON模式下默认读取0s文件作为初始拓扑；后续xs文件由目录扫描负责。
-  if (!_useJsonTopo)
+  if (g_topologyInputsConfigured)
   {
     return;
   }
+  if (!_useJsonTopo)
+  {
+    g_topologyInputsConfigured = true;
+    return;
+  }
+
+  bool hasExplicitLegacyInput =
+    !nodesJsonFile.empty() || !topologyJsonFile.empty() || !timeSlicesJsonFile.empty();
+  if (!IsLinkOutputMode() && !hasExplicitLegacyInput)
+  {
+    linkOutputDir = kDefaultLinkOutputDir;
+  }
+
   if (IsLinkOutputMode())
   {
     if (!nodesJsonFile.empty() || !topologyJsonFile.empty() || !timeSlicesJsonFile.empty())
@@ -119,6 +133,7 @@ ConfigureDefaultJsonTopologyFiles()
     }
     g_linkOutputTimeWindow =
       ScanLinkOutputSnapshotsDirectory(linkOutputDir, totalTimeStep);
+    g_topologyInputsConfigured = true;
     return;
   }
   if (nodesJsonFile.empty())
@@ -130,6 +145,7 @@ ConfigureDefaultJsonTopologyFiles()
     topologyJsonFile = kDefaultTopologyJsonFile;
   }
   ValidateInitialJsonTopologyFiles();
+  g_topologyInputsConfigured = true;
 }
 
 bool
