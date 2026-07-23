@@ -6,8 +6,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <dirent.h>
 #include <fstream>
+#include <iostream>
 #include <limits>
 #include <map>
 #include <set>
@@ -1115,11 +1117,13 @@ ScanLinkOutputSnapshotsDirectory(const std::string& dirname,
   DIR* dir = opendir(dirname.c_str());
   if (dir == nullptr)
   {
-    NS_FATAL_ERROR("无法打开link_output目录: " << dirname
-                   << "\n处理方式："
-                   << "\n  1. 检查目录是否存在；"
-                   << "\n  2. 或用 --linkOutputDir=<目录> 指定甲方JSON所在位置；"
-                   << "\n  3. 文件名必须为YYYY-MM-DD_HH-MM-SS.json。");
+    std::cerr << "[TOPO:Error] 无法打开link_output目录: " << dirname
+              << "\n处理方式："
+              << "\n  1. 检查目录是否存在；"
+              << "\n  2. 或用 --linkOutputDir=<目录> 指定甲方JSON所在位置；"
+              << "\n  3. 文件名必须为YYYY-MM-DD_HH-MM-SS.json。"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
   struct dirent* entry = nullptr;
@@ -1152,11 +1156,14 @@ ScanLinkOutputSnapshotsDirectory(const std::string& dirname,
 
   if (filesByTimestamp.empty())
   {
-    NS_FATAL_ERROR("link_output目录中没有YYYY-MM-DD_HH-MM-SS.json快照: " << dirname
-                   << "\n处理方式："
-                   << "\n  1. 将甲方JSON放入该目录；"
-                   << "\n  2. 或用 --linkOutputDir=<目录> 指定其他位置；"
-                   << "\n  3. 仿真时长用 --simulationDuration=<秒> 设置。");
+    std::cerr << "[TOPO:Error] link_output目录中没有YYYY-MM-DD_HH-MM-SS.json快照: "
+              << dirname
+              << "\n处理方式："
+              << "\n  1. 将甲方JSON放入该目录；"
+              << "\n  2. 或用 --linkOutputDir=<目录> 指定其他位置；"
+              << "\n  3. 仿真时长用 --simulationDuration=<秒> 设置。"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
   auto initial = filesByTimestamp.begin();
