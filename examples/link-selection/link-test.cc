@@ -184,7 +184,7 @@ void GetData(vector<vector<double>>& data, const int destNum, std::string name)
   // cout<<"行：" <<data.size()<<"列："<<data[0].size()<<endl;
 }
 
-void installClient(vector<vector<double>> data, uint32_t numNodes, uint16_t servicePort){
+void installClient(const vector<vector<double>>& data, uint32_t numNodes, uint16_t servicePort){
 //   double currentTime = Simulator::Now().GetSeconds(); // 单位为s
 //   if(currentTime >= totalTimeStep) return;
 
@@ -296,49 +296,6 @@ void installClient(vector<vector<double>> data, uint32_t numNodes, uint16_t serv
 // 为每个节点创建应用 client加server
 void buildApp(){
   // if(_BreakDetect) return ;
-  vector<vector<double>> data(sates.GetN()*totalTimeStep, vector<double>(sates.GetN(), 0));
-  // 获取excel数据
-  // GetData(data, sates.GetN(), "examples/sdn-controller/traffic_matrix(Iridium).csv");
-  if(_trafficMode == 0)
-  {// 区域热点流量
-    // 默认复用324星流量矩阵，并按实际卫星数截取；可通过--trafficMatrix覆盖。
-    if(_isSate == 1){
-      GetData(data, sates.GetN(), trafficMatrixFile);
-    }
-    else if(_isSate == 2)
-    {
-      cout<<"2"<<endl;
-    }
-    else if(_isSate == 3)
-    {  
-      cout<<"3"<<endl;
-    }
-    else if(_isSate == 4)
-    {   // TODO
-      cout<<"4"<<endl;
-    }
-
-  }
-  else if(_trafficMode == 1)
-  {// 均匀流量
-    if(_isSate == 1)
-    {
-      cout<<"1"<<endl;
-    }
-    else if(_isSate == 2)
-    {
-      cout<<"1"<<endl;
-    }
-    else if(_isSate == 3)
-    {
-      cout<<"1"<<endl;
-    }
-    else if(_isSate == 4)
-    {   
-      cout<<"1"<<endl;
-    }
-  }
-
   uint16_t servicePort = 9;
   uint32_t numNodes = sates.GetN();
   udpServers.clear();
@@ -365,7 +322,56 @@ void buildApp(){
       apps.Stop(Seconds(totalTimeStep));
     }
   }
-  
+
+  if (offeredload == 0.0)
+  {
+    std::cout << "[TRAFFIC] offeredload=0，跳过流量矩阵和客户端创建" << std::endl
+              << std::endl;
+    return;
+  }
+
+  // GetData和installClient只按源/目的卫星索引访问该矩阵，不需要随仿真时长扩展行数。
+  vector<vector<double>> data(numNodes, vector<double>(numNodes, 0));
+  if(_trafficMode == 0)
+  {// 区域热点流量
+    // 默认复用324星流量矩阵，并按实际卫星数截取；可通过--trafficMatrix覆盖。
+    if(_isSate == 1){
+      GetData(data, numNodes, trafficMatrixFile);
+    }
+    else if(_isSate == 2)
+    {
+      cout<<"2"<<endl;
+    }
+    else if(_isSate == 3)
+    {
+      cout<<"3"<<endl;
+    }
+    else if(_isSate == 4)
+    {   // TODO
+      cout<<"4"<<endl;
+    }
+
+  }
+  else if(_trafficMode == 1)
+  {// 均匀流量
+    if(_isSate == 1)
+    {
+      cout<<"1"<<endl;
+    }
+    else if(_isSate == 2)
+    {
+      cout<<"1"<<endl;
+    }
+    else if(_isSate == 3)
+    {
+      cout<<"1"<<endl;
+    }
+    else if(_isSate == 4)
+    {
+      cout<<"1"<<endl;
+    }
+  }
+
   installClient(data, numNodes, servicePort);
 }
 
@@ -399,6 +405,11 @@ main (int argc, char *argv[])
   cmd.AddValue("simulationDuration", "仿真时长(s)；link_output模式下必须为正数", requestedSimulationDuration);
   cmd.Parse (argc, argv);
 
+  if (!std::isfinite(offeredload) || offeredload < 0.0)
+  {
+    std::cerr << "[RUN:Error] offeredload必须是有限的非负数" << std::endl;
+    return EXIT_FAILURE;
+  }
   if (!std::isfinite(requestedSimulationDuration) || requestedSimulationDuration < 0.0)
   {
     std::cerr << "[RUN:Error] simulationDuration必须是有限的非负数" << std::endl;
