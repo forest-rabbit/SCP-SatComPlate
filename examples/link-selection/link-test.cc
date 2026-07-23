@@ -391,6 +391,7 @@ main (int argc, char *argv[])
   cmd.AddValue ("isSate", "传统拓扑模式使用：1=324, 2=351, 3=500, 4=432；JSON模式不决定节点数量", _isSate);
   cmd.AddValue ("consType", "传统拓扑模式使用：0=Walker Star, 1=Walker Delta", _consType);
   cmd.AddValue ("linkBandwidth", "默认链路带宽；JSON链路未写带宽时作为兜底值", linkBandwidth);
+  cmd.AddValue("routingMode", "路由模式：0=OSPF，1=簇内/簇间路由", _SDNRoute);
   cmd.AddValue("tranProtocol", "0:UDP, 1:TCP", _tranProc);
   cmd.AddValue("trafficMatrix", "业务流量矩阵CSV文件", trafficMatrixFile);
   cmd.AddValue("outputDir", "仿真指标输出目录", metricsOutputDirectory);
@@ -451,6 +452,7 @@ main (int argc, char *argv[])
             << "  offeredLoad   : " << offeredload << std::endl
             << "  duration      : " << totalTimeStep << " s" << std::endl
             << "  linkBandwidth : " << linkBandwidth << std::endl
+            << "  routingMode   : " << _SDNRoute << std::endl
             << "  tranProc      : " << (_tranProc == 1 ? "TCP" : "UDP") << std::endl
             << "  trafficMatrix : " << trafficMatrixFile << std::endl
             << "  outputDir     : " << metricsOutputDirectory << std::endl
