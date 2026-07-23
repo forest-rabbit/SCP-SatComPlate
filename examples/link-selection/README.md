@@ -19,15 +19,21 @@
 source .venv/bin/activate
 ```
 
-然后构建并运行。甲方当前的 `link_output` 时间序列可用以下命令验证：
+然后构建并运行。无参数时会直接读取仓库内的 `link_output` 时间序列：
 
 ```bash
 ./waf build
-./waf --run "link-test --routingMode=0 --offeredload=0 --linkOutputDir=examples/link-selection/input/topology/json/examples/link_output --simulationDuration=300 --outputDir=/tmp/link-output-smoke"
+./waf --run "link-test"
 ```
 
-该命令自动把目录中最早的 `2024-01-02_00-00-00.json` 映射为仿真 `0s`，
-并读取其后 300 秒内的全部快照。
+默认目录是 `examples/link-selection/input/topology/json/examples/link_output`，
+默认仿真时长是 `110s`。只覆盖仿真时长并关闭业务流时可运行：
+
+```bash
+./waf --run "link-test --simulationDuration=300 --offeredload=0 --outputDir=/tmp/link-output-smoke"
+```
+
+程序自动把目录中最早的 `2024-01-02_00-00-00.json` 映射为仿真 `0s`。
 
 仓库内置的传统 73 星 6 地面站 JsonTopo 示例也可用于兼容性自检：
 
@@ -45,12 +51,11 @@ source .venv/bin/activate
 如果没有激活环境，或直接运行 `./waf` 出现 Python 环境相关错误，可以临时使用：
 
 ```bash
-PATH="$PWD/.venv/bin:$PATH" ./waf --run "link-test --offeredload=0 --nodesJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv"
+PATH="$PWD/.venv/bin:$PATH" ./waf --run "link-test"
 ```
 
-如果直接运行 `./waf --run link-test`，需要先把 `nodes_0s.json` 和
-`topology_0s.json` 放到 `input/topology/json/`。缺少任一初始化文件时，程序会立即报错退出，
-不会继续进入仿真。
+若甲方数据位于其他目录，增加 `--linkOutputDir=<目录>` 即可。目录不存在或没有
+`YYYY-MM-DD_HH-MM-SS.json` 文件时，程序会按新格式给出处理提示。
 
 默认参数位于 `para.cc`：
 
@@ -88,14 +93,13 @@ totalTimeStep = 110
 - `--trafficMatrix=<path>`：业务流量矩阵 CSV 文件，默认读取 `input/traffic/traffic_matrix(324).csv`。
 - `--outputDir=<path>`：指标输出目录，默认 `examples/link-selection/output`。
 - `--writeRoutingTables=<true|false>`：是否输出调试用路由表文件，默认 `false`。
-- `--useJsonTopo=<true|false>`：是否使用 JsonTopo，默认 `true`。
+- `--useJsonTopo=<true|false>`：是否使用 JSON 拓扑，默认 `true` 并读取 `link_output`。
 - `--jsonTopoPatchMode=<true|false>`：后续时间片格式；`false=全量快照`，`true=增量 patch`。
-- `--nodesJson=<path>`：初始节点 JSON 文件。
-- `--topologyJson=<path>`：初始链路 JSON 文件。
-- `--timeSlicesJson=<path>`：可选索引文件；常规情况下不需要，默认按文件名扫描 `input/topology/json/`。
-- `--linkOutputDir=<path>`：甲方绝对时间快照目录；设置后启用 `link_output` 模式。
-- `--simulationDuration=<seconds>`：仿真时长。`link_output` 模式下必须为正数；
-  其他模式下提供正数时可覆盖默认的 `110s`。
+- `--nodesJson=<path>`：显式启用传统 JsonTopo 的初始节点 JSON。
+- `--topologyJson=<path>`：显式启用传统 JsonTopo 的初始链路 JSON。
+- `--timeSlicesJson=<path>`：传统 JsonTopo 的可选时间片索引。
+- `--linkOutputDir=<path>`：覆盖默认的甲方绝对时间快照目录。
+- `--simulationDuration=<seconds>`：可选仿真时长，单位秒；不写时默认 `110s`。
 - `--isSate=<1|2|3|4>`：传统拓扑模式使用；JsonTopo 模式下不决定节点数量。
 - `--consType=<0|1>`：传统拓扑模式使用；`0=Walker Star`，`1=Walker Delta`。
 
@@ -118,9 +122,15 @@ totalTimeStep = 110
 
 ### 4.1 甲方 link_output 时间序列
 
-`link_output` 模式通过命令行显式指定目录，不要求把数据复制到默认目录。程序严格扫描
-`YYYY-MM-DD_HH-MM-SS.json`，自动选择目录中时间最早的快照作为仿真 `0s`，并只选择
-闭区间 `[最早快照, 最早快照 + simulationDuration]` 内的文件。
+无参数运行时，`link_output` 默认目录为：
+
+```text
+examples/link-selection/input/topology/json/examples/link_output
+```
+
+也可以通过 `--linkOutputDir` 指定其他目录。程序严格扫描
+`YYYY-MM-DD_HH-MM-SS.json`，自动选择目录中时间最早的快照作为仿真 `0s`，
+并只选择闭区间 `[最早快照, 最早快照 + simulationDuration]` 内的文件。
 
 最早快照中的 `sat_id` 用于创建任意规模的卫星节点；`feeder` 的非卫星端点自动推导为
 地面站。后续文件作为完整快照处理，缺失链路会被断开。目录即使包含一天约 1440 个文件，
@@ -133,13 +143,14 @@ totalTimeStep = 110
 
 ### 4.2 传统 JsonTopo
 
-默认数据目录：
+传统 JsonTopo 建议数据目录：
 
 ```text
 examples/link-selection/input/topology/json/
 ```
 
-该目录中的 JSON 会被仿真读取；仓库不再提交默认读取的测试 JSON。`input/topology/json/examples/` 只放说明示例，不参与默认扫描。
+传统格式不再是无参数默认入口，需要用 `--nodesJson` 和 `--topologyJson`
+显式指定初始化文件。
 
 常规交付只需要遵守文件命名规则，程序会按时间自动加载：
 

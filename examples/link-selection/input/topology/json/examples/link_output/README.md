@@ -21,11 +21,13 @@ YYYY-MM-DD_HH-MM-SS.json
 在仓库根目录执行：
 
 ```bash
-./waf --run "link-test \
-  --routingMode=0 \
-  --offeredload=0 \
-  --linkOutputDir=examples/link-selection/input/topology/json/examples/link_output \
-  --simulationDuration=300 \
+./waf --run "link-test"
+```
+
+默认运行 110 秒。只指定其他仿真时长并关闭业务流：
+
+```bash
+./waf --run "link-test --simulationDuration=300 --offeredload=0 \
   --outputDir=/tmp/link-output-smoke"
 ```
 
@@ -35,7 +37,8 @@ YYYY-MM-DD_HH-MM-SS.json
 - 只选择 `[最早快照, 最早快照 + 仿真时长]` 闭区间内的快照；
 - 支持跨日、不连续分钟和最多一天约 1440 个文件；
 - 内存仅保存时间与路径，每个 JSON 到对应仿真时间才读取；
-- `simulationDuration` 同时是 ns-3 的停止时间，必须为正数。
+- `simulationDuration` 同时是 ns-3 的停止时间；不写时默认 `110s`。
+- 数据不在本目录时，通过 `--linkOutputDir=<目录>` 覆盖默认位置。
 
 ## 顶层数组
 
