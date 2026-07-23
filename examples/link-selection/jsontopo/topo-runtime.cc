@@ -329,11 +329,16 @@ ValidateLinkOutputSnapshot(const LinkOutputSnapshot& snapshot, const std::string
   std::set<uint32_t> expectedSatelliteIds;
   std::set<uint32_t> actualSatelliteIds;
   std::map<uint32_t, bool> groundByNodeIndex;
+  uint32_t groundStationCount = 0;
   for (const auto& info : topoNodeInfos)
   {
     bool isGround = IsGroundNodeInfo(info);
     groundByNodeIndex[info.node_index] = isGround;
-    if (!isGround)
+    if (isGround)
+    {
+      ++groundStationCount;
+    }
+    else
     {
       expectedSatelliteIds.insert(info.node_id);
     }
@@ -341,6 +346,16 @@ ValidateLinkOutputSnapshot(const LinkOutputSnapshot& snapshot, const std::string
   for (const auto& patch : snapshot.node_updates)
   {
     actualSatelliteIds.insert(patch.node_id);
+    if (patch.has_is_cluster
+        && patch.is_cluster
+        && patch.cluster_id >= groundStationCount)
+    {
+      NS_FATAL_ERROR("link_output的clusterId没有按地面站ID顺序对应的簇首"
+                     << "\n  satellite: " << patch.node_id
+                     << "\n  clusterId: " << patch.cluster_id + 1
+                     << "\n  ground count: " << groundStationCount
+                     << "\n  file: " << filename);
+    }
   }
   if (actualSatelliteIds != expectedSatelliteIds)
   {

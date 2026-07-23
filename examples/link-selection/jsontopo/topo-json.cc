@@ -620,11 +620,26 @@ ParseLinkOutputSatelliteInfos(const json& satellites, const std::string& filenam
     LinkOutputSatelliteJsonInfo parsed;
     parsed.node.node_id = satelliteId;
     parsed.node.node_type = GetStringField(item, {"node_type", "type"}, "sat");
-    parsed.node.is_cluster = GetBoolField(item, {"is_cluster"}, true);
-    parsed.node.cluster_id = GetRequiredUint32Field(item, {"clusterId", "cluster_id"});
+    uint32_t clusterCode = GetRequiredUint32Field(item, {"clusterId", "cluster_id"});
+    parsed.node.is_cluster = clusterCode > 0;
+    parsed.node.cluster_id = clusterCode > 0 ? clusterCode - 1 : 0;
+    if (FindJsonField(item, {"is_cluster"}) != nullptr
+        && GetBoolField(item, {"is_cluster"}, false) != parsed.node.is_cluster)
+    {
+      NS_FATAL_ERROR("link_output的is_cluster与clusterId语义冲突"
+                     << "\n  satellite: " << satelliteId
+                     << "\n  file     : " << filename);
+    }
     parsed.node.is_cluster_head =
       GetBoolField(item, {"is_cluster_head", "is_clusterhead"}, false);
-    parsed.has_is_cluster = FindJsonField(item, {"is_cluster"}) != nullptr;
+    if (parsed.node.is_cluster_head)
+    {
+      NS_FATAL_ERROR("link_output簇首由地面站ID顺序确定，卫星不能标记为簇首"
+                     << "\n  satellite: " << satelliteId
+                     << "\n  file     : " << filename);
+    }
+    // clusterId每个快照都存在，因此运行期必须同时更新是否分簇和内部零基簇号。
+    parsed.has_is_cluster = true;
     parsed.has_is_cluster_head =
       FindJsonField(item, {"is_cluster_head", "is_clusterhead"}) != nullptr;
     if (!satelliteInfos.insert(std::make_pair(satelliteId, parsed)).second)
@@ -696,13 +711,26 @@ ReadLinkOutputInitialNodesJsonFile(const std::string& filename)
   nodes.reserve(satelliteIds.size() + groundIds.size());
   for (const auto& item : satelliteInfos)
   {
+    if (item.second.node.is_cluster
+        && item.second.node.cluster_id >= groundIds.size())
+    {
+      NS_FATAL_ERROR("link_output的clusterId没有按地面站ID顺序对应的簇首"
+                     << "\n  satellite: " << item.first
+                     << "\n  clusterId: " << item.second.node.cluster_id + 1
+                     << "\n  ground count: " << groundIds.size()
+                     << "\n  file: " << filename);
+    }
     nodes.push_back(item.second.node);
   }
+  uint32_t clusterId = 0;
   for (uint32_t groundId : groundIds)
   {
     TopologyNodeInfo info;
     info.node_id = groundId;
     info.node_type = "ground";
+    info.is_cluster = true;
+    info.cluster_id = clusterId++;
+    info.is_cluster_head = true;
     nodes.push_back(info);
   }
   return nodes;
