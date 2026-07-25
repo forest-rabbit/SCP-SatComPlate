@@ -11,4 +11,8 @@ def build(bld):
         'jsontopo/topo-link-state.cc',
         'metrics/metrics.cc',
         'traffic/background-traffic.cc',
+        'traffic/network-transfer.cc',
+        'traffic/network-transfer-application.cc',
+        'traffic/network-transfer-config.cc',
+        'traffic/network-transfer-receiver.cc',
     ]

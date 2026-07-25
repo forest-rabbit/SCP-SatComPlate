@@ -14,27 +14,38 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_PARA_H
-#define SATCOMPUTE_PARA_H
+#ifndef SATCOMPUTE_NETWORK_TRANSFER_H
+#define SATCOMPUTE_NETWORK_TRANSFER_H
+
+#include "../metrics/metrics.h"
+#include "../topo.h"
+#include "network-transfer-application.h"
+#include "network-transfer-config.h"
+#include "network-transfer-receiver.h"
+
+#include "ns3/ptr.h"
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace ns3 {
 
-struct SatComputeConfig
+struct NetworkTransferState
 {
-  std::string topologyDirectory;
-  std::string trafficMatrix;
-  std::string transferTrace;
-  std::string outputDirectory;
-  std::string transport;
-  uint64_t transferPacketIntervalNs;
-  double simulationDurationSeconds;
-  double offeredLoad;
+  std::vector<NetworkTransfer> transfers;
+  std::vector<Ptr<NetworkTransferApplication>> senders;
+  std::vector<Ptr<NetworkTransferReceiver>> receivers;
 };
 
-SatComputeConfig GetDefaultSatComputeConfig();
+NetworkTransferState InstallNetworkTransfers(
+  const std::string& filename,
+  uint64_t packetIntervalNs,
+  double simulationDurationSeconds,
+  const SatelliteTopology& topology);
+
+TaskApplicationMetrics CollectNetworkTransferMetrics(
+  const NetworkTransferState& state);
 
 } // namespace ns3
 

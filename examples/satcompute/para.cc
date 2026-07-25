@@ -26,8 +26,10 @@ GetDefaultSatComputeConfig()
     "examples/satcompute/input/topology/json/examples/xw-66sat";
   config.trafficMatrix =
     "examples/satcompute/input/traffic/traffic_matrix(66).csv";
+  config.transferTrace = "";
   config.outputDirectory = "examples/satcompute/output";
   config.transport = "udp";
+  config.transferPacketIntervalNs = 10000000;
   config.simulationDurationSeconds = 110.0;
   config.offeredLoad = 0.0;
   return config;

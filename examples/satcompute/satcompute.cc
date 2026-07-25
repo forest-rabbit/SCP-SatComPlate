@@ -18,6 +18,7 @@
 #include "para.h"
 #include "topo.h"
 #include "traffic/background-traffic.h"
+#include "traffic/network-transfer.h"
 
 #include "ns3/core-module.h"
 #include "ns3/flow-monitor-module.h"
@@ -55,6 +56,12 @@ main(int argc, char* argv[])
   commandLine.AddValue("trafficMatrix",
                        "100N-row by N-column traffic input in Gbps",
                        config.trafficMatrix);
+  commandLine.AddValue("transferTrace",
+                       "Optional NetworkTransfer JSON trace",
+                       config.transferTrace);
+  commandLine.AddValue("transferPacketIntervalNs",
+                       "Positive global UDP packet interval for NetworkTransfer",
+                       config.transferPacketIntervalNs);
   commandLine.AddValue("outputDir",
                        "Metrics output directory",
                        config.outputDirectory);
@@ -85,6 +92,24 @@ main(int argc, char* argv[])
       std::cerr << "[RUN:Error] transport must be udp or tcp" << std::endl;
       return EXIT_FAILURE;
     }
+  if (config.transferPacketIntervalNs == 0)
+    {
+      std::cerr << "[RUN:Error] transferPacketIntervalNs must be positive"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  if (!config.transferTrace.empty() && config.offeredLoad > 0.0)
+    {
+      std::cerr << "[RUN:Error] transferTrace requires offeredLoad=0"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  if (!config.transferTrace.empty() && config.transport != "udp")
+    {
+      std::cerr << "[RUN:Error] NetworkTransfer supports udp only"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
 
   std::cout << "[RUN]" << std::endl
             << "  topologyDir       : " << config.topologyDirectory << std::endl
@@ -93,6 +118,11 @@ main(int argc, char* argv[])
             << "  offeredLoad       : " << config.offeredLoad << std::endl
             << "  transport         : " << config.transport << std::endl
             << "  trafficMatrix     : " << config.trafficMatrix << std::endl
+            << "  transferTrace     : "
+            << (config.transferTrace.empty() ? "(none)" : config.transferTrace)
+            << std::endl
+            << "  transferInterval  : "
+            << config.transferPacketIntervalNs << " ns" << std::endl
             << "  outputDir         : " << config.outputDirectory << std::endl
             << "  routing           : ns-3 Ipv4GlobalRouting" << std::endl
             << std::endl;
@@ -106,7 +136,20 @@ main(int argc, char* argv[])
   };
   SatelliteTopology topology(topologyConfig);
   topology.Initialize();
-  ApplicationState applications = InstallApplications(config, topology);
+  ApplicationState backgroundApplications;
+  NetworkTransferState networkTransfers;
+  if (config.transferTrace.empty())
+    {
+      backgroundApplications = InstallApplications(config, topology);
+    }
+  else
+    {
+      networkTransfers =
+        InstallNetworkTransfers(config.transferTrace,
+                                config.transferPacketIntervalNs,
+                                config.simulationDurationSeconds,
+                                topology);
+    }
   Ptr<FlowMonitor> flowMonitor = InstallSimulationFlowMonitor();
 
   Simulator::Stop(Seconds(config.simulationDurationSeconds));
@@ -118,11 +161,15 @@ main(int argc, char* argv[])
   std::cout << "[RUN] wall-clock: " << wallClockSeconds << " s"
             << std::endl << std::endl;
 
+  TaskApplicationMetrics applicationMetrics =
+    config.transferTrace.empty()
+      ? CollectApplicationMetrics(backgroundApplications)
+      : CollectNetworkTransferMetrics(networkTransfers);
   MetricsRecorder metrics(flowMonitor,
                           config.simulationDurationSeconds,
                           wallClockSeconds,
                           config.transport,
-                          CollectApplicationMetrics(applications),
+                          applicationMetrics,
                           config.outputDirectory);
   metrics.Record();
   Simulator::Destroy();
