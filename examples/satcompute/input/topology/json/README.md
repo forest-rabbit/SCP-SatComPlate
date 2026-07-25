@@ -1,6 +1,6 @@
 # JsonTopo 数据构建说明
 
-本目录用于放置 `examples/link-selection/link-test` 的 JsonTopo 输入文件。
+本目录用于放置 `examples/satcompute/satcompute` 的 JsonTopo 输入文件。
 无参数运行默认读取 `input/topology/json/examples/link_output/`；传统
 `nodes_*.json/topology_*.json` 仍可通过命令行显式指定。
 
@@ -15,13 +15,13 @@ YYYY-MM-DD_HH-MM-SS.json
 最简单的运行方式：
 
 ```bash
-./waf --run "link-test"
+./waf --run "satcompute"
 ```
 
 只修改仿真时长并关闭业务流：
 
 ```bash
-./waf --run "link-test --simulationDuration=300 --offeredload=0"
+./waf --run "satcompute --simulationDuration=300 --offeredload=0"
 ```
 
 程序自动选择目录中时间最早的快照，从其中的 `sat_id` 推导卫星，从 `feeder`
@@ -112,12 +112,12 @@ topology_<time>s.json    # 该时刻完整活跃链路集合
 patch 模式用于只提交变化项。激活 Python 环境后，在仓库根目录运行：
 
 ```bash
-./waf --run "link-test --offeredload=0 --jsonTopoPatchMode=true \
-  --nodesJson=examples/link-selection/input/topology/json/examples/patch/nodes_0s.json \
-  --topologyJson=examples/link-selection/input/topology/json/examples/patch/topology_0s.json"
+./waf --run "satcompute --offeredload=0 --jsonTopoPatchMode=true \
+  --nodesJson=examples/satcompute/input/topology/json/examples/patch/nodes_0s.json \
+  --topologyJson=examples/satcompute/input/topology/json/examples/patch/topology_0s.json"
 ```
 
-也可以在 `examples/link-selection/para.cc` 中将 `_jsonTopoPatchMode` 默认值改为 `true`。
+也可以在 `examples/satcompute/para.cc` 中将 `_jsonTopoPatchMode` 默认值改为 `true`。
 
 推荐目录：
 

@@ -26,7 +26,7 @@ static uint32_t g_topologyUpdateApplied = 0;
 static bool g_topologyInputsConfigured = false;
 
 // 无参数运行默认使用仓库内甲方link_output样例；显式nodes/topology参数保留旧格式兼容。
-static const std::string kDefaultTopoDataDir = "examples/link-selection/input/topology/json/";
+static const std::string kDefaultTopoDataDir = "examples/satcompute/input/topology/json/";
 static const std::string kDefaultNodesJsonFile = kDefaultTopoDataDir + "nodes_0s.json";
 static const std::string kDefaultTopologyJsonFile = kDefaultTopoDataDir + "topology_0s.json";
 static const std::string kDefaultLinkOutputDir =

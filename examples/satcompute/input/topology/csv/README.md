@@ -9,7 +9,7 @@ topo(324).csv
 使用传统 CSV 拓扑时运行：
 
 ```bash
-./waf --run "link-test --useJsonTopo=false"
+./waf --run "satcompute --useJsonTopo=false"
 ```
 
 该模式主要用于兼容旧实验流程。新增拓扑数据优先使用 `input/topology/json/` 下的 JsonTopo 格式。

@@ -9,7 +9,7 @@
 #include <numeric>
 #include <cmath>
 
-NS_LOG_COMPONENT_DEFINE("OpenFlowSDNExample-cluster");
+NS_LOG_COMPONENT_DEFINE("SatComputeCluster");
 
 namespace ns3
 {
@@ -35,7 +35,7 @@ namespace ns3
   {
     if (!g_metricsCsv.is_open())
     {
-      g_metricsCsv.open("examples/link-selection/output/cluster_metrics"+to_string(_clusterMode)+".csv", std::ios::out | std::ios::trunc);
+      g_metricsCsv.open("examples/satcompute/output/cluster_metrics"+to_string(_clusterMode)+".csv", std::ios::out | std::ios::trunc);
       g_metricsCsv << "time,tag,k,avg_size,size_std,size_min,size_max,"
                    << "diameter_avg,diameter_max,avg_intra_hops,inter_links_sum,"
                    << "max_boundary_util,J_delay,J_stable,cost,is_connected"
@@ -302,7 +302,7 @@ namespace ns3
 	{
 		// 打开文件
 		std::ofstream file;
-		file.open("examples/link-selection/output/linkUtilization.txt", std::ios::app);
+		file.open("examples/satcompute/output/linkUtilization.txt", std::ios::app);
 
     file << "currTime:" << Simulator::Now().GetSeconds() << std::endl;
 		for (uint32_t i = 0; i < monitors.size(); ++i) 

@@ -26,7 +26,7 @@ patch_15s.json     # 15s 增量 patch 示例
 
 ## 使用方式
 
-若要用该示例测试，请将需要的 JSON 文件复制到 `examples/link-selection/input/topology/json/`。
+若要用该示例测试，请将需要的 JSON 文件复制到 `examples/satcompute/input/topology/json/`。
 该目录才会被默认扫描；本目录只作为交付格式示例。
 
 全量快照模式可以测试：

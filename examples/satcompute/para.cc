@@ -6,7 +6,7 @@ namespace ns3{
    * JSON拓扑模式开关。
    *
    * true:
-   *   - 节点、链路、簇归属、簇首、运行期拓扑变化均来自 examples/link-selection/input/topology/json。
+   *   - 节点、链路、簇归属、簇首、运行期拓扑变化均来自 examples/satcompute/input/topology/json。
    *   - _isSate、orbit_num、sate_num、_isMesh、_scenario、linkAvailability 等传统拓扑参数不再决定拓扑。
    *   - 仿真结束时间仍由totalTimeStep控制；最后一个JSON时间片之后拓扑保持最后状态继续运行。
    * false:

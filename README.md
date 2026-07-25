@@ -1,36 +1,42 @@
-# xw
+# SatCompute
 
-基于 ns-3.33 的卫星网络仿真项目。当前主线实验位于
-`examples/link-selection/`，通过 JsonTopo 动态拓扑运行 `link-test`，并统计业务流性能。
+SatCompute 是基于 ns-3.33 的动态卫星网络仿真项目。主程序位于
+`examples/satcompute/`，通过 JsonTopo 动态拓扑运行 `satcompute`，并统计业务流性能。
+
+## 仓库来源
+
+本仓库的 `main` 由原 `xw` 仓库的 `customer/jsontopo` 分支迁移而来。导入时移除了
+历史仿真输出和超过 GitHub 单文件限制的旧 324 星流量矩阵；原始 `xw` 仓库保持不变。
+需要运行 324 星实验时，请通过 `--trafficMatrix=<path>` 使用外部矩阵文件。
 
 ## 文档分工
 
 ```text
 README.md                                   # 项目入口：面向使用者的构建、运行和数据入口
-examples/link-selection/README.md           # link-test 运行参数、主流程和输出说明
-examples/link-selection/input/topology/README.md       # 拓扑数据总入口，区分 json/csv
-examples/link-selection/input/topology/json/README.md  # JsonTopo 文件构建、命名规则和交付规范
-examples/link-selection/input/topology/json/examples/  # 全量快照和增量 patch 的示例
-examples/link-selection/input/topology/csv/README.md   # 传统 CSV 拓扑输入说明
-examples/link-selection/input/traffic/README.md        # 业务流量矩阵输入说明
+examples/satcompute/README.md                # satcompute 运行参数、主流程和输出说明
+examples/satcompute/input/topology/README.md       # 拓扑数据总入口，区分 json/csv
+examples/satcompute/input/topology/json/README.md  # JsonTopo 文件构建、命名规则和交付规范
+examples/satcompute/input/topology/json/examples/  # 全量快照和增量 patch 的示例
+examples/satcompute/input/topology/csv/README.md   # 传统 CSV 拓扑输入说明
+examples/satcompute/input/traffic/README.md        # 业务流量矩阵输入说明
 docs/dev-setup.md                           # 开发环境、VS Code 和 clangd 说明
 ```
 
-甲方通常只需要阅读本文件、`examples/link-selection/README.md`、`input/topology/` 和 `input/traffic/` 下的数据说明；
+甲方通常只需要阅读本文件、`examples/satcompute/README.md`、`input/topology/` 和 `input/traffic/` 下的数据说明；
 开发环境和仓库维护内容不放在本文件中。
 
 ## 主要目录
 
 ```text
-examples/link-selection/
-├── link-test.cc              # 主仿真入口
+examples/satcompute/
+├── satcompute.cc              # 主仿真入口
 ├── topo.cc                   # 拓扑构建与动态更新主流程
 ├── para.cc                   # 默认实验参数
 ├── jsontopo/                 # JsonTopo 解析、状态维护和时间片调度
 ├── input/                    # 输入数据目录
 │   ├── topology/             # 拓扑数据；json/ 放 JsonTopo，csv/ 放传统 CSV
 │   └── traffic/              # 业务流量矩阵
-└── README.md                 # link-test 详细运行说明
+└── README.md                 # satcompute 详细运行说明
 ```
 
 旧的 SDN/OpenFlow/OSPF 实验仍保留在 `examples/sdn-controller/`，当前主线不依赖该目录。
@@ -68,7 +74,7 @@ PATH="$PWD/.venv/bin:$PATH" ./waf build
 表示只检查拓扑加载、链路更新和 OSPF 路由收敛，不注入业务流量：
 
 ```bash
-./waf --run "link-test --offeredload=0 --nodesJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv"
+./waf --run "satcompute --offeredload=0 --nodesJson=examples/satcompute/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/satcompute/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/satcompute/input/traffic/traffic_matrix(73).csv"
 ```
 
 正常输出应包含：
@@ -81,9 +87,10 @@ PATH="$PWD/.venv/bin:$PATH" ./waf build
 [TOPO:Links] 初始链路安装完成
 [TOPO:Plan] JsonTopo 时间片计划
 [TOPO:HoldTime] ...
-[TRAFFIC] 读取流量矩阵
-Simulation real - time cost
-业务数据性能
+[TRAFFIC] 读取流量矩阵 / offeredload=0，跳过流量矩阵和客户端创建
+[RUN] Simulation wall-clock cost
+[METRICS] 业务网络流
+[METRICS] 结构化结果
 ```
 
 常用参数：
@@ -103,25 +110,25 @@ Simulation real - time cost
 最小示例：启用增量 patch 模式：
 
 ```bash
-./waf --run "link-test --offeredload=0 --jsonTopoPatchMode=true --nodesJson=examples/link-selection/input/topology/json/examples/patch/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/patch/topology_0s.json"
+./waf --run "satcompute --offeredload=0 --jsonTopoPatchMode=true --nodesJson=examples/satcompute/input/topology/json/examples/patch/nodes_0s.json --topologyJson=examples/satcompute/input/topology/json/examples/patch/topology_0s.json"
 ```
 
-若要自动加载 patch 时间片，请将 `patch_<time>s.json` 放到 `examples/link-selection/input/topology/json/` 目录。
+若要自动加载 patch 时间片，请将 `patch_<time>s.json` 放到 `examples/satcompute/input/topology/json/` 目录。
 
-如果已将甲方数据放入 `examples/link-selection/input/topology/json/`，也可以直接运行 `./waf --run link-test`。如果缺少 `nodes_0s.json` 或 `topology_0s.json`，程序会立即报错退出，并提示应放置的文件或可使用的命令行参数。完整参数和仿真流程见 `examples/link-selection/README.md`。
+如果已将甲方数据放入 `examples/satcompute/input/topology/json/`，也可以直接运行 `./waf --run satcompute`。如果缺少 `nodes_0s.json` 或 `topology_0s.json`，程序会立即报错退出，并提示应放置的文件或可使用的命令行参数。完整参数和仿真流程见 `examples/satcompute/README.md`。
 
 ## JsonTopo 数据交付
 
 默认数据目录：
 
 ```text
-examples/link-selection/input/topology/json/
+examples/satcompute/input/topology/json/
 ```
 
 仓库不再提交默认读取的测试 JSON；该目录用于放置甲方交付的 JsonTopo 数据。可参考：
 
 ```text
-examples/link-selection/input/topology/json/examples/customer-73sat-6gs/
+examples/satcompute/input/topology/json/examples/customer-73sat-6gs/
 ```
 
 必需初始文件：
@@ -145,7 +152,7 @@ patch_<time>s.json                          # 增量变化项，需开启 --json
 
 `time_slices.json` 不是常规必需文件。默认情况下程序会扫描 `input/topology/json/` 文件名并按时间加载；只有文件名无法遵守规则或必须显式控制顺序时，才建议使用 `--timeSlicesJson=<path>`。
 
-详细字段、命名规则和示例见 `examples/link-selection/input/topology/json/README.md`。
+详细字段、命名规则和示例见 `examples/satcompute/input/topology/json/README.md`。
 
 ## 输出
 

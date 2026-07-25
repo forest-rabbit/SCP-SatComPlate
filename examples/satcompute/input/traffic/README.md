@@ -1,6 +1,6 @@
 # input/traffic 流量数据说明
 
-本目录用于保存 `link-test` 的业务流量输入文件。拓扑数据放在 `input/topology/`，
+本目录用于保存 `satcompute` 的业务流量输入文件。拓扑数据放在 `input/topology/`，
 流量矩阵放在 `input/traffic/`，两类数据不要混放。
 
 ## 当前默认文件
@@ -12,7 +12,7 @@ traffic_matrix(73).csv
 热点流量模式下（`_trafficMode=0`），程序默认读取：
 
 ```text
-examples/link-selection/input/traffic/traffic_matrix(73).csv
+examples/satcompute/input/traffic/traffic_matrix(73).csv
 ```
 
 旧项目的 324 星矩阵超过 GitHub 单文件大小限制，因此不纳入本仓库。若需要运行
@@ -29,5 +29,5 @@ traffic_matrix(<satellite_count>).csv
 例如 `traffic_matrix(66).csv`。运行时通过以下参数选择，不需要修改源码：
 
 ```bash
---trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(66).csv
+--trafficMatrix=examples/satcompute/input/traffic/traffic_matrix(66).csv
 ```

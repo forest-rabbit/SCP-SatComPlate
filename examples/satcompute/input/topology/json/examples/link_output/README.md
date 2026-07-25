@@ -21,13 +21,13 @@ YYYY-MM-DD_HH-MM-SS.json
 在仓库根目录执行：
 
 ```bash
-./waf --run "link-test"
+./waf --run "satcompute"
 ```
 
 默认运行 110 秒。只指定其他仿真时长并关闭业务流：
 
 ```bash
-./waf --run "link-test --simulationDuration=300 --offeredload=0 \
+./waf --run "satcompute --simulationDuration=300 --offeredload=0 \
   --outputDir=/tmp/link-output-smoke"
 ```
 

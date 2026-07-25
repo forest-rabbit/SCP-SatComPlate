@@ -1,15 +1,15 @@
-# link-test 运行说明（JsonTopo 版本）
+# SatCompute 运行说明（JsonTopo 版本）
 
-本文件说明 `link-test` 的构建、运行参数、仿真流程和输出。JsonTopo 文件格式、
+本文件说明 `satcompute` 的构建、运行参数、仿真流程和输出。JsonTopo 文件格式、
 命名规则、字段单位和甲方交付示例统一维护在 `input/topology/json/README.md`，避免多处重复。
 
 ## 1. 入口文件
 
-- 主程序：`examples/link-selection/link-test.cc`
-- 拓扑构建：`examples/link-selection/topo.cc`
-- JsonTopo 模块：`examples/link-selection/jsontopo/`
-- 全局参数：`examples/link-selection/para.cc`
-- waf 目标：`link-test`
+- 主程序：`examples/satcompute/satcompute.cc`
+- 拓扑构建：`examples/satcompute/topo.cc`
+- JsonTopo 模块：`examples/satcompute/jsontopo/`
+- 全局参数：`examples/satcompute/para.cc`
+- waf 目标：`satcompute`
 
 ## 2. 构建与运行
 
@@ -23,14 +23,14 @@ source .venv/bin/activate
 
 ```bash
 ./waf build
-./waf --run "link-test"
+./waf --run "satcompute"
 ```
 
-默认目录是 `examples/link-selection/input/topology/json/examples/link_output`，
+默认目录是 `examples/satcompute/input/topology/json/examples/link_output`，
 默认仿真时长是 `110s`。只覆盖仿真时长并关闭业务流时可运行：
 
 ```bash
-./waf --run "link-test --simulationDuration=300 --offeredload=0 --outputDir=/tmp/link-output-smoke"
+./waf --run "satcompute --simulationDuration=300 --offeredload=0 --outputDir=/tmp/link-output-smoke"
 ```
 
 程序自动把目录中最早的 `2024-01-02_00-00-00.json` 映射为仿真 `0s`。
@@ -38,7 +38,7 @@ source .venv/bin/activate
 仓库内置的传统 73 星 6 地面站 JsonTopo 示例也可用于兼容性自检：
 
 ```bash
-./waf --run "link-test --routingMode=0 --offeredload=0 --nodesJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv"
+./waf --run "satcompute --routingMode=0 --offeredload=0 --nodesJson=examples/satcompute/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/satcompute/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/satcompute/input/traffic/traffic_matrix(73).csv"
 ```
 
 如果 `build/` 目录不存在，或修改了 waf / wscript / 模块依赖，先重新配置：
@@ -51,7 +51,7 @@ source .venv/bin/activate
 如果没有激活环境，或直接运行 `./waf` 出现 Python 环境相关错误，可以临时使用：
 
 ```bash
-PATH="$PWD/.venv/bin:$PATH" ./waf --run "link-test"
+PATH="$PWD/.venv/bin:$PATH" ./waf --run "satcompute"
 ```
 
 若甲方数据位于其他目录，增加 `--linkOutputDir=<目录>` 即可。目录不存在或没有
@@ -91,7 +91,7 @@ totalTimeStep = 110
 - `--linkBandwidth=<bps>`：链路带宽；当 JSON 链路未写带宽时作为兜底值。
 - `--tranProtocol=<0|1>`：`0=UDP`，`1=TCP`。
 - `--trafficMatrix=<path>`：业务流量矩阵 CSV 文件，默认读取 `input/traffic/traffic_matrix(73).csv`。
-- `--outputDir=<path>`：指标输出目录，默认 `examples/link-selection/output`。
+- `--outputDir=<path>`：指标输出目录，默认 `examples/satcompute/output`。
 - `--writeRoutingTables=<true|false>`：是否输出调试用路由表文件，默认 `false`。
 - `--useJsonTopo=<true|false>`：是否使用 JSON 拓扑，默认 `true` 并读取 `link_output`。
 - `--jsonTopoPatchMode=<true|false>`：后续时间片格式；`false=全量快照`，`true=增量 patch`。
@@ -106,7 +106,7 @@ totalTimeStep = 110
 示例：运行最小增量 patch 模式：
 
 ```bash
-./waf --run "link-test --offeredload=0 --jsonTopoPatchMode=true --nodesJson=examples/link-selection/input/topology/json/examples/patch/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/patch/topology_0s.json"
+./waf --run "satcompute --offeredload=0 --jsonTopoPatchMode=true --nodesJson=examples/satcompute/input/topology/json/examples/patch/nodes_0s.json --topologyJson=examples/satcompute/input/topology/json/examples/patch/topology_0s.json"
 ```
 
 若要自动加载 patch 时间片，请将 `patch_<time>s.json` 放到 `input/topology/json/`；`input/topology/json/examples/` 下的文件只作为格式示例。
@@ -115,7 +115,7 @@ totalTimeStep = 110
 
 ```bash
 ./waf --run \
-  "link-test --nodesJson=examples/link-selection/input/topology/json/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/topology_0s.json"
+  "satcompute --nodesJson=examples/satcompute/input/topology/json/nodes_0s.json --topologyJson=examples/satcompute/input/topology/json/topology_0s.json"
 ```
 
 ## 4. JSON 拓扑数据入口
@@ -125,7 +125,7 @@ totalTimeStep = 110
 无参数运行时，`link_output` 默认目录为：
 
 ```text
-examples/link-selection/input/topology/json/examples/link_output
+examples/satcompute/input/topology/json/examples/link_output
 ```
 
 也可以通过 `--linkOutputDir` 指定其他目录。程序严格扫描
@@ -146,7 +146,7 @@ examples/link-selection/input/topology/json/examples/link_output
 传统 JsonTopo 建议数据目录：
 
 ```text
-examples/link-selection/input/topology/json/
+examples/satcompute/input/topology/json/
 ```
 
 传统格式不再是无参数默认入口，需要用 `--nodesJson` 和 `--topologyJson`
@@ -168,7 +168,7 @@ patch_<time>s.json                          # 增量 patch 模式
 详细规范见：
 
 ```text
-examples/link-selection/input/topology/json/README.md
+examples/satcompute/input/topology/json/README.md
 ```
 
 ## 5. 流量输入
@@ -176,7 +176,7 @@ examples/link-selection/input/topology/json/README.md
 热点流量模式下（`_trafficMode=0`），程序默认读取仓库内的客户尺度示例：
 
 ```text
-examples/link-selection/input/traffic/traffic_matrix(73).csv
+examples/satcompute/input/traffic/traffic_matrix(73).csv
 ```
 
 旧项目的 324 星矩阵超过 GitHub 单文件大小限制，不纳入本仓库；需要时请通过
@@ -184,7 +184,7 @@ examples/link-selection/input/traffic/traffic_matrix(73).csv
 流量数据目录说明见：
 
 ```text
-examples/link-selection/input/traffic/README.md
+examples/satcompute/input/traffic/README.md
 ```
 
 JsonTopo 默认全局路由路径会为每个节点分配 `172.16.0.0/12` 范围内的独立 `/32`
@@ -218,7 +218,7 @@ JsonTopo 默认全局路由路径会为每个节点分配 `172.16.0.0/12` 范围
 如果通过 `--useJsonTopo=false` 切回传统拓扑，程序会使用：
 
 ```text
-examples/link-selection/input/topology/csv/topo(324).csv
+examples/satcompute/input/topology/csv/topo(324).csv
 ```
 
 该模式主要保留兼容旧实验流程；当前新增拓扑数据优先使用 JsonTopo。

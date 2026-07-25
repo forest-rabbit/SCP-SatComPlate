@@ -14,23 +14,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-// Network topology
-//
-//        subcontroller0          subcontroller1
-//        |                           |
-//       -------------------------------
-//        |     mastercontroller      |
-//       -------------------------------
-//        |                           |
-//        subcontroller2     subcontroller3
-//
-//
-// - CBR/UDP flows from n0 to n1 and from n3 to n0
-// - DropTail queues
-// - Tracing of queues and packet receptions to file "openflow-switch.tr"
-// - If order of adding nodes and netdevices is kept:
-//      n0 = 00:00:00;00:00:01, n1 = 00:00:00:00:00:03, n3 = 00:00:00:00:00:07
-//	and port number corresponds to node number, so port 0 is connected to n0, for example.
+// SatCompute dynamic satellite-network simulation entry point.
+// JsonTopo inputs define nodes, links, clusters, and runtime topology changes.
 
 #include <algorithm>
 #include <chrono>
@@ -64,13 +49,13 @@
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE ("OpenFlowSDNExample");
+NS_LOG_COMPONENT_DEFINE ("SatCompute");
 
 ns3::Time timeout = ns3::Seconds (0);
 
 std::string trafficMatrixFile =
-  "examples/link-selection/input/traffic/traffic_matrix(73).csv";
-std::string metricsOutputDirectory = "examples/link-selection/output";
+  "examples/satcompute/input/traffic/traffic_matrix(73).csv";
+std::string metricsOutputDirectory = "examples/satcompute/output";
 std::vector<Ptr<UdpServer>> udpServers;
 std::vector<Ptr<PacketSink>> tcpSinks;
 

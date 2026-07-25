@@ -32,7 +32,7 @@
 #include <sys/types.h>
 #include <unordered_map>
 
-NS_LOG_COMPONENT_DEFINE ("OpenFlowSDNExample-topo");
+NS_LOG_COMPONENT_DEFINE ("SatComputeTopology");
 
 namespace ns3{
   NodeContainer sates;       // 所有卫星节点
@@ -154,7 +154,7 @@ namespace ns3{
   // 函数功能：输出卫星节点信息以及网卡信息
   void print_node_info(){
     AsciiTraceHelper ascii;
-    Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("examples/link-selection/output/node-info-tables.txt");
+    Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("examples/satcompute/output/node-info-tables.txt");
     *stream->GetStream() <<  Simulator::Now().GetSeconds() << "s" << std::endl;
     for(uint32_t i=0; i<sates.GetN(); i++){
       uint32_t size = sates.Get(i)->GetNDevices();
@@ -326,7 +326,7 @@ namespace ns3{
       else
       {
         std::vector<LinkInfo> links =
-          ReadTopologyFile("examples/link-selection/input/topology/csv/topo(324).csv");
+          ReadTopologyFile("examples/satcompute/input/topology/csv/topo(324).csv");
         BuildNetworkTopology(sates, links);
       }
     }
@@ -412,13 +412,13 @@ namespace ns3{
     {
       AsciiTraceHelper ascii;
       Ptr<OutputStreamWrapper> stream =
-        ascii.CreateFileStream ("examples/link-selection/output/routing-tables-6s.txt");
+        ascii.CreateFileStream ("examples/satcompute/output/routing-tables-6s.txt");
       Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (6), stream, Time::S);
       Ptr<OutputStreamWrapper> stream2 =
-        ascii.CreateFileStream ("examples/link-selection/output/routing-tables-11s.txt");
+        ascii.CreateFileStream ("examples/satcompute/output/routing-tables-11s.txt");
       Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (11), stream2, Time::S);
       Ptr<OutputStreamWrapper> stream3 =
-        ascii.CreateFileStream ("examples/link-selection/output/routing-tables-16s.txt");
+        ascii.CreateFileStream ("examples/satcompute/output/routing-tables-16s.txt");
       Ipv4RoutingHelper::PrintRoutingTableAllAt (Seconds (16), stream3, Time::S);
     }
 

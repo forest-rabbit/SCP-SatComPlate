@@ -47,7 +47,7 @@ feeder 链路是特意构造的覆盖样例，不代表某个真实可见性优�
 ## 快速验证
 
 ```bash
-./waf --run "link-test --offeredload=0 --nodesJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/link-selection/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv"
+./waf --run "satcompute --offeredload=0 --nodesJson=examples/satcompute/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/satcompute/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/satcompute/input/traffic/traffic_matrix(73).csv"
 ```
 
 该甲方分支使用 ns-3 OSPF 全局路由；内部 ECMP 和自定义簇路由不在交付范围内。
