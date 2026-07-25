@@ -15,6 +15,7 @@
  */
 
 #include "metrics/metrics.h"
+#include "para.h"
 #include "topo.h"
 
 #include "ns3/applications-module.h"
@@ -42,18 +43,6 @@ NS_LOG_COMPONENT_DEFINE("SatCompute");
 namespace {
 
 constexpr uint32_t TRAFFIC_TIME_SLICES = 100;
-
-struct RunConfig
-{
-  std::string topologyDirectory =
-    "examples/satcompute/input/topology/json/examples/xw-66sat";
-  std::string trafficMatrix =
-    "examples/satcompute/input/traffic/traffic_matrix(66).csv";
-  std::string outputDirectory = "examples/satcompute/output";
-  std::string transport = "udp";
-  double simulationDurationSeconds = 110.0;
-  double offeredLoad = 0.0;
-};
 
 struct ApplicationState
 {
@@ -141,7 +130,8 @@ ReadTrafficMatrix(const std::string& filename, uint32_t nodeCount)
 }
 
 ApplicationState
-InstallApplications(const RunConfig& config, const SatelliteTopology& topology)
+InstallApplications(const SatComputeConfig& config,
+                    const SatelliteTopology& topology)
 {
   ApplicationState state;
   const uint16_t servicePort = 9;
@@ -235,7 +225,7 @@ CollectApplicationMetrics(const ApplicationState& applications)
 int
 main(int argc, char* argv[])
 {
-  RunConfig config;
+  SatComputeConfig config = GetDefaultSatComputeConfig();
   CommandLine commandLine;
   commandLine.AddValue("topologyDir",
                        "Directory containing paired nodes_<time>s.json and "

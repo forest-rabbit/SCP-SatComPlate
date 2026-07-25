@@ -8,8 +8,9 @@ intra/inter-cluster routing, SDN routing, or OpenFlow experiments.
 
 ## Project Structure
 
-The main program is `examples/satcompute/satcompute.cc`. Topology orchestration
-is in `examples/satcompute/topo.cc`; JSON parsing and runtime link state are in
+The main program is `examples/satcompute/satcompute.cc`; active default
+parameters are in `examples/satcompute/para.cc`. Topology orchestration is in
+`examples/satcompute/topo.cc`; JSON parsing and runtime link state are in
 `examples/satcompute/jsontopo/`; metrics are in
 `examples/satcompute/metrics/`. The committed input is a small, pure-satellite
 example under `examples/satcompute/input/`.

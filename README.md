@@ -13,6 +13,7 @@ SDN/OpenFlow 实验和相关兼容参数。
 ```text
 examples/satcompute/
 ├── satcompute.cc          # 主程序和命令行参数
+├── para.cc                # 当前有效参数的默认值
 ├── topo.cc                # 卫星节点、ISL 和动态更新
 ├── jsontopo/              # JSON 快照解析与链路状态
 ├── metrics/               # FlowMonitor 和应用层指标
@@ -42,6 +43,16 @@ source .venv/bin/activate
 
 ```bash
 ./waf --run "satcompute --offeredLoad=0.001"
+```
+
+`para.cc` 只保存当前有效参数的默认值。建议用命令行为每次实验覆盖参数；
+若要永久修改默认负载强度，可调整其中的 `config.offeredLoad`。例如
+`0.001` 表示使用业务输入累计值的 0.1%，`0` 表示不创建业务流。
+
+查看所有可调参数：
+
+```bash
+./waf --run "satcompute --PrintHelp"
 ```
 
 快速拓扑与路由自检：

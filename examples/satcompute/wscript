@@ -5,6 +5,7 @@ def build(bld):
          'applications', 'flow-monitor'])
     program.source = [
         'satcompute.cc',
+        'para.cc',
         'topo.cc',
         'jsontopo/topo-json.cc',
         'jsontopo/topo-link-state.cc',

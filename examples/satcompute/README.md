@@ -13,6 +13,7 @@ SatCompute 只有一条主流程：
 7. 输出 FlowMonitor 和应用层统计。
 
 程序不会创建地面站，不解析 cluster，不支持 CSV 拓扑，也没有自定义路由模式。
+当前有效参数的默认值集中在 `para.cc`，运行时仍可通过命令行覆盖。
 
 ## 构建与运行
 
@@ -36,6 +37,8 @@ outputDir         = examples/satcompute/output
 
 ## 参数
 
+- `para.cc` 中的值是默认值；修改后需要重新构建。
+- 同名命令行参数只覆盖当前一次运行，适合批量实验。
 - `--topologyDir`：卫星 JSON 全量快照目录。
 - `--simulationDuration`：仿真时长，单位秒，必须大于 0。
 - `--offeredLoad`：业务矩阵倍率，必须非负；为 0 时不读取矩阵。
@@ -54,6 +57,14 @@ outputDir         = examples/satcompute/output
   --trafficMatrix=/path/to/traffic.csv \
   --outputDir=/tmp/satcompute-run"
 ```
+
+例如只调整负载强度：
+
+```bash
+./waf --run "satcompute --offeredLoad=0.0001"
+```
+
+也可以在 `para.cc` 中把 `config.offeredLoad = 0.0;` 改成所需默认值。
 
 ## 地址与路由
 
