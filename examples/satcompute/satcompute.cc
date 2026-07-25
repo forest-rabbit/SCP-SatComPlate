@@ -14,6 +14,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "metrics/ecmp-route-recorder.h"
 #include "metrics/metrics.h"
 #include "para.h"
 #include "topo.h"
@@ -155,6 +156,7 @@ main(int argc, char* argv[])
   };
   SatelliteTopology topology(topologyConfig);
   topology.Initialize();
+  EcmpRouteRecorder routeRecorder(topology);
   ApplicationState backgroundApplications;
   NetworkTransferState networkTransfers;
   if (config.transferTrace.empty())
@@ -184,11 +186,17 @@ main(int argc, char* argv[])
     config.transferTrace.empty()
       ? CollectApplicationMetrics(backgroundApplications)
       : CollectNetworkTransferMetrics(networkTransfers);
+  std::vector<TransferFlowMetadata> transferFlowMetadata =
+    config.transferTrace.empty()
+      ? std::vector<TransferFlowMetadata>()
+      : CollectNetworkTransferFlowMetadata(networkTransfers);
   MetricsRecorder metrics(flowMonitor,
                           config.simulationDurationSeconds,
                           wallClockSeconds,
                           config.transport,
                           applicationMetrics,
+                          transferFlowMetadata,
+                          routeRecorder.GetEvents(),
                           config.outputDirectory);
   metrics.Record();
   Simulator::Destroy();

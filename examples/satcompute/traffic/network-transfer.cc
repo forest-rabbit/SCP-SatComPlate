@@ -54,6 +54,7 @@ InstallNetworkTransfers(const std::string& filename,
           state.receivers.push_back(receiver);
         }
       receiver->AddExpectedTransfer(transfer);
+      state.transferReceivers.push_back(receiver);
     }
 
   std::cout << "[TRANSFER]" << std::endl
@@ -123,6 +124,32 @@ CollectNetworkTransferMetrics(const NetworkTransferState& state)
       metrics.receivedBytes += receiver->GetTotalReceivedBytes();
     }
   return metrics;
+}
+
+std::vector<TransferFlowMetadata>
+CollectNetworkTransferFlowMetadata(const NetworkTransferState& state)
+{
+  NS_ABORT_MSG_IF(state.transfers.size() != state.transferReceivers.size(),
+                  "NetworkTransfer 与 receiver 映射数量不一致");
+  std::vector<TransferFlowMetadata> metadata;
+  metadata.reserve(state.transfers.size());
+  for (uint32_t index = 0; index < state.transfers.size(); ++index)
+    {
+      const NetworkTransfer& transfer = state.transfers[index];
+      TransferFlowMetadata flow = {
+        transfer.transferId,
+        transfer.sourceAddress,
+        transfer.destinationAddress,
+        17,
+        transfer.sourcePort,
+        transfer.destinationPort,
+        transfer.sizeBytes,
+        state.transferReceivers[index]->GetTransferReceivedBytes(
+          transfer.transferId)
+      };
+      metadata.push_back(flow);
+    }
+  return metadata;
 }
 
 } // namespace ns3

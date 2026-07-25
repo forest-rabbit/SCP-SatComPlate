@@ -1,11 +1,14 @@
 #include "metrics.h"
 
 #include "ns3/abort.h"
+#include "ns3/ipv4-flow-classifier.h"
 
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
+#include <set>
 #include <sys/stat.h>
 
 namespace ns3 {
@@ -136,6 +139,154 @@ WriteNetworkMetrics(const FlowAggregate& metrics, const std::string& outputDirec
          << "\n";
 }
 
+void
+WriteNetworkFlowDetails(
+  Ptr<FlowMonitor> monitor,
+  const std::vector<TransferFlowMetadata>& transferFlows,
+  const std::string& outputDirectory)
+{
+  std::ofstream output(OutputPath(outputDirectory, "network-flow-details.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入逐流网络指标 CSV");
+  output
+    << "flow_monitor_id,transfer_id,source_address,destination_address,"
+       "protocol,source_port,destination_port,"
+       "planned_application_payload_bytes,received_application_payload_bytes,"
+       "tx_packets,rx_packets,lost_packets,tx_bytes,rx_bytes,"
+       "time_first_tx_ns,time_last_rx_ns,mean_delay_ns,mean_jitter_ns,"
+       "throughput_bps\n";
+
+  std::map<Ipv4FlowClassifier::FiveTuple, TransferFlowMetadata> metadataByTuple;
+  for (const auto& metadata : transferFlows)
+    {
+      Ipv4FlowClassifier::FiveTuple tuple = {
+        metadata.sourceAddress,
+        metadata.destinationAddress,
+        metadata.protocol,
+        metadata.sourcePort,
+        metadata.destinationPort
+      };
+      NS_ABORT_MSG_IF(
+        !metadataByTuple.insert(std::make_pair(tuple, metadata)).second,
+        "NetworkTransfer metadata 包含重复 five-tuple，transfer_id="
+          << metadata.transferId);
+    }
+
+  Ptr<Ipv4FlowClassifier> classifier =
+    DynamicCast<Ipv4FlowClassifier>(g_flowMonitorHelper.GetClassifier());
+  NS_ABORT_MSG_IF(classifier == nullptr, "FlowMonitor 缺少 IPv4 classifier");
+  std::set<uint64_t> matchedTransferIds;
+  for (const auto& item : monitor->GetFlowStats())
+    {
+      FlowId flowId = item.first;
+      const FlowMonitor::FlowStats& stats = item.second;
+      Ipv4FlowClassifier::FiveTuple tuple = classifier->FindFlow(flowId);
+      auto metadata = metadataByTuple.find(tuple);
+
+      uint64_t transferId = 0;
+      uint64_t plannedPayloadBytes = 0;
+      uint64_t receivedPayloadBytes = 0;
+      if (metadata != metadataByTuple.end())
+        {
+          transferId = metadata->second.transferId;
+          plannedPayloadBytes =
+            metadata->second.plannedApplicationPayloadBytes;
+          receivedPayloadBytes =
+            metadata->second.receivedApplicationPayloadBytes;
+          matchedTransferIds.insert(transferId);
+        }
+
+      int64_t firstTxNs =
+        stats.txPackets > 0 ? stats.timeFirstTxPacket.GetNanoSeconds() : 0;
+      int64_t lastRxNs =
+        stats.rxPackets > 0 ? stats.timeLastRxPacket.GetNanoSeconds() : 0;
+      uint64_t meanDelayNs =
+        stats.rxPackets > 0
+          ? static_cast<uint64_t>(stats.delaySum.GetNanoSeconds())
+              / stats.rxPackets
+          : 0;
+      uint64_t jitterSamples =
+        stats.rxPackets > 0 ? stats.rxPackets - 1 : 0;
+      uint64_t meanJitterNs =
+        jitterSamples > 0
+          ? static_cast<uint64_t>(stats.jitterSum.GetNanoSeconds())
+              / jitterSamples
+          : 0;
+      int64_t durationNs =
+        stats.rxPackets > 0 ? std::max<int64_t>(0, lastRxNs - firstTxNs) : 0;
+      long double throughputBps =
+        durationNs > 0
+          ? static_cast<long double>(stats.rxBytes) * 8.0L * 1000000000.0L
+              / static_cast<long double>(durationNs)
+          : 0.0L;
+
+      output << std::setprecision(15)
+             << flowId << ","
+             << transferId << ","
+             << tuple.sourceAddress << ","
+             << tuple.destinationAddress << ","
+             << static_cast<uint32_t>(tuple.protocol) << ","
+             << tuple.sourcePort << ","
+             << tuple.destinationPort << ","
+             << plannedPayloadBytes << ","
+             << receivedPayloadBytes << ","
+             << stats.txPackets << ","
+             << stats.rxPackets << ","
+             << stats.lostPackets << ","
+             << stats.txBytes << ","
+             << stats.rxBytes << ","
+             << firstTxNs << ","
+             << lastRxNs << ","
+             << meanDelayNs << ","
+             << meanJitterNs << ","
+             << static_cast<double>(throughputBps)
+             << "\n";
+    }
+
+  for (const auto& metadata : transferFlows)
+    {
+      NS_ABORT_MSG_IF(
+        matchedTransferIds.find(metadata.transferId)
+          == matchedTransferIds.end(),
+        "FlowMonitor 缺少 NetworkTransfer five-tuple，transfer_id="
+          << metadata.transferId);
+    }
+}
+
+void
+WriteEcmpRouteEvents(
+  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
+  const std::string& outputDirectory)
+{
+  std::ofstream output(OutputPath(outputDirectory, "ecmp-route-events.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 ECMP 路由证据 CSV");
+  output
+    << "simulation_time_ns,route_epoch,node_id,source_address,"
+       "destination_address,protocol,source_port,destination_port,"
+       "candidate_count_before_dedup,candidate_count_after_dedup,"
+       "selected_index,selected_gateway,selected_output_interface,"
+       "hash_value,selection_reason\n";
+  for (const auto& event : routeEvents)
+    {
+      output << event.simulationTimeNs << ","
+             << event.routeEpoch << ","
+             << event.nodeId << ","
+             << event.flowKey.sourceAddress << ","
+             << event.flowKey.destinationAddress << ","
+             << static_cast<uint32_t>(event.flowKey.protocol) << ","
+             << event.flowKey.sourcePort << ","
+             << event.flowKey.destinationPort << ","
+             << event.candidateCountBeforeDedup << ","
+             << event.candidateCountAfterDedup << ","
+             << event.selectedIndex << ","
+             << event.selectedGateway << ","
+             << event.selectedOutputInterface << ","
+             << event.hashValue << ","
+             << event.selectionReason << "\n";
+    }
+}
+
 } // namespace
 
 Ptr<FlowMonitor>
@@ -149,12 +300,16 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
                                  double wallClockSeconds,
                                  const std::string& transportProtocol,
                                  const TaskApplicationMetrics& applicationMetrics,
+                                 const std::vector<TransferFlowMetadata>& transferFlows,
+                                 const std::vector<EcmpRouteDecisionEvent>& routeEvents,
                                  const std::string& outputDirectory)
   : m_monitor(monitor),
     m_simulationDurationSeconds(simulationDurationSeconds),
     m_wallClockSeconds(wallClockSeconds),
     m_transportProtocol(transportProtocol),
     m_applicationMetrics(applicationMetrics),
+    m_transferFlows(transferFlows),
+    m_routeEvents(routeEvents),
     m_outputDirectory(outputDirectory)
 {
 }
@@ -171,6 +326,8 @@ MetricsRecorder::Record()
 
   PrintNetworkMetrics(aggregate);
   WriteNetworkMetrics(aggregate, m_outputDirectory);
+  WriteNetworkFlowDetails(m_monitor, m_transferFlows, m_outputDirectory);
+  WriteEcmpRouteEvents(m_routeEvents, m_outputDirectory);
 
   std::ofstream output(OutputPath(m_outputDirectory, "task-metrics.json"),
                        std::ios::out | std::ios::trunc);
@@ -187,6 +344,10 @@ MetricsRecorder::Record()
   std::cout << "[METRICS] Output" << std::endl
             << "  network : "
             << OutputPath(m_outputDirectory, "network-flow-metrics.csv") << std::endl
+            << "  details : "
+            << OutputPath(m_outputDirectory, "network-flow-details.csv") << std::endl
+            << "  ECMP    : "
+            << OutputPath(m_outputDirectory, "ecmp-route-events.csv") << std::endl
             << "  task    : "
             << OutputPath(m_outputDirectory, "task-metrics.json") << std::endl;
 }

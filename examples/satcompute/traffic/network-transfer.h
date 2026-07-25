@@ -36,6 +36,7 @@ struct NetworkTransferState
   std::vector<NetworkTransfer> transfers;
   std::vector<Ptr<NetworkTransferApplication>> senders;
   std::vector<Ptr<NetworkTransferReceiver>> receivers;
+  std::vector<Ptr<NetworkTransferReceiver>> transferReceivers;
 };
 
 NetworkTransferState InstallNetworkTransfers(
@@ -45,6 +46,9 @@ NetworkTransferState InstallNetworkTransfers(
   const SatelliteTopology& topology);
 
 TaskApplicationMetrics CollectNetworkTransferMetrics(
+  const NetworkTransferState& state);
+
+std::vector<TransferFlowMetadata> CollectNetworkTransferFlowMetadata(
   const NetworkTransferState& state);
 
 } // namespace ns3

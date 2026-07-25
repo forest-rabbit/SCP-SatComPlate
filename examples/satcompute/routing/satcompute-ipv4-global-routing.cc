@@ -312,6 +312,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
   event.candidateCountBeforeDedup = countBeforeDedup;
   event.candidateCountAfterDedup = candidates.size();
   event.selectedIndex = -1;
+  event.selectedGateway = Ipv4Address::GetAny();
   event.selectedOutputInterface = -1;
 
   if (candidates.empty())
