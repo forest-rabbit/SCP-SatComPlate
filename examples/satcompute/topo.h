@@ -19,6 +19,8 @@ struct TopologyConfig
 {
   std::string snapshotDirectory;
   double simulationDurationSeconds;
+  std::string routingMode;
+  uint64_t ecmpHashSeed;
 };
 
 class SatelliteTopology

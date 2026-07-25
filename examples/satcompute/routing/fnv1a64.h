@@ -14,29 +14,28 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_PARA_H
-#define SATCOMPUTE_PARA_H
+#ifndef SATCOMPUTE_FNV1A64_H
+#define SATCOMPUTE_FNV1A64_H
 
+#include <array>
 #include <cstdint>
-#include <string>
 
 namespace ns3 {
 
-struct SatComputeConfig
+inline uint64_t
+Fnv1a64(const std::array<uint8_t, 21>& bytes)
 {
-  std::string topologyDirectory;
-  std::string trafficMatrix;
-  std::string transferTrace;
-  std::string outputDirectory;
-  std::string transport;
-  std::string routingMode;
-  uint64_t transferPacketIntervalNs;
-  uint64_t ecmpHashSeed;
-  double simulationDurationSeconds;
-  double offeredLoad;
-};
+  static const uint64_t offsetBasis = 14695981039346656037ULL;
+  static const uint64_t prime = 1099511628211ULL;
 
-SatComputeConfig GetDefaultSatComputeConfig();
+  uint64_t hash = offsetBasis;
+  for (uint8_t byte : bytes)
+    {
+      hash ^= byte;
+      hash *= prime;
+    }
+  return hash;
+}
 
 } // namespace ns3
 

@@ -62,6 +62,12 @@ main(int argc, char* argv[])
   commandLine.AddValue("transferPacketIntervalNs",
                        "Positive global UDP packet interval for NetworkTransfer",
                        config.transferPacketIntervalNs);
+  commandLine.AddValue("routingMode",
+                       "Routing mode: global-first or global-hash-per-flow",
+                       config.routingMode);
+  commandLine.AddValue("ecmpHashSeed",
+                       "FNV-1a-64 seed prefix for per-flow ECMP",
+                       config.ecmpHashSeed);
   commandLine.AddValue("outputDir",
                        "Metrics output directory",
                        config.outputDirectory);
@@ -110,6 +116,14 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
+  if (config.routingMode != "global-first"
+      && config.routingMode != "global-hash-per-flow")
+    {
+      std::cerr << "[RUN:Error] routingMode must be global-first or "
+                   "global-hash-per-flow"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
 
   std::cout << "[RUN]" << std::endl
             << "  topologyDir       : " << config.topologyDirectory << std::endl
@@ -123,8 +137,11 @@ main(int argc, char* argv[])
             << std::endl
             << "  transferInterval  : "
             << config.transferPacketIntervalNs << " ns" << std::endl
+            << "  routingMode       : " << config.routingMode << std::endl
+            << "  ecmpHashSeed      : " << config.ecmpHashSeed << std::endl
             << "  outputDir         : " << config.outputDirectory << std::endl
-            << "  routing           : ns-3 Ipv4GlobalRouting" << std::endl
+            << "  routing           : SatCompute Ipv4GlobalRouting"
+            << std::endl
             << std::endl;
 
   std::chrono::steady_clock::time_point wallClockStart =
@@ -132,7 +149,9 @@ main(int argc, char* argv[])
 
   TopologyConfig topologyConfig = {
     config.topologyDirectory,
-    config.simulationDurationSeconds
+    config.simulationDurationSeconds,
+    config.routingMode,
+    config.ecmpHashSeed
   };
   SatelliteTopology topology(topologyConfig);
   topology.Initialize();

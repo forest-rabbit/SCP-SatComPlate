@@ -29,7 +29,9 @@ GetDefaultSatComputeConfig()
   config.transferTrace = "";
   config.outputDirectory = "examples/satcompute/output";
   config.transport = "udp";
+  config.routingMode = "global-first";
   config.transferPacketIntervalNs = 10000000;
+  config.ecmpHashSeed = 1;
   config.simulationDurationSeconds = 110.0;
   config.offeredLoad = 0.0;
   return config;

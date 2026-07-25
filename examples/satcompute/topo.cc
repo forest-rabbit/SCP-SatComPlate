@@ -1,6 +1,7 @@
 #include "topo.h"
 
 #include "jsontopo/topo-json.h"
+#include "routing/satcompute-ipv4-global-routing-helper.h"
 
 #include "ns3/abort.h"
 #include "ns3/csma-net-device.h"
@@ -19,6 +20,9 @@ SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
   NS_ABORT_MSG_IF(config.snapshotDirectory.empty(), "topologyDir 不能为空");
   NS_ABORT_MSG_IF(config.simulationDurationSeconds <= 0.0,
                   "simulationDuration 必须大于 0");
+  NS_ABORT_MSG_IF(config.routingMode != "global-first"
+                    && config.routingMode != "global-hash-per-flow",
+                  "未知 routingMode: " << config.routingMode);
 }
 
 void
@@ -31,8 +35,22 @@ SatelliteTopology::CreateSatelliteNodes(const std::vector<uint32_t>& satelliteId
       m_nodeIndexes[satelliteIds[index]] = index;
     }
 
+  Ipv4StaticRoutingHelper staticRouting;
+  SatComputeIpv4GlobalRoutingHelper globalRouting(
+    m_config.routingMode == "global-hash-per-flow",
+    m_config.ecmpHashSeed);
+  Ipv4ListRoutingHelper listRouting;
+  listRouting.Add(staticRouting, 0);
+  listRouting.Add(globalRouting, -10);
+
   InternetStackHelper internet;
+  internet.SetRoutingHelper(listRouting);
   internet.Install(m_nodes);
+  for (uint32_t index = 0; index < m_nodes.GetN(); ++index)
+    {
+      SatComputeIpv4GlobalRoutingHelper::GetRouting(m_nodes.Get(index))
+        ->SetSatelliteId(m_satelliteIds[index]);
+    }
   AssignServiceAddresses();
 }
 
@@ -100,6 +118,7 @@ SatelliteTopology::ApplyScheduledSnapshot(std::string nodesFilename,
   // Use the stock ns-3 global route manager after the complete link snapshot
   // has been applied, so each time slice triggers exactly one recomputation.
   Ipv4GlobalRoutingHelper::RecomputeRoutingTables();
+  SatComputeIpv4GlobalRoutingHelper::AdvanceRouteEpoch(m_nodes);
   LogSnapshot("Update", snapshot, summary);
 }
 
