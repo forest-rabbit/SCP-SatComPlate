@@ -80,12 +80,19 @@ outputDir         = examples/satcompute/output
 业务文件必须恰好有 100×N 行、N 列，N 等于卫星数。每连续 N 行作为一个
 时间片，行列顺序都是 `sat_id` 数值升序。程序沿用旧版 xw 的索引和累计逻辑：
 输出矩阵的第 `m` 行等于输入第 `m + n×N` 行在 `n=0…99` 上的逐列求和。
-其他单元表示源卫星到目的卫星的 Gbps 需求。
-实际发送速率为：
+其他单元表示源卫星到目的卫星的 Gbps 需求。UDP 临时沿用旧 xw 的限量发包
+语义：
 
 ```text
-matrix_value × offeredLoad × 1e9 bps
+scaled_value = matrix_value × offeredLoad
+MaxPackets = max(1, floor(scaled_value × 2^30 / (1024 × 8 × 10000)))
+Interval = 100 s / MaxPackets
 ```
+
+每个非零源宿对使用一个 `UdpClient`，包长为 1024 字节。默认 66 星输入下，
+`offeredLoad=0.0001` 计划 4356 个包，`offeredLoad=0.001` 计划 17712 个包。
+TCP 仍使用连续 `OnOff`，速率为
+`matrix_value × offeredLoad × 1e9 bps`。
 
 ## 输出
 

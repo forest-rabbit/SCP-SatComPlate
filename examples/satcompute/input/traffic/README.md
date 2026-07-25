@@ -14,10 +14,20 @@ head -n 6600 traffic_matrix\(324\).csv | cut -d, -f1-66 \
 
 N 必须等于卫星数。程序每 N 行读取一个时间片，共读取 100 个时间片，并按照
 旧版 xw 逻辑将同一源节点的 100 行逐列累计为实际 N×N 发送矩阵。行列按外部
-`sat_id` 数值升序，单元值和累计结果的单位均为 Gbps。实际发送速率为：
+`sat_id` 数值升序，单元值和累计结果的单位均为 Gbps。
+
+当前 CSV/UDP 路径用于临时兼容旧 xw。每个非零源宿对创建一个 `UdpClient`，
+使用 1024 字节包，并按以下规则在 100 秒内均匀发送：
 
 ```text
-accumulated_value × offeredLoad × 1e9 bps
+scaled_value = accumulated_value × offeredLoad
+MaxPackets = max(1, floor(scaled_value × 2^30 / (1024 × 8 × 10000)))
+Interval = 100 s / MaxPackets
 ```
 
+TCP 不使用该包数限制，仍按
+`accumulated_value × offeredLoad × 1e9 bps` 连续发送。
 当 `--offeredLoad=0` 时，程序不读取业务文件，也不创建客户端流。
+
+JSON 业务输入、逐流发送和 ECMP 尚未在本兼容路径中实现，将作为后续独立
+阶段替换 CSV/UDP 逻辑。
