@@ -43,11 +43,16 @@ NS_LOG_COMPONENT_DEFINE("SatCompute");
 namespace {
 
 constexpr uint32_t TRAFFIC_TIME_SLICES = 100;
+constexpr uint32_t TRAFFIC_PACKET_SIZE_BYTES = 1024;
+constexpr uint32_t LEGACY_UDP_PACKET_DIVISOR = 10000;
+constexpr double LEGACY_UDP_WINDOW_SECONDS = 100.0;
+constexpr long double BITS_PER_GIBIBIT = 1073741824.0L;
 
 struct ApplicationState
 {
   std::vector<Ptr<PacketSink>> sinks;
   uint32_t clientCount = 0;
+  uint64_t plannedPacketCount = 0;
 };
 
 std::vector<std::vector<double>>
@@ -129,6 +134,20 @@ ReadTrafficMatrix(const std::string& filename, uint32_t nodeCount)
   return matrix;
 }
 
+uint32_t
+CalculateLegacyUdpPacketCount(double demandGbps, double offeredLoad)
+{
+  long double packetCount =
+    static_cast<long double>(demandGbps)
+    * static_cast<long double>(offeredLoad)
+    * BITS_PER_GIBIBIT
+    / (static_cast<long double>(TRAFFIC_PACKET_SIZE_BYTES) * 8.0L)
+    / static_cast<long double>(LEGACY_UDP_PACKET_DIVISOR);
+  NS_ABORT_MSG_IF(packetCount > std::numeric_limits<uint32_t>::max(),
+                  "旧版 UDP 计划包数超出 uint32 范围");
+  return std::max(1u, static_cast<uint32_t>(packetCount));
+}
+
 ApplicationState
 InstallApplications(const SatComputeConfig& config,
                     const SatelliteTopology& topology)
@@ -171,31 +190,57 @@ InstallApplications(const SatComputeConfig& config,
               continue;
             }
 
-          long double rate =
-            static_cast<long double>(demandGbps)
-            * static_cast<long double>(config.offeredLoad)
-            * 1000000000.0L;
-          NS_ABORT_MSG_IF(rate > std::numeric_limits<uint64_t>::max(),
-                          "业务流速率超出 uint64 范围");
-          uint64_t rateBps = static_cast<uint64_t>(rate + 0.5L);
-          if (rateBps == 0)
+          Ipv4Address destinationAddress =
+            topology.GetServiceAddress(destination);
+          ApplicationContainer application;
+          if (config.transport == "udp")
             {
-              continue;
+              uint32_t maxPackets =
+                CalculateLegacyUdpPacketCount(demandGbps, config.offeredLoad);
+              double intervalSeconds =
+                LEGACY_UDP_WINDOW_SECONDS / maxPackets;
+              UdpClientHelper client(destinationAddress, servicePort);
+              client.SetAttribute("MaxPackets", UintegerValue(maxPackets));
+              client.SetAttribute("Interval",
+                                  TimeValue(Seconds(intervalSeconds)));
+              client.SetAttribute("PacketSize",
+                                  UintegerValue(TRAFFIC_PACKET_SIZE_BYTES));
+              application = client.Install(topology.GetNode(source));
+              application.Start(Seconds(0.0));
+              application.Stop(
+                Seconds(std::min(LEGACY_UDP_WINDOW_SECONDS,
+                                 config.simulationDurationSeconds)));
+              state.plannedPacketCount += maxPackets;
             }
+          else
+            {
+              long double rate =
+                static_cast<long double>(demandGbps)
+                * static_cast<long double>(config.offeredLoad)
+                * 1000000000.0L;
+              NS_ABORT_MSG_IF(rate > std::numeric_limits<uint64_t>::max(),
+                              "业务流速率超出 uint64 范围");
+              uint64_t rateBps = static_cast<uint64_t>(rate + 0.5L);
+              if (rateBps == 0)
+                {
+                  continue;
+                }
 
-          Address remote =
-            InetSocketAddress(topology.GetServiceAddress(destination), servicePort);
-          OnOffHelper client(socketFactory, remote);
-          client.SetConstantRate(DataRate(rateBps), 1024);
-          client.SetAttribute("OnTime",
-                              StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-          client.SetAttribute("OffTime",
-                              StringValue("ns3::ConstantRandomVariable[Constant=0]"));
-
-          ApplicationContainer application =
-            client.Install(topology.GetNode(source));
-          application.Start(Seconds(applicationStart));
-          application.Stop(Seconds(config.simulationDurationSeconds));
+              Address remote =
+                InetSocketAddress(destinationAddress, servicePort);
+              OnOffHelper client(socketFactory, remote);
+              client.SetConstantRate(DataRate(rateBps),
+                                     TRAFFIC_PACKET_SIZE_BYTES);
+              client.SetAttribute(
+                "OnTime",
+                StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+              client.SetAttribute(
+                "OffTime",
+                StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+              application = client.Install(topology.GetNode(source));
+              application.Start(Seconds(applicationStart));
+              application.Stop(Seconds(config.simulationDurationSeconds));
+            }
           ++state.clientCount;
         }
     }
@@ -203,8 +248,19 @@ InstallApplications(const SatComputeConfig& config,
   std::cout << "[TRAFFIC]" << std::endl
             << "  matrix  : " << config.trafficMatrix << std::endl
             << "  slices  : " << TRAFFIC_TIME_SLICES << std::endl
-            << "  clients : " << state.clientCount << std::endl
-            << std::endl;
+            << "  model   : "
+            << (config.transport == "udp"
+                  ? "legacy bounded UDP"
+                  : "continuous TCP OnOff")
+            << std::endl
+            << "  clients : " << state.clientCount << std::endl;
+  if (config.transport == "udp")
+    {
+      std::cout << "  packets : " << state.plannedPacketCount
+                << " planned over " << LEGACY_UDP_WINDOW_SECONDS << " s"
+                << std::endl;
+    }
+  std::cout << std::endl;
   return state;
 }
 
