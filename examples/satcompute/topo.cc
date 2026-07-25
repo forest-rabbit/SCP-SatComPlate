@@ -159,4 +159,37 @@ SatelliteTopology::GetServiceAddress(uint32_t index) const
   return m_serviceAddresses[index];
 }
 
+bool
+SatelliteTopology::HasSatelliteId(uint32_t satelliteId) const
+{
+  return m_nodeIndexes.find(satelliteId) != m_nodeIndexes.end();
+}
+
+uint32_t
+SatelliteTopology::GetNodeIndexBySatelliteId(uint32_t satelliteId) const
+{
+  auto node = m_nodeIndexes.find(satelliteId);
+  NS_ABORT_MSG_IF(node == m_nodeIndexes.end(), "未知的卫星 ID: " << satelliteId);
+  return node->second;
+}
+
+uint32_t
+SatelliteTopology::GetSatelliteIdByNodeIndex(uint32_t index) const
+{
+  NS_ABORT_MSG_IF(index >= m_satelliteIds.size(), "卫星节点下标越界: " << index);
+  return m_satelliteIds[index];
+}
+
+Ptr<Node>
+SatelliteTopology::GetNodeBySatelliteId(uint32_t satelliteId) const
+{
+  return GetNode(GetNodeIndexBySatelliteId(satelliteId));
+}
+
+Ipv4Address
+SatelliteTopology::GetServiceAddressBySatelliteId(uint32_t satelliteId) const
+{
+  return GetServiceAddress(GetNodeIndexBySatelliteId(satelliteId));
+}
+
 } // namespace ns3

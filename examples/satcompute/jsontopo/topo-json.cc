@@ -4,6 +4,7 @@
 #include "ns3/abort.h"
 #include "ns3/fatal-error.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <dirent.h>
@@ -258,6 +259,19 @@ ReadSatelliteLinks(const std::string& filename)
     }
 
   NS_ABORT_MSG_IF(parsedLinks.empty(), "topology 快照中没有 ISL: " << filename);
+  std::sort(parsedLinks.begin(),
+            parsedLinks.end(),
+            [](const SatelliteLink& left, const SatelliteLink& right) {
+              const std::pair<uint32_t, uint32_t> leftKey =
+                left.sourceId < left.destinationId
+                  ? std::make_pair(left.sourceId, left.destinationId)
+                  : std::make_pair(left.destinationId, left.sourceId);
+              const std::pair<uint32_t, uint32_t> rightKey =
+                right.sourceId < right.destinationId
+                  ? std::make_pair(right.sourceId, right.destinationId)
+                  : std::make_pair(right.destinationId, right.sourceId);
+              return leftKey < rightKey;
+            });
   return parsedLinks;
 }
 

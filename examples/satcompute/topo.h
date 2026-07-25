@@ -31,6 +31,11 @@ public:
   uint32_t GetNodeCount() const;
   Ptr<Node> GetNode(uint32_t index) const;
   Ipv4Address GetServiceAddress(uint32_t index) const;
+  bool HasSatelliteId(uint32_t satelliteId) const;
+  uint32_t GetNodeIndexBySatelliteId(uint32_t satelliteId) const;
+  uint32_t GetSatelliteIdByNodeIndex(uint32_t index) const;
+  Ptr<Node> GetNodeBySatelliteId(uint32_t satelliteId) const;
+  Ipv4Address GetServiceAddressBySatelliteId(uint32_t satelliteId) const;
 
 private:
   void CreateSatelliteNodes(const std::vector<uint32_t>& satelliteIds);
