@@ -5,6 +5,7 @@
 #include "ns3/ipv4.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/string.h"
+#include "ns3/uinteger.h"
 
 #include <limits>
 #include <string>
@@ -12,11 +13,15 @@
 namespace ns3 {
 
 SatelliteLinkState::SatelliteLinkState(const NodeContainer& nodes,
-                                       const std::map<uint32_t, uint32_t>& nodeIndexes)
+                                       const std::map<uint32_t, uint32_t>& nodeIndexes,
+                                       uint16_t islMtuBytes)
   : m_nodes(nodes),
     m_nodeIndexes(nodeIndexes),
+    m_islMtuBytes(islMtuBytes),
     m_nextIpv4Network(0)
 {
+  NS_ABORT_MSG_IF(m_islMtuBytes < 68,
+                  "ISL MTU 必须至少为 68 bytes");
 }
 
 SatelliteLinkState::LinkKey
@@ -62,6 +67,8 @@ SatelliteLinkState::ConfigureLink(const NetDeviceContainer& devices,
       Ptr<PointToPointNetDevice> device =
         DynamicCast<PointToPointNetDevice>(devices.Get(i));
       NS_ABORT_MSG_IF(device == nullptr, "星间链路设备不是 PointToPointNetDevice");
+      NS_ABORT_MSG_IF(!device->SetMtu(m_islMtuBytes),
+                      "无法设置星间链路 MTU: " << m_islMtuBytes);
       device->SetAttribute("DataRate", dataRate);
     }
 
@@ -83,6 +90,7 @@ SatelliteLinkState::InstallLink(const SatelliteLink& link)
   PointToPointHelper helper;
   helper.SetDeviceAttribute("DataRate",
                             DataRateValue(DataRate(link.bandwidthBps)));
+  helper.SetDeviceAttribute("Mtu", UintegerValue(m_islMtuBytes));
   helper.SetChannelAttribute("Delay", TimeValue(MicroSeconds(link.delayUs)));
   helper.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("1000p"));
 

@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <set>
 #include <sys/stat.h>
@@ -21,6 +22,14 @@ double
 SafeDivide(double numerator, double denominator)
 {
   return denominator > 0.0 ? numerator / denominator : 0.0;
+}
+
+uint64_t
+CheckedAdd(uint64_t left, uint64_t right, const std::string& field)
+{
+  NS_ABORT_MSG_IF(left > std::numeric_limits<uint64_t>::max() - right,
+                  "run summary " << field << " 溢出");
+  return left + right;
 }
 
 std::string
@@ -287,6 +296,112 @@ WriteEcmpRouteEvents(
     }
 }
 
+void
+WriteTransferSummaries(
+  const std::vector<TransferSummaryRecord>& summaries,
+  const std::string& outputDirectory)
+{
+  std::ofstream output(OutputPath(outputDirectory, "transfer-summary.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 transfer summary CSV");
+  output
+    << "transfer_id,source_node_id,destination_node_id,source_address,"
+       "destination_address,source_port,destination_port,declared_size_bytes,"
+       "payload_bytes_per_packet,derived_packet_interval_ns,"
+       "derived_packet_count,final_packet_payload_bytes,arrival_time_ns,"
+       "last_scheduled_send_time_ns,sent_application_bytes,"
+       "received_application_bytes,received_packet_count,completion_time_ns,"
+       "completion_delay_ns\n";
+  for (const auto& summary : summaries)
+    {
+      output << summary.transferId << ","
+             << summary.sourceSatelliteId << ","
+             << summary.destinationSatelliteId << ","
+             << summary.sourceAddress << ","
+             << summary.destinationAddress << ","
+             << summary.sourcePort << ","
+             << summary.destinationPort << ","
+             << summary.declaredSizeBytes << ","
+             << summary.payloadBytesPerPacket << ","
+             << summary.derivedPacketIntervalNs << ","
+             << summary.derivedPacketCount << ","
+             << summary.finalPacketPayloadBytes << ","
+             << summary.arrivalTimeNs << ","
+             << summary.lastScheduledSendTimeNs << ","
+             << summary.sentApplicationBytes << ","
+             << summary.receivedApplicationBytes << ","
+             << summary.receivedPacketCount << ","
+             << summary.completionTimeNs << ","
+             << summary.completionDelayNs << "\n";
+    }
+}
+
+void
+WriteRunSummary(
+  const FlowAggregate& aggregate,
+  double simulationDurationSeconds,
+  double wallClockSeconds,
+  const RunMetadata& runMetadata,
+  const ApplicationMetrics& applicationMetrics,
+  const std::vector<TransferSummaryRecord>& transferSummaries,
+  const std::string& outputDirectory)
+{
+  uint64_t declaredBytes = 0;
+  uint64_t sentBytes = 0;
+  uint64_t receivedBytes = 0;
+  uint64_t derivedPackets = 0;
+  for (const auto& summary : transferSummaries)
+    {
+      declaredBytes =
+        CheckedAdd(declaredBytes, summary.declaredSizeBytes, "declared bytes");
+      sentBytes =
+        CheckedAdd(sentBytes, summary.sentApplicationBytes, "sent bytes");
+      receivedBytes =
+        CheckedAdd(receivedBytes,
+                   summary.receivedApplicationBytes,
+                   "received bytes");
+      derivedPackets =
+        CheckedAdd(derivedPackets,
+                   summary.derivedPacketCount,
+                   "derived packet count");
+    }
+
+  if (transferSummaries.empty())
+    {
+      sentBytes = applicationMetrics.sentBytes;
+      receivedBytes = applicationMetrics.receivedBytes;
+    }
+  else
+    {
+      NS_ABORT_MSG_IF(sentBytes != applicationMetrics.sentBytes
+                        || receivedBytes != applicationMetrics.receivedBytes,
+                      "NetworkTransfer summary 与应用聚合指标不一致");
+    }
+
+  std::ofstream output(OutputPath(outputDirectory, "run-summary.json"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 run summary JSON");
+  output << std::setprecision(15)
+         << "{\n"
+         << "  \"simulation_duration_s\": "
+         << simulationDurationSeconds << ",\n"
+         << "  \"wall_clock_s\": " << wallClockSeconds << ",\n"
+         << "  \"mode\": \"" << runMetadata.mode << "\",\n"
+         << "  \"routing_mode\": \"" << runMetadata.routingMode << "\",\n"
+         << "  \"ecmp_hash_seed\": " << runMetadata.ecmpHashSeed << ",\n"
+         << "  \"isl_mtu_bytes\": " << runMetadata.islMtuBytes << ",\n"
+         << "  \"transfer_count\": " << transferSummaries.size() << ",\n"
+         << "  \"declared_application_bytes\": " << declaredBytes << ",\n"
+         << "  \"sent_application_bytes\": " << sentBytes << ",\n"
+         << "  \"received_application_bytes\": " << receivedBytes << ",\n"
+         << "  \"derived_udp_packets\": " << derivedPackets << ",\n"
+         << "  \"flow_monitor_tx_packets\": " << aggregate.txPackets << ",\n"
+         << "  \"flow_monitor_rx_packets\": " << aggregate.rxPackets << ",\n"
+         << "  \"flow_monitor_lost_packets\": "
+         << aggregate.lostPackets << "\n"
+         << "}\n";
+}
+
 } // namespace
 
 Ptr<FlowMonitor>
@@ -298,17 +413,19 @@ InstallSimulationFlowMonitor()
 MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
                                  double simulationDurationSeconds,
                                  double wallClockSeconds,
-                                 const std::string& transportProtocol,
-                                 const TaskApplicationMetrics& applicationMetrics,
+                                 const RunMetadata& runMetadata,
+                                 const ApplicationMetrics& applicationMetrics,
                                  const std::vector<TransferFlowMetadata>& transferFlows,
+                                 const std::vector<TransferSummaryRecord>& transferSummaries,
                                  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
                                  const std::string& outputDirectory)
   : m_monitor(monitor),
     m_simulationDurationSeconds(simulationDurationSeconds),
     m_wallClockSeconds(wallClockSeconds),
-    m_transportProtocol(transportProtocol),
+    m_runMetadata(runMetadata),
     m_applicationMetrics(applicationMetrics),
     m_transferFlows(transferFlows),
+    m_transferSummaries(transferSummaries),
     m_routeEvents(routeEvents),
     m_outputDirectory(outputDirectory)
 {
@@ -328,18 +445,14 @@ MetricsRecorder::Record()
   WriteNetworkMetrics(aggregate, m_outputDirectory);
   WriteNetworkFlowDetails(m_monitor, m_transferFlows, m_outputDirectory);
   WriteEcmpRouteEvents(m_routeEvents, m_outputDirectory);
-
-  std::ofstream output(OutputPath(m_outputDirectory, "task-metrics.json"),
-                       std::ios::out | std::ios::trunc);
-  NS_ABORT_MSG_IF(!output.is_open(), "无法写入任务级指标 JSON");
-  output << std::setprecision(15)
-         << "{\n"
-         << "  \"simulation_duration_s\": " << m_simulationDurationSeconds << ",\n"
-         << "  \"wall_clock_s\": " << m_wallClockSeconds << ",\n"
-         << "  \"transport_protocol\": \"" << m_transportProtocol << "\",\n"
-         << "  \"sink_applications\": " << m_applicationMetrics.sinkApplications << ",\n"
-         << "  \"application_bytes_received\": " << m_applicationMetrics.receivedBytes << "\n"
-         << "}\n";
+  WriteTransferSummaries(m_transferSummaries, m_outputDirectory);
+  WriteRunSummary(aggregate,
+                  m_simulationDurationSeconds,
+                  m_wallClockSeconds,
+                  m_runMetadata,
+                  m_applicationMetrics,
+                  m_transferSummaries,
+                  m_outputDirectory);
 
   std::cout << "[METRICS] Output" << std::endl
             << "  network : "
@@ -348,8 +461,10 @@ MetricsRecorder::Record()
             << OutputPath(m_outputDirectory, "network-flow-details.csv") << std::endl
             << "  ECMP    : "
             << OutputPath(m_outputDirectory, "ecmp-route-events.csv") << std::endl
-            << "  task    : "
-            << OutputPath(m_outputDirectory, "task-metrics.json") << std::endl;
+            << "  transfer: "
+            << OutputPath(m_outputDirectory, "transfer-summary.csv") << std::endl
+            << "  run     : "
+            << OutputPath(m_outputDirectory, "run-summary.json") << std::endl;
 }
 
 } // namespace ns3

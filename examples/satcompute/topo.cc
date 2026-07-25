@@ -23,6 +23,8 @@ SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
   NS_ABORT_MSG_IF(config.routingMode != "global-first"
                     && config.routingMode != "global-hash-per-flow",
                   "未知 routingMode: " << config.routingMode);
+  NS_ABORT_MSG_IF(config.islMtuBytes < 68,
+                  "islMtuBytes 必须至少为 68");
 }
 
 void
@@ -95,6 +97,10 @@ SatelliteTopology::LogSnapshot(const std::string& label,
                                const SatelliteSnapshot& snapshot,
                                const TopologyLinkUpdateSummary& summary) const
 {
+  if (!m_config.logEnabled)
+    {
+      return;
+    }
   std::cout << "[TOPO:" << label << "] @ "
             << Simulator::Now().GetSeconds() << "s" << std::endl
             << "  satellites : " << snapshot.satelliteIds.size() << std::endl
@@ -134,18 +140,22 @@ SatelliteTopology::Initialize()
   NS_ABORT_MSG_IF(initial.links.empty(), "初始快照中没有星间链路");
 
   CreateSatelliteNodes(initial.satelliteIds);
-  m_linkState.reset(new SatelliteLinkState(m_nodes, m_nodeIndexes));
+  m_linkState.reset(
+    new SatelliteLinkState(m_nodes, m_nodeIndexes, m_config.islMtuBytes));
   TopologyLinkUpdateSummary summary = m_linkState->ApplyFullSnapshot(initial.links);
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
-  std::cout << "[TOPO:Plan]" << std::endl
-            << "  directory  : " << m_config.snapshotDirectory << std::endl
-            << "  nodes      : " << schedule.initialNodesFilename << std::endl
-            << "  topology   : " << schedule.initialLinksFilename << std::endl
-            << "  discovered : " << schedule.discoveredSnapshotCount << std::endl
-            << "  selected   : " << schedule.selectedSnapshotCount << std::endl
-            << "  updates    : " << schedule.updates.size() << std::endl
-            << std::endl;
+  if (m_config.logEnabled)
+    {
+      std::cout << "[TOPO:Plan]" << std::endl
+                << "  directory  : " << m_config.snapshotDirectory << std::endl
+                << "  nodes      : " << schedule.initialNodesFilename << std::endl
+                << "  topology   : " << schedule.initialLinksFilename << std::endl
+                << "  discovered : " << schedule.discoveredSnapshotCount << std::endl
+                << "  selected   : " << schedule.selectedSnapshotCount << std::endl
+                << "  updates    : " << schedule.updates.size() << std::endl
+                << std::endl;
+    }
   LogSnapshot("Initial", initial, summary);
 
   for (const auto& update : schedule.updates)

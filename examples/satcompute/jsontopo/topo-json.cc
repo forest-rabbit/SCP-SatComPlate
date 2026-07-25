@@ -221,10 +221,10 @@ ReadSatelliteLinks(const std::string& filename)
   for (const auto& item : links)
     {
       NS_ABORT_MSG_IF(!item.is_object(), "links 数组元素必须是对象: " << filename);
-      uint32_t sourceId = GetRequiredUint32(item, "node1_id", filename);
-      uint32_t destinationId = GetRequiredUint32(item, "node2_id", filename);
-      NS_ABORT_MSG_IF(sourceId == destinationId,
-                      "卫星链路不能连接节点自身: " << sourceId
+      uint32_t node1Id = GetRequiredUint32(item, "node1_id", filename);
+      uint32_t node2Id = GetRequiredUint32(item, "node2_id", filename);
+      NS_ABORT_MSG_IF(node1Id == node2Id,
+                      "卫星链路不能连接节点自身: " << node1Id
                       << "\nfile: " << filename);
       NS_ABORT_MSG_IF(GetRequiredString(item, "type", filename) != "sat",
                       "纯星上拓扑只允许 type=sat: " << filename);
@@ -241,10 +241,10 @@ ReadSatelliteLinks(const std::string& filename)
                         > std::numeric_limits<uint64_t>::max() / 1000u,
                       "link_bandwidth 超出可表示范围: " << filename);
 
+      uint32_t sourceId = std::min(node1Id, node2Id);
+      uint32_t destinationId = std::max(node1Id, node2Id);
       std::pair<uint32_t, uint32_t> key =
-        sourceId < destinationId
-          ? std::make_pair(sourceId, destinationId)
-          : std::make_pair(destinationId, sourceId);
+        std::make_pair(sourceId, destinationId);
       NS_ABORT_MSG_IF(!linkKeys.insert(key).second,
                       "topology 快照包含重复卫星链路: "
                         << key.first << "<->" << key.second
@@ -263,13 +263,9 @@ ReadSatelliteLinks(const std::string& filename)
             parsedLinks.end(),
             [](const SatelliteLink& left, const SatelliteLink& right) {
               const std::pair<uint32_t, uint32_t> leftKey =
-                left.sourceId < left.destinationId
-                  ? std::make_pair(left.sourceId, left.destinationId)
-                  : std::make_pair(left.destinationId, left.sourceId);
+                std::make_pair(left.sourceId, left.destinationId);
               const std::pair<uint32_t, uint32_t> rightKey =
-                right.sourceId < right.destinationId
-                  ? std::make_pair(right.sourceId, right.destinationId)
-                  : std::make_pair(right.destinationId, right.sourceId);
+                std::make_pair(right.sourceId, right.destinationId);
               return leftKey < rightKey;
             });
   return parsedLinks;

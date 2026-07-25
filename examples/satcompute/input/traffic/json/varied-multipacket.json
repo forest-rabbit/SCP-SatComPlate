@@ -1,0 +1,33 @@
+{
+  "schema_version": "0.1",
+  "transfers": [
+    {
+      "transfer_id": 1,
+      "source_node_id": 0,
+      "destination_node_id": 1,
+      "size_bytes": 256001,
+      "arrival_time_ns": 100000000
+    },
+    {
+      "transfer_id": 2,
+      "source_node_id": 1,
+      "destination_node_id": 2,
+      "size_bytes": 597333,
+      "arrival_time_ns": 200000000
+    },
+    {
+      "transfer_id": 3,
+      "source_node_id": 2,
+      "destination_node_id": 3,
+      "size_bytes": 938666,
+      "arrival_time_ns": 300000000
+    },
+    {
+      "transfer_id": 4,
+      "source_node_id": 3,
+      "destination_node_id": 0,
+      "size_bytes": 1279999,
+      "arrival_time_ns": 400000000
+    }
+  ]
+}

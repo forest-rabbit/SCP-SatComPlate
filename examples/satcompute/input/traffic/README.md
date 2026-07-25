@@ -1,6 +1,13 @@
 # 业务流量输入
 
-CSV 仅用于业务需求，不参与拓扑构建。`traffic_matrix(66).csv` 从 xw 原始文件
+本目录统一保存业务输入：
+
+```text
+csv/   临时保留的 legacy 业务矩阵
+json/  NetworkTransfer 逻辑传输输入
+```
+
+CSV 不参与拓扑构建。`csv/traffic_matrix(66).csv` 从 xw 原始文件
 `examples/link-selection/input/traffic/traffic_matrix(324).csv` 机械截取得到：
 
 ```bash
@@ -29,5 +36,6 @@ TCP 不使用该包数限制，仍按
 `accumulated_value × offeredLoad × 1e9 bps` 连续发送。
 当 `--offeredLoad=0` 时，程序不读取业务文件，也不创建客户端流。
 
-JSON 业务输入、逐流发送和 ECMP 尚未在本兼容路径中实现，将作为后续独立
-阶段替换 CSV/UDP 逻辑。
+JSON 每条记录只描述 transfer ID、源卫星、目的卫星、应用字节数和到达时间。
+分包、发送速率、MTU和 UDP 端口由运行参数及程序确定性派生。CSV 本轮仅作
+兼容保留，后续 N0 审查完成后再单独删除。

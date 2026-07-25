@@ -39,7 +39,7 @@ struct ApplicationState
 ApplicationState InstallApplications(const SatComputeConfig& config,
                                      const SatelliteTopology& topology);
 
-TaskApplicationMetrics
+ApplicationMetrics
 CollectApplicationMetrics(const ApplicationState& applications);
 
 } // namespace ns3

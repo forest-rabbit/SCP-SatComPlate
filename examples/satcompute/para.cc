@@ -25,12 +25,15 @@ GetDefaultSatComputeConfig()
   config.topologyDirectory =
     "examples/satcompute/input/topology/json/examples/xw-66sat";
   config.trafficMatrix =
-    "examples/satcompute/input/traffic/traffic_matrix(66).csv";
+    "examples/satcompute/input/traffic/csv/traffic_matrix(66).csv";
   config.transferTrace = "";
   config.outputDirectory = "examples/satcompute/output";
   config.transport = "udp";
   config.routingMode = "global-first";
-  config.transferPacketIntervalNs = 10000000;
+  config.transferLogMode = "summary";
+  config.transferPayloadBytes = 1024;
+  config.transferSendRateBps = 819200;
+  config.islMtuBytes = 1500;
   config.ecmpHashSeed = 1;
   config.simulationDurationSeconds = 110.0;
   config.offeredLoad = 0.0;

@@ -22,8 +22,9 @@ examples/satcompute/
 └── input/
     ├── topology/json/examples/xw-66sat/
     ├── topology/json/tests/diamond-4-*/
-    ├── traffic/
-    └── transfers/
+    └── traffic/
+        ├── csv/          # 临时保留的 legacy 业务矩阵
+        └── json/         # NetworkTransfer 输入
 ```
 
 ## 构建与基本运行
@@ -57,7 +58,10 @@ source .venv/bin/activate
 --transport=<udp|tcp>                  legacy 传输协议
 --trafficMatrix=<file>                 legacy 100×N 行、N 列业务输入
 --transferTrace=<file>                 NetworkTransfer JSON；默认关闭
---transferPacketIntervalNs=<uint64>     全局 transfer 发包间隔；默认 10 ms
+--transferPayloadBytes=<uint32>         每个 UDP 包的应用 payload 上限
+--transferSendRateBps=<uint64>          每条 transfer 的应用发送速率
+--islMtuBytes=<uint16>                  所有 ISL 的 MTU
+--transferLogMode=<summary|verbose|silent>
 --routingMode=<global-first|global-hash-per-flow>
 --ecmpHashSeed=<uint64>                 FNV-1a-64 seed 前缀
 --outputDir=<dir>                       指标输出目录
@@ -79,10 +83,15 @@ NetworkTransfer JSON 的 `schema_version` 必须为 `0.1`。每条记录只含�
 }
 ```
 
-`source_node_id` 和 `destination_node_id` 是外部卫星 ID。JSON 不保存包数、包长、
-发包间隔或 UDP 端口：程序把应用 payload 确定性拆为 1024-byte 包和一个精确
-余量包，目的端口固定为 9000，并按每个源卫星的 `transfer_id` 顺序从 10000
-派生唯一源端口。
+`source_node_id` 和 `destination_node_id` 是外部卫星 ID。JSON 不保存包数、
+包长、发包间隔、MTU、速率或 UDP 端口。程序根据全局 payload cap 自动分包，
+最后一包使用精确余量；发送间隔为
+`ceil(payloadBytes × 8 × 1e9 / transferSendRateBps)` 纳秒。目的端口固定为
+9000，并按每个源卫星的 `transfer_id` 顺序从 10000 派生唯一源端口。
+
+已提交的 `workload-5000-varied.json` 包含 5000 个不同的 `size_bytes`，在
+4096-byte cap 下覆盖 1–20 包。`varied-multipacket.json` 用于验证不同大小的
+5、10、15、20 包传输；不再把“大流量”固定解释为 1 Gbit 或 1 GiB。
 
 ## 路由
 
@@ -100,7 +109,11 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 ./waf --run "satcompute \
   --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=examples/satcompute/input/transfers/diamond-4-static-transfers.json \
+  --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+  --transferPayloadBytes=1024 \
+  --transferSendRateBps=819200 \
+  --islMtuBytes=1500 \
+  --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ecmp-static-a"
@@ -116,9 +129,11 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 - `network-flow-metrics.csv`：所有 IPv4 流的聚合指标；
 - `network-flow-details.csv`：FlowMonitor 五元组与 NetworkTransfer payload 的逐流指标；
 - `ecmp-route-events.csv`：每个 `(route_epoch,node_id,five_tuple)` 的首次选路证据；
-- `task-metrics.json`：兼容保留的运行摘要和应用层接收字节。
+- `transfer-summary.csv`：声明大小、分包、发送、接收和完成时间；
+- `run-summary.json`：运行配置及应用层、FlowMonitor 聚合结果。
 
 拓扑协议见
 [`examples/satcompute/input/topology/json/README.md`](examples/satcompute/input/topology/json/README.md)。
 当前阶段只完成网络传输和确定性 ECMP；任务计算、服务时间、调度、故障、备份和
-恢复语义尚未实现。
+恢复语义尚未实现。64000-byte payload 仅是降低大数据仿真事件数量的可扩展性
+配置，不表示真实卫星网络使用 64 KB 物理帧。

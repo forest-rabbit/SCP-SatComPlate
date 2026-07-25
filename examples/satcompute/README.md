@@ -27,9 +27,12 @@ topologyDir              = examples/satcompute/input/topology/json/examples/xw-6
 simulationDuration       = 110
 offeredLoad              = 0
 transport                = udp
-trafficMatrix            = examples/satcompute/input/traffic/traffic_matrix(66).csv
+trafficMatrix            = examples/satcompute/input/traffic/csv/traffic_matrix(66).csv
 transferTrace            = empty
-transferPacketIntervalNs = 10000000
+transferPayloadBytes     = 1024
+transferSendRateBps      = 819200
+islMtuBytes              = 1500
+transferLogMode          = summary
 routingMode              = global-first
 ecmpHashSeed             = 1
 outputDir                = examples/satcompute/output
@@ -43,7 +46,10 @@ outputDir                = examples/satcompute/output
 - `--transport`：legacy 模式支持 `udp` 或 `tcp`。
 - `--trafficMatrix`：legacy 100×N 行、N 列 CSV，单位 Gbps。
 - `--transferTrace`：可选 NetworkTransfer JSON。
-- `--transferPacketIntervalNs`：所有 transfer 共用的正纳秒间隔。
+- `--transferPayloadBytes`：每个 UDP 应用包的 payload 上限，默认 1024。
+- `--transferSendRateBps`：每条 transfer 的应用发送速率，默认 819200 bps。
+- `--islMtuBytes`：所有当前及后续 ISL 的 MTU，默认 1500。
+- `--transferLogMode`：`summary`、`verbose` 或 `silent`。
 - `--routingMode`：`global-first` 或 `global-hash-per-flow`。
 - `--ecmpHashSeed`：确定性 FNV-1a-64 输入的 64-bit seed 前缀。
 - `--outputDir`：结构化指标目录。
@@ -81,18 +87,26 @@ arrival_time_ns
 `size_bytes` 是不含 UDP/IP/链路 header 的正应用 payload；到达时间必须非负且
 严格早于仿真结束。
 
-程序按 `transfer_id` canonical sort。应用 payload 每包最多 1024 bytes，
-最后一包使用准确余量。第一包在 `arrival_time_ns` 发送，后续包使用全局
-`transferPacketIntervalNs`；最后一次计划发送必须早于 simulation stop。
+程序按 `transfer_id` canonical sort。应用 payload 按全局 cap 分包，最后一包
+使用准确余量。第一包在 `arrival_time_ns` 发送，后续包的间隔由下式确定：
+
+```text
+ceil(transferPayloadBytes × 8 × 1e9 / transferSendRateBps) ns
+```
+
+最后一次计划发送必须早于 simulation stop。
 目的 UDP 端口固定为 9000，同一源卫星的 transfer 按
 `(source_node_id,transfer_id)` 从源端口 10000 顺序派生。JSON 不接受包数、
-包间隔、包长或端口字段。
+包间隔、包长、端口、MTU或速率字段。
+
+要求 `transferPayloadBytes + 28 <= islMtuBytes` 且 payload 不超过 65507，
+因此 NetworkTransfer 不依赖 IPv4 分片。默认配置仍派生 10 ms 间隔。
 
 ## 地址与路由
 
 卫星按外部 `sat_id` 升序映射到 ns-3 节点。service 地址来自
 `172.16.0.0/12` 的 `/32`，ISL 来自 `10.0.0.0/8` 的 `/30`。JSON 中
-`links[]` 的排列不影响地址分配。
+`links[]` 的排列以及 `node1_id/node2_id` 的端点方向都不影响地址分配。
 
 `global-first` 完整使用原生 `Ipv4GlobalRouting` 首条路由。
 `global-hash-per-flow` 只枚举公开可读的 exact service `/32` host routes，
@@ -117,8 +131,11 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/transfers/diamond-4-static-transfers.json \
-  --transferPacketIntervalNs=10000000 \
+  --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+  --transferPayloadBytes=1024 \
+  --transferSendRateBps=819200 \
+  --islMtuBytes=1500 \
+  --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ecmp-static-a"
@@ -127,8 +144,11 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/transfers/diamond-4-static-transfers.json \
-  --transferPacketIntervalNs=10000000 \
+  --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+  --transferPayloadBytes=1024 \
+  --transferSendRateBps=819200 \
+  --islMtuBytes=1500 \
+  --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ecmp-static-b"
@@ -141,8 +161,11 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-dynamic \
   --simulationDuration=6 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/transfers/diamond-4-dynamic-transfers.json \
-  --transferPacketIntervalNs=10000000 \
+  --transferTrace=examples/satcompute/input/traffic/json/diamond-4-dynamic-transfers.json \
+  --transferPayloadBytes=1024 \
+  --transferSendRateBps=819200 \
+  --islMtuBytes=1500 \
+  --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ecmp-dynamic"
@@ -156,12 +179,36 @@ python3 examples/satcompute/tools/check-ecmp-output.py \
 检查器验证静态双支路覆盖、重复输出一致、每条 transfer 的精确 payload，以及
 动态 epoch 的 `2 → 1 → 2` candidates 和恢复后的确定性选择。
 
+## 变长规模输入
+
+`input/traffic/json/workload-5000-varied.json` 由
+`tools/generate-transfer-workload.py` 确定性生成。5000 条记录的
+`size_bytes` 均不同，范围为 1024–81920 bytes；使用 4096-byte cap 时，每条
+transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节。
+
+```bash
+./waf --run "satcompute \
+  --simulationDuration=8 \
+  --transferTrace=examples/satcompute/input/traffic/json/workload-5000-varied.json \
+  --transferPayloadBytes=4096 \
+  --transferSendRateBps=100000000 \
+  --islMtuBytes=9000 \
+  --transferLogMode=summary \
+  --routingMode=global-hash-per-flow \
+  --outputDir=/tmp/satcompute-workload-5000"
+```
+
+`varied-multipacket.json` 是更小的多包 fixture，在 64000-byte cap 下分别产生
+5、10、15、20 个包。64000-byte payload 仅用于降低大数据仿真的事件数量，
+不宣称真实卫星网络使用 64 KB 物理帧。
+
 ## 输出与当前边界
 
 - `network-flow-metrics.csv`：所有 IPv4 FlowMonitor 流的聚合结果；
 - `network-flow-details.csv`：五元组、transfer ID、应用 payload 与逐流 IP 指标；
 - `ecmp-route-events.csv`：每个 epoch、外部卫星 ID 和五元组的首次选择；
-- `task-metrics.json`：兼容保留的运行摘要及应用层接收字节。
+- `transfer-summary.csv`：每条逻辑 transfer 的声明大小、分包、收发和完成时间；
+- `run-summary.json`：本次运行及应用层、FlowMonitor 聚合结果。
 
 未匹配 NetworkTransfer 的 legacy FlowMonitor 行使用 `transfer_id=0`。当前尚未
 实现任务计算、服务时间、调度、故障、checkpoint、备份或恢复语义。

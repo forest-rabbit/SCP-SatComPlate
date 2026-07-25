@@ -132,25 +132,54 @@ NetworkTransfer::NetworkTransfer()
     arrivalTimeNs(0),
     sourcePort(0),
     destinationPort(NETWORK_TRANSFER_DESTINATION_PORT),
-    packetIntervalNs(0),
+    payloadBytesPerPacket(0),
+    derivedPacketIntervalNs(0),
     packetCount(0),
     finalPacketPayloadBytes(0),
     lastScheduledSendTimeNs(0)
 {
 }
 
+uint64_t
+DeriveNetworkTransferPacketIntervalNs(uint32_t payloadBytes,
+                                      uint64_t sendRateBps)
+{
+  static const uint64_t nanosecondsPerSecond = 1000000000u;
+  static const uint64_t bitsPerByte = 8u;
+  NS_ABORT_MSG_IF(payloadBytes == 0,
+                  "transferPayloadBytes 必须大于 0");
+  NS_ABORT_MSG_IF(payloadBytes > 65507,
+                  "transferPayloadBytes 不能超过 UDP/IPv4 上限 65507");
+  NS_ABORT_MSG_IF(sendRateBps == 0,
+                  "transferSendRateBps 必须大于 0");
+
+  uint64_t numerator =
+    static_cast<uint64_t>(payloadBytes) * bitsPerByte * nanosecondsPerSecond;
+  uint64_t intervalNs =
+    numerator / sendRateBps + (numerator % sendRateBps == 0 ? 0 : 1);
+  NS_ABORT_MSG_IF(intervalNs == 0,
+                  "派生的 NetworkTransfer packet interval 必须至少为 1 ns");
+  NS_ABORT_MSG_IF(intervalNs
+                    > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
+                  "派生的 NetworkTransfer packet interval 超出 ns-3 Time 范围");
+  return intervalNs;
+}
+
 std::vector<NetworkTransfer>
 ReadNetworkTransferTrace(const std::string& filename,
+                         uint32_t payloadBytes,
                          uint64_t packetIntervalNs,
                          double simulationDurationSeconds,
                          const SatelliteTopology& topology)
 {
   NS_ABORT_MSG_IF(filename.empty(), "NetworkTransfer JSON 路径不能为空");
+  NS_ABORT_MSG_IF(payloadBytes == 0 || payloadBytes > 65507,
+                  "transferPayloadBytes 必须在 1..65507 范围内");
   NS_ABORT_MSG_IF(packetIntervalNs == 0,
-                  "transferPacketIntervalNs 必须大于 0");
+                  "派生的 NetworkTransfer packet interval 必须大于 0");
   NS_ABORT_MSG_IF(packetIntervalNs
                     > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
-                  "transferPacketIntervalNs 超出 ns-3 Time 可表示范围");
+                  "派生的 NetworkTransfer packet interval 超出 ns-3 Time 范围");
 
   int64_t simulationDurationNs =
     Seconds(simulationDurationSeconds).GetNanoSeconds();
@@ -217,15 +246,16 @@ ReadNetworkTransferTrace(const std::string& filename,
         topology.GetServiceAddressBySatelliteId(transfer.sourceSatelliteId);
       transfer.destinationAddress =
         topology.GetServiceAddressBySatelliteId(transfer.destinationSatelliteId);
-      transfer.packetIntervalNs = packetIntervalNs;
+      transfer.payloadBytesPerPacket = payloadBytes;
+      transfer.derivedPacketIntervalNs = packetIntervalNs;
       transfer.packetCount =
-        transfer.sizeBytes / NETWORK_TRANSFER_PAYLOAD_BYTES
-        + (transfer.sizeBytes % NETWORK_TRANSFER_PAYLOAD_BYTES == 0 ? 0 : 1);
+        transfer.sizeBytes / payloadBytes
+        + (transfer.sizeBytes % payloadBytes == 0 ? 0 : 1);
       transfer.finalPacketPayloadBytes =
-        transfer.sizeBytes % NETWORK_TRANSFER_PAYLOAD_BYTES == 0
-          ? NETWORK_TRANSFER_PAYLOAD_BYTES
+        transfer.sizeBytes % payloadBytes == 0
+          ? payloadBytes
           : static_cast<uint32_t>(
-              transfer.sizeBytes % NETWORK_TRANSFER_PAYLOAD_BYTES);
+              transfer.sizeBytes % payloadBytes);
 
       uint64_t intervals = transfer.packetCount - 1;
       NS_ABORT_MSG_IF(
@@ -252,6 +282,8 @@ ReadNetworkTransferTrace(const std::string& filename,
       transfers.push_back(transfer);
     }
 
+  NS_ABORT_MSG_IF(transfers.empty(),
+                  "NetworkTransfer JSON 至少需要一条 transfer: " << filename);
   std::sort(transfers.begin(),
             transfers.end(),
             [](const NetworkTransfer& left, const NetworkTransfer& right) {

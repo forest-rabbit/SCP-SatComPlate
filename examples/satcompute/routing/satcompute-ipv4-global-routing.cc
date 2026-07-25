@@ -269,13 +269,13 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
   flowKey.protocol = header.GetProtocol();
   bool hasFiveTuple = TryExtractFlowKey(packet, header, flowKey);
 
-  DecisionCacheKey cacheKey = {
-    m_routeEpoch,
-    hasFiveTuple,
-    flowKey
-  };
   if (outputInterface == nullptr && hasFiveTuple)
     {
+      DecisionCacheKey cacheKey = {
+        m_routeEpoch,
+        hasFiveTuple,
+        flowKey
+      };
       auto cached = m_decisionCache.find(cacheKey);
       if (cached != m_decisionCache.end())
         {
@@ -318,13 +318,19 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
   if (candidates.empty())
     {
       event.selectionReason = "BASE_FALLBACK_NO_HOST_ROUTE";
-      RecordDecision(event);
+      if (outputInterface == nullptr)
+        {
+          RecordDecision(event);
+        }
       return nullptr;
     }
   if (!hasFiveTuple)
     {
       event.selectionReason = "BASE_FALLBACK_NO_FIVE_TUPLE";
-      RecordDecision(event);
+      if (outputInterface == nullptr)
+        {
+          RecordDecision(event);
+        }
       return nullptr;
     }
 
@@ -340,7 +346,10 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
   event.hashValue = hashValue;
   event.selectionReason =
     candidates.size() == 1 ? "SINGLE_CANDIDATE" : "HASH_PER_FLOW";
-  RecordDecision(event);
+  if (outputInterface == nullptr)
+    {
+      RecordDecision(event);
+    }
   handled = true;
   return BuildRoute(selected);
 }

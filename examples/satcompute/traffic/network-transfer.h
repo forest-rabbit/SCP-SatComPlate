@@ -41,14 +41,20 @@ struct NetworkTransferState
 
 NetworkTransferState InstallNetworkTransfers(
   const std::string& filename,
+  uint32_t payloadBytes,
   uint64_t packetIntervalNs,
+  uint16_t islMtuBytes,
+  const std::string& logMode,
   double simulationDurationSeconds,
   const SatelliteTopology& topology);
 
-TaskApplicationMetrics CollectNetworkTransferMetrics(
+ApplicationMetrics CollectNetworkTransferMetrics(
   const NetworkTransferState& state);
 
 std::vector<TransferFlowMetadata> CollectNetworkTransferFlowMetadata(
+  const NetworkTransferState& state);
+
+std::vector<TransferSummaryRecord> CollectNetworkTransferSummaries(
   const NetworkTransferState& state);
 
 } // namespace ns3

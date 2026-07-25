@@ -252,10 +252,10 @@ InstallApplications(const SatComputeConfig& config,
   return state;
 }
 
-TaskApplicationMetrics
+ApplicationMetrics
 CollectApplicationMetrics(const ApplicationState& applications)
 {
-  TaskApplicationMetrics metrics = {};
+  ApplicationMetrics metrics = {};
   metrics.sinkApplications = applications.sinks.size();
   for (const auto& sink : applications.sinks)
     {

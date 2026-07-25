@@ -43,6 +43,7 @@ public:
   uint64_t GetTotalReceivedBytes() const;
   uint64_t GetTransferReceivedBytes(uint64_t transferId) const;
   uint64_t GetTransferReceivedPacketCount(uint64_t transferId) const;
+  int64_t GetTransferCompletionTimeNs(uint64_t transferId) const;
 
 private:
   struct FourTuple
@@ -61,6 +62,8 @@ private:
     uint64_t expectedBytes;
     uint64_t receivedBytes;
     uint64_t receivedPacketCount;
+    int64_t arrivalTimeNs;
+    int64_t completionTimeNs;
   };
 
   void StartApplication() override;

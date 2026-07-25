@@ -19,6 +19,7 @@
 #include "ns3/abort.h"
 #include "ns3/inet-socket-address.h"
 #include "ns3/packet.h"
+#include "ns3/simulator.h"
 #include "ns3/udp-socket-factory.h"
 
 #include <tuple>
@@ -92,7 +93,9 @@ NetworkTransferReceiver::AddExpectedTransfer(
     transfer.transferId,
     transfer.sizeBytes,
     0,
-    0
+    0,
+    transfer.arrivalTimeNs,
+    -1
   };
   NS_ABORT_MSG_IF(!m_receptions.insert(std::make_pair(tuple, reception)).second,
                   "NetworkTransfer receiver 出现重复四元组，transfer_id="
@@ -132,6 +135,21 @@ NetworkTransferReceiver::GetTransferReceivedPacketCount(
     }
   NS_FATAL_ERROR("receiver 不包含 transfer_id=" << transferId);
   return 0;
+}
+
+int64_t
+NetworkTransferReceiver::GetTransferCompletionTimeNs(
+  uint64_t transferId) const
+{
+  for (const auto& item : m_receptions)
+    {
+      if (item.second.transferId == transferId)
+        {
+          return item.second.completionTimeNs;
+        }
+    }
+  NS_FATAL_ERROR("receiver 不包含 transfer_id=" << transferId);
+  return -1;
 }
 
 void
@@ -200,6 +218,18 @@ NetworkTransferReceiver::HandleRead(Ptr<Socket> socket)
       reception->second.receivedBytes += payloadBytes;
       ++reception->second.receivedPacketCount;
       m_totalReceivedBytes += payloadBytes;
+      if (reception->second.receivedBytes == reception->second.expectedBytes)
+        {
+          NS_ABORT_MSG_IF(reception->second.completionTimeNs >= 0,
+                          "NetworkTransfer completion 重复记录，transfer_id="
+                            << reception->second.transferId);
+          reception->second.completionTimeNs =
+            Simulator::Now().GetNanoSeconds();
+          NS_ABORT_MSG_IF(reception->second.completionTimeNs
+                            < reception->second.arrivalTimeNs,
+                          "NetworkTransfer completion 早于 arrival，transfer_id="
+                            << reception->second.transferId);
+        }
     }
 }
 

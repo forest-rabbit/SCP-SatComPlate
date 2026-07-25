@@ -13,10 +13,19 @@
 
 namespace ns3 {
 
-struct TaskApplicationMetrics
+struct ApplicationMetrics
 {
   uint64_t sinkApplications;
+  uint64_t sentBytes;
   uint64_t receivedBytes;
+};
+
+struct RunMetadata
+{
+  std::string mode;
+  std::string routingMode;
+  uint64_t ecmpHashSeed;
+  uint16_t islMtuBytes;
 };
 
 struct TransferFlowMetadata
@@ -31,6 +40,29 @@ struct TransferFlowMetadata
   uint64_t receivedApplicationPayloadBytes;
 };
 
+struct TransferSummaryRecord
+{
+  uint64_t transferId;
+  uint32_t sourceSatelliteId;
+  uint32_t destinationSatelliteId;
+  Ipv4Address sourceAddress;
+  Ipv4Address destinationAddress;
+  uint16_t sourcePort;
+  uint16_t destinationPort;
+  uint64_t declaredSizeBytes;
+  uint32_t payloadBytesPerPacket;
+  uint64_t derivedPacketIntervalNs;
+  uint64_t derivedPacketCount;
+  uint32_t finalPacketPayloadBytes;
+  int64_t arrivalTimeNs;
+  int64_t lastScheduledSendTimeNs;
+  uint64_t sentApplicationBytes;
+  uint64_t receivedApplicationBytes;
+  uint64_t receivedPacketCount;
+  int64_t completionTimeNs;
+  int64_t completionDelayNs;
+};
+
 Ptr<FlowMonitor> InstallSimulationFlowMonitor();
 
 class MetricsRecorder
@@ -39,9 +71,10 @@ public:
   MetricsRecorder(Ptr<FlowMonitor> monitor,
                   double simulationDurationSeconds,
                   double wallClockSeconds,
-                  const std::string& transportProtocol,
-                  const TaskApplicationMetrics& applicationMetrics,
+                  const RunMetadata& runMetadata,
+                  const ApplicationMetrics& applicationMetrics,
                   const std::vector<TransferFlowMetadata>& transferFlows,
+                  const std::vector<TransferSummaryRecord>& transferSummaries,
                   const std::vector<EcmpRouteDecisionEvent>& routeEvents,
                   const std::string& outputDirectory);
 
@@ -51,9 +84,10 @@ private:
   Ptr<FlowMonitor> m_monitor;
   double m_simulationDurationSeconds;
   double m_wallClockSeconds;
-  std::string m_transportProtocol;
-  TaskApplicationMetrics m_applicationMetrics;
+  RunMetadata m_runMetadata;
+  ApplicationMetrics m_applicationMetrics;
   std::vector<TransferFlowMetadata> m_transferFlows;
+  std::vector<TransferSummaryRecord> m_transferSummaries;
   std::vector<EcmpRouteDecisionEvent> m_routeEvents;
   std::string m_outputDirectory;
 };

@@ -21,6 +21,8 @@ struct TopologyConfig
   double simulationDurationSeconds;
   std::string routingMode;
   uint64_t ecmpHashSeed;
+  uint16_t islMtuBytes;
+  bool logEnabled;
 };
 
 class SatelliteTopology

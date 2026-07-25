@@ -137,7 +137,7 @@ NetworkTransferApplication::SendNextPacket()
                     << m_transfer.transferId);
 
   uint32_t payloadBytes = static_cast<uint32_t>(
-    std::min<uint64_t>(NETWORK_TRANSFER_PAYLOAD_BYTES, m_remainingBytes));
+    std::min<uint64_t>(m_transfer.payloadBytesPerPacket, m_remainingBytes));
   int sentBytes = m_socket->Send(Create<Packet>(payloadBytes));
   NS_ABORT_MSG_IF(sentBytes != static_cast<int>(payloadBytes),
                   "NetworkTransfer UDP payload 发送失败，transfer_id="
@@ -157,7 +157,7 @@ NetworkTransferApplication::SendNextPacket()
     }
 
   m_sendEvent = Simulator::Schedule(
-    NanoSeconds(static_cast<int64_t>(m_transfer.packetIntervalNs)),
+    NanoSeconds(static_cast<int64_t>(m_transfer.derivedPacketIntervalNs)),
     &NetworkTransferApplication::SendNextPacket,
     this);
 }

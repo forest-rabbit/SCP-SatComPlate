@@ -27,7 +27,6 @@
 
 namespace ns3 {
 
-static const uint32_t NETWORK_TRANSFER_PAYLOAD_BYTES = 1024;
 static const uint16_t NETWORK_TRANSFER_DESTINATION_PORT = 9000;
 static const uint16_t NETWORK_TRANSFER_FIRST_SOURCE_PORT = 10000;
 
@@ -42,7 +41,8 @@ struct NetworkTransfer
   Ipv4Address destinationAddress;
   uint16_t sourcePort;
   uint16_t destinationPort;
-  uint64_t packetIntervalNs;
+  uint32_t payloadBytesPerPacket;
+  uint64_t derivedPacketIntervalNs;
   uint64_t packetCount;
   uint32_t finalPacketPayloadBytes;
   int64_t lastScheduledSendTimeNs;
@@ -50,8 +50,12 @@ struct NetworkTransfer
   NetworkTransfer();
 };
 
+uint64_t DeriveNetworkTransferPacketIntervalNs(uint32_t payloadBytes,
+                                               uint64_t sendRateBps);
+
 std::vector<NetworkTransfer> ReadNetworkTransferTrace(
   const std::string& filename,
+  uint32_t payloadBytes,
   uint64_t packetIntervalNs,
   double simulationDurationSeconds,
   const SatelliteTopology& topology);

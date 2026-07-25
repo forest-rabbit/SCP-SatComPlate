@@ -1,0 +1,20 @@
+{
+  "nodes": [
+    {
+      "node_id": 70,
+      "node_type": "sat"
+    },
+    {
+      "node_id": 10,
+      "node_type": "sat"
+    },
+    {
+      "node_id": 40,
+      "node_type": "sat"
+    },
+    {
+      "node_id": 25,
+      "node_type": "sat"
+    }
+  ]
+}

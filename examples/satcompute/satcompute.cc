@@ -60,9 +60,18 @@ main(int argc, char* argv[])
   commandLine.AddValue("transferTrace",
                        "Optional NetworkTransfer JSON trace",
                        config.transferTrace);
-  commandLine.AddValue("transferPacketIntervalNs",
-                       "Positive global UDP packet interval for NetworkTransfer",
-                       config.transferPacketIntervalNs);
+  commandLine.AddValue("transferPayloadBytes",
+                       "Maximum UDP application payload per NetworkTransfer packet",
+                       config.transferPayloadBytes);
+  commandLine.AddValue("transferSendRateBps",
+                       "Per-transfer UDP application send rate in bits/s",
+                       config.transferSendRateBps);
+  commandLine.AddValue("islMtuBytes",
+                       "MTU applied to every ISL PointToPointNetDevice",
+                       config.islMtuBytes);
+  commandLine.AddValue("transferLogMode",
+                       "NetworkTransfer logging: summary, verbose, or silent",
+                       config.transferLogMode);
   commandLine.AddValue("routingMode",
                        "Routing mode: global-first or global-hash-per-flow",
                        config.routingMode);
@@ -77,6 +86,12 @@ main(int argc, char* argv[])
   std::transform(config.transport.begin(),
                  config.transport.end(),
                  config.transport.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
+  std::transform(config.transferLogMode.begin(),
+                 config.transferLogMode.end(),
+                 config.transferLogMode.begin(),
                  [](unsigned char character) {
                    return static_cast<char>(std::tolower(character));
                  });
@@ -99,9 +114,29 @@ main(int argc, char* argv[])
       std::cerr << "[RUN:Error] transport must be udp or tcp" << std::endl;
       return EXIT_FAILURE;
     }
-  if (config.transferPacketIntervalNs == 0)
+  if (config.transferPayloadBytes == 0
+      || config.transferPayloadBytes > 65507)
     {
-      std::cerr << "[RUN:Error] transferPacketIntervalNs must be positive"
+      std::cerr << "[RUN:Error] transferPayloadBytes must be in 1..65507"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  if (config.transferSendRateBps == 0)
+    {
+      std::cerr << "[RUN:Error] transferSendRateBps must be positive"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  if (config.islMtuBytes < 68)
+    {
+      std::cerr << "[RUN:Error] islMtuBytes must be in 68..65535"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  if (config.transferPayloadBytes + 28u > config.islMtuBytes)
+    {
+      std::cerr << "[RUN:Error] transferPayloadBytes plus UDP/IPv4 headers "
+                   "must fit islMtuBytes"
                 << std::endl;
       return EXIT_FAILURE;
     }
@@ -125,25 +160,56 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
+  if (config.transferLogMode != "summary"
+      && config.transferLogMode != "verbose"
+      && config.transferLogMode != "silent")
+    {
+      std::cerr << "[RUN:Error] transferLogMode must be summary, verbose, or silent"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
 
-  std::cout << "[RUN]" << std::endl
-            << "  topologyDir       : " << config.topologyDirectory << std::endl
-            << "  simulationDuration: " << config.simulationDurationSeconds << " s"
-            << std::endl
-            << "  offeredLoad       : " << config.offeredLoad << std::endl
-            << "  transport         : " << config.transport << std::endl
-            << "  trafficMatrix     : " << config.trafficMatrix << std::endl
-            << "  transferTrace     : "
-            << (config.transferTrace.empty() ? "(none)" : config.transferTrace)
-            << std::endl
-            << "  transferInterval  : "
-            << config.transferPacketIntervalNs << " ns" << std::endl
-            << "  routingMode       : " << config.routingMode << std::endl
-            << "  ecmpHashSeed      : " << config.ecmpHashSeed << std::endl
-            << "  outputDir         : " << config.outputDirectory << std::endl
-            << "  routing           : SatCompute Ipv4GlobalRouting"
-            << std::endl
-            << std::endl;
+  uint64_t derivedPacketIntervalNs =
+    DeriveNetworkTransferPacketIntervalNs(config.transferPayloadBytes,
+                                          config.transferSendRateBps);
+  bool transferMode = !config.transferTrace.empty();
+  bool silentTransferRun =
+    transferMode && config.transferLogMode == "silent";
+
+  if (!silentTransferRun)
+    {
+      std::cout << "[RUN]" << std::endl
+                << "  mode               : "
+                << (transferMode ? "network-transfer" : "legacy-traffic")
+                << std::endl
+                << "  topologyDir        : " << config.topologyDirectory << std::endl
+                << "  simulationDuration : "
+                << config.simulationDurationSeconds << " s" << std::endl;
+      if (transferMode)
+        {
+          std::cout << "  transferTrace      : " << config.transferTrace << std::endl
+                    << "  transferPayload    : "
+                    << config.transferPayloadBytes << " bytes" << std::endl
+                    << "  transferSendRate   : "
+                    << config.transferSendRateBps << " bps" << std::endl
+                    << "  derivedInterval    : "
+                    << derivedPacketIntervalNs << " ns" << std::endl
+                    << "  transferLogMode    : "
+                    << config.transferLogMode << std::endl;
+        }
+      else
+        {
+          std::cout << "  trafficMatrix      : " << config.trafficMatrix << std::endl
+                    << "  offeredLoad        : " << config.offeredLoad << std::endl
+                    << "  transport          : " << config.transport << std::endl;
+        }
+      std::cout << "  islMtu             : " << config.islMtuBytes
+                << " bytes" << std::endl
+                << "  routingMode        : " << config.routingMode << std::endl
+                << "  ecmpHashSeed       : " << config.ecmpHashSeed << std::endl
+                << "  outputDir          : " << config.outputDirectory << std::endl
+                << std::endl;
+    }
 
   std::chrono::steady_clock::time_point wallClockStart =
     std::chrono::steady_clock::now();
@@ -152,7 +218,9 @@ main(int argc, char* argv[])
     config.topologyDirectory,
     config.simulationDurationSeconds,
     config.routingMode,
-    config.ecmpHashSeed
+    config.ecmpHashSeed,
+    config.islMtuBytes,
+    !silentTransferRun
   };
   SatelliteTopology topology(topologyConfig);
   topology.Initialize();
@@ -167,7 +235,10 @@ main(int argc, char* argv[])
     {
       networkTransfers =
         InstallNetworkTransfers(config.transferTrace,
-                                config.transferPacketIntervalNs,
+                                config.transferPayloadBytes,
+                                derivedPacketIntervalNs,
+                                config.islMtuBytes,
+                                config.transferLogMode,
                                 config.simulationDurationSeconds,
                                 topology);
     }
@@ -179,10 +250,13 @@ main(int argc, char* argv[])
   double wallClockSeconds =
     std::chrono::duration<double>(std::chrono::steady_clock::now() - wallClockStart)
       .count();
-  std::cout << "[RUN] wall-clock: " << wallClockSeconds << " s"
-            << std::endl << std::endl;
+  if (!silentTransferRun)
+    {
+      std::cout << "[RUN] wall-clock: " << wallClockSeconds << " s"
+                << std::endl << std::endl;
+    }
 
-  TaskApplicationMetrics applicationMetrics =
+  ApplicationMetrics applicationMetrics =
     config.transferTrace.empty()
       ? CollectApplicationMetrics(backgroundApplications)
       : CollectNetworkTransferMetrics(networkTransfers);
@@ -190,12 +264,23 @@ main(int argc, char* argv[])
     config.transferTrace.empty()
       ? std::vector<TransferFlowMetadata>()
       : CollectNetworkTransferFlowMetadata(networkTransfers);
+  std::vector<TransferSummaryRecord> transferSummaries =
+    config.transferTrace.empty()
+      ? std::vector<TransferSummaryRecord>()
+      : CollectNetworkTransferSummaries(networkTransfers);
+  RunMetadata runMetadata = {
+    transferMode ? "network-transfer" : "legacy-traffic",
+    config.routingMode,
+    config.ecmpHashSeed,
+    config.islMtuBytes
+  };
   MetricsRecorder metrics(flowMonitor,
                           config.simulationDurationSeconds,
                           wallClockSeconds,
-                          config.transport,
+                          runMetadata,
                           applicationMetrics,
                           transferFlowMetadata,
+                          transferSummaries,
                           routeRecorder.GetEvents(),
                           config.outputDirectory);
   metrics.Record();
