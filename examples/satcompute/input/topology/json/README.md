@@ -41,9 +41,7 @@ topology_<time>s.json
       "node2_id": 1,
       "type": "sat",
       "delay": 8000,
-      "link_bandwidth": 10000000,
-      "link_load_up": 0,
-      "link_load_down": 0
+      "link_bandwidth": 10000000
     }
   ]
 }
@@ -53,10 +51,9 @@ topology_<time>s.json
 - `type`：必须为 `sat`；
 - `delay`：单向传播时延，单位 µs；
 - `link_bandwidth`：链路带宽，单位 kbps，必须大于 0；
-- `link_load_up`、`link_load_down`：两个方向的链路负载，单位 kbps。
 
-时延和带宽用于 PointToPoint 链路配置。负载字段按旧协议保留并校验，但
-`Ipv4GlobalRouting` 不使用负载参与选路。
+时延和带宽用于 PointToPoint 链路配置。业务负载由独立的流量 CSV 和
+`--offeredLoad` 参数决定，不写入拓扑文件。
 
 同一链路文件中不能重复声明同一条无向 ISL。仓库样例位于
 [`examples/xw-66sat/`](examples/xw-66sat/)。

@@ -18,5 +18,5 @@ topology_{0,10,...,110}s.json   # 每份均为相同的 132 条 ISL
 - 删除所有 cluster 字段；
 - 节点保留 `node_id`、`node_type`；
 - 链路保留 `node1_id`、`node2_id`、`type`、`delay`、
-  `link_bandwidth`、`link_load_up` 和 `link_load_down`；
-- `delay` 使用 µs，带宽与链路负载使用 kbps。
+  `link_bandwidth`；
+- `delay` 使用 µs，带宽使用 kbps。

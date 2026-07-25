@@ -240,9 +240,6 @@ ReadSatelliteLinks(const std::string& filename)
                         > std::numeric_limits<uint64_t>::max() / 1000u,
                       "link_bandwidth 超出可表示范围: " << filename);
 
-      GetRequiredUint64(item, "link_load_up", filename);
-      GetRequiredUint64(item, "link_load_down", filename);
-
       std::pair<uint32_t, uint32_t> key =
         sourceId < destinationId
           ? std::make_pair(sourceId, destinationId)
