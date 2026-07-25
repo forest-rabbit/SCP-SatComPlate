@@ -26,7 +26,7 @@ source .venv/bin/activate
 默认配置：
 
 ```text
-topologyDir       = examples/satcompute/input/topology/json/examples/link_output
+topologyDir       = examples/satcompute/input/topology/json/examples/xw-66sat
 simulationDuration= 120
 linkBandwidth     = 10000000000
 offeredLoad       = 0

@@ -53,4 +53,4 @@ YYYY-MM-DD_HH-MM-SS.json
 ]
 ```
 
-仓库样例位于 [`examples/link_output/`](examples/link_output/)。
+仓库样例位于 [`examples/xw-66sat/`](examples/xw-66sat/)。

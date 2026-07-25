@@ -44,7 +44,7 @@ namespace {
 struct RunConfig
 {
   std::string topologyDirectory =
-    "examples/satcompute/input/topology/json/examples/link_output";
+    "examples/satcompute/input/topology/json/examples/xw-66sat";
   std::string trafficMatrix =
     "examples/satcompute/input/traffic/traffic_matrix(24).csv";
   std::string outputDirectory = "examples/satcompute/output";

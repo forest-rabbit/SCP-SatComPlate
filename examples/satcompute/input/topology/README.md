@@ -3,7 +3,7 @@
 SatCompute 只接受 JSON 卫星全量快照：
 
 ```text
-json/examples/link_output/
+json/examples/xw-66sat/
 ```
 
 CSV 建图、独立 nodes/topology 文件、增量 patch、地面站和 cluster 格式均不再

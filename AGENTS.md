@@ -24,9 +24,8 @@ source .venv/bin/activate
 ./test.py -s devices-point-to-point
 ```
 
-The smoke test must create 24 satellites, load only ISLs, apply the
-60-second and 120-second snapshots, and recompute routes with stock
-`Ipv4GlobalRouting`.
+The smoke test must create 66 satellites, load only ISLs, apply the
+15-second snapshot, and recompute routes with stock `Ipv4GlobalRouting`.
 
 ## Conventions
 

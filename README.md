@@ -17,7 +17,7 @@ examples/satcompute/
 ├── jsontopo/              # JSON 快照解析与链路状态
 ├── metrics/               # FlowMonitor 和应用层指标
 └── input/
-    ├── topology/json/examples/link_output/  # 24 星动态拓扑样例
+    ├── topology/json/examples/xw-66sat/  # xw 66 星动态拓扑样例
     └── traffic/                          # NxN 业务矩阵样例
 ```
 
@@ -31,7 +31,7 @@ source .venv/bin/activate
 
 ## 运行
 
-默认运行 120 秒，读取仓库内的 24 星快照，不注入业务流量：
+默认运行 120 秒，读取仓库内的 xw 66 星快照，不注入业务流量：
 
 ```bash
 ./waf --run satcompute
