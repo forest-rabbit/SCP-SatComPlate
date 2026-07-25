@@ -31,7 +31,7 @@ simulationDuration= 120
 linkBandwidth     = 10000000000
 offeredLoad       = 0
 transport         = udp
-trafficMatrix     = examples/satcompute/input/traffic/traffic_matrix(24).csv
+trafficMatrix     = examples/satcompute/input/traffic/traffic_matrix(66).csv
 outputDir         = examples/satcompute/output
 ```
 
