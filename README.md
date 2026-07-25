@@ -18,7 +18,7 @@ examples/satcompute/
 ├── metrics/               # FlowMonitor 和应用层指标
 └── input/
     ├── topology/json/examples/xw-66sat/  # xw 66 星静态拓扑快照
-    └── traffic/                          # 66 星业务输入
+    └── traffic/                          # 由原 324 星 CSV 派生的 66 星业务输入
 ```
 
 ## 构建
@@ -57,7 +57,7 @@ source .venv/bin/activate
 --simulationDuration=<s>      仿真时长
 --offeredLoad=<double>        业务矩阵倍率；0 表示不创建客户端流
 --transport=<udp|tcp>         业务传输协议
---trafficMatrix=<file>        NxN 业务矩阵
+--trafficMatrix=<file>        100×N 行、N 列的业务输入
 --outputDir=<dir>             指标输出目录
 ```
 

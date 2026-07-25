@@ -41,6 +41,8 @@ NS_LOG_COMPONENT_DEFINE("SatCompute");
 
 namespace {
 
+constexpr uint32_t TRAFFIC_TIME_SLICES = 100;
+
 struct RunConfig
 {
   std::string topologyDirectory =
@@ -64,10 +66,16 @@ ReadTrafficMatrix(const std::string& filename, uint32_t nodeCount)
 {
   std::ifstream input(filename);
   NS_ABORT_MSG_IF(!input.is_open(), "无法打开业务流量矩阵: " << filename);
+  NS_ABORT_MSG_IF(nodeCount == 0, "业务流量矩阵要求至少一个卫星节点");
 
-  std::vector<std::vector<double>> matrix;
+  const uint64_t expectedRows =
+    static_cast<uint64_t>(nodeCount) * TRAFFIC_TIME_SLICES;
+  std::vector<std::vector<double>> matrix(
+    nodeCount,
+    std::vector<double>(nodeCount, 0.0));
   std::string line;
   uint32_t lineNumber = 0;
+  uint64_t rowCount = 0;
   while (std::getline(input, line))
     {
       ++lineNumber;
@@ -110,17 +118,25 @@ ReadTrafficMatrix(const std::string& filename, uint32_t nodeCount)
       NS_ABORT_MSG_IF(row.size() != nodeCount,
                       "流量矩阵第 " << lineNumber << " 行包含 " << row.size()
                       << " 列，期望 " << nodeCount << " 列");
-      matrix.push_back(row);
+      NS_ABORT_MSG_IF(rowCount >= expectedRows,
+                      "流量矩阵非空行数超过 " << expectedRows
+                      << ": " << filename);
+
+      uint32_t source = static_cast<uint32_t>(rowCount % nodeCount);
+      for (uint32_t destination = 0; destination < nodeCount; ++destination)
+        {
+          double accumulated = matrix[source][destination] + row[destination];
+          NS_ABORT_MSG_IF(!std::isfinite(accumulated),
+                          "流量矩阵累计值溢出，源节点下标: " << source
+                          << "，目的节点下标: " << destination);
+          matrix[source][destination] = accumulated;
+        }
+      ++rowCount;
     }
 
-  NS_ABORT_MSG_IF(matrix.size() != nodeCount,
-                  "流量矩阵包含 " << matrix.size()
-                  << " 行，期望 " << nodeCount << " 行");
-  for (uint32_t index = 0; index < nodeCount; ++index)
-    {
-      NS_ABORT_MSG_IF(matrix[index][index] != 0.0,
-                      "流量矩阵对角线必须为 0，节点下标: " << index);
-    }
+  NS_ABORT_MSG_IF(rowCount != expectedRows,
+                  "流量矩阵包含 " << rowCount
+                  << " 个非空行，期望 " << expectedRows << " 行");
   return matrix;
 }
 
@@ -196,6 +212,7 @@ InstallApplications(const RunConfig& config, const SatelliteTopology& topology)
 
   std::cout << "[TRAFFIC]" << std::endl
             << "  matrix  : " << config.trafficMatrix << std::endl
+            << "  slices  : " << TRAFFIC_TIME_SLICES << std::endl
             << "  clients : " << state.clientCount << std::endl
             << std::endl;
   return state;
@@ -234,7 +251,7 @@ main(int argc, char* argv[])
                        "Application transport: udp or tcp",
                        config.transport);
   commandLine.AddValue("trafficMatrix",
-                       "NxN traffic matrix in Gbps",
+                       "100N-row by N-column traffic input in Gbps",
                        config.trafficMatrix);
   commandLine.AddValue("outputDir",
                        "Metrics output directory",
