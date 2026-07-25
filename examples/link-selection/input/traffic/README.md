@@ -6,26 +6,17 @@
 ## 当前默认文件
 
 ```text
-traffic_matrix(324).csv
+traffic_matrix(73).csv
 ```
 
 热点流量模式下（`_trafficMode=0`），程序默认读取：
 
 ```text
-examples/link-selection/input/traffic/traffic_matrix(324).csv
+examples/link-selection/input/traffic/traffic_matrix(73).csv
 ```
 
-客户尺度 JsonTopo 示例应使用：
-
-```text
-traffic_matrix(73).csv
-```
-
-运行时显式指定：
-
-```bash
---trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv
-```
+旧项目的 324 星矩阵超过 GitHub 单文件大小限制，因此不纳入本仓库。若需要运行
+324 星实验，请单独取得对应矩阵，并通过 `--trafficMatrix=<path>` 指定。
 
 ## 后续交付建议
 

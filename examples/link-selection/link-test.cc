@@ -69,7 +69,7 @@ NS_LOG_COMPONENT_DEFINE ("OpenFlowSDNExample");
 ns3::Time timeout = ns3::Seconds (0);
 
 std::string trafficMatrixFile =
-  "examples/link-selection/input/traffic/traffic_matrix(324).csv";
+  "examples/link-selection/input/traffic/traffic_matrix(73).csv";
 std::string metricsOutputDirectory = "examples/link-selection/output";
 std::vector<Ptr<UdpServer>> udpServers;
 std::vector<Ptr<PacketSink>> tcpSinks;
@@ -93,8 +93,8 @@ CollectTaskApplicationMetrics()
 
 void GetData(vector<vector<double>>& data, const int destNum, std::string name)
 {
-  // destNum来自当前实际创建的卫星数量。JSON 66星模式下这里会按66列读取，
-  // 即使当前文件名仍是traffic_matrix(324).csv；其他规模可通过--trafficMatrix指定。
+  // destNum来自当前实际创建的卫星数量。JSON 66星模式下这里会按66列读取；
+  // 其他规模可通过--trafficMatrix指定。
   vector<vector<double>> temp_data(destNum*100, vector<double>(destNum, 0.0));
 	std::ifstream inFile(name, std::ios::in);
 	std::string lineStr;
@@ -335,7 +335,7 @@ void buildApp(){
   vector<vector<double>> data(numNodes, vector<double>(numNodes, 0));
   if(_trafficMode == 0)
   {// 区域热点流量
-    // 默认复用324星流量矩阵，并按实际卫星数截取；可通过--trafficMatrix覆盖。
+    // 默认复用仓库内的73星示例矩阵，并按实际卫星数截取；可通过--trafficMatrix覆盖。
     if(_isSate == 1){
       GetData(data, numNodes, trafficMatrixFile);
     }

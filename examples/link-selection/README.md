@@ -90,7 +90,7 @@ totalTimeStep = 110
 - `--routingMode=<0|1>`：`0=OSPF`，`1=簇内/簇间路由`。
 - `--linkBandwidth=<bps>`：链路带宽；当 JSON 链路未写带宽时作为兜底值。
 - `--tranProtocol=<0|1>`：`0=UDP`，`1=TCP`。
-- `--trafficMatrix=<path>`：业务流量矩阵 CSV 文件，默认读取 `input/traffic/traffic_matrix(324).csv`。
+- `--trafficMatrix=<path>`：业务流量矩阵 CSV 文件，默认读取 `input/traffic/traffic_matrix(73).csv`。
 - `--outputDir=<path>`：指标输出目录，默认 `examples/link-selection/output`。
 - `--writeRoutingTables=<true|false>`：是否输出调试用路由表文件，默认 `false`。
 - `--useJsonTopo=<true|false>`：是否使用 JSON 拓扑，默认 `true` 并读取 `link_output`。
@@ -173,14 +173,14 @@ examples/link-selection/input/topology/json/README.md
 
 ## 5. 流量输入
 
-热点流量模式下（`_trafficMode=0`），程序默认读取：
+热点流量模式下（`_trafficMode=0`），程序默认读取仓库内的客户尺度示例：
 
 ```text
-examples/link-selection/input/traffic/traffic_matrix(324).csv
+examples/link-selection/input/traffic/traffic_matrix(73).csv
 ```
 
-客户尺度 JsonTopo 示例包含 73 颗卫星和 6 个地面站。运行该示例时应显式指定
-`--trafficMatrix=examples/link-selection/input/traffic/traffic_matrix(73).csv`。
+旧项目的 324 星矩阵超过 GitHub 单文件大小限制，不纳入本仓库；需要时请通过
+`--trafficMatrix=<path>` 指向外部数据文件。
 流量数据目录说明见：
 
 ```text
