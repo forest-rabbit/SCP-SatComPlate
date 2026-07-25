@@ -222,7 +222,8 @@ main(int argc, char* argv[])
   RunConfig config;
   CommandLine commandLine;
   commandLine.AddValue("topologyDir",
-                       "Directory containing YYYY-MM-DD_HH-MM-SS.json satellite snapshots",
+                       "Directory containing paired nodes_<time>s.json and "
+                       "topology_<time>s.json snapshots",
                        config.topologyDirectory);
   commandLine.AddValue("simulationDuration",
                        "Simulation duration in seconds",

@@ -3,17 +3,15 @@
 
 #include "topo-data.h"
 
-#include <cstdint>
 #include <string>
 
 namespace ns3 {
 
-SatelliteSnapshot ReadSatelliteSnapshot(const std::string& filename);
+SatelliteSnapshot ReadSatelliteSnapshot(const std::string& nodesFilename,
+                                        const std::string& linksFilename);
 
 SnapshotSchedule ScanSatelliteSnapshots(const std::string& directory,
                                          double simulationDurationSeconds);
-
-bool TryParseSnapshotTimestamp(const std::string& value, int64_t& timestampSeconds);
 
 } // namespace ns3
 

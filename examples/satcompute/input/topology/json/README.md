@@ -1,56 +1,62 @@
-# 卫星 JSON 全量快照
+# 分离式卫星 JSON 全量快照
 
-## 文件命名与时间
-
-每个文件名必须为：
+本协议参考 xw `customer-jsontopo-v2.1`。每个时间片必须同时提供节点文件和
+链路文件：
 
 ```text
-YYYY-MM-DD_HH-MM-SS.json
+nodes_<time>s.json
+topology_<time>s.json
 ```
 
-目录中最早的文件映射为仿真 `0s`，其他文件按与最早文件的真实时间差调度。
-程序只选择 `simulationDuration` 闭区间内的文件。每个文件都是完整 ISL 快照：
-上一快照存在但本快照缺失的链路会被关闭，再次出现时会恢复。
+`<time>` 是相对仿真起点的非负秒数。`nodes_0s.json` 与
+`topology_0s.json` 必须存在；程序按时间升序加载
+`simulationDuration` 闭区间内的完整快照。
 
-所有快照必须列出完全相同的卫星集合，运行期间不新增或删除卫星节点。
+所有节点快照必须列出完全相同的卫星集合。所有链路快照都是完整活跃 ISL
+集合：上一时间片存在、本时间片缺失的链路会被关闭。
 
-## 卫星记录
+## 节点文件
 
 ```json
 {
-  "sat_id": 101
+  "nodes": [
+    {
+      "node_id": 0,
+      "node_type": "sat"
+    }
+  ]
 }
 ```
 
-`sat_id` 是非负且唯一的外部卫星 ID。
+- `node_id`：唯一的非负卫星 ID；
+- `node_type`：必须为 `sat`。
 
-## 星间链路记录
+## 链路文件
 
 ```json
 {
-  "node1_id": 101,
-  "node2_id": 102,
-  "delay": 32.648,
-  "bandwidth_bps": 10000000000
+  "links": [
+    {
+      "node1_id": 0,
+      "node2_id": 1,
+      "type": "sat",
+      "delay": 8000,
+      "link_bandwidth": 10000000,
+      "link_load_up": 0,
+      "link_load_down": 0
+    }
+  ]
 }
 ```
 
-- `node1_id`、`node2_id`：卫星 ID，不能相同；
-- `delay`：单向传播时延，单位 ms，支持小数；
-- `bandwidth_bps`：可选，单位 bps；省略时使用 `--linkBandwidth`。
+- `node1_id`、`node2_id`：配对节点快照中的卫星 ID，不能相同；
+- `type`：必须为 `sat`；
+- `delay`：单向传播时延，单位 µs；
+- `link_bandwidth`：链路带宽，单位 kbps，必须大于 0；
+- `link_load_up`、`link_load_down`：两个方向的链路负载，单位 kbps。
 
-同一快照中不能重复声明同一无向 ISL。
+时延和带宽用于 PointToPoint 链路配置。负载字段按旧协议保留并校验，但
+`Ipv4GlobalRouting` 不使用负载参与选路。
 
-## 完整文件
-
-根节点是数组，卫星记录和 ISL 记录可混排：
-
-```json
-[
-  {"node1_id": 101, "node2_id": 102, "delay": 10.5},
-  {"sat_id": 101},
-  {"sat_id": 102}
-]
-```
-
-仓库样例位于 [`examples/xw-66sat/`](examples/xw-66sat/)。
+同一链路文件中不能重复声明同一条无向 ISL。仓库样例位于
+[`examples/xw-66sat/`](examples/xw-66sat/)。

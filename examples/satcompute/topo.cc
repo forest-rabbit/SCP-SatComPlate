@@ -91,10 +91,12 @@ SatelliteTopology::LogSnapshot(const std::string& label,
 }
 
 void
-SatelliteTopology::ApplyScheduledSnapshot(std::string filename)
+SatelliteTopology::ApplyScheduledSnapshot(std::string nodesFilename,
+                                          std::string linksFilename)
 {
-  SatelliteSnapshot snapshot = ReadSatelliteSnapshot(filename);
-  ValidateSatelliteSet(snapshot, filename);
+  SatelliteSnapshot snapshot =
+    ReadSatelliteSnapshot(nodesFilename, linksFilename);
+  ValidateSatelliteSet(snapshot, nodesFilename);
   TopologyLinkUpdateSummary summary = m_linkState->ApplyFullSnapshot(snapshot.links);
 
   // Use the stock ns-3 global route manager after the complete link snapshot
@@ -109,7 +111,9 @@ SatelliteTopology::Initialize()
   SnapshotSchedule schedule =
     ScanSatelliteSnapshots(m_config.snapshotDirectory,
                            m_config.simulationDurationSeconds);
-  SatelliteSnapshot initial = ReadSatelliteSnapshot(schedule.initialFilename);
+  SatelliteSnapshot initial =
+    ReadSatelliteSnapshot(schedule.initialNodesFilename,
+                          schedule.initialLinksFilename);
   NS_ABORT_MSG_IF(initial.links.empty(), "初始快照中没有星间链路");
 
   CreateSatelliteNodes(initial.satelliteIds);
@@ -121,7 +125,8 @@ SatelliteTopology::Initialize()
 
   std::cout << "[TOPO:Plan]" << std::endl
             << "  directory  : " << m_config.snapshotDirectory << std::endl
-            << "  initial    : " << schedule.initialFilename << std::endl
+            << "  nodes      : " << schedule.initialNodesFilename << std::endl
+            << "  topology   : " << schedule.initialLinksFilename << std::endl
             << "  discovered : " << schedule.discoveredSnapshotCount << std::endl
             << "  selected   : " << schedule.selectedSnapshotCount << std::endl
             << "  updates    : " << schedule.updates.size() << std::endl
@@ -133,7 +138,8 @@ SatelliteTopology::Initialize()
       Simulator::Schedule(Seconds(update.timeSeconds),
                           &SatelliteTopology::ApplyScheduledSnapshot,
                           this,
-                          update.filename);
+                          update.nodesFilename,
+                          update.linksFilename);
     }
 }
 

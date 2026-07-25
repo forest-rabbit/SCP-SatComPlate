@@ -32,7 +32,8 @@ struct SatelliteSnapshot
 struct SnapshotUpdate
 {
   double timeSeconds;
-  std::string filename;
+  std::string nodesFilename;
+  std::string linksFilename;
 
   SnapshotUpdate()
     : timeSeconds(0.0)
@@ -42,7 +43,8 @@ struct SnapshotUpdate
 
 struct SnapshotSchedule
 {
-  std::string initialFilename;
+  std::string initialNodesFilename;
+  std::string initialLinksFilename;
   std::vector<SnapshotUpdate> updates;
   uint32_t discoveredSnapshotCount;
   uint32_t selectedSnapshotCount;

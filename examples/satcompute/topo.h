@@ -38,7 +38,8 @@ private:
   void AssignServiceAddresses();
   void ValidateSatelliteSet(const SatelliteSnapshot& snapshot,
                             const std::string& filename) const;
-  void ApplyScheduledSnapshot(std::string filename);
+  void ApplyScheduledSnapshot(std::string nodesFilename,
+                              std::string linksFilename);
   void LogSnapshot(const std::string& label,
                    const SatelliteSnapshot& snapshot,
                    const TopologyLinkUpdateSummary& summary) const;
