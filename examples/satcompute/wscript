@@ -10,4 +10,5 @@ def build(bld):
         'jsontopo/topo-json.cc',
         'jsontopo/topo-link-state.cc',
         'metrics/metrics.cc',
+        'traffic/background-traffic.cc',
     ]
