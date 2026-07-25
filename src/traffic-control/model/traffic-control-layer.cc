@@ -369,8 +369,8 @@ TrafficControlLayer::Send (Ptr<NetDevice> device, Ptr<QueueDiscItem> item)
 
   NS_ASSERT (!devQueueIface || txq < devQueueIface->GetNTxQueues ());
 
-  // if (ndi == m_netDevices.end () || ndi->second.m_rootQueueDisc == 0)
-  //   {
+  if (ndi == m_netDevices.end () || ndi->second.m_rootQueueDisc == 0)
+    {
       // The device has no attached queue disc, thus add the header to the packet and
       // send it directly to the device if the selected queue is not stopped
       if (!devQueueIface || !devQueueIface->GetTxQueue (txq)->IsStopped ())
@@ -384,18 +384,18 @@ TrafficControlLayer::Send (Ptr<NetDevice> device, Ptr<QueueDiscItem> item)
             }
           device->Send (item->GetPacket (), item->GetAddress (), item->GetProtocol ());
         }
-    // }
-  // else
-  //   {
-  //     // Enqueue the packet in the queue disc associated with the netdevice queue
-  //     // selected for the packet and try to dequeue packets from such queue disc
-  //     item->SetTxQueueIndex (txq);
+    }
+  else
+    {
+      // Enqueue the packet in the queue disc associated with the netdevice queue
+      // selected for the packet and try to dequeue packets from such queue disc
+      item->SetTxQueueIndex (txq);
 
-  //     Ptr<QueueDisc> qDisc = ndi->second.m_queueDiscsToWake[txq];
-  //     NS_ASSERT (qDisc);
-  //     qDisc->Enqueue (item);
-  //     qDisc->Run ();
-  //   }
+      Ptr<QueueDisc> qDisc = ndi->second.m_queueDiscsToWake[txq];
+      NS_ASSERT (qDisc);
+      qDisc->Enqueue (item);
+      qDisc->Run ();
+    }
 }
 
 } // namespace ns3

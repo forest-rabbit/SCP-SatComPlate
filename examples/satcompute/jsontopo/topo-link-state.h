@@ -1,37 +1,63 @@
-#ifndef TOPO_LINK_STATE_H
-#define TOPO_LINK_STATE_H
+#ifndef SATCOMPUTE_TOPO_LINK_STATE_H
+#define SATCOMPUTE_TOPO_LINK_STATE_H
 
 #include "topo-data.h"
+
+#include "ns3/net-device-container.h"
 #include "ns3/node-container.h"
 
 #include <cstdint>
-#include <string>
+#include <map>
+#include <set>
 #include <utility>
 #include <vector>
 
 namespace ns3 {
 
-typedef std::pair<int, int> Link;
-
 struct TopologyLinkUpdateSummary
 {
-  uint32_t desired_links = 0;
-  uint32_t added_links = 0;
-  uint32_t reenabled_links = 0;
-  uint32_t disabled_links = 0;
-  uint32_t unchanged_links = 0;
-  std::string note;
+  uint32_t desiredLinks;
+  uint32_t addedLinks;
+  uint32_t reenabledLinks;
+  uint32_t unchangedLinks;
+  uint32_t disabledLinks;
+
+  TopologyLinkUpdateSummary()
+    : desiredLinks(0),
+      addedLinks(0),
+      reenabledLinks(0),
+      unchangedLinks(0),
+      disabledLinks(0)
+  {
+  }
 };
 
-Link MakeLinkKey(uint32_t first, uint32_t second);
-std::string FormatLinkKey(const Link& link);
-std::string FormatInitialTopologyLinkTypes(const std::vector<LinkInfo>& links);
+class SatelliteLinkState
+{
+public:
+  SatelliteLinkState(const NodeContainer& nodes,
+                     const std::map<uint32_t, uint32_t>& nodeIndexes,
+                     uint64_t defaultBandwidthBps);
 
-std::vector<LinkInfo> ApplyTopologyLinkPatchToState(const TopologyPatchInfo& patch);
-TopologyLinkUpdateSummary KeepCurrentTopologyLinksSummary();
-TopologyLinkUpdateSummary ApplyFullTopologyLinks(NodeContainer& nodes,
-                                                 const std::vector<LinkInfo>& links,
-                                                 bool recomputeRoutes);
+  TopologyLinkUpdateSummary ApplyFullSnapshot(const std::vector<SatelliteLink>& links);
+
+private:
+  typedef std::pair<uint32_t, uint32_t> LinkKey;
+
+  LinkKey MakeKey(uint32_t sourceId, uint32_t destinationId) const;
+  uint32_t ResolveNodeIndex(uint32_t externalId) const;
+  NetDeviceContainer InstallLink(const SatelliteLink& link);
+  void ConfigureLink(const NetDeviceContainer& devices, const SatelliteLink& link) const;
+  void SetLinkState(const NetDeviceContainer& devices, bool isUp) const;
+  void AssignIpv4Addresses(const NetDeviceContainer& devices);
+
+  NodeContainer m_nodes;
+  std::map<uint32_t, uint32_t> m_nodeIndexes;
+  uint64_t m_defaultBandwidthBps;
+  uint32_t m_nextIpv4Network;
+  std::map<LinkKey, NetDeviceContainer> m_installedLinks;
+  std::set<LinkKey> m_activeLinks;
+};
 
 } // namespace ns3
 

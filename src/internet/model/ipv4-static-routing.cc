@@ -624,25 +624,6 @@ Ipv4StaticRouting::NotifyInterfaceDown (uint32_t i)
 }
 
 void 
-Ipv4StaticRouting::NotifySatInterfaceDown (Ptr<Node> node, uint32_t i)
-{
-  NS_LOG_FUNCTION (this << i);
-  // Remove all static routes that are going through this interface
-  for (NetworkRoutesI it = m_networkRoutes.begin (); it != m_networkRoutes.end (); )
-    {
-      if (it->first->GetInterface () == i)
-        {
-          delete it->first;
-          it = m_networkRoutes.erase (it);
-        }
-      else
-        {
-          it++;
-        }
-    }
-}
-
-void 
 Ipv4StaticRouting::NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address)
 {
   NS_LOG_FUNCTION (this << interface << " " << address.GetLocal ());

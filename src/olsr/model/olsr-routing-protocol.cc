@@ -3066,10 +3066,6 @@ RoutingProtocol::NotifyInterfaceDown (uint32_t i)
 {
 }
 void
-RoutingProtocol::NotifySatInterfaceDown (Ptr<Node> node, uint32_t interface)
-{
-}
-void
 RoutingProtocol::NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address)
 {
 }

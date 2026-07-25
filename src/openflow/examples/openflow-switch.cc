@@ -42,7 +42,6 @@
 #include "ns3/applications-module.h"
 #include "ns3/openflow-module.h"
 #include "ns3/log.h"
-#include "ns3/point-to-point-module.h"
 
 using namespace ns3;
 
@@ -112,31 +111,23 @@ main (int argc, char *argv[])
   NodeContainer csmaSwitch;
   csmaSwitch.Create (1);
 
-  NodeContainer p2pSwitch;
-  p2pSwitch.Create (1);
-
   NS_LOG_INFO ("Build Topology");
   CsmaHelper csma;
   csma.SetChannelAttribute ("DataRate", DataRateValue (5000000));
   csma.SetChannelAttribute ("Delay", TimeValue (MilliSeconds (2)));
 
-  // 配置 PointToPoint 信道属性
-  PointToPointHelper pointToPoint;
-  pointToPoint.SetDeviceAttribute ("DataRate", DataRateValue (5000000));
-  pointToPoint.SetChannelAttribute ("Delay", TimeValue (MilliSeconds (2)));
-
-  // Create the p2p links, from each terminal to the switch
+  // Create the csma links, from each terminal to the switch
   NetDeviceContainer terminalDevices;
   NetDeviceContainer switchDevices;
   for (int i = 0; i < 4; i++)
     {
-      NetDeviceContainer link = pointToPoint.Install (NodeContainer (terminals.Get (i), p2pSwitch));
+      NetDeviceContainer link = csma.Install (NodeContainer (terminals.Get (i), csmaSwitch));
       terminalDevices.Add (link.Get (0));
       switchDevices.Add (link.Get (1));
     }
 
   // Create the switch netdevice, which will do the packet switching
-  Ptr<Node> switchNode = p2pSwitch.Get (0);
+  Ptr<Node> switchNode = csmaSwitch.Get (0);
   OpenFlowSwitchHelper swtch;
 
   if (use_drop)
@@ -150,33 +141,6 @@ main (int argc, char *argv[])
       if (!timeout.IsZero ()) controller->SetAttribute ("ExpirationTime", TimeValue (timeout));
       swtch.Install (switchNode, switchDevices, controller);
     }
-
-
-  // // Create the csma links, from each terminal to the switch
-  // NetDeviceContainer terminalDevices;
-  // NetDeviceContainer switchDevices;
-  // for (int i = 0; i < 4; i++)
-  //   {
-  //     NetDeviceContainer link = csma.Install (NodeContainer (terminals.Get (i), csmaSwitch));
-  //     terminalDevices.Add (link.Get (0));
-  //     switchDevices.Add (link.Get (1));
-  //   }
-
-  // // Create the switch netdevice, which will do the packet switching
-  // Ptr<Node> switchNode = csmaSwitch.Get (0);
-  // OpenFlowSwitchHelper swtch;
-
-  // if (use_drop)
-  //   {
-  //     Ptr<ns3::ofi::DropController> controller = CreateObject<ns3::ofi::DropController> ();
-  //     swtch.Install (switchNode, switchDevices, controller);
-  //   }
-  // else
-  //   {
-  //     Ptr<ns3::ofi::LearningController> controller = CreateObject<ns3::ofi::LearningController> ();
-  //     if (!timeout.IsZero ()) controller->SetAttribute ("ExpirationTime", TimeValue (timeout));
-  //     swtch.Install (switchNode, switchDevices, controller);
-  //   }
 
   // Add internet stack to the terminals
   InternetStackHelper internet;

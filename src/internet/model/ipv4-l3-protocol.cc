@@ -44,8 +44,6 @@
 #include "ipv4-interface.h"
 #include "ipv4-raw-socket-impl.h"
 
-#define _rouXW 1
-
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("Ipv4L3Protocol");
@@ -805,30 +803,7 @@ Ipv4L3Protocol::Send (Ptr<Packet> packet,
       // 1b) with a valid gateway
       NS_LOG_LOGIC ("Ipv4L3Protocol::Send case 1b:  passed in with route and valid gateway");
       int32_t interface = GetInterfaceForDevice (route->GetOutputDevice ());
-
-      DTag tag;
-      packet->PeekPacketTag(tag);
-      m_sendOutgoingTrace (ipHeader, packet, interface, tag.GetPrio());
-
-      // if(tag.GetPrio() == 0){
-      //   std::ofstream outFile("output_tag_0.txt", std::ios::app);
-      //   if (!outFile) {
-      //     std::cerr << "无法打开文件!" << std::endl;
-      //   }
-      //   outFile << "Send id:" << packet->GetUid () << "\t";
-      //   tag.Print(outFile);
-      //   outFile.close();
-      // }
-      // else if(tag.GetPrio() == 1) {
-      //   std::ofstream outFile("output_tag_1.txt", std::ios::app);
-      //   if (!outFile) {
-      //     std::cerr << "无法打开文件!" << std::endl;
-      //   }
-      //   outFile << "Send id:" << packet->GetUid () << "\t";
-      //   tag.Print(outFile);
-      //   outFile.close();
-      // }
-
+      m_sendOutgoingTrace (ipHeader, packet, interface);
       SendRealOut (route, packet->Copy (), ipHeader);
       return; 
     }
@@ -1027,19 +1002,6 @@ Ipv4L3Protocol::SendRealOut (Ptr<Ipv4Route> route,
         }
       else
         {
-          if(packet != 0){
-            DTag tag;
-            packet->RemovePacketTag(tag);
-            // std::ofstream outFile("output_tag.txt", std::ios::app);
-            // if (!outFile) {
-            //     std::cerr << "无法打开文件!" << std::endl;
-            // }
-            tag.HopAdd();
-            packet->AddPacketTag(tag);
-            // outFile << "SendRealOut id:" << packet->GetUid () << "\t";
-            // tag.Print(outFile);
-            // outFile.close();
-          }
           CallTxTrace (ipHeader, packet, m_node->GetObject<Ipv4> (), interface);
           outInterface->Send (packet, ipHeader, target);
         }
@@ -1400,12 +1362,7 @@ Ipv4L3Protocol::SetDown (uint32_t ifaceIndex)
 
   if (m_routingProtocol != 0)
     {
-      #ifdef _rouXW
-        Ptr<Node> node = m_node;
-        m_routingProtocol->NotifySatInterfaceDown (node, ifaceIndex);
-      #else
-        m_routingProtocol->NotifyInterfaceDown (ifaceIndex);
-      #endif
+      m_routingProtocol->NotifyInterfaceDown (ifaceIndex);
     }
 }
 

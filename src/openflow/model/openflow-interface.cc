@@ -15,8 +15,6 @@
  *
  * Author: Blake Hurd  <naimorai@gmail.com>
  */
-#include <ns3/ipv4-address.h>
-#include <ns3/mac48-address.h>
 #ifdef NS3_OPENFLOW
 
 #include "openflow-interface.h"
@@ -683,20 +681,6 @@ Controller::AddSwitch (Ptr<OpenFlowSwitchNetDevice> swtch)
 }
 
 void
-Controller::DeleteSwitch (Ptr<OpenFlowSwitchNetDevice> swtch)
-{
-  if (m_switches.find (swtch) != m_switches.end ())
-    {
-      m_switches.erase (swtch);
-      // NS_LOG_INFO ("This Controller has already registered this switch!");
-    }
-  // else
-  //   {
-  //     m_switches.insert (swtch);
-  //   }
-}
-
-void
 Controller::SendToSwitch (Ptr<OpenFlowSwitchNetDevice> swtch, void * msg, size_t length)
 {
   if (m_switches.find (swtch) == m_switches.end ())
@@ -735,20 +719,6 @@ Controller::BuildFlow (sw_flow_key key, uint32_t buffer_id, uint16_t command, vo
   ofm->match.tp_dst = key.flow.tp_dst;                                  // TCP/UDP destination port
   ofm->match.mpls_label1 = key.flow.mpls_label1;                        // Top of label stack htonl(MPLS_INVALID_LABEL);
   ofm->match.mpls_label2 = key.flow.mpls_label1;                        // Second label (if available) htonl(MPLS_INVALID_LABEL);
-
-  Mac48Address src_addr;
-  src_addr.CopyFrom(key.flow.dl_src);
-  Mac48Address dst_addr;
-  dst_addr.CopyFrom(key.flow.dl_dst);
-  Ipv4Address src(htonl(key.flow.nw_src));
-  Ipv4Address dst(htonl(key.flow.nw_dst));
-
-
-  // std::cout << "Ethernet source address " << src_addr
-  //           << " Ethernet dest address " << dst_addr << std::endl
-  //           << "IP source address " << src
-  //           << " IP dest address " << dst << std::endl
-  //           << std::endl;
 
   return ofm;
 }
@@ -1188,46 +1158,6 @@ ValidateVendor (const sw_flow_key *key, const ofp_action_header *ah, uint16_t le
   return ret;
 }
 
-
-// TypeId MasterController::GetTypeId (void)
-// {
-//   static TypeId tid = TypeId ("ns3::ofi::MasterController")
-//     .SetParent<Controller> ()
-//     .SetGroupName ("OpenFlow")
-//     .AddConstructor<MasterController> ()
-//     .AddAttribute("Id",
-//                   "Unique identifier for the MasterController.",
-//                   IntegerValue(0), // 初始值为0，你可以根据需要修改
-//                   MakeIntegerAccessor(&MasterController::m_id), // 使用 m_id 成员变量
-//                   MakeIntegerChecker<int>()) // 检查器，确保是 int 类型的值
-//     .AddAttribute("IsActive",
-//                   "Flag indicating whether the MasterController is a backup master.",
-//                   BooleanValue (true), // 默认值为 true
-//                   MakeBooleanAccessor(&MasterController::m_active), // 使用 m_active 成员变量
-//                   MakeBooleanChecker ()) // 检查器，确保是 bool 类型的值
-//     ;
-//     return tid;
-// }
-
-// TypeId SlaveController::GetTypeId (void)
-// {
-//   static TypeId tid = TypeId ("ns3::ofi::SlaveController")
-//     .SetParent<Controller> ()
-//     .SetGroupName ("OpenFlow")
-//     .AddConstructor<SlaveController> ()
-//     .AddAttribute("Id",
-//                   "Unique identifier for the SlaveController.",
-//                   IntegerValue(0), // 初始值为0，你可以根据需要修改
-//                   MakeIntegerAccessor(&SlaveController::m_id), // 使用 m_id 成员变量
-//                   MakeIntegerChecker<int>()) // 检查器，确保是 int 类型的值
-//     .AddAttribute("IsBackupMaster",
-//                   "Flag indicating whether the SlaveController is a backup MasterController.",
-//                   BooleanValue (false), // 默认值为 false
-//                   MakeBooleanAccessor(&SlaveController::m_backup_master), // 使用 m_backup_master 成员变量
-//                   MakeBooleanChecker ()) // 检查器，确保是 bool 类型的值
-//     ;
-//   return tid;
-// }
 }
 
 }

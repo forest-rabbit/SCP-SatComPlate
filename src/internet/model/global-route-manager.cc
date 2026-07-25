@@ -58,13 +58,6 @@ GlobalRouteManager::InitializeRoutes (void)
   InitializeRoutes ();
 }
 
-void
-GlobalRouteManager::SDNInitializeRoutes (NodeContainer gNodes, NodeContainer sateNodes){
-  NS_LOG_FUNCTION_NOARGS ();
-  SimulationSingleton<GlobalRouteManagerImpl>::Get ()->
-  SDNInitializeRoutes (gNodes, sateNodes);
-}
-
 uint32_t
 GlobalRouteManager::AllocateRouterId (void)
 {

@@ -28,7 +28,6 @@
 #include "point-to-point-net-device.h"
 #include "point-to-point-channel.h"
 #include "ppp-header.h"
-#include <ns3/dtag.h>
 
 namespace ns3 {
 
@@ -58,11 +57,6 @@ PointToPointNetDevice::GetTypeId (void)
                    DataRateValue (DataRate ("32768b/s")),
                    MakeDataRateAccessor (&PointToPointNetDevice::m_bps),
                    MakeDataRateChecker ())
-    .AddAttribute ("DataLoad", 
-                   "The default data load for point to point links",
-                   DataRateValue (DataRate ("32768b/s")),
-                   MakeDataRateAccessor (&PointToPointNetDevice::m_bpsload),
-                   MakeDataRateChecker ())
     .AddAttribute ("ReceiveErrorModel", 
                    "The receiver error model used to simulate packet loss",
                    PointerValue (),
@@ -88,13 +82,6 @@ PointToPointNetDevice::GetTypeId (void)
     // Trace sources at the "top" of the net device, where packets transition
     // to/from higher layers.
     //
-
-    //添加追踪源
-    .AddTraceSource("DeviceTx", 
-                     "Trace source indicating a packet has arrived in device "
-                     "for transmission by this device",
-                     MakeTraceSourceAccessor (&PointToPointNetDevice::m_deviceTxTrace),
-                     "ns3::Packet::TracedCallbackDevice")
     .AddTraceSource ("MacTx", 
                      "Trace source indicating a packet has arrived "
                      "for transmission by this device",
@@ -189,7 +176,7 @@ PointToPointNetDevice::PointToPointNetDevice ()
   :
     m_txMachineState (READY),
     m_channel (0),
-    m_linkUp (true),
+    m_linkUp (false),
     m_currentPkt (0)
 {
   NS_LOG_FUNCTION (this);
@@ -236,31 +223,6 @@ PointToPointNetDevice::SetDataRate (DataRate bps)
 {
   NS_LOG_FUNCTION (this);
   m_bps = bps;
-}
-
-uint64_t
-PointToPointNetDevice::GetDataRate (void)
-{ 
-  NS_LOG_FUNCTION (this);
-  uint64_t bps = m_bps.GetBitRate ();
-  // std::cout << bps << std::endl;
-  return bps;
-}
-
-void
-PointToPointNetDevice::SetDataLoad (DataRate bpsload)
-{
-  NS_LOG_FUNCTION (this);
-  m_bpsload = bpsload;
-}
-
-uint64_t
-PointToPointNetDevice::GetDataLoad (void)
-{ 
-  NS_LOG_FUNCTION (this);
-  uint64_t bps = m_bpsload.GetBitRate ();
-  // std::cout << bps << std::endl;
-  return bps;
 }
 
 void
@@ -317,9 +279,6 @@ PointToPointNetDevice::TransmitComplete (void)
   NS_ASSERT_MSG (m_currentPkt != 0, "PointToPointNetDevice::TransmitComplete(): m_currentPkt zero");
 
   m_phyTxEndTrace (m_currentPkt);
-
-  // m_deviceTxTrace (m_currentPkt, this);
-  
   m_currentPkt = 0;
 
   Ptr<Packet> p = m_queue->Dequeue ();
@@ -400,16 +359,6 @@ PointToPointNetDevice::Receive (Ptr<Packet> packet)
       //
       Ptr<Packet> originalPacket = packet->Copy ();
 
-      m_rxPackets ++;
-      m_rxBytes += originalPacket->GetSize();
-
-      // std::cout << "*******************" << std::endl;
-      // std::cout << "node " << m_node->GetId() << " recvived a msg" << std::endl;
-      // std::cout << "m_rxPackets:" << m_rxPackets << std::endl;
-      // std::cout << "m_rxBytes:" << m_rxBytes << std::endl;
-      // // packet->Print(std::cout);
-      // std::cout << "*******************" << std::endl;
-
       //
       // Strip off the point-to-point protocol header and forward this packet
       // up the protocol stack.  Since this is a simple point-to-point link,
@@ -480,38 +429,6 @@ Address
 PointToPointNetDevice::GetAddress (void) const
 {
   return m_address;
-}
-
-// Set link connect and disconnect
-void
-PointToPointNetDevice::DownTheLink()
-{
-  NS_LOG_FUNCTION (this);
-  if (!m_linkUp)
-    {
-      return;
-    }
-  m_linkUp = false;
-  m_linkChangeCallbacks ();
-}
-
-void
-PointToPointNetDevice::UpTheLink()
-{
-  NS_LOG_FUNCTION (this);
-  if (m_linkUp)
-    {
-      return;
-    }
-  m_linkUp = true;
-  m_linkChangeCallbacks ();
-}
-
-bool
-PointToPointNetDevice::IsSatLinkUp()
-{
-  NS_LOG_FUNCTION (this);
-  return m_linkUp;
 }
 
 bool
@@ -596,17 +513,6 @@ PointToPointNetDevice::Send (
   NS_LOG_LOGIC ("p=" << packet << ", dest=" << &dest);
   NS_LOG_LOGIC ("UID is " << packet->GetUid ());
 
-  // 统计发送的字节数和数据包数
-  m_txBytes += packet->GetSize();
-  m_txPackets++;
-  
-  // std::cout << "*******************" << std::endl;
-  // std::cout << "node " << m_node->GetId() 
-  //           << " send a msg, dest " << Mac48Address::ConvertFrom(dest) 
-  //           << " uid is " << packet->GetUid()
-  //           << std::endl;
-  // std::cout << "*******************" << std::endl;
-
   //
   // If IsLinkUp() is false it means there is no channel to send any packet 
   // over so we just hit the drop trace on the packet and return an error.
@@ -624,9 +530,6 @@ PointToPointNetDevice::Send (
   AddHeader (packet, protocolNumber);
 
   m_macTxTrace (packet);
-
-  //添加回调
-   m_deviceTxTrace(packet, this);
 
   //
   // We should enqueue and dequeue the packet to hit the tracing hooks.
@@ -651,38 +554,6 @@ PointToPointNetDevice::Send (
 
   m_macTxDropTrace (packet);
   return false;
-
-  // DTag tag;
-  // packet->PeekPacketTag(tag);
-
-  // //
-  // // We should enqueue and dequeue the packet to hit the tracing hooks.
-  // //
-  // if(tag.GetPrio() == 0){
-  //   if (!m_ctlQueue->Enqueue (packet)){
-
-  //     // Enqueue may fail (overflow)
-  //     m_macTxDropTrace (packet);
-  //     return false;
-  //   }
-  // }else{
-  //   if (!m_queue->Enqueue (packet)){
-
-  //     // Enqueue may fail (overflow)
-  //     m_macTxDropTrace (packet);
-  //     return false;
-  //   }
-  // }
-
-  // if (m_txMachineState == READY){
-  //   if(!m_ctlQueue->IsEmpty()) packet = m_ctlQueue->Dequeue ();
-  //   else packet = m_queue->Dequeue ();
-  //   m_snifferTrace (packet);
-  //   m_promiscSnifferTrace (packet);
-  //   bool ret = TransmitStart (packet);
-  //   return ret;
-  // }
-  // return true;
 }
 
 bool

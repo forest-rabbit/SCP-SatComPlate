@@ -772,49 +772,6 @@ RoutingProtocol::NotifyInterfaceDown (uint32_t i)
 }
 
 void
-RoutingProtocol::NotifySatInterfaceDown (Ptr<Node> node, uint32_t i)
-{
-  NS_LOG_FUNCTION (this << m_ipv4->GetAddress (i, 0).GetLocal ());
-
-  // Disable layer 2 link state monitoring (if possible)
-  Ptr<Ipv4L3Protocol> l3 = m_ipv4->GetObject<Ipv4L3Protocol> ();
-  Ptr<NetDevice> dev = l3->GetNetDevice (i);
-  Ptr<WifiNetDevice> wifi = dev->GetObject<WifiNetDevice> ();
-  if (wifi != 0)
-    {
-      Ptr<WifiMac> mac = wifi->GetMac ()->GetObject<AdhocWifiMac> ();
-      if (mac != 0)
-        {
-          mac->TraceDisconnectWithoutContext ("TxErrHeader",
-                                              m_nb.GetTxErrorCallback ());
-          m_nb.DelArpCache (l3->GetInterface (i)->GetArpCache ());
-        }
-    }
-
-  // Close socket
-  Ptr<Socket> socket = FindSocketWithInterfaceAddress (m_ipv4->GetAddress (i, 0));
-  NS_ASSERT (socket);
-  socket->Close ();
-  m_socketAddresses.erase (socket);
-
-  // Close socket
-  socket = FindSubnetBroadcastSocketWithInterfaceAddress (m_ipv4->GetAddress (i, 0));
-  NS_ASSERT (socket);
-  socket->Close ();
-  m_socketSubnetBroadcastAddresses.erase (socket);
-
-  if (m_socketAddresses.empty ())
-    {
-      NS_LOG_LOGIC ("No aodv interfaces");
-      m_htimer.Cancel ();
-      m_nb.Clear ();
-      m_routingTable.Clear ();
-      return;
-    }
-  m_routingTable.DeleteAllRoutesFromInterface (m_ipv4->GetAddress (i, 0));
-}
-
-void
 RoutingProtocol::NotifyAddAddress (uint32_t i, Ipv4InterfaceAddress address)
 {
   NS_LOG_FUNCTION (this << " interface " << i << " address " << address);

@@ -34,7 +34,6 @@
 #include "ns3/trace-source-accessor.h"
 #include "ns3/ipv4-packet-info-tag.h"
 #include "ns3/ipv6-packet-info-tag.h"
-#include "ns3/dtag.h"
 #include "udp-socket-impl.h"
 #include "udp-l4-protocol.h"
 #include "ipv4-end-point.h"
@@ -447,19 +446,6 @@ UdpSocketImpl::Send (Ptr<Packet> p, uint32_t flags)
 int 
 UdpSocketImpl::DoSend (Ptr<Packet> p)
 {
-  // if(p != 0){
-  //   DTag tag;
-  //   p->PeekPacketTag(tag);
-  //   std::ofstream outFile("tag_output.txt", std::ios::app);
-  //   if (!outFile) {
-  //       std::cerr << "无法打开文件!" << std::endl;
-  //   }
-  //   if(tag.GetPrio() == 0)  outFile << "CTL SEND id:" << p->GetUid() << "\t";
-  //   else outFile << "DATA SEND id:" << p->GetUid() << "\t";
-  //   tag.Print(outFile);
-  //   outFile.close();
-  // }
-
   NS_LOG_FUNCTION (this << p);
   if ((m_endPoint == 0) && (Ipv4Address::IsMatchingType(m_defaultAddress) == true))
     {
@@ -875,20 +861,6 @@ UdpSocketImpl::RecvFrom (uint32_t maxSize, uint32_t flags,
     {
       p = 0;
     }
-  
-  // if(p != 0){
-  //   DTag tag;
-  //   p->PeekPacketTag(tag);
-  //   std::ofstream outFile("tag_output.txt", std::ios::app);
-  //   if (!outFile) {
-  //       std::cerr << "无法打开文件!" << std::endl;
-  //   }
-  //   if(tag.GetPrio() == 0)  outFile << "CTL RECV id:" << p->GetUid() << "\t";
-  //   else outFile << "DATA RECV id:" << p->GetUid() << "\t";
-  //   tag.Print(outFile);
-  //   outFile.close();
-  // }
-
   return p;
 }
 

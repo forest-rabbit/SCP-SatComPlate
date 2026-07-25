@@ -127,7 +127,8 @@ References
 Usage
 *****
 
-The OFSID requires libxml2 (for MPLS FIB xml file parsing), and libdl (for address fault checking).
+The OFSID requires libxml2 (for MPLS FIB xml file parsing), libdl (for address fault checking),
+and boost (for assert) libraries to be installed.
 
 Building OFSID
 ==============
@@ -229,4 +230,3 @@ Validation
 This model has one test suite which can be run as follows::
 
   $ ./test.py --suite=openflow
-

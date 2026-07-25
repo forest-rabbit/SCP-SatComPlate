@@ -1021,25 +1021,6 @@ RoutingProtocol::NotifyInterfaceDown (uint32_t i)
 }
 
 void
-RoutingProtocol::NotifySatInterfaceDown (Ptr<Node> node, uint32_t i)
-{
-  Ptr<Ipv4L3Protocol> l3 = m_ipv4->GetObject<Ipv4L3Protocol> ();
-  Ptr<NetDevice> dev = l3->GetNetDevice (i);
-  Ptr<Socket> socket = FindSocketWithInterfaceAddress (m_ipv4->GetAddress (i,0));
-  NS_ASSERT (socket);
-  socket->Close ();
-  m_socketAddresses.erase (socket);
-  if (m_socketAddresses.empty ())
-    {
-      NS_LOG_LOGIC ("No dsdv interfaces");
-      m_routingTable.Clear ();
-      return;
-    }
-  m_routingTable.DeleteAllRoutesFromInterface (m_ipv4->GetAddress (i,0));
-  m_advRoutingTable.DeleteAllRoutesFromInterface (m_ipv4->GetAddress (i,0));
-}
-
-void
 RoutingProtocol::NotifyAddAddress (uint32_t i,
                                    Ipv4InterfaceAddress address)
 {

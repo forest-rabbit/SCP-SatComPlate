@@ -1,33 +1,10 @@
-# input/traffic 流量数据说明
+# 业务流量矩阵
 
-本目录用于保存 `satcompute` 的业务流量输入文件。拓扑数据放在 `input/topology/`，
-流量矩阵放在 `input/traffic/`，两类数据不要混放。
+业务矩阵是 NxN CSV，N 必须等于卫星数。行和列均按外部 `sat_id` 数值升序，
+对角线必须为 0，单元值表示 Gbps 需求。
 
-## 当前默认文件
+仓库内的 `traffic_matrix(24).csv` 是与默认 24 星快照配套的稀疏环形业务样例。
+实际发送速率为矩阵值乘以 `--offeredLoad`；当 `--offeredLoad=0` 时，程序不读取
+矩阵，也不创建客户端流。
 
-```text
-traffic_matrix(73).csv
-```
-
-热点流量模式下（`_trafficMode=0`），程序默认读取：
-
-```text
-examples/satcompute/input/traffic/traffic_matrix(73).csv
-```
-
-旧项目的 324 星矩阵超过 GitHub 单文件大小限制，因此不纳入本仓库。若需要运行
-324 星实验，请单独取得对应矩阵，并通过 `--trafficMatrix=<path>` 指定。
-
-## 后续交付建议
-
-如果甲方提供新的星座规模流量矩阵，建议命名为：
-
-```text
-traffic_matrix(<satellite_count>).csv
-```
-
-例如 `traffic_matrix(66).csv`。运行时通过以下参数选择，不需要修改源码：
-
-```bash
---trafficMatrix=examples/satcompute/input/traffic/traffic_matrix(66).csv
-```
+CSV 仅用于业务需求，不参与拓扑构建。

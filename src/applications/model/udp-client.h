@@ -27,13 +27,6 @@
 #include "ns3/event-id.h"
 #include "ns3/ptr.h"
 #include "ns3/ipv4-address.h"
-#include "ns3/dtag.h"
-
-#include "ns3/dtag.h"
-#include "ns3/random-variable-stream.h"
-#include "ns3/internet-module.h"
-
-#include <unordered_set>
 
 namespace ns3 {
 
@@ -72,8 +65,6 @@ public:
    */
   void SetRemote (Address addr);
 
-  void SetNode(Ptr<Node> node);
-
   /**
    * \return the total bytes sent by this app
    */
@@ -99,7 +90,6 @@ private:
   uint32_t m_sent; //!< Counter for sent packets
   uint64_t m_totalTx; //!< Total bytes sent
   Ptr<Socket> m_socket; //!< Socket
-  Ptr<Node> m_node;
   Address m_peerAddress; //!< Remote peer address
   uint16_t m_peerPort; //!< Remote peer port
   EventId m_sendEvent; //!< Event to send the next packet

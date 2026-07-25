@@ -1,8 +1,0 @@
-{
-    "src_node_id": 1,
-    "dst_node_id": 4,
-    "strategy": "hop",
-    "tunnel_id": 100,
-    "guaranteed_bandwidth": 1000,
-    "guaranteed_deley": 100000
-}

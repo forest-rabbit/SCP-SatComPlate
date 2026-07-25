@@ -405,37 +405,6 @@ void Rip::NotifyInterfaceDown (uint32_t interface)
     }
 }
 
-void Rip::NotifySatInterfaceDown (Ptr<Node> node, uint32_t interface)
-{
-  NS_LOG_FUNCTION (this << interface);
-
-  /* remove all routes that are going through this interface */
-  for (RoutesI it = m_routes.begin (); it != m_routes.end (); it++)
-    {
-      if (it->first->GetInterface () == interface)
-        {
-          InvalidateRoute (it->first);
-        }
-    }
-
-  for (SocketListI iter = m_unicastSocketList.begin (); iter != m_unicastSocketList.end (); iter++ )
-    {
-      NS_LOG_INFO ("Checking socket for interface " << interface);
-      if (iter->second == interface)
-        {
-          NS_LOG_INFO ("Removed socket for interface " << interface);
-          iter->first->Close ();
-          m_unicastSocketList.erase (iter);
-          break;
-        }
-    }
-
-  if (m_interfaceExclusions.find (interface) == m_interfaceExclusions.end ())
-    {
-      SendTriggeredRouteUpdate ();
-    }
-}
-
 void Rip::NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address)
 {
   NS_LOG_FUNCTION (this << interface << address);

@@ -18,7 +18,7 @@
  * Authors: George F. Riley<riley@ece.gatech.edu>
  *          Mathieu Lacage <mathieu.lacage@sophia.inria.fr>
  */
- 
+
 #include "node.h"
 #include "node-list.h"
 #include "net-device.h"
@@ -125,16 +125,6 @@ Node::GetSystemId (void) const
   NS_LOG_FUNCTION (this);
   return m_sid;
 }
-
-// void Node::SetBeginId (uint32_t beginID){
-//   NS_LOG_FUNCTION (this);
-//   m_beginID = beginID;
-// }
-
-// uint32_t Node::GetBeginId (void){
-//   NS_LOG_FUNCTION (this);
-//   return m_beginID;
-// }
 
 uint32_t
 Node::AddDevice (Ptr<NetDevice> device)
@@ -376,32 +366,8 @@ Node::NotifyDeviceAdded (Ptr<NetDevice> device)
        i != m_deviceAdditionListeners.end (); i++)
     {
       (*i) (device);
-    }  
+    }
 }
-// //define_by_h
-// Node_Stats::Node_Stats(ns3::Ptr<ns3::NodeContainer> nodes){
-//   flowMonitor = flowMonitorHelper.InstallAll();
-// }
-// void Node_Stats::PrintStats(){
-//           ns3::FlowMonitor::FlowStatsContainer stats = flowMonitor->GetFlowStats();
 
-//         for (auto const& flowStat : stats) {
-//             std::cout << "Flow ID: " << flowStat.first << std::endl;
-//             std::cout << "Source Address: " << flowStat.second.sourceAddress << std::endl;
-//             std::cout << "Destination Address: " << flowStat.second.destinationAddress << std::endl;
-//             std::cout << "Total Packets: " << flowStat.second.txPackets + flowStat.second.rxPackets << std::endl;
-//             std::cout << "TotalBytes: " << flowStat.second.txBytes + flowStat.second.rxBytes << std::endl;
-//             std::cout << "Packet Loss: " << flowStat.second.lostPackets << std::endl;
-//             std::cout << "-------------------------" << std::endl;
-//         }
-// }
-// void TopologyConnectionInfo::addConnection(uint32_t sourceNode, uint32_t destinationNode) {
-//         connections.push_back(std::make_pair(sourceNode, destinationNode));
-//     }
-// void TopologyConnectionInfo::printConnections() {
-//         for (const auto& connection : connections) {
-//             std::cout << "Source Node: " << connection.first << ", Destination Node: " << connection.second << std::endl;
-//         }
-//     }
 
 } // namespace ns3

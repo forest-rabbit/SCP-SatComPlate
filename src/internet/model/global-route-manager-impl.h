@@ -30,9 +30,7 @@
 #include "ns3/object.h"
 #include "ns3/ptr.h"
 #include "ns3/ipv4-address.h"
-#include "ns3/node-container.h"
 #include "global-router-interface.h"
-#include "ns3/point-to-point-module.h"
 
 namespace ns3 {
 
@@ -737,8 +735,6 @@ public:
  */
   virtual void InitializeRoutes ();
 
-  virtual void SDNInitializeRoutes (NodeContainer gNodes, NodeContainer sateNodes);
-  
 /**
  * @brief Debugging routine; allow client code to supply a pre-built LSDB
  */
@@ -950,9 +946,6 @@ private:
    */
   int32_t FindOutgoingInterfaceId (Ipv4Address a, 
                                    Ipv4Mask amask = Ipv4Mask ("255.255.255.255"));
-  
-  Ptr<PointToPointNetDevice> FindPointToPointNetDevice (GlobalRoutingLinkRecord *linkRecord, GlobalRoutingLSA* rlsa) const;
-
 };
 
 } // namespace ns3

@@ -19,7 +19,6 @@
 #ifndef POINT_TO_POINT_NET_DEVICE_H
 #define POINT_TO_POINT_NET_DEVICE_H
 
-#include <cstdint>
 #include <cstring>
 #include "ns3/address.h"
 #include "ns3/node.h"
@@ -31,7 +30,6 @@
 #include "ns3/data-rate.h"
 #include "ns3/ptr.h"
 #include "ns3/mac48-address.h"
-#include "ns3/dtag.h"
 
 namespace ns3 {
 
@@ -64,10 +62,6 @@ class ErrorModel;
 class PointToPointNetDevice : public NetDevice
 {
 public:
-  uint8_t m_rxPackets = 0;
-  uint8_t m_rxBytes = 0;
-  uint8_t m_txPackets = 0;
-  uint8_t m_txBytes = 0;
   /**
    * \brief Get the TypeId
    *
@@ -99,17 +93,6 @@ public:
    * \param bps the data rate at which this object operates
    */
   void SetDataRate (DataRate bps);
-
-  /**
-   * Get a copy of the attached Data Rate.
-   *
-   * \returns the data rate at which this object operates.
-   */
-  uint64_t GetDataRate (void);
-
-  void SetDataLoad (DataRate bpsload);
-
-  uint64_t GetDataLoad (void);
 
   /**
    * Set the interframe gap used to separate packets.  The interframe gap
@@ -179,11 +162,6 @@ public:
   virtual bool SetMtu (const uint16_t mtu);
   virtual uint16_t GetMtu (void) const;
 
-  // define function(link)
-  void DownTheLink ();
-  void UpTheLink();
-  bool IsSatLinkUp();
-  
   virtual bool IsLinkUp (void) const;
 
   virtual void AddLinkChangeCallback (Callback<void> callback);
@@ -322,7 +300,6 @@ private:
    * timing.
    */
   DataRate       m_bps;
-  DataRate       m_bpsload;
 
   /**
    * The interframe gap that the Net Device uses to throttle packet
@@ -355,9 +332,6 @@ private:
    */
   TracedCallback<Ptr<const Packet> > m_macTxTrace;
 
-  //添加回调函数--输入：Packet,P2P
-  TracedCallback<Ptr<const Packet> ,Ptr<const PointToPointNetDevice> > m_deviceTxTrace;
-
   /**
    * The trace source fired when packets coming into the "top" of the device
    * at the L3/L2 transition are dropped before being queued for transmission.
@@ -386,12 +360,6 @@ private:
    * transition).
    */
   TracedCallback<Ptr<const Packet> > m_macRxDropTrace;
-
-  // /**
-  //  * The trace source fired when packets come into the "top" of the device
-  //  * at the L3/L2 transition, before being queued for transmission.
-  //  */
-  // TracedCallback<Ptr<const Packet>, Ptr<const PointToPointNetDevice> > m_deviceTxTrace;
 
   /**
    * The trace source fired when a packet begins the transmission process on

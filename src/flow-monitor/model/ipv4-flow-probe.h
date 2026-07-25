@@ -90,7 +90,7 @@ private:
   /// \param ipHeader IP header
   /// \param ipPayload IP payload
   /// \param interface outgoing interface
-  void SendOutgoingLogger (const Ipv4Header &ipHeader, Ptr<const Packet> ipPayload, uint32_t interface, uint32_t pktPrio);
+  void SendOutgoingLogger (const Ipv4Header &ipHeader, Ptr<const Packet> ipPayload, uint32_t interface);
   /// Log a packet being forwarded
   /// \param ipHeader IP header
   /// \param ipPayload IP payload

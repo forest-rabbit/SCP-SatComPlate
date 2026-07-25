@@ -26,6 +26,7 @@ build/
 build-*/
 **/build/
 **/build-*/
+testpy-output/
 *.o
 *.a
 *.so

@@ -875,12 +875,7 @@ TcpSocketBase::Recv (uint32_t maxSize, uint32_t flags)
   NS_ABORT_MSG_IF (flags, "use of flags is not supported in TcpSocketBase::Recv()");
   if (m_tcb->m_rxBuffer->Size () == 0 && m_state == CLOSE_WAIT)
     {
-      Ptr<Packet> p = Create<Packet> ();
-      DTag ttag;
-      ttag.SetPrio(1);
-      ttag.SetTimestamp(Simulator::Now ());
-      ttag.SetSize(p->GetSize());
-      return p; // Send EOF on connection close
+      return Create<Packet> (); // Send EOF on connection close
     }
   Ptr<Packet> outPacket = m_tcb->m_rxBuffer->Extract (maxSize);
   return outPacket;
@@ -1408,11 +1403,6 @@ TcpSocketBase::DoForwardUp (Ptr<Packet> packet, const Address &fromAddress,
         { // Since m_endPoint is not configured yet, we cannot use SendRST here
           TcpHeader h;
           Ptr<Packet> p = Create<Packet> ();
-          DTag ttag;
-          ttag.SetPrio(1);
-          ttag.SetTimestamp(Simulator::Now ());
-          ttag.SetSize(p->GetSize());
-          p->AddPacketTag(ttag);
           h.SetFlags (TcpHeader::RST);
           h.SetSequenceNumber (m_tcb->m_nextTxSequence);
           h.SetAckNumber (m_tcb->m_rxBuffer->NextRxSequence ());
@@ -2685,12 +2675,6 @@ TcpSocketBase::SendEmptyPacket (uint8_t flags)
   Ptr<Packet> p = Create<Packet> ();
   TcpHeader header;
   SequenceNumber32 s = m_tcb->m_nextTxSequence;
-
-  DTag ttag;
-  ttag.SetPrio(1);
-  ttag.SetTimestamp(Simulator::Now ());
-  ttag.SetSize(p->GetSize());
-  p->AddPacketTag(ttag);
 
   if (flags & TcpHeader::FIN)
     {

@@ -97,7 +97,6 @@ UdpClientHelper::Install (NodeContainer c)
     {
       Ptr<Node> node = *i;
       Ptr<UdpClient> client = m_factory.Create<UdpClient> ();
-      client->SetNode(node);
       node->AddApplication (client);
       apps.Add (client);
     }

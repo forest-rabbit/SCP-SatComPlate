@@ -34,7 +34,6 @@
 #include "ns3/ipv4-routing-protocol.h"
 #include "ns3/nstime.h"
 #include "ns3/simulator.h"
-#include "ns3/dtag.h"
 
 class Ipv4L3ProtocolTestCase;
 
@@ -471,7 +470,7 @@ private:
   Ptr<Node> m_node; //!< Node attached to stack.
 
   /// Trace of sent packets
-  TracedCallback<const Ipv4Header &, Ptr<const Packet>, uint32_t, uint32_t> m_sendOutgoingTrace;
+  TracedCallback<const Ipv4Header &, Ptr<const Packet>, uint32_t> m_sendOutgoingTrace;
   /// Trace of unicast forwarded packets
   TracedCallback<const Ipv4Header &, Ptr<const Packet>, uint32_t> m_unicastForwardTrace;
   /// Trace of multicast forwarded packets

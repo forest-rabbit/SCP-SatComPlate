@@ -110,9 +110,6 @@ public:
     /// forwarded, summed for all received packets in the flow
     uint32_t timesForwarded;
 
-    /// 数据包优先级
-    uint32_t packetPrio;
-
     /// Histogram of the packet delays
     Histogram delayHistogram;
     /// Histogram of the packet jitters
@@ -181,7 +178,7 @@ public:
   /// \param flowId flow identification
   /// \param packetId Packet ID
   /// \param packetSize packet size
-  void ReportFirstTx (Ptr<FlowProbe> probe, FlowId flowId, FlowPacketId packetId, uint32_t packetSize, uint32_t pktPrio);
+  void ReportFirstTx (Ptr<FlowProbe> probe, FlowId flowId, FlowPacketId packetId, uint32_t packetSize);
   /// FlowProbe implementations are supposed to call this method to
   /// report that a known packet is being forwarded.
   /// \param probe the reporting probe

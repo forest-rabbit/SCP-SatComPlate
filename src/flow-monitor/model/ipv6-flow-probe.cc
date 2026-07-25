@@ -266,7 +266,7 @@ Ipv6FlowProbe::SendOutgoingLogger (const Ipv6Header &ipHeader, Ptr<const Packet>
       uint32_t size = (ipPayload->GetSize () + ipHeader.GetSerializedSize ());
       NS_LOG_DEBUG ("ReportFirstTx ("<<this<<", "<<flowId<<", "<<packetId<<", "<<size<<"); "
                                      << ipHeader << *ipPayload);
-      m_flowMonitor->ReportFirstTx (this, flowId, packetId, size, 0);
+      m_flowMonitor->ReportFirstTx (this, flowId, packetId, size);
 
       // tag the packet with the flow id and packet id, so that the packet can be identified even
       // when Ipv6Header is not accessible at some non-IPv6 protocol layer

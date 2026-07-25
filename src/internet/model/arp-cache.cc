@@ -338,18 +338,6 @@ ArpCache::Add (Ipv4Address to)
   return entry;
 }
 
-ArpCache::Entry *
-ArpCache::Add (Ipv4Address to, Mac48Address to_mac){
-  NS_LOG_FUNCTION (this << to);
-  NS_ASSERT (m_arpCache.find (to) == m_arpCache.end ());
-
-  ArpCache::Entry *entry = new ArpCache::Entry (this);
-  m_arpCache[to] = entry;
-  entry->SetIpv4Address (to);
-  entry->SetMacAddress(to_mac);
-  return entry;
-}
-
 void
 ArpCache::Remove (ArpCache::Entry *entry)
 {

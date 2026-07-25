@@ -1,48 +1,42 @@
 # Repository Guidelines
 
+## Scope
+
+SatCompute models satellite nodes and inter-satellite links only. Do not add
+ground stations, feeder links, clusters, CSV topology construction, custom
+intra/inter-cluster routing, SDN routing, or OpenFlow experiments.
+
 ## Project Structure
 
-SatCompute is an ns-3.33-based dynamic satellite-network simulator. The main
-application is `examples/satcompute/satcompute.cc`. Topology construction and
-runtime updates live in `examples/satcompute/topo.cc` and
-`examples/satcompute/jsontopo/`; metrics live in
-`examples/satcompute/metrics/`; experiment defaults live in
-`examples/satcompute/para.cc`. Input examples are under
-`examples/satcompute/input/`. Custom ns-3 clustering code remains a separate
-module under `src/cluster/`.
+The main program is `examples/satcompute/satcompute.cc`. Topology orchestration
+is in `examples/satcompute/topo.cc`; JSON parsing and runtime link state are in
+`examples/satcompute/jsontopo/`; metrics are in
+`examples/satcompute/metrics/`. The committed input is a small, pure-satellite
+example under `examples/satcompute/input/`.
 
-## Build and Run
-
-Use a project-local Python environment when available:
+## Build and Verify
 
 ```bash
 source .venv/bin/activate
 ./waf configure --enable-examples --enable-tests
 ./waf build
-./waf --run "satcompute --routingMode=0 --offeredload=0 --simulationDuration=10 --nodesJson=examples/satcompute/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/satcompute/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/satcompute/input/traffic/traffic_matrix(73).csv"
+./waf --run "satcompute --simulationDuration=120 --offeredLoad=0 --outputDir=/tmp/satcompute-smoke"
+./test.py -s devices-point-to-point
 ```
 
-The smoke test should initialize 73 satellites and 6 ground stations, then
-apply topology updates at 5 and 10 seconds.
+The smoke test must create 24 satellites, load only ISLs, apply the
+60-second and 120-second snapshots, and recompute routes with stock
+`Ipv4GlobalRouting`.
 
-## Code Conventions
+## Conventions
 
-Follow the existing ns-3 C++ style: GNU braces, two-space indentation, no tabs,
-and `.cc`/`.h` filenames. Preserve GPL headers in ns-3 source files. Keep
-JsonTopo snapshots named `nodes_<time>s.json`, `topology_<time>s.json`, or
-`patch_<time>s.json`. Update user-facing paths and commands whenever the
-application entry point or input layout changes.
+Follow ns-3 GNU C++ style: two-space indentation, GNU braces, no tabs, and
+`.cc`/`.h` filenames. Preserve upstream GPL headers. Snapshot filenames must
+use `YYYY-MM-DD_HH-MM-SS.json`; every snapshot is a full ISL snapshot and must
+list the same satellite IDs.
 
-## Verification
+## Generated Data
 
-After simulation or topology changes, run `./waf build` and the customer-scale
-smoke test above. Use `./test.py -s <suite>` or
-`./waf --run "test-runner --suite=<suite>"` for affected ns-3 modules.
-
-## Data and Generated Files
-
-Do not commit `build/`, caches, packet captures, routing-table dumps, metrics,
-or any `output/` directory. The legacy 324-satellite traffic matrix is kept
-outside this repository because it exceeds GitHub's file-size limit; pass its
-path with `--trafficMatrix` when needed. Keep small, intentional examples under
-`examples/satcompute/input/`.
+Do not commit `build/`, caches, packet captures, routing dumps, metrics, or any
+`output/` directory. Keep sample topology and traffic files intentionally
+small.

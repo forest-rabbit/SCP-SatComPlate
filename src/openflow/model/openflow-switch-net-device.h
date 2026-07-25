@@ -43,12 +43,10 @@
 #include "ns3/integer.h"
 #include "ns3/uinteger.h"
 
-// #include <map>
-// #include <set>
+#include <map>
+#include <set>
 
 #include "openflow-interface.h"
-#include "openflow-packet.h"
-#include <cstdint>
 
 namespace ns3 {
 
@@ -123,17 +121,6 @@ public:
    * \param c Pointer to a Controller.
    */
   void SetController (Ptr<ofi::Controller> c);
-
-  /**
-   * \brief Change the Switch's controller connection.
-   *
-   * \param c Pointer to a Controller.
-   */
-  void ChangeController (Ptr<ofi::Controller> c);
-
-  void SetMasterController (Ptr<ofi::Controller> c);
-
-  void DeleteMasterController ();
 
   /**
    * \brief Add a 'port' to a switch device
@@ -259,9 +246,6 @@ public:
   virtual void SetPromiscReceiveCallback (NetDevice::PromiscReceiveCallback cb);
   virtual bool SupportsSendFrom () const;
   virtual Address GetMulticast (Ipv6Address addr) const;
-  // void SDNReceiveCallbackImpl(Ptr<NetDevice> device, Ptr<const Packet> packet, uint16_t protocol, const Address& src);
-  // ofpbuf *LocalDeliver(Ptr<OpenFlowSwitchNetDevice> dest, uint64_t uid);
-  // ofpbuf *AddMetaData(Ptr<Packet> packet, const Address& source, const Address& dest, uint16_t protocolNumber);
 
 protected:
   virtual void DoDispose (void);
@@ -517,7 +501,6 @@ private:
   Ports_t m_ports;                      ///< Switch's ports
 
   Ptr<ofi::Controller> m_controller;    ///< Connection to controller.
-  Ptr<ofi::Controller> m_Mastercontroller;    ///< Connection to controller.
 
   uint64_t m_id;                        ///< Unique identifier for this switch, needed for OpenFlow
   Time m_lookupDelay;                   ///< Flow Table Lookup Delay [overhead].

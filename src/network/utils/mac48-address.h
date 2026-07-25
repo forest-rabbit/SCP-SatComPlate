@@ -136,13 +136,13 @@ public:
    */
   typedef void (* TracedCallback)(Mac48Address value);
 
+private:
   /**
    * \returns a new Address instance
    *
    * Convert an instance of this class to a polymorphic Address instance.
    */
   Address ConvertTo (void) const;
-private:
 
   /**
    * \brief Return the Type of address.

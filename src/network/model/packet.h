@@ -39,8 +39,7 @@ namespace ns3 {
 
 // Forward declaration
 class Address;
-class PointToPointNetDevice;
-class NetDevice;
+
 /**
  * \ingroup network
  * \defgroup packet Packet
@@ -713,21 +712,13 @@ public:
    * \param [in] packet The packet.
    */
   typedef void (* TracedCallback) (Ptr<const Packet> packet);
-
-  /** 
-   * 添加
-   * TraceCallback signaturn for Ptr<Packet> and Ptr<NetDevice>
-   * \param [in] packet The packet.
-   * \param [in] device The device.
-  */
-  typedef void (* TracedCallbackDevice) (Ptr<const Packet> packet, Ptr<const PointToPointNetDevice> device);
   
   /**
    * TracedCallback signature for packet and Address.
    *
    * \param [in] packet The packet.
    * \param [in] address The address.
-   */  
+   */
   typedef void (* AddressTracedCallback)
     (Ptr<const Packet> packet, const Address &address);
   

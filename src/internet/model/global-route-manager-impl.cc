@@ -729,31 +729,6 @@ GlobalRouteManagerImpl::InitializeRoutes ()
   NS_LOG_INFO ("Finished SPF calculation");
 }
 
-void
-GlobalRouteManagerImpl::SDNInitializeRoutes(NodeContainer gNodes, NodeContainer sateNodes)
-{
-  NS_LOG_FUNCTION (this);
-
-  // 将卫星网络与地面网络独立区分
-  // 含有卫星网络到地面网络的路由存放于 m_ofhostRoutes 中
-  for(uint32_t i = 0; i<gNodes.GetN(); i++){
-    Ptr<Node> node = gNodes.Get(i);
-    Ptr<GlobalRouter> rtr = 
-        node->GetObject<GlobalRouter> ();
-    Ptr<Ipv4GlobalRouting> grouting = rtr->GetRoutingProtocol ();
-    grouting->CopyRouteToGSate();
-  }
-
-  for(uint32_t i = 0; i<sateNodes.GetN(); i++){
-    Ptr<Node> node = sateNodes.Get(i);
-    Ptr<GlobalRouter> rtr = 
-        node->GetObject<GlobalRouter> ();
-    Ptr<Ipv4GlobalRouting> grouting = rtr->GetRoutingProtocol ();
-    grouting->ClearGroundRoute(node, gNodes);
-  }
-  NS_LOG_INFO ("Finished SPF calculation");
-}
-
 //
 // This method is derived from quagga ospf_spf_next ().  See RFC2328 Section 
 // 16.1 (2) for further details.
@@ -1274,58 +1249,6 @@ GlobalRouteManagerImpl::DebugSPFCalculate (Ipv4Address root)
   SPFCalculate (root);
 }
 
-Ptr<PointToPointNetDevice> 
-GlobalRouteManagerImpl::FindPointToPointNetDevice (GlobalRoutingLinkRecord *linkRecord, GlobalRoutingLSA* rlsa) const{
-  // Extract the local IP address from the link data
-  Ipv4Address localIp = linkRecord->GetLinkData ();
-
-  Ptr<Node> node = rlsa->GetNode(); // Assuming m_node is a member variable pointing to the current node
-  if (!node)
-    {
-      NS_LOG_WARN ("Node pointer is null");
-      return nullptr;
-    }
-
-  // Iterate through all NetDevices on the node
-  Ptr<NetDevice> netDevice;
-  Ptr<PointToPointNetDevice> p2pDevice;
-  uint32_t nDevices = node->GetNDevices ();
-  for (uint32_t i = 0; i < nDevices; ++i)
-    {
-      netDevice = node->GetDevice (i);
-      p2pDevice = DynamicCast<PointToPointNetDevice> (netDevice);
-      if (p2pDevice)
-        {
-          // Get the IP address associated with this NetDevice
-          Ptr<Ipv4> ipv4 = node->GetObject<Ipv4> ();
-          if (!ipv4)
-            {
-              NS_LOG_WARN ("Ipv4 object not found on node");
-              continue;
-            }
-
-          int32_t interface = ipv4->GetInterfaceForDevice (netDevice);
-          if (interface < 0)
-            {
-              NS_LOG_WARN ("No IPv4 interface found for NetDevice " << i);
-              continue;
-            }
-
-          Ipv4InterfaceAddress ifaceAddress = ipv4->GetAddress (interface, 0);
-          Ipv4Address deviceIp = ifaceAddress.GetLocal ();
-
-          // Match the local IP address
-          if (deviceIp == localIp)
-            {
-              return p2pDevice;
-            }
-        }
-    }
-
-  // If no matching device is found, return nullptr
-  NS_LOG_LOGIC ("No PointToPointNetDevice found matching IP: " << localIp);
-  return nullptr;
-}
 //
 // Used to test if a node is a stub, from an OSPF sense.
 // If there is only one link of type 1 or 2, then a default route
@@ -1392,16 +1315,6 @@ GlobalRouteManagerImpl::CheckForStubNode (Ipv4Address root)
                 {
                   continue;
                 }
-              // // Retrieve the corresponding NetDevice for the link
-              // Ptr<PointToPointNetDevice> p2pDevice = FindPointToPointNetDevice(transitLink, rlsa);
-              
-              // // Check if the device is a PointToPointNetDevice and if the link is up
-              // if (p2pDevice && !p2pDevice->IsSatLinkUp ())
-              //   {
-              //     // If the link is not up, skip this link record
-              //     continue;
-              //   }
-
               // Find the link record that corresponds to our routerId
               if (lr->GetLinkId () == myRouterId)
                 {
@@ -2134,9 +2047,7 @@ GlobalRouteManagerImpl::SPFIntraAddRouter (SPFVertex* v)
                   int32_t outIf = exit.second;
                   if (outIf >= 0)
                     {
-                      // gr->AddHostRouteTo (lr->GetLinkData (), nextHop,
-                      //                     outIf);
-                      gr->AddHostRouteToGSate(lr->GetLinkData (), nextHop,
+                      gr->AddHostRouteTo (lr->GetLinkData (), nextHop,
                                           outIf);
                       NS_LOG_LOGIC ("(Route " << i << ") Node " << node->GetId () <<
                                     " adding host route to " << lr->GetLinkData () <<

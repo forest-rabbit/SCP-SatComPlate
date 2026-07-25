@@ -17,7 +17,6 @@
  *
  */
 #include "tcp-tx-item.h"
-#include <ns3/dtag.h>
 
 namespace ns3 {
 
@@ -80,15 +79,7 @@ TcpTxItem::IsRetrans (void) const
 Ptr<Packet>
 TcpTxItem::GetPacketCopy (void) const
 {
-  Ptr<Packet> ret = m_packet->Copy ();
-  DTag dtag;
-  if(m_packet->PeekPacketTag(dtag)){
-    DTag temp;
-    if(!ret->PeekPacketTag(temp)){
-      ret->AddPacketTag(dtag);
-    }
-  }
-  return ret;
+  return m_packet->Copy ();
 }
 
 Ptr<const Packet>

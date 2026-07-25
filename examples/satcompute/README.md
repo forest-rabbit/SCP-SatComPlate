@@ -1,224 +1,83 @@
-# SatCompute 运行说明（JsonTopo 版本）
+# SatCompute 运行说明
 
-本文件说明 `satcompute` 的构建、运行参数、仿真流程和输出。JsonTopo 文件格式、
-命名规则、字段单位和甲方交付示例统一维护在 `input/topology/json/README.md`，避免多处重复。
+## 执行模型
 
-## 1. 入口文件
+SatCompute 只有一条主流程：
 
-- 主程序：`examples/satcompute/satcompute.cc`
-- 拓扑构建：`examples/satcompute/topo.cc`
-- JsonTopo 模块：`examples/satcompute/jsontopo/`
-- 全局参数：`examples/satcompute/para.cc`
-- waf 目标：`satcompute`
+1. 扫描 `YYYY-MM-DD_HH-MM-SS.json` 全量快照；
+2. 从最早快照创建全部卫星节点；
+3. 创建星间 PointToPoint 链路并分配 `/30` 地址；
+4. 使用 ns-3 `Ipv4GlobalRouting` 生成路由表；
+5. 在后续快照时刻更新 ISL，并统一重算原生全局路由；
+6. 可选地按 NxN 流量矩阵创建 UDP 或 TCP 业务；
+7. 输出 FlowMonitor 和应用层统计。
 
-## 2. 构建与运行
+程序不会创建地面站，不解析 cluster，不支持 CSV 拓扑，也没有自定义路由模式。
 
-以下命令默认在仓库根目录执行。每次打开新终端后，先激活 Python 环境：
+## 构建与运行
 
 ```bash
 source .venv/bin/activate
-```
-
-然后构建并运行。无参数时会直接读取仓库内的 `link_output` 时间序列：
-
-```bash
-./waf build
-./waf --run "satcompute"
-```
-
-默认目录是 `examples/satcompute/input/topology/json/examples/link_output`，
-默认仿真时长是 `110s`。只覆盖仿真时长并关闭业务流时可运行：
-
-```bash
-./waf --run "satcompute --simulationDuration=300 --offeredload=0 --outputDir=/tmp/link-output-smoke"
-```
-
-程序自动把目录中最早的 `2024-01-02_00-00-00.json` 映射为仿真 `0s`。
-
-仓库内置的传统 73 星 6 地面站 JsonTopo 示例也可用于兼容性自检：
-
-```bash
-./waf --run "satcompute --routingMode=0 --offeredload=0 --nodesJson=examples/satcompute/input/topology/json/examples/customer-73sat-6gs/nodes_0s.json --topologyJson=examples/satcompute/input/topology/json/examples/customer-73sat-6gs/topology_0s.json --trafficMatrix=examples/satcompute/input/traffic/traffic_matrix(73).csv"
-```
-
-如果 `build/` 目录不存在，或修改了 waf / wscript / 模块依赖，先重新配置：
-
-```bash
 ./waf configure --enable-examples --enable-tests
 ./waf build
+./waf --run satcompute
 ```
 
-如果没有激活环境，或直接运行 `./waf` 出现 Python 环境相关错误，可以临时使用：
+默认配置：
+
+```text
+topologyDir       = examples/satcompute/input/topology/json/examples/link_output
+simulationDuration= 120
+linkBandwidth     = 10000000000
+offeredLoad       = 0
+transport         = udp
+trafficMatrix     = examples/satcompute/input/traffic/traffic_matrix(24).csv
+outputDir         = examples/satcompute/output
+```
+
+## 参数
+
+- `--topologyDir`：卫星 JSON 全量快照目录。
+- `--simulationDuration`：仿真时长，单位秒，必须大于 0。
+- `--linkBandwidth`：快照未设置带宽时的 ISL 默认带宽，单位 bps。
+- `--offeredLoad`：业务矩阵倍率，必须非负；为 0 时不读取矩阵。
+- `--transport`：`udp` 或 `tcp`。
+- `--trafficMatrix`：与卫星数一致的 NxN CSV 业务矩阵，值的单位为 Gbps。
+- `--outputDir`：结构化指标输出目录。
+
+示例：
 
 ```bash
-PATH="$PWD/.venv/bin:$PATH" ./waf --run "satcompute"
+./waf --run "satcompute \
+  --topologyDir=/path/to/snapshots \
+  --simulationDuration=600 \
+  --linkBandwidth=10000000000 \
+  --offeredLoad=0.001 \
+  --transport=udp \
+  --trafficMatrix=/path/to/traffic.csv \
+  --outputDir=/tmp/satcompute-run"
 ```
 
-若甲方数据位于其他目录，增加 `--linkOutputDir=<目录>` 即可。目录不存在或没有
-`YYYY-MM-DD_HH-MM-SS.json` 文件时，程序会按新格式给出处理提示。
+## 地址与路由
 
-默认参数位于 `para.cc`：
+卫星按外部 `sat_id` 升序映射到 ns-3 节点。每颗卫星获得稳定的
+`172.16.0.0/12` 范围 `/32` 业务地址；每条曾出现的 ISL 获得独立的
+`10.0.0.0/8` 范围 `/30` 网段。
+
+初始建图使用 `PopulateRoutingTables()`，运行期完整快照使用
+`RecomputeRoutingTables()`。链路的消失、恢复和首次出现均支持。
+
+## 业务矩阵
+
+矩阵必须恰好有 N 行 N 列，N 等于卫星数；行列顺序都是 `sat_id` 数值升序。
+对角线必须为 0，其他单元表示源卫星到目的卫星的 Gbps 需求。
+实际发送速率为：
 
 ```text
-_useJsonTopo = true
-_jsonTopoPatchMode = false
-offeredload = 0.0001
-_tranProc = 0  // UDP
-linkBandwidth = 10000000000  // 10Gbps
-totalTimeStep = 110
+matrix_value × offeredLoad × 1e9 bps
 ```
 
-正常输出应包含：
+## 输出
 
-```text
-[RUN] 实验参数
-[TOPO:Init] 开始拓扑初始化
-[TOPO:Nodes] 节点创建完成
-[TOPO:Clusters] 初始簇信息
-[TOPO:Links] 初始链路安装完成
-[TOPO:Plan] JsonTopo 时间片计划 / link_output 时间窗口
-[TOPO:HoldTime] ...
-[TRAFFIC] 读取流量矩阵 / offeredload=0，跳过流量矩阵和客户端创建
-[RUN] Simulation wall-clock cost
-[METRICS] 业务网络流
-[METRICS] 结构化结果
-```
-
-## 3. 命令行参数
-
-- `--offeredload=<double>`：业务负载，快速验证可使用默认值 `0.0001`。
-- `--routingMode=<0|1>`：`0=OSPF`，`1=簇内/簇间路由`。
-- `--linkBandwidth=<bps>`：链路带宽；当 JSON 链路未写带宽时作为兜底值。
-- `--tranProtocol=<0|1>`：`0=UDP`，`1=TCP`。
-- `--trafficMatrix=<path>`：业务流量矩阵 CSV 文件，默认读取 `input/traffic/traffic_matrix(73).csv`。
-- `--outputDir=<path>`：指标输出目录，默认 `examples/satcompute/output`。
-- `--writeRoutingTables=<true|false>`：是否输出调试用路由表文件，默认 `false`。
-- `--useJsonTopo=<true|false>`：是否使用 JSON 拓扑，默认 `true` 并读取 `link_output`。
-- `--jsonTopoPatchMode=<true|false>`：后续时间片格式；`false=全量快照`，`true=增量 patch`。
-- `--nodesJson=<path>`：显式启用传统 JsonTopo 的初始节点 JSON。
-- `--topologyJson=<path>`：显式启用传统 JsonTopo 的初始链路 JSON。
-- `--timeSlicesJson=<path>`：传统 JsonTopo 的可选时间片索引。
-- `--linkOutputDir=<path>`：覆盖默认的甲方绝对时间快照目录。
-- `--simulationDuration=<seconds>`：可选仿真时长，单位秒；不写时默认 `110s`。
-- `--isSate=<1|2|3|4>`：传统拓扑模式使用；JsonTopo 模式下不决定节点数量。
-- `--consType=<0|1>`：传统拓扑模式使用；`0=Walker Star`，`1=Walker Delta`。
-
-示例：运行最小增量 patch 模式：
-
-```bash
-./waf --run "satcompute --offeredload=0 --jsonTopoPatchMode=true --nodesJson=examples/satcompute/input/topology/json/examples/patch/nodes_0s.json --topologyJson=examples/satcompute/input/topology/json/examples/patch/topology_0s.json"
-```
-
-若要自动加载 patch 时间片，请将 `patch_<time>s.json` 放到 `input/topology/json/`；`input/topology/json/examples/` 下的文件只作为格式示例。
-
-示例：指定初始 JsonTopo 文件：
-
-```bash
-./waf --run \
-  "satcompute --nodesJson=examples/satcompute/input/topology/json/nodes_0s.json --topologyJson=examples/satcompute/input/topology/json/topology_0s.json"
-```
-
-## 4. JSON 拓扑数据入口
-
-### 4.1 甲方 link_output 时间序列
-
-无参数运行时，`link_output` 默认目录为：
-
-```text
-examples/satcompute/input/topology/json/examples/link_output
-```
-
-也可以通过 `--linkOutputDir` 指定其他目录。程序严格扫描
-`YYYY-MM-DD_HH-MM-SS.json`，自动选择目录中时间最早的快照作为仿真 `0s`，
-并只选择闭区间 `[最早快照, 最早快照 + simulationDuration]` 内的文件。
-
-最早快照中的 `sat_id` 用于创建任意规模的卫星节点；`feeder` 的非卫星端点自动推导为
-地面站。后续文件作为完整快照处理，缺失链路会被断开。目录即使包含一天约 1440 个文件，
-内存中也只保留时间戳和路径，JSON 内容到对应仿真时间才读取。
-
-新格式的 `delay` 单位是毫秒，`hold_time` 单位是秒。`clusterId=0` 表示卫星
-未分簇，`clusterId=n (n≥1)` 映射到内部簇 `n-1`；地面站按 ID 数值升序依次
-作为簇 0、簇 1……的簇首。
-完整格式见 `input/topology/json/examples/link_output/README.md`。
-
-### 4.2 传统 JsonTopo
-
-传统 JsonTopo 建议数据目录：
-
-```text
-examples/satcompute/input/topology/json/
-```
-
-传统格式不再是无参数默认入口，需要用 `--nodesJson` 和 `--topologyJson`
-显式指定初始化文件。
-
-常规交付只需要遵守文件命名规则，程序会按时间自动加载：
-
-```text
-nodes_0s.json + topology_0s.json            # 必需初始拓扑
-nodes_<time>s.json + topology_<time>s.json  # 全量快照模式
-patch_<time>s.json                          # 增量 patch 模式
-```
-
-建议同一个 `input/topology/json/` 目录一次只放一种运行方案：要么放全量快照文件，要么放 patch 文件。切换方案前先清理另一类后续时间片文件。
-
-全量快照模式下，后续时间片的 `nodes_<time>s.json` 和 `topology_<time>s.json`
-可以只提供发生变化的一类；缺少的节点或链路部分会保持上一状态。
-
-详细规范见：
-
-```text
-examples/satcompute/input/topology/json/README.md
-```
-
-## 5. 流量输入
-
-热点流量模式下（`_trafficMode=0`），程序默认读取仓库内的客户尺度示例：
-
-```text
-examples/satcompute/input/traffic/traffic_matrix(73).csv
-```
-
-旧项目的 324 星矩阵超过 GitHub 单文件大小限制，不纳入本仓库；需要时请通过
-`--trafficMatrix=<path>` 指向外部数据文件。
-流量数据目录说明见：
-
-```text
-examples/satcompute/input/traffic/README.md
-```
-
-JsonTopo 默认全局路由路径会为每个节点分配 `172.16.0.0/12` 范围内的独立 `/32`
-服务地址，地址按外部 `node_id` 排序后稳定映射。业务应用统一监听本地端口 `9`；
-链路 `/30` 地址只用于逐跳传输，不再作为节点业务身份。
-
-当 `--offeredload=0` 时，程序仍安装服务器以保留指标结构，但不会读取流量矩阵、
-分配客户端业务矩阵或创建客户端；此时业务网络流指标为 0 是预期结果。
-
-## 6. 主流程
-
-1. 解析命令行参数并打印关键配置。
-2. 调用 `initTopo()` 创建节点、安装协议栈、创建链路并分配地址。
-3. JsonTopo 模式下加载初始 JSON 拓扑，并按时间片更新节点和链路状态。
-4. 调用 `buildApp()` 安装服务器与客户端应用。
-5. 安装 FlowMonitor，运行仿真到 `totalTimeStep`。
-6. 在 `Simulator::Destroy()` 前调用 `MetricsRecorder` 汇总并写出指标。
-
-## 7. 统计输出
-
-终端会分别输出业务网络流和控制网络流统计。网络流吞吐量统一使用 Mbps，
-测量区间来自实际 flow 首发和末次活动时间。
-
-每次运行还会在 `--outputDir` 下生成：
-
-- `network-flow-metrics.csv`：包数、字节数、真实测量区间、时延、抖动、吞吐量和丢包率。
-- `task-metrics.json`：仿真时长、墙钟时间、传输协议及 UDP/TCP 应用层接收量。
-
-## 8. 传统 CSV 拓扑模式
-
-如果通过 `--useJsonTopo=false` 切回传统拓扑，程序会使用：
-
-```text
-examples/satcompute/input/topology/csv/topo(324).csv
-```
-
-该模式主要保留兼容旧实验流程；当前新增拓扑数据优先使用 JsonTopo。
+- `network-flow-metrics.csv`：原生 FlowMonitor 汇总；
+- `task-metrics.json`：运行配置摘要和所有 PacketSink 的接收字节。

@@ -37,7 +37,6 @@ public:
                     LocalDeliverCallback lcb, ErrorCallback ecb) { return false; }
   void NotifyInterfaceUp (uint32_t interface) {}
   void NotifyInterfaceDown (uint32_t interface) {}
-  void NotifySatInterfaceDown (Ptr<Node> node, uint32_t interface) {}
   void NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address) {}
   void NotifyRemoveAddress (uint32_t interface, Ipv4InterfaceAddress address) {}
   void SetIpv4 (Ptr<Ipv4> ipv4) {}
@@ -58,7 +57,6 @@ public:
                     LocalDeliverCallback lcb, ErrorCallback ecb) { return false; }
   void NotifyInterfaceUp (uint32_t interface) {}
   void NotifyInterfaceDown (uint32_t interface) {}
-  void NotifySatInterfaceDown (Ptr<Node> node, uint32_t interface) {}
   void NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address) {}
   void NotifyRemoveAddress (uint32_t interface, Ipv4InterfaceAddress address) {}
   void SetIpv4 (Ptr<Ipv4> ipv4) {}

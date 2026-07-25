@@ -40,7 +40,6 @@
 #include "ns3/stats-module.h"     // TimeSeriesAdapter
 #include "ns3/uan-module.h"       // UanPhy
 #include "ns3/wifi-phy-state-helper.h"
-#include "ns3/point-to-point-net-device.h"
 
 using namespace ns3;
 
@@ -179,7 +178,6 @@ TYPENAME (Packet::Mac48AddressTracedCallback);
 TYPENAME (Packet::SinrTracedCallback);
 TYPENAME (Packet::SizeTracedCallback);
 TYPENAME (Packet::TracedCallback);
-TYPENAME (Packet::TracedCallbackDevice);//sdfds 
 TYPENAME (PacketBurst::TracedCallback);
 TYPENAME (dot11s::PeerManagementProtocol::LinkOpenCloseTracedCallback);
 TYPENAME (PhyReceptionStatParameters::TracedCallback);
@@ -583,10 +581,6 @@ TracedCallbackTypedefTestCase::DoRun (void)
   CHECK (Packet::TracedCallback,
          Ptr<const Packet>,
          empty, empty, empty, empty);
-////
-  CHECK (Packet::TracedCallbackDevice,
-         Ptr<const Packet>,Ptr<const PointToPointNetDevice>,
-         empty, empty, empty);
 
   CHECK (PacketBurst::TracedCallback,
          Ptr<const PacketBurst>,

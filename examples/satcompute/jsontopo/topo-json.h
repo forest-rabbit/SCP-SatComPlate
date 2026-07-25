@@ -1,99 +1,19 @@
-#ifndef TOPO_JSON_H
-#define TOPO_JSON_H
+#ifndef SATCOMPUTE_TOPO_JSON_H
+#define SATCOMPUTE_TOPO_JSON_H
 
 #include "topo-data.h"
+
 #include <cstdint>
-#include <functional>
 #include <string>
-#include <vector>
 
 namespace ns3 {
 
-// 一个运行期拓扑时间片。可以引用外部nodes/topology文件，也可以直接内嵌nodes/links数组。
-// 目录扫描模式下由文件名生成，例如 nodes_5s.json + topology_5s.json -> time_s=5。
-struct TopologyTimeSlice
-{
-  double time_s;
-  bool is_patch;
-  bool has_nodes_update;
-  bool has_links_update;
-  std::string nodes_file;
-  std::string links_file;
-  std::string patch_file;
-  std::vector<TopologyNodeInfo> nodes;
-  std::vector<LinkInfo> links;
-  TopologyPatchInfo patch;
+SatelliteSnapshot ReadSatelliteSnapshot(const std::string& filename);
 
-  TopologyTimeSlice()
-    : time_s(0.0),
-      is_patch(false),
-      has_nodes_update(false),
-      has_links_update(false)
-  {
-  }
-};
+SnapshotSchedule ScanSatelliteSnapshots(const std::string& directory,
+                                         double simulationDurationSeconds);
 
-// 甲方link_output单文件快照。节点在初始化阶段由首个文件一次性创建；
-// 后续文件只生成已有卫星的簇更新，链路始终按完整快照处理。
-struct LinkOutputSnapshot
-{
-  std::vector<TopologyNodePatch> node_updates;
-  std::vector<LinkInfo> links;
-};
-
-// link_output目录扫描结果。initial_file在仿真0s读取；updates只保存相对时间和路径，
-// 到达对应仿真时间后才读取JSON内容。
-struct LinkOutputSnapshotFile
-{
-  double time_s;
-  std::string snapshot_file;
-
-  LinkOutputSnapshotFile()
-    : time_s(0.0)
-  {
-  }
-};
-
-struct LinkOutputTimeWindow
-{
-  std::string initial_file;
-  std::vector<LinkOutputSnapshotFile> updates;
-  uint32_t discovered_snapshot_count;
-  uint32_t selected_snapshot_count;
-
-  LinkOutputTimeWindow()
-    : discovered_snapshot_count(0),
-      selected_snapshot_count(0)
-  {
-  }
-};
-
-// topo-json只负责解析文件，不直接访问ns-3节点。
-// 解析链路时通过resolver把JSON里的node_id转换为topo.cc中的NodeContainer下标。
-typedef std::function<uint32_t(uint32_t, bool)> TopologyNodeResolver;
-
-std::vector<TopologyNodeInfo> ReadTopologyNodesJsonFile(const std::string& filename);
-std::vector<LinkInfo> ReadTopologyLinksJsonFile(const std::string& filename,
-                                                const TopologyNodeResolver& resolver,
-                                                bool hasExplicitNodeIds);
-TopologyPatchInfo ReadTopologyPatchJsonFile(const std::string& filename,
-                                            const TopologyNodeResolver& resolver,
-                                            bool hasExplicitNodeIds);
-std::vector<TopologyTimeSlice> ReadTopologyTimeSlicesJsonFile(const std::string& filename,
-                                                              const TopologyNodeResolver& resolver,
-                                                              bool hasExplicitNodeIds,
-                                                              bool patchMode);
-// 扫描input/topology/json目录，默认忽略0s文件；0s文件只用于初始化，后续时间片才调度更新。
-std::vector<TopologyTimeSlice> ScanTopologyTimeSlicesDirectory(const std::string& dirname,
-                                                               bool patchMode);
-bool TryParseSecondsFromTimeSliceFilename(const std::string& path, double& seconds);
-
-std::vector<TopologyNodeInfo> ReadLinkOutputInitialNodesJsonFile(const std::string& filename);
-LinkOutputSnapshot ReadLinkOutputSnapshotJsonFile(const std::string& filename,
-                                                  const TopologyNodeResolver& resolver);
-bool TryParseLinkOutputTimestamp(const std::string& value, int64_t& timestampSeconds);
-LinkOutputTimeWindow ScanLinkOutputSnapshotsDirectory(const std::string& dirname,
-                                                      double simulationDuration);
+bool TryParseSnapshotTimestamp(const std::string& value, int64_t& timestampSeconds);
 
 } // namespace ns3
 

@@ -102,10 +102,6 @@ UdpClient::SetRemote (Address addr)
   m_peerAddress = addr;
 }
 
-void UdpClient::SetNode(Ptr<Node> node){
-  m_node = node;
-}
-
 void
 UdpClient::DoDispose (void)
 {
@@ -191,12 +187,6 @@ UdpClient::Send (void)
     {
       peerAddressStringStream << Ipv6Address::ConvertFrom (m_peerAddress);
     }
-    
-  DTag tag;
-  tag.SetPrio(1);
-  tag.SetTimestamp(Simulator::Now());
-  tag.SetSize(p->GetSize());
-  p->AddPacketTag(tag);
 
   if ((m_socket->Send (p)) >= 0)
     {

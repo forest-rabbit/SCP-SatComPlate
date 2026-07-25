@@ -71,13 +71,6 @@ public:
    *
    */
   static void PopulateRoutingTables (void);
-
-  // gNodes：地面网络节点
-  // sateNodes：卫星网络节点
-  static void SDNRoutingTables (NodeContainer gNodes, NodeContainer sateNodes);
-
-  // static uint32_t SDSNCaculateFlow (uint32_t node_id, Ipv4Address dest_addr);
-  
   /**
    * \brief Remove all routes that were previously installed in a prior call
    * to either PopulateRoutingTables() or RecomputeRoutingTables(), and 

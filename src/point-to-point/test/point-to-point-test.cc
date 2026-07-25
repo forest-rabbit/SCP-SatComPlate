@@ -55,56 +55,6 @@ private:
   void SendOnePacket (Ptr<PointToPointNetDevice> device);
 };
 
-class PointToPointLinkStateTest : public TestCase
-{
-public:
-  PointToPointLinkStateTest ();
-  virtual void DoRun (void);
-
-private:
-  void LinkStateChanged ();
-
-  uint32_t m_linkChanges;
-};
-
-PointToPointLinkStateTest::PointToPointLinkStateTest ()
-  : TestCase ("PointToPoint link state changes"),
-    m_linkChanges (0)
-{
-}
-
-void
-PointToPointLinkStateTest::LinkStateChanged ()
-{
-  ++m_linkChanges;
-}
-
-void
-PointToPointLinkStateTest::DoRun (void)
-{
-  Ptr<PointToPointNetDevice> device = CreateObject<PointToPointNetDevice> ();
-  Ptr<PointToPointChannel> channel = CreateObject<PointToPointChannel> ();
-  device->AddLinkChangeCallback (MakeCallback (&PointToPointLinkStateTest::LinkStateChanged, this));
-
-  device->Attach (channel);
-  NS_TEST_ASSERT_MSG_EQ (device->IsLinkUp (), true, "Attaching the channel must bring the link up");
-  NS_TEST_ASSERT_MSG_EQ (m_linkChanges, 1, "Attaching the channel must report one link change");
-
-  device->UpTheLink ();
-  NS_TEST_ASSERT_MSG_EQ (m_linkChanges, 1, "Repeated link-up must not report a state change");
-
-  device->DownTheLink ();
-  NS_TEST_ASSERT_MSG_EQ (device->IsLinkUp (), false, "DownTheLink must bring the link down");
-  NS_TEST_ASSERT_MSG_EQ (m_linkChanges, 2, "Link-down must report one link change");
-
-  device->DownTheLink ();
-  NS_TEST_ASSERT_MSG_EQ (m_linkChanges, 2, "Repeated link-down must not report a state change");
-
-  device->UpTheLink ();
-  NS_TEST_ASSERT_MSG_EQ (device->IsLinkUp (), true, "UpTheLink must bring the link up");
-  NS_TEST_ASSERT_MSG_EQ (m_linkChanges, 3, "Link-up must report one link change");
-}
-
 PointToPointTest::PointToPointTest ()
   : TestCase ("PointToPoint")
 {
@@ -160,7 +110,6 @@ PointToPointTestSuite::PointToPointTestSuite ()
   : TestSuite ("devices-point-to-point", UNIT)
 {
   AddTestCase (new PointToPointTest, TestCase::QUICK);
-  AddTestCase (new PointToPointLinkStateTest, TestCase::QUICK);
 }
 
 static PointToPointTestSuite g_pointToPointTestSuite; //!< The testsuite

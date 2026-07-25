@@ -22,7 +22,6 @@
 
 #include "ns3/log.h"
 #include "ns3/uinteger.h"
-#include "json.hpp"
 
 namespace ns3 {
 

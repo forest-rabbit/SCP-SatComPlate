@@ -20,9 +20,8 @@
 // packets or number of bytes depending on the operating mode.
 // The base class implements tracing and basic statistics calculations.
 
-#ifndef NS3_QUEUE_H
-#define NS3_QUEUE_H
-
+#ifndef QUEUE_H
+#define QUEUE_H
 
 #include "ns3/packet.h"
 #include "ns3/object.h"

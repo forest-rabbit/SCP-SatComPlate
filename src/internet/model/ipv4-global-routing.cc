@@ -16,7 +16,6 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-#include <cstdint>
 #include <vector>
 #include <iomanip>
 #include "ns3/names.h"
@@ -32,20 +31,11 @@
 #include "ipv4-global-routing.h"
 #include "global-route-manager.h"
 
-#define _rouXW 1
-
-#ifdef _rouXW
-#include "sat-global-route-manager-impl.h"
-#include "ns3/simulation-singleton.h"
-#endif
-
 namespace ns3 {
 
 NS_LOG_COMPONENT_DEFINE ("Ipv4GlobalRouting");
 
 NS_OBJECT_ENSURE_REGISTERED (Ipv4GlobalRouting);
-
-// uint32_t sateFirstID = 7;
 
 TypeId 
 Ipv4GlobalRouting::GetTypeId (void)
@@ -60,7 +50,7 @@ Ipv4GlobalRouting::GetTypeId (void)
                    MakeBooleanChecker ())
     .AddAttribute ("RespondToInterfaceEvents",
                    "Set to true if you want to dynamically recompute the global routes upon Interface notification events (up/down, or add/remove address)",
-                   BooleanValue (true),
+                   BooleanValue (false),
                    MakeBooleanAccessor (&Ipv4GlobalRouting::m_respondToInterfaceEvents),
                    MakeBooleanChecker ())
   ;
@@ -69,8 +59,7 @@ Ipv4GlobalRouting::GetTypeId (void)
 
 Ipv4GlobalRouting::Ipv4GlobalRouting () 
   : m_randomEcmpRouting (false),
-    m_respondToInterfaceEvents (true),
-    m_gsRouting(true)
+    m_respondToInterfaceEvents (false)
 {
   NS_LOG_FUNCTION (this);
 
@@ -91,16 +80,6 @@ Ipv4GlobalRouting::AddHostRouteTo (Ipv4Address dest,
   Ipv4RoutingTableEntry *route = new Ipv4RoutingTableEntry ();
   *route = Ipv4RoutingTableEntry::CreateHostRouteTo (dest, nextHop, interface);
   m_hostRoutes.push_back (route);
-}
-
-void 
-Ipv4GlobalRouting::AddHostRouteToGSate (Ipv4Address dest, 
-                       Ipv4Address nextHop, 
-                         uint32_t interface){
-  NS_LOG_FUNCTION (this << dest << interface);
-  Ipv4RoutingTableEntry *route = new Ipv4RoutingTableEntry ();
-  *route = Ipv4RoutingTableEntry::CreateHostRouteTo (dest, nextHop, interface);
-  m_gSateRoutes.push_back (route);
 }
 
 void 
@@ -166,7 +145,6 @@ Ipv4GlobalRouting::LookupGlobal (Ipv4Address dest, Ptr<NetDevice> oif)
   // store all available routes that bring packets to their destination
   typedef std::vector<Ipv4RoutingTableEntry*> RouteVec_t;
   RouteVec_t allRoutes;
-  bool gsFlag = false;
 
   NS_LOG_LOGIC ("Number of m_hostRoutes = " << m_hostRoutes.size ());
   for (HostRoutesCI i = m_hostRoutes.begin (); 
@@ -188,31 +166,6 @@ Ipv4GlobalRouting::LookupGlobal (Ipv4Address dest, Ptr<NetDevice> oif)
           NS_LOG_LOGIC (allRoutes.size () << "Found global host route" << *i); 
         }
     }
-    
-  if (allRoutes.size () == 0) // if no host route is found
-  {
-    for (HostRoutesCI i = m_gSateRoutes.begin (); 
-        i != m_gSateRoutes.end (); 
-        i++) 
-      {
-        NS_ASSERT ((*i)->IsHost ());
-        if ((*i)->GetDest () == dest)
-          {
-            if (oif != 0)
-              {
-                if (oif != m_ipv4->GetNetDevice ((*i)->GetInterface ()))
-                  {
-                    NS_LOG_LOGIC ("Not on requested interface, skipping");
-                    continue;
-                  }
-              }
-            allRoutes.push_back (*i);
-            gsFlag = true;
-            NS_LOG_LOGIC (allRoutes.size () << "Found global host route" << *i); 
-          }
-      }
-  }
-
   if (allRoutes.size () == 0) // if no host route is found
     {
       NS_LOG_LOGIC ("Number of m_networkRoutes" << m_networkRoutes.size ());
@@ -267,11 +220,7 @@ Ipv4GlobalRouting::LookupGlobal (Ipv4Address dest, Ptr<NetDevice> oif)
       // ECMP routing is enabled, or always select the first route
       // consistently if random ECMP routing is disabled
       uint32_t selectIndex;
-      if(gsFlag && m_gsRouting){
-        selectIndex = m_rand->GetInteger (0, allRoutes.size ()-1);
-        // std::cout << "select " << selectIndex << std::endl;
-      }
-      else if (m_randomEcmpRouting)
+      if (m_randomEcmpRouting)
         {
           selectIndex = m_rand->GetInteger (0, allRoutes.size ()-1);
         }
@@ -279,11 +228,6 @@ Ipv4GlobalRouting::LookupGlobal (Ipv4Address dest, Ptr<NetDevice> oif)
         {
           selectIndex = 0;
         }
-      // uint32_t selectIndex = 0;
-      // if (allRoutes.size () >= 2)
-      //   {
-      //     selectIndex = 1;
-      //   }
       Ipv4RoutingTableEntry* route = allRoutes.at (selectIndex); 
       // create a Ipv4Route object from the selected routing table entry
       rtentry = Create<Ipv4Route> ();
@@ -426,55 +370,6 @@ Ipv4GlobalRouting::AssignStreams (int64_t stream)
   return 1;
 }
 
-std::string 
-Ipv4GlobalRouting::Ipv4AddressToString (Ipv4Address address) {
-    std::ostringstream oss;
-    uint32_t addr = address.Get();
-    oss << ((addr >> 24) & 0xFF) << "."
-        << ((addr >> 16) & 0xFF) << "."
-        << ((addr >> 8) & 0xFF) << "."
-        << (addr & 0xFF);
-    return oss.str();
-}
-
-void 
-Ipv4GlobalRouting::ClearGroundRoute(Ptr<Node> mynode, NodeContainer gNodes){
-  for(uint32_t i=0; i<gNodes.GetN(); i++){
-    Ptr<Node> node = gNodes.Get(i);
-    for(uint32_t j=1; j<node->GetNDevices(); j++){
-      Ptr<Ipv4> ipv4 = node->GetObject<Ipv4> ();
-      for(auto iter = m_hostRoutes.begin(); iter != m_hostRoutes.end(); iter ++){
-        if(ipv4->GetAddress(j, 0).GetLocal() == (*iter)->GetDest()){
-          AddHostRouteToGSate((*iter)->GetDest(), (*iter)->GetGateway(), (*iter)->GetInterface());
-          // if(m_hostRoutesMap.find((*iter)->GetDest()) != m_hostRoutesMap.end()) m_hostRoutesMap.erase((*iter)->GetDest());
-          delete *iter;
-          iter = m_hostRoutes.erase(iter);
-        }
-      }
-    }
-  }
-
-  for(auto iter = m_hostRoutes.begin(); iter != m_hostRoutes.end(); iter ++){
-    std::string str1 = Ipv4AddressToString((*iter)->GetDest());
-    if(str1.rfind("10.1.", 0) == 0 || str1.rfind("10.2.", 0) == 0 || str1.rfind("10.3.", 0) == 0){
-      AddHostRouteToGSate((*iter)->GetDest(), (*iter)->GetGateway(), (*iter)->GetInterface());
-      // m_hostRoutesMap.erase((*iter)->GetDest());
-      delete *iter;
-      iter = m_hostRoutes.erase(iter);
-    }
-  }
-}
-
-void Ipv4GlobalRouting::CopyRouteToGSate(){
-  uint32_t nRoutes = GetNRoutes ();
-  uint32_t j = 0;
-  for (j = 0; j < nRoutes; j++){
-    auto route = GetRoute(0);
-    AddHostRouteToGSate(route->GetDest(), route->GetGateway(), route->GetInterface());
-    RemoveRoute (0);
-  }
-}
-
 void
 Ipv4GlobalRouting::DoDispose (void)
 {
@@ -553,48 +448,6 @@ Ipv4GlobalRouting::PrintRoutingTable (Ptr<OutputStreamWrapper> stream, Time::Uni
           *os << std::endl;
         }
     }
-  
-  if(m_gSateRoutes.size() > 0){
-    *os << "Node: " << m_ipv4->GetObject<Node> ()->GetId ()
-        << ", Time: " << Now().As (unit)
-        << ", 星地路由 table" << std::endl;
-    *os << "Destination     Gateway         Genmask         Flags Metric Ref    Use Iface" << std::endl;
-    for (HostRoutesCI i = m_gSateRoutes.begin ();  i != m_gSateRoutes.end (); i++) {
-          Ipv4RoutingTableEntry route = *i;
-          std::ostringstream dest, gw, mask, flags;
-          dest << route.GetDest ();
-          *os << std::setiosflags (std::ios::left) << std::setw (16) << dest.str ();
-          gw << route.GetGateway ();
-          *os << std::setiosflags (std::ios::left) << std::setw (16) << gw.str ();
-          mask << route.GetDestNetworkMask ();
-          *os << std::setiosflags (std::ios::left) << std::setw (16) << mask.str ();
-          flags << "U";
-          if (route.IsHost ())
-            {
-              flags << "H";
-            }
-          else if (route.IsGateway ())
-            {
-              flags << "G";
-            }
-          *os << std::setiosflags (std::ios::left) << std::setw (6) << flags.str ();
-          // Metric not implemented
-          *os << "-" << "      ";
-          // Ref ct not implemented
-          *os << "-" << "      ";
-          // Use not implemented
-          *os << "-" << "   ";
-          if (Names::FindName (m_ipv4->GetNetDevice (route.GetInterface ())) != "")
-            {
-              *os << Names::FindName (m_ipv4->GetNetDevice (route.GetInterface ()));
-            }
-          else
-            {
-              *os << route.GetInterface ();
-            }
-          *os << std::endl;
-    }
-  }
   *os << std::endl;
 }
 
@@ -627,7 +480,6 @@ Ipv4GlobalRouting::RouteOutput (Ptr<Packet> p, const Ipv4Header &header, Ptr<Net
   return rtentry;
 }
 
-// 这个函数负责处理入站数据包的路由选择。它的主要任务是根据目的地址决定数据包的处理方式：本地交付、转发还是让其他路由协议处理。
 bool 
 Ipv4GlobalRouting::RouteInput  (Ptr<const Packet> p, const Ipv4Header &header, Ptr<const NetDevice> idev,                             UnicastForwardCallback ucb, MulticastForwardCallback mcb,
                                 LocalDeliverCallback lcb, ErrorCallback ecb)
@@ -670,11 +522,6 @@ Ipv4GlobalRouting::RouteInput  (Ptr<const Packet> p, const Ipv4Header &header, P
     {
       NS_LOG_LOGIC ("Found unicast destination- calling unicast callback");
       ucb (rtentry, p, header);
-      // Ptr<Node> currentNode = idev->GetNode(); // 获取当前设备所属的节点
-      // std::cout << "Source Address: " << header.GetSource() << "\t"
-      //           << "Destination Address: " << header.GetDestination() << "\t"
-      //           << "currNode：" << currentNode->GetId() << "\n"
-      //           << "Next Hop Address: " << rtentry->GetGateway() << "\n";
       return true;
     }
   else
@@ -690,12 +537,9 @@ Ipv4GlobalRouting::NotifyInterfaceUp (uint32_t i)
   NS_LOG_FUNCTION (this << i);
   if (m_respondToInterfaceEvents && Simulator::Now ().GetSeconds () > 0)  // avoid startup events
     {
-      #ifndef _rouXW
       GlobalRouteManager::DeleteGlobalRoutes ();
       GlobalRouteManager::BuildGlobalRoutingDatabase ();
       GlobalRouteManager::InitializeRoutes ();
-      #endif
-      // 暂时不能在链路重连后重新计算路由 
     }
 }
 
@@ -712,26 +556,14 @@ Ipv4GlobalRouting::NotifyInterfaceDown (uint32_t i)
 }
 
 void 
-Ipv4GlobalRouting::NotifySatInterfaceDown (Ptr<Node> node, uint32_t i)
-{
-  NS_LOG_FUNCTION (this << i);
-  if (m_respondToInterfaceEvents && Simulator::Now ().GetSeconds () > 0)  // avoid startup events
-    {
-        SimulationSingleton<SatGlobalRouteManagerImpl>::Get ()->DeleteLocalRoutes (node, i);
-    }
-}
-
-void 
 Ipv4GlobalRouting::NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address)
 {
   NS_LOG_FUNCTION (this << interface << address);
   if (m_respondToInterfaceEvents && Simulator::Now ().GetSeconds () > 0)  // avoid startup events
     {
-      #ifndef _rouXW
       GlobalRouteManager::DeleteGlobalRoutes ();
       GlobalRouteManager::BuildGlobalRoutingDatabase ();
       GlobalRouteManager::InitializeRoutes ();
-      #endif
     }
 }
 
@@ -741,11 +573,9 @@ Ipv4GlobalRouting::NotifyRemoveAddress (uint32_t interface, Ipv4InterfaceAddress
   NS_LOG_FUNCTION (this << interface << address);
   if (m_respondToInterfaceEvents && Simulator::Now ().GetSeconds () > 0)  // avoid startup events
     {
-      #ifndef _rouXW
       GlobalRouteManager::DeleteGlobalRoutes ();
       GlobalRouteManager::BuildGlobalRoutingDatabase ();
       GlobalRouteManager::InitializeRoutes ();
-      #endif
     }
 }
 

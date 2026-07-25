@@ -23,8 +23,6 @@
 #include "ns3/log.h"
 #include "ns3/header.h"
 #include "ipv4-header.h"
-#include <iostream>
-#include <fstream>
 
 namespace ns3 {
 
@@ -371,7 +369,6 @@ Ipv4Header::Print (std::ostream &os) const
      << "length: " << (m_payloadSize + 5 * 4)
      << " " 
      << m_source << " > " << m_destination
-     << "\n"
   ;
 }
 uint32_t 

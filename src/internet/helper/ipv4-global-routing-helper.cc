@@ -22,7 +22,6 @@
 #include "ns3/ipv4-global-routing.h"
 #include "ns3/ipv4-list-routing.h"
 #include "ns3/log.h"
-#include <cstdint>
 
 namespace ns3 {
 
@@ -64,30 +63,6 @@ Ipv4GlobalRoutingHelper::PopulateRoutingTables (void)
   GlobalRouteManager::BuildGlobalRoutingDatabase ();
   GlobalRouteManager::InitializeRoutes ();
 }
-
-void 
-Ipv4GlobalRoutingHelper::SDNRoutingTables(NodeContainer gNodes, NodeContainer sateNodes)
-{
-  GlobalRouteManager::SDNInitializeRoutes (gNodes, sateNodes);
-}
-
-// uint32_t 
-// Ipv4GlobalRoutingHelper::SDSNCaculateFlow (uint32_t node_id, Ipv4Address dest_addr)
-// {
-//   // GlobalRouteManager::SDSNBuildGlobalRoutingDatabase ();
-//   // GlobalRouteManager::SDSNInitializeRoutes ();
-//   NodeList::Iterator listEnd = NodeList::End ();
-//   for (NodeList::Iterator i = NodeList::Begin (); i != listEnd; i++){
-//     Ptr<Node> node = *i;
-//     if(node->GetId() != node_id) continue;
-
-//     Ptr<GlobalRouter> rtr = node->GetObject<GlobalRouter> ();
-//     Ptr<Ipv4GlobalRouting> grouting = rtr->GetRoutingProtocol ();
-//     return grouting->FindNextInter(node, dest_addr);
-//   }
-//   return 0;
-// }
-
 void 
 Ipv4GlobalRoutingHelper::RecomputeRoutingTables (void)
 {

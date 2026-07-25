@@ -137,15 +137,6 @@ public:
   virtual void NotifyInterfaceDown (uint32_t interface) = 0;
 
   /**
-   * \param node the satellite node we are being notified about
-   * \param interface the index of the interface we are being notified about
-   *
-   * Protocols are expected to implement this method to be notified of the state change of
-   * an interface in a satellite node.
-   */
-  virtual void NotifySatInterfaceDown (Ptr<Node> node, uint32_t interface) = 0;
-
-  /**
    * \param interface the index of the interface we are being notified about
    * \param address a new address being added to an interface
    *

@@ -22,8 +22,6 @@
 #ifndef GLOBAL_ROUTE_MANAGER_H
 #define GLOBAL_ROUTE_MANAGER_H
 
-#include "ns3/node-container.h"
-
 namespace ns3 {
 
 /**
@@ -66,8 +64,6 @@ public:
  * per-node forwarding tables
  */
   static void InitializeRoutes ();
-
-  static void SDNInitializeRoutes (NodeContainer gNodes, NodeContainer sateNodes);
 
 private:
 /**

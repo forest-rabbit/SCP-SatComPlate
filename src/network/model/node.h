@@ -22,11 +22,7 @@
 #define NODE_H
 
 #include <vector>
-///
-#include <iostream>
-#include <fstream>
-// #include "ns3/flow-monitor-module.h"
-///
+
 #include "ns3/object.h"
 #include "ns3/callback.h"
 #include "ns3/ptr.h"
@@ -97,19 +93,6 @@ public:
    *          to this node.
    */
   uint32_t GetSystemId (void) const;
-
-  // /**
-  //  * \brief Get the begin ID of openflow netdevice of this node.
-  //  *
-  //  * \param device the begin ID of openflow NetDevice that associated to this node.
-  //  * \returns void
-  //  */
-  // void SetBeginId (uint32_t beginID);
-
-  // /**
-  //  * \returns the begin id for openflow netdevice
-  //  */
-  // uint32_t GetBeginId (void);
 
   /**
    * \brief Associate a NetDevice to this node.
@@ -226,8 +209,7 @@ public:
    */
   static bool ChecksumEnabled (void);
 
-  std::vector<Ptr<NetDevice> > m_devices; //!< Devices associated to this node
-  uint32_t m_ClusterNumber;		// 表示卫星的簇ID（从0开始）
+
 protected:
   /**
    * The dispose method. Subclasses must override this method
@@ -236,7 +218,6 @@ protected:
    */
   virtual void DoDispose (void);
   virtual void DoInitialize (void);
-  uint32_t    m_beginID = 0;    //!< begin ID of the openflow-netdevice
 private:
 
   /**
@@ -303,33 +284,11 @@ private:
 
   uint32_t    m_id;         //!< Node id for this node
   uint32_t    m_sid;        //!< System id for this node
-  // std::vector<Ptr<NetDevice> > m_devices; //!< Devices associated to this node
+  std::vector<Ptr<NetDevice> > m_devices; //!< Devices associated to this node
   std::vector<Ptr<Application> > m_applications; //!< Applications associated to this node
   ProtocolHandlerList m_handlers; //!< Protocol handlers in the node
   DeviceAdditionListenerList m_deviceAdditionListeners; //!< Device addition listeners in the node
 };
-// //self-define:Statistics on port traffic and packet loss performance of nodes
-// class Node_Stats : public Object {
-// private:
-//     ns3::FlowMonitorHelper flowMonitorHelper;
-//     ns3::Ptr<ns3::FlowMonitor> flowMonitor;
-
-// public:
-//     Node_Stats(ns3::Ptr<ns3::NodeContainer> nodes);
-//     void PrintStats() ;
-// };
-
-// class TopologyConnectionInfo {
-// private:
-//     std::vector<std::pair<uint32_t, uint32_t>> connections;  // <sourceNode, destinationNode>
-
-// public:
-//     // 添加拓扑连接
-//     void addConnection(uint32_t sourceNode, uint32_t destinationNode);
-
-//     // 输出拓扑连接信息
-//     void printConnections();
-// };
 
 } // namespace ns3
 

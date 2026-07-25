@@ -288,7 +288,7 @@ Ipv4FlowProbe::DoDispose ()
 }
 
 void
-Ipv4FlowProbe::SendOutgoingLogger (const Ipv4Header &ipHeader, Ptr<const Packet> ipPayload, uint32_t interface, uint32_t pktPrio)
+Ipv4FlowProbe::SendOutgoingLogger (const Ipv4Header &ipHeader, Ptr<const Packet> ipPayload, uint32_t interface)
 {
   FlowId flowId;
   FlowPacketId packetId;
@@ -311,7 +311,7 @@ Ipv4FlowProbe::SendOutgoingLogger (const Ipv4Header &ipHeader, Ptr<const Packet>
       uint32_t size = (ipPayload->GetSize () + ipHeader.GetSerializedSize ());
       NS_LOG_DEBUG ("ReportFirstTx ("<<this<<", "<<flowId<<", "<<packetId<<", "<<size<<"); "
                                      << ipHeader << *ipPayload);
-      m_flowMonitor->ReportFirstTx (this, flowId, packetId, size, pktPrio);
+      m_flowMonitor->ReportFirstTx (this, flowId, packetId, size);
 
       // tag the packet with the flow id and packet id, so that the packet can be identified even
       // when Ipv4Header is not accessible at some non-IPv4 protocol layer

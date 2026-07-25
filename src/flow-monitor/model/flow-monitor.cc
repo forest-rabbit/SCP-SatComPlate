@@ -135,9 +135,9 @@ FlowMonitor::GetStatsForFlow (FlowId flowId)
     }
 }
 
-// 记录数据包第一次被发送时的状态和信息
+
 void
-FlowMonitor::ReportFirstTx (Ptr<FlowProbe> probe, uint32_t flowId, uint32_t packetId, uint32_t packetSize, uint32_t pktPrio)
+FlowMonitor::ReportFirstTx (Ptr<FlowProbe> probe, uint32_t flowId, uint32_t packetId, uint32_t packetSize)
 {
   NS_LOG_FUNCTION (this << probe << flowId << packetId << packetSize);
   if (!m_enabled)
@@ -156,7 +156,6 @@ FlowMonitor::ReportFirstTx (Ptr<FlowProbe> probe, uint32_t flowId, uint32_t pack
   probe->AddPacketStats (flowId, packetSize, Seconds (0));
 
   FlowStats &stats = GetStatsForFlow (flowId);
-  stats.packetPrio = pktPrio;
   stats.txBytes += packetSize;
   stats.txPackets++;
   if (stats.txPackets == 1)
@@ -166,7 +165,7 @@ FlowMonitor::ReportFirstTx (Ptr<FlowProbe> probe, uint32_t flowId, uint32_t pack
   stats.timeLastTxPacket = now;
 }
 
-// 记录数据包在网络中的转发情况
+
 void
 FlowMonitor::ReportForwarding (Ptr<FlowProbe> probe, uint32_t flowId, uint32_t packetId, uint32_t packetSize)
 {
@@ -192,7 +191,7 @@ FlowMonitor::ReportForwarding (Ptr<FlowProbe> probe, uint32_t flowId, uint32_t p
   probe->AddPacketStats (flowId, packetSize, delay);
 }
 
-// 接收端被接收时的状态和信息
+
 void
 FlowMonitor::ReportLastRx (Ptr<FlowProbe> probe, uint32_t flowId, uint32_t packetId, uint32_t packetSize)
 {

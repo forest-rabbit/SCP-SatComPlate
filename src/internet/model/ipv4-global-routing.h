@@ -20,20 +20,14 @@
 #ifndef IPV4_GLOBAL_ROUTING_H
 #define IPV4_GLOBAL_ROUTING_H
 
-#include <cstdint>
 #include <list>
-#include <map>
 #include <stdint.h>
-#include <string.h>
 #include "ns3/ipv4-address.h"
 #include "ns3/ipv4-header.h"
-#include "ns3/node-list.h"
-#include "ns3/node-container.h"
 #include "ns3/ptr.h"
 #include "ns3/ipv4.h"
 #include "ns3/ipv4-routing-protocol.h"
 #include "ns3/random-variable-stream.h"
-#include "ns3/dtag.h"
 
 namespace ns3 {
 
@@ -101,24 +95,10 @@ public:
                             LocalDeliverCallback lcb, ErrorCallback ecb);
   virtual void NotifyInterfaceUp (uint32_t interface);
   virtual void NotifyInterfaceDown (uint32_t interface);
-  virtual void NotifySatInterfaceDown (Ptr<Node> node, uint32_t interface);
-
   virtual void NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address);
   virtual void NotifyRemoveAddress (uint32_t interface, Ipv4InterfaceAddress address);
   virtual void SetIpv4 (Ptr<Ipv4> ipv4);
   virtual void PrintRoutingTable (Ptr<OutputStreamWrapper> stream, Time::Unit unit = Time::S) const;
-
-  void AddHostRouteToGSate (Ipv4Address dest, 
-                       Ipv4Address nextHop, 
-                         uint32_t interface);
-
-  // void AddHostRouteToOf (Ipv4Address dest, 
-  //                      Ipv4Address nextHop, 
-  //                        uint32_t interface);
-
-  // void AddHostRouteToOfIf (Ipv4Address dest, 
-  //                      Ipv4Address nextHop, 
-  //                        uint32_t interface);
 
   /**
    * \brief Add a host route to the global routing table.
@@ -248,16 +228,6 @@ public:
    */
   int64_t AssignStreams (int64_t stream);
 
-  // void DealOpenFlowRoute(Ptr<Node> mynode);
-  std::string Ipv4AddressToString (Ipv4Address address);
-  void ClearGroundRoute(Ptr<Node> mynode, NodeContainer gNodes);
-  void CopyRouteToGSate();
-  // uint32_t FindNextInter(Ptr<Node> node, Ipv4Address dest_addr);
-
-  // std::list<Ipv4RoutingTableEntry *> m_ofhostRoutes;             //!< openflow Routes to hosts, interface maps to p2p
-  // std::list<Ipv4RoutingTableEntry *> m_ofifhostRoutes;             //!< openflow Routes to hosts, interface maps to openflow
-  // std::list<Ipv4RoutingTableEntry *> m_ofnetworkRoutes;       //!< openflow Routes to networks
-
 protected:
   void DoDispose (void);
 
@@ -266,7 +236,6 @@ private:
   bool m_randomEcmpRouting;
   /// Set to true if this interface should respond to interface events by globallly recomputing routes 
   bool m_respondToInterfaceEvents;
-  bool m_gsRouting;
   /// A uniform random number generator for randomly routing packets among ECMP 
   Ptr<UniformRandomVariable> m_rand;
 
@@ -303,7 +272,6 @@ private:
   NetworkRoutes m_networkRoutes;       //!< Routes to networks
   ASExternalRoutes m_ASexternalRoutes; //!< External routes imported
 
-  HostRoutes m_gSateRoutes;             //!< 地面网络与卫星网络之间的路由，不可被删除
   Ptr<Ipv4> m_ipv4; //!< associated IPv4 instance
 };
 

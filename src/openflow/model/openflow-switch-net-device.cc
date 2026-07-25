@@ -15,17 +15,8 @@
  *
  * Author: Blake Hurd  <naimorai@gmail.com>
  */
-
-#include "openflow/openflow.h"
-#include <cstddef>
-#include <cstdint>
-#include <ns3/address.h>
-#include <ns3/mac48-address.h>
-#include <ns3/openflow-interface.h>
-#include <utility>
 #ifdef NS3_OPENFLOW
 
-#include "openflow-packet.h"
 #include "openflow-switch-net-device.h"
 #include "ns3/udp-l4-protocol.h"
 #include "ns3/tcp-l4-protocol.h"
@@ -163,39 +154,6 @@ OpenFlowSwitchNetDevice::SetController (Ptr<ofi::Controller> c)
   m_controller->AddSwitch (this);
 }
 
-void
-OpenFlowSwitchNetDevice::ChangeController (Ptr<ofi::Controller> c)
-{
-  if (m_controller != 0)
-    {
-      m_controller->DeleteSwitch(this);
-      // std::cout << "本交换机 原控制器id："<< m_controller->m_id <<std::endl;
-    }
-    
-    m_controller = c;
-    m_controller->AddSwitch (this);
-}
-
-void
-OpenFlowSwitchNetDevice::SetMasterController (Ptr<ofi::Controller> c)
-{
-  if (m_Mastercontroller != 0)
-    {
-      m_Mastercontroller->DeleteSwitch(this);
-      // std::cout << "本交换机 原控制器id："<< m_controller->m_id <<std::endl;
-    }
-    
-    m_Mastercontroller = c;
-    m_Mastercontroller->AddSwitch (this);
-}
-
-void OpenFlowSwitchNetDevice::DeleteMasterController (){
-  if (m_Mastercontroller != 0)
-    {
-      m_Mastercontroller->DeleteSwitch(this);
-    }
-}
-
 int
 OpenFlowSwitchNetDevice::AddSwitchPort (Ptr<NetDevice> switchPort)
 {
@@ -205,10 +163,10 @@ OpenFlowSwitchNetDevice::AddSwitchPort (Ptr<NetDevice> switchPort)
     {
       NS_FATAL_ERROR ("Device does not support eui 48 addresses: cannot be added to switch.");
     }
-  // if (!switchPort->SupportsSendFrom ())
-  //   {
-  //     NS_FATAL_ERROR ("Device does not support SendFrom: cannot be added to switch.");
-  //   }
+  if (!switchPort->SupportsSendFrom ())
+    {
+      NS_FATAL_ERROR ("Device does not support SendFrom: cannot be added to switch.");
+    }
   if (m_address == Mac48Address ())
     {
       m_address = Mac48Address::ConvertFrom (switchPort->GetAddress ());
@@ -220,7 +178,6 @@ OpenFlowSwitchNetDevice::AddSwitchPort (Ptr<NetDevice> switchPort)
       p.config = 0;
       p.netdev = switchPort;
       m_ports.push_back (p);
-      // std::cout << "node " << m_node->GetId() << " ports size " << m_ports.size() << std::endl;
 
       // Notify the controller that this port has been added
       SendPortStatus (p, OFPPR_ADD);
@@ -331,54 +288,6 @@ OpenFlowSwitchNetDevice::GetMulticast (Ipv4Address multicastGroup) const
   return multicast;
 }
 
-// ofpbuf * 
-// OpenFlowSwitchNetDevice::LocalDeliver(Ptr<OpenFlowSwitchNetDevice> dest, uint64_t uid){
-//   ofi::SwitchPacketMetadata data = m_packetData[uid];
-//   ofpbuf *ret = dest->AddMetaData(data.packet, data.src, data.dst, data.protocolNumber);
-//   // dest->SendFrom(data.packet, data.src, data.dst, data.protocolNumber);
-
-//   // if(m_packetData.find(uid) != m_packetData.end()){
-//   //   m_packetData.erase (uid);
-//   //   discard_buffer (uid);
-//   //   ofpbuf_delete (data.buffer);
-//   // }
-
-//   return ret;
-// }
-
-// ofpbuf *
-// OpenFlowSwitchNetDevice::AddMetaData(Ptr<Packet> packet, const Address& source, const Address& dest, uint16_t protocolNumber){
-  
-//   ofpbuf *buffer = BufferFromPacket (packet,source,dest,GetMtu (),protocolNumber);
-
-//   uint32_t packet_uid = save_buffer (buffer);
-//   ofi::SwitchPacketMetadata data;
-//   data.packet = packet;
-//   data.buffer = buffer;
-//   data.protocolNumber = protocolNumber;
-//   data.src = Address (source);
-//   data.dst = Address (dest);
-//   m_packetData.insert (std::make_pair (packet_uid, data));
-
-//   size_t total_len = buffer->size;
-//   if (packet_uid != std::numeric_limits<uint32_t>::max () && m_missSendLen != 0 && buffer->size > m_missSendLen)
-//     {
-//       buffer->size = m_missSendLen;
-//     }
-
-//   ofp_packet_in *opi = (ofp_packet_in*)ofpbuf_push_uninit (buffer, offsetof (ofp_packet_in, data));
-//   opi->header.version = OFP_VERSION;
-//   opi->header.type    = OFPT_PACKET_IN;
-//   opi->header.length  = htons (buffer->size);
-//   opi->header.xid     = htonl (0);
-//   opi->buffer_id      = htonl (packet_uid);
-//   opi->total_len      = htons (total_len);
-//   opi->in_port        = htons (-1);
-//   opi->reason         = OFPR_NO_MATCH;
-//   opi->pad            = 0;
-//   // std::cout << "node " << m_node->GetId() << ", packet_id " << packet_uid << ", buffer " << buffer << std::endl;
-//   return buffer;
-// }
 
 bool
 OpenFlowSwitchNetDevice::IsPointToPoint (void) const
@@ -411,9 +320,6 @@ bool
 OpenFlowSwitchNetDevice::Send (Ptr<Packet> packet, const Address& dest, uint16_t protocolNumber)
 {
   NS_LOG_FUNCTION_NOARGS ();
-  NS_LOG_INFO ("Send src addr " << Mac48Address::ConvertFrom(m_address) << " dest addr " << Mac48Address::ConvertFrom(dest));
-  // std::cout << "size:" << packet->GetSize() << std::endl;
-  // std::cout << "Send src addr " << Mac48Address::ConvertFrom(m_address) << " dest addr " << Mac48Address::ConvertFrom(dest) << std::endl;
   return SendFrom (packet, m_address, dest, protocolNumber);
 }
 
@@ -432,7 +338,7 @@ OpenFlowSwitchNetDevice::SendFrom (Ptr<Packet> packet, const Address& src, const
   data.src = Address (src);
   data.dst = Address (dest);
   m_packetData.insert (std::make_pair (packet_uid, data));
-  // std::cout << "openflow send from " << Mac48Address::ConvertFrom(data.src) << " to " << Mac48Address::ConvertFrom(data.dst) << std::endl;
+
   RunThroughFlowTable (packet_uid, -1);
 
   return true;
@@ -459,33 +365,6 @@ OpenFlowSwitchNetDevice::NeedsArp (void) const
   NS_LOG_FUNCTION_NOARGS ();
   return true;
 }
-
-// void OpenFlowSwitchNetDevice::SDNReceiveCallbackImpl(Ptr<NetDevice> device, Ptr<const Packet> packet, uint16_t protocol, const Address& src) {
-//   Mac48Address myaddr = Mac48Address::ConvertFrom(device->GetAddress());
-
-//   uint8_t buffer[packet->GetSize()];
-//   packet->CopyData(buffer, packet->GetSize());
-
-//   // if(packet->GetSize() != 14) return;
-//   ofi::pktType type; 
-
-//   std::memcpy(&type, buffer, sizeof(type));
-
-//   std::cout << "Received packet from " << Mac48Address::ConvertFrom (src) << " to " << myaddr << " 协议类型："<< protocol
-//             << "\tsize:" << packet->GetSize() 
-//             << std::endl;
-//   if(type == ofi::pktType::HEARTBEAT){
-//     ofi::HeartbeatPacket hpacket;
-//     std::memcpy(&hpacket, buffer + sizeof(type), sizeof(ofi::HeartbeatPacket));
-//     std::cout << "数据包类型：" << ofi::SDNPacket::GetStatusString(type)
-//               << "\t主控制器ID：" << static_cast<unsigned int>(hpacket.controller_id)
-//               << "\t子控制器ID： " << static_cast<unsigned int>(hpacket.subcontroller_id)
-//               << "\t序列号： " << static_cast<unsigned int>(hpacket.sequence_number)
-//               << "\t时间戳： " << static_cast<unsigned int>(hpacket.timestamp)
-//               << std::endl;
-//   }
-
-// }
 
 void
 OpenFlowSwitchNetDevice::SetReceiveCallback (NetDevice::ReceiveCallback cb)
@@ -736,63 +615,8 @@ OpenFlowSwitchNetDevice::ReceiveFromDevice (Ptr<NetDevice> netdev, Ptr<const Pac
       m_promiscRxCallback (this, packet, protocol, src, dst, packetType);
     }
 
-  // 创建非const数据包副本
-  Ptr<Packet> Packet = packet->Copy();
-  // 假设数据包在网络中传输，接收到的数据包提取IPv4头
-  Ipv4Header extractedHeader;
-  Packet->RemoveHeader (extractedHeader);
-  UdpHeader extractedUdpHeader;
-  Packet->RemoveHeader (extractedUdpHeader);
-
-  // std::cout << "ipheadr_info[node " << m_node->GetId()
-  //           << ", src " << extractedHeader.GetSource()
-  //           << ", dest " << extractedHeader.GetDestination()
-  //           << "]"
-  //           << std::endl;
-
-  // std::cout << "udpheadr_info[node " << m_node->GetId()
-  //           << ", src_port " << extractedUdpHeader.GetSourcePort()
-  //           << ", dest_port " << extractedUdpHeader.GetDestinationPort()
-  //           << "]"
-  //           << std::endl;
-
-  // 获取原始数据
-  const size_t len = sizeof(ofi::SDNPacket);
-  uint8_t buffer[len];
-  Packet->CopyData(buffer, len);
-  // std::cout << "packet size:" << Packet->GetSize() << std::endl;
-  ofi::SDNPacket pkt;
-  pkt.Deserialize(buffer, len);
-  // std::cout << "pkt type:" << pkt.GetStatusString(pkt.type) <<std::endl;
-
-  // std::cout << "node:" << m_node->GetId() 
-  //           << "\tdest:" << pkt.dest 
-  //           << "\tsrc:" << pkt.src 
-  //           << "\tmyaddr:" << m_address 
-  //           << std::endl;
-            
-  if (pkt.dest.IsBroadcast ())
-    {
-      packetType = PACKET_BROADCAST;
-    }
-  else if (pkt.dest.IsGroup ())
-    {
-      packetType = PACKET_MULTICAST;
-    }
-  else if (pkt.dest == m_address)
-    {
-      packetType = PACKET_HOST;
-    }
-  else
-    {
-      packetType = PACKET_OTHERHOST;
-    }
-
-  // std::cout << "packet size:"<< packet->GetSize() << std::endl;
-  // std::cout << "SDNPACKET size:" << sizeof(ofi::SDNPacket) << std::endl;
-
-  Mac48Address dst48 = pkt.dest;//Mac48Address::ConvertFrom (dst);
-  NS_LOG_INFO ("Received packet from " << pkt.src << " looking for " << dst48);
+  Mac48Address dst48 = Mac48Address::ConvertFrom (dst);
+  NS_LOG_INFO ("Received packet from " << Mac48Address::ConvertFrom (src) << " looking for " << dst48);
 
   for (size_t i = 0; i < m_ports.size (); i++)
     {
@@ -800,36 +624,33 @@ OpenFlowSwitchNetDevice::ReceiveFromDevice (Ptr<NetDevice> netdev, Ptr<const Pac
         {
           if (packetType == PACKET_HOST && dst48 == m_address)
             {
-              // m_rxCallback (this, packet, protocol, pkt.src.ConvertTo());
-              // SDNReceiveCallbackImpl(this, packet, protocol, src);
+              m_rxCallback (this, packet, protocol, src);
             }
           else if (packetType == PACKET_BROADCAST || packetType == PACKET_MULTICAST || packetType == PACKET_OTHERHOST)
             {
               if (packetType == PACKET_OTHERHOST && dst48 == m_address)
                 {
-                  m_rxCallback (this, packet, protocol, pkt.src.ConvertTo());
-                  // SDNReceiveCallbackImpl(this, packet, protocol, src);
+                  m_rxCallback (this, packet, protocol, src);
                 }
               else
                 {
                   if (packetType != PACKET_OTHERHOST)
                     {
-                      m_rxCallback (this, packet, protocol, pkt.src.ConvertTo());
-                      // SDNReceiveCallbackImpl(this, packet, protocol, src);
+                      m_rxCallback (this, packet, protocol, src);
                     }
 
                   ofi::SwitchPacketMetadata data;
                   data.packet = packet->Copy ();
 
-                  ofpbuf *buffer = BufferFromPacket (data.packet,pkt.src.ConvertTo(),pkt.dest.ConvertTo(),netdev->GetMtu (),protocol);
+                  ofpbuf *buffer = BufferFromPacket (data.packet,src,dst,netdev->GetMtu (),protocol);
                   m_ports[i].rx_packets++;
                   m_ports[i].rx_bytes += buffer->size;
                   data.buffer = buffer;
                   uint32_t packet_uid = save_buffer (buffer);
 
                   data.protocolNumber = protocol;
-                  data.src = Address (pkt.src.ConvertTo());
-                  data.dst = Address (pkt.dest.ConvertTo());
+                  data.src = Address (src);
+                  data.dst = Address (dst);
                   m_packetData.insert (std::make_pair (packet_uid, data));
 
                   RunThroughFlowTable (packet_uid, i);
@@ -912,40 +733,15 @@ OpenFlowSwitchNetDevice::OutputAll (uint32_t packet_uid, int in_port, bool flood
 void
 OpenFlowSwitchNetDevice::OutputPacket (uint32_t packet_uid, int out_port)
 {
-  // std::cout << "node " << m_node->GetId() << " outport:" << out_port << std::endl;
-  // std::cout << "addr:" << this << std::endl;
-  // std::cout << "DP_MAX_PORTS:" << DP_MAX_PORTS << std::endl;
-  // for(uint32_t i= 0; i<m_node->GetNDevices(); i++){
-  //   Ptr<NetDevice> temp = m_node->GetDevice(i);
-  //   if(temp == (Ptr<NetDevice>)this) std::cout << "index:" << i<< std::endl;
-  // }
-
   if (out_port >= 0 && out_port < DP_MAX_PORTS)
     {
-      // std::cout << "所以为什么进不来呢 size:" << m_ports.size() << std::endl;
-      // ofi::Port& test = m_ports[0];
-      // std::cout << "next addr:" << Mac48Address::ConvertFrom(test.netdev->GetAddress()) << std::endl;
       ofi::Port& p = m_ports[out_port];
-      // if(p.netdev == 0) std::cout << "1111111111" << std::endl;
-      // if(p.config & OFPPC_PORT_DOWN) {
-      //   if(p.config) std::cout << "222222222" << std::endl;
-      //   else std::cout << "333333333333" << std::endl;
-      // }
-      // ofi::Port& p = m_ports[out_port];
       if (p.netdev != 0 && !(p.config & OFPPC_PORT_DOWN))
         {
           ofi::SwitchPacketMetadata data = m_packetData.find (packet_uid)->second;
           size_t bufsize = data.buffer->size;
           NS_LOG_INFO ("Sending packet " << data.packet->GetUid () << " over port " << out_port);
-          // std::cout << "Sending packet " << data.packet->GetUid () << " over port " << out_port 
-          //           << " 协议号 " << data.protocolNumber << std::endl;
-          // std::cout << "node " << m_node->GetId() 
-          //           << ", sending packet" << std::endl
-          //           << "src " << Mac48Address::ConvertFrom(data.src )
-          //           <<  ", dst " << Mac48Address::ConvertFrom(data.dst)
-          //           << std::endl;
-          if (p.netdev->Send (data.packet->Copy (), data.dst, data.protocolNumber))
-          // if (p.netdev->SendFrom (data.packet->Copy (), data.src, data.dst, data.protocolNumber))
+          if (p.netdev->SendFrom (data.packet->Copy (), data.src, data.dst, data.protocolNumber))
             {
               p.tx_packets++;
               p.tx_bytes += bufsize;
@@ -1174,7 +970,6 @@ OpenFlowSwitchNetDevice::FlowTableLookup (sw_flow_key key, ofpbuf* buffer, uint3
   if (flow != 0)
     {
       NS_LOG_INFO ("Flow matched");
-      // std::cout << "node " << m_node->GetId() << " Flow matched" << std::endl;
       flow_used (flow, buffer);
       ofi::ExecuteActions (this, packet_uid, buffer, &key, flow->sf_acts->actions, flow->sf_acts->actions_len, false);
     }
@@ -1184,17 +979,14 @@ OpenFlowSwitchNetDevice::FlowTableLookup (sw_flow_key key, ofpbuf* buffer, uint3
 
       if (send_to_controller)
         {
-          // std::cout << "node " << m_node->GetId() << " send_to_controller." << std::endl;
           OutputControl (packet_uid, port, m_missSendLen, OFPR_NO_MATCH);
         }
     }
 
   // Clean up; at this point we're done with the packet.
-  // if(m_packetData.find(packet_uid) != m_packetData.end()){
-    m_packetData.erase (packet_uid);
-    discard_buffer (packet_uid);
-    ofpbuf_delete (buffer);
-  // }
+  m_packetData.erase (packet_uid);
+  discard_buffer (packet_uid);
+  ofpbuf_delete (buffer);
 }
 
 void
@@ -1461,18 +1253,17 @@ OpenFlowSwitchNetDevice::AddFlow (const ofp_flow_mod *ofm)
 
   flow_extract_match (&flow->key, &ofm->match);
 
-  // uint16_t v_code = ofi::ValidateActions (&flow->key, ofm->actions, actions_len);
-  // if (v_code != ACT_VALIDATION_OK)
-  //   {
-  //     SendErrorMsg (OFPET_BAD_ACTION, v_code, ofm, ntohs (ofm->header.length));
-  //     flow_free (flow);
-  //     if (ntohl (ofm->buffer_id) != (uint32_t) -1)
-  //       {
-  //         discard_buffer (ntohl (ofm->buffer_id));
-  //       }
-  //       std::cout << "node " << m_node->GetId() << " 出错啦！！ENOMEM " << std::endl; 
-  //     return -ENOMEM;
-  //   }
+  uint16_t v_code = ofi::ValidateActions (&flow->key, ofm->actions, actions_len);
+  if (v_code != ACT_VALIDATION_OK)
+    {
+      SendErrorMsg (OFPET_BAD_ACTION, v_code, ofm, ntohs (ofm->header.length));
+      flow_free (flow);
+      if (ntohl (ofm->buffer_id) != (uint32_t) -1)
+        {
+          discard_buffer (ntohl (ofm->buffer_id));
+        }
+      return -ENOMEM;
+    }
 
   // Fill out flow.
   flow->priority = flow->key.wildcards ? ntohs (ofm->priority) : -1;

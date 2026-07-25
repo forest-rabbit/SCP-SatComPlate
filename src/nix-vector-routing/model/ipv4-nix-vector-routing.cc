@@ -805,11 +805,6 @@ Ipv4NixVectorRouting::NotifyInterfaceDown (uint32_t i)
   g_isCacheDirty = true;
 }
 void
-Ipv4NixVectorRouting::NotifySatInterfaceDown (Ptr<Node> node, uint32_t i)
-{
-  g_isCacheDirty = true;
-}
-void
 Ipv4NixVectorRouting::NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address)
 {
   g_isCacheDirty = true;

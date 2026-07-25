@@ -29,7 +29,7 @@
 #include "ns3/address.h"
 #include "ns3/nstime.h"
 #include "ns3/mac48-address.h"
-#include "ns3/boolean.h"
+
 #include <set>
 #include <map>
 #include <limits>
@@ -359,13 +359,6 @@ public:
    * \param swtch The switch to register.
    */
   virtual void AddSwitch (Ptr<OpenFlowSwitchNetDevice> swtch);
-
-  /**
-   * Delete a switch in the controller.
-   *
-   * \param swtch The switch need to delete.
-   */
-  virtual void DeleteSwitch (Ptr<OpenFlowSwitchNetDevice> swtch);
 
   /**
    * A switch calls this method to pass a message on to the Controller.

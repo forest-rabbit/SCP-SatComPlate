@@ -22,7 +22,6 @@
 #include "ns3/packet.h"
 #include "ns3/nstime.h"
 #include "ns3/sequence-number.h"
-#include "ns3/dtag.h"
 
 namespace ns3 {
 /**

@@ -104,7 +104,7 @@ def configure(conf):
 
 def build(bld):
     # bridge dependency is due to global routing
-    obj = bld.create_ns3_module('internet', ['bridge', 'traffic-control', 'network', 'core', 'point-to-point'])
+    obj = bld.create_ns3_module('internet', ['bridge', 'traffic-control', 'network', 'core'])
     obj.source = [
         'model/ip-l4-protocol.cc',
         'model/udp-header.cc',
@@ -232,8 +232,6 @@ def build(bld):
         'model/rip.cc',
         'model/rip-header.cc',
         'helper/rip-helper.cc',
-        'model/sat-candidate-queue.cc',
-        'model/sat-global-route-manager-impl.cc',
         ]
 
     internet_test = bld.create_ns3_module_test_library('internet')
@@ -441,8 +439,6 @@ def build(bld):
         'model/rip.h',
         'model/rip-header.h',
         'helper/rip-helper.h',
-        'model/sat-candidate-queue.h',
-        'model/sat-global-route-manager-impl.h',
        ]
 
     if bld.env['NSC_ENABLED']:

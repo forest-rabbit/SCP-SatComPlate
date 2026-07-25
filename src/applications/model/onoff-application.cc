@@ -344,28 +344,6 @@ void OnOffApplication::SendPacket ()
       packet = Create<Packet> (m_pktSize);
     }
 
-  //添加标签--区分不同流
-  // std::ofstream outFile("output_ONOFF.txt", std::ios::app);
-  // if (!outFile) {
-  //   std::cerr << "无法打开文件!" << std::endl;
-  // }
-
-  DTag tag;
-  if(packet->RemovePacketTag(tag)){
-    packet->AddPacketTag(tag);
-  }else{
-    tag.SetPrio(1);
-    tag.SetTimestamp(Simulator::Now());
-    tag.SetSize(packet->GetSize());
-    packet->AddPacketTag(tag);
-
-    // outFile << "OnOffApplication::SendPacket id:" << packet->GetUid ()<< "\t"; 
-    // tag.Print(outFile);
-
-  }
-
-  // outFile.close();
-
   int actual = m_socket->Send (packet);
   if ((unsigned) actual == m_pktSize)
     {

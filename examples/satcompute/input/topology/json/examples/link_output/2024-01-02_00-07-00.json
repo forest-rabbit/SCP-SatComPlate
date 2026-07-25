@@ -2,423 +2,313 @@
   {
     "node1_id": 101,
     "node2_id": 102,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 101,
     "node2_id": 201,
-    "type": "sat",
     "delay": 24.146
   },
   {
     "node1_id": 102,
     "node2_id": 103,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 102,
     "node2_id": 202,
-    "type": "sat",
     "delay": 21.163
   },
   {
     "node1_id": 103,
     "node2_id": 104,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 103,
     "node2_id": 203,
-    "type": "sat",
     "delay": 24.146
   },
   {
     "node1_id": 104,
     "node2_id": 101,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 104,
     "node2_id": 204,
-    "type": "sat",
     "delay": 21.163
   },
   {
     "node1_id": 201,
     "node2_id": 202,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 201,
     "node2_id": 301,
-    "type": "sat",
     "delay": 22.163
   },
   {
     "node1_id": 202,
     "node2_id": 203,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 202,
     "node2_id": 302,
-    "type": "sat",
     "delay": 23.231
   },
   {
     "node1_id": 203,
     "node2_id": 204,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 203,
     "node2_id": 303,
-    "type": "sat",
     "delay": 22.163
   },
   {
     "node1_id": 204,
     "node2_id": 201,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 204,
     "node2_id": 304,
-    "type": "sat",
     "delay": 23.231
   },
   {
     "node1_id": 301,
     "node2_id": 302,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 301,
     "node2_id": 401,
-    "type": "sat",
     "delay": 20.146
   },
   {
     "node1_id": 302,
     "node2_id": 303,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 302,
     "node2_id": 402,
-    "type": "sat",
     "delay": 25.001
   },
   {
     "node1_id": 303,
     "node2_id": 304,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 303,
     "node2_id": 403,
-    "type": "sat",
     "delay": 20.146
   },
   {
     "node1_id": 304,
     "node2_id": 301,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 304,
     "node2_id": 404,
-    "type": "sat",
     "delay": 25.001
   },
   {
     "node1_id": 401,
     "node2_id": 402,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 401,
     "node2_id": 501,
-    "type": "sat",
     "delay": 18.705
   },
   {
     "node1_id": 402,
     "node2_id": 403,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 402,
     "node2_id": 502,
-    "type": "sat",
     "delay": 26.096
   },
   {
     "node1_id": 403,
     "node2_id": 404,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 403,
     "node2_id": 503,
-    "type": "sat",
     "delay": 18.705
   },
   {
     "node1_id": 404,
     "node2_id": 401,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 404,
     "node2_id": 504,
-    "type": "sat",
     "delay": 26.096
   },
   {
     "node1_id": 501,
     "node2_id": 502,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 501,
     "node2_id": 601,
-    "type": "sat",
     "delay": 18.393
   },
   {
     "node1_id": 502,
     "node2_id": 503,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 502,
     "node2_id": 602,
-    "type": "sat",
     "delay": 26.317
   },
   {
     "node1_id": 503,
     "node2_id": 504,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 503,
     "node2_id": 603,
-    "type": "sat",
     "delay": 18.393
   },
   {
     "node1_id": 504,
     "node2_id": 501,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 504,
     "node2_id": 604,
-    "type": "sat",
     "delay": 26.317
   },
   {
     "node1_id": 601,
     "node2_id": 602,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 601,
     "node2_id": 101,
-    "type": "sat",
     "delay": 16.146
   },
   {
     "node1_id": 602,
     "node2_id": 603,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 602,
     "node2_id": 102,
-    "type": "sat",
     "delay": 21.906
   },
   {
     "node1_id": 603,
     "node2_id": 604,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 603,
     "node2_id": 103,
-    "type": "sat",
     "delay": 16.146
   },
   {
     "node1_id": 604,
     "node2_id": 601,
-    "type": "sat",
     "delay": 32.648
   },
   {
     "node1_id": 604,
     "node2_id": 104,
-    "type": "sat",
     "delay": 21.906
   },
   {
-    "node1_id": 10000,
-    "node2_id": 202,
-    "type": "feeder",
-    "delay": 4.148,
-    "hold_time": 280160
+    "sat_id": 101
   },
   {
-    "node1_id": 10001,
-    "node2_id": 202,
-    "type": "feeder",
-    "delay": 4.148,
-    "hold_time": 280160
+    "sat_id": 102
   },
   {
-    "sat_id": 101,
-    "clusterId": 0
-
+    "sat_id": 103
   },
   {
-    "sat_id": 102,
-    "clusterId": 0
-
+    "sat_id": 104
   },
   {
-    "sat_id": 103,
-    "clusterId": 0
-
+    "sat_id": 201
   },
   {
-    "sat_id": 104,
-    "clusterId": 0
-
+    "sat_id": 202
   },
   {
-    "sat_id": 201,
-    "clusterId": 0
-
+    "sat_id": 203
   },
   {
-    "sat_id": 202,
-    "clusterId": 0
-
+    "sat_id": 204
   },
   {
-    "sat_id": 203,
-    "clusterId": 0
-
+    "sat_id": 301
   },
   {
-    "sat_id": 204,
-    "clusterId": 0
-
+    "sat_id": 302
   },
   {
-    "sat_id": 301,
-    "clusterId": 0
-
+    "sat_id": 303
   },
   {
-    "sat_id": 302,
-    "clusterId": 0
-
+    "sat_id": 304
   },
   {
-    "sat_id": 303,
-    "clusterId": 0
-
+    "sat_id": 401
   },
   {
-    "sat_id": 304,
-    "clusterId": 0
-
+    "sat_id": 402
   },
   {
-    "sat_id": 401,
-    "clusterId": 0
-
+    "sat_id": 403
   },
   {
-    "sat_id": 402,
-    "clusterId": 0
-
+    "sat_id": 404
   },
   {
-    "sat_id": 403,
-    "clusterId": 0
-
+    "sat_id": 501
   },
   {
-    "sat_id": 404,
-    "clusterId": 0
-
+    "sat_id": 502
   },
   {
-    "sat_id": 501,
-    "clusterId": 0
-
+    "sat_id": 503
   },
   {
-    "sat_id": 502,
-    "clusterId": 0
-
+    "sat_id": 504
   },
   {
-    "sat_id": 503,
-    "clusterId": 0
-
+    "sat_id": 601
   },
   {
-    "sat_id": 504,
-    "clusterId": 0
-
+    "sat_id": 602
   },
   {
-    "sat_id": 601,
-    "clusterId": 0
-
+    "sat_id": 603
   },
   {
-    "sat_id": 602,
-    "clusterId": 1
-
-  },
-  {
-    "sat_id": 603,
-    "clusterId": 0
-
-  },
-  {
-    "sat_id": 604,
-    "clusterId": 0
-
+    "sat_id": 604
   }
 ]

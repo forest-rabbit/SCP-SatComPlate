@@ -210,20 +210,6 @@ Ipv4ListRouting::NotifyInterfaceDown (uint32_t interface)
       (*rprotoIter).second->NotifyInterfaceDown (interface);
     }
 }
-
-void 
-Ipv4ListRouting::NotifySatInterfaceDown (Ptr<Node> node, uint32_t interface)
-{
-  NS_LOG_FUNCTION (this << interface);
-  for (Ipv4RoutingProtocolList::const_iterator rprotoIter =
-         m_routingProtocols.begin ();
-       rprotoIter != m_routingProtocols.end ();
-       rprotoIter++)
-    {
-      (*rprotoIter).second->NotifySatInterfaceDown (node, interface);
-    }
-}
-
 void 
 Ipv4ListRouting::NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address)
 {

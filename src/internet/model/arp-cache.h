@@ -160,8 +160,6 @@ public:
    * \returns A pointer to a new ARP Entry.
    */
   ArpCache::Entry *Add (Ipv4Address to);
-
-  ArpCache::Entry *Add (Ipv4Address to, Mac48Address to_mac);
   /**
    * \brief Remove an entry.
    * \param entry pointer to delete it from the list
