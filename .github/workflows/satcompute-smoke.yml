@@ -1,0 +1,176 @@
+name: SatCompute deterministic smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: satcompute-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure
+        run: ./waf configure --enable-examples --enable-tests
+
+      - name: Build
+        run: ./waf build
+
+      - name: Point-to-point tests
+        run: ./test.py -s devices-point-to-point
+
+      - name: Global routing tests
+        run: ./test.py -s ipv4-global-routing
+
+      - name: Static diamond repeat
+        run: |
+          ./waf --run "satcompute \
+            --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+            --simulationDuration=3 \
+            --offeredLoad=0 \
+            --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+            --transferPayloadBytes=1024 \
+            --transferSendRateBps=819200 \
+            --islMtuBytes=1500 \
+            --transferLogMode=verbose \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-static-a"
+          ./waf --run "satcompute \
+            --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+            --simulationDuration=3 \
+            --offeredLoad=0 \
+            --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+            --transferPayloadBytes=1024 \
+            --transferSendRateBps=819200 \
+            --islMtuBytes=1500 \
+            --transferLogMode=verbose \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-static-b"
+
+      - name: Dynamic diamond
+        run: |
+          ./waf --run "satcompute \
+            --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-dynamic \
+            --simulationDuration=6 \
+            --offeredLoad=0 \
+            --transferTrace=examples/satcompute/input/traffic/json/diamond-4-dynamic-transfers.json \
+            --transferPayloadBytes=1024 \
+            --transferSendRateBps=819200 \
+            --islMtuBytes=1500 \
+            --transferLogMode=verbose \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-dynamic"
+
+      - name: Canonical endpoint and remainder
+        run: |
+          ./waf --run "satcompute \
+            --topologyDir=examples/satcompute/input/topology/json/tests/canonical-order-a \
+            --simulationDuration=1 \
+            --offeredLoad=0 \
+            --transferTrace=examples/satcompute/input/traffic/json/canonical-order-a.json \
+            --transferPayloadBytes=1024 \
+            --transferSendRateBps=819200 \
+            --islMtuBytes=1500 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-canonical-a"
+          ./waf --run "satcompute \
+            --topologyDir=examples/satcompute/input/topology/json/tests/canonical-order-b \
+            --simulationDuration=1 \
+            --offeredLoad=0 \
+            --transferTrace=examples/satcompute/input/traffic/json/canonical-order-b.json \
+            --transferPayloadBytes=1024 \
+            --transferSendRateBps=819200 \
+            --islMtuBytes=1500 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-canonical-order-b"
+          ./waf --run "satcompute \
+            --topologyDir=examples/satcompute/input/topology/json/tests/canonical-endpoint-reversed \
+            --simulationDuration=1 \
+            --offeredLoad=0 \
+            --transferTrace=examples/satcompute/input/traffic/json/canonical-order-a.json \
+            --transferPayloadBytes=1024 \
+            --transferSendRateBps=819200 \
+            --islMtuBytes=1500 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-canonical-reversed"
+
+      - name: Varied 5000-transfer workload
+        shell: bash
+        run: |
+          set -o pipefail
+          ./waf --run "satcompute \
+            --topologyDir=examples/satcompute/input/topology/json/examples/xw-66sat \
+            --simulationDuration=8 \
+            --offeredLoad=0 \
+            --transferTrace=examples/satcompute/input/traffic/json/workload-5000-varied.json \
+            --transferPayloadBytes=4096 \
+            --transferSendRateBps=100000000 \
+            --islMtuBytes=9000 \
+            --transferLogMode=summary \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-scale" \
+            | tee /tmp/satcompute-ci-scale.log
+
+      - name: Varied multi-packet workload
+        run: |
+          ./waf --run "satcompute \
+            --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+            --simulationDuration=2 \
+            --offeredLoad=0 \
+            --transferTrace=examples/satcompute/input/traffic/json/varied-multipacket.json \
+            --transferPayloadBytes=64000 \
+            --transferSendRateBps=1000000000 \
+            --islMtuBytes=65535 \
+            --transferLogMode=summary \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-varied-multipacket"
+
+      - name: Check deterministic outputs
+        run: |
+          python3 examples/satcompute/tools/check-ecmp-output.py \
+            --first=/tmp/satcompute-ci-static-a \
+            --second=/tmp/satcompute-ci-static-b \
+            --dynamic=/tmp/satcompute-ci-dynamic \
+            --canonical-first=/tmp/satcompute-ci-canonical-a \
+            --canonical-second=/tmp/satcompute-ci-canonical-reversed \
+            --remainder=/tmp/satcompute-ci-canonical-a \
+            --scale=/tmp/satcompute-ci-scale \
+            --scale-input=examples/satcompute/input/traffic/json/workload-5000-varied.json \
+            --scale-log=/tmp/satcompute-ci-scale.log \
+            --large=/tmp/satcompute-ci-varied-multipacket \
+            --large-input=examples/satcompute/input/traffic/json/varied-multipacket.json
+          python3 examples/satcompute/tools/check-ecmp-output.py \
+            --canonical-first=/tmp/satcompute-ci-canonical-a \
+            --canonical-second=/tmp/satcompute-ci-canonical-order-b
+
+      - name: Summary
+        run: |
+          echo "PASS build"
+          echo "PASS ns-3 tests"
+          echo "PASS diamond"
+          echo "PASS canonical endpoint"
+          echo "PASS remainder"
+          echo "PASS 5000 varied transfers"
+          echo "PASS varied multi-packet workload"
