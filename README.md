@@ -17,8 +17,8 @@ examples/satcompute/
 ├── jsontopo/              # JSON 快照解析与链路状态
 ├── metrics/               # FlowMonitor 和应用层指标
 └── input/
-    ├── topology/json/examples/xw-66sat/  # xw 66 星动态拓扑样例
-    └── traffic/                          # NxN 业务矩阵样例
+    ├── topology/json/examples/xw-66sat/  # xw 66 星静态拓扑快照
+    └── traffic/                          # 66 星业务输入
 ```
 
 ## 构建
@@ -31,7 +31,8 @@ source .venv/bin/activate
 
 ## 运行
 
-默认运行 120 秒，读取仓库内的 xw 66 星快照，不注入业务流量：
+默认运行 110 秒，读取 0–110 秒、间隔 10 秒且内容不变的 xw 66 星快照，
+不注入业务流量：
 
 ```bash
 ./waf --run satcompute
@@ -46,7 +47,7 @@ source .venv/bin/activate
 快速拓扑与路由自检：
 
 ```bash
-./waf --run "satcompute --simulationDuration=120 --offeredLoad=0 --outputDir=/tmp/satcompute-smoke"
+./waf --run "satcompute --simulationDuration=110 --offeredLoad=0 --outputDir=/tmp/satcompute-smoke"
 ```
 
 主要参数：
@@ -54,7 +55,6 @@ source .venv/bin/activate
 ```text
 --topologyDir=<dir>           JSON 快照目录
 --simulationDuration=<s>      仿真时长
---linkBandwidth=<bps>         JSON 未指定时的 ISL 默认带宽
 --offeredLoad=<double>        业务矩阵倍率；0 表示不创建客户端流
 --transport=<udp|tcp>         业务传输协议
 --trafficMatrix=<file>        NxN 业务矩阵

@@ -3,12 +3,14 @@
 本目录采用 xw 标签 `customer-jsontopo-v2.1` 的分离式 JSON 协议，并由其中的
 `constellation-66sat-5gs` 输入清洗而来，只保留卫星 `0–65` 和星间链路。
 
-初始快照由一对文件组成：
+0–110 秒每隔 10 秒提供一对文件：
 
 ```text
-nodes_0s.json      # 66 颗卫星
-topology_0s.json   # 132 条 ISL
+nodes_{0,10,...,110}s.json      # 每份均为相同的 66 颗卫星
+topology_{0,10,...,110}s.json   # 每份均为相同的 132 条 ISL
 ```
+
+12 个时间片中的节点和链路均不发生变化。
 
 清洗规则：
 

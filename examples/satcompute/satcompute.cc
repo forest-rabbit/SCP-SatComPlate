@@ -49,9 +49,8 @@ struct RunConfig
     "examples/satcompute/input/traffic/traffic_matrix(66).csv";
   std::string outputDirectory = "examples/satcompute/output";
   std::string transport = "udp";
-  double simulationDurationSeconds = 120.0;
+  double simulationDurationSeconds = 110.0;
   double offeredLoad = 0.0;
-  uint64_t defaultLinkBandwidthBps = 10000000000ULL;
 };
 
 struct ApplicationState
@@ -228,9 +227,6 @@ main(int argc, char* argv[])
   commandLine.AddValue("simulationDuration",
                        "Simulation duration in seconds",
                        config.simulationDurationSeconds);
-  commandLine.AddValue("linkBandwidth",
-                       "Default ISL bandwidth in bits per second",
-                       config.defaultLinkBandwidthBps);
   commandLine.AddValue("offeredLoad",
                        "Multiplier applied to the traffic matrix",
                        config.offeredLoad);
@@ -265,12 +261,6 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
-  if (config.defaultLinkBandwidthBps == 0)
-    {
-      std::cerr << "[RUN:Error] linkBandwidth must be greater than zero"
-                << std::endl;
-      return EXIT_FAILURE;
-    }
   if (config.transport != "udp" && config.transport != "tcp")
     {
       std::cerr << "[RUN:Error] transport must be udp or tcp" << std::endl;
@@ -280,8 +270,6 @@ main(int argc, char* argv[])
   std::cout << "[RUN]" << std::endl
             << "  topologyDir       : " << config.topologyDirectory << std::endl
             << "  simulationDuration: " << config.simulationDurationSeconds << " s"
-            << std::endl
-            << "  linkBandwidth     : " << config.defaultLinkBandwidthBps << " bps"
             << std::endl
             << "  offeredLoad       : " << config.offeredLoad << std::endl
             << "  transport         : " << config.transport << std::endl
@@ -295,8 +283,7 @@ main(int argc, char* argv[])
 
   TopologyConfig topologyConfig = {
     config.topologyDirectory,
-    config.simulationDurationSeconds,
-    config.defaultLinkBandwidthBps
+    config.simulationDurationSeconds
   };
   SatelliteTopology topology(topologyConfig);
   topology.Initialize();

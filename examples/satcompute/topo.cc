@@ -19,8 +19,6 @@ SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
   NS_ABORT_MSG_IF(config.snapshotDirectory.empty(), "topologyDir 不能为空");
   NS_ABORT_MSG_IF(config.simulationDurationSeconds <= 0.0,
                   "simulationDuration 必须大于 0");
-  NS_ABORT_MSG_IF(config.defaultLinkBandwidthBps == 0,
-                  "linkBandwidth 必须大于 0");
 }
 
 void
@@ -117,9 +115,7 @@ SatelliteTopology::Initialize()
   NS_ABORT_MSG_IF(initial.links.empty(), "初始快照中没有星间链路");
 
   CreateSatelliteNodes(initial.satelliteIds);
-  m_linkState.reset(new SatelliteLinkState(m_nodes,
-                                            m_nodeIndexes,
-                                            m_config.defaultLinkBandwidthBps));
+  m_linkState.reset(new SatelliteLinkState(m_nodes, m_nodeIndexes));
   TopologyLinkUpdateSummary summary = m_linkState->ApplyFullSnapshot(initial.links);
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 

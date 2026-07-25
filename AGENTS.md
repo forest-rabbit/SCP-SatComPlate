@@ -20,19 +20,20 @@ example under `examples/satcompute/input/`.
 source .venv/bin/activate
 ./waf configure --enable-examples --enable-tests
 ./waf build
-./waf --run "satcompute --simulationDuration=120 --offeredLoad=0 --outputDir=/tmp/satcompute-smoke"
+./waf --run "satcompute --simulationDuration=110 --offeredLoad=0 --outputDir=/tmp/satcompute-smoke"
 ./test.py -s devices-point-to-point
 ```
 
-The smoke test must create 66 satellites, load only ISLs, apply the
-15-second snapshot, and recompute routes with stock `Ipv4GlobalRouting`.
+The smoke test must create 66 satellites, load only ISLs, apply all static
+10-second snapshots through 110 seconds, and recompute routes with stock
+`Ipv4GlobalRouting`.
 
 ## Conventions
 
 Follow ns-3 GNU C++ style: two-space indentation, GNU braces, no tabs, and
 `.cc`/`.h` filenames. Preserve upstream GPL headers. Snapshot filenames must
-use `YYYY-MM-DD_HH-MM-SS.json`; every snapshot is a full ISL snapshot and must
-list the same satellite IDs.
+use paired `nodes_<time>s.json` and `topology_<time>s.json` files; every
+snapshot is full and must list the same satellite IDs.
 
 ## Generated Data
 

@@ -4,7 +4,7 @@
 
 SatCompute 只有一条主流程：
 
-1. 扫描 `YYYY-MM-DD_HH-MM-SS.json` 全量快照；
+1. 扫描配对的 `nodes_<time>s.json` 与 `topology_<time>s.json` 全量快照；
 2. 从最早快照创建全部卫星节点；
 3. 创建星间 PointToPoint 链路并分配 `/30` 地址；
 4. 使用 ns-3 `Ipv4GlobalRouting` 生成路由表；
@@ -27,8 +27,7 @@ source .venv/bin/activate
 
 ```text
 topologyDir       = examples/satcompute/input/topology/json/examples/xw-66sat
-simulationDuration= 120
-linkBandwidth     = 10000000000
+simulationDuration= 110
 offeredLoad       = 0
 transport         = udp
 trafficMatrix     = examples/satcompute/input/traffic/traffic_matrix(66).csv
@@ -39,7 +38,6 @@ outputDir         = examples/satcompute/output
 
 - `--topologyDir`：卫星 JSON 全量快照目录。
 - `--simulationDuration`：仿真时长，单位秒，必须大于 0。
-- `--linkBandwidth`：快照未设置带宽时的 ISL 默认带宽，单位 bps。
 - `--offeredLoad`：业务矩阵倍率，必须非负；为 0 时不读取矩阵。
 - `--transport`：`udp` 或 `tcp`。
 - `--trafficMatrix`：与卫星数一致的 NxN CSV 业务矩阵，值的单位为 Gbps。
@@ -50,8 +48,7 @@ outputDir         = examples/satcompute/output
 ```bash
 ./waf --run "satcompute \
   --topologyDir=/path/to/snapshots \
-  --simulationDuration=600 \
-  --linkBandwidth=10000000000 \
+  --simulationDuration=110 \
   --offeredLoad=0.001 \
   --transport=udp \
   --trafficMatrix=/path/to/traffic.csv \

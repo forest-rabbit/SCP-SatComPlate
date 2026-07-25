@@ -12,14 +12,11 @@
 namespace ns3 {
 
 SatelliteLinkState::SatelliteLinkState(const NodeContainer& nodes,
-                                       const std::map<uint32_t, uint32_t>& nodeIndexes,
-                                       uint64_t defaultBandwidthBps)
+                                       const std::map<uint32_t, uint32_t>& nodeIndexes)
   : m_nodes(nodes),
     m_nodeIndexes(nodeIndexes),
-    m_defaultBandwidthBps(defaultBandwidthBps),
     m_nextIpv4Network(0)
 {
-  NS_ABORT_MSG_IF(defaultBandwidthBps == 0, "默认星间链路带宽必须大于 0");
 }
 
 SatelliteLinkState::LinkKey
@@ -58,8 +55,8 @@ void
 SatelliteLinkState::ConfigureLink(const NetDeviceContainer& devices,
                                   const SatelliteLink& link) const
 {
-  uint64_t bandwidth = link.bandwidthBps == 0 ? m_defaultBandwidthBps : link.bandwidthBps;
-  DataRateValue dataRate{DataRate(bandwidth)};
+  NS_ABORT_MSG_IF(link.bandwidthBps == 0, "星间链路带宽必须大于 0");
+  DataRateValue dataRate{DataRate(link.bandwidthBps)};
   for (uint32_t i = 0; i < devices.GetN(); ++i)
     {
       Ptr<PointToPointNetDevice> device =
@@ -81,10 +78,11 @@ SatelliteLinkState::InstallLink(const SatelliteLink& link)
 {
   uint32_t sourceIndex = ResolveNodeIndex(link.sourceId);
   uint32_t destinationIndex = ResolveNodeIndex(link.destinationId);
-  uint64_t bandwidth = link.bandwidthBps == 0 ? m_defaultBandwidthBps : link.bandwidthBps;
+  NS_ABORT_MSG_IF(link.bandwidthBps == 0, "星间链路带宽必须大于 0");
 
   PointToPointHelper helper;
-  helper.SetDeviceAttribute("DataRate", DataRateValue(DataRate(bandwidth)));
+  helper.SetDeviceAttribute("DataRate",
+                            DataRateValue(DataRate(link.bandwidthBps)));
   helper.SetChannelAttribute("Delay", TimeValue(MicroSeconds(link.delayUs)));
   helper.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("1000p"));
 

@@ -19,7 +19,6 @@ struct TopologyConfig
 {
   std::string snapshotDirectory;
   double simulationDurationSeconds;
-  uint64_t defaultLinkBandwidthBps;
 };
 
 class SatelliteTopology
