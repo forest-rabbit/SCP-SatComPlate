@@ -42,7 +42,6 @@ struct NetworkTransferState
 NetworkTransferState InstallNetworkTransfers(
   const std::string& filename,
   uint32_t payloadBytes,
-  uint64_t packetIntervalNs,
   uint16_t islMtuBytes,
   const std::string& logMode,
   double simulationDurationSeconds,

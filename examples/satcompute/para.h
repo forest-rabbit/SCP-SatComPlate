@@ -32,7 +32,6 @@ struct SatComputeConfig
   std::string routingMode;
   std::string transferLogMode;
   uint32_t transferPayloadBytes;
-  uint64_t transferSendRateBps;
   uint16_t islMtuBytes;
   uint64_t ecmpHashSeed;
   double simulationDurationSeconds;

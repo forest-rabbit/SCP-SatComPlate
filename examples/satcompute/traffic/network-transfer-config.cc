@@ -133,53 +133,20 @@ NetworkTransfer::NetworkTransfer()
     sourcePort(0),
     destinationPort(NETWORK_TRANSFER_DESTINATION_PORT),
     payloadBytesPerPacket(0),
-    derivedPacketIntervalNs(0),
     packetCount(0),
-    finalPacketPayloadBytes(0),
-    lastScheduledSendTimeNs(0)
+    finalPacketPayloadBytes(0)
 {
-}
-
-uint64_t
-DeriveNetworkTransferPacketIntervalNs(uint32_t payloadBytes,
-                                      uint64_t sendRateBps)
-{
-  static const uint64_t nanosecondsPerSecond = 1000000000u;
-  static const uint64_t bitsPerByte = 8u;
-  NS_ABORT_MSG_IF(payloadBytes == 0,
-                  "transferPayloadBytes 必须大于 0");
-  NS_ABORT_MSG_IF(payloadBytes > 65507,
-                  "transferPayloadBytes 不能超过 UDP/IPv4 上限 65507");
-  NS_ABORT_MSG_IF(sendRateBps == 0,
-                  "transferSendRateBps 必须大于 0");
-
-  uint64_t numerator =
-    static_cast<uint64_t>(payloadBytes) * bitsPerByte * nanosecondsPerSecond;
-  uint64_t intervalNs =
-    numerator / sendRateBps + (numerator % sendRateBps == 0 ? 0 : 1);
-  NS_ABORT_MSG_IF(intervalNs == 0,
-                  "派生的 NetworkTransfer packet interval 必须至少为 1 ns");
-  NS_ABORT_MSG_IF(intervalNs
-                    > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
-                  "派生的 NetworkTransfer packet interval 超出 ns-3 Time 范围");
-  return intervalNs;
 }
 
 std::vector<NetworkTransfer>
 ReadNetworkTransferTrace(const std::string& filename,
                          uint32_t payloadBytes,
-                         uint64_t packetIntervalNs,
                          double simulationDurationSeconds,
                          const SatelliteTopology& topology)
 {
   NS_ABORT_MSG_IF(filename.empty(), "NetworkTransfer JSON 路径不能为空");
   NS_ABORT_MSG_IF(payloadBytes == 0 || payloadBytes > 65507,
                   "transferPayloadBytes 必须在 1..65507 范围内");
-  NS_ABORT_MSG_IF(packetIntervalNs == 0,
-                  "派生的 NetworkTransfer packet interval 必须大于 0");
-  NS_ABORT_MSG_IF(packetIntervalNs
-                    > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
-                  "派生的 NetworkTransfer packet interval 超出 ns-3 Time 范围");
 
   int64_t simulationDurationNs =
     Seconds(simulationDurationSeconds).GetNanoSeconds();
@@ -242,12 +209,15 @@ ReadNetworkTransferTrace(const std::string& filename,
                       "arrival_time_ns 超出 int64 范围，transfer_id="
                         << transfer.transferId);
       transfer.arrivalTimeNs = static_cast<int64_t>(arrivalTimeNs);
+      NS_ABORT_MSG_IF(
+        transfer.arrivalTimeNs >= simulationDurationNs,
+        "arrival_time_ns 必须早于 simulation stop，transfer_id="
+          << transfer.transferId);
       transfer.sourceAddress =
         topology.GetServiceAddressBySatelliteId(transfer.sourceSatelliteId);
       transfer.destinationAddress =
         topology.GetServiceAddressBySatelliteId(transfer.destinationSatelliteId);
       transfer.payloadBytesPerPacket = payloadBytes;
-      transfer.derivedPacketIntervalNs = packetIntervalNs;
       transfer.packetCount =
         transfer.sizeBytes / payloadBytes
         + (transfer.sizeBytes % payloadBytes == 0 ? 0 : 1);
@@ -256,29 +226,6 @@ ReadNetworkTransferTrace(const std::string& filename,
           ? payloadBytes
           : static_cast<uint32_t>(
               transfer.sizeBytes % payloadBytes);
-
-      uint64_t intervals = transfer.packetCount - 1;
-      NS_ABORT_MSG_IF(
-        intervals
-          > (std::numeric_limits<uint64_t>::max() - arrivalTimeNs)
-              / packetIntervalNs,
-        "最后计划发送时刻计算溢出，transfer_id=" << transfer.transferId);
-      uint64_t lastScheduledSendTimeNs =
-        arrivalTimeNs + intervals * packetIntervalNs;
-      NS_ABORT_MSG_IF(
-        lastScheduledSendTimeNs
-          > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
-        "最后计划发送时刻超出 int64 范围，transfer_id="
-          << transfer.transferId);
-      NS_ABORT_MSG_IF(
-        lastScheduledSendTimeNs
-          >= static_cast<uint64_t>(simulationDurationNs),
-        "NetworkTransfer 无法在 simulation stop 前完成计划发送，transfer_id="
-          << transfer.transferId << "，last_send_ns="
-          << lastScheduledSendTimeNs << "，simulation_stop_ns="
-          << simulationDurationNs);
-      transfer.lastScheduledSendTimeNs =
-        static_cast<int64_t>(lastScheduledSendTimeNs);
       transfers.push_back(transfer);
     }
 

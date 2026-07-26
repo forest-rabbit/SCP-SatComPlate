@@ -26,6 +26,7 @@ struct RunMetadata
   std::string routingMode;
   uint64_t ecmpHashSeed;
   uint16_t islMtuBytes;
+  std::string pacingMode;
 };
 
 struct TransferFlowMetadata
@@ -51,11 +52,11 @@ struct TransferSummaryRecord
   uint16_t destinationPort;
   uint64_t declaredSizeBytes;
   uint32_t payloadBytesPerPacket;
-  uint64_t derivedPacketIntervalNs;
+  std::string pacingMode;
   uint64_t derivedPacketCount;
   uint32_t finalPacketPayloadBytes;
   int64_t arrivalTimeNs;
-  int64_t lastScheduledSendTimeNs;
+  int64_t lastSendTimeNs;
   uint64_t sentApplicationBytes;
   uint64_t receivedApplicationBytes;
   uint64_t receivedPacketCount;

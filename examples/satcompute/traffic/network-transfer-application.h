@@ -21,6 +21,7 @@
 
 #include "ns3/application.h"
 #include "ns3/event-id.h"
+#include "ns3/nstime.h"
 #include "ns3/ptr.h"
 #include "ns3/socket.h"
 
@@ -41,12 +42,14 @@ public:
   uint64_t GetTransferId() const;
   uint64_t GetSentPacketCount() const;
   uint64_t GetSentBytes() const;
+  int64_t GetLastSendTimeNs() const;
 
 private:
   void StartApplication() override;
   void StopApplication() override;
   void DoDispose() override;
   void SendNextPacket();
+  Time GetFirstHopSerializationTime(uint32_t payloadBytes) const;
 
   NetworkTransfer m_transfer;
   Ptr<Socket> m_socket;
@@ -54,6 +57,7 @@ private:
   uint64_t m_remainingBytes;
   uint64_t m_sentPacketCount;
   uint64_t m_sentBytes;
+  int64_t m_lastSendTimeNs;
 };
 
 } // namespace ns3

@@ -59,7 +59,6 @@ source .venv/bin/activate
 --trafficMatrix=<file>                 legacy 100×N 行、N 列业务输入
 --transferTrace=<file>                 NetworkTransfer JSON；默认关闭
 --transferPayloadBytes=<uint32>         每个 UDP 包的应用 payload 上限
---transferSendRateBps=<uint64>          每条 transfer 的应用发送速率
 --islMtuBytes=<uint16>                  所有 ISL 的 MTU
 --transferLogMode=<summary|verbose|silent>
 --routingMode=<global-first|global-hash-per-flow>
@@ -84,10 +83,11 @@ NetworkTransfer JSON 的 `schema_version` 必须为 `0.1`。每条记录只含�
 ```
 
 `source_node_id` 和 `destination_node_id` 是外部卫星 ID。JSON 不保存包数、
-包长、发包间隔、MTU、速率或 UDP 端口。程序根据全局 payload cap 自动分包，
-最后一包使用精确余量；发送间隔为
-`ceil(payloadBytes × 8 × 1e9 / transferSendRateBps)` 纳秒。目的端口固定为
-9000，并按每个源卫星的 `transfer_id` 顺序从 10000 派生唯一源端口。
+包长、发包间隔、MTU、速率或 UDP 端口。程序根据 payload cap 自动分包，
+最后一包使用精确余量。每包发送后重新查询该五元组当前选中的首跳
+PointToPoint 设备，并按该包的链路序列化时间调度下一包，不再使用应用层人工
+发送速率。目的端口固定为 9000，并按每个源卫星的 `transfer_id` 顺序从
+10000 派生唯一源端口。
 
 已提交的 `workload-5000-varied.json` 包含 5000 个不同的 `size_bytes`，在
 4096-byte cap 下覆盖 1–20 包。`varied-multipacket.json` 用于验证不同大小的
@@ -111,7 +111,6 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
   --simulationDuration=3 \
   --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
   --transferPayloadBytes=1024 \
-  --transferSendRateBps=819200 \
   --islMtuBytes=1500 \
   --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \

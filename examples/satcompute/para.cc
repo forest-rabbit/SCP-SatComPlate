@@ -32,7 +32,6 @@ GetDefaultSatComputeConfig()
   config.routingMode = "global-first";
   config.transferLogMode = "summary";
   config.transferPayloadBytes = 1024;
-  config.transferSendRateBps = 819200;
   config.islMtuBytes = 1500;
   config.ecmpHashSeed = 1;
   config.simulationDurationSeconds = 110.0;

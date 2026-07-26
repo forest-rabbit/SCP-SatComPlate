@@ -30,7 +30,6 @@ transport                = udp
 trafficMatrix            = examples/satcompute/input/traffic/csv/traffic_matrix(66).csv
 transferTrace            = empty
 transferPayloadBytes     = 1024
-transferSendRateBps      = 819200
 islMtuBytes              = 1500
 transferLogMode          = summary
 routingMode              = global-first
@@ -47,7 +46,6 @@ outputDir                = examples/satcompute/output
 - `--trafficMatrix`：legacy 100×N 行、N 列 CSV，单位 Gbps。
 - `--transferTrace`：可选 NetworkTransfer JSON。
 - `--transferPayloadBytes`：每个 UDP 应用包的 payload 上限，默认 1024。
-- `--transferSendRateBps`：每条 transfer 的应用发送速率，默认 819200 bps。
 - `--islMtuBytes`：所有当前及后续 ISL 的 MTU，默认 1500。
 - `--transferLogMode`：`summary`、`verbose` 或 `silent`。
 - `--routingMode`：`global-first` 或 `global-hash-per-flow`。
@@ -88,19 +86,15 @@ arrival_time_ns
 严格早于仿真结束。
 
 程序按 `transfer_id` canonical sort。应用 payload 按全局 cap 分包，最后一包
-使用准确余量。第一包在 `arrival_time_ns` 发送，后续包的间隔由下式确定：
-
-```text
-ceil(transferPayloadBytes × 8 × 1e9 / transferSendRateBps) ns
-```
-
-最后一次计划发送必须早于 simulation stop。
+使用准确余量。第一包在 `arrival_time_ns` 发送；每包发送后重新查询该五元组
+当前选定的首跳 PointToPoint 设备与 DataRate，并按当前包的链路序列化时间调度
+下一包，不增加应用层人工 gap。
 目的 UDP 端口固定为 9000，同一源卫星的 transfer 按
 `(source_node_id,transfer_id)` 从源端口 10000 顺序派生。JSON 不接受包数、
 包间隔、包长、端口、MTU或速率字段。
 
 要求 `transferPayloadBytes + 28 <= islMtuBytes` 且 payload 不超过 65507，
-因此 NetworkTransfer 不依赖 IPv4 分片。默认配置仍派生 10 ms 间隔。
+因此 NetworkTransfer 不依赖 IPv4 分片。
 
 ## 地址与路由
 
@@ -133,7 +127,6 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --offeredLoad=0 \
   --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
   --transferPayloadBytes=1024 \
-  --transferSendRateBps=819200 \
   --islMtuBytes=1500 \
   --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
@@ -146,7 +139,6 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --offeredLoad=0 \
   --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
   --transferPayloadBytes=1024 \
-  --transferSendRateBps=819200 \
   --islMtuBytes=1500 \
   --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
@@ -163,7 +155,6 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --offeredLoad=0 \
   --transferTrace=examples/satcompute/input/traffic/json/diamond-4-dynamic-transfers.json \
   --transferPayloadBytes=1024 \
-  --transferSendRateBps=819200 \
   --islMtuBytes=1500 \
   --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
@@ -191,7 +182,6 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
   --simulationDuration=8 \
   --transferTrace=examples/satcompute/input/traffic/json/workload-5000-varied.json \
   --transferPayloadBytes=4096 \
-  --transferSendRateBps=100000000 \
   --islMtuBytes=9000 \
   --transferLogMode=summary \
   --routingMode=global-hash-per-flow \

@@ -42,21 +42,15 @@ struct NetworkTransfer
   uint16_t sourcePort;
   uint16_t destinationPort;
   uint32_t payloadBytesPerPacket;
-  uint64_t derivedPacketIntervalNs;
   uint64_t packetCount;
   uint32_t finalPacketPayloadBytes;
-  int64_t lastScheduledSendTimeNs;
 
   NetworkTransfer();
 };
 
-uint64_t DeriveNetworkTransferPacketIntervalNs(uint32_t payloadBytes,
-                                               uint64_t sendRateBps);
-
 std::vector<NetworkTransfer> ReadNetworkTransferTrace(
   const std::string& filename,
   uint32_t payloadBytes,
-  uint64_t packetIntervalNs,
   double simulationDurationSeconds,
   const SatelliteTopology& topology);
 

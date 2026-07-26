@@ -65,17 +65,16 @@ def flow_key(row):
     )
 
 
-def validate_transfer_rows(directory):
+def validate_transfer_rows(directory, expected_ids):
     rows = read_rows(directory, DETAILS_FILE)
     transfer_rows = [row for row in rows if int_field(row, "transfer_id") > 0]
-    require(len(transfer_rows) == 4, "expected exactly four transfer flows")
     require(
         {int_field(row, "transfer_id") for row in transfer_rows}
-        == {1, 2, 3, 4},
-        "transfer IDs must be 1, 2, 3, and 4",
+        == set(expected_ids),
+        "transfer IDs do not match the expected fixture IDs",
     )
     require(
-        len({flow_key(row) for row in transfer_rows}) == 4,
+        len({flow_key(row) for row in transfer_rows}) == len(transfer_rows),
         "transfer five-tuples must be unique",
     )
     for row in transfer_rows:
@@ -135,7 +134,8 @@ def validate_no_fragmentation_fallback(directory):
 
 
 def validate_static(first, second):
-    transfer_rows = validate_transfer_rows(first)
+    expected_ids = range(1, 5)
+    transfer_rows = validate_transfer_rows(first, expected_ids)
     events = source_events(first)
     require(len(events) == 4, "static source must emit one event per transfer")
     require(
@@ -164,7 +164,7 @@ def validate_static(first, second):
         "static transfers must cover both equal-cost branches",
     )
 
-    validate_transfer_rows(second)
+    validate_transfer_rows(second, expected_ids)
     source_events(second)
     for filename in (EVENTS_FILE, DETAILS_FILE, AGGREGATE_FILE, TRANSFER_FILE):
         first_bytes = (Path(first) / filename).read_bytes()
@@ -176,70 +176,65 @@ def validate_static(first, second):
 
 
 def validate_dynamic(directory):
-    transfer_rows = validate_transfer_rows(directory)
+    expected_ids = range(1, 13)
+    transfer_rows = validate_transfer_rows(directory, expected_ids)
     events = source_events(directory)
-    events_by_flow = {}
-    for row in events:
-        events_by_flow.setdefault(flow_key(row), {})[
-            int_field(row, "route_epoch")
-        ] = row
-
+    require(len(events) == 12, "dynamic source must emit one event per transfer")
     require(
-        set(events_by_flow) == {flow_key(row) for row in transfer_rows},
+        {flow_key(row) for row in events}
+        == {flow_key(row) for row in transfer_rows},
         "dynamic route evidence does not match transfer five-tuples",
     )
+
+    events_by_epoch = {}
+    for row in events:
+        events_by_epoch.setdefault(int_field(row, "route_epoch"), []).append(row)
+
     require(
-        all(set(by_epoch) == {0, 1, 2} for by_epoch in events_by_flow.values()),
-        "every dynamic flow must have route decisions in epochs 0, 1, and 2",
+        set(events_by_epoch) == {0, 1, 2}
+        and all(len(rows) == 4 for rows in events_by_epoch.values()),
+        "dynamic fixture must emit four transfers in each route epoch",
     )
 
+    for epoch in (0, 2):
+        selected_gateways = set()
+        selected_interfaces = set()
+        for row in events_by_epoch[epoch]:
+            require(
+                int_field(row, "candidate_count_before_dedup") == 2
+                and int_field(row, "candidate_count_after_dedup") == 2,
+                f"epoch {epoch} transfer must see two candidates",
+            )
+            require(
+                row["selection_reason"] == "HASH_PER_FLOW",
+                f"epoch {epoch} transfer must use HASH_PER_FLOW",
+            )
+            selected_gateways.add(row["selected_gateway"])
+            selected_interfaces.add(int_field(row, "selected_output_interface"))
+        require(
+            len(selected_gateways) == 2 and len(selected_interfaces) == 2,
+            f"epoch {epoch} transfers must cover both restored branches",
+        )
+
     epoch_one_gateways = set()
-    changed_to_remaining_path = False
-    for key, by_epoch in events_by_flow.items():
-        initial = by_epoch[0]
-        failed = by_epoch[1]
-        restored = by_epoch[2]
+    for row in events_by_epoch[1]:
         require(
-            int_field(initial, "candidate_count_before_dedup") == 2
-            and int_field(initial, "candidate_count_after_dedup") == 2
-            and int_field(restored, "candidate_count_before_dedup") == 2
-            and int_field(restored, "candidate_count_after_dedup") == 2,
-            f"flow {key} must see two candidates before and after restoration",
+            int_field(row, "candidate_count_before_dedup") == 1
+            and int_field(row, "candidate_count_after_dedup") == 1,
+            "epoch 1 transfer must see one candidate",
         )
         require(
-            int_field(failed, "candidate_count_before_dedup") == 1
-            and int_field(failed, "candidate_count_after_dedup") == 1,
-            f"flow {key} must see one candidate during branch failure",
+            row["selection_reason"] == "SINGLE_CANDIDATE",
+            "epoch 1 transfer must use SINGLE_CANDIDATE",
         )
-        require(
-            initial["selection_reason"] == "HASH_PER_FLOW"
-            and failed["selection_reason"] == "SINGLE_CANDIDATE"
-            and restored["selection_reason"] == "HASH_PER_FLOW",
-            f"flow {key} has incorrect dynamic selection reasons",
-        )
-        require(
-            initial["selected_gateway"] == restored["selected_gateway"]
-            and int_field(initial, "selected_output_interface")
-            == int_field(restored, "selected_output_interface")
-            and int_field(initial, "hash_value")
-            == int_field(restored, "hash_value"),
-            f"flow {key} did not restore its deterministic selection",
-        )
-        epoch_one_gateways.add(failed["selected_gateway"])
-        changed_to_remaining_path |= (
-            initial["selected_gateway"] != failed["selected_gateway"]
-        )
+        epoch_one_gateways.add(row["selected_gateway"])
 
     require(
         len(epoch_one_gateways) == 1,
         "all epoch-1 traffic must use the single remaining branch",
     )
-    require(
-        changed_to_remaining_path,
-        "no flow demonstrated rerouting away from the failed branch",
-    )
     validate_no_fragmentation_fallback(directory)
-    print("PASS: dynamic diamond epochs 2->1->2 and deterministic restoration")
+    print("PASS: dynamic diamond epochs expose deterministic 2->1->2 candidates")
 
 
 def read_transfer_input(path):
@@ -354,16 +349,19 @@ def validate_transfer_contract(directory, input_path):
             f"transfer {transfer_id} final payload mismatch",
         )
         require(
-            int_field(summary, "derived_packet_interval_ns") > 0,
-            f"transfer {transfer_id} interval must be positive",
+            summary["pacing_mode"] == "first-hop-serialization",
+            f"transfer {transfer_id} pacing mode mismatch",
         )
+        last_send_time = int_field(summary, "last_send_time_ns")
         require(
-            int_field(summary, "last_scheduled_send_time_ns")
-            == transfer["arrival_time_ns"]
-            + (expected_packets - 1)
-            * int_field(summary, "derived_packet_interval_ns"),
-            f"transfer {transfer_id} last send mismatch",
+            last_send_time >= transfer["arrival_time_ns"],
+            f"transfer {transfer_id} last send precedes arrival",
         )
+        if expected_packets == 1:
+            require(
+                last_send_time == transfer["arrival_time_ns"],
+                f"single-packet transfer {transfer_id} must send at arrival",
+            )
         require(
             int_field(summary, "sent_application_bytes") == declared
             and int_field(summary, "received_application_bytes") == declared,
@@ -375,6 +373,10 @@ def validate_transfer_contract(directory, input_path):
         )
         completion_time = int_field(summary, "completion_time_ns")
         require(completion_time >= 0, f"transfer {transfer_id} did not complete")
+        require(
+            completion_time >= last_send_time,
+            f"transfer {transfer_id} completed before its last send",
+        )
         require(
             int_field(summary, "completion_delay_ns")
             == completion_time - transfer["arrival_time_ns"],
@@ -396,6 +398,10 @@ def validate_transfer_contract(directory, input_path):
         packet_counts.append(expected_packets)
 
     run = read_run_summary(directory)
+    require(
+        run["pacing_mode"] == "first-hop-serialization",
+        "run pacing mode mismatch",
+    )
     require(run["transfer_count"] == len(transfers), "run transfer count mismatch")
     require(
         run["declared_application_bytes"] == total_bytes

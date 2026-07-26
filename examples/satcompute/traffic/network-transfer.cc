@@ -54,8 +54,7 @@ PrintTransferSample(const std::string& label,
 void
 PrintTransferSummary(const std::string& filename,
                      const std::vector<NetworkTransfer>& transfers,
-                     uint32_t payloadBytes,
-                     uint64_t packetIntervalNs)
+                     uint32_t payloadBytes)
 {
   std::set<uint32_t> sources;
   std::set<uint32_t> destinations;
@@ -107,8 +106,8 @@ PrintTransferSummary(const std::string& filename,
             << "  first/last arrival ns       : "
             << firstArrivalNs << "/" << lastArrivalNs << std::endl
             << "  payload cap bytes           : " << payloadBytes << std::endl
-            << "  derived packet interval ns  : "
-            << packetIntervalNs << std::endl
+            << "  pacing mode                 : first-hop-serialization"
+            << std::endl
             << "  total derived packets       : " << totalPackets << std::endl
             << "  final-packet count          : " << transfers.size() << std::endl
             << "  partial final packets       : "
@@ -138,13 +137,12 @@ void
 PrintTransferVerbose(const std::string& filename,
                      const std::vector<NetworkTransfer>& transfers,
                      uint32_t payloadBytes,
-                     uint64_t packetIntervalNs,
                      uint16_t islMtuBytes)
 {
   std::cout << "[TRANSFER]" << std::endl
             << "  trace              : " << filename << std::endl
             << "  packet payload     : " << payloadBytes << " bytes" << std::endl
-            << "  packet interval    : " << packetIntervalNs << " ns" << std::endl
+            << "  pacing mode        : first-hop-serialization" << std::endl
             << "  ISL MTU            : " << islMtuBytes << " bytes" << std::endl
             << "  transfers          : " << transfers.size()
             << std::endl << std::endl;
@@ -164,16 +162,12 @@ PrintTransferVerbose(const std::string& filename,
                 << std::endl
                 << "  payload_cap_bytes  : "
                 << transfer.payloadBytesPerPacket << std::endl
-                << "  packet_interval_ns : "
-                << transfer.derivedPacketIntervalNs << std::endl
                 << "  packet_count       : " << transfer.packetCount
                 << std::endl
                 << "  final_payload_bytes: "
                 << transfer.finalPacketPayloadBytes << std::endl
                 << "  arrival_time_ns    : " << transfer.arrivalTimeNs
                 << std::endl
-                << "  last_send_time_ns  : "
-                << transfer.lastScheduledSendTimeNs << std::endl
                 << "  isl_mtu_bytes      : " << islMtuBytes << std::endl
                 << std::endl;
     }
@@ -184,7 +178,6 @@ PrintTransferVerbose(const std::string& filename,
 NetworkTransferState
 InstallNetworkTransfers(const std::string& filename,
                         uint32_t payloadBytes,
-                        uint64_t packetIntervalNs,
                         uint16_t islMtuBytes,
                         const std::string& logMode,
                         double simulationDurationSeconds,
@@ -198,7 +191,6 @@ InstallNetworkTransfers(const std::string& filename,
   state.transfers =
     ReadNetworkTransferTrace(filename,
                              payloadBytes,
-                             packetIntervalNs,
                              simulationDurationSeconds,
                              topology);
 
@@ -237,15 +229,13 @@ InstallNetworkTransfers(const std::string& filename,
     {
       PrintTransferSummary(filename,
                            state.transfers,
-                           payloadBytes,
-                           packetIntervalNs);
+                           payloadBytes);
     }
   else if (logMode == "verbose")
     {
       PrintTransferVerbose(filename,
                            state.transfers,
                            payloadBytes,
-                           packetIntervalNs,
                            islMtuBytes);
     }
   return state;
@@ -351,11 +341,11 @@ CollectNetworkTransferSummaries(const NetworkTransferState& state)
         transfer.destinationPort,
         transfer.sizeBytes,
         transfer.payloadBytesPerPacket,
-        transfer.derivedPacketIntervalNs,
+        "first-hop-serialization",
         transfer.packetCount,
         transfer.finalPacketPayloadBytes,
         transfer.arrivalTimeNs,
-        transfer.lastScheduledSendTimeNs,
+        sender->GetLastSendTimeNs(),
         sender->GetSentBytes(),
         receivedBytes,
         receiver->GetTransferReceivedPacketCount(transfer.transferId),

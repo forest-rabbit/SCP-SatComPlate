@@ -63,9 +63,6 @@ main(int argc, char* argv[])
   commandLine.AddValue("transferPayloadBytes",
                        "Maximum UDP application payload per NetworkTransfer packet",
                        config.transferPayloadBytes);
-  commandLine.AddValue("transferSendRateBps",
-                       "Per-transfer UDP application send rate in bits/s",
-                       config.transferSendRateBps);
   commandLine.AddValue("islMtuBytes",
                        "MTU applied to every ISL PointToPointNetDevice",
                        config.islMtuBytes);
@@ -121,12 +118,6 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
-  if (config.transferSendRateBps == 0)
-    {
-      std::cerr << "[RUN:Error] transferSendRateBps must be positive"
-                << std::endl;
-      return EXIT_FAILURE;
-    }
   if (config.islMtuBytes < 68)
     {
       std::cerr << "[RUN:Error] islMtuBytes must be in 68..65535"
@@ -169,9 +160,6 @@ main(int argc, char* argv[])
       return EXIT_FAILURE;
     }
 
-  uint64_t derivedPacketIntervalNs =
-    DeriveNetworkTransferPacketIntervalNs(config.transferPayloadBytes,
-                                          config.transferSendRateBps);
   bool transferMode = !config.transferTrace.empty();
   bool silentTransferRun =
     transferMode && config.transferLogMode == "silent";
@@ -190,10 +178,8 @@ main(int argc, char* argv[])
           std::cout << "  transferTrace      : " << config.transferTrace << std::endl
                     << "  transferPayload    : "
                     << config.transferPayloadBytes << " bytes" << std::endl
-                    << "  transferSendRate   : "
-                    << config.transferSendRateBps << " bps" << std::endl
-                    << "  derivedInterval    : "
-                    << derivedPacketIntervalNs << " ns" << std::endl
+                    << "  pacingMode         : first-hop-serialization"
+                    << std::endl
                     << "  transferLogMode    : "
                     << config.transferLogMode << std::endl;
         }
@@ -236,7 +222,6 @@ main(int argc, char* argv[])
       networkTransfers =
         InstallNetworkTransfers(config.transferTrace,
                                 config.transferPayloadBytes,
-                                derivedPacketIntervalNs,
                                 config.islMtuBytes,
                                 config.transferLogMode,
                                 config.simulationDurationSeconds,
@@ -272,7 +257,8 @@ main(int argc, char* argv[])
     transferMode ? "network-transfer" : "legacy-traffic",
     config.routingMode,
     config.ecmpHashSeed,
-    config.islMtuBytes
+    config.islMtuBytes,
+    transferMode ? "first-hop-serialization" : "none"
   };
   MetricsRecorder metrics(flowMonitor,
                           config.simulationDurationSeconds,

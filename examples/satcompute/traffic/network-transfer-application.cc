@@ -17,9 +17,17 @@
 #include "network-transfer-application.h"
 
 #include "ns3/abort.h"
+#include "ns3/data-rate.h"
 #include "ns3/inet-socket-address.h"
+#include "ns3/ipv4-header.h"
+#include "ns3/ipv4-route.h"
+#include "ns3/ipv4-routing-protocol.h"
+#include "ns3/ipv4.h"
 #include "ns3/packet.h"
+#include "ns3/point-to-point-net-device.h"
+#include "ns3/ppp-header.h"
 #include "ns3/simulator.h"
+#include "ns3/udp-header.h"
 #include "ns3/udp-socket-factory.h"
 
 #include <algorithm>
@@ -42,7 +50,8 @@ NetworkTransferApplication::GetTypeId()
 NetworkTransferApplication::NetworkTransferApplication()
   : m_remainingBytes(0),
     m_sentPacketCount(0),
-    m_sentBytes(0)
+    m_sentBytes(0),
+    m_lastSendTimeNs(-1)
 {
 }
 
@@ -78,6 +87,12 @@ NetworkTransferApplication::GetSentBytes() const
   return m_sentBytes;
 }
 
+int64_t
+NetworkTransferApplication::GetLastSendTimeNs() const
+{
+  return m_lastSendTimeNs;
+}
+
 void
 NetworkTransferApplication::StartApplication()
 {
@@ -86,6 +101,7 @@ NetworkTransferApplication::StartApplication()
   m_remainingBytes = m_transfer.sizeBytes;
   m_sentPacketCount = 0;
   m_sentBytes = 0;
+  m_lastSendTimeNs = -1;
 
   m_socket =
     Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
@@ -126,6 +142,64 @@ NetworkTransferApplication::DoDispose()
   Application::DoDispose();
 }
 
+Time
+NetworkTransferApplication::GetFirstHopSerializationTime(
+  uint32_t payloadBytes) const
+{
+  Ptr<Ipv4> ipv4 = GetNode()->GetObject<Ipv4>();
+  NS_ABORT_MSG_IF(ipv4 == nullptr,
+                  "NetworkTransfer source node 缺少 IPv4，transfer_id="
+                    << m_transfer.transferId);
+  Ptr<Ipv4RoutingProtocol> routing = ipv4->GetRoutingProtocol();
+  NS_ABORT_MSG_IF(routing == nullptr,
+                  "NetworkTransfer source node 缺少 IPv4 routing，transfer_id="
+                    << m_transfer.transferId);
+
+  Ptr<Packet> routeProbe = Create<Packet>(payloadBytes);
+  UdpHeader udpHeader;
+  udpHeader.SetSourcePort(m_transfer.sourcePort);
+  udpHeader.SetDestinationPort(m_transfer.destinationPort);
+  routeProbe->AddHeader(udpHeader);
+
+  Ipv4Header ipv4Header;
+  ipv4Header.SetSource(m_transfer.sourceAddress);
+  ipv4Header.SetDestination(m_transfer.destinationAddress);
+  ipv4Header.SetProtocol(17);
+  ipv4Header.SetPayloadSize(routeProbe->GetSize());
+
+  Socket::SocketErrno socketError = Socket::ERROR_NOTERROR;
+  Ptr<Ipv4Route> route =
+    routing->RouteOutput(routeProbe, ipv4Header, nullptr, socketError);
+  NS_ABORT_MSG_IF(route == nullptr || socketError != Socket::ERROR_NOTERROR,
+                  "NetworkTransfer 无法查询当前首跳路由，transfer_id="
+                    << m_transfer.transferId);
+  Ptr<PointToPointNetDevice> device =
+    DynamicCast<PointToPointNetDevice>(route->GetOutputDevice());
+  NS_ABORT_MSG_IF(device == nullptr,
+                  "NetworkTransfer 首跳不是 PointToPointNetDevice，transfer_id="
+                    << m_transfer.transferId);
+
+  DataRateValue dataRate;
+  NS_ABORT_MSG_IF(!device->GetAttributeFailSafe("DataRate", dataRate),
+                  "NetworkTransfer 无法读取首跳 DataRate，transfer_id="
+                    << m_transfer.transferId);
+  NS_ABORT_MSG_IF(dataRate.Get().GetBitRate() == 0,
+                  "NetworkTransfer 首跳 DataRate 为零，transfer_id="
+                    << m_transfer.transferId);
+
+  PppHeader pppHeader;
+  uint32_t wireBytes =
+    routeProbe->GetSize()
+    + ipv4Header.GetSerializedSize()
+    + pppHeader.GetSerializedSize();
+  Time serializationTime =
+    dataRate.Get().CalculateBytesTxTime(wireBytes);
+  NS_ABORT_MSG_IF(serializationTime.IsZero(),
+                  "NetworkTransfer 首跳序列化时间为零，transfer_id="
+                    << m_transfer.transferId);
+  return serializationTime;
+}
+
 void
 NetworkTransferApplication::SendNextPacket()
 {
@@ -144,6 +218,7 @@ NetworkTransferApplication::SendNextPacket()
                     << m_transfer.transferId << "，expected="
                     << payloadBytes << "，actual=" << sentBytes);
 
+  m_lastSendTimeNs = Simulator::Now().GetNanoSeconds();
   m_remainingBytes -= payloadBytes;
   m_sentBytes += payloadBytes;
   ++m_sentPacketCount;
@@ -156,8 +231,10 @@ NetworkTransferApplication::SendNextPacket()
       return;
     }
 
+  Time serializationTime =
+    GetFirstHopSerializationTime(payloadBytes);
   m_sendEvent = Simulator::Schedule(
-    NanoSeconds(static_cast<int64_t>(m_transfer.derivedPacketIntervalNs)),
+    serializationTime,
     &NetworkTransferApplication::SendNextPacket,
     this);
 }

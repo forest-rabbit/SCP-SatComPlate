@@ -307,9 +307,9 @@ WriteTransferSummaries(
   output
     << "transfer_id,source_node_id,destination_node_id,source_address,"
        "destination_address,source_port,destination_port,declared_size_bytes,"
-       "payload_bytes_per_packet,derived_packet_interval_ns,"
+       "payload_bytes_per_packet,pacing_mode,"
        "derived_packet_count,final_packet_payload_bytes,arrival_time_ns,"
-       "last_scheduled_send_time_ns,sent_application_bytes,"
+       "last_send_time_ns,sent_application_bytes,"
        "received_application_bytes,received_packet_count,completion_time_ns,"
        "completion_delay_ns\n";
   for (const auto& summary : summaries)
@@ -323,11 +323,11 @@ WriteTransferSummaries(
              << summary.destinationPort << ","
              << summary.declaredSizeBytes << ","
              << summary.payloadBytesPerPacket << ","
-             << summary.derivedPacketIntervalNs << ","
+             << summary.pacingMode << ","
              << summary.derivedPacketCount << ","
              << summary.finalPacketPayloadBytes << ","
              << summary.arrivalTimeNs << ","
-             << summary.lastScheduledSendTimeNs << ","
+             << summary.lastSendTimeNs << ","
              << summary.sentApplicationBytes << ","
              << summary.receivedApplicationBytes << ","
              << summary.receivedPacketCount << ","
@@ -390,6 +390,7 @@ WriteRunSummary(
          << "  \"routing_mode\": \"" << runMetadata.routingMode << "\",\n"
          << "  \"ecmp_hash_seed\": " << runMetadata.ecmpHashSeed << ",\n"
          << "  \"isl_mtu_bytes\": " << runMetadata.islMtuBytes << ",\n"
+         << "  \"pacing_mode\": \"" << runMetadata.pacingMode << "\",\n"
          << "  \"transfer_count\": " << transferSummaries.size() << ",\n"
          << "  \"declared_application_bytes\": " << declaredBytes << ",\n"
          << "  \"sent_application_bytes\": " << sentBytes << ",\n"
