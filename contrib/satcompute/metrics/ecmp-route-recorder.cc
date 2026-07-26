@@ -14,6 +14,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+// 订阅逐流 ECMP 选路事件，为指标输出保存可审计的路由证据。
+
 #include "ecmp-route-recorder.h"
 
 #include "../routing/satcompute-ipv4-global-routing-helper.h"

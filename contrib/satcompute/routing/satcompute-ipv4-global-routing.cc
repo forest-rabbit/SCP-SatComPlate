@@ -14,6 +14,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+// 在 ns-3 全局路由候选中执行确定性的五元组逐流 ECMP 选择。
+
 #include "satcompute-ipv4-global-routing.h"
 
 #include "fnv1a64.h"

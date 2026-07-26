@@ -14,6 +14,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+// 安装和访问 SatCompute 全局路由，并在拓扑更新后推进 route epoch。
+
 #include "satcompute-ipv4-global-routing-helper.h"
 
 #include "ns3/abort.h"

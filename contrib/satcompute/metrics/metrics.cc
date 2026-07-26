@@ -1,3 +1,5 @@
+// 汇总 FlowMonitor、NetworkTransfer 与 ECMP 数据并写出结构化指标。
+
 #include "metrics.h"
 
 #include "ns3/abort.h"
