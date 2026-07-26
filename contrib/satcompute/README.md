@@ -39,7 +39,7 @@ transferPayloadBytes     = 1024
 islMtuBytes              = 1500
 islQueueBytes            = 1500000
 transferLogMode          = summary
-routingMode              = global-first
+routingMode              = global-hash-per-flow
 ecmpHashSeed             = 1
 outputDir                = contrib/satcompute/output
 ```
@@ -58,7 +58,8 @@ outputDir                = contrib/satcompute/output
 - `--islQueueBytes`：所有当前及后续 ISL DropTail 队列的字节容量，默认
   1500000；容量不随 payload 大小变化。
 - `--transferLogMode`：`summary`、`verbose` 或 `silent`。
-- `--routingMode`：`global-first` 或 `global-hash-per-flow`。
+- `--routingMode`：`global-first` 或 `global-hash-per-flow`，默认
+  `global-hash-per-flow`。
 - `--ecmpHashSeed`：确定性 FNV-1a-64 输入的 64-bit seed 前缀。
 - `--outputDir`：结构化指标目录。
 

@@ -49,7 +49,7 @@ GetDefaultSatComputeConfig()
   // --routingMode：
   // "global-first" 使用 ns-3 Ipv4GlobalRouting 的默认路由选择；
   // "global-hash-per-flow" 对等价最短路执行确定性的五元组逐流 hash。
-  config.routingMode = "global-first";
+  config.routingMode = "global-hash-per-flow";
 
   // --transferLogMode：
   // "summary" 输出聚合信息与少量样本，"verbose" 输出每条 transfer，

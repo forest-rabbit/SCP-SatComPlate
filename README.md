@@ -48,7 +48,7 @@ SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests
 `offeredLoad` 启用：
 
 ```bash
-./waf --run-no-build "satcompute --offeredLoad=0.0001 --routingMode=global-first"
+./waf --run-no-build "satcompute --offeredLoad=0.0001"
 ```
 
 `para.cc` 保存默认值；命令行只覆盖当前运行。查看全部参数：
@@ -109,9 +109,9 @@ fixed 4096-byte cap 下覆盖 1–20 包。`mixed-large-ci.json` 含两个分级
 
 ## 路由
 
-- `global-first`：默认模式，完整委托原生 `Ipv4GlobalRouting` 的首条路由行为；
-- `global-hash-per-flow`：只对公开路由表中的目标 service `/32` exact host
-  candidates 做稳定排序、去重和五元组 FNV-1a-64 选择。
+- `global-hash-per-flow`：默认模式，只对公开路由表中的目标 service `/32`
+  exact host candidates 做稳定排序、去重和五元组 FNV-1a-64 选择；
+- `global-first`：兼容模式，完整委托原生 `Ipv4GlobalRouting` 的首条路由行为。
 
 自定义层不复制 SPF、Dijkstra、LSDB 或 `LookupGlobal()`，也不启用原生随机
 ECMP。每次完整快照调用原生 `RecomputeRoutingTables()` 后进入新的 route
