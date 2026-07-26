@@ -1,0 +1,160 @@
+{
+  "generator_version": "1.0.0",
+  "rules_version": "n1.6-v1",
+  "seed": "n1-ci",
+  "deterministic_method": "SHA-256(seed, rules_version, task_id, field_name)",
+  "task_count": 40,
+  "total_input_bytes": 4000000,
+  "total_output_bytes": 3217636,
+  "total_compute_work_units": 95427624,
+  "arrival_mode": "uniform",
+  "arrival_start_ns": 1000000000,
+  "arrival_end_ns": 10000000000,
+  "class_share_basis_points": {
+    "image-enhancement": 1500,
+    "image-detection": 2500,
+    "dnn-inference": 3500,
+    "preprocess-compress": 2500
+  },
+  "profile_counts": {
+    "image-enhancement": 6,
+    "image-detection": 10,
+    "dnn-inference": 14,
+    "preprocess-compress": 10
+  },
+  "profile_input_bytes": {
+    "image-enhancement": 864835,
+    "image-detection": 1022200,
+    "dnn-inference": 487243,
+    "preprocess-compress": 1625722
+  },
+  "profile_output_bytes": {
+    "image-enhancement": 801644,
+    "image-detection": 29890,
+    "dnn-inference": 1962026,
+    "preprocess-compress": 424076
+  },
+  "profile_work_units": {
+    "image-enhancement": 20955305,
+    "image-detection": 30033297,
+    "dnn-inference": 33436302,
+    "preprocess-compress": 11002720
+  },
+  "maximum_large_1gb_count": 20,
+  "maximum_large_500mb_count": 40,
+  "scenario_scale_bp": 0,
+  "large_1gb_count": 0,
+  "large_500mb_count": 0,
+  "tail_class_share_basis_points": {
+    "preprocess-compress": 7500,
+    "image-enhancement": 2500
+  },
+  "tail_class_counts": {
+    "1gb": {
+      "preprocess-compress": 0,
+      "image-enhancement": 0
+    },
+    "500mb": {
+      "preprocess-compress": 0,
+      "image-enhancement": 0
+    }
+  },
+  "non_tail_min_input_bytes": 4096,
+  "non_tail_max_input_bytes": 500000,
+  "min_input_bytes": 6043,
+  "mean_input_bytes": 100000.0,
+  "max_input_bytes": 257794,
+  "min_output_bytes": 299,
+  "mean_output_bytes": 80440.9,
+  "max_output_bytes": 247282,
+  "min_work_units": 200000,
+  "mean_work_units": 2385690.6,
+  "max_work_units": 4928839,
+  "first_arrival_ns": 1019830891,
+  "last_arrival_ns": 9974352589,
+  "compute_node_task_counts": {
+    "0": 2,
+    "3": 2,
+    "6": 2,
+    "9": 2,
+    "12": 2,
+    "15": 2,
+    "18": 2,
+    "21": 2,
+    "24": 2,
+    "27": 2,
+    "30": 2,
+    "33": 2,
+    "36": 2,
+    "39": 2,
+    "42": 2,
+    "45": 1,
+    "48": 1,
+    "51": 1,
+    "54": 1,
+    "57": 2,
+    "60": 2,
+    "63": 2
+  },
+  "task_class_assignments": {
+    "1": "dnn-inference",
+    "2": "dnn-inference",
+    "3": "image-enhancement",
+    "4": "preprocess-compress",
+    "5": "dnn-inference",
+    "6": "preprocess-compress",
+    "7": "dnn-inference",
+    "8": "preprocess-compress",
+    "9": "image-enhancement",
+    "10": "image-enhancement",
+    "11": "preprocess-compress",
+    "12": "dnn-inference",
+    "13": "dnn-inference",
+    "14": "dnn-inference",
+    "15": "preprocess-compress",
+    "16": "image-detection",
+    "17": "image-detection",
+    "18": "preprocess-compress",
+    "19": "preprocess-compress",
+    "20": "image-detection",
+    "21": "preprocess-compress",
+    "22": "dnn-inference",
+    "23": "image-enhancement",
+    "24": "image-detection",
+    "25": "dnn-inference",
+    "26": "preprocess-compress",
+    "27": "image-detection",
+    "28": "image-detection",
+    "29": "image-detection",
+    "30": "dnn-inference",
+    "31": "image-detection",
+    "32": "image-enhancement",
+    "33": "dnn-inference",
+    "34": "image-enhancement",
+    "35": "dnn-inference",
+    "36": "image-detection",
+    "37": "preprocess-compress",
+    "38": "dnn-inference",
+    "39": "dnn-inference",
+    "40": "image-detection"
+  },
+  "per_class_spearman_input_work": {
+    "image-enhancement": 1.0,
+    "image-detection": 1.0,
+    "dnn-inference": 1.0,
+    "preprocess-compress": 1.0
+  },
+  "per_class_largest_quartile_mean_work": {
+    "image-enhancement": 4928839.0,
+    "image-detection": 4365301.0,
+    "dnn-inference": 3771403.6666666665,
+    "preprocess-compress": 1875882.5
+  },
+  "per_class_smallest_quartile_mean_work": {
+    "image-enhancement": 2038634.0,
+    "image-detection": 1649217.5,
+    "dnn-inference": 1018368.3333333334,
+    "preprocess-compress": 303263.5
+  },
+  "task_trace_sha256": "6cf237ff875adf6f36cbc12c9b88d6012402852ef71793a93db83b9b9b2ff276"
+}
