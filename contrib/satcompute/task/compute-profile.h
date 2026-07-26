@@ -14,36 +14,37 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_PARA_H
-#define SATCOMPUTE_PARA_H
+#ifndef SATCOMPUTE_COMPUTE_PROFILE_H
+#define SATCOMPUTE_COMPUTE_PROFILE_H
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace ns3 {
 
-struct SatComputeConfig
+class SatelliteTopology;
+
+struct ComputeNodeProfile
 {
-  std::string topologyDirectory;
-  std::string trafficMatrix;
-  std::string transferTrace;
-  std::string computeProfile;
-  std::string taskTrace;
-  std::string outputDirectory;
-  std::string transport;
-  std::string routingMode;
-  std::string transferLogMode;
-  std::string taskLogMode;
-  std::string transferChunkMode;
-  uint32_t transferPayloadBytes;
-  uint16_t islMtuBytes;
-  uint32_t islQueueBytes;
-  uint64_t ecmpHashSeed;
-  double simulationDurationSeconds;
-  double offeredLoad;
+  uint32_t nodeId;
+  uint64_t computeRateWorkUnitsPerSecond;
 };
 
-SatComputeConfig GetDefaultSatComputeConfig();
+struct ComputeProfile
+{
+  std::vector<ComputeNodeProfile> nodes;
+};
+
+ComputeProfile ReadComputeProfile(const std::string& filename,
+                                  const SatelliteTopology& topology,
+                                  const std::string& logMode);
+
+const ComputeNodeProfile*
+FindComputeNodeProfile(const ComputeProfile& profile, uint32_t nodeId);
+
+const ComputeNodeProfile&
+GetComputeNodeProfile(const ComputeProfile& profile, uint32_t nodeId);
 
 } // namespace ns3
 

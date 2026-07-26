@@ -14,36 +14,29 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_PARA_H
-#define SATCOMPUTE_PARA_H
+#ifndef SATCOMPUTE_TASK_TRACE_H
+#define SATCOMPUTE_TASK_TRACE_H
 
-#include <cstdint>
+#include "compute-profile.h"
+#include "compute-task.h"
+
 #include <string>
+#include <vector>
 
 namespace ns3 {
 
-struct SatComputeConfig
+class SatelliteTopology;
+
+struct TaskTrace
 {
-  std::string topologyDirectory;
-  std::string trafficMatrix;
-  std::string transferTrace;
-  std::string computeProfile;
-  std::string taskTrace;
-  std::string outputDirectory;
-  std::string transport;
-  std::string routingMode;
-  std::string transferLogMode;
-  std::string taskLogMode;
-  std::string transferChunkMode;
-  uint32_t transferPayloadBytes;
-  uint16_t islMtuBytes;
-  uint32_t islQueueBytes;
-  uint64_t ecmpHashSeed;
-  double simulationDurationSeconds;
-  double offeredLoad;
+  std::vector<TaskDefinition> tasks;
 };
 
-SatComputeConfig GetDefaultSatComputeConfig();
+TaskTrace ReadTaskTrace(const std::string& filename,
+                        double simulationDurationSeconds,
+                        const SatelliteTopology& topology,
+                        const ComputeProfile& computeProfile,
+                        const std::string& logMode);
 
 } // namespace ns3
 

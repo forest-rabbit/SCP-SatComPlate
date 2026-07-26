@@ -39,6 +39,14 @@ GetDefaultSatComputeConfig()
   // 非空时启用 schema_version=0.1 的逐流输入，并要求 offeredLoad=0、transport=udp。
   config.transferTrace = "";
 
+  // --computeProfile：topology/resources 下的静态计算能力 JSON。
+  // 必须与 taskTrace 同时提供；空字符串表示不启用任务模式。
+  config.computeProfile = "";
+
+  // --taskTrace：traffic/json/task 下的任务到达 JSON。
+  // 必须与 computeProfile 同时提供，且不能与 transferTrace 或 offeredLoad 混用。
+  config.taskTrace = "";
+
   // --outputDir：结构化指标输出目录；可填写仓库相对路径或绝对路径。
   config.outputDirectory = "contrib/satcompute/output";
 
@@ -55,6 +63,11 @@ GetDefaultSatComputeConfig()
   // "summary" 输出聚合信息与少量样本，"verbose" 输出每条 transfer，
   // "silent" 关闭运行、拓扑和 transfer 日志；三种模式都写出指标文件。
   config.transferLogMode = "summary";
+
+  // --taskLogMode：
+  // "summary" 输出任务输入聚合和样本，"verbose" 输出每个节点与任务，
+  // "silent" 关闭任务输入日志；三种模式都不改变任务行为。
+  config.taskLogMode = "summary";
 
   // --transferChunkMode：
   // "fixed" 让所有 transfer 使用 transferPayloadBytes 作为 UDP payload 上限；
