@@ -3,8 +3,10 @@
 
 import argparse
 import csv
+import hashlib
 import json
 import math
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -172,6 +174,16 @@ def float_field(row, field):
         raise AssertionError(f"{field} must be numeric") from error
     require(math.isfinite(value), f"{field} must be finite")
     return value
+
+
+def flow_key(row):
+    return (
+        row["source_address"],
+        row["destination_address"],
+        int_field(row, "protocol"),
+        int_field(row, "source_port"),
+        int_field(row, "destination_port"),
+    )
 
 
 def read_topology_nodes(directory):
@@ -440,6 +452,10 @@ def validate_transfer_evidence(tasks, summaries, output, run):
             "selection_reason",
         ],
     )
+    route_index = defaultdict(list)
+    for event in route_rows:
+        route_index[flow_key(event)].append(event)
+
     expected_plans = []
     for task in tasks:
         summary = summaries[task["task_id"]]
@@ -552,28 +568,14 @@ def validate_transfer_evidence(tasks, summaries, output, run):
             and int_field(detail, "lost_packets") == 0,
             f"transfer {transfer_id} FlowMonitor evidence mismatch",
         )
-        flow_key = (
-            detail["source_address"],
-            detail["destination_address"],
-            int_field(detail, "protocol"),
-            int_field(detail, "source_port"),
-            int_field(detail, "destination_port"),
+        transfer_flow_key = flow_key(detail)
+        require(
+            transfer_flow_key not in flow_keys,
+            "duplicate task transfer five-tuple",
         )
-        require(flow_key not in flow_keys, "duplicate task transfer five-tuple")
-        flow_keys.add(flow_key)
-        plan["flow_key"] = flow_key
-        matching_routes = [
-            event
-            for event in route_rows
-            if (
-                event["source_address"],
-                event["destination_address"],
-                int_field(event, "protocol"),
-                int_field(event, "source_port"),
-                int_field(event, "destination_port"),
-            )
-            == flow_key
-        ]
+        flow_keys.add(transfer_flow_key)
+        plan["flow_key"] = transfer_flow_key
+        matching_routes = route_index.get(transfer_flow_key, [])
         require(matching_routes, f"transfer {transfer_id} lacks ECMP route evidence")
         total_bytes += plan["size_bytes"]
         total_packets += packets
@@ -673,6 +675,42 @@ def validate_run_summary(
         and run["flow_monitor_lost_packets"] == 0,
         "task packet aggregate mismatch",
     )
+
+
+def validate_workload_summary(summary_path, trace_path, tasks):
+    summary = read_json(summary_path)
+    require(isinstance(summary, dict), "workload summary root must be an object")
+    required_fields = {
+        "task_count",
+        "total_input_bytes",
+        "total_output_bytes",
+        "total_compute_work_units",
+        "task_trace_sha256",
+    }
+    require(
+        required_fields <= set(summary),
+        "workload summary is missing required audit fields",
+    )
+    expected_totals = {
+        "task_count": len(tasks),
+        "total_input_bytes": sum(task["input_bytes"] for task in tasks),
+        "total_output_bytes": sum(task["output_bytes"] for task in tasks),
+        "total_compute_work_units": sum(
+            task["compute_work_units"] for task in tasks
+        ),
+    }
+    for field, expected in expected_totals.items():
+        require_integer(summary[field], f"workload summary {field}", 0, UINT64_MAX)
+        require(
+            summary[field] == expected,
+            f"workload summary {field} does not match TaskTrace",
+        )
+    expected_hash = hashlib.sha256(Path(trace_path).read_bytes()).hexdigest()
+    require(
+        summary["task_trace_sha256"] == expected_hash,
+        "workload summary TaskTrace SHA-256 mismatch",
+    )
+    return summary
 
 
 def validate_scenario(output, topology_dir, profile_path, trace_path):
@@ -837,6 +875,35 @@ def validate_determinism(
 
 
 def main():
+    argv = sys.argv[1:]
+    if argv[:1] == ["run"]:
+        parser = argparse.ArgumentParser(
+            description="Validate one arbitrary SatCompute TaskTrace run."
+        )
+        parser.add_argument("--topology-dir", required=True)
+        parser.add_argument("--compute-profile", required=True)
+        parser.add_argument("--task-trace", required=True)
+        parser.add_argument("--workload-summary", required=True)
+        parser.add_argument("--output-dir", required=True)
+        args = parser.parse_args(argv[1:])
+        result = validate_scenario(
+            args.output_dir,
+            args.topology_dir,
+            args.compute_profile,
+            args.task_trace,
+        )
+        validate_workload_summary(
+            args.workload_summary,
+            args.task_trace,
+            result["tasks"],
+        )
+        print(
+            "PASS: generic task run "
+            f"({len(result['tasks'])} tasks, "
+            f"{len(result['plans'])} transfers)"
+        )
+        return
+
     parser = argparse.ArgumentParser(
         description="Check deterministic SatCompute task execution evidence."
     )
@@ -860,7 +927,7 @@ def main():
     parser.add_argument("--profile-order-first-profile", required=True)
     parser.add_argument("--profile-order-second-profile", required=True)
     parser.add_argument("--profile-order-trace", required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     single = validate_scenario(
         args.single_output,
