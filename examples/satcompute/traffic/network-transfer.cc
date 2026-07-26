@@ -54,7 +54,8 @@ PrintTransferSample(const std::string& label,
 void
 PrintTransferSummary(const std::string& filename,
                      const std::vector<NetworkTransfer>& transfers,
-                     uint32_t payloadBytes)
+                     const std::string& chunkMode,
+                     uint32_t fixedPayloadBytes)
 {
   std::set<uint32_t> sources;
   std::set<uint32_t> destinations;
@@ -77,7 +78,10 @@ PrintTransferSummary(const std::string& filename,
       totalPackets =
         CheckedAdd(totalPackets, transfer.packetCount, "packet count");
       partialFinalPackets +=
-        transfer.finalPacketPayloadBytes < payloadBytes ? 1 : 0;
+        transfer.finalPacketPayloadBytes
+            < transfer.payloadBytesPerPacket
+          ? 1
+          : 0;
       minBytes = std::min(minBytes, transfer.sizeBytes);
       maxBytes = std::max(maxBytes, transfer.sizeBytes);
       firstArrivalNs = std::min(firstArrivalNs, transfer.arrivalTimeNs);
@@ -105,7 +109,13 @@ PrintTransferSummary(const std::string& filename,
             << minBytes << "/" << meanBytes << "/" << maxBytes << std::endl
             << "  first/last arrival ns       : "
             << firstArrivalNs << "/" << lastArrivalNs << std::endl
-            << "  payload cap bytes           : " << payloadBytes << std::endl
+            << "  chunk mode                  : " << chunkMode << std::endl;
+  if (chunkMode == "fixed")
+    {
+      std::cout << "  fixed payload cap bytes     : "
+                << fixedPayloadBytes << std::endl;
+    }
+  std::cout
             << "  pacing mode                 : first-hop-serialization"
             << std::endl
             << "  total derived packets       : " << totalPackets << std::endl
@@ -136,12 +146,19 @@ PrintTransferSummary(const std::string& filename,
 void
 PrintTransferVerbose(const std::string& filename,
                      const std::vector<NetworkTransfer>& transfers,
-                     uint32_t payloadBytes,
+                     const std::string& chunkMode,
+                     uint32_t fixedPayloadBytes,
                      uint16_t islMtuBytes)
 {
   std::cout << "[TRANSFER]" << std::endl
             << "  trace              : " << filename << std::endl
-            << "  packet payload     : " << payloadBytes << " bytes" << std::endl
+            << "  chunk mode         : " << chunkMode << std::endl;
+  if (chunkMode == "fixed")
+    {
+      std::cout << "  fixed payload      : "
+                << fixedPayloadBytes << " bytes" << std::endl;
+    }
+  std::cout
             << "  pacing mode        : first-hop-serialization" << std::endl
             << "  ISL MTU            : " << islMtuBytes << " bytes" << std::endl
             << "  transfers          : " << transfers.size()
@@ -177,6 +194,7 @@ PrintTransferVerbose(const std::string& filename,
 
 NetworkTransferState
 InstallNetworkTransfers(const std::string& filename,
+                        const std::string& chunkMode,
                         uint32_t payloadBytes,
                         uint16_t islMtuBytes,
                         const std::string& logMode,
@@ -190,6 +208,7 @@ InstallNetworkTransfers(const std::string& filename,
   NetworkTransferState state;
   state.transfers =
     ReadNetworkTransferTrace(filename,
+                             chunkMode,
                              payloadBytes,
                              simulationDurationSeconds,
                              topology);
@@ -229,12 +248,14 @@ InstallNetworkTransfers(const std::string& filename,
     {
       PrintTransferSummary(filename,
                            state.transfers,
+                           chunkMode,
                            payloadBytes);
     }
   else if (logMode == "verbose")
     {
       PrintTransferVerbose(filename,
                            state.transfers,
+                           chunkMode,
                            payloadBytes,
                            islMtuBytes);
     }

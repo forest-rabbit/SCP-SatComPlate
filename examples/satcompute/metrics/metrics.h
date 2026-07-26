@@ -27,6 +27,8 @@ struct RunMetadata
   uint64_t ecmpHashSeed;
   uint16_t islMtuBytes;
   std::string pacingMode;
+  std::string transferChunkMode;
+  uint32_t fixedPayloadBytes;
 };
 
 struct TransferFlowMetadata

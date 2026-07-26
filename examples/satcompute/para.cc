@@ -31,6 +31,7 @@ GetDefaultSatComputeConfig()
   config.transport = "udp";
   config.routingMode = "global-first";
   config.transferLogMode = "summary";
+  config.transferChunkMode = "fixed";
   config.transferPayloadBytes = 1024;
   config.islMtuBytes = 1500;
   config.ecmpHashSeed = 1;

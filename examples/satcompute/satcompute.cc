@@ -60,8 +60,11 @@ main(int argc, char* argv[])
   commandLine.AddValue("transferTrace",
                        "Optional NetworkTransfer JSON trace",
                        config.transferTrace);
+  commandLine.AddValue("transferChunkMode",
+                       "NetworkTransfer chunking: fixed or size-aware",
+                       config.transferChunkMode);
   commandLine.AddValue("transferPayloadBytes",
-                       "Maximum UDP application payload per NetworkTransfer packet",
+                       "UDP application payload cap in fixed chunk mode",
                        config.transferPayloadBytes);
   commandLine.AddValue("islMtuBytes",
                        "MTU applied to every ISL PointToPointNetDevice",
@@ -92,6 +95,12 @@ main(int argc, char* argv[])
                  [](unsigned char character) {
                    return static_cast<char>(std::tolower(character));
                  });
+  std::transform(config.transferChunkMode.begin(),
+                 config.transferChunkMode.end(),
+                 config.transferChunkMode.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
 
   if (!std::isfinite(config.simulationDurationSeconds)
       || config.simulationDurationSeconds <= 0.0)
@@ -118,15 +127,26 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
+  if (config.transferChunkMode != "fixed"
+      && config.transferChunkMode != "size-aware")
+    {
+      std::cerr << "[RUN:Error] transferChunkMode must be fixed or size-aware"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
   if (config.islMtuBytes < 68)
     {
       std::cerr << "[RUN:Error] islMtuBytes must be in 68..65535"
                 << std::endl;
       return EXIT_FAILURE;
     }
-  if (config.transferPayloadBytes + 28u > config.islMtuBytes)
+  uint32_t maximumTransferPayloadBytes =
+    config.transferChunkMode == "size-aware"
+      ? GetSizeAwareMaximumPayloadBytes()
+      : config.transferPayloadBytes;
+  if (maximumTransferPayloadBytes + 28u > config.islMtuBytes)
     {
-      std::cerr << "[RUN:Error] transferPayloadBytes plus UDP/IPv4 headers "
+      std::cerr << "[RUN:Error] maximum transfer payload plus UDP/IPv4 headers "
                    "must fit islMtuBytes"
                 << std::endl;
       return EXIT_FAILURE;
@@ -176,8 +196,14 @@ main(int argc, char* argv[])
       if (transferMode)
         {
           std::cout << "  transferTrace      : " << config.transferTrace << std::endl
-                    << "  transferPayload    : "
-                    << config.transferPayloadBytes << " bytes" << std::endl
+                    << "  transferChunkMode  : "
+                    << config.transferChunkMode << std::endl;
+          if (config.transferChunkMode == "fixed")
+            {
+              std::cout << "  transferPayload    : "
+                        << config.transferPayloadBytes << " bytes" << std::endl;
+            }
+          std::cout
                     << "  pacingMode         : first-hop-serialization"
                     << std::endl
                     << "  transferLogMode    : "
@@ -221,6 +247,7 @@ main(int argc, char* argv[])
     {
       networkTransfers =
         InstallNetworkTransfers(config.transferTrace,
+                                config.transferChunkMode,
                                 config.transferPayloadBytes,
                                 config.islMtuBytes,
                                 config.transferLogMode,
@@ -258,7 +285,11 @@ main(int argc, char* argv[])
     config.routingMode,
     config.ecmpHashSeed,
     config.islMtuBytes,
-    transferMode ? "first-hop-serialization" : "none"
+    transferMode ? "first-hop-serialization" : "none",
+    transferMode ? config.transferChunkMode : "none",
+    transferMode && config.transferChunkMode == "fixed"
+      ? config.transferPayloadBytes
+      : 0
   };
   MetricsRecorder metrics(flowMonitor,
                           config.simulationDurationSeconds,

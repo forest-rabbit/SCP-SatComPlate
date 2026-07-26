@@ -307,7 +307,7 @@ WriteTransferSummaries(
   output
     << "transfer_id,source_node_id,destination_node_id,source_address,"
        "destination_address,source_port,destination_port,declared_size_bytes,"
-       "payload_bytes_per_packet,pacing_mode,"
+       "effective_payload_bytes,pacing_mode,"
        "derived_packet_count,final_packet_payload_bytes,arrival_time_ns,"
        "last_send_time_ns,sent_application_bytes,"
        "received_application_bytes,received_packet_count,completion_time_ns,"
@@ -391,6 +391,18 @@ WriteRunSummary(
          << "  \"ecmp_hash_seed\": " << runMetadata.ecmpHashSeed << ",\n"
          << "  \"isl_mtu_bytes\": " << runMetadata.islMtuBytes << ",\n"
          << "  \"pacing_mode\": \"" << runMetadata.pacingMode << "\",\n"
+         << "  \"transfer_chunk_mode\": \""
+         << runMetadata.transferChunkMode << "\",\n"
+         << "  \"fixed_payload_bytes\": ";
+  if (runMetadata.transferChunkMode == "fixed")
+    {
+      output << runMetadata.fixedPayloadBytes;
+    }
+  else
+    {
+      output << "null";
+    }
+  output << ",\n"
          << "  \"transfer_count\": " << transferSummaries.size() << ",\n"
          << "  \"declared_application_bytes\": " << declaredBytes << ",\n"
          << "  \"sent_application_bytes\": " << sentBytes << ",\n"

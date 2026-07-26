@@ -31,6 +31,7 @@ struct SatComputeConfig
   std::string transport;
   std::string routingMode;
   std::string transferLogMode;
+  std::string transferChunkMode;
   uint32_t transferPayloadBytes;
   uint16_t islMtuBytes;
   uint64_t ecmpHashSeed;

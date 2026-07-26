@@ -34,6 +34,12 @@ namespace ns3 {
 
 namespace {
 
+static const uint64_t SMALL_TRANSFER_MAX_BYTES = 1u << 20;
+static const uint64_t MEDIUM_TRANSFER_MAX_BYTES = 64u << 20;
+static const uint32_t SMALL_TRANSFER_PAYLOAD_BYTES = 1024;
+static const uint32_t MEDIUM_TRANSFER_PAYLOAD_BYTES = 8192;
+static const uint32_t LARGE_TRANSFER_PAYLOAD_BYTES = 64000;
+
 const json*
 FindField(const json& item, const std::string& name)
 {
@@ -122,6 +128,26 @@ ReadJsonFile(const std::string& filename)
   return json();
 }
 
+uint32_t
+ResolvePayloadBytes(const std::string& chunkMode,
+                    uint32_t fixedPayloadBytes,
+                    uint64_t transferSizeBytes)
+{
+  if (chunkMode == "fixed")
+    {
+      return fixedPayloadBytes;
+    }
+  if (transferSizeBytes <= SMALL_TRANSFER_MAX_BYTES)
+    {
+      return SMALL_TRANSFER_PAYLOAD_BYTES;
+    }
+  if (transferSizeBytes <= MEDIUM_TRANSFER_MAX_BYTES)
+    {
+      return MEDIUM_TRANSFER_PAYLOAD_BYTES;
+    }
+  return LARGE_TRANSFER_PAYLOAD_BYTES;
+}
+
 } // namespace
 
 NetworkTransfer::NetworkTransfer()
@@ -138,14 +164,23 @@ NetworkTransfer::NetworkTransfer()
 {
 }
 
+uint32_t
+GetSizeAwareMaximumPayloadBytes()
+{
+  return LARGE_TRANSFER_PAYLOAD_BYTES;
+}
+
 std::vector<NetworkTransfer>
 ReadNetworkTransferTrace(const std::string& filename,
-                         uint32_t payloadBytes,
+                         const std::string& chunkMode,
+                         uint32_t fixedPayloadBytes,
                          double simulationDurationSeconds,
                          const SatelliteTopology& topology)
 {
   NS_ABORT_MSG_IF(filename.empty(), "NetworkTransfer JSON 路径不能为空");
-  NS_ABORT_MSG_IF(payloadBytes == 0 || payloadBytes > 65507,
+  NS_ABORT_MSG_IF(chunkMode != "fixed" && chunkMode != "size-aware",
+                  "transferChunkMode 必须是 fixed 或 size-aware");
+  NS_ABORT_MSG_IF(fixedPayloadBytes == 0 || fixedPayloadBytes > 65507,
                   "transferPayloadBytes 必须在 1..65507 范围内");
 
   int64_t simulationDurationNs =
@@ -217,6 +252,10 @@ ReadNetworkTransferTrace(const std::string& filename,
         topology.GetServiceAddressBySatelliteId(transfer.sourceSatelliteId);
       transfer.destinationAddress =
         topology.GetServiceAddressBySatelliteId(transfer.destinationSatelliteId);
+      uint32_t payloadBytes =
+        ResolvePayloadBytes(chunkMode,
+                            fixedPayloadBytes,
+                            transfer.sizeBytes);
       transfer.payloadBytesPerPacket = payloadBytes;
       transfer.packetCount =
         transfer.sizeBytes / payloadBytes

@@ -41,6 +41,7 @@ struct NetworkTransferState
 
 NetworkTransferState InstallNetworkTransfers(
   const std::string& filename,
+  const std::string& chunkMode,
   uint32_t payloadBytes,
   uint16_t islMtuBytes,
   const std::string& logMode,

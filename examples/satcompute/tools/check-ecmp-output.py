@@ -276,6 +276,24 @@ def read_transfer_input(path):
 
 def validate_transfer_contract(directory, input_path):
     transfers = read_transfer_input(input_path)
+    run = read_run_summary(directory)
+    chunk_mode = run["transfer_chunk_mode"]
+    require(
+        chunk_mode in {"fixed", "size-aware"},
+        "run transfer chunk mode must be fixed or size-aware",
+    )
+    fixed_payload = run["fixed_payload_bytes"]
+    if chunk_mode == "fixed":
+        require(
+            isinstance(fixed_payload, int) and fixed_payload > 0,
+            "fixed mode requires a positive fixed payload",
+        )
+    else:
+        require(
+            fixed_payload is None,
+            "size-aware mode must report null fixed payload",
+        )
+
     summary_rows = read_rows(directory, TRANSFER_FILE)
     detail_rows = [
         row
@@ -311,9 +329,21 @@ def validate_transfer_contract(directory, input_path):
         require(transfer_id in details, f"missing transfer detail {transfer_id}")
         summary = summaries[transfer_id]
         detail = details[transfer_id]
-        payload = int_field(summary, "payload_bytes_per_packet")
+        payload = int_field(summary, "effective_payload_bytes")
         require(payload > 0, f"transfer {transfer_id} has invalid payload cap")
         declared = transfer["size_bytes"]
+        expected_payload = fixed_payload
+        if chunk_mode == "size-aware":
+            if declared <= 1 << 20:
+                expected_payload = 1024
+            elif declared <= 64 << 20:
+                expected_payload = 8192
+            else:
+                expected_payload = 64000
+        require(
+            payload == expected_payload,
+            f"transfer {transfer_id} effective payload mismatch",
+        )
         expected_packets = (declared + payload - 1) // payload
         expected_final = declared % payload or payload
 
@@ -397,7 +427,6 @@ def validate_transfer_contract(directory, input_path):
         total_packets += expected_packets
         packet_counts.append(expected_packets)
 
-    run = read_run_summary(directory)
     require(
         run["pacing_mode"] == "first-hop-serialization",
         "run pacing mode mismatch",
@@ -465,7 +494,7 @@ def validate_remainder(directory):
     require(len(matches) == 1, "expected exactly one 2050-byte transfer")
     row = matches[0]
     require(
-        int_field(row, "payload_bytes_per_packet") == 1024
+        int_field(row, "effective_payload_bytes") == 1024
         and int_field(row, "derived_packet_count") == 3
         and int_field(row, "final_packet_payload_bytes") == 2,
         "2050-byte remainder must be 1024 + 1024 + 2",

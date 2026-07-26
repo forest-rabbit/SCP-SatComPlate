@@ -45,12 +45,15 @@ struct NetworkTransfer
   uint64_t packetCount;
   uint32_t finalPacketPayloadBytes;
 
-  NetworkTransfer();
+NetworkTransfer();
 };
+
+uint32_t GetSizeAwareMaximumPayloadBytes();
 
 std::vector<NetworkTransfer> ReadNetworkTransferTrace(
   const std::string& filename,
-  uint32_t payloadBytes,
+  const std::string& chunkMode,
+  uint32_t fixedPayloadBytes,
   double simulationDurationSeconds,
   const SatelliteTopology& topology);
 

@@ -29,6 +29,7 @@ offeredLoad              = 0
 transport                = udp
 trafficMatrix            = examples/satcompute/input/traffic/csv/traffic_matrix(66).csv
 transferTrace            = empty
+transferChunkMode        = fixed
 transferPayloadBytes     = 1024
 islMtuBytes              = 1500
 transferLogMode          = summary
@@ -45,7 +46,8 @@ outputDir                = examples/satcompute/output
 - `--transport`：legacy 模式支持 `udp` 或 `tcp`。
 - `--trafficMatrix`：legacy 100×N 行、N 列 CSV，单位 Gbps。
 - `--transferTrace`：可选 NetworkTransfer JSON。
-- `--transferPayloadBytes`：每个 UDP 应用包的 payload 上限，默认 1024。
+- `--transferChunkMode`：`fixed` 或 `size-aware`，默认 `fixed`。
+- `--transferPayloadBytes`：`fixed` 模式的 UDP payload 上限，默认 1024。
 - `--islMtuBytes`：所有当前及后续 ISL 的 MTU，默认 1500。
 - `--transferLogMode`：`summary`、`verbose` 或 `silent`。
 - `--routingMode`：`global-first` 或 `global-hash-per-flow`。
@@ -85,8 +87,17 @@ arrival_time_ns
 `size_bytes` 是不含 UDP/IP/链路 header 的正应用 payload；到达时间必须非负且
 严格早于仿真结束。
 
-程序按 `transfer_id` canonical sort。应用 payload 按全局 cap 分包，最后一包
-使用准确余量。第一包在 `arrival_time_ns` 发送；每包发送后重新查询该五元组
+程序按 `transfer_id` canonical sort。`fixed` 模式使用全局 cap；
+`size-aware` 模式固定使用以下可审计策略：
+
+```text
+size <= 1 MiB        -> 1024 bytes
+1 MiB < size <= 64MiB -> 8192 bytes
+size > 64 MiB        -> 64000 bytes
+```
+
+每条 transfer 的 effective payload 写入 `transfer-summary.csv`，最后一包使用
+准确余量。第一包在 `arrival_time_ns` 发送；每包发送后重新查询该五元组
 当前选定的首跳 PointToPoint 设备与 DataRate，并按当前包的链路序列化时间调度
 下一包，不增加应用层人工 gap。
 目的 UDP 端口固定为 9000，同一源卫星的 transfer 按
@@ -126,6 +137,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --simulationDuration=3 \
   --offeredLoad=0 \
   --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+  --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
   --transferLogMode=verbose \
@@ -138,6 +150,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --simulationDuration=3 \
   --offeredLoad=0 \
   --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+  --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
   --transferLogMode=verbose \
@@ -154,6 +167,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --simulationDuration=6 \
   --offeredLoad=0 \
   --transferTrace=examples/satcompute/input/traffic/json/diamond-4-dynamic-transfers.json \
+  --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
   --transferLogMode=verbose \
@@ -181,6 +195,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 ./waf --run "satcompute \
   --simulationDuration=8 \
   --transferTrace=examples/satcompute/input/traffic/json/workload-5000-varied.json \
+  --transferChunkMode=fixed \
   --transferPayloadBytes=4096 \
   --islMtuBytes=9000 \
   --transferLogMode=summary \
@@ -188,9 +203,9 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
   --outputDir=/tmp/satcompute-workload-5000"
 ```
 
-`varied-multipacket.json` 是更小的多包 fixture，在 64000-byte cap 下分别产生
-5、10、15、20 个包。64000-byte payload 仅用于降低大数据仿真的事件数量，
-不宣称真实卫星网络使用 64 KB 物理帧。
+`varied-multipacket.json` 当前用于验证同一输入内的 size-aware 分级和多包
+传输；大于 64 MiB 的逻辑 transfer 才使用 64000-byte effective payload。
+该值只用于降低大数据仿真的事件数量，不宣称真实卫星网络使用 64 KB 物理帧。
 
 ## 输出与当前边界
 

@@ -40,6 +40,7 @@ jobs:
             --simulationDuration=3 \
             --offeredLoad=0 \
             --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+            --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
             --transferLogMode=verbose \
@@ -51,6 +52,7 @@ jobs:
             --simulationDuration=3 \
             --offeredLoad=0 \
             --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+            --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
             --transferLogMode=verbose \
@@ -65,6 +67,7 @@ jobs:
             --simulationDuration=6 \
             --offeredLoad=0 \
             --transferTrace=examples/satcompute/input/traffic/json/diamond-4-dynamic-transfers.json \
+            --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
             --transferLogMode=verbose \
@@ -79,6 +82,7 @@ jobs:
             --simulationDuration=1 \
             --offeredLoad=0 \
             --transferTrace=examples/satcompute/input/traffic/json/canonical-order-a.json \
+            --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
             --transferLogMode=silent \
@@ -90,6 +94,7 @@ jobs:
             --simulationDuration=1 \
             --offeredLoad=0 \
             --transferTrace=examples/satcompute/input/traffic/json/canonical-order-b.json \
+            --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
             --transferLogMode=silent \
@@ -101,6 +106,7 @@ jobs:
             --simulationDuration=1 \
             --offeredLoad=0 \
             --transferTrace=examples/satcompute/input/traffic/json/canonical-order-a.json \
+            --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
             --transferLogMode=silent \
@@ -117,6 +123,7 @@ jobs:
             --simulationDuration=8 \
             --offeredLoad=0 \
             --transferTrace=examples/satcompute/input/traffic/json/workload-5000-varied.json \
+            --transferChunkMode=fixed \
             --transferPayloadBytes=4096 \
             --islMtuBytes=9000 \
             --transferLogMode=summary \
@@ -132,7 +139,7 @@ jobs:
             --simulationDuration=2 \
             --offeredLoad=0 \
             --transferTrace=examples/satcompute/input/traffic/json/varied-multipacket.json \
-            --transferPayloadBytes=64000 \
+            --transferChunkMode=size-aware \
             --islMtuBytes=65535 \
             --transferLogMode=summary \
             --routingMode=global-hash-per-flow \
