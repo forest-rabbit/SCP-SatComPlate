@@ -19,6 +19,7 @@ def build(bld):
         'routing/satcompute-ipv4-global-routing.cc',
         'routing/satcompute-ipv4-global-routing-helper.cc',
         'task/compute-profile.cc',
+        'task/compute-service.cc',
         'task/compute-task.cc',
         'task/task-trace.cc',
         'traffic/background-traffic.cc',
