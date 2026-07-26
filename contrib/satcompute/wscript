@@ -1,10 +1,15 @@
 def build(bld):
-    program = bld.create_ns3_program(
-        'satcompute',
-        ['core', 'network', 'csma', 'point-to-point', 'internet',
-         'applications', 'flow-monitor'])
-    program.source = [
-        'satcompute.cc',
+    dependencies = [
+        'core',
+        'network',
+        'csma',
+        'point-to-point',
+        'internet',
+        'applications',
+        'flow-monitor',
+    ]
+    module = bld.create_ns3_module('satcompute', dependencies)
+    module.source = [
         'para.cc',
         'topo.cc',
         'jsontopo/topo-json.cc',
@@ -19,3 +24,12 @@ def build(bld):
         'traffic/network-transfer-config.cc',
         'traffic/network-transfer-receiver.cc',
     ]
+
+    headers = bld(features='ns3header')
+    headers.module = 'satcompute'
+    headers.source = ['para.h']
+
+    program = bld.create_ns3_program(
+        'satcompute',
+        ['satcompute'])
+    program.source = ['satcompute.cc']

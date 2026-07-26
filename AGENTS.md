@@ -8,26 +8,29 @@ intra/inter-cluster routing, SDN routing, or OpenFlow experiments.
 
 ## Project Structure
 
-The main program is `examples/satcompute/satcompute.cc`; active default
-parameters are in `examples/satcompute/para.cc`. Topology orchestration is in
-`examples/satcompute/topo.cc`; JSON parsing and runtime link state are in
-`examples/satcompute/jsontopo/`; metrics are in
-`examples/satcompute/metrics/`. The committed input is a small, pure-satellite
-example under `examples/satcompute/input/`.
+The main program is `contrib/satcompute/satcompute.cc`; active default
+parameters are in `contrib/satcompute/para.cc`. Topology orchestration is in
+`contrib/satcompute/topo.cc`; JSON parsing and runtime link state are in
+`contrib/satcompute/jsontopo/`; metrics are in
+`contrib/satcompute/metrics/`. The committed input is a small, pure-satellite
+example under `contrib/satcompute/input/`.
 
 ## Build and Verify
 
 ```bash
 source .venv/bin/activate
-./waf configure --enable-examples --enable-tests
-./waf build
-./waf --run "satcompute --simulationDuration=110 --offeredLoad=0 --outputDir=/tmp/satcompute-smoke"
-./test.py -s devices-point-to-point
+./waf configure --disable-examples --disable-tests --enable-modules=satcompute
+./waf build --targets=satcompute
+./waf --run-no-build "satcompute --simulationDuration=110 --offeredLoad=0 --outputDir=/tmp/satcompute-smoke"
 ```
 
 The smoke test must create 66 satellites, load only ISLs, apply all static
 10-second snapshots through 110 seconds, and recompute routes with stock
 `Ipv4GlobalRouting`.
+
+SatCompute end-to-end checks use JSON fixtures and the external Python checker;
+they do not require `--enable-tests`. Upstream ns-3 test suites are optional
+dependency checks and must be enabled explicitly when needed.
 
 ## Conventions
 

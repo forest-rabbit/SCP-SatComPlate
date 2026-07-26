@@ -17,17 +17,22 @@
 
 ```bash
 source .venv/bin/activate
-./waf configure --enable-examples --enable-tests
-./waf build
-./waf --run satcompute
+./waf configure --disable-examples --disable-tests --enable-modules=satcompute
+./waf build --targets=satcompute
+./waf --run-no-build satcompute
 ```
 
+`input/topology/json/tests/`、`input/traffic/json/test/` 和
+`tools/check-ecmp-output.py` 是外部端到端验证资产，不进入
+`ns3-satcompute` 模块编译。需要运行 ns-3 上游单元测试时再显式启用
+`--enable-tests`；日常平台构建不启用 examples 或 tests。
+
 ```text
-topologyDir              = examples/satcompute/input/topology/json/examples/xw-66sat
+topologyDir              = contrib/satcompute/input/topology/json/examples/xw-66sat
 simulationDuration       = 110
 offeredLoad              = 0
 transport                = udp
-trafficMatrix            = examples/satcompute/input/traffic/csv/traffic_matrix(66).csv
+trafficMatrix            = contrib/satcompute/input/traffic/csv/traffic_matrix(66).csv
 transferTrace            = empty
 transferChunkMode        = fixed
 transferPayloadBytes     = 1024
@@ -36,7 +41,7 @@ islQueueBytes            = 1500000
 transferLogMode          = summary
 routingMode              = global-first
 ecmpHashSeed             = 1
-outputDir                = examples/satcompute/output
+outputDir                = contrib/satcompute/output
 ```
 
 ## 参数合同
@@ -137,11 +142,11 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 静态场景重复运行：
 
 ```bash
-./waf --run "satcompute \
-  --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+./waf --run-no-build "satcompute \
+  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -150,11 +155,11 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ecmp-static-a"
 
-./waf --run "satcompute \
-  --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+./waf --run-no-build "satcompute \
+  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -167,11 +172,11 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 动态场景在 2 秒断开一条支路、4 秒恢复：
 
 ```bash
-./waf --run "satcompute \
-  --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-dynamic \
+./waf --run-no-build "satcompute \
+  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-dynamic \
   --simulationDuration=6 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -180,7 +185,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ecmp-dynamic"
 
-python3 examples/satcompute/tools/check-ecmp-output.py \
+python3 contrib/satcompute/tools/check-ecmp-output.py \
   --first=/tmp/satcompute-ecmp-static-a \
   --second=/tmp/satcompute-ecmp-static-b \
   --dynamic=/tmp/satcompute-ecmp-dynamic
@@ -197,9 +202,9 @@ python3 examples/satcompute/tools/check-ecmp-output.py \
 transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节。
 
 ```bash
-./waf --run "satcompute \
+./waf --run-no-build "satcompute \
   --simulationDuration=8 \
-  --transferTrace=examples/satcompute/input/traffic/json/workload/workload-5000-varied.json \
+  --transferTrace=contrib/satcompute/input/traffic/json/workload/workload-5000-varied.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=4096 \
   --islMtuBytes=9000 \
@@ -215,11 +220,11 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 覆盖 1024、8192 和 64000-byte 三个 effective payload 分级：
 
 ```bash
-./waf --run "satcompute \
-  --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+./waf --run-no-build "satcompute \
+  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=45 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/traffic/json/test/mixed-large-ci.json \
+  --transferTrace=contrib/satcompute/input/traffic/json/test/mixed-large-ci.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1500000 \
@@ -227,20 +232,20 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
   --routingMode=global-hash-per-flow \
   --outputDir=/tmp/satcompute-mixed-large-ci"
 
-python3 examples/satcompute/tools/check-ecmp-output.py \
+python3 contrib/satcompute/tools/check-ecmp-output.py \
   --large=/tmp/satcompute-mixed-large-ci \
-  --large-input=examples/satcompute/input/traffic/json/test/mixed-large-ci.json
+  --large-input=contrib/satcompute/input/traffic/json/test/mixed-large-ci.json
 ```
 
 `mixed-large-local.json` 是不放入 CI 的完整压力输入，含 10 条不同大流量，
 范围为 128 MiB–1 GiB，并明确包含 256 MiB、512 MiB 和 1 GiB：
 
 ```bash
-./waf --run "satcompute \
-  --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+./waf --run-no-build "satcompute \
+  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=340 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/traffic/json/workload/mixed-large-local.json \
+  --transferTrace=contrib/satcompute/input/traffic/json/workload/mixed-large-local.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1500000 \
@@ -248,9 +253,9 @@ python3 examples/satcompute/tools/check-ecmp-output.py \
   --routingMode=global-hash-per-flow \
   --outputDir=/tmp/satcompute-mixed-large-local"
 
-python3 examples/satcompute/tools/check-ecmp-output.py \
+python3 contrib/satcompute/tools/check-ecmp-output.py \
   --large-local=/tmp/satcompute-mixed-large-local \
-  --large-local-input=examples/satcompute/input/traffic/json/workload/mixed-large-local.json
+  --large-local-input=contrib/satcompute/input/traffic/json/workload/mixed-large-local.json
 ```
 
 64000-byte effective payload 只用于降低大数据仿真的事件数量，不宣称真实卫星

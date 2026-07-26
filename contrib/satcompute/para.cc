@@ -23,11 +23,11 @@ GetDefaultSatComputeConfig()
 {
   SatComputeConfig config;
   config.topologyDirectory =
-    "examples/satcompute/input/topology/json/examples/xw-66sat";
+    "contrib/satcompute/input/topology/json/examples/xw-66sat";
   config.trafficMatrix =
-    "examples/satcompute/input/traffic/csv/traffic_matrix(66).csv";
+    "contrib/satcompute/input/traffic/csv/traffic_matrix(66).csv";
   config.transferTrace = "";
-  config.outputDirectory = "examples/satcompute/output";
+  config.outputDirectory = "contrib/satcompute/output";
   config.transport = "udp";
   config.routingMode = "global-first";
   config.transferLogMode = "summary";

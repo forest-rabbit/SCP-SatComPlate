@@ -22,24 +22,18 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Configure
-        run: ./waf configure --enable-examples --enable-tests
+        run: ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
 
       - name: Build
-        run: ./waf build
-
-      - name: Point-to-point tests
-        run: ./test.py -s devices-point-to-point
-
-      - name: Global routing tests
-        run: ./test.py -s ipv4-global-routing
+        run: ./waf build --targets=satcompute
 
       - name: Static diamond repeat
         run: |
-          ./waf --run "satcompute \
-            --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
             --simulationDuration=3 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -48,11 +42,11 @@ jobs:
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-static-a"
-          ./waf --run "satcompute \
-            --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
             --simulationDuration=3 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -64,11 +58,11 @@ jobs:
 
       - name: Dynamic diamond
         run: |
-          ./waf --run "satcompute \
-            --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-dynamic \
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-dynamic \
             --simulationDuration=6 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-dynamic-transfers.json \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-dynamic-transfers.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -80,11 +74,11 @@ jobs:
 
       - name: Canonical endpoint and remainder
         run: |
-          ./waf --run "satcompute \
-            --topologyDir=examples/satcompute/input/topology/json/tests/canonical-order-a \
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/canonical-order-a \
             --simulationDuration=1 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/test/canonical-order-a.json \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/canonical-order-a.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -93,11 +87,11 @@ jobs:
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-canonical-a"
-          ./waf --run "satcompute \
-            --topologyDir=examples/satcompute/input/topology/json/tests/canonical-order-b \
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/canonical-order-b \
             --simulationDuration=1 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/test/canonical-order-b.json \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/canonical-order-b.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -106,11 +100,11 @@ jobs:
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-canonical-order-b"
-          ./waf --run "satcompute \
-            --topologyDir=examples/satcompute/input/topology/json/tests/canonical-endpoint-reversed \
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/canonical-endpoint-reversed \
             --simulationDuration=1 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/test/canonical-order-a.json \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/canonical-order-a.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -124,11 +118,11 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          ./waf --run "satcompute \
-            --topologyDir=examples/satcompute/input/topology/json/examples/xw-66sat \
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/examples/xw-66sat \
             --simulationDuration=8 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/workload/workload-5000-varied.json \
+            --transferTrace=contrib/satcompute/input/traffic/json/workload/workload-5000-varied.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=4096 \
             --islMtuBytes=9000 \
@@ -141,11 +135,11 @@ jobs:
 
       - name: Mixed large workload
         run: |
-          ./waf --run "satcompute \
-            --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
             --simulationDuration=45 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/test/mixed-large-ci.json \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/mixed-large-ci.json \
             --transferChunkMode=size-aware \
             --islMtuBytes=65535 \
             --islQueueBytes=1500000 \
@@ -156,7 +150,7 @@ jobs:
 
       - name: Check deterministic outputs
         run: |
-          python3 examples/satcompute/tools/check-ecmp-output.py \
+          python3 contrib/satcompute/tools/check-ecmp-output.py \
             --first=/tmp/satcompute-ci-static-a \
             --second=/tmp/satcompute-ci-static-b \
             --dynamic=/tmp/satcompute-ci-dynamic \
@@ -164,18 +158,17 @@ jobs:
             --canonical-second=/tmp/satcompute-ci-canonical-reversed \
             --remainder=/tmp/satcompute-ci-canonical-a \
             --scale=/tmp/satcompute-ci-scale \
-            --scale-input=examples/satcompute/input/traffic/json/workload/workload-5000-varied.json \
+            --scale-input=contrib/satcompute/input/traffic/json/workload/workload-5000-varied.json \
             --scale-log=/tmp/satcompute-ci-scale.log \
             --large=/tmp/satcompute-ci-mixed-large \
-            --large-input=examples/satcompute/input/traffic/json/test/mixed-large-ci.json
-          python3 examples/satcompute/tools/check-ecmp-output.py \
+            --large-input=contrib/satcompute/input/traffic/json/test/mixed-large-ci.json
+          python3 contrib/satcompute/tools/check-ecmp-output.py \
             --canonical-first=/tmp/satcompute-ci-canonical-a \
             --canonical-second=/tmp/satcompute-ci-canonical-order-b
 
       - name: Summary
         run: |
           echo "PASS build"
-          echo "PASS ns-3 tests"
           echo "PASS diamond"
           echo "PASS canonical endpoint"
           echo "PASS remainder"

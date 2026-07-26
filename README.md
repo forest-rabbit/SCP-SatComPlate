@@ -10,7 +10,8 @@ cluster、地面站、星地链路、CSV 建图、簇内/簇间路由和 SDN/Ope
 ## 目录
 
 ```text
-examples/satcompute/
+contrib/satcompute/
+├── wscript                # 独立 ns3-satcompute 模块和运行程序
 ├── satcompute.cc          # 主程序和 CLI
 ├── para.cc                # 当前有效默认参数
 ├── topo.cc                # 卫星、ISL 和动态快照
@@ -33,22 +34,25 @@ examples/satcompute/
 
 ```bash
 source .venv/bin/activate
-./waf configure --enable-examples --enable-tests
-./waf build
-./waf --run satcompute
+./waf configure --disable-examples --disable-tests --enable-modules=satcompute
+./waf build --targets=satcompute
+./waf --run-no-build satcompute
 ```
+
+SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests。只有需要
+检查 ns-3 上游测试套件时，才单独重新配置 `--enable-tests`。
 
 默认运行 xw 66 星的 0–110 秒快照，不注入业务。legacy CSV 背景流量仍可通过
 `offeredLoad` 启用：
 
 ```bash
-./waf --run "satcompute --offeredLoad=0.0001 --routingMode=global-first"
+./waf --run-no-build "satcompute --offeredLoad=0.0001 --routingMode=global-first"
 ```
 
 `para.cc` 保存默认值；命令行只覆盖当前运行。查看全部参数：
 
 ```bash
-./waf --run "satcompute --PrintHelp"
+./waf --run-no-build "satcompute --PrintHelp"
 ```
 
 主要参数：
@@ -114,10 +118,10 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 ## Diamond 验证
 
 ```bash
-./waf --run "satcompute \
-  --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+./waf --run-no-build "satcompute \
+  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -128,7 +132,7 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 ```
 
 完整的静态重复运行、动态 `2 → 1 → 2` route epoch 验证和检查器命令见
-[`examples/satcompute/README.md`](examples/satcompute/README.md)。
+[`contrib/satcompute/README.md`](contrib/satcompute/README.md)。
 
 ## 输出与范围
 
@@ -141,9 +145,9 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 - `run-summary.json`：运行配置及应用层、FlowMonitor 聚合结果。
 
 拓扑协议见
-[`examples/satcompute/input/topology/json/README.md`](examples/satcompute/input/topology/json/README.md)。
+[`contrib/satcompute/input/topology/json/README.md`](contrib/satcompute/input/topology/json/README.md)。
 流量输入的 `workload`/`test` 分类见
-[`examples/satcompute/input/traffic/json/README.md`](examples/satcompute/input/traffic/json/README.md)。
+[`contrib/satcompute/input/traffic/json/README.md`](contrib/satcompute/input/traffic/json/README.md)。
 当前阶段只完成网络传输和确定性 ECMP；任务计算、服务时间、调度、故障、备份和
 恢复语义尚未实现。64000-byte payload 仅是降低大数据仿真事件数量的可扩展性
 配置，不表示真实卫星网络使用 64 KB 物理帧。

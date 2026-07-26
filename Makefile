@@ -1,14 +1,13 @@
 # Makefile wrapper for waf
 
-all:
-	./waf
+all: build
 
 # free free to change this part to suit your requirements
 configure:
-	./waf configure --enable-examples --enable-tests
+	./waf configure --disable-examples --disable-tests --enable-modules=satcompute
 
 build:
-	./waf build
+	./waf build --targets=satcompute
 
 install:
 	./waf install

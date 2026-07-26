@@ -24,7 +24,7 @@ sudo apt install -y clangd-15
 Create a project-local Python environment with uv:
 
 ```bash
-cd /path/to/xw
+cd /path/to/SatCompute
 uv venv --python /usr/bin/python3
 source .venv/bin/activate
 ```
@@ -33,11 +33,12 @@ The `.venv/` directory is local and should not be committed.
 
 ## Configure and build
 
-Configure ns-3 with examples and tests enabled:
+Configure only the SatCompute module and its ns-3 dependencies. Upstream
+examples and test libraries are disabled for the normal development build:
 
 ```bash
-./waf configure --enable-examples --enable-tests
-./waf build
+./waf configure --disable-examples --disable-tests --enable-modules=satcompute
+./waf build --targets=satcompute
 ```
 
 The build writes the compilation database to:
@@ -66,8 +67,8 @@ Error Lens
 Use clangd as the main C++ language server. If Ctrl+Click navigation does not work:
 
 1. Make sure `clangd-15` is installed.
-2. Run `./waf configure --enable-examples --enable-tests`.
-3. Run `./waf build`.
+2. Run `./waf configure --disable-examples --disable-tests --enable-modules=satcompute`.
+3. Run `./waf build --targets=satcompute`.
 4. Reload VS Code with `Developer: Reload Window`.
 
 The local VS Code workspace settings can point clangd to:
