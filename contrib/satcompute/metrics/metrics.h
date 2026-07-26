@@ -13,6 +13,8 @@
 
 namespace ns3 {
 
+class TaskCoordinator;
+
 struct ApplicationMetrics
 {
   uint64_t sinkApplications;
@@ -30,6 +32,8 @@ struct RunMetadata
   std::string pacingMode;
   std::string transferChunkMode;
   uint32_t fixedPayloadBytes;
+  std::string computeProfilePath;
+  std::string taskTracePath;
 };
 
 struct TransferFlowMetadata
@@ -80,6 +84,7 @@ public:
                   const std::vector<TransferFlowMetadata>& transferFlows,
                   const std::vector<TransferSummaryRecord>& transferSummaries,
                   const std::vector<EcmpRouteDecisionEvent>& routeEvents,
+                  const TaskCoordinator* taskCoordinator,
                   const std::string& outputDirectory);
 
   void Record();
@@ -93,6 +98,7 @@ private:
   std::vector<TransferFlowMetadata> m_transferFlows;
   std::vector<TransferSummaryRecord> m_transferSummaries;
   std::vector<EcmpRouteDecisionEvent> m_routeEvents;
+  const TaskCoordinator* m_taskCoordinator;
   std::string m_outputDirectory;
 };
 

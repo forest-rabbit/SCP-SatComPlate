@@ -2,6 +2,8 @@
 
 #include "metrics.h"
 
+#include "../task/task-coordinator.h"
+
 #include "ns3/abort.h"
 #include "ns3/ipv4-flow-classifier.h"
 
@@ -338,6 +340,224 @@ WriteTransferSummaries(
     }
 }
 
+uint64_t
+NonNegativeDifference(int64_t endTimeNs,
+                      int64_t startTimeNs,
+                      const std::string& field,
+                      uint64_t taskId)
+{
+  NS_ABORT_MSG_IF(startTimeNs < 0 || endTimeNs < startTimeNs,
+                  "任务时间戳无效: task_id=" << taskId
+                    << " field=" << field
+                    << " start=" << startTimeNs
+                    << " end=" << endTimeNs);
+  return static_cast<uint64_t>(endTimeNs - startTimeNs);
+}
+
+struct TaskAggregate
+{
+  uint64_t computeNodeCount = 0;
+  uint64_t taskCount = 0;
+  uint64_t completedTaskCount = 0;
+  uint64_t totalInputBytes = 0;
+  uint64_t totalOutputBytes = 0;
+  uint64_t totalComputeWorkUnits = 0;
+  uint64_t totalCompletionDelayNs = 0;
+  uint64_t meanCompletionDelayNs = 0;
+  uint64_t maxCompletionDelayNs = 0;
+};
+
+TaskAggregate
+CollectTaskAggregate(const TaskCoordinator* coordinator)
+{
+  TaskAggregate aggregate;
+  if (coordinator == nullptr)
+    {
+      return aggregate;
+    }
+
+  aggregate.computeNodeCount = coordinator->GetComputeServices().size();
+  aggregate.taskCount = coordinator->GetTaskRuntimes().size();
+  for (const auto& task : coordinator->GetTaskRuntimes())
+    {
+      aggregate.totalInputBytes =
+        CheckedAdd(aggregate.totalInputBytes,
+                   task.definition.inputBytes,
+                   "task input bytes");
+      aggregate.totalOutputBytes =
+        CheckedAdd(aggregate.totalOutputBytes,
+                   task.definition.outputBytes,
+                   "task output bytes");
+      aggregate.totalComputeWorkUnits =
+        CheckedAdd(aggregate.totalComputeWorkUnits,
+                   task.definition.computeWorkUnits,
+                   "task compute work units");
+      if (task.state != TASK_COMPLETED)
+        {
+          continue;
+        }
+      ++aggregate.completedTaskCount;
+      uint64_t completionDelayNs =
+        NonNegativeDifference(task.resultTransferCompleteTimeNs,
+                              task.definition.arrivalTimeNs,
+                              "end_to_end_completion_delay_ns",
+                              task.definition.taskId);
+      aggregate.totalCompletionDelayNs =
+        CheckedAdd(aggregate.totalCompletionDelayNs,
+                   completionDelayNs,
+                   "task completion delay");
+      aggregate.maxCompletionDelayNs =
+        std::max(aggregate.maxCompletionDelayNs, completionDelayNs);
+    }
+  if (aggregate.completedTaskCount > 0)
+    {
+      aggregate.meanCompletionDelayNs =
+        aggregate.totalCompletionDelayNs / aggregate.completedTaskCount;
+    }
+  return aggregate;
+}
+
+void
+WriteTaskEvents(const TaskCoordinator& coordinator,
+                const std::string& outputDirectory)
+{
+  std::ofstream output(OutputPath(outputDirectory, "task-events.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 task events CSV");
+  output << "simulation_time_ns,task_id,from_state,to_state,node_id,cause\n";
+  for (const auto& event : coordinator.GetTaskEvents())
+    {
+      output << event.simulationTimeNs << ","
+             << event.taskId << ","
+             << TaskStateToString(event.fromState) << ","
+             << TaskStateToString(event.toState) << ","
+             << event.nodeId << ","
+             << event.cause << "\n";
+    }
+}
+
+void
+WriteTaskSummaries(const TaskCoordinator& coordinator,
+                   const std::string& outputDirectory)
+{
+  std::map<uint32_t, uint64_t> ratesByNodeId;
+  for (const auto& service : coordinator.GetComputeServices())
+    {
+      NS_ABORT_MSG_IF(
+        !ratesByNodeId.insert(
+          std::make_pair(
+            service->GetNodeId(),
+            service->GetComputeRateWorkUnitsPerSecond())).second,
+        "重复 ComputeService node_id=" << service->GetNodeId());
+    }
+
+  std::ofstream output(OutputPath(outputDirectory, "task-summary.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 task summary CSV");
+  output
+    << "task_id,source_node_id,compute_node_id,result_node_id,input_bytes,"
+       "output_bytes,compute_work_units,compute_rate_work_units_per_second,"
+       "input_transfer_id,result_transfer_id,arrival_time_ns,"
+       "input_transfer_complete_time_ns,queue_enter_time_ns,"
+       "compute_start_time_ns,compute_complete_time_ns,"
+       "result_transfer_start_time_ns,result_transfer_complete_time_ns,"
+       "input_transfer_delay_ns,queue_delay_ns,compute_service_time_ns,"
+       "result_transfer_delay_ns,end_to_end_completion_delay_ns,final_state\n";
+  for (const auto& task : coordinator.GetTaskRuntimes())
+    {
+      auto rate = ratesByNodeId.find(task.definition.computeNodeId);
+      NS_ABORT_MSG_IF(rate == ratesByNodeId.end(),
+                      "task summary 缺少 ComputeService，task_id="
+                        << task.definition.taskId);
+      uint64_t inputDelayNs =
+        NonNegativeDifference(task.inputTransferCompleteTimeNs,
+                              task.definition.arrivalTimeNs,
+                              "input_transfer_delay_ns",
+                              task.definition.taskId);
+      uint64_t queueDelayNs =
+        NonNegativeDifference(task.computeStartTimeNs,
+                              task.queueEnterTimeNs,
+                              "queue_delay_ns",
+                              task.definition.taskId);
+      uint64_t serviceTimeNs =
+        NonNegativeDifference(task.computeCompleteTimeNs,
+                              task.computeStartTimeNs,
+                              "compute_service_time_ns",
+                              task.definition.taskId);
+      uint64_t resultDelayNs =
+        NonNegativeDifference(task.resultTransferCompleteTimeNs,
+                              task.resultTransferStartTimeNs,
+                              "result_transfer_delay_ns",
+                              task.definition.taskId);
+      uint64_t completionDelayNs =
+        NonNegativeDifference(task.resultTransferCompleteTimeNs,
+                              task.definition.arrivalTimeNs,
+                              "end_to_end_completion_delay_ns",
+                              task.definition.taskId);
+
+      output << task.definition.taskId << ","
+             << task.definition.sourceNodeId << ","
+             << task.definition.computeNodeId << ","
+             << task.definition.resultNodeId << ","
+             << task.definition.inputBytes << ","
+             << task.definition.outputBytes << ","
+             << task.definition.computeWorkUnits << ","
+             << rate->second << ","
+             << task.definition.inputTransferId << ","
+             << task.definition.resultTransferId << ","
+             << task.definition.arrivalTimeNs << ","
+             << task.inputTransferCompleteTimeNs << ","
+             << task.queueEnterTimeNs << ","
+             << task.computeStartTimeNs << ","
+             << task.computeCompleteTimeNs << ","
+             << task.resultTransferStartTimeNs << ","
+             << task.resultTransferCompleteTimeNs << ","
+             << inputDelayNs << ","
+             << queueDelayNs << ","
+             << serviceTimeNs << ","
+             << resultDelayNs << ","
+             << completionDelayNs << ","
+             << TaskStateToString(task.state) << "\n";
+    }
+}
+
+void
+WriteComputeNodeSummaries(const TaskCoordinator& coordinator,
+                          double simulationDurationSeconds,
+                          const std::string& outputDirectory)
+{
+  int64_t simulationDurationNs =
+    Seconds(simulationDurationSeconds).GetNanoSeconds();
+  NS_ABORT_MSG_IF(simulationDurationNs <= 0,
+                  "simulationDuration 无法表示为正的纳秒时长");
+
+  std::ofstream output(OutputPath(outputDirectory, "compute-node-summary.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 compute node summary CSV");
+  output
+    << "node_id,compute_rate_work_units_per_second,enqueued_tasks,"
+       "completed_tasks,busy_time_ns,max_queue_length,utilization_percent\n";
+  for (const auto& service : coordinator.GetComputeServices())
+    {
+      NS_ABORT_MSG_IF(
+        service->GetBusyTimeNs()
+          > static_cast<uint64_t>(simulationDurationNs),
+        "ComputeService busy_time_ns 超过 simulationDuration，node_id="
+          << service->GetNodeId());
+      long double utilizationPercent =
+        static_cast<long double>(service->GetBusyTimeNs()) * 100.0L
+        / static_cast<long double>(simulationDurationNs);
+      output << std::setprecision(15)
+             << service->GetNodeId() << ","
+             << service->GetComputeRateWorkUnitsPerSecond() << ","
+             << service->GetEnqueuedTaskCount() << ","
+             << service->GetCompletedTaskCount() << ","
+             << service->GetBusyTimeNs() << ","
+             << service->GetMaxQueueLength() << ","
+             << static_cast<double>(utilizationPercent) << "\n";
+    }
+}
+
 void
 WriteRunSummary(
   const FlowAggregate& aggregate,
@@ -346,6 +566,7 @@ WriteRunSummary(
   const RunMetadata& runMetadata,
   const ApplicationMetrics& applicationMetrics,
   const std::vector<TransferSummaryRecord>& transferSummaries,
+  const TaskCoordinator* taskCoordinator,
   const std::string& outputDirectory)
 {
   uint64_t declaredBytes = 0;
@@ -367,6 +588,13 @@ WriteRunSummary(
                    summary.derivedPacketCount,
                    "derived packet count");
     }
+
+  TaskAggregate taskAggregate = CollectTaskAggregate(taskCoordinator);
+  NS_ABORT_MSG_IF(
+    taskCoordinator != nullptr
+      && (runMetadata.computeProfilePath.empty()
+            || runMetadata.taskTracePath.empty()),
+    "task mode run summary 缺少输入路径");
 
   if (transferSummaries.empty())
     {
@@ -414,7 +642,42 @@ WriteRunSummary(
          << "  \"flow_monitor_tx_packets\": " << aggregate.txPackets << ",\n"
          << "  \"flow_monitor_rx_packets\": " << aggregate.rxPackets << ",\n"
          << "  \"flow_monitor_lost_packets\": "
-         << aggregate.lostPackets << "\n"
+         << aggregate.lostPackets << ",\n"
+         << "  \"compute_profile_path\": ";
+  if (runMetadata.computeProfilePath.empty())
+    {
+      output << "null";
+    }
+  else
+    {
+      output << "\"" << runMetadata.computeProfilePath << "\"";
+    }
+  output << ",\n"
+         << "  \"task_trace_path\": ";
+  if (runMetadata.taskTracePath.empty())
+    {
+      output << "null";
+    }
+  else
+    {
+      output << "\"" << runMetadata.taskTracePath << "\"";
+    }
+  output << ",\n"
+         << "  \"compute_node_count\": "
+         << taskAggregate.computeNodeCount << ",\n"
+         << "  \"task_count\": " << taskAggregate.taskCount << ",\n"
+         << "  \"completed_task_count\": "
+         << taskAggregate.completedTaskCount << ",\n"
+         << "  \"total_input_bytes\": "
+         << taskAggregate.totalInputBytes << ",\n"
+         << "  \"total_output_bytes\": "
+         << taskAggregate.totalOutputBytes << ",\n"
+         << "  \"total_compute_work_units\": "
+         << taskAggregate.totalComputeWorkUnits << ",\n"
+         << "  \"mean_task_completion_delay_ns\": "
+         << taskAggregate.meanCompletionDelayNs << ",\n"
+         << "  \"max_task_completion_delay_ns\": "
+         << taskAggregate.maxCompletionDelayNs << "\n"
          << "}\n";
 }
 
@@ -434,6 +697,7 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
                                  const std::vector<TransferFlowMetadata>& transferFlows,
                                  const std::vector<TransferSummaryRecord>& transferSummaries,
                                  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
+                                 const TaskCoordinator* taskCoordinator,
                                  const std::string& outputDirectory)
   : m_monitor(monitor),
     m_simulationDurationSeconds(simulationDurationSeconds),
@@ -443,6 +707,7 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
     m_transferFlows(transferFlows),
     m_transferSummaries(transferSummaries),
     m_routeEvents(routeEvents),
+    m_taskCoordinator(taskCoordinator),
     m_outputDirectory(outputDirectory)
 {
 }
@@ -462,12 +727,21 @@ MetricsRecorder::Record()
   WriteNetworkFlowDetails(m_monitor, m_transferFlows, m_outputDirectory);
   WriteEcmpRouteEvents(m_routeEvents, m_outputDirectory);
   WriteTransferSummaries(m_transferSummaries, m_outputDirectory);
+  if (m_taskCoordinator != nullptr)
+    {
+      WriteTaskEvents(*m_taskCoordinator, m_outputDirectory);
+      WriteTaskSummaries(*m_taskCoordinator, m_outputDirectory);
+      WriteComputeNodeSummaries(*m_taskCoordinator,
+                                m_simulationDurationSeconds,
+                                m_outputDirectory);
+    }
   WriteRunSummary(aggregate,
                   m_simulationDurationSeconds,
                   m_wallClockSeconds,
                   m_runMetadata,
                   m_applicationMetrics,
                   m_transferSummaries,
+                  m_taskCoordinator,
                   m_outputDirectory);
 
   std::cout << "[METRICS] Output" << std::endl
@@ -481,6 +755,17 @@ MetricsRecorder::Record()
             << OutputPath(m_outputDirectory, "transfer-summary.csv") << std::endl
             << "  run     : "
             << OutputPath(m_outputDirectory, "run-summary.json") << std::endl;
+  if (m_taskCoordinator != nullptr)
+    {
+      std::cout
+        << "  task    : "
+        << OutputPath(m_outputDirectory, "task-summary.csv") << std::endl
+        << "  events  : "
+        << OutputPath(m_outputDirectory, "task-events.csv") << std::endl
+        << "  compute : "
+        << OutputPath(m_outputDirectory, "compute-node-summary.csv")
+        << std::endl;
+    }
 }
 
 } // namespace ns3

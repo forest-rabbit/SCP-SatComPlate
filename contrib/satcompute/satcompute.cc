@@ -431,7 +431,9 @@ main(int argc, char* argv[])
     transferMode || taskMode ? config.transferChunkMode : "none",
     (transferMode || taskMode) && config.transferChunkMode == "fixed"
       ? config.transferPayloadBytes
-      : 0
+      : 0,
+    taskMode ? config.computeProfile : "",
+    taskMode ? config.taskTrace : ""
   };
   MetricsRecorder metrics(flowMonitor,
                           config.simulationDurationSeconds,
@@ -441,6 +443,7 @@ main(int argc, char* argv[])
                           transferFlowMetadata,
                           transferSummaries,
                           routeRecorder.GetEvents(),
+                          taskMode ? PeekPointer(taskCoordinator) : nullptr,
                           config.outputDirectory);
   metrics.Record();
   Simulator::Destroy();
