@@ -139,20 +139,20 @@ jobs:
             --outputDir=/tmp/satcompute-ci-scale" \
             | tee /tmp/satcompute-ci-scale.log
 
-      - name: Varied multi-packet workload
+      - name: Mixed large workload
         run: |
           ./waf --run "satcompute \
             --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
-            --simulationDuration=2 \
+            --simulationDuration=45 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/varied-multipacket.json \
+            --transferTrace=examples/satcompute/input/traffic/json/mixed-large-ci.json \
             --transferChunkMode=size-aware \
             --islMtuBytes=65535 \
             --islQueueBytes=1500000 \
             --transferLogMode=summary \
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
-            --outputDir=/tmp/satcompute-ci-varied-multipacket"
+            --outputDir=/tmp/satcompute-ci-mixed-large"
 
       - name: Check deterministic outputs
         run: |
@@ -166,8 +166,8 @@ jobs:
             --scale=/tmp/satcompute-ci-scale \
             --scale-input=examples/satcompute/input/traffic/json/workload-5000-varied.json \
             --scale-log=/tmp/satcompute-ci-scale.log \
-            --large=/tmp/satcompute-ci-varied-multipacket \
-            --large-input=examples/satcompute/input/traffic/json/varied-multipacket.json
+            --large=/tmp/satcompute-ci-mixed-large \
+            --large-input=examples/satcompute/input/traffic/json/mixed-large-ci.json
           python3 examples/satcompute/tools/check-ecmp-output.py \
             --canonical-first=/tmp/satcompute-ci-canonical-a \
             --canonical-second=/tmp/satcompute-ci-canonical-order-b
@@ -180,4 +180,4 @@ jobs:
           echo "PASS canonical endpoint"
           echo "PASS remainder"
           echo "PASS 5000 varied transfers"
-          echo "PASS varied multi-packet workload"
+          echo "PASS mixed large workload"

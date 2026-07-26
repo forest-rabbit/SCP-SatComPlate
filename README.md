@@ -94,7 +94,10 @@ PointToPoint 设备，并按该包的链路序列化时间调度下一包，不�
 10000 派生唯一源端口。
 
 已提交的 `workload-5000-varied.json` 包含 5000 个不同的 `size_bytes`，在
-fixed 4096-byte cap 下覆盖 1–20 包。混合大流量输入使用 size-aware 模式。
+fixed 4096-byte cap 下覆盖 1–20 包。`mixed-large-ci.json` 含两个分级边界
+探针和 10 条不小于 8 MiB 的不同大流量，最大为 125,000,000 bytes
+（1 Gbit）；`mixed-large-local.json` 含 10 条 128 MiB–1 GiB 的本地完整
+压力输入。两者均使用 size-aware 模式。
 
 ## 路由
 

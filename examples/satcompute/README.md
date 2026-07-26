@@ -107,8 +107,10 @@ size > 64 MiB        -> 64000 bytes
 `(source_node_id,transfer_id)` 从源端口 10000 顺序派生。JSON 不接受包数、
 包间隔、包长、端口、MTU或速率字段。
 
-要求 `transferPayloadBytes + 28 <= islMtuBytes` 且 payload 不超过 65507，
-因此 NetworkTransfer 不依赖 IPv4 分片。
+要求本次运行可能使用的最大 effective payload 加 28 bytes 后不超过
+`islMtuBytes`，且 UDP payload 不超过 65507。因此 fixed 模式按
+`transferPayloadBytes` 校验，size-aware 模式按 64000 bytes 校验，
+NetworkTransfer 不依赖 IPv4 分片。
 
 ## 地址与路由
 
@@ -206,9 +208,53 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
   --outputDir=/tmp/satcompute-workload-5000"
 ```
 
-`varied-multipacket.json` 当前用于验证同一输入内的 size-aware 分级和多包
-传输；大于 64 MiB 的逻辑 transfer 才使用 64000-byte effective payload。
-该值只用于降低大数据仿真的事件数量，不宣称真实卫星网络使用 64 KB 物理帧。
+## 混合大流量输入
+
+`mixed-large-ci.json` 含两个 size-aware 阈值探针，以及 10 条大小互异且不小于
+8 MiB 的大流量；其中包含 64 MiB 和 125,000,000 bytes（1 Gbit），一次运行
+覆盖 1024、8192 和 64000-byte 三个 effective payload 分级：
+
+```bash
+./waf --run "satcompute \
+  --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+  --simulationDuration=45 \
+  --offeredLoad=0 \
+  --transferTrace=examples/satcompute/input/traffic/json/mixed-large-ci.json \
+  --transferChunkMode=size-aware \
+  --islMtuBytes=65535 \
+  --islQueueBytes=1500000 \
+  --transferLogMode=summary \
+  --routingMode=global-hash-per-flow \
+  --outputDir=/tmp/satcompute-mixed-large-ci"
+
+python3 examples/satcompute/tools/check-ecmp-output.py \
+  --large=/tmp/satcompute-mixed-large-ci \
+  --large-input=examples/satcompute/input/traffic/json/mixed-large-ci.json
+```
+
+`mixed-large-local.json` 是不放入 CI 的完整压力输入，含 10 条不同大流量，
+范围为 128 MiB–1 GiB，并明确包含 256 MiB、512 MiB 和 1 GiB：
+
+```bash
+./waf --run "satcompute \
+  --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
+  --simulationDuration=340 \
+  --offeredLoad=0 \
+  --transferTrace=examples/satcompute/input/traffic/json/mixed-large-local.json \
+  --transferChunkMode=size-aware \
+  --islMtuBytes=65535 \
+  --islQueueBytes=1500000 \
+  --transferLogMode=summary \
+  --routingMode=global-hash-per-flow \
+  --outputDir=/tmp/satcompute-mixed-large-local"
+
+python3 examples/satcompute/tools/check-ecmp-output.py \
+  --large-local=/tmp/satcompute-mixed-large-local \
+  --large-local-input=examples/satcompute/input/traffic/json/mixed-large-local.json
+```
+
+64000-byte effective payload 只用于降低大数据仿真的事件数量，不宣称真实卫星
+网络使用 64 KB 物理帧。
 
 ## 输出与当前边界
 

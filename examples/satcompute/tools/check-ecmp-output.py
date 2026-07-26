@@ -545,18 +545,65 @@ def validate_scale(directory, input_path, log_path, second=None):
     print("PASS: 5000 distinct-size transfers, 1..20 packets, zero loss")
 
 
-def validate_large(directory, input_path):
-    transfers, _, _, packet_counts = validate_transfer_contract(
+def validate_large(directory, input_path, local_full=False):
+    transfers, summary_rows, _, packet_counts = validate_transfer_contract(
         directory, input_path
     )
-    require(len(transfers) > 1, "varied multi-packet input needs multiple flows")
     require(
         len({item["size_bytes"] for item in transfers}) == len(transfers),
-        "varied multi-packet sizes must differ",
+        "mixed-large transfer sizes must differ",
     )
-    require(max(packet_counts) >= 20, "expected at least one 20-packet transfer")
-    require(min(packet_counts) > 1, "every varied-large transfer must be multi-packet")
-    print("PASS: varied-size multi-packet transfers complete without fragmentation")
+    require(
+        min(packet_counts) > 1,
+        "every mixed-large fixture transfer must be multi-packet",
+    )
+    payloads = {
+        int_field(row, "effective_payload_bytes") for row in summary_rows
+    }
+    sizes = {item["size_bytes"] for item in transfers}
+
+    if local_full:
+        require(
+            len(transfers) >= 10,
+            "local full input must contain at least 10 large transfers",
+        )
+        require(
+            min(sizes) > 64 << 20,
+            "every local full transfer must exceed 64 MiB",
+        )
+        require(
+            {(256 << 20), (512 << 20), (1 << 30)} <= sizes,
+            "local full input must include 256 MiB, 512 MiB, and 1 GiB",
+        )
+        require(
+            payloads == {64000},
+            "local full transfers must use the 64000-byte payload tier",
+        )
+        print(
+            "PASS: at least 10 full-size local transfers complete "
+            "without fragmentation"
+        )
+        return
+
+    large_transfers = [
+        item for item in transfers if item["size_bytes"] >= 8 << 20
+    ]
+    require(
+        len(large_transfers) >= 10,
+        "CI input must contain at least 10 transfers of 8 MiB or larger",
+    )
+    require(
+        {(1 << 20), (1 << 20) + 1, (64 << 20), 125000000} <= sizes,
+        "CI input must cover chunk boundaries and the 1-Gbit transfer",
+    )
+    require(
+        payloads == {1024, 8192, 64000},
+        "CI input must exercise every size-aware payload tier",
+    )
+    print(
+        "PASS: at least 10 mixed large transfers and all chunk tiers "
+        "complete without fragmentation"
+    )
 
 
 def main():
@@ -573,8 +620,10 @@ def main():
     parser.add_argument("--scale-second", help="repeat scale output directory")
     parser.add_argument("--scale-input", help="5000-transfer JSON input")
     parser.add_argument("--scale-log", help="5000-transfer stdout log")
-    parser.add_argument("--large", help="varied multi-packet output directory")
-    parser.add_argument("--large-input", help="varied multi-packet JSON input")
+    parser.add_argument("--large", help="mixed-large CI output directory")
+    parser.add_argument("--large-input", help="mixed-large CI JSON input")
+    parser.add_argument("--large-local", help="full local large output directory")
+    parser.add_argument("--large-local-input", help="full local large JSON input")
     args = parser.parse_args()
 
     require(
@@ -598,6 +647,10 @@ def main():
         "--large requires --large-input",
     )
     require(
+        not args.large_local or args.large_local_input,
+        "--large-local requires --large-local-input",
+    )
+    require(
         any(
             (
                 args.first,
@@ -606,6 +659,7 @@ def main():
                 args.remainder,
                 args.scale,
                 args.large,
+                args.large_local,
             )
         ),
         "provide at least one output mode",
@@ -627,6 +681,12 @@ def main():
         )
     if args.large:
         validate_large(args.large, args.large_input)
+    if args.large_local:
+        validate_large(
+            args.large_local,
+            args.large_local_input,
+            local_full=True,
+        )
 
 
 if __name__ == "__main__":
