@@ -24,7 +24,6 @@
 #include <algorithm>
 #include <iostream>
 #include <limits>
-#include <map>
 #include <set>
 
 namespace ns3 {
@@ -192,6 +191,15 @@ PrintTransferVerbose(const std::string& filename,
     }
 }
 
+void
+StartStandaloneTransfer(Ptr<NetworkTransferEngine> engine,
+                        uint64_t transferId)
+{
+  engine->StartTransferNow(
+    transferId,
+    Callback<void, uint64_t, int64_t>());
+}
+
 } // namespace
 
 NetworkTransferState
@@ -208,55 +216,41 @@ InstallNetworkTransfers(const std::string& filename,
                     && logMode != "silent",
                   "未知 transferLogMode: " << logMode);
   NetworkTransferState state;
-  state.transfers =
+  std::vector<NetworkTransfer> plans =
     ReadNetworkTransferTrace(filename,
-                             chunkMode,
-                             payloadBytes,
                              simulationDurationSeconds,
                              topology);
-
-  std::map<uint32_t, Ptr<NetworkTransferReceiver>> receiversBySatellite;
-  for (const auto& transfer : state.transfers)
+  state.engine = CreateObject<NetworkTransferEngine>();
+  state.engine->Configure(topology,
+                          chunkMode,
+                          payloadBytes,
+                          islMtuBytes,
+                          simulationDurationSeconds);
+  state.engine->RegisterPlans(plans);
+  const std::vector<NetworkTransfer>& preparedPlans =
+    state.engine->GetPlans();
+  for (const auto& plan : preparedPlans)
     {
-      Ptr<NetworkTransferReceiver>& receiver =
-        receiversBySatellite[transfer.destinationSatelliteId];
-      if (receiver == nullptr)
-        {
-          receiver = CreateObject<NetworkTransferReceiver>();
-          receiver->Configure(transfer.destinationAddress,
-                              transfer.destinationPort);
-          topology.GetNodeBySatelliteId(transfer.destinationSatelliteId)
-            ->AddApplication(receiver);
-          receiver->SetStartTime(Seconds(0.0));
-          receiver->SetStopTime(Seconds(simulationDurationSeconds));
-          state.receivers.push_back(receiver);
-        }
-      receiver->AddExpectedTransfer(transfer);
-      state.transferReceivers.push_back(receiver);
-    }
-
-  for (const auto& transfer : state.transfers)
-    {
-      Ptr<NetworkTransferApplication> sender =
-        CreateObject<NetworkTransferApplication>();
-      sender->Configure(transfer);
-      topology.GetNodeBySatelliteId(transfer.sourceSatelliteId)
-        ->AddApplication(sender);
-      sender->SetStartTime(NanoSeconds(transfer.arrivalTimeNs));
-      sender->SetStopTime(Seconds(simulationDurationSeconds));
-      state.senders.push_back(sender);
+      NS_ABORT_MSG_IF(plan.arrivalTimeNs < 0,
+                      "standalone NetworkTransfer 缺少 arrival_time_ns，"
+                      "transfer_id=" << plan.transferId);
+      Simulator::Schedule(
+        NanoSeconds(plan.arrivalTimeNs),
+        &StartStandaloneTransfer,
+        state.engine,
+        plan.transferId);
     }
   if (logMode == "summary")
     {
       PrintTransferSummary(filename,
-                           state.transfers,
+                           preparedPlans,
                            chunkMode,
                            payloadBytes);
     }
   else if (logMode == "verbose")
     {
       PrintTransferVerbose(filename,
-                           state.transfers,
+                           preparedPlans,
                            chunkMode,
                            payloadBytes,
                            islMtuBytes);
@@ -267,117 +261,25 @@ InstallNetworkTransfers(const std::string& filename,
 ApplicationMetrics
 CollectNetworkTransferMetrics(const NetworkTransferState& state)
 {
-  ApplicationMetrics metrics = {};
-  metrics.sinkApplications = state.receivers.size();
-  NS_ABORT_MSG_IF(state.senders.size() != state.transfers.size(),
-                  "NetworkTransfer sender 与配置数量不一致");
-  for (uint32_t index = 0; index < state.senders.size(); ++index)
-    {
-      const Ptr<NetworkTransferApplication>& sender = state.senders[index];
-      const NetworkTransfer& transfer = state.transfers[index];
-      NS_ABORT_MSG_IF(sender->GetTransferId() != transfer.transferId,
-                      "NetworkTransfer sender 顺序与配置不一致");
-      NS_ABORT_MSG_IF(sender->GetSentBytes() != transfer.sizeBytes
-                        || sender->GetSentPacketCount() != transfer.packetCount,
-                      "NetworkTransfer sender 未完成计划 payload，transfer_id="
-                        << transfer.transferId);
-      metrics.sentBytes =
-        CheckedAdd(metrics.sentBytes, sender->GetSentBytes(), "sent bytes");
-    }
-  for (const auto& receiver : state.receivers)
-    {
-      metrics.receivedBytes =
-        CheckedAdd(metrics.receivedBytes,
-                   receiver->GetTotalReceivedBytes(),
-                   "received bytes");
-    }
-  return metrics;
+  NS_ABORT_MSG_IF(state.engine == nullptr,
+                  "NetworkTransferState 缺少 engine");
+  return state.engine->CollectApplicationMetrics();
 }
 
 std::vector<TransferFlowMetadata>
 CollectNetworkTransferFlowMetadata(const NetworkTransferState& state)
 {
-  NS_ABORT_MSG_IF(state.transfers.size() != state.transferReceivers.size(),
-                  "NetworkTransfer 与 receiver 映射数量不一致");
-  std::vector<TransferFlowMetadata> metadata;
-  metadata.reserve(state.transfers.size());
-  for (uint32_t index = 0; index < state.transfers.size(); ++index)
-    {
-      const NetworkTransfer& transfer = state.transfers[index];
-      TransferFlowMetadata flow = {
-        transfer.transferId,
-        transfer.sourceAddress,
-        transfer.destinationAddress,
-        17,
-        transfer.sourcePort,
-        transfer.destinationPort,
-        transfer.sizeBytes,
-        state.transferReceivers[index]->GetTransferReceivedBytes(
-          transfer.transferId)
-      };
-      metadata.push_back(flow);
-    }
-  return metadata;
+  NS_ABORT_MSG_IF(state.engine == nullptr,
+                  "NetworkTransferState 缺少 engine");
+  return state.engine->CollectFlowMetadata();
 }
 
 std::vector<TransferSummaryRecord>
 CollectNetworkTransferSummaries(const NetworkTransferState& state)
 {
-  NS_ABORT_MSG_IF(state.transfers.size() != state.senders.size()
-                    || state.transfers.size()
-                         != state.transferReceivers.size(),
-                  "NetworkTransfer summary 映射数量不一致");
-  std::vector<TransferSummaryRecord> summaries;
-  summaries.reserve(state.transfers.size());
-  for (uint32_t index = 0; index < state.transfers.size(); ++index)
-    {
-      const NetworkTransfer& transfer = state.transfers[index];
-      const Ptr<NetworkTransferApplication>& sender = state.senders[index];
-      const Ptr<NetworkTransferReceiver>& receiver =
-        state.transferReceivers[index];
-      NS_ABORT_MSG_IF(sender->GetTransferId() != transfer.transferId,
-                      "NetworkTransfer summary sender 顺序不一致");
-
-      uint64_t receivedBytes =
-        receiver->GetTransferReceivedBytes(transfer.transferId);
-      int64_t completionTimeNs =
-        receiver->GetTransferCompletionTimeNs(transfer.transferId);
-      int64_t completionDelayNs = -1;
-      if (completionTimeNs >= 0)
-        {
-          NS_ABORT_MSG_IF(receivedBytes != transfer.sizeBytes,
-                          "已完成 NetworkTransfer 的接收字节不等于声明值，"
-                          "transfer_id=" << transfer.transferId);
-          completionDelayNs = completionTimeNs - transfer.arrivalTimeNs;
-          NS_ABORT_MSG_IF(completionDelayNs < 0,
-                          "NetworkTransfer completion delay 为负，transfer_id="
-                            << transfer.transferId);
-        }
-
-      TransferSummaryRecord summary = {
-        transfer.transferId,
-        transfer.sourceSatelliteId,
-        transfer.destinationSatelliteId,
-        transfer.sourceAddress,
-        transfer.destinationAddress,
-        transfer.sourcePort,
-        transfer.destinationPort,
-        transfer.sizeBytes,
-        transfer.payloadBytesPerPacket,
-        "first-hop-serialization",
-        transfer.packetCount,
-        transfer.finalPacketPayloadBytes,
-        transfer.arrivalTimeNs,
-        sender->GetLastSendTimeNs(),
-        sender->GetSentBytes(),
-        receivedBytes,
-        receiver->GetTransferReceivedPacketCount(transfer.transferId),
-        completionTimeNs,
-        completionDelayNs
-      };
-      summaries.push_back(summary);
-    }
-  return summaries;
+  NS_ABORT_MSG_IF(state.engine == nullptr,
+                  "NetworkTransferState 缺少 engine");
+  return state.engine->CollectSummaries();
 }
 
 } // namespace ns3

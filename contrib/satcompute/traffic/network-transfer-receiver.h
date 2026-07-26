@@ -20,6 +20,7 @@
 #include "network-transfer-config.h"
 
 #include "ns3/application.h"
+#include "ns3/callback.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/ptr.h"
 #include "ns3/socket.h"
@@ -39,6 +40,9 @@ public:
 
   void Configure(Ipv4Address destinationAddress, uint16_t destinationPort);
   void AddExpectedTransfer(const NetworkTransfer& transfer);
+  void SetCompletionCallback(
+    Callback<void, uint64_t, int64_t> completionCallback);
+  void MarkTransferStarted(uint64_t transferId, int64_t startTimeNs);
 
   uint64_t GetTotalReceivedBytes() const;
   uint64_t GetTransferReceivedBytes(uint64_t transferId) const;
@@ -62,10 +66,12 @@ private:
     uint64_t expectedBytes;
     uint64_t receivedBytes;
     uint64_t receivedPacketCount;
-    int64_t arrivalTimeNs;
+    int64_t startTimeNs;
     int64_t completionTimeNs;
   };
 
+  Reception& GetReception(uint64_t transferId);
+  const Reception& GetReception(uint64_t transferId) const;
   void StartApplication() override;
   void StopApplication() override;
   void DoDispose() override;
@@ -75,7 +81,9 @@ private:
   uint16_t m_destinationPort;
   Ptr<Socket> m_socket;
   std::map<FourTuple, Reception> m_receptions;
+  std::map<uint64_t, FourTuple> m_transferTuples;
   uint64_t m_totalReceivedBytes;
+  Callback<void, uint64_t, int64_t> m_completionCallback;
 };
 
 } // namespace ns3

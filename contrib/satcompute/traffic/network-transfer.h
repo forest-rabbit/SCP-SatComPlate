@@ -19,9 +19,8 @@
 
 #include "../metrics/metrics.h"
 #include "../topo.h"
-#include "network-transfer-application.h"
 #include "network-transfer-config.h"
-#include "network-transfer-receiver.h"
+#include "network-transfer-engine.h"
 
 #include "ns3/ptr.h"
 
@@ -33,10 +32,7 @@ namespace ns3 {
 
 struct NetworkTransferState
 {
-  std::vector<NetworkTransfer> transfers;
-  std::vector<Ptr<NetworkTransferApplication>> senders;
-  std::vector<Ptr<NetworkTransferReceiver>> receivers;
-  std::vector<Ptr<NetworkTransferReceiver>> transferReceivers;
+  Ptr<NetworkTransferEngine> engine;
 };
 
 NetworkTransferState InstallNetworkTransfers(

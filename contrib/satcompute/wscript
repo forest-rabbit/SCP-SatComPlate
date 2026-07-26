@@ -25,6 +25,7 @@ def build(bld):
         'traffic/network-transfer.cc',
         'traffic/network-transfer-application.cc',
         'traffic/network-transfer-config.cc',
+        'traffic/network-transfer-engine.cc',
         'traffic/network-transfer-receiver.cc',
     ]
 

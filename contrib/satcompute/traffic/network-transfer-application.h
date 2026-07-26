@@ -38,8 +38,10 @@ public:
   ~NetworkTransferApplication() override;
 
   void Configure(const NetworkTransfer& transfer);
+  void StartTransferNow();
 
   uint64_t GetTransferId() const;
+  bool HasStarted() const;
   uint64_t GetSentPacketCount() const;
   uint64_t GetSentBytes() const;
   int64_t GetLastSendTimeNs() const;
@@ -58,6 +60,8 @@ private:
   uint64_t m_sentPacketCount;
   uint64_t m_sentBytes;
   int64_t m_lastSendTimeNs;
+  bool m_isRunning;
+  bool m_hasStarted;
 };
 
 } // namespace ns3

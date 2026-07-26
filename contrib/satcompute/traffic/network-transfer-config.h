@@ -49,11 +49,12 @@ NetworkTransfer();
 };
 
 uint32_t GetSizeAwareMaximumPayloadBytes();
+uint32_t ResolveNetworkTransferPayloadBytes(const std::string& chunkMode,
+                                            uint32_t fixedPayloadBytes,
+                                            uint64_t transferSizeBytes);
 
 std::vector<NetworkTransfer> ReadNetworkTransferTrace(
   const std::string& filename,
-  const std::string& chunkMode,
-  uint32_t fixedPayloadBytes,
   double simulationDurationSeconds,
   const SatelliteTopology& topology);
 
