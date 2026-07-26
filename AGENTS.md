@@ -20,7 +20,7 @@ example under `contrib/satcompute/input/`.
 ```bash
 source .venv/bin/activate
 ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
-./waf build --targets=satcompute
+./waf build
 ./waf --run-no-build "satcompute --simulationDuration=110 --offeredLoad=0 --outputDir=/tmp/satcompute-smoke"
 ```
 

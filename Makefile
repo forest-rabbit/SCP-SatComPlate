@@ -7,7 +7,7 @@ configure:
 	./waf configure --disable-examples --disable-tests --enable-modules=satcompute
 
 build:
-	./waf build --targets=satcompute
+	./waf build
 
 install:
 	./waf install

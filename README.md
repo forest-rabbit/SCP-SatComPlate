@@ -35,7 +35,7 @@ contrib/satcompute/
 ```bash
 source .venv/bin/activate
 ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
-./waf build --targets=satcompute
+./waf build
 ./waf --run-no-build satcompute
 ```
 

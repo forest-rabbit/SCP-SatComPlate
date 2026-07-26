@@ -25,7 +25,7 @@ jobs:
         run: ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
 
       - name: Build
-        run: ./waf build --targets=satcompute
+        run: ./waf build
 
       - name: Static diamond repeat
         run: |
