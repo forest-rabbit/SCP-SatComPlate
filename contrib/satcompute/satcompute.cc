@@ -20,6 +20,7 @@
 #include "metrics/metrics.h"
 #include "para.h"
 #include "task/compute-profile.h"
+#include "task/task-coordinator.h"
 #include "task/task-trace.h"
 #include "topo.h"
 #include "traffic/background-traffic.h"
@@ -342,6 +343,19 @@ main(int argc, char* argv[])
                       config.taskLogMode);
     }
   EcmpRouteRecorder routeRecorder(topology);
+  Ptr<TaskCoordinator> taskCoordinator;
+  if (taskMode)
+    {
+      taskCoordinator = CreateObject<TaskCoordinator>();
+      taskCoordinator->Initialize(computeProfile,
+                                  taskTrace,
+                                  topology,
+                                  config.transferChunkMode,
+                                  config.transferPayloadBytes,
+                                  config.islMtuBytes,
+                                  config.simulationDurationSeconds,
+                                  config.taskLogMode);
+    }
   ApplicationState backgroundApplications;
   NetworkTransferState networkTransfers;
   if (!taskMode && !transferMode)
@@ -363,6 +377,10 @@ main(int argc, char* argv[])
 
   Simulator::Stop(Seconds(config.simulationDurationSeconds));
   Simulator::Run();
+  if (taskMode)
+    {
+      taskCoordinator->ValidateCompleted();
+    }
 
   double wallClockSeconds =
     std::chrono::duration<double>(std::chrono::steady_clock::now() - wallClockStart)
@@ -378,18 +396,31 @@ main(int argc, char* argv[])
     {
       applicationMetrics = CollectNetworkTransferMetrics(networkTransfers);
     }
+  else if (taskMode)
+    {
+      applicationMetrics =
+        taskCoordinator->GetTransferEngine()->CollectApplicationMetrics();
+    }
   else if (!taskMode)
     {
       applicationMetrics = CollectApplicationMetrics(backgroundApplications);
     }
-  std::vector<TransferFlowMetadata> transferFlowMetadata =
-    transferMode
-      ? CollectNetworkTransferFlowMetadata(networkTransfers)
-      : std::vector<TransferFlowMetadata>();
-  std::vector<TransferSummaryRecord> transferSummaries =
-    transferMode
-      ? CollectNetworkTransferSummaries(networkTransfers)
-      : std::vector<TransferSummaryRecord>();
+  std::vector<TransferFlowMetadata> transferFlowMetadata;
+  std::vector<TransferSummaryRecord> transferSummaries;
+  if (transferMode)
+    {
+      transferFlowMetadata =
+        CollectNetworkTransferFlowMetadata(networkTransfers);
+      transferSummaries =
+        CollectNetworkTransferSummaries(networkTransfers);
+    }
+  else if (taskMode)
+    {
+      transferFlowMetadata =
+        taskCoordinator->GetTransferEngine()->CollectFlowMetadata();
+      transferSummaries =
+        taskCoordinator->GetTransferEngine()->CollectSummaries();
+    }
   RunMetadata runMetadata = {
     runMode,
     config.routingMode,

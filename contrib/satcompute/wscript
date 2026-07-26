@@ -21,6 +21,7 @@ def build(bld):
         'task/compute-profile.cc',
         'task/compute-service.cc',
         'task/compute-task.cc',
+        'task/task-coordinator.cc',
         'task/task-trace.cc',
         'traffic/background-traffic.cc',
         'traffic/network-transfer.cc',
