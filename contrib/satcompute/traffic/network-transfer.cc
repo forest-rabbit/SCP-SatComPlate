@@ -14,6 +14,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+// 安装 NetworkTransfer 收发应用，并汇总配置、日志与传输结果。
+
 #include "network-transfer.h"
 
 #include "ns3/abort.h"

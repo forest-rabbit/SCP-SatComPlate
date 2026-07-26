@@ -14,6 +14,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+// 读取临时 CSV 业务矩阵并安装 legacy UDP 或 TCP 背景流量。
+
 #include "background-traffic.h"
 
 #include "ns3/applications-module.h"

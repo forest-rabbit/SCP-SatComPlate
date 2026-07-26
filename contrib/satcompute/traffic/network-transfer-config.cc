@@ -14,6 +14,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+// 解析 NetworkTransfer JSON，分配端口并推导每条传输的分包参数。
+
 #include "network-transfer-config.h"
 
 #include "../jsontopo/json.hpp"

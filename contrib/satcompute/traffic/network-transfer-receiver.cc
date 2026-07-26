@@ -14,6 +14,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+// 接收 NetworkTransfer UDP 数据并按传输记录接收量与完成时间。
+
 #include "network-transfer-receiver.h"
 
 #include "ns3/abort.h"

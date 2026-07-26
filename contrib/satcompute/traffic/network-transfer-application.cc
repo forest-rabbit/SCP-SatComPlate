@@ -14,6 +14,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+// 将逻辑传输分包，并按照当前首跳链路的序列化时间发送 UDP 数据。
+
 #include "network-transfer-application.h"
 
 #include "ns3/abort.h"
