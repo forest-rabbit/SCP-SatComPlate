@@ -7,6 +7,8 @@ ns-3 原生 `GlobalRouteManager` 完成。
 本仓库的 `main` 由原 `xw` 仓库的 `customer` 分支迁移而来。迁移后已移除
 cluster、地面站、星地链路、CSV 建图、簇内/簇间路由和 SDN/OpenFlow 实验。
 
+阶段进度、冻结提交和验收证据见 [`MILESTONES.md`](MILESTONES.md)。
+
 ## 目录
 
 ```text
