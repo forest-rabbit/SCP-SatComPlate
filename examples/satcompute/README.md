@@ -141,7 +141,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+  --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -154,7 +154,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+  --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -171,7 +171,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-dynamic \
   --simulationDuration=6 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/traffic/json/diamond-4-dynamic-transfers.json \
+  --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -191,7 +191,7 @@ python3 examples/satcompute/tools/check-ecmp-output.py \
 
 ## 变长规模输入
 
-`input/traffic/json/workload-5000-varied.json` 由
+`input/traffic/json/workload/workload-5000-varied.json` 由
 `tools/generate-transfer-workload.py` 确定性生成。5000 条记录的
 `size_bytes` 均不同，范围为 1024–81920 bytes；使用 4096-byte cap 时，每条
 transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节。
@@ -199,7 +199,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 ```bash
 ./waf --run "satcompute \
   --simulationDuration=8 \
-  --transferTrace=examples/satcompute/input/traffic/json/workload-5000-varied.json \
+  --transferTrace=examples/satcompute/input/traffic/json/workload/workload-5000-varied.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=4096 \
   --islMtuBytes=9000 \
@@ -219,7 +219,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
   --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=45 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/traffic/json/mixed-large-ci.json \
+  --transferTrace=examples/satcompute/input/traffic/json/test/mixed-large-ci.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1500000 \
@@ -229,7 +229,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 
 python3 examples/satcompute/tools/check-ecmp-output.py \
   --large=/tmp/satcompute-mixed-large-ci \
-  --large-input=examples/satcompute/input/traffic/json/mixed-large-ci.json
+  --large-input=examples/satcompute/input/traffic/json/test/mixed-large-ci.json
 ```
 
 `mixed-large-local.json` 是不放入 CI 的完整压力输入，含 10 条不同大流量，
@@ -240,7 +240,7 @@ python3 examples/satcompute/tools/check-ecmp-output.py \
   --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=340 \
   --offeredLoad=0 \
-  --transferTrace=examples/satcompute/input/traffic/json/mixed-large-local.json \
+  --transferTrace=examples/satcompute/input/traffic/json/workload/mixed-large-local.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1500000 \
@@ -250,7 +250,7 @@ python3 examples/satcompute/tools/check-ecmp-output.py \
 
 python3 examples/satcompute/tools/check-ecmp-output.py \
   --large-local=/tmp/satcompute-mixed-large-local \
-  --large-local-input=examples/satcompute/input/traffic/json/mixed-large-local.json
+  --large-local-input=examples/satcompute/input/traffic/json/workload/mixed-large-local.json
 ```
 
 64000-byte effective payload 只用于降低大数据仿真的事件数量，不宣称真实卫星

@@ -39,7 +39,7 @@ jobs:
             --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
             --simulationDuration=3 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+            --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -52,7 +52,7 @@ jobs:
             --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
             --simulationDuration=3 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+            --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -68,7 +68,7 @@ jobs:
             --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-dynamic \
             --simulationDuration=6 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/diamond-4-dynamic-transfers.json \
+            --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-dynamic-transfers.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -84,7 +84,7 @@ jobs:
             --topologyDir=examples/satcompute/input/topology/json/tests/canonical-order-a \
             --simulationDuration=1 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/canonical-order-a.json \
+            --transferTrace=examples/satcompute/input/traffic/json/test/canonical-order-a.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -97,7 +97,7 @@ jobs:
             --topologyDir=examples/satcompute/input/topology/json/tests/canonical-order-b \
             --simulationDuration=1 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/canonical-order-b.json \
+            --transferTrace=examples/satcompute/input/traffic/json/test/canonical-order-b.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -110,7 +110,7 @@ jobs:
             --topologyDir=examples/satcompute/input/topology/json/tests/canonical-endpoint-reversed \
             --simulationDuration=1 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/canonical-order-a.json \
+            --transferTrace=examples/satcompute/input/traffic/json/test/canonical-order-a.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
@@ -128,7 +128,7 @@ jobs:
             --topologyDir=examples/satcompute/input/topology/json/examples/xw-66sat \
             --simulationDuration=8 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/workload-5000-varied.json \
+            --transferTrace=examples/satcompute/input/traffic/json/workload/workload-5000-varied.json \
             --transferChunkMode=fixed \
             --transferPayloadBytes=4096 \
             --islMtuBytes=9000 \
@@ -145,7 +145,7 @@ jobs:
             --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
             --simulationDuration=45 \
             --offeredLoad=0 \
-            --transferTrace=examples/satcompute/input/traffic/json/mixed-large-ci.json \
+            --transferTrace=examples/satcompute/input/traffic/json/test/mixed-large-ci.json \
             --transferChunkMode=size-aware \
             --islMtuBytes=65535 \
             --islQueueBytes=1500000 \
@@ -164,10 +164,10 @@ jobs:
             --canonical-second=/tmp/satcompute-ci-canonical-reversed \
             --remainder=/tmp/satcompute-ci-canonical-a \
             --scale=/tmp/satcompute-ci-scale \
-            --scale-input=examples/satcompute/input/traffic/json/workload-5000-varied.json \
+            --scale-input=examples/satcompute/input/traffic/json/workload/workload-5000-varied.json \
             --scale-log=/tmp/satcompute-ci-scale.log \
             --large=/tmp/satcompute-ci-mixed-large \
-            --large-input=examples/satcompute/input/traffic/json/mixed-large-ci.json
+            --large-input=examples/satcompute/input/traffic/json/test/mixed-large-ci.json
           python3 examples/satcompute/tools/check-ecmp-output.py \
             --canonical-first=/tmp/satcompute-ci-canonical-a \
             --canonical-second=/tmp/satcompute-ci-canonical-order-b

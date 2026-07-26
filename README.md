@@ -24,7 +24,9 @@ examples/satcompute/
     ├── topology/json/tests/diamond-4-*/
     └── traffic/
         ├── csv/          # 临时保留的 legacy 业务矩阵
-        └── json/         # NetworkTransfer 输入
+        └── json/
+            ├── workload/ # 正式规模与本地压力输入
+            └── test/     # CI 和回归测试输入
 ```
 
 ## 构建与基本运行
@@ -115,7 +117,7 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 ./waf --run "satcompute \
   --topologyDir=examples/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=examples/satcompute/input/traffic/json/diamond-4-static-transfers.json \
+  --transferTrace=examples/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -140,6 +142,8 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 
 拓扑协议见
 [`examples/satcompute/input/topology/json/README.md`](examples/satcompute/input/topology/json/README.md)。
+流量输入的 `workload`/`test` 分类见
+[`examples/satcompute/input/traffic/json/README.md`](examples/satcompute/input/traffic/json/README.md)。
 当前阶段只完成网络传输和确定性 ECMP；任务计算、服务时间、调度、故障、备份和
 恢复语义尚未实现。64000-byte payload 仅是降低大数据仿真事件数量的可扩展性
 配置，不表示真实卫星网络使用 64 KB 物理帧。
