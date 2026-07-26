@@ -629,6 +629,56 @@ def validate_compute_summaries(profile, tasks, task_summaries, output, run):
     return rows
 
 
+def validate_generic_fcfs(tasks, task_summaries):
+    by_node = defaultdict(list)
+    for task in tasks:
+        by_node[task["compute_node_id"]].append(task)
+    for node_id, node_tasks in by_node.items():
+        expected_order = sorted(
+            node_tasks,
+            key=lambda task: (
+                int_field(
+                    task_summaries[task["task_id"]],
+                    "queue_enter_time_ns",
+                ),
+                task["task_id"],
+            ),
+        )
+        actual_order = sorted(
+            node_tasks,
+            key=lambda task: (
+                int_field(
+                    task_summaries[task["task_id"]],
+                    "compute_start_time_ns",
+                ),
+                task["task_id"],
+            ),
+        )
+        require(
+            [task["task_id"] for task in actual_order]
+            == [task["task_id"] for task in expected_order],
+            f"compute node {node_id} violates FCFS dispatch order",
+        )
+        previous_completion = None
+        for task in actual_order:
+            summary = task_summaries[task["task_id"]]
+            queue_enter = int_field(summary, "queue_enter_time_ns")
+            compute_start = int_field(summary, "compute_start_time_ns")
+            expected_start = (
+                queue_enter
+                if previous_completion is None
+                else max(queue_enter, previous_completion)
+            )
+            require(
+                compute_start == expected_start,
+                f"compute node {node_id} has an FCFS gap or overlap",
+            )
+            previous_completion = int_field(
+                summary,
+                "compute_complete_time_ns",
+            )
+
+
 def validate_run_summary(
     run,
     profile_path,
@@ -733,6 +783,7 @@ def validate_scenario(output, topology_dir, profile_path, trace_path):
     compute_rows = validate_compute_summaries(
         profile, tasks, task_summaries, output, run
     )
+    validate_generic_fcfs(tasks, task_summaries)
     validate_run_summary(
         run,
         profile_path,
