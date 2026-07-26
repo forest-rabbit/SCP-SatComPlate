@@ -1,3 +1,5 @@
+// 发现、解析并校验节点与链路分离的 JSON 全量拓扑快照。
+
 #include "topo-json.h"
 
 #include "json.hpp"

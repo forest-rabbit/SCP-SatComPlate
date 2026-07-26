@@ -1,3 +1,5 @@
+// 创建卫星节点与 ISL，并按 JSON 快照更新链路和重算全局路由。
+
 #include "topo.h"
 
 #include "jsontopo/topo-json.h"
