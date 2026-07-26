@@ -34,6 +34,7 @@ struct SatComputeConfig
   std::string transferChunkMode;
   uint32_t transferPayloadBytes;
   uint16_t islMtuBytes;
+  uint32_t islQueueBytes;
   uint64_t ecmpHashSeed;
   double simulationDurationSeconds;
   double offeredLoad;

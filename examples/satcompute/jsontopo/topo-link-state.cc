@@ -14,14 +14,18 @@ namespace ns3 {
 
 SatelliteLinkState::SatelliteLinkState(const NodeContainer& nodes,
                                        const std::map<uint32_t, uint32_t>& nodeIndexes,
-                                       uint16_t islMtuBytes)
+                                       uint16_t islMtuBytes,
+                                       uint32_t islQueueBytes)
   : m_nodes(nodes),
     m_nodeIndexes(nodeIndexes),
     m_islMtuBytes(islMtuBytes),
+    m_islQueueBytes(islQueueBytes),
     m_nextIpv4Network(0)
 {
   NS_ABORT_MSG_IF(m_islMtuBytes < 68,
                   "ISL MTU 必须至少为 68 bytes");
+  NS_ABORT_MSG_IF(m_islQueueBytes == 0,
+                  "ISL queue 必须至少为 1 byte");
 }
 
 SatelliteLinkState::LinkKey
@@ -92,7 +96,9 @@ SatelliteLinkState::InstallLink(const SatelliteLink& link)
                             DataRateValue(DataRate(link.bandwidthBps)));
   helper.SetDeviceAttribute("Mtu", UintegerValue(m_islMtuBytes));
   helper.SetChannelAttribute("Delay", TimeValue(MicroSeconds(link.delayUs)));
-  helper.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("1000p"));
+  helper.SetQueue("ns3::DropTailQueue",
+                  "MaxSize",
+                  StringValue(std::to_string(m_islQueueBytes) + "B"));
 
   NetDeviceContainer devices =
     helper.Install(NodeContainer(m_nodes.Get(sourceIndex), m_nodes.Get(destinationIndex)));

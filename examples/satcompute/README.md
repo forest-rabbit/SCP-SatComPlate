@@ -32,6 +32,7 @@ transferTrace            = empty
 transferChunkMode        = fixed
 transferPayloadBytes     = 1024
 islMtuBytes              = 1500
+islQueueBytes            = 1500000
 transferLogMode          = summary
 routingMode              = global-first
 ecmpHashSeed             = 1
@@ -49,6 +50,8 @@ outputDir                = examples/satcompute/output
 - `--transferChunkMode`：`fixed` 或 `size-aware`，默认 `fixed`。
 - `--transferPayloadBytes`：`fixed` 模式的 UDP payload 上限，默认 1024。
 - `--islMtuBytes`：所有当前及后续 ISL 的 MTU，默认 1500。
+- `--islQueueBytes`：所有当前及后续 ISL DropTail 队列的字节容量，默认
+  1500000；容量不随 payload 大小变化。
 - `--transferLogMode`：`summary`、`verbose` 或 `silent`。
 - `--routingMode`：`global-first` 或 `global-hash-per-flow`。
 - `--ecmpHashSeed`：确定性 FNV-1a-64 输入的 64-bit seed 前缀。

@@ -26,6 +26,7 @@ struct RunMetadata
   std::string routingMode;
   uint64_t ecmpHashSeed;
   uint16_t islMtuBytes;
+  uint32_t islQueueBytes;
   std::string pacingMode;
   std::string transferChunkMode;
   uint32_t fixedPayloadBytes;

@@ -43,6 +43,7 @@ jobs:
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
             --transferLogMode=verbose \
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
@@ -55,6 +56,7 @@ jobs:
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
             --transferLogMode=verbose \
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
@@ -70,6 +72,7 @@ jobs:
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
             --transferLogMode=verbose \
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
@@ -85,6 +88,7 @@ jobs:
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
             --transferLogMode=silent \
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
@@ -97,6 +101,7 @@ jobs:
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
             --transferLogMode=silent \
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
@@ -109,6 +114,7 @@ jobs:
             --transferChunkMode=fixed \
             --transferPayloadBytes=1024 \
             --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
             --transferLogMode=silent \
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
@@ -126,6 +132,7 @@ jobs:
             --transferChunkMode=fixed \
             --transferPayloadBytes=4096 \
             --islMtuBytes=9000 \
+            --islQueueBytes=1500000 \
             --transferLogMode=summary \
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
@@ -141,6 +148,7 @@ jobs:
             --transferTrace=examples/satcompute/input/traffic/json/varied-multipacket.json \
             --transferChunkMode=size-aware \
             --islMtuBytes=65535 \
+            --islQueueBytes=1500000 \
             --transferLogMode=summary \
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \

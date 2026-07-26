@@ -61,6 +61,7 @@ source .venv/bin/activate
 --transferChunkMode=<fixed|size-aware>  NetworkTransfer 分包模式
 --transferPayloadBytes=<uint32>         fixed 模式的 UDP payload 上限
 --islMtuBytes=<uint16>                  所有 ISL 的 MTU
+--islQueueBytes=<uint32>                所有 ISL DropTail 队列的字节容量
 --transferLogMode=<summary|verbose|silent>
 --routingMode=<global-first|global-hash-per-flow>
 --ecmpHashSeed=<uint64>                 FNV-1a-64 seed 前缀

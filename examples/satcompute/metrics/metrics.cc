@@ -390,6 +390,7 @@ WriteRunSummary(
          << "  \"routing_mode\": \"" << runMetadata.routingMode << "\",\n"
          << "  \"ecmp_hash_seed\": " << runMetadata.ecmpHashSeed << ",\n"
          << "  \"isl_mtu_bytes\": " << runMetadata.islMtuBytes << ",\n"
+         << "  \"isl_queue_bytes\": " << runMetadata.islQueueBytes << ",\n"
          << "  \"pacing_mode\": \"" << runMetadata.pacingMode << "\",\n"
          << "  \"transfer_chunk_mode\": \""
          << runMetadata.transferChunkMode << "\",\n"

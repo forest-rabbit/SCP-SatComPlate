@@ -277,6 +277,11 @@ def read_transfer_input(path):
 def validate_transfer_contract(directory, input_path):
     transfers = read_transfer_input(input_path)
     run = read_run_summary(directory)
+    require(
+        isinstance(run["isl_queue_bytes"], int)
+        and run["isl_queue_bytes"] > 0,
+        "run ISL queue byte capacity must be positive",
+    )
     chunk_mode = run["transfer_chunk_mode"]
     require(
         chunk_mode in {"fixed", "size-aware"},

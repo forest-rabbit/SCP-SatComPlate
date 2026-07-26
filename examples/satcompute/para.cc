@@ -34,6 +34,7 @@ GetDefaultSatComputeConfig()
   config.transferChunkMode = "fixed";
   config.transferPayloadBytes = 1024;
   config.islMtuBytes = 1500;
+  config.islQueueBytes = 1500000;
   config.ecmpHashSeed = 1;
   config.simulationDurationSeconds = 110.0;
   config.offeredLoad = 0.0;

@@ -69,6 +69,9 @@ main(int argc, char* argv[])
   commandLine.AddValue("islMtuBytes",
                        "MTU applied to every ISL PointToPointNetDevice",
                        config.islMtuBytes);
+  commandLine.AddValue("islQueueBytes",
+                       "Byte capacity of every ISL DropTail queue",
+                       config.islQueueBytes);
   commandLine.AddValue("transferLogMode",
                        "NetworkTransfer logging: summary, verbose, or silent",
                        config.transferLogMode);
@@ -137,6 +140,12 @@ main(int argc, char* argv[])
   if (config.islMtuBytes < 68)
     {
       std::cerr << "[RUN:Error] islMtuBytes must be in 68..65535"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  if (config.islQueueBytes == 0)
+    {
+      std::cerr << "[RUN:Error] islQueueBytes must be positive"
                 << std::endl;
       return EXIT_FAILURE;
     }
@@ -217,6 +226,8 @@ main(int argc, char* argv[])
         }
       std::cout << "  islMtu             : " << config.islMtuBytes
                 << " bytes" << std::endl
+                << "  islQueue           : " << config.islQueueBytes
+                << " bytes" << std::endl
                 << "  routingMode        : " << config.routingMode << std::endl
                 << "  ecmpHashSeed       : " << config.ecmpHashSeed << std::endl
                 << "  outputDir          : " << config.outputDirectory << std::endl
@@ -232,6 +243,7 @@ main(int argc, char* argv[])
     config.routingMode,
     config.ecmpHashSeed,
     config.islMtuBytes,
+    config.islQueueBytes,
     !silentTransferRun
   };
   SatelliteTopology topology(topologyConfig);
@@ -285,6 +297,7 @@ main(int argc, char* argv[])
     config.routingMode,
     config.ecmpHashSeed,
     config.islMtuBytes,
+    config.islQueueBytes,
     transferMode ? "first-hop-serialization" : "none",
     transferMode ? config.transferChunkMode : "none",
     transferMode && config.transferChunkMode == "fixed"

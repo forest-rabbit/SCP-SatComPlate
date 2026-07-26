@@ -37,7 +37,8 @@ class SatelliteLinkState
 public:
   SatelliteLinkState(const NodeContainer& nodes,
                      const std::map<uint32_t, uint32_t>& nodeIndexes,
-                     uint16_t islMtuBytes);
+                     uint16_t islMtuBytes,
+                     uint32_t islQueueBytes);
 
   TopologyLinkUpdateSummary ApplyFullSnapshot(const std::vector<SatelliteLink>& links);
 
@@ -54,6 +55,7 @@ private:
   NodeContainer m_nodes;
   std::map<uint32_t, uint32_t> m_nodeIndexes;
   uint16_t m_islMtuBytes;
+  uint32_t m_islQueueBytes;
   uint32_t m_nextIpv4Network;
   std::map<LinkKey, NetDeviceContainer> m_installedLinks;
   std::set<LinkKey> m_activeLinks;

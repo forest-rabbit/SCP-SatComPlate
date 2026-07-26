@@ -25,6 +25,8 @@ SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
                   "未知 routingMode: " << config.routingMode);
   NS_ABORT_MSG_IF(config.islMtuBytes < 68,
                   "islMtuBytes 必须至少为 68");
+  NS_ABORT_MSG_IF(config.islQueueBytes == 0,
+                  "islQueueBytes 必须大于 0");
 }
 
 void
@@ -141,7 +143,10 @@ SatelliteTopology::Initialize()
 
   CreateSatelliteNodes(initial.satelliteIds);
   m_linkState.reset(
-    new SatelliteLinkState(m_nodes, m_nodeIndexes, m_config.islMtuBytes));
+    new SatelliteLinkState(m_nodes,
+                           m_nodeIndexes,
+                           m_config.islMtuBytes,
+                           m_config.islQueueBytes));
   TopologyLinkUpdateSummary summary = m_linkState->ApplyFullSnapshot(initial.links);
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 

@@ -22,6 +22,7 @@ struct TopologyConfig
   std::string routingMode;
   uint64_t ecmpHashSeed;
   uint16_t islMtuBytes;
+  uint32_t islQueueBytes;
   bool logEnabled;
 };
 
