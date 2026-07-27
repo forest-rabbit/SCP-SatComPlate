@@ -113,6 +113,9 @@ WriteRunSummary(
     }
 
   TaskAggregate taskAggregate = CollectTaskAggregate(taskCoordinator);
+  bool taskRunComplete =
+    taskCoordinator == nullptr
+    || taskAggregate.completedTaskCount == taskAggregate.taskCount;
   NS_ABORT_MSG_IF(
     taskCoordinator != nullptr
       && (runMetadata.computeProfilePath.empty()
@@ -140,6 +143,10 @@ WriteRunSummary(
          << simulationDurationSeconds << ",\n"
          << "  \"wall_clock_s\": " << wallClockSeconds << ",\n"
          << "  \"mode\": \"" << runMetadata.mode << "\",\n"
+         << "  \"run_status\": \""
+         << (taskRunComplete ? "COMPLETE" : "PARTIAL") << "\",\n"
+         << "  \"task_completion_policy\": \""
+         << runMetadata.taskCompletionPolicy << "\",\n"
          << "  \"routing_mode\": \"" << runMetadata.routingMode << "\",\n"
          << "  \"ecmp_hash_seed\": " << runMetadata.ecmpHashSeed << ",\n"
          << "  \"isl_mtu_bytes\": " << runMetadata.islMtuBytes << ",\n"

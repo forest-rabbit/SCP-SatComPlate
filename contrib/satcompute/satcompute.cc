@@ -93,6 +93,9 @@ main(int argc, char* argv[])
   commandLine.AddValue("taskLogMode",
                        "Task input logging: summary, verbose, or silent",
                        config.taskLogMode);
+  commandLine.AddValue("taskCompletionPolicy",
+                       "Incomplete task handling: strict or report",
+                       config.taskCompletionPolicy);
   commandLine.AddValue("diagnosticMode",
                        "Failure diagnostics: off or failure",
                        config.diagnosticMode);
@@ -128,6 +131,12 @@ main(int argc, char* argv[])
   std::transform(config.taskLogMode.begin(),
                  config.taskLogMode.end(),
                  config.taskLogMode.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
+  std::transform(config.taskCompletionPolicy.begin(),
+                 config.taskCompletionPolicy.end(),
+                 config.taskCompletionPolicy.begin(),
                  [](unsigned char character) {
                    return static_cast<char>(std::tolower(character));
                  });
@@ -258,6 +267,13 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
+  if (config.taskCompletionPolicy != "strict"
+      && config.taskCompletionPolicy != "report")
+    {
+      std::cerr << "[RUN:Error] taskCompletionPolicy must be strict or report"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
   if (config.diagnosticMode != "off"
       && config.diagnosticMode != "failure")
     {
@@ -293,6 +309,8 @@ main(int argc, char* argv[])
                     << std::endl
                     << "  taskLogMode        : " << config.taskLogMode
                     << std::endl
+                    << "  completionPolicy   : "
+                    << config.taskCompletionPolicy << std::endl
                     << "  diagnosticMode     : " << config.diagnosticMode
                     << std::endl
                     << "  transferChunkMode  : "
@@ -467,6 +485,7 @@ main(int argc, char* argv[])
     config.receiverRcvBufBytes,
     (taskMode || transferMode) && config.diagnosticMode == "failure",
     config.diagnosticMode,
+    config.taskCompletionPolicy,
     transferMode || taskMode ? "first-hop-serialization" : "none",
     transferMode || taskMode ? config.transferChunkMode : "none",
     (transferMode || taskMode) && config.transferChunkMode == "fixed"
@@ -498,13 +517,21 @@ main(int argc, char* argv[])
         }
       else
         {
-          std::cerr << "[RUN:Error] task run incomplete; "
-                    << (config.diagnosticMode == "failure"
-                          ? "diagnostics"
-                          : "base metrics")
-                    << " were written to " << config.outputDirectory
-                    << std::endl;
-          exitCode = EXIT_FAILURE;
+          std::ostream& message =
+            config.taskCompletionPolicy == "report" ? std::cout : std::cerr;
+          message << (config.taskCompletionPolicy == "report"
+                        ? "[RUN:Report]"
+                        : "[RUN:Error]")
+                  << " task run incomplete; "
+                  << (config.diagnosticMode == "failure"
+                        ? "diagnostics"
+                        : "base metrics")
+                  << " were written to " << config.outputDirectory
+                  << std::endl;
+          if (config.taskCompletionPolicy == "strict")
+            {
+              exitCode = EXIT_FAILURE;
+            }
         }
     }
   Simulator::Destroy();
