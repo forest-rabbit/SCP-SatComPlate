@@ -1021,7 +1021,13 @@ def directed_link_key(row):
     )
 
 
-def validate_failure_diagnostics(output, topology_dir, profile_path, trace_path):
+def validate_failure_diagnostics(
+    output,
+    topology_dir,
+    profile_path,
+    trace_path,
+    require_queue_drop=False,
+):
     topology_nodes = read_topology_nodes(topology_dir)
     topology_links = read_topology_links(topology_dir)
     profile = read_compute_profile(profile_path, topology_nodes)
@@ -1198,7 +1204,8 @@ def validate_failure_diagnostics(output, topology_dir, profile_path, trace_path)
     )
 
     drop_rows = read_csv_rows(output, "isl-queue-drops.csv", QUEUE_DROP_FIELDS)
-    require(drop_rows, "small failure fixture must produce an ISL queue drop")
+    if require_queue_drop:
+        require(drop_rows, "small failure fixture must produce an ISL queue drop")
     drop_totals = {}
     previous_time = -1
     simulation_duration_ns = round(run["simulation_duration_s"] * 1_000_000_000)
@@ -1399,12 +1406,18 @@ def main():
         parser.add_argument("--compute-profile", required=True)
         parser.add_argument("--task-trace", required=True)
         parser.add_argument("--output-dir", required=True)
+        parser.add_argument(
+            "--require-queue-drop",
+            action="store_true",
+            help="Require at least one mapped ISL queue-drop event.",
+        )
         args = parser.parse_args(argv[1:])
         validate_failure_diagnostics(
             args.output_dir,
             args.topology_dir,
             args.compute_profile,
             args.task_trace,
+            args.require_queue_drop,
         )
         return
 

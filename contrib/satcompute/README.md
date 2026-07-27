@@ -378,7 +378,8 @@ python3 contrib/satcompute/tools/check-task-output.py failure \
   --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --compute-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
   --task-trace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
-  --output-dir=/tmp/satcompute-task-failure
+  --output-dir=/tmp/satcompute-task-failure \
+  --require-queue-drop
 ```
 
 ## 输出与当前边界
