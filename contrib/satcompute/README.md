@@ -44,6 +44,7 @@ islQueueBytes            = 1500000
 receiverRcvBufBytes      = 131072
 transferLogMode          = summary
 taskLogMode              = summary
+taskCompletionPolicy     = strict
 diagnosticMode           = off
 routingMode              = global-hash-per-flow
 ecmpHashSeed             = 1
@@ -69,6 +70,8 @@ outputDir                = contrib/satcompute/output
   字节数，默认 131072，必须大于 0。
 - `--transferLogMode`：`summary`、`verbose` 或 `silent`。
 - `--taskLogMode`：`summary`、`verbose` 或 `silent`，只影响任务输入日志。
+- `--taskCompletionPolicy`：`strict` 在任务未全部完成时写出指标后返回非零；
+  `report` 写出相同结果后正常退出。默认 `strict`。
 - `--diagnosticMode`：`off` 只保留基础指标；`failure` 在任务失败时额外
   采集并写出未完成对象、ISL 队列 Drop 和 ECMP 链路集中度。默认 `off`。
 - `--routingMode`：`global-first` 或 `global-hash-per-flow`，默认
@@ -188,6 +191,10 @@ ceil(compute_work_units × 1,000,000,000
 ```
 
 计算完成时立即启动结果传输；结果完整接收后任务才进入 `COMPLETED`。
+`taskCompletionPolicy` 不改变上述状态机、调度、计算、传输、ECMP 或仿真
+停止时间，只控制指标落盘后的退出码。`run-summary.json` 对完整运行写
+`run_status=COMPLETE`，对未完全完成的任务运行写 `run_status=PARTIAL`，
+并同时记录实际使用的策略。
 
 单任务运行：
 
@@ -377,6 +384,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
   --ecmpHashSeed=1 \
   --transferLogMode=silent \
   --taskLogMode=silent \
+  --taskCompletionPolicy=strict \
   --diagnosticMode=failure \
   --outputDir=/tmp/satcompute-task-failure"
 
@@ -394,6 +402,24 @@ python3 contrib/satcompute/tools/check-task-output.py failure \
 `--require-udp-socket-drop`。该用例应由 `udp-socket-drops.csv` 直接记录
 socket 缓冲区 Drop；FlowMonitor 可能仍将这些包记为 IP 层已接收。
 
+正式压力运行使用
+`--taskCompletionPolicy=report --diagnosticMode=failure`。无论结果为
+`COMPLETE` 还是 `PARTIAL`，都可用同一个入口检查任务状态前缀、时间戳、
+传输字节/包计数、计算节点计数、FlowMonitor 与失败诊断聚合：
+
+```bash
+python3 contrib/satcompute/tools/check-task-output.py stress \
+  --topology-dir=<topology-dir> \
+  --compute-profile=<compute-profile.json> \
+  --task-trace=<task-trace.json> \
+  --workload-summary=<workload-summary.json> \
+  --output-dir=<run-output> \
+  --minimum-completion-rate-percent=90
+```
+
+检查器先输出 `RUN_VALID`，再按完成率给出 `CONTINUE` 或 `STOP`；低于阈值
+表示停止后续更大压力场景，不表示当前部分完成结果的结构合同无效。
+
 ## 输出与当前边界
 
 - `network-flow-metrics.csv`：所有 IPv4 FlowMonitor 流的聚合结果；
@@ -404,8 +430,9 @@ socket 缓冲区 Drop；FlowMonitor 可能仍将这些包记为 IP 层已接收�
 - `task-summary.csv`：每个任务的输入、排队、计算、结果和端到端时间；
 - `compute-node-summary.csv`：计算节点的完成数、忙时、最大队列和利用率；
 - `run-summary.json`：本次运行及网络、传输、任务聚合结果，包含任务完成数、
-  完成率、完成任务的平均/最大端到端时间、接收缓冲区配置及可用时的 UDP
-  socket Drop 聚合；诊断关闭时 Drop 聚合为 `null`，不会误报为零。
+  完成率、`COMPLETE/PARTIAL` 运行状态、完成策略、完成任务的平均/最大
+  端到端时间、接收缓冲区配置及可用时的 UDP socket Drop 聚合；诊断关闭时
+  Drop 聚合为 `null`，不会误报为零。
 - `incomplete-tasks.csv`、`incomplete-transfers.csv`：失败任务运行中的全部
   未完成对象及 partial 收发状态；
 - `isl-queue-drops.csv`、`isl-queue-drop-summary.csv`：按有向 ISL 输出
