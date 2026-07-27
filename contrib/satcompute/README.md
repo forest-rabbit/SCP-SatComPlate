@@ -144,6 +144,12 @@ topology/json/resources/...  ComputeProfile：节点静态计算能力
 traffic/json/task/...        TaskTrace：任务、数据量、计算量与到达时间
 ```
 
+`xw-66sat-static-2g-compute-profile.json` 是 22 个计算节点的受限对照；
+`xw-66sat-static-2g-all-compute-profile.json` 覆盖卫星 0–65，是 66
+计算节点正式压力矩阵的配置。大型压力 TaskTrace 和输出不提交仓库，精确
+生成参数、输入哈希及 50%/75%/109 GB 结果记录在
+`docs/n1-6-stress-validation-review.md`。
+
 `ComputeProfile` 根对象只允许 `schema_version` 和 `compute_nodes`，版本为
 `0.1`。每个计算节点只允许：
 
