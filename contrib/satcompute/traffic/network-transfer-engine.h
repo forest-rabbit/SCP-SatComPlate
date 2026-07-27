@@ -69,6 +69,7 @@ private:
   };
 
   uint32_t GetPlanIndex(uint64_t transferId) const;
+  const char* GetTransferStateName(uint32_t index) const;
   void ActivateTransfer(uint64_t transferId);
   void HandleTransferComplete(uint64_t transferId, int64_t completionTimeNs);
 

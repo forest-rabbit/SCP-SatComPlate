@@ -156,7 +156,8 @@ void
 WriteNetworkFlowDetails(
   Ptr<FlowMonitor> monitor,
   const std::vector<TransferFlowMetadata>& transferFlows,
-  const std::string& outputDirectory)
+  const std::string& outputDirectory,
+  bool requireCompleteCoverage)
 {
   std::ofstream output(OutputPath(outputDirectory, "network-flow-details.csv"),
                        std::ios::out | std::ios::trunc);
@@ -258,11 +259,25 @@ WriteNetworkFlowDetails(
 
   for (const auto& metadata : transferFlows)
     {
+      if (matchedTransferIds.find(metadata.transferId)
+          != matchedTransferIds.end())
+        {
+          continue;
+        }
       NS_ABORT_MSG_IF(
-        matchedTransferIds.find(metadata.transferId)
-          == matchedTransferIds.end(),
+        requireCompleteCoverage,
         "FlowMonitor 缺少 NetworkTransfer five-tuple，transfer_id="
           << metadata.transferId);
+      output << "0,"
+             << metadata.transferId << ","
+             << metadata.sourceAddress << ","
+             << metadata.destinationAddress << ","
+             << static_cast<uint32_t>(metadata.protocol) << ","
+             << metadata.sourcePort << ","
+             << metadata.destinationPort << ","
+             << metadata.plannedApplicationPayloadBytes << ","
+             << metadata.receivedApplicationPayloadBytes << ","
+             << "0,0,0,0,0,0,0,0,0,0\n";
     }
 }
 
@@ -352,6 +367,24 @@ NonNegativeDifference(int64_t endTimeNs,
                     << " start=" << startTimeNs
                     << " end=" << endTimeNs);
   return static_cast<uint64_t>(endTimeNs - startTimeNs);
+}
+
+int64_t
+OptionalDifference(int64_t endTimeNs,
+                   int64_t startTimeNs,
+                   const std::string& field,
+                   uint64_t taskId)
+{
+  if (startTimeNs < 0 || endTimeNs < 0)
+    {
+      return -1;
+    }
+  NS_ABORT_MSG_IF(endTimeNs < startTimeNs,
+                  "任务时间戳无效: task_id=" << taskId
+                    << " field=" << field
+                    << " start=" << startTimeNs
+                    << " end=" << endTimeNs);
+  return endTimeNs - startTimeNs;
 }
 
 struct TaskAggregate
@@ -469,31 +502,31 @@ WriteTaskSummaries(const TaskCoordinator& coordinator,
       NS_ABORT_MSG_IF(rate == ratesByNodeId.end(),
                       "task summary 缺少 ComputeService，task_id="
                         << task.definition.taskId);
-      uint64_t inputDelayNs =
-        NonNegativeDifference(task.inputTransferCompleteTimeNs,
-                              task.definition.arrivalTimeNs,
-                              "input_transfer_delay_ns",
-                              task.definition.taskId);
-      uint64_t queueDelayNs =
-        NonNegativeDifference(task.computeStartTimeNs,
-                              task.queueEnterTimeNs,
-                              "queue_delay_ns",
-                              task.definition.taskId);
-      uint64_t serviceTimeNs =
-        NonNegativeDifference(task.computeCompleteTimeNs,
-                              task.computeStartTimeNs,
-                              "compute_service_time_ns",
-                              task.definition.taskId);
-      uint64_t resultDelayNs =
-        NonNegativeDifference(task.resultTransferCompleteTimeNs,
-                              task.resultTransferStartTimeNs,
-                              "result_transfer_delay_ns",
-                              task.definition.taskId);
-      uint64_t completionDelayNs =
-        NonNegativeDifference(task.resultTransferCompleteTimeNs,
-                              task.definition.arrivalTimeNs,
-                              "end_to_end_completion_delay_ns",
-                              task.definition.taskId);
+      int64_t inputDelayNs =
+        OptionalDifference(task.inputTransferCompleteTimeNs,
+                           task.definition.arrivalTimeNs,
+                           "input_transfer_delay_ns",
+                           task.definition.taskId);
+      int64_t queueDelayNs =
+        OptionalDifference(task.computeStartTimeNs,
+                           task.queueEnterTimeNs,
+                           "queue_delay_ns",
+                           task.definition.taskId);
+      int64_t serviceTimeNs =
+        OptionalDifference(task.computeCompleteTimeNs,
+                           task.computeStartTimeNs,
+                           "compute_service_time_ns",
+                           task.definition.taskId);
+      int64_t resultDelayNs =
+        OptionalDifference(task.resultTransferCompleteTimeNs,
+                           task.resultTransferStartTimeNs,
+                           "result_transfer_delay_ns",
+                           task.definition.taskId);
+      int64_t completionDelayNs =
+        OptionalDifference(task.resultTransferCompleteTimeNs,
+                           task.definition.arrivalTimeNs,
+                           "end_to_end_completion_delay_ns",
+                           task.definition.taskId);
 
       output << task.definition.taskId << ","
              << task.definition.sourceNodeId << ","
@@ -518,6 +551,94 @@ WriteTaskSummaries(const TaskCoordinator& coordinator,
              << resultDelayNs << ","
              << completionDelayNs << ","
              << TaskStateToString(task.state) << "\n";
+    }
+}
+
+void
+WriteIncompleteTasks(const TaskCoordinator& coordinator,
+                     const std::string& outputDirectory)
+{
+  std::ofstream output(OutputPath(outputDirectory, "incomplete-tasks.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 incomplete tasks CSV");
+  output
+    << "task_id,state,source_node_id,compute_node_id,result_node_id,"
+       "input_transfer_id,result_transfer_id,arrival_time_ns,"
+       "last_transition_time_ns,input_transfer_complete_time_ns,"
+       "queue_enter_time_ns,compute_start_time_ns,compute_complete_time_ns,"
+       "result_transfer_complete_time_ns\n";
+  for (const auto& task : coordinator.GetTaskRuntimes())
+    {
+      if (task.state == TASK_COMPLETED)
+        {
+          continue;
+        }
+      output << task.definition.taskId << ","
+             << TaskStateToString(task.state) << ","
+             << task.definition.sourceNodeId << ","
+             << task.definition.computeNodeId << ","
+             << task.definition.resultNodeId << ","
+             << task.definition.inputTransferId << ","
+             << task.definition.resultTransferId << ","
+             << task.definition.arrivalTimeNs << ","
+             << task.lastTransitionTimeNs << ","
+             << task.inputTransferCompleteTimeNs << ","
+             << task.queueEnterTimeNs << ","
+             << task.computeStartTimeNs << ","
+             << task.computeCompleteTimeNs << ","
+             << task.resultTransferCompleteTimeNs << "\n";
+    }
+}
+
+void
+WriteIncompleteTransfers(
+  const std::vector<TransferSummaryRecord>& summaries,
+  const std::string& outputDirectory)
+{
+  std::ofstream output(OutputPath(outputDirectory, "incomplete-transfers.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 incomplete transfers CSV");
+  output
+    << "transfer_id,transfer_state,source_node_id,destination_node_id,"
+       "source_address,destination_address,source_port,destination_port,"
+       "declared_size_bytes,payload_bytes_per_packet,derived_packet_count,"
+       "sent_application_bytes,sent_packet_count,"
+       "received_application_bytes,received_packet_count,"
+       "missing_application_bytes,missing_packet_count_lower_bound,"
+       "arrival_time_ns,last_send_time_ns,completion_time_ns\n";
+  for (const auto& summary : summaries)
+    {
+      if (summary.transferState == "COMPLETED")
+        {
+          continue;
+        }
+      NS_ABORT_MSG_IF(
+        summary.receivedApplicationBytes > summary.declaredSizeBytes
+          || summary.receivedPacketCount > summary.derivedPacketCount,
+        "incomplete transfer 接收量超过声明值，transfer_id="
+          << summary.transferId);
+      output << summary.transferId << ","
+             << summary.transferState << ","
+             << summary.sourceSatelliteId << ","
+             << summary.destinationSatelliteId << ","
+             << summary.sourceAddress << ","
+             << summary.destinationAddress << ","
+             << summary.sourcePort << ","
+             << summary.destinationPort << ","
+             << summary.declaredSizeBytes << ","
+             << summary.payloadBytesPerPacket << ","
+             << summary.derivedPacketCount << ","
+             << summary.sentApplicationBytes << ","
+             << summary.sentPacketCount << ","
+             << summary.receivedApplicationBytes << ","
+             << summary.receivedPacketCount << ","
+             << summary.declaredSizeBytes
+                  - summary.receivedApplicationBytes << ","
+             << summary.derivedPacketCount
+                  - summary.receivedPacketCount << ","
+             << summary.arrivalTimeNs << ","
+             << summary.lastSendTimeNs << ","
+             << summary.completionTimeNs << "\n";
     }
 }
 
@@ -681,6 +802,87 @@ WriteRunSummary(
          << "}\n";
 }
 
+void
+WriteDiagnosticSummary(
+  const FlowAggregate& aggregate,
+  double simulationDurationSeconds,
+  const RunMetadata& runMetadata,
+  const std::vector<TransferSummaryRecord>& transferSummaries,
+  const TaskCoordinator& coordinator,
+  const std::string& outputDirectory)
+{
+  std::map<std::string, uint64_t> tasksByState;
+  uint64_t completedTasks = 0;
+  for (const auto& task : coordinator.GetTaskRuntimes())
+    {
+      ++tasksByState[TaskStateToString(task.state)];
+      if (task.state == TASK_COMPLETED)
+        {
+          ++completedTasks;
+        }
+    }
+
+  std::map<std::string, uint64_t> transfersByState;
+  uint64_t completedTransfers = 0;
+  for (const auto& transfer : transferSummaries)
+    {
+      ++transfersByState[transfer.transferState];
+      if (transfer.transferState == "COMPLETED")
+        {
+          ++completedTransfers;
+        }
+    }
+
+  std::ofstream output(OutputPath(outputDirectory, "diagnostic-summary.json"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 diagnostic summary JSON");
+  output << std::setprecision(15)
+         << "{\n"
+         << "  \"run_status\": \"INCOMPLETE\",\n"
+         << "  \"simulation_duration_s\": "
+         << simulationDurationSeconds << ",\n"
+         << "  \"task_count\": "
+         << coordinator.GetTaskRuntimes().size() << ",\n"
+         << "  \"completed_task_count\": " << completedTasks << ",\n"
+         << "  \"incomplete_task_count\": "
+         << coordinator.GetTaskRuntimes().size() - completedTasks << ",\n"
+         << "  \"tasks_by_state\": {\n"
+         << "    \"PENDING\": " << tasksByState["PENDING"] << ",\n"
+         << "    \"INPUT_TRANSFERRING\": "
+         << tasksByState["INPUT_TRANSFERRING"] << ",\n"
+         << "    \"QUEUED\": " << tasksByState["QUEUED"] << ",\n"
+         << "    \"RUNNING\": " << tasksByState["RUNNING"] << ",\n"
+         << "    \"RESULT_TRANSFERRING\": "
+         << tasksByState["RESULT_TRANSFERRING"] << ",\n"
+         << "    \"COMPLETED\": " << tasksByState["COMPLETED"] << "\n"
+         << "  },\n"
+         << "  \"transfer_count\": " << transferSummaries.size() << ",\n"
+         << "  \"registered_transfer_count\": "
+         << transfersByState["REGISTERED"] << ",\n"
+         << "  \"started_transfer_count\": "
+         << transfersByState["STARTED"] << ",\n"
+         << "  \"completed_transfer_count\": "
+         << completedTransfers << ",\n"
+         << "  \"incomplete_transfer_count\": "
+         << transferSummaries.size() - completedTransfers << ",\n"
+         << "  \"flowmonitor_tx_packets\": "
+         << aggregate.txPackets << ",\n"
+         << "  \"flowmonitor_rx_packets\": "
+         << aggregate.rxPackets << ",\n"
+         << "  \"flowmonitor_lost_packets\": "
+         << aggregate.lostPackets << ",\n"
+         << "  \"queue_drop_packets\": 0,\n"
+         << "  \"queue_drop_bytes\": 0,\n"
+         << "  \"dropped_directed_link_count\": 0,\n"
+         << "  \"top_dropped_links\": [],\n"
+         << "  \"compute_node_count\": "
+         << coordinator.GetComputeServices().size() << ",\n"
+         << "  \"queue_bytes_per_device\": "
+         << runMetadata.islQueueBytes << ",\n"
+         << "  \"ecmp_hash_seed\": " << runMetadata.ecmpHashSeed << "\n"
+         << "}\n";
+}
+
 } // namespace
 
 Ptr<FlowMonitor>
@@ -722,9 +924,14 @@ MetricsRecorder::Record()
       aggregate.Add(flow.second);
     }
 
+  bool taskRunComplete =
+    m_taskCoordinator == nullptr || m_taskCoordinator->IsComplete();
   PrintNetworkMetrics(aggregate);
   WriteNetworkMetrics(aggregate, m_outputDirectory);
-  WriteNetworkFlowDetails(m_monitor, m_transferFlows, m_outputDirectory);
+  WriteNetworkFlowDetails(m_monitor,
+                          m_transferFlows,
+                          m_outputDirectory,
+                          taskRunComplete);
   WriteEcmpRouteEvents(m_routeEvents, m_outputDirectory);
   WriteTransferSummaries(m_transferSummaries, m_outputDirectory);
   if (m_taskCoordinator != nullptr)
@@ -734,6 +941,17 @@ MetricsRecorder::Record()
       WriteComputeNodeSummaries(*m_taskCoordinator,
                                 m_simulationDurationSeconds,
                                 m_outputDirectory);
+      if (!taskRunComplete)
+        {
+          WriteIncompleteTasks(*m_taskCoordinator, m_outputDirectory);
+          WriteIncompleteTransfers(m_transferSummaries, m_outputDirectory);
+          WriteDiagnosticSummary(aggregate,
+                                 m_simulationDurationSeconds,
+                                 m_runMetadata,
+                                 m_transferSummaries,
+                                 *m_taskCoordinator,
+                                 m_outputDirectory);
+        }
     }
   WriteRunSummary(aggregate,
                   m_simulationDurationSeconds,
@@ -765,6 +983,19 @@ MetricsRecorder::Record()
         << "  compute : "
         << OutputPath(m_outputDirectory, "compute-node-summary.csv")
         << std::endl;
+      if (!taskRunComplete)
+        {
+          std::cout
+            << "  incomplete tasks     : "
+            << OutputPath(m_outputDirectory, "incomplete-tasks.csv")
+            << std::endl
+            << "  incomplete transfers : "
+            << OutputPath(m_outputDirectory, "incomplete-transfers.csv")
+            << std::endl
+            << "  diagnostics          : "
+            << OutputPath(m_outputDirectory, "diagnostic-summary.json")
+            << std::endl;
+        }
     }
 }
 

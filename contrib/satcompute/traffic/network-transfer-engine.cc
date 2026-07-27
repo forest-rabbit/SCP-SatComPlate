@@ -223,6 +223,23 @@ NetworkTransferEngine::GetPlanIndex(uint64_t transferId) const
   return plan->second;
 }
 
+const char*
+NetworkTransferEngine::GetTransferStateName(uint32_t index) const
+{
+  NS_ABORT_MSG_IF(index >= m_states.size(),
+                  "NetworkTransfer state 下标越界");
+  switch (m_states[index])
+    {
+    case TRANSFER_REGISTERED:
+      return "REGISTERED";
+    case TRANSFER_STARTED:
+      return "STARTED";
+    case TRANSFER_COMPLETED:
+      return "COMPLETED";
+    }
+  return "UNKNOWN";
+}
+
 void
 NetworkTransferEngine::StartTransferNow(
   uint64_t transferId,
@@ -322,6 +339,7 @@ NetworkTransferEngine::CollectApplicationMetrics() const
                   "NetworkTransferEngine plans 尚未注册");
   ApplicationMetrics metrics = {};
   metrics.sinkApplications = m_receivers.size();
+  bool requireComplete = AreAllTransfersCompleted();
   NS_ABORT_MSG_IF(m_senders.size() != m_plans.size(),
                   "NetworkTransfer sender 与 plan 数量不一致");
   for (uint32_t index = 0; index < m_senders.size(); ++index)
@@ -330,11 +348,14 @@ NetworkTransferEngine::CollectApplicationMetrics() const
       const NetworkTransfer& plan = m_plans[index];
       NS_ABORT_MSG_IF(sender->GetTransferId() != plan.transferId,
                       "NetworkTransfer sender 顺序与 plan 不一致");
-      NS_ABORT_MSG_IF(!sender->HasStarted()
-                        || sender->GetSentBytes() != plan.sizeBytes
-                        || sender->GetSentPacketCount() != plan.packetCount,
-                      "NetworkTransfer sender 未完成计划 payload，transfer_id="
-                        << plan.transferId);
+      if (requireComplete)
+        {
+          NS_ABORT_MSG_IF(!sender->HasStarted()
+                            || sender->GetSentBytes() != plan.sizeBytes
+                            || sender->GetSentPacketCount() != plan.packetCount,
+                          "NetworkTransfer sender 未完成计划 payload，"
+                          "transfer_id=" << plan.transferId);
+        }
       metrics.sentBytes =
         CheckedAdd(metrics.sentBytes, sender->GetSentBytes(), "sent bytes");
     }
@@ -425,7 +446,9 @@ NetworkTransferEngine::CollectSummaries() const
         receivedBytes,
         receiver->GetTransferReceivedPacketCount(plan.transferId),
         completionTimeNs,
-        completionDelayNs
+        completionDelayNs,
+        GetTransferStateName(index),
+        sender->GetSentPacketCount()
       };
       summaries.push_back(summary);
     }

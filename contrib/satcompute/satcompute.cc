@@ -377,10 +377,7 @@ main(int argc, char* argv[])
 
   Simulator::Stop(Seconds(config.simulationDurationSeconds));
   Simulator::Run();
-  if (taskMode)
-    {
-      taskCoordinator->ValidateCompleted();
-    }
+  bool taskRunComplete = !taskMode || taskCoordinator->IsComplete();
 
   double wallClockSeconds =
     std::chrono::duration<double>(std::chrono::steady_clock::now() - wallClockStart)
@@ -446,6 +443,21 @@ main(int argc, char* argv[])
                           taskMode ? PeekPointer(taskCoordinator) : nullptr,
                           config.outputDirectory);
   metrics.Record();
+  int exitCode = EXIT_SUCCESS;
+  if (taskMode)
+    {
+      if (taskRunComplete)
+        {
+          taskCoordinator->ValidateCompleted();
+        }
+      else
+        {
+          std::cerr
+            << "[RUN:Error] task run incomplete; diagnostics were written to "
+            << config.outputDirectory << std::endl;
+          exitCode = EXIT_FAILURE;
+        }
+    }
   Simulator::Destroy();
-  return EXIT_SUCCESS;
+  return exitCode;
 }

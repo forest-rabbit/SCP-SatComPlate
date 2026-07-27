@@ -21,6 +21,7 @@
 #include "ns3/abort.h"
 #include "ns3/simulator.h"
 
+#include <algorithm>
 #include <iostream>
 
 namespace ns3 {
@@ -297,6 +298,19 @@ TaskCoordinator::HandleResultTransferComplete(uint64_t transferId,
                  task.definition.resultNodeId,
                  completionTimeNs,
                  "RESULT_TRANSFER_COMPLETE");
+}
+
+bool
+TaskCoordinator::IsComplete() const
+{
+  NS_ABORT_MSG_IF(!m_initialized,
+                  "TaskCoordinator 尚未初始化");
+  return m_transferEngine->AreAllTransfersCompleted()
+         && std::all_of(m_tasks.begin(),
+                        m_tasks.end(),
+                        [](const TaskRuntime& task) {
+                          return task.state == TASK_COMPLETED;
+                        });
 }
 
 void

@@ -61,6 +61,7 @@ public:
                   uint16_t islMtuBytes,
                   double simulationDurationSeconds,
                   const std::string& taskLogMode);
+  bool IsComplete() const;
   void ValidateCompleted() const;
 
   Ptr<NetworkTransferEngine> GetTransferEngine() const;

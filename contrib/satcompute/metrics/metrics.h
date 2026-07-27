@@ -69,6 +69,8 @@ struct TransferSummaryRecord
   uint64_t receivedPacketCount;
   int64_t completionTimeNs;
   int64_t completionDelayNs;
+  std::string transferState;
+  uint64_t sentPacketCount;
 };
 
 Ptr<FlowMonitor> InstallSimulationFlowMonitor();
