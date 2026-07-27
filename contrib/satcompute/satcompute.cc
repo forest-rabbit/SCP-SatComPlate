@@ -17,8 +17,12 @@
 // SatCompute 可执行程序入口：解析参数、运行仿真并写出网络指标。
 
 #include "metrics/ecmp-route-recorder.h"
+#include "metrics/flow-metrics.h"
 #include "metrics/metrics.h"
 #include "para.h"
+#include "task/compute-profile.h"
+#include "task/task-coordinator.h"
+#include "task/task-trace.h"
 #include "topo.h"
 #include "traffic/background-traffic.h"
 #include "traffic/network-transfer.h"
@@ -62,6 +66,12 @@ main(int argc, char* argv[])
   commandLine.AddValue("transferTrace",
                        "Optional NetworkTransfer JSON trace",
                        config.transferTrace);
+  commandLine.AddValue("computeProfile",
+                       "Optional static compute-node profile JSON",
+                       config.computeProfile);
+  commandLine.AddValue("taskTrace",
+                       "Optional compute-task trace JSON",
+                       config.taskTrace);
   commandLine.AddValue("transferChunkMode",
                        "NetworkTransfer chunking: fixed or size-aware",
                        config.transferChunkMode);
@@ -74,9 +84,18 @@ main(int argc, char* argv[])
   commandLine.AddValue("islQueueBytes",
                        "Byte capacity of every ISL DropTail queue",
                        config.islQueueBytes);
+  commandLine.AddValue("receiverRcvBufBytes",
+                       "Receive-buffer bytes for each NetworkTransfer UDP socket",
+                       config.receiverRcvBufBytes);
   commandLine.AddValue("transferLogMode",
                        "NetworkTransfer logging: summary, verbose, or silent",
                        config.transferLogMode);
+  commandLine.AddValue("taskLogMode",
+                       "Task input logging: summary, verbose, or silent",
+                       config.taskLogMode);
+  commandLine.AddValue("diagnosticMode",
+                       "Failure diagnostics: off or failure",
+                       config.diagnosticMode);
   commandLine.AddValue("routingMode",
                        "Routing mode: global-first or global-hash-per-flow",
                        config.routingMode);
@@ -103,6 +122,18 @@ main(int argc, char* argv[])
   std::transform(config.transferChunkMode.begin(),
                  config.transferChunkMode.end(),
                  config.transferChunkMode.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
+  std::transform(config.taskLogMode.begin(),
+                 config.taskLogMode.end(),
+                 config.taskLogMode.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
+  std::transform(config.diagnosticMode.begin(),
+                 config.diagnosticMode.end(),
+                 config.diagnosticMode.begin(),
                  [](unsigned char character) {
                    return static_cast<char>(std::tolower(character));
                  });
@@ -151,6 +182,12 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
+  if (config.receiverRcvBufBytes == 0)
+    {
+      std::cerr << "[RUN:Error] receiverRcvBufBytes must be positive"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
   uint32_t maximumTransferPayloadBytes =
     config.transferChunkMode == "size-aware"
       ? GetSizeAwareMaximumPayloadBytes()
@@ -162,15 +199,38 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
-  if (!config.transferTrace.empty() && config.offeredLoad > 0.0)
+  bool hasComputeProfile = !config.computeProfile.empty();
+  bool hasTaskTrace = !config.taskTrace.empty();
+  bool transferMode = !config.transferTrace.empty();
+  if (hasComputeProfile != hasTaskTrace)
+    {
+      std::cerr << "[RUN:Error] computeProfile and taskTrace must be provided "
+                   "together"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  bool taskMode = hasComputeProfile && hasTaskTrace;
+  if (taskMode && transferMode)
+    {
+      std::cerr << "[RUN:Error] task mode cannot be combined with transferTrace"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  if (taskMode && config.offeredLoad > 0.0)
+    {
+      std::cerr << "[RUN:Error] task mode requires offeredLoad=0"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  if (transferMode && config.offeredLoad > 0.0)
     {
       std::cerr << "[RUN:Error] transferTrace requires offeredLoad=0"
                 << std::endl;
       return EXIT_FAILURE;
     }
-  if (!config.transferTrace.empty() && config.transport != "udp")
+  if ((transferMode || taskMode) && config.transport != "udp")
     {
-      std::cerr << "[RUN:Error] NetworkTransfer supports udp only"
+      std::cerr << "[RUN:Error] NetworkTransfer and task modes support udp only"
                 << std::endl;
       return EXIT_FAILURE;
     }
@@ -190,21 +250,64 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
+  if (config.taskLogMode != "summary"
+      && config.taskLogMode != "verbose"
+      && config.taskLogMode != "silent")
+    {
+      std::cerr << "[RUN:Error] taskLogMode must be summary, verbose, or silent"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  if (config.diagnosticMode != "off"
+      && config.diagnosticMode != "failure")
+    {
+      std::cerr << "[RUN:Error] diagnosticMode must be off or failure"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
 
-  bool transferMode = !config.transferTrace.empty();
-  bool silentTransferRun =
-    transferMode && config.transferLogMode == "silent";
+  bool legacyMode = !taskMode && !transferMode && config.offeredLoad > 0.0;
+  std::string runMode =
+    taskMode
+      ? "task"
+      : (transferMode
+           ? "network-transfer"
+           : (legacyMode ? "legacy-traffic" : "no-workload"));
+  bool silentRun =
+    (transferMode && config.transferLogMode == "silent")
+    || (taskMode && config.taskLogMode == "silent");
 
-  if (!silentTransferRun)
+  if (!silentRun)
     {
       std::cout << "[RUN]" << std::endl
-                << "  mode               : "
-                << (transferMode ? "network-transfer" : "legacy-traffic")
+                << "  mode               : " << runMode
                 << std::endl
                 << "  topologyDir        : " << config.topologyDirectory << std::endl
                 << "  simulationDuration : "
                 << config.simulationDurationSeconds << " s" << std::endl;
-      if (transferMode)
+      if (taskMode)
+        {
+          std::cout << "  computeProfile     : " << config.computeProfile
+                    << std::endl
+                    << "  taskTrace          : " << config.taskTrace
+                    << std::endl
+                    << "  taskLogMode        : " << config.taskLogMode
+                    << std::endl
+                    << "  diagnosticMode     : " << config.diagnosticMode
+                    << std::endl
+                    << "  transferChunkMode  : "
+                    << config.transferChunkMode << std::endl;
+          if (config.transferChunkMode == "fixed")
+            {
+              std::cout << "  transferPayload    : "
+                        << config.transferPayloadBytes << " bytes" << std::endl;
+            }
+          std::cout << "  pacingMode         : first-hop-serialization"
+                    << std::endl
+                    << "  transferLogMode    : "
+                    << config.transferLogMode << std::endl;
+        }
+      else if (transferMode)
         {
           std::cout << "  transferTrace      : " << config.transferTrace << std::endl
                     << "  transferChunkMode  : "
@@ -220,16 +323,22 @@ main(int argc, char* argv[])
                     << "  transferLogMode    : "
                     << config.transferLogMode << std::endl;
         }
-      else
+      else if (legacyMode)
         {
           std::cout << "  trafficMatrix      : " << config.trafficMatrix << std::endl
                     << "  offeredLoad        : " << config.offeredLoad << std::endl
                     << "  transport          : " << config.transport << std::endl;
         }
+      else
+        {
+          std::cout << "  workload           : none" << std::endl;
+        }
       std::cout << "  islMtu             : " << config.islMtuBytes
                 << " bytes" << std::endl
                 << "  islQueue           : " << config.islQueueBytes
                 << " bytes" << std::endl
+                << "  receiverRcvBuf     : "
+                << config.receiverRcvBufBytes << " bytes" << std::endl
                 << "  routingMode        : " << config.routingMode << std::endl
                 << "  ecmpHashSeed       : " << config.ecmpHashSeed << std::endl
                 << "  outputDir          : " << config.outputDirectory << std::endl
@@ -246,24 +355,55 @@ main(int argc, char* argv[])
     config.ecmpHashSeed,
     config.islMtuBytes,
     config.islQueueBytes,
-    !silentTransferRun
+    taskMode && config.diagnosticMode == "failure",
+    !silentRun
   };
   SatelliteTopology topology(topologyConfig);
   topology.Initialize();
+  ComputeProfile computeProfile;
+  TaskTrace taskTrace;
+  if (taskMode)
+    {
+      computeProfile =
+        ReadComputeProfile(config.computeProfile, topology, config.taskLogMode);
+      taskTrace =
+        ReadTaskTrace(config.taskTrace,
+                      config.simulationDurationSeconds,
+                      topology,
+                      computeProfile,
+                      config.taskLogMode);
+    }
   EcmpRouteRecorder routeRecorder(topology);
+  Ptr<TaskCoordinator> taskCoordinator;
+  if (taskMode)
+    {
+      taskCoordinator = CreateObject<TaskCoordinator>();
+      taskCoordinator->Initialize(computeProfile,
+                                  taskTrace,
+                                  topology,
+                                  config.transferChunkMode,
+                                  config.transferPayloadBytes,
+                                  config.islMtuBytes,
+                                  config.receiverRcvBufBytes,
+                                  config.diagnosticMode == "failure",
+                                  config.simulationDurationSeconds,
+                                  config.taskLogMode);
+    }
   ApplicationState backgroundApplications;
   NetworkTransferState networkTransfers;
-  if (config.transferTrace.empty())
+  if (!taskMode && !transferMode)
     {
       backgroundApplications = InstallApplications(config, topology);
     }
-  else
+  else if (transferMode)
     {
       networkTransfers =
         InstallNetworkTransfers(config.transferTrace,
                                 config.transferChunkMode,
                                 config.transferPayloadBytes,
                                 config.islMtuBytes,
+                                config.receiverRcvBufBytes,
+                                config.diagnosticMode == "failure",
                                 config.transferLogMode,
                                 config.simulationDurationSeconds,
                                 topology);
@@ -272,39 +412,68 @@ main(int argc, char* argv[])
 
   Simulator::Stop(Seconds(config.simulationDurationSeconds));
   Simulator::Run();
+  bool taskRunComplete = !taskMode || taskCoordinator->IsComplete();
 
   double wallClockSeconds =
     std::chrono::duration<double>(std::chrono::steady_clock::now() - wallClockStart)
       .count();
-  if (!silentTransferRun)
+  if (!silentRun)
     {
       std::cout << "[RUN] wall-clock: " << wallClockSeconds << " s"
                 << std::endl << std::endl;
     }
 
-  ApplicationMetrics applicationMetrics =
-    config.transferTrace.empty()
-      ? CollectApplicationMetrics(backgroundApplications)
-      : CollectNetworkTransferMetrics(networkTransfers);
-  std::vector<TransferFlowMetadata> transferFlowMetadata =
-    config.transferTrace.empty()
-      ? std::vector<TransferFlowMetadata>()
-      : CollectNetworkTransferFlowMetadata(networkTransfers);
-  std::vector<TransferSummaryRecord> transferSummaries =
-    config.transferTrace.empty()
-      ? std::vector<TransferSummaryRecord>()
-      : CollectNetworkTransferSummaries(networkTransfers);
+  ApplicationMetrics applicationMetrics = {};
+  if (transferMode)
+    {
+      applicationMetrics = CollectNetworkTransferMetrics(networkTransfers);
+    }
+  else if (taskMode)
+    {
+      applicationMetrics =
+        taskCoordinator->GetTransferEngine()->CollectApplicationMetrics();
+    }
+  else if (!taskMode)
+    {
+      applicationMetrics = CollectApplicationMetrics(backgroundApplications);
+    }
+  std::vector<TransferFlowMetadata> transferFlowMetadata;
+  std::vector<TransferSummaryRecord> transferSummaries;
+  std::vector<UdpSocketDropEvent> udpSocketDropEvents;
+  if (transferMode)
+    {
+      transferFlowMetadata =
+        CollectNetworkTransferFlowMetadata(networkTransfers);
+      transferSummaries =
+        CollectNetworkTransferSummaries(networkTransfers);
+      udpSocketDropEvents =
+        networkTransfers.engine->CollectUdpSocketDropEvents();
+    }
+  else if (taskMode)
+    {
+      transferFlowMetadata =
+        taskCoordinator->GetTransferEngine()->CollectFlowMetadata();
+      transferSummaries =
+        taskCoordinator->GetTransferEngine()->CollectSummaries();
+      udpSocketDropEvents =
+        taskCoordinator->GetTransferEngine()->CollectUdpSocketDropEvents();
+    }
   RunMetadata runMetadata = {
-    transferMode ? "network-transfer" : "legacy-traffic",
+    runMode,
     config.routingMode,
     config.ecmpHashSeed,
     config.islMtuBytes,
     config.islQueueBytes,
-    transferMode ? "first-hop-serialization" : "none",
-    transferMode ? config.transferChunkMode : "none",
-    transferMode && config.transferChunkMode == "fixed"
+    config.receiverRcvBufBytes,
+    (taskMode || transferMode) && config.diagnosticMode == "failure",
+    config.diagnosticMode,
+    transferMode || taskMode ? "first-hop-serialization" : "none",
+    transferMode || taskMode ? config.transferChunkMode : "none",
+    (transferMode || taskMode) && config.transferChunkMode == "fixed"
       ? config.transferPayloadBytes
-      : 0
+      : 0,
+    taskMode ? config.computeProfile : "",
+    taskMode ? config.taskTrace : ""
   };
   MetricsRecorder metrics(flowMonitor,
                           config.simulationDurationSeconds,
@@ -314,8 +483,30 @@ main(int argc, char* argv[])
                           transferFlowMetadata,
                           transferSummaries,
                           routeRecorder.GetEvents(),
+                          topology.GetIslDirectedLinks(),
+                          topology.GetIslQueueDropEvents(),
+                          udpSocketDropEvents,
+                          taskMode ? PeekPointer(taskCoordinator) : nullptr,
                           config.outputDirectory);
   metrics.Record();
+  int exitCode = EXIT_SUCCESS;
+  if (taskMode)
+    {
+      if (taskRunComplete)
+        {
+          taskCoordinator->ValidateCompleted();
+        }
+      else
+        {
+          std::cerr << "[RUN:Error] task run incomplete; "
+                    << (config.diagnosticMode == "failure"
+                          ? "diagnostics"
+                          : "base metrics")
+                    << " were written to " << config.outputDirectory
+                    << std::endl;
+          exitCode = EXIT_FAILURE;
+        }
+    }
   Simulator::Destroy();
-  return EXIT_SUCCESS;
+  return exitCode;
 }

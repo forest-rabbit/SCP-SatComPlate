@@ -52,8 +52,35 @@ topology_<time>s.json
 - `delay`：单向传播时延，单位 µs；
 - `link_bandwidth`：链路带宽，单位 kbps，必须大于 0；
 
-时延和带宽用于 PointToPoint 链路配置。业务负载由独立的流量 CSV 和
-`--offeredLoad` 参数决定，不写入拓扑文件。
+时延和带宽用于 PointToPoint 链路配置。业务到达不写入拓扑文件，而由独立的
+legacy CSV、NetworkTransfer 或 TaskTrace 提供。
 
 同一链路文件中不能重复声明同一条无向 ISL。仓库样例位于
 [`examples/xw-66sat/`](examples/xw-66sat/)。
+
+## ComputeProfile 静态资源
+
+节点的静态计算能力属于 topology side，放在 `resources/`，不写入
+`nodes_<time>s.json`，也不与任务到达混合。任务模式通过
+`--computeProfile=<file>` 显式读取一个文件：
+
+```json
+{
+  "schema_version": "0.1",
+  "compute_nodes": [
+    {
+      "node_id": 3,
+      "compute_rate_work_units_per_second": 1000000
+    }
+  ]
+}
+```
+
+根对象只允许 `schema_version` 和 `compute_nodes`；每项只允许 `node_id` 和
+`compute_rate_work_units_per_second`。`node_id` 必须引用拓扑中存在的卫星且
+不能重复，速率是正整数，单位为 work units/s。数组按 `node_id` canonical
+sort，因此 JSON 中的排列不影响运行与结构化输出。
+
+测试资源位于 [`resources/test/`](resources/test/)。与之配对的任务到达属于
+traffic side，位于 `input/traffic/json/task/`，其格式见
+[`../../traffic/json/README.md`](../../traffic/json/README.md)。

@@ -39,6 +39,14 @@ GetDefaultSatComputeConfig()
   // 非空时启用 schema_version=0.1 的逐流输入，并要求 offeredLoad=0、transport=udp。
   config.transferTrace = "";
 
+  // --computeProfile：topology/resources 下的静态计算能力 JSON。
+  // 必须与 taskTrace 同时提供；空字符串表示不启用任务模式。
+  config.computeProfile = "";
+
+  // --taskTrace：traffic/json/task 下的任务到达 JSON。
+  // 必须与 computeProfile 同时提供，且不能与 transferTrace 或 offeredLoad 混用。
+  config.taskTrace = "";
+
   // --outputDir：结构化指标输出目录；可填写仓库相对路径或绝对路径。
   config.outputDirectory = "contrib/satcompute/output";
 
@@ -55,6 +63,16 @@ GetDefaultSatComputeConfig()
   // "summary" 输出聚合信息与少量样本，"verbose" 输出每条 transfer，
   // "silent" 关闭运行、拓扑和 transfer 日志；三种模式都写出指标文件。
   config.transferLogMode = "summary";
+
+  // --taskLogMode：
+  // "summary" 输出任务输入聚合和样本，"verbose" 输出每个节点与任务，
+  // "silent" 关闭任务输入日志；三种模式都不改变任务行为。
+  config.taskLogMode = "summary";
+
+  // --diagnosticMode：
+  // "off" 关闭失败诊断采集与诊断文件，只保留基础指标；
+  // "failure" 在任务未全部完成时写出未完成对象、队列 Drop 和链路集中度。
+  config.diagnosticMode = "off";
 
   // --transferChunkMode：
   // "fixed" 让所有 transfer 使用 transferPayloadBytes 作为 UDP payload 上限；
@@ -74,6 +92,10 @@ GetDefaultSatComputeConfig()
   // --islQueueBytes：每个 ISL DropTail 队列的总字节容量，必须大于 0。
   // 调小会更早产生竞争丢包，调大可以容纳更多排队数据。
   config.islQueueBytes = 1500000;
+
+  // --receiverRcvBufBytes：每个 NetworkTransfer UDP 接收 socket 的缓冲区，
+  // 单位为 bytes，必须大于 0。默认值与 ns-3 UdpSocket 一致。
+  config.receiverRcvBufBytes = 131072;
 
   // --ecmpHashSeed：逐流 ECMP 的 uint64 hash seed；任意 uint64 值均可。
   // 相同 seed 和输入保持相同选路，改变 seed 会重新映射等价路径。

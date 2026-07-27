@@ -148,6 +148,126 @@ jobs:
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-mixed-large"
 
+      - name: Task single ECMP
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+            --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+            --simulationDuration=3 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1024 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-task-single"
+
+      - name: Task FCFS
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+            --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-fcfs.json \
+            --simulationDuration=4 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1024 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-task-fcfs"
+
+      - name: Task heterogeneous
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/test/heterogeneous-compute-profile.json \
+            --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-heterogeneous.json \
+            --simulationDuration=4 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1024 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-task-heterogeneous"
+
+      - name: Task order determinism
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/test/compute-profile-order-a.json \
+            --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-order-a.json \
+            --simulationDuration=3 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1024 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-task-order-a"
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/test/compute-profile-order-a.json \
+            --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-order-b.json \
+            --simulationDuration=3 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1024 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-task-order-b"
+
+      - name: Compute profile order determinism
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/test/compute-profile-order-a.json \
+            --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-order-a.json \
+            --simulationDuration=3 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1024 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-profile-order-a"
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/test/compute-profile-order-b.json \
+            --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-order-a.json \
+            --simulationDuration=3 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1024 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-profile-order-b"
+
       - name: Check deterministic outputs
         run: |
           python3 contrib/satcompute/tools/check-ecmp-output.py \
@@ -166,6 +286,163 @@ jobs:
             --canonical-first=/tmp/satcompute-ci-canonical-a \
             --canonical-second=/tmp/satcompute-ci-canonical-order-b
 
+      - name: Check task outputs
+        run: |
+          python3 contrib/satcompute/tools/check-task-output.py \
+            --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --single-output=/tmp/satcompute-ci-task-single \
+            --single-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+            --single-trace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+            --fcfs-output=/tmp/satcompute-ci-task-fcfs \
+            --fcfs-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+            --fcfs-trace=contrib/satcompute/input/traffic/json/task/test/task-fcfs.json \
+            --heterogeneous-output=/tmp/satcompute-ci-task-heterogeneous \
+            --heterogeneous-profile=contrib/satcompute/input/topology/json/resources/test/heterogeneous-compute-profile.json \
+            --heterogeneous-trace=contrib/satcompute/input/traffic/json/task/test/task-heterogeneous.json \
+            --task-order-first-output=/tmp/satcompute-ci-task-order-a \
+            --task-order-second-output=/tmp/satcompute-ci-task-order-b \
+            --task-order-profile=contrib/satcompute/input/topology/json/resources/test/compute-profile-order-a.json \
+            --task-order-first-trace=contrib/satcompute/input/traffic/json/task/test/task-order-a.json \
+            --task-order-second-trace=contrib/satcompute/input/traffic/json/task/test/task-order-b.json \
+            --profile-order-first-output=/tmp/satcompute-ci-profile-order-a \
+            --profile-order-second-output=/tmp/satcompute-ci-profile-order-b \
+            --profile-order-first-profile=contrib/satcompute/input/topology/json/resources/test/compute-profile-order-a.json \
+            --profile-order-second-profile=contrib/satcompute/input/topology/json/resources/test/compute-profile-order-b.json \
+            --profile-order-trace=contrib/satcompute/input/traffic/json/task/test/task-order-a.json
+
+      - name: Generated task workload contract
+        run: |
+          python3 contrib/satcompute/tools/generate-task-workload.py \
+            --nodes-file=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g/nodes_0s.json \
+            --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
+            --task-count=40 \
+            --total-input-bytes=4000000 \
+            --seed=n1-ci \
+            --rules-version=n1.6-v1 \
+            --arrival-start-ns=1000000000 \
+            --arrival-end-ns=10000000000 \
+            --arrival-mode=uniform \
+            --large-1gb-count=20 \
+            --large-500mb-count=40 \
+            --scenario-scale-bp=0 \
+            --non-tail-min-input-bytes=4096 \
+            --non-tail-max-input-bytes=500000 \
+            --output-task-trace=/tmp/satcompute-ci-generated-a.json \
+            --output-workload-summary=/tmp/satcompute-ci-generated-a-summary.json
+          cmp contrib/satcompute/input/traffic/json/task/test/stress-generated-40.json \
+            /tmp/satcompute-ci-generated-a.json
+          cmp contrib/satcompute/input/traffic/json/task/test/stress-generated-40-summary.json \
+            /tmp/satcompute-ci-generated-a-summary.json
+          python3 contrib/satcompute/tools/generate-task-workload.py \
+            --nodes-file=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g/nodes_0s.json \
+            --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
+            --task-count=40 \
+            --total-input-bytes=4000000 \
+            --seed=n1-ci-different \
+            --rules-version=n1.6-v1 \
+            --arrival-start-ns=1000000000 \
+            --arrival-end-ns=10000000000 \
+            --arrival-mode=uniform \
+            --large-1gb-count=20 \
+            --large-500mb-count=40 \
+            --scenario-scale-bp=0 \
+            --non-tail-min-input-bytes=4096 \
+            --non-tail-max-input-bytes=500000 \
+            --output-task-trace=/tmp/satcompute-ci-generated-different.json \
+            --output-workload-summary=/tmp/satcompute-ci-generated-different-summary.json
+          if cmp -s /tmp/satcompute-ci-generated-a.json \
+            /tmp/satcompute-ci-generated-different.json; then
+            echo "different seed produced an identical TaskTrace"
+            exit 1
+          fi
+          python3 contrib/satcompute/tools/generate-task-workload.py \
+            --nodes-file=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g/nodes_0s.json \
+            --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
+            --task-count=40 \
+            --total-input-bytes=2004000000 \
+            --seed=n1-ci-tail \
+            --rules-version=n1.6-v1 \
+            --arrival-start-ns=1000000000 \
+            --arrival-end-ns=10000000000 \
+            --arrival-mode=uniform \
+            --large-1gb-count=20 \
+            --large-500mb-count=40 \
+            --scenario-scale-bp=500 \
+            --non-tail-min-input-bytes=4096 \
+            --non-tail-max-input-bytes=500000 \
+            --output-task-trace=/tmp/satcompute-ci-generated-tail.json \
+            --output-workload-summary=/tmp/satcompute-ci-generated-tail-summary.json
+
+      - name: Generated task workload preflight
+        run: |
+          python3 contrib/satcompute/tools/preflight-task-workload.py \
+            --topology-dir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
+            --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
+            --task-trace=/tmp/satcompute-ci-generated-a.json \
+            --workload-summary=/tmp/satcompute-ci-generated-a-summary.json \
+            --simulation-duration-s=20 \
+            --chunk-mode=size-aware \
+            --isl-mtu-bytes=65535 \
+            --isl-queue-bytes=8000000 \
+            --output-report=/tmp/satcompute-ci-generated-preflight.json
+          python3 contrib/satcompute/tools/preflight-task-workload.py \
+            --topology-dir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
+            --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
+            --task-trace=/tmp/satcompute-ci-generated-tail.json \
+            --workload-summary=/tmp/satcompute-ci-generated-tail-summary.json \
+            --simulation-duration-s=20 \
+            --chunk-mode=size-aware \
+            --isl-mtu-bytes=65535 \
+            --isl-queue-bytes=8000000
+          if python3 contrib/satcompute/tools/preflight-task-workload.py \
+            --topology-dir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
+            --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
+            --task-trace=/tmp/satcompute-ci-generated-a.json \
+            --workload-summary=/tmp/satcompute-ci-generated-a-summary.json \
+            --simulation-duration-s=20 \
+            --chunk-mode=size-aware \
+            --isl-mtu-bytes=65535 \
+            --isl-queue-bytes=8000000 \
+            --max-total-input-bytes=3999999; then
+            echo "preflight accepted an over-budget workload"
+            exit 1
+          fi
+          python3 contrib/satcompute/tools/preflight-task-workload.py \
+            --topology-dir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
+            --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
+            --task-trace=/tmp/satcompute-ci-generated-a.json \
+            --workload-summary=/tmp/satcompute-ci-generated-a-summary.json \
+            --simulation-duration-s=20 \
+            --chunk-mode=size-aware \
+            --isl-mtu-bytes=65535 \
+            --isl-queue-bytes=64000000 \
+            | tee /tmp/satcompute-ci-generated-warning.log
+          grep -F "WARNING: aggregate theoretical queue capacity is large" \
+            /tmp/satcompute-ci-generated-warning.log
+
+      - name: Generated task end-to-end
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
+            --taskTrace=/tmp/satcompute-ci-generated-a.json \
+            --simulationDuration=20 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --transferChunkMode=size-aware \
+            --islMtuBytes=65535 \
+            --islQueueBytes=8000000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-generated-run"
+          python3 contrib/satcompute/tools/check-task-output.py run \
+            --topology-dir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
+            --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
+            --task-trace=/tmp/satcompute-ci-generated-a.json \
+            --workload-summary=/tmp/satcompute-ci-generated-a-summary.json \
+            --output-dir=/tmp/satcompute-ci-generated-run
+
       - name: Summary
         run: |
           echo "PASS build"
@@ -174,3 +451,11 @@ jobs:
           echo "PASS remainder"
           echo "PASS 5000 varied transfers"
           echo "PASS mixed large workload"
+          echo "PASS task single ECMP"
+          echo "PASS task FCFS"
+          echo "PASS task heterogeneous"
+          echo "PASS task input ordering"
+          echo "PASS compute profile ordering"
+          echo "PASS generated workload contract"
+          echo "PASS generated workload preflight"
+          echo "PASS generated task end-to-end"

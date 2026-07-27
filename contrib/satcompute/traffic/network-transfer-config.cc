@@ -28,7 +28,6 @@
 #include <exception>
 #include <fstream>
 #include <limits>
-#include <map>
 
 using json = nlohmann::json;
 
@@ -130,11 +129,39 @@ ReadJsonFile(const std::string& filename)
   return json();
 }
 
-uint32_t
-ResolvePayloadBytes(const std::string& chunkMode,
-                    uint32_t fixedPayloadBytes,
-                    uint64_t transferSizeBytes)
+} // namespace
+
+NetworkTransfer::NetworkTransfer()
+  : transferId(0),
+    sourceSatelliteId(0),
+    destinationSatelliteId(0),
+    sizeBytes(0),
+    arrivalTimeNs(-1),
+    sourcePort(0),
+    destinationPort(NETWORK_TRANSFER_DESTINATION_PORT),
+    payloadBytesPerPacket(0),
+    packetCount(0),
+    finalPacketPayloadBytes(0)
 {
+}
+
+uint32_t
+GetSizeAwareMaximumPayloadBytes()
+{
+  return LARGE_TRANSFER_PAYLOAD_BYTES;
+}
+
+uint32_t
+ResolveNetworkTransferPayloadBytes(const std::string& chunkMode,
+                                   uint32_t fixedPayloadBytes,
+                                   uint64_t transferSizeBytes)
+{
+  NS_ABORT_MSG_IF(chunkMode != "fixed" && chunkMode != "size-aware",
+                  "transferChunkMode 必须是 fixed 或 size-aware");
+  NS_ABORT_MSG_IF(fixedPayloadBytes == 0 || fixedPayloadBytes > 65507,
+                  "transferPayloadBytes 必须在 1..65507 范围内");
+  NS_ABORT_MSG_IF(transferSizeBytes == 0,
+                  "NetworkTransfer size_bytes 必须为正整数");
   if (chunkMode == "fixed")
     {
       return fixedPayloadBytes;
@@ -150,40 +177,12 @@ ResolvePayloadBytes(const std::string& chunkMode,
   return LARGE_TRANSFER_PAYLOAD_BYTES;
 }
 
-} // namespace
-
-NetworkTransfer::NetworkTransfer()
-  : transferId(0),
-    sourceSatelliteId(0),
-    destinationSatelliteId(0),
-    sizeBytes(0),
-    arrivalTimeNs(0),
-    sourcePort(0),
-    destinationPort(NETWORK_TRANSFER_DESTINATION_PORT),
-    payloadBytesPerPacket(0),
-    packetCount(0),
-    finalPacketPayloadBytes(0)
-{
-}
-
-uint32_t
-GetSizeAwareMaximumPayloadBytes()
-{
-  return LARGE_TRANSFER_PAYLOAD_BYTES;
-}
-
 std::vector<NetworkTransfer>
 ReadNetworkTransferTrace(const std::string& filename,
-                         const std::string& chunkMode,
-                         uint32_t fixedPayloadBytes,
                          double simulationDurationSeconds,
                          const SatelliteTopology& topology)
 {
   NS_ABORT_MSG_IF(filename.empty(), "NetworkTransfer JSON 路径不能为空");
-  NS_ABORT_MSG_IF(chunkMode != "fixed" && chunkMode != "size-aware",
-                  "transferChunkMode 必须是 fixed 或 size-aware");
-  NS_ABORT_MSG_IF(fixedPayloadBytes == 0 || fixedPayloadBytes > 65507,
-                  "transferPayloadBytes 必须在 1..65507 范围内");
 
   int64_t simulationDurationNs =
     Seconds(simulationDurationSeconds).GetNanoSeconds();
@@ -250,23 +249,6 @@ ReadNetworkTransferTrace(const std::string& filename,
         transfer.arrivalTimeNs >= simulationDurationNs,
         "arrival_time_ns 必须早于 simulation stop，transfer_id="
           << transfer.transferId);
-      transfer.sourceAddress =
-        topology.GetServiceAddressBySatelliteId(transfer.sourceSatelliteId);
-      transfer.destinationAddress =
-        topology.GetServiceAddressBySatelliteId(transfer.destinationSatelliteId);
-      uint32_t payloadBytes =
-        ResolvePayloadBytes(chunkMode,
-                            fixedPayloadBytes,
-                            transfer.sizeBytes);
-      transfer.payloadBytesPerPacket = payloadBytes;
-      transfer.packetCount =
-        transfer.sizeBytes / payloadBytes
-        + (transfer.sizeBytes % payloadBytes == 0 ? 0 : 1);
-      transfer.finalPacketPayloadBytes =
-        transfer.sizeBytes % payloadBytes == 0
-          ? payloadBytes
-          : static_cast<uint32_t>(
-              transfer.sizeBytes % payloadBytes);
       transfers.push_back(transfer);
     }
 
@@ -278,25 +260,13 @@ ReadNetworkTransferTrace(const std::string& filename,
               return left.transferId < right.transferId;
             });
 
-  std::map<uint32_t, uint32_t> nextSourceOrdinal;
   for (uint32_t index = 0; index < transfers.size(); ++index)
     {
-      NetworkTransfer& transfer = transfers[index];
       NS_ABORT_MSG_IF(index > 0
-                        && transfers[index - 1].transferId == transfer.transferId,
+                        && transfers[index - 1].transferId
+                             == transfers[index].transferId,
                       "NetworkTransfer 文件包含重复 transfer_id: "
-                        << transfer.transferId);
-
-      uint32_t ordinal = nextSourceOrdinal[transfer.sourceSatelliteId];
-      NS_ABORT_MSG_IF(
-        ordinal
-          > std::numeric_limits<uint16_t>::max()
-              - NETWORK_TRANSFER_FIRST_SOURCE_PORT,
-        "同一源卫星的 NetworkTransfer 数量超出 UDP source port 空间: "
-          << transfer.sourceSatelliteId);
-      transfer.sourcePort = static_cast<uint16_t>(
-        NETWORK_TRANSFER_FIRST_SOURCE_PORT + ordinal);
-      ++nextSourceOrdinal[transfer.sourceSatelliteId];
+                        << transfers[index].transferId);
     }
   return transfers;
 }

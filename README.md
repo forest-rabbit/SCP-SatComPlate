@@ -20,16 +20,19 @@ contrib/satcompute/
 ├── jsontopo/              # JSON 拓扑解析与链路状态
 ├── routing/               # 原生全局路由之上的确定性逐流 ECMP 选择
 ├── traffic/               # legacy 背景流量与 NetworkTransfer
+├── task/                  # TaskTrace、FCFS 计算服务与任务协调
 ├── metrics/               # 聚合、逐流和 ECMP 路由证据
 ├── tools/                 # 最小确定性检查器
 └── input/
     ├── topology/json/examples/xw-66sat/
     ├── topology/json/tests/diamond-4-*/
+    ├── topology/json/resources/ # 静态 ComputeProfile
     └── traffic/
         ├── csv/          # 临时保留的 legacy 业务矩阵
         └── json/
             ├── workload/ # 正式规模与本地压力输入
-            └── test/     # CI 和回归测试输入
+            ├── test/     # NetworkTransfer CI 和回归输入
+            └── task/     # TaskTrace
 ```
 
 ## 构建与基本运行
@@ -66,17 +69,21 @@ SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests
 --transport=<udp|tcp>                  legacy 传输协议
 --trafficMatrix=<file>                 legacy 100×N 行、N 列业务输入
 --transferTrace=<file>                 NetworkTransfer JSON；默认关闭
+--computeProfile=<file>                topology/resources 下的静态计算能力
+--taskTrace=<file>                     traffic/json/task 下的任务到达
 --transferChunkMode=<fixed|size-aware>  NetworkTransfer 分包模式
 --transferPayloadBytes=<uint32>         fixed 模式的 UDP payload 上限
 --islMtuBytes=<uint16>                  所有 ISL 的 MTU
 --islQueueBytes=<uint32>                所有 ISL DropTail 队列的字节容量
 --transferLogMode=<summary|verbose|silent>
+--taskLogMode=<summary|verbose|silent>
 --routingMode=<global-first|global-hash-per-flow>
 --ecmpHashSeed=<uint64>                 FNV-1a-64 seed 前缀
 --outputDir=<dir>                       指标输出目录
 ```
 
-`transferTrace` 与正的 `offeredLoad` 互斥；当前 NetworkTransfer 仅支持 UDP。
+`computeProfile` 与 `taskTrace` 必须同时提供。任务模式、`transferTrace` 模式和
+正的 `offeredLoad` 互斥；NetworkTransfer 与任务模式当前均只支持 UDP。
 
 ## NetworkTransfer
 
@@ -106,6 +113,37 @@ fixed 4096-byte cap 下覆盖 1–20 包。`mixed-large-ci.json` 含两个分级
 探针和 10 条不小于 8 MiB 的不同大流量，最大为 125,000,000 bytes
 （1 Gbit）；`mixed-large-local.json` 含 10 条 128 MiB–1 GiB 的本地完整
 压力输入。两者均使用 size-aware 模式。
+
+## 任务计算
+
+输入按职责分离：静态计算能力 `ComputeProfile` 属于
+`input/topology/json/resources/`，任务到达 `TaskTrace` 属于
+`input/traffic/json/task/`。任务依次经历：
+
+```text
+PENDING → INPUT_TRANSFERRING → QUEUED → RUNNING
+        → RESULT_TRANSFERRING → COMPLETED
+```
+
+每个任务派生两条 NetworkTransfer：输入传输 ID 为 `2 × task_id - 1`，结果传输
+ID 为 `2 × task_id`。输入完整到达后才进入计算节点的非抢占、单服务台 FCFS
+队列；服务时间严格按
+`ceil(compute_work_units × 10^9 / compute_rate_work_units_per_second)` ns
+计算。计算完成后立即启动结果传输。
+
+```bash
+./waf --run-no-build "satcompute \
+  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+  --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+  --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+  --simulationDuration=10 \
+  --offeredLoad=0 \
+  --taskLogMode=verbose \
+  --transferChunkMode=fixed \
+  --transferPayloadBytes=1024 \
+  --routingMode=global-hash-per-flow \
+  --outputDir=/tmp/satcompute-task-single"
+```
 
 ## 路由
 
@@ -144,12 +182,17 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 - `network-flow-details.csv`：FlowMonitor 五元组与 NetworkTransfer payload 的逐流指标；
 - `ecmp-route-events.csv`：每个 `(route_epoch,node_id,five_tuple)` 的首次选路证据；
 - `transfer-summary.csv`：声明大小、分包、发送、接收和完成时间；
+- `task-events.csv`：任务的五次状态转换；
+- `task-summary.csv`：每个任务的传输、排队、计算和完成时延；
+- `compute-node-summary.csv`：计算节点的入队/完成数、忙时、最大队列和利用率；
 - `run-summary.json`：运行配置及应用层、FlowMonitor 聚合结果。
+
+三份任务 CSV 只在任务模式生成。
 
 拓扑协议见
 [`contrib/satcompute/input/topology/json/README.md`](contrib/satcompute/input/topology/json/README.md)。
 流量输入的 `workload`/`test` 分类见
 [`contrib/satcompute/input/traffic/json/README.md`](contrib/satcompute/input/traffic/json/README.md)。
-当前阶段只完成网络传输和确定性 ECMP；任务计算、服务时间、调度、故障、备份和
-恢复语义尚未实现。64000-byte payload 仅是降低大数据仿真事件数量的可扩展性
-配置，不表示真实卫星网络使用 64 KB 物理帧。
+当前只实现无抢占 FCFS 任务闭环；故障、checkpoint、备份和恢复语义尚未实现。
+64000-byte payload 仅是降低大数据仿真事件数量的可扩展性配置，不表示真实
+卫星网络使用 64 KB 物理帧。

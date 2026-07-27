@@ -53,7 +53,9 @@ NetworkTransferApplication::NetworkTransferApplication()
   : m_remainingBytes(0),
     m_sentPacketCount(0),
     m_sentBytes(0),
-    m_lastSendTimeNs(-1)
+    m_lastSendTimeNs(-1),
+    m_isRunning(false),
+    m_hasStarted(false)
 {
 }
 
@@ -64,17 +66,57 @@ NetworkTransferApplication::~NetworkTransferApplication()
 void
 NetworkTransferApplication::Configure(const NetworkTransfer& transfer)
 {
-  NS_ABORT_MSG_IF(m_socket != nullptr,
-                  "运行中的 NetworkTransferApplication 不能重新配置");
+  NS_ABORT_MSG_IF(m_transfer.transferId != 0 || m_isRunning || m_hasStarted,
+                  "NetworkTransferApplication 只能配置一次");
   NS_ABORT_MSG_IF(transfer.transferId == 0,
                   "NetworkTransferApplication 要求有效 transfer_id");
   m_transfer = transfer;
+}
+
+void
+NetworkTransferApplication::StartTransferNow()
+{
+  NS_ABORT_MSG_IF(!m_isRunning,
+                  "NetworkTransferApplication 尚未启动，transfer_id="
+                    << m_transfer.transferId);
+  NS_ABORT_MSG_IF(m_hasStarted,
+                  "NetworkTransferApplication 重复启动，transfer_id="
+                    << m_transfer.transferId);
+  m_hasStarted = true;
+  m_transfer.arrivalTimeNs = Simulator::Now().GetNanoSeconds();
+  m_remainingBytes = m_transfer.sizeBytes;
+  m_sentPacketCount = 0;
+  m_sentBytes = 0;
+  m_lastSendTimeNs = -1;
+
+  m_socket =
+    Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
+  int bindResult = m_socket->Bind(
+    InetSocketAddress(m_transfer.sourceAddress, m_transfer.sourcePort));
+  NS_ABORT_MSG_IF(bindResult != 0,
+                  "NetworkTransfer UDP source bind 失败，transfer_id="
+                    << m_transfer.transferId << "，source="
+                    << m_transfer.sourceAddress << ":"
+                    << m_transfer.sourcePort);
+  int connectResult = m_socket->Connect(
+    InetSocketAddress(m_transfer.destinationAddress,
+                      m_transfer.destinationPort));
+  NS_ABORT_MSG_IF(connectResult != 0,
+                  "NetworkTransfer UDP connect 失败，transfer_id="
+                    << m_transfer.transferId);
+  SendNextPacket();
 }
 
 uint64_t
 NetworkTransferApplication::GetTransferId() const
 {
   return m_transfer.transferId;
+}
+
+bool
+NetworkTransferApplication::HasStarted() const
+{
+  return m_hasStarted;
 }
 
 uint64_t
@@ -100,32 +142,16 @@ NetworkTransferApplication::StartApplication()
 {
   NS_ABORT_MSG_IF(m_transfer.transferId == 0,
                   "NetworkTransferApplication 尚未配置");
-  m_remainingBytes = m_transfer.sizeBytes;
-  m_sentPacketCount = 0;
-  m_sentBytes = 0;
-  m_lastSendTimeNs = -1;
-
-  m_socket =
-    Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
-  int bindResult = m_socket->Bind(
-    InetSocketAddress(m_transfer.sourceAddress, m_transfer.sourcePort));
-  NS_ABORT_MSG_IF(bindResult != 0,
-                  "NetworkTransfer UDP source bind 失败，transfer_id="
-                    << m_transfer.transferId << "，source="
-                    << m_transfer.sourceAddress << ":"
-                    << m_transfer.sourcePort);
-  int connectResult = m_socket->Connect(
-    InetSocketAddress(m_transfer.destinationAddress,
-                      m_transfer.destinationPort));
-  NS_ABORT_MSG_IF(connectResult != 0,
-                  "NetworkTransfer UDP connect 失败，transfer_id="
+  NS_ABORT_MSG_IF(m_isRunning,
+                  "NetworkTransferApplication 重复启动应用，transfer_id="
                     << m_transfer.transferId);
-  SendNextPacket();
+  m_isRunning = true;
 }
 
 void
 NetworkTransferApplication::StopApplication()
 {
+  m_isRunning = false;
   if (m_sendEvent.IsRunning())
     {
       Simulator::Cancel(m_sendEvent);

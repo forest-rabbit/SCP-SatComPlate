@@ -3,9 +3,12 @@
 #include "topo-link-state.h"
 
 #include "ns3/data-rate.h"
+#include "ns3/callback.h"
 #include "ns3/ipv4-address-helper.h"
 #include "ns3/ipv4.h"
 #include "ns3/point-to-point-module.h"
+#include "ns3/queue.h"
+#include "ns3/simulator.h"
 #include "ns3/string.h"
 #include "ns3/uinteger.h"
 
@@ -17,11 +20,13 @@ namespace ns3 {
 SatelliteLinkState::SatelliteLinkState(const NodeContainer& nodes,
                                        const std::map<uint32_t, uint32_t>& nodeIndexes,
                                        uint16_t islMtuBytes,
-                                       uint32_t islQueueBytes)
+                                       uint32_t islQueueBytes,
+                                       bool collectQueueDrops)
   : m_nodes(nodes),
     m_nodeIndexes(nodeIndexes),
     m_islMtuBytes(islMtuBytes),
     m_islQueueBytes(islQueueBytes),
+    m_collectQueueDrops(collectQueueDrops),
     m_nextIpv4Network(0)
 {
   NS_ABORT_MSG_IF(m_islMtuBytes < 68,
@@ -86,6 +91,77 @@ SatelliteLinkState::ConfigureLink(const NetDeviceContainer& devices,
   channel->SetAttribute("Delay", TimeValue(MicroSeconds(link.delayUs)));
 }
 
+void
+SatelliteLinkState::ConnectQueueDropTrace(Ptr<NetDevice> netDevice,
+                                          uint32_t sourceNodeId,
+                                          uint32_t destinationNodeId)
+{
+  Ptr<PointToPointNetDevice> device =
+    DynamicCast<PointToPointNetDevice>(netDevice);
+  NS_ABORT_MSG_IF(device == nullptr,
+                  "星间链路设备不是 PointToPointNetDevice");
+  Ptr<Ipv4> ipv4 = device->GetNode()->GetObject<Ipv4>();
+  NS_ABORT_MSG_IF(ipv4 == nullptr, "卫星节点没有 IPv4 协议栈");
+  int32_t interface = ipv4->GetInterfaceForDevice(device);
+  NS_ABORT_MSG_IF(interface < 0, "星间链路设备没有 IPv4 接口");
+
+  uint32_t outputInterface = static_cast<uint32_t>(interface);
+  IslDirectedLink directedLink = {
+    sourceNodeId,
+    destinationNodeId,
+    outputInterface
+  };
+  m_directedLinks.push_back(directedLink);
+
+  if (!m_collectQueueDrops)
+    {
+      return;
+    }
+  Ptr<Queue<Packet>> queue = device->GetQueue();
+  NS_ABORT_MSG_IF(queue == nullptr, "星间链路设备没有发送队列");
+  bool connected = queue->TraceConnectWithoutContext(
+    "Drop",
+    MakeBoundCallback(&SatelliteLinkState::QueueDropCallback,
+                      this,
+                      directedLink));
+  NS_ABORT_MSG_IF(!connected,
+                  "无法连接 ISL queue Drop trace: "
+                    << sourceNodeId << "->" << destinationNodeId
+                    << " interface=" << outputInterface);
+}
+
+void
+SatelliteLinkState::QueueDropCallback(SatelliteLinkState* state,
+                                      IslDirectedLink directedLink,
+                                      Ptr<const Packet> packet)
+{
+  state->RecordQueueDrop(directedLink.sourceNodeId,
+                         directedLink.destinationNodeId,
+                         directedLink.outputInterface,
+                         packet);
+}
+
+void
+SatelliteLinkState::RecordQueueDrop(uint32_t sourceNodeId,
+                                    uint32_t destinationNodeId,
+                                    uint32_t outputInterface,
+                                    Ptr<const Packet> packet)
+{
+  NS_ABORT_MSG_IF(packet == nullptr, "ISL queue Drop trace 收到空 packet");
+  DirectedQueueKey key = std::make_pair(sourceNodeId, outputInterface);
+  auto& totals = m_queueDropTotals[key];
+  ++totals.first;
+  totals.second += packet->GetSize();
+  m_queueDropEvents.push_back(
+    {Simulator::Now().GetNanoSeconds(),
+     sourceNodeId,
+     destinationNodeId,
+     outputInterface,
+     packet->GetSize(),
+     totals.first,
+     totals.second});
+}
+
 NetDeviceContainer
 SatelliteLinkState::InstallLink(const SatelliteLink& link)
 {
@@ -105,6 +181,8 @@ SatelliteLinkState::InstallLink(const SatelliteLink& link)
   NetDeviceContainer devices =
     helper.Install(NodeContainer(m_nodes.Get(sourceIndex), m_nodes.Get(destinationIndex)));
   AssignIpv4Addresses(devices);
+  ConnectQueueDropTrace(devices.Get(0), link.sourceId, link.destinationId);
+  ConnectQueueDropTrace(devices.Get(1), link.destinationId, link.sourceId);
   return devices;
 }
 
@@ -185,6 +263,18 @@ SatelliteLinkState::ApplyFullSnapshot(const std::vector<SatelliteLink>& links)
     }
 
   return summary;
+}
+
+const std::vector<IslDirectedLink>&
+SatelliteLinkState::GetDirectedLinks() const
+{
+  return m_directedLinks;
+}
+
+const std::vector<IslQueueDropEvent>&
+SatelliteLinkState::GetQueueDropEvents() const
+{
+  return m_queueDropEvents;
 }
 
 } // namespace ns3

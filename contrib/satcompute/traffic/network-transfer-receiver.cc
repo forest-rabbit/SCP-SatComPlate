@@ -23,7 +23,9 @@
 #include "ns3/packet.h"
 #include "ns3/simulator.h"
 #include "ns3/udp-socket-factory.h"
+#include "ns3/uinteger.h"
 
+#include <limits>
 #include <tuple>
 
 namespace ns3 {
@@ -42,8 +44,13 @@ NetworkTransferReceiver::GetTypeId()
 }
 
 NetworkTransferReceiver::NetworkTransferReceiver()
-  : m_destinationPort(0),
-    m_totalReceivedBytes(0)
+  : m_destinationSatelliteId(0),
+    m_destinationPort(0),
+    m_receiverRcvBufBytes(0),
+    m_collectUdpSocketDrops(false),
+    m_totalReceivedBytes(0),
+    m_udpSocketDropPackets(0),
+    m_udpSocketDropBytes(0)
 {
 }
 
@@ -65,16 +72,24 @@ NetworkTransferReceiver::FourTuple::operator<(const FourTuple& other) const
 }
 
 void
-NetworkTransferReceiver::Configure(Ipv4Address destinationAddress,
-                                   uint16_t destinationPort)
+NetworkTransferReceiver::Configure(uint32_t destinationSatelliteId,
+                                   Ipv4Address destinationAddress,
+                                   uint16_t destinationPort,
+                                   uint32_t receiverRcvBufBytes,
+                                   bool collectUdpSocketDrops)
 {
   NS_ABORT_MSG_IF(m_socket != nullptr,
                   "运行中的 NetworkTransferReceiver 不能重新配置");
   NS_ABORT_MSG_IF(destinationAddress == Ipv4Address::GetAny()
                     || destinationPort == 0,
                   "NetworkTransferReceiver 要求明确的目的地址和端口");
+  NS_ABORT_MSG_IF(receiverRcvBufBytes == 0,
+                  "NetworkTransferReceiver RcvBufSize 必须大于 0");
+  m_destinationSatelliteId = destinationSatelliteId;
   m_destinationAddress = destinationAddress;
   m_destinationPort = destinationPort;
+  m_receiverRcvBufBytes = receiverRcvBufBytes;
+  m_collectUdpSocketDrops = collectUdpSocketDrops;
 }
 
 void
@@ -96,12 +111,69 @@ NetworkTransferReceiver::AddExpectedTransfer(
     transfer.sizeBytes,
     0,
     0,
-    transfer.arrivalTimeNs,
+    -1,
     -1
   };
   NS_ABORT_MSG_IF(!m_receptions.insert(std::make_pair(tuple, reception)).second,
                   "NetworkTransfer receiver 出现重复四元组，transfer_id="
                     << transfer.transferId);
+  NS_ABORT_MSG_IF(
+    !m_transferTuples.insert(std::make_pair(transfer.transferId, tuple)).second,
+    "NetworkTransfer receiver 出现重复 transfer_id="
+      << transfer.transferId);
+}
+
+void
+NetworkTransferReceiver::SetCompletionCallback(
+  Callback<void, uint64_t, int64_t> completionCallback)
+{
+  NS_ABORT_MSG_IF(completionCallback.IsNull(),
+                  "NetworkTransfer receiver completion callback 不能为空");
+  NS_ABORT_MSG_IF(!m_completionCallback.IsNull(),
+                  "NetworkTransfer receiver completion callback 只能设置一次");
+  m_completionCallback = completionCallback;
+}
+
+NetworkTransferReceiver::Reception&
+NetworkTransferReceiver::GetReception(uint64_t transferId)
+{
+  auto tuple = m_transferTuples.find(transferId);
+  NS_ABORT_MSG_IF(tuple == m_transferTuples.end(),
+                  "receiver 不包含 transfer_id=" << transferId);
+  auto reception = m_receptions.find(tuple->second);
+  NS_ABORT_MSG_IF(reception == m_receptions.end(),
+                  "receiver transfer 索引不一致，transfer_id=" << transferId);
+  return reception->second;
+}
+
+const NetworkTransferReceiver::Reception&
+NetworkTransferReceiver::GetReception(uint64_t transferId) const
+{
+  auto tuple = m_transferTuples.find(transferId);
+  NS_ABORT_MSG_IF(tuple == m_transferTuples.end(),
+                  "receiver 不包含 transfer_id=" << transferId);
+  auto reception = m_receptions.find(tuple->second);
+  NS_ABORT_MSG_IF(reception == m_receptions.end(),
+                  "receiver transfer 索引不一致，transfer_id=" << transferId);
+  return reception->second;
+}
+
+void
+NetworkTransferReceiver::MarkTransferStarted(uint64_t transferId,
+                                             int64_t startTimeNs)
+{
+  NS_ABORT_MSG_IF(startTimeNs < 0,
+                  "NetworkTransfer start time 不能为负，transfer_id="
+                    << transferId);
+  Reception& reception = GetReception(transferId);
+  NS_ABORT_MSG_IF(reception.startTimeNs >= 0,
+                  "NetworkTransfer receiver 重复启动，transfer_id="
+                    << transferId);
+  NS_ABORT_MSG_IF(reception.receivedBytes != 0
+                    || reception.completionTimeNs >= 0,
+                  "NetworkTransfer 启动前已有接收状态，transfer_id="
+                    << transferId);
+  reception.startTimeNs = startTimeNs;
 }
 
 uint64_t
@@ -113,54 +185,47 @@ NetworkTransferReceiver::GetTotalReceivedBytes() const
 uint64_t
 NetworkTransferReceiver::GetTransferReceivedBytes(uint64_t transferId) const
 {
-  for (const auto& item : m_receptions)
-    {
-      if (item.second.transferId == transferId)
-        {
-          return item.second.receivedBytes;
-        }
-    }
-  NS_FATAL_ERROR("receiver 不包含 transfer_id=" << transferId);
-  return 0;
+  return GetReception(transferId).receivedBytes;
 }
 
 uint64_t
 NetworkTransferReceiver::GetTransferReceivedPacketCount(
   uint64_t transferId) const
 {
-  for (const auto& item : m_receptions)
-    {
-      if (item.second.transferId == transferId)
-        {
-          return item.second.receivedPacketCount;
-        }
-    }
-  NS_FATAL_ERROR("receiver 不包含 transfer_id=" << transferId);
-  return 0;
+  return GetReception(transferId).receivedPacketCount;
 }
 
 int64_t
 NetworkTransferReceiver::GetTransferCompletionTimeNs(
   uint64_t transferId) const
 {
-  for (const auto& item : m_receptions)
-    {
-      if (item.second.transferId == transferId)
-        {
-          return item.second.completionTimeNs;
-        }
-    }
-  NS_FATAL_ERROR("receiver 不包含 transfer_id=" << transferId);
-  return -1;
+  return GetReception(transferId).completionTimeNs;
+}
+
+const std::vector<UdpSocketDropEvent>&
+NetworkTransferReceiver::GetUdpSocketDropEvents() const
+{
+  return m_udpSocketDropEvents;
 }
 
 void
 NetworkTransferReceiver::StartApplication()
 {
-  NS_ABORT_MSG_IF(m_destinationPort == 0 || m_receptions.empty(),
+  NS_ABORT_MSG_IF(m_destinationPort == 0 || m_receptions.empty()
+                    || m_completionCallback.IsNull(),
                   "NetworkTransferReceiver 尚未完整配置");
   m_socket =
     Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
+  m_socket->SetAttribute("RcvBufSize",
+                         UintegerValue(m_receiverRcvBufBytes));
+  if (m_collectUdpSocketDrops)
+    {
+      bool connected = m_socket->TraceConnectWithoutContext(
+        "Drop",
+        MakeCallback(&NetworkTransferReceiver::HandleSocketDrop, this));
+      NS_ABORT_MSG_IF(!connected,
+                      "无法连接 NetworkTransfer UDP socket Drop trace");
+    }
   int bindResult = m_socket->Bind(
     InetSocketAddress(m_destinationAddress, m_destinationPort));
   NS_ABORT_MSG_IF(bindResult != 0,
@@ -210,6 +275,9 @@ NetworkTransferReceiver::HandleRead(Ptr<Socket> socket)
                         << source.GetIpv4() << ":" << source.GetPort()
                         << " -> " << m_destinationAddress << ":"
                         << m_destinationPort);
+      NS_ABORT_MSG_IF(reception->second.startTimeNs < 0,
+                      "NetworkTransfer receiver 在启动前收到 payload，"
+                      "transfer_id=" << reception->second.transferId);
 
       uint64_t payloadBytes = packet->GetSize();
       NS_ABORT_MSG_IF(
@@ -219,6 +287,10 @@ NetworkTransferReceiver::HandleRead(Ptr<Socket> socket)
           << reception->second.transferId);
       reception->second.receivedBytes += payloadBytes;
       ++reception->second.receivedPacketCount;
+      NS_ABORT_MSG_IF(
+        m_totalReceivedBytes
+          > std::numeric_limits<uint64_t>::max() - payloadBytes,
+        "NetworkTransfer receiver total bytes 溢出");
       m_totalReceivedBytes += payloadBytes;
       if (reception->second.receivedBytes == reception->second.expectedBytes)
         {
@@ -228,11 +300,37 @@ NetworkTransferReceiver::HandleRead(Ptr<Socket> socket)
           reception->second.completionTimeNs =
             Simulator::Now().GetNanoSeconds();
           NS_ABORT_MSG_IF(reception->second.completionTimeNs
-                            < reception->second.arrivalTimeNs,
-                          "NetworkTransfer completion 早于 arrival，transfer_id="
+                            < reception->second.startTimeNs,
+                          "NetworkTransfer completion 早于 start，transfer_id="
                             << reception->second.transferId);
+          m_completionCallback(reception->second.transferId,
+                               reception->second.completionTimeNs);
         }
     }
+}
+
+void
+NetworkTransferReceiver::HandleSocketDrop(Ptr<const Packet> packet)
+{
+  NS_ABORT_MSG_IF(!m_collectUdpSocketDrops,
+                  "未启用 UDP socket Drop 采集却收到回调");
+  NS_ABORT_MSG_IF(packet == nullptr || packet->GetSize() == 0,
+                  "UDP socket Drop packet 无效");
+  NS_ABORT_MSG_IF(
+    m_udpSocketDropBytes
+      > std::numeric_limits<uint64_t>::max() - packet->GetSize(),
+    "UDP socket Drop bytes 溢出");
+  ++m_udpSocketDropPackets;
+  m_udpSocketDropBytes += packet->GetSize();
+  m_udpSocketDropEvents.push_back(
+    {Simulator::Now().GetNanoSeconds(),
+     m_destinationSatelliteId,
+     m_destinationAddress,
+     m_destinationPort,
+     packet->GetSize(),
+     m_udpSocketDropPackets,
+     m_udpSocketDropBytes,
+     m_receiverRcvBufBytes});
 }
 
 } // namespace ns3
