@@ -20,6 +20,7 @@
 
 #include "failure-diagnostics.h"
 #include "flow-metrics.h"
+#include "transfer-metrics.h"
 #include "../task/task-coordinator.h"
 
 #include "ns3/abort.h"
@@ -59,80 +60,6 @@ OutputPath(const std::string& directory, const std::string& filename)
     }
   mkdir(directory.c_str(), 0755);
   return directory.back() == '/' ? directory + filename : directory + "/" + filename;
-}
-
-void
-WriteEcmpRouteEvents(
-  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
-  const std::string& outputDirectory)
-{
-  std::ofstream output(OutputPath(outputDirectory, "ecmp-route-events.csv"),
-                       std::ios::out | std::ios::trunc);
-  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 ECMP 路由证据 CSV");
-  output
-    << "simulation_time_ns,route_epoch,node_id,source_address,"
-       "destination_address,protocol,source_port,destination_port,"
-       "candidate_count_before_dedup,candidate_count_after_dedup,"
-       "selected_index,selected_gateway,selected_output_interface,"
-       "hash_value,selection_reason\n";
-  for (const auto& event : routeEvents)
-    {
-      output << event.simulationTimeNs << ","
-             << event.routeEpoch << ","
-             << event.nodeId << ","
-             << event.flowKey.sourceAddress << ","
-             << event.flowKey.destinationAddress << ","
-             << static_cast<uint32_t>(event.flowKey.protocol) << ","
-             << event.flowKey.sourcePort << ","
-             << event.flowKey.destinationPort << ","
-             << event.candidateCountBeforeDedup << ","
-             << event.candidateCountAfterDedup << ","
-             << event.selectedIndex << ","
-             << event.selectedGateway << ","
-             << event.selectedOutputInterface << ","
-             << event.hashValue << ","
-             << event.selectionReason << "\n";
-    }
-}
-
-void
-WriteTransferSummaries(
-  const std::vector<TransferSummaryRecord>& summaries,
-  const std::string& outputDirectory)
-{
-  std::ofstream output(OutputPath(outputDirectory, "transfer-summary.csv"),
-                       std::ios::out | std::ios::trunc);
-  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 transfer summary CSV");
-  output
-    << "transfer_id,source_node_id,destination_node_id,source_address,"
-       "destination_address,source_port,destination_port,declared_size_bytes,"
-       "effective_payload_bytes,pacing_mode,"
-       "derived_packet_count,final_packet_payload_bytes,arrival_time_ns,"
-       "last_send_time_ns,sent_application_bytes,"
-       "received_application_bytes,received_packet_count,completion_time_ns,"
-       "completion_delay_ns\n";
-  for (const auto& summary : summaries)
-    {
-      output << summary.transferId << ","
-             << summary.sourceSatelliteId << ","
-             << summary.destinationSatelliteId << ","
-             << summary.sourceAddress << ","
-             << summary.destinationAddress << ","
-             << summary.sourcePort << ","
-             << summary.destinationPort << ","
-             << summary.declaredSizeBytes << ","
-             << summary.payloadBytesPerPacket << ","
-             << summary.pacingMode << ","
-             << summary.derivedPacketCount << ","
-             << summary.finalPacketPayloadBytes << ","
-             << summary.arrivalTimeNs << ","
-             << summary.lastSendTimeNs << ","
-             << summary.sentApplicationBytes << ","
-             << summary.receivedApplicationBytes << ","
-             << summary.receivedPacketCount << ","
-             << summary.completionTimeNs << ","
-             << summary.completionDelayNs << "\n";
-    }
 }
 
 uint64_t
