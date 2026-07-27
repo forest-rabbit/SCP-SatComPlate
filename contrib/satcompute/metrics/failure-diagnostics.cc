@@ -58,12 +58,26 @@ OutputPath(const std::string& directory, const std::string& filename)
 
 typedef std::pair<uint32_t, uint32_t> OutputQueueKey;
 typedef std::tuple<uint32_t, uint32_t, uint32_t> DirectedLinkKey;
+typedef std::tuple<uint32_t, uint32_t, uint16_t, uint32_t>
+  UdpReceiverKey;
 
 struct QueueDropSummaryRecord
 {
   uint32_t sourceNodeId;
   uint32_t destinationNodeId;
   uint32_t outputInterface;
+  uint64_t dropPackets;
+  uint64_t dropBytes;
+  int64_t firstDropTimeNs;
+  int64_t lastDropTimeNs;
+};
+
+struct UdpSocketDropSummaryRecord
+{
+  uint32_t destinationNodeId;
+  Ipv4Address destinationAddress;
+  uint16_t destinationPort;
+  uint32_t receiverRcvBufBytes;
   uint64_t dropPackets;
   uint64_t dropBytes;
   int64_t firstDropTimeNs;
@@ -93,6 +107,15 @@ MakeDirectedLinkKey(uint32_t sourceNodeId,
   return std::make_tuple(sourceNodeId,
                          destinationNodeId,
                          outputInterface);
+}
+
+UdpReceiverKey
+MakeUdpReceiverKey(const UdpSocketDropEvent& event)
+{
+  return std::make_tuple(event.destinationSatelliteId,
+                         event.destinationAddress.Get(),
+                         event.destinationPort,
+                         event.receiverRcvBufBytes);
 }
 
 std::map<OutputQueueKey, IslDirectedLink>
@@ -238,6 +261,139 @@ WriteIslQueueDropSummaries(
       output << summary.sourceNodeId << ","
              << summary.destinationNodeId << ","
              << summary.outputInterface << ","
+             << summary.dropPackets << ","
+             << summary.dropBytes << ","
+             << summary.firstDropTimeNs << ","
+             << summary.lastDropTimeNs << "\n";
+    }
+}
+
+std::vector<UdpSocketDropSummaryRecord>
+CollectUdpSocketDropSummaries(
+  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
+  const RunMetadata& runMetadata)
+{
+  std::map<UdpReceiverKey, UdpSocketDropSummaryRecord> summariesByReceiver;
+  int64_t previousTimeNs = -1;
+  for (const auto& event : udpSocketDropEvents)
+    {
+      NS_ABORT_MSG_IF(event.simulationTimeNs < previousTimeNs,
+                      "UDP socket Drop 事件未按仿真时间排序");
+      NS_ABORT_MSG_IF(event.destinationAddress == Ipv4Address::GetAny()
+                        || event.destinationPort == 0
+                        || event.packetSizeBytes == 0,
+                      "UDP socket Drop 事件包含无效接收端或 packet size");
+      NS_ABORT_MSG_IF(
+        event.receiverRcvBufBytes != runMetadata.receiverRcvBufBytes,
+        "UDP socket Drop 事件的 RcvBufSize 与运行配置不一致");
+      previousTimeNs = event.simulationTimeNs;
+
+      UdpReceiverKey key = MakeUdpReceiverKey(event);
+      auto insertion = summariesByReceiver.insert(
+        std::make_pair(
+          key,
+          UdpSocketDropSummaryRecord{
+            event.destinationSatelliteId,
+            event.destinationAddress,
+            event.destinationPort,
+            event.receiverRcvBufBytes,
+            0,
+            0,
+            event.simulationTimeNs,
+            event.simulationTimeNs
+          }));
+      UdpSocketDropSummaryRecord& summary = insertion.first->second;
+      ++summary.dropPackets;
+      summary.dropBytes =
+        CheckedAdd(summary.dropBytes,
+                   event.packetSizeBytes,
+                   "UDP socket drop bytes");
+      summary.lastDropTimeNs = event.simulationTimeNs;
+      NS_ABORT_MSG_IF(
+        event.cumulativeDropPackets != summary.dropPackets
+          || event.cumulativeDropBytes != summary.dropBytes,
+        "UDP socket Drop cumulative totals 不一致: destination="
+          << event.destinationSatelliteId << " address="
+          << event.destinationAddress << " port="
+          << event.destinationPort);
+    }
+
+  std::vector<UdpSocketDropSummaryRecord> summaries;
+  summaries.reserve(summariesByReceiver.size());
+  for (const auto& item : summariesByReceiver)
+    {
+      summaries.push_back(item.second);
+    }
+  std::sort(
+    summaries.begin(),
+    summaries.end(),
+    [](const UdpSocketDropSummaryRecord& left,
+       const UdpSocketDropSummaryRecord& right) {
+      if (left.dropBytes != right.dropBytes)
+        {
+          return left.dropBytes > right.dropBytes;
+        }
+      if (left.dropPackets != right.dropPackets)
+        {
+          return left.dropPackets > right.dropPackets;
+        }
+      return std::make_tuple(left.destinationNodeId,
+                             left.destinationAddress.Get(),
+                             left.destinationPort,
+                             left.receiverRcvBufBytes)
+             < std::make_tuple(right.destinationNodeId,
+                               right.destinationAddress.Get(),
+                               right.destinationPort,
+                               right.receiverRcvBufBytes);
+    });
+  return summaries;
+}
+
+void
+WriteUdpSocketDrops(
+  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
+  const std::string& outputDirectory)
+{
+  std::ofstream output(OutputPath(outputDirectory, "udp-socket-drops.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 UDP socket drops CSV");
+  output
+    << "simulation_time_ns,destination_node_id,destination_address,"
+       "destination_port,packet_size_bytes,cumulative_drop_packets,"
+       "cumulative_drop_bytes,receiver_rcv_buf_bytes\n";
+  for (const auto& event : udpSocketDropEvents)
+    {
+      output << event.simulationTimeNs << ","
+             << event.destinationSatelliteId << ","
+             << event.destinationAddress << ","
+             << event.destinationPort << ","
+             << event.packetSizeBytes << ","
+             << event.cumulativeDropPackets << ","
+             << event.cumulativeDropBytes << ","
+             << event.receiverRcvBufBytes << "\n";
+    }
+}
+
+void
+WriteUdpSocketDropSummaries(
+  const std::vector<UdpSocketDropSummaryRecord>& summaries,
+  const std::string& outputDirectory)
+{
+  std::ofstream output(
+    OutputPath(outputDirectory, "udp-socket-drop-summary.csv"),
+    std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(),
+                  "无法写入 UDP socket drop summary CSV");
+  output
+    << "destination_node_id,destination_address,destination_port,"
+       "receiver_rcv_buf_bytes,drop_packets,drop_bytes,"
+       "first_drop_time_ns,last_drop_time_ns\n";
+  for (const auto& summary : summaries)
+    {
+      output << summary.destinationNodeId << ","
+             << summary.destinationAddress << ","
+             << summary.destinationPort << ","
+             << summary.receiverRcvBufBytes << ","
              << summary.dropPackets << ","
              << summary.dropBytes << ","
              << summary.firstDropTimeNs << ","
@@ -555,6 +711,7 @@ WriteDiagnosticSummary(
   const RunMetadata& runMetadata,
   const std::vector<TransferSummaryRecord>& transferSummaries,
   const std::vector<QueueDropSummaryRecord>& queueDropSummaries,
+  const std::vector<UdpSocketDropSummaryRecord>& udpSocketDropSummaries,
   const std::vector<FlowLinkSummaryRecord>& flowLinkSummaries,
   const TaskCoordinator& coordinator,
   const std::string& outputDirectory)
@@ -593,6 +750,20 @@ WriteDiagnosticSummary(
         CheckedAdd(queueDropBytes,
                    drop.dropBytes,
                    "queue drop bytes");
+    }
+
+  uint64_t udpSocketDropPackets = 0;
+  uint64_t udpSocketDropBytes = 0;
+  for (const auto& drop : udpSocketDropSummaries)
+    {
+      udpSocketDropPackets =
+        CheckedAdd(udpSocketDropPackets,
+                   drop.dropPackets,
+                   "UDP socket drop packets");
+      udpSocketDropBytes =
+        CheckedAdd(udpSocketDropBytes,
+                   drop.dropBytes,
+                   "UDP socket drop bytes");
     }
 
   std::ofstream output(OutputPath(outputDirectory, "diagnostic-summary.json"),
@@ -637,6 +808,14 @@ WriteDiagnosticSummary(
          << "  \"queue_drop_bytes\": " << queueDropBytes << ",\n"
          << "  \"dropped_directed_link_count\": "
          << queueDropSummaries.size() << ",\n"
+         << "  \"receiver_rcv_buf_bytes\": "
+         << runMetadata.receiverRcvBufBytes << ",\n"
+         << "  \"udp_socket_drop_packets\": "
+         << udpSocketDropPackets << ",\n"
+         << "  \"udp_socket_drop_bytes\": "
+         << udpSocketDropBytes << ",\n"
+         << "  \"udp_socket_dropped_receiver_count\": "
+         << udpSocketDropSummaries.size() << ",\n"
          << "  \"top_dropped_links\": [";
   uint32_t droppedLinkLimit =
     std::min<uint32_t>(10, queueDropSummaries.size());
@@ -700,6 +879,8 @@ RemoveFailureDiagnosticOutputs(const std::string& outputDirectory)
     "incomplete-transfers.csv",
     "isl-queue-drops.csv",
     "isl-queue-drop-summary.csv",
+    "udp-socket-drops.csv",
+    "udp-socket-drop-summary.csv",
     "flow-link-concentration.csv",
     "diagnostic-summary.json"
   };
@@ -723,11 +904,16 @@ WriteFailureDiagnostics(
   const std::vector<EcmpRouteDecisionEvent>& routeEvents,
   const std::vector<IslDirectedLink>& directedLinks,
   const std::vector<IslQueueDropEvent>& queueDropEvents,
+  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
   const TaskCoordinator& coordinator,
   const std::string& outputDirectory)
 {
+  NS_ABORT_MSG_IF(!runMetadata.udpSocketDropCollectionEnabled,
+                  "失败诊断要求启用 UDP socket Drop 采集");
   std::vector<QueueDropSummaryRecord> queueDropSummaries =
     CollectQueueDropSummaries(directedLinks, queueDropEvents);
+  std::vector<UdpSocketDropSummaryRecord> udpSocketDropSummaries =
+    CollectUdpSocketDropSummaries(udpSocketDropEvents, runMetadata);
   std::vector<FlowLinkSummaryRecord> flowLinkSummaries =
     CollectFlowLinkSummaries(transferFlows,
                              routeEvents,
@@ -739,12 +925,15 @@ WriteFailureDiagnostics(
   WriteIncompleteTransfers(transferSummaries, outputDirectory);
   WriteIslQueueDrops(queueDropEvents, outputDirectory);
   WriteIslQueueDropSummaries(queueDropSummaries, outputDirectory);
+  WriteUdpSocketDrops(udpSocketDropEvents, outputDirectory);
+  WriteUdpSocketDropSummaries(udpSocketDropSummaries, outputDirectory);
   WriteFlowLinkSummaries(flowLinkSummaries, outputDirectory);
   WriteDiagnosticSummary(aggregate,
                          simulationDurationSeconds,
                          runMetadata,
                          transferSummaries,
                          queueDropSummaries,
+                         udpSocketDropSummaries,
                          flowLinkSummaries,
                          coordinator,
                          outputDirectory);

@@ -112,6 +112,7 @@ MetricsRecorder::Record()
                                   m_routeEvents,
                                   m_directedLinks,
                                   m_queueDropEvents,
+                                  m_udpSocketDropEvents,
                                   *m_taskCoordinator,
                                   m_outputDirectory);
         }
@@ -161,6 +162,12 @@ MetricsRecorder::Record()
             << std::endl
             << "  ISL drop summary     : "
             << OutputPath(m_outputDirectory, "isl-queue-drop-summary.csv")
+            << std::endl
+            << "  UDP socket drops     : "
+            << OutputPath(m_outputDirectory, "udp-socket-drops.csv")
+            << std::endl
+            << "  UDP drop summary     : "
+            << OutputPath(m_outputDirectory, "udp-socket-drop-summary.csv")
             << std::endl
             << "  flow/link load       : "
             << OutputPath(m_outputDirectory, "flow-link-concentration.csv")

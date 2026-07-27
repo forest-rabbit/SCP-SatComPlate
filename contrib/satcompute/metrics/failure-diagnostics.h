@@ -37,6 +37,7 @@ void WriteFailureDiagnostics(
   const std::vector<EcmpRouteDecisionEvent>& routeEvents,
   const std::vector<IslDirectedLink>& directedLinks,
   const std::vector<IslQueueDropEvent>& queueDropEvents,
+  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
   const TaskCoordinator& coordinator,
   const std::string& outputDirectory);
 

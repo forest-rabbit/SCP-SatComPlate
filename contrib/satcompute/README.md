@@ -389,6 +389,11 @@ python3 contrib/satcompute/tools/check-task-output.py failure \
   --require-queue-drop
 ```
 
+验证接收端缓冲区证据时，复用同一 fixture，将运行参数改为
+`--islQueueBytes=1500000 --receiverRcvBufBytes=1000`，并把检查器末尾改为
+`--require-udp-socket-drop`。该用例应由 `udp-socket-drops.csv` 直接记录
+socket 缓冲区 Drop；FlowMonitor 可能仍将这些包记为 IP 层已接收。
+
 ## 输出与当前边界
 
 - `network-flow-metrics.csv`：所有 IPv4 FlowMonitor 流的聚合结果；
@@ -405,12 +410,14 @@ python3 contrib/satcompute/tools/check-task-output.py failure \
   未完成对象及 partial 收发状态；
 - `isl-queue-drops.csv`、`isl-queue-drop-summary.csv`：按有向 ISL 输出
   队列记录的逐次 Drop 与聚合；
+- `udp-socket-drops.csv`、`udp-socket-drop-summary.csv`：按 UDP 接收
+  socket 记录的逐次缓冲区 Drop 与接收端聚合；
 - `flow-link-concentration.csv`、`diagnostic-summary.json`：计划业务量、
-  ECMP 链路集中度、丢包和完成状态摘要。
+  ECMP 链路集中度、ISL/UDP socket 丢包和完成状态摘要。
 
 任务与计算 CSV 只在任务模式生成；失败诊断文件仅在
 `diagnosticMode=failure` 且任务未全部完成时生成。
-复用同一个 `outputDir` 时，如果本次不会写诊断，程序会清理上述六个旧诊断
+复用同一个 `outputDir` 时，如果本次不会写诊断，程序会清理上述八个旧诊断
 文件，避免把历史失败误认为本次结果。
 未匹配 NetworkTransfer 的 legacy FlowMonitor 行使用 `transfer_id=0`。当前
 任务调度仅支持单服务台、非抢占 FCFS；尚未实现可靠重传、故障、

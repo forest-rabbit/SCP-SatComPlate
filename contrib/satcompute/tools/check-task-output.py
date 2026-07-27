@@ -171,6 +171,26 @@ QUEUE_DROP_SUMMARY_FIELDS = [
     "first_drop_time_ns",
     "last_drop_time_ns",
 ]
+UDP_SOCKET_DROP_FIELDS = [
+    "simulation_time_ns",
+    "destination_node_id",
+    "destination_address",
+    "destination_port",
+    "packet_size_bytes",
+    "cumulative_drop_packets",
+    "cumulative_drop_bytes",
+    "receiver_rcv_buf_bytes",
+]
+UDP_SOCKET_DROP_SUMMARY_FIELDS = [
+    "destination_node_id",
+    "destination_address",
+    "destination_port",
+    "receiver_rcv_buf_bytes",
+    "drop_packets",
+    "drop_bytes",
+    "first_drop_time_ns",
+    "last_drop_time_ns",
+]
 FLOW_LINK_FIELDS = [
     "source_node_id",
     "destination_node_id",
@@ -1060,12 +1080,22 @@ def directed_link_key(row):
     )
 
 
+def udp_receiver_key(row):
+    return (
+        int_field(row, "destination_node_id"),
+        row["destination_address"],
+        int_field(row, "destination_port"),
+        int_field(row, "receiver_rcv_buf_bytes"),
+    )
+
+
 def validate_failure_diagnostics(
     output,
     topology_dir,
     profile_path,
     trace_path,
     require_queue_drop=False,
+    require_udp_socket_drop=False,
 ):
     topology_nodes = read_topology_nodes(topology_dir)
     topology_links = read_topology_links(topology_dir)
@@ -1166,6 +1196,14 @@ def validate_failure_diagnostics(
     transfer_rows = read_csv_rows(output, "transfer-summary.csv", TRANSFER_SUMMARY_FIELDS)
     transfer_rows_by_id = {
         int_field(row, "transfer_id"): row for row in transfer_rows
+    }
+    receiver_endpoints = {
+        (
+            int_field(row, "destination_node_id"),
+            row["destination_address"],
+            int_field(row, "destination_port"),
+        )
+        for row in transfer_rows
     }
     require(
         len(transfer_rows) == len(expected_transfers)
@@ -1322,6 +1360,95 @@ def validate_failure_diagnostics(
         "queue drop diagnostic aggregate mismatch",
     )
 
+    udp_drop_rows = read_csv_rows(
+        output, "udp-socket-drops.csv", UDP_SOCKET_DROP_FIELDS
+    )
+    if require_udp_socket_drop:
+        require(
+            udp_drop_rows,
+            "small receiver-buffer fixture must produce a UDP socket Drop",
+        )
+    udp_drop_totals = {}
+    previous_time = -1
+    for row in udp_drop_rows:
+        key = udp_receiver_key(row)
+        event_time = int_field(row, "simulation_time_ns")
+        packet_bytes = int_field(row, "packet_size_bytes")
+        require(
+            previous_time <= event_time <= simulation_duration_ns,
+            "UDP socket Drop time invalid",
+        )
+        previous_time = event_time
+        require(
+            key[:3] in receiver_endpoints,
+            f"UDP socket Drop does not map to a transfer receiver: {key}",
+        )
+        require(
+            key[3] == run["receiver_rcv_buf_bytes"],
+            f"UDP socket Drop buffer mismatch: {key}",
+        )
+        require(packet_bytes > 0, "UDP socket Drop packet size must be positive")
+        aggregate = udp_drop_totals.setdefault(
+            key,
+            {"packets": 0, "bytes": 0, "first": event_time, "last": event_time},
+        )
+        aggregate["packets"] += 1
+        aggregate["bytes"] += packet_bytes
+        aggregate["last"] = event_time
+        require(
+            int_field(row, "cumulative_drop_packets") == aggregate["packets"]
+            and int_field(row, "cumulative_drop_bytes") == aggregate["bytes"],
+            f"UDP socket Drop cumulative total mismatch: {key}",
+        )
+
+    udp_drop_summary_rows = read_csv_rows(
+        output,
+        "udp-socket-drop-summary.csv",
+        UDP_SOCKET_DROP_SUMMARY_FIELDS,
+    )
+    expected_udp_drop_order = sorted(
+        udp_drop_totals,
+        key=lambda key: (
+            -udp_drop_totals[key]["bytes"],
+            -udp_drop_totals[key]["packets"],
+            key,
+        ),
+    )
+    require(
+        [udp_receiver_key(row) for row in udp_drop_summary_rows]
+        == expected_udp_drop_order,
+        "UDP socket Drop summary order/coverage mismatch",
+    )
+    for row in udp_drop_summary_rows:
+        key = udp_receiver_key(row)
+        expected = udp_drop_totals[key]
+        require(
+            int_field(row, "drop_packets") == expected["packets"]
+            and int_field(row, "drop_bytes") == expected["bytes"]
+            and int_field(row, "first_drop_time_ns") == expected["first"]
+            and int_field(row, "last_drop_time_ns") == expected["last"],
+            f"UDP socket Drop summary mismatch: {key}",
+        )
+    total_udp_drop_packets = sum(
+        item["packets"] for item in udp_drop_totals.values()
+    )
+    total_udp_drop_bytes = sum(item["bytes"] for item in udp_drop_totals.values())
+    require(
+        diagnostic["receiver_rcv_buf_bytes"] == run["receiver_rcv_buf_bytes"]
+        and diagnostic["udp_socket_drop_packets"] == total_udp_drop_packets
+        and diagnostic["udp_socket_drop_bytes"] == total_udp_drop_bytes
+        and diagnostic["udp_socket_dropped_receiver_count"]
+        == len(udp_drop_totals),
+        "UDP socket Drop diagnostic aggregate mismatch",
+    )
+    require(
+        run["udp_socket_drop_collection_enabled"]
+        and run["udp_socket_drop_packets"] == total_udp_drop_packets
+        and run["udp_socket_drop_bytes"] == total_udp_drop_bytes
+        and run["udp_socket_dropped_receiver_count"] == len(udp_drop_totals),
+        "UDP socket Drop run aggregate mismatch",
+    )
+
     concentration_rows = read_csv_rows(
         output, "flow-link-concentration.csv", FLOW_LINK_FIELDS
     )
@@ -1441,14 +1568,17 @@ def validate_failure_diagnostics(
         )
 
     require(
-        flow_lost_packets > 0 or total_drop_packets > 0,
+        flow_lost_packets > 0
+        or total_drop_packets > 0
+        or total_udp_drop_packets > 0,
         "failure diagnostics contain no direct packet-loss evidence",
     )
     print(
         "PASS: incomplete run preserved strict diagnostics "
         f"({len(incomplete_task_rows)} tasks, "
         f"{len(incomplete_transfer_rows)} transfers, "
-        f"{total_drop_packets} directed-queue drops)"
+        f"{total_drop_packets} directed-queue drops, "
+        f"{total_udp_drop_packets} UDP socket drops)"
     )
 
 
@@ -1467,6 +1597,11 @@ def main():
             action="store_true",
             help="Require at least one mapped ISL queue-drop event.",
         )
+        parser.add_argument(
+            "--require-udp-socket-drop",
+            action="store_true",
+            help="Require at least one UDP receiver socket-buffer Drop event.",
+        )
         args = parser.parse_args(argv[1:])
         validate_failure_diagnostics(
             args.output_dir,
@@ -1474,6 +1609,7 @@ def main():
             args.compute_profile,
             args.task_trace,
             args.require_queue_drop,
+            args.require_udp_socket_drop,
         )
         return
 
