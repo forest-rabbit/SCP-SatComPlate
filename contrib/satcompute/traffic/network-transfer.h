@@ -40,6 +40,7 @@ NetworkTransferState InstallNetworkTransfers(
   const std::string& chunkMode,
   uint32_t payloadBytes,
   uint16_t islMtuBytes,
+  uint32_t receiverRcvBufBytes,
   const std::string& logMode,
   double simulationDurationSeconds,
   const SatelliteTopology& topology);

@@ -778,6 +778,12 @@ def validate_run_summary(
     total_packets,
 ):
     require(run["mode"] == "task", "run mode must be task")
+    require_integer(
+        run["receiver_rcv_buf_bytes"],
+        "receiver_rcv_buf_bytes",
+        1,
+        UINT32_MAX,
+    )
     require(run["compute_profile_path"] == str(profile_path), "profile path mismatch")
     require(run["task_trace_path"] == str(trace_path), "task trace path mismatch")
     require(run["compute_node_count"] == len(profile), "compute node count mismatch")
@@ -1068,6 +1074,12 @@ def validate_failure_diagnostics(
     )
     require(diagnostic["incomplete_task_count"] > 0, "failure run has no incomplete task")
     require(run.get("diagnostic_mode") == "failure", "failure diagnostics not enabled")
+    require_integer(
+        run["receiver_rcv_buf_bytes"],
+        "receiver_rcv_buf_bytes",
+        1,
+        UINT32_MAX,
+    )
     require(
         math.isclose(
             run["task_completion_rate_percent"],

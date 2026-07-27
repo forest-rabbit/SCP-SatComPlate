@@ -207,6 +207,7 @@ InstallNetworkTransfers(const std::string& filename,
                         const std::string& chunkMode,
                         uint32_t payloadBytes,
                         uint16_t islMtuBytes,
+                        uint32_t receiverRcvBufBytes,
                         const std::string& logMode,
                         double simulationDurationSeconds,
                         const SatelliteTopology& topology)
@@ -225,6 +226,7 @@ InstallNetworkTransfers(const std::string& filename,
                           chunkMode,
                           payloadBytes,
                           islMtuBytes,
+                          receiverRcvBufBytes,
                           simulationDurationSeconds);
   state.engine->RegisterPlans(plans);
   const std::vector<NetworkTransfer>& preparedPlans =

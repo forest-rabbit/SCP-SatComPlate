@@ -59,6 +59,7 @@ public:
                   const std::string& transferChunkMode,
                   uint32_t transferPayloadBytes,
                   uint16_t islMtuBytes,
+                  uint32_t receiverRcvBufBytes,
                   double simulationDurationSeconds,
                   const std::string& taskLogMode);
   bool IsComplete() const;

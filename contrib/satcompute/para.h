@@ -39,6 +39,7 @@ struct SatComputeConfig
   uint32_t transferPayloadBytes;
   uint16_t islMtuBytes;
   uint32_t islQueueBytes;
+  uint32_t receiverRcvBufBytes;
   uint64_t ecmpHashSeed;
   double simulationDurationSeconds;
   double offeredLoad;

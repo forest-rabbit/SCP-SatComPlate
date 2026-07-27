@@ -55,6 +55,7 @@ NetworkTransferEngine::NetworkTransferEngine()
   : m_topology(nullptr),
     m_fixedPayloadBytes(0),
     m_islMtuBytes(0),
+    m_receiverRcvBufBytes(0),
     m_simulationDurationNs(0),
     m_configured(false),
     m_registered(false)
@@ -70,6 +71,7 @@ NetworkTransferEngine::Configure(const SatelliteTopology& topology,
                                  const std::string& chunkMode,
                                  uint32_t fixedPayloadBytes,
                                  uint16_t islMtuBytes,
+                                 uint32_t receiverRcvBufBytes,
                                  double simulationDurationSeconds)
 {
   NS_ABORT_MSG_IF(m_configured || m_registered,
@@ -80,6 +82,8 @@ NetworkTransferEngine::Configure(const SatelliteTopology& topology,
                   "transferPayloadBytes 必须在 1..65507 范围内");
   NS_ABORT_MSG_IF(islMtuBytes < 68,
                   "islMtuBytes 必须至少为 68");
+  NS_ABORT_MSG_IF(receiverRcvBufBytes == 0,
+                  "receiverRcvBufBytes 必须大于 0");
   uint32_t maximumPayloadBytes =
     chunkMode == "size-aware"
       ? GetSizeAwareMaximumPayloadBytes()
@@ -95,6 +99,7 @@ NetworkTransferEngine::Configure(const SatelliteTopology& topology,
   m_chunkMode = chunkMode;
   m_fixedPayloadBytes = fixedPayloadBytes;
   m_islMtuBytes = islMtuBytes;
+  m_receiverRcvBufBytes = receiverRcvBufBytes;
   m_simulationDurationNs = durationNs;
   m_configured = true;
 }
@@ -187,7 +192,9 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
       if (receiver == nullptr)
         {
           receiver = CreateObject<NetworkTransferReceiver>();
-          receiver->Configure(plan.destinationAddress, plan.destinationPort);
+          receiver->Configure(plan.destinationAddress,
+                              plan.destinationPort,
+                              m_receiverRcvBufBytes);
           receiver->SetCompletionCallback(
             MakeCallback(&NetworkTransferEngine::HandleTransferComplete, this));
           m_topology->GetNodeBySatelliteId(plan.destinationSatelliteId)

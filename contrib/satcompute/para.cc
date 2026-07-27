@@ -93,6 +93,10 @@ GetDefaultSatComputeConfig()
   // 调小会更早产生竞争丢包，调大可以容纳更多排队数据。
   config.islQueueBytes = 1500000;
 
+  // --receiverRcvBufBytes：每个 NetworkTransfer UDP 接收 socket 的缓冲区，
+  // 单位为 bytes，必须大于 0。默认值与 ns-3 UdpSocket 一致。
+  config.receiverRcvBufBytes = 131072;
+
   // --ecmpHashSeed：逐流 ECMP 的 uint64 hash seed；任意 uint64 值均可。
   // 相同 seed 和输入保持相同选路，改变 seed 会重新映射等价路径。
   config.ecmpHashSeed = 1;

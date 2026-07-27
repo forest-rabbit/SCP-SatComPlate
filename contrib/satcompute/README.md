@@ -41,6 +41,7 @@ transferChunkMode        = fixed
 transferPayloadBytes     = 1024
 islMtuBytes              = 1500
 islQueueBytes            = 1500000
+receiverRcvBufBytes      = 131072
 transferLogMode          = summary
 taskLogMode              = summary
 diagnosticMode           = off
@@ -64,6 +65,8 @@ outputDir                = contrib/satcompute/output
 - `--islMtuBytes`：所有当前及后续 ISL 的 MTU，默认 1500。
 - `--islQueueBytes`：所有当前及后续 ISL DropTail 队列的字节容量，默认
   1500000；容量不随 payload 大小变化。
+- `--receiverRcvBufBytes`：每个 NetworkTransfer UDP 接收 socket 的缓冲区
+  字节数，默认 131072，必须大于 0。
 - `--transferLogMode`：`summary`、`verbose` 或 `silent`。
 - `--taskLogMode`：`summary`、`verbose` 或 `silent`，只影响任务输入日志。
 - `--diagnosticMode`：`off` 只保留基础指标；`failure` 在任务失败时额外
@@ -396,7 +399,7 @@ python3 contrib/satcompute/tools/check-task-output.py failure \
 - `task-summary.csv`：每个任务的输入、排队、计算、结果和端到端时间；
 - `compute-node-summary.csv`：计算节点的完成数、忙时、最大队列和利用率；
 - `run-summary.json`：本次运行及网络、传输、任务聚合结果，包含任务完成数、
-  完成率以及完成任务的平均/最大端到端时间。
+  完成率、完成任务的平均/最大端到端时间及接收缓冲区配置。
 - `incomplete-tasks.csv`、`incomplete-transfers.csv`：失败任务运行中的全部
   未完成对象及 partial 收发状态；
 - `isl-queue-drops.csv`、`isl-queue-drop-summary.csv`：按有向 ISL 输出

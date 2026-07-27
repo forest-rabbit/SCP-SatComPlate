@@ -46,6 +46,7 @@ public:
                  const std::string& chunkMode,
                  uint32_t fixedPayloadBytes,
                  uint16_t islMtuBytes,
+                 uint32_t receiverRcvBufBytes,
                  double simulationDurationSeconds);
   void RegisterPlans(std::vector<NetworkTransfer> plans);
   void StartTransferNow(
@@ -77,6 +78,7 @@ private:
   std::string m_chunkMode;
   uint32_t m_fixedPayloadBytes;
   uint16_t m_islMtuBytes;
+  uint32_t m_receiverRcvBufBytes;
   int64_t m_simulationDurationNs;
   bool m_configured;
   bool m_registered;

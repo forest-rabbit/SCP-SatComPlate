@@ -38,7 +38,9 @@ public:
   NetworkTransferReceiver();
   ~NetworkTransferReceiver() override;
 
-  void Configure(Ipv4Address destinationAddress, uint16_t destinationPort);
+  void Configure(Ipv4Address destinationAddress,
+                 uint16_t destinationPort,
+                 uint32_t receiverRcvBufBytes);
   void AddExpectedTransfer(const NetworkTransfer& transfer);
   void SetCompletionCallback(
     Callback<void, uint64_t, int64_t> completionCallback);
@@ -79,6 +81,7 @@ private:
 
   Ipv4Address m_destinationAddress;
   uint16_t m_destinationPort;
+  uint32_t m_receiverRcvBufBytes;
   Ptr<Socket> m_socket;
   std::map<FourTuple, Reception> m_receptions;
   std::map<uint64_t, FourTuple> m_transferTuples;

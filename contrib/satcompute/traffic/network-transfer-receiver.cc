@@ -23,6 +23,7 @@
 #include "ns3/packet.h"
 #include "ns3/simulator.h"
 #include "ns3/udp-socket-factory.h"
+#include "ns3/uinteger.h"
 
 #include <limits>
 #include <tuple>
@@ -44,6 +45,7 @@ NetworkTransferReceiver::GetTypeId()
 
 NetworkTransferReceiver::NetworkTransferReceiver()
   : m_destinationPort(0),
+    m_receiverRcvBufBytes(0),
     m_totalReceivedBytes(0)
 {
 }
@@ -67,15 +69,19 @@ NetworkTransferReceiver::FourTuple::operator<(const FourTuple& other) const
 
 void
 NetworkTransferReceiver::Configure(Ipv4Address destinationAddress,
-                                   uint16_t destinationPort)
+                                   uint16_t destinationPort,
+                                   uint32_t receiverRcvBufBytes)
 {
   NS_ABORT_MSG_IF(m_socket != nullptr,
                   "运行中的 NetworkTransferReceiver 不能重新配置");
   NS_ABORT_MSG_IF(destinationAddress == Ipv4Address::GetAny()
                     || destinationPort == 0,
                   "NetworkTransferReceiver 要求明确的目的地址和端口");
+  NS_ABORT_MSG_IF(receiverRcvBufBytes == 0,
+                  "NetworkTransferReceiver RcvBufSize 必须大于 0");
   m_destinationAddress = destinationAddress;
   m_destinationPort = destinationPort;
+  m_receiverRcvBufBytes = receiverRcvBufBytes;
 }
 
 void
@@ -196,6 +202,8 @@ NetworkTransferReceiver::StartApplication()
                   "NetworkTransferReceiver 尚未完整配置");
   m_socket =
     Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
+  m_socket->SetAttribute("RcvBufSize",
+                         UintegerValue(m_receiverRcvBufBytes));
   int bindResult = m_socket->Bind(
     InetSocketAddress(m_destinationAddress, m_destinationPort));
   NS_ABORT_MSG_IF(bindResult != 0,

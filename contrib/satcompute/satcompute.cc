@@ -84,6 +84,9 @@ main(int argc, char* argv[])
   commandLine.AddValue("islQueueBytes",
                        "Byte capacity of every ISL DropTail queue",
                        config.islQueueBytes);
+  commandLine.AddValue("receiverRcvBufBytes",
+                       "Receive-buffer bytes for each NetworkTransfer UDP socket",
+                       config.receiverRcvBufBytes);
   commandLine.AddValue("transferLogMode",
                        "NetworkTransfer logging: summary, verbose, or silent",
                        config.transferLogMode);
@@ -176,6 +179,12 @@ main(int argc, char* argv[])
   if (config.islQueueBytes == 0)
     {
       std::cerr << "[RUN:Error] islQueueBytes must be positive"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
+  if (config.receiverRcvBufBytes == 0)
+    {
+      std::cerr << "[RUN:Error] receiverRcvBufBytes must be positive"
                 << std::endl;
       return EXIT_FAILURE;
     }
@@ -328,6 +337,8 @@ main(int argc, char* argv[])
                 << " bytes" << std::endl
                 << "  islQueue           : " << config.islQueueBytes
                 << " bytes" << std::endl
+                << "  receiverRcvBuf     : "
+                << config.receiverRcvBufBytes << " bytes" << std::endl
                 << "  routingMode        : " << config.routingMode << std::endl
                 << "  ecmpHashSeed       : " << config.ecmpHashSeed << std::endl
                 << "  outputDir          : " << config.outputDirectory << std::endl
@@ -373,6 +384,7 @@ main(int argc, char* argv[])
                                   config.transferChunkMode,
                                   config.transferPayloadBytes,
                                   config.islMtuBytes,
+                                  config.receiverRcvBufBytes,
                                   config.simulationDurationSeconds,
                                   config.taskLogMode);
     }
@@ -389,6 +401,7 @@ main(int argc, char* argv[])
                                 config.transferChunkMode,
                                 config.transferPayloadBytes,
                                 config.islMtuBytes,
+                                config.receiverRcvBufBytes,
                                 config.transferLogMode,
                                 config.simulationDurationSeconds,
                                 topology);
@@ -444,6 +457,7 @@ main(int argc, char* argv[])
     config.ecmpHashSeed,
     config.islMtuBytes,
     config.islQueueBytes,
+    config.receiverRcvBufBytes,
     config.diagnosticMode,
     transferMode || taskMode ? "first-hop-serialization" : "none",
     transferMode || taskMode ? config.transferChunkMode : "none",

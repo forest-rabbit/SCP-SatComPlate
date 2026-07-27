@@ -121,6 +121,8 @@ WriteRunSummary(
          << "  \"ecmp_hash_seed\": " << runMetadata.ecmpHashSeed << ",\n"
          << "  \"isl_mtu_bytes\": " << runMetadata.islMtuBytes << ",\n"
          << "  \"isl_queue_bytes\": " << runMetadata.islQueueBytes << ",\n"
+         << "  \"receiver_rcv_buf_bytes\": "
+         << runMetadata.receiverRcvBufBytes << ",\n"
          << "  \"diagnostic_mode\": \"" << runMetadata.diagnosticMode
          << "\",\n"
          << "  \"pacing_mode\": \"" << runMetadata.pacingMode << "\",\n"
