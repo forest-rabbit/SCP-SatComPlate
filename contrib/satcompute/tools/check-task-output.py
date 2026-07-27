@@ -115,6 +115,75 @@ FLOW_DETAIL_FIELDS = [
     "mean_jitter_ns",
     "throughput_bps",
 ]
+INCOMPLETE_TASK_FIELDS = [
+    "task_id",
+    "state",
+    "source_node_id",
+    "compute_node_id",
+    "result_node_id",
+    "input_transfer_id",
+    "result_transfer_id",
+    "arrival_time_ns",
+    "last_transition_time_ns",
+    "input_transfer_complete_time_ns",
+    "queue_enter_time_ns",
+    "compute_start_time_ns",
+    "compute_complete_time_ns",
+    "result_transfer_complete_time_ns",
+]
+INCOMPLETE_TRANSFER_FIELDS = [
+    "transfer_id",
+    "transfer_state",
+    "source_node_id",
+    "destination_node_id",
+    "source_address",
+    "destination_address",
+    "source_port",
+    "destination_port",
+    "declared_size_bytes",
+    "payload_bytes_per_packet",
+    "derived_packet_count",
+    "sent_application_bytes",
+    "sent_packet_count",
+    "received_application_bytes",
+    "received_packet_count",
+    "missing_application_bytes",
+    "missing_packet_count_lower_bound",
+    "arrival_time_ns",
+    "last_send_time_ns",
+    "completion_time_ns",
+]
+QUEUE_DROP_FIELDS = [
+    "simulation_time_ns",
+    "source_node_id",
+    "destination_node_id",
+    "output_interface",
+    "packet_size_bytes",
+    "cumulative_drop_packets",
+    "cumulative_drop_bytes",
+]
+QUEUE_DROP_SUMMARY_FIELDS = [
+    "source_node_id",
+    "destination_node_id",
+    "output_interface",
+    "drop_packets",
+    "drop_bytes",
+    "first_drop_time_ns",
+    "last_drop_time_ns",
+]
+FLOW_LINK_FIELDS = [
+    "source_node_id",
+    "destination_node_id",
+    "output_interface",
+    "unique_transfer_count",
+    "planned_application_bytes",
+    "large_transfer_count",
+    "input_transfer_count",
+    "result_transfer_count",
+    "adjacent_to_compute_node",
+    "drop_packets",
+    "drop_bytes",
+]
 EXPECTED_TRANSITIONS = [
     ("PENDING", "INPUT_TRANSFERRING", "TASK_ARRIVAL"),
     ("INPUT_TRANSFERRING", "QUEUED", "INPUT_TRANSFER_COMPLETE"),
@@ -200,6 +269,25 @@ def read_topology_nodes(directory):
         node_ids.add(node_id)
     require(node_ids, "topology must contain nodes")
     return node_ids
+
+
+def read_topology_links(directory):
+    root = read_json(Path(directory) / "topology_0s.json")
+    require(isinstance(root, dict), "topology links root must be an object")
+    require(isinstance(root.get("links"), list), "topology links must be an array")
+    links = set()
+    for item in root["links"]:
+        require(isinstance(item, dict), "topology link must be an object")
+        source = item.get("node1_id")
+        destination = item.get("node2_id")
+        require_integer(source, "topology node1_id", 0, UINT32_MAX)
+        require_integer(destination, "topology node2_id", 0, UINT32_MAX)
+        require(source != destination, "topology link must connect distinct nodes")
+        key = tuple(sorted((source, destination)))
+        require(key not in links, f"duplicate topology link {key}")
+        links.add(key)
+    require(links, "topology must contain links")
+    return links
 
 
 def read_compute_profile(path, topology_nodes):
@@ -925,8 +1013,401 @@ def validate_determinism(
     print(f"PASS: {label} preserves deterministic structured output")
 
 
+def directed_link_key(row):
+    return (
+        int_field(row, "source_node_id"),
+        int_field(row, "destination_node_id"),
+        int_field(row, "output_interface"),
+    )
+
+
+def validate_failure_diagnostics(output, topology_dir, profile_path, trace_path):
+    topology_nodes = read_topology_nodes(topology_dir)
+    topology_links = read_topology_links(topology_dir)
+    profile = read_compute_profile(profile_path, topology_nodes)
+    tasks = read_task_trace(trace_path, topology_nodes, profile)
+    compute_nodes = {item["node_id"] for item in profile}
+    expected_transfers = {}
+    for task in tasks:
+        expected_transfers[2 * task["task_id"] - 1] = {
+            "source_node_id": task["source_node_id"],
+            "destination_node_id": task["compute_node_id"],
+            "declared_size_bytes": task["input_bytes"],
+        }
+        expected_transfers[2 * task["task_id"]] = {
+            "source_node_id": task["compute_node_id"],
+            "destination_node_id": task["result_node_id"],
+            "declared_size_bytes": task["output_bytes"],
+        }
+
+    output = Path(output)
+    run = read_json(output / "run-summary.json")
+    diagnostic = read_json(output / "diagnostic-summary.json")
+    require(diagnostic.get("run_status") == "INCOMPLETE", "run must be INCOMPLETE")
+    require(diagnostic.get("task_count") == len(tasks), "diagnostic task count mismatch")
+    require(
+        diagnostic.get("completed_task_count", -1)
+        + diagnostic.get("incomplete_task_count", -1)
+        == len(tasks),
+        "diagnostic task completion counts mismatch",
+    )
+    require(diagnostic["incomplete_task_count"] > 0, "failure run has no incomplete task")
+    require(
+        isinstance(diagnostic.get("tasks_by_state"), dict)
+        and sum(diagnostic["tasks_by_state"].values()) == len(tasks),
+        "diagnostic task state counts mismatch",
+    )
+    require(
+        diagnostic.get("transfer_count") == len(expected_transfers),
+        "diagnostic transfer count mismatch",
+    )
+    require(
+        diagnostic.get("completed_transfer_count", -1)
+        + diagnostic.get("incomplete_transfer_count", -1)
+        == len(expected_transfers),
+        "diagnostic transfer completion counts mismatch",
+    )
+
+    task_rows = read_csv_rows(output, "task-summary.csv", TASK_SUMMARY_FIELDS)
+    require(len(task_rows) == len(tasks), "partial task-summary row count mismatch")
+    task_rows_by_id = {int_field(row, "task_id"): row for row in task_rows}
+    require(
+        len(task_rows_by_id) == len(task_rows),
+        "partial task-summary contains duplicate task IDs",
+    )
+    incomplete_task_rows = read_csv_rows(
+        output, "incomplete-tasks.csv", INCOMPLETE_TASK_FIELDS
+    )
+    incomplete_task_ids = {
+        int_field(row, "task_id") for row in incomplete_task_rows
+    }
+    expected_incomplete_task_ids = {
+        task_id
+        for task_id, row in task_rows_by_id.items()
+        if row["final_state"] != "COMPLETED"
+    }
+    require(
+        incomplete_task_ids == expected_incomplete_task_ids,
+        "incomplete task coverage mismatch",
+    )
+    require(
+        len(incomplete_task_rows) == diagnostic["incomplete_task_count"],
+        "incomplete task diagnostic count mismatch",
+    )
+    for row in incomplete_task_rows:
+        task_id = int_field(row, "task_id")
+        require(
+            row["state"] == task_rows_by_id[task_id]["final_state"],
+            f"task {task_id} partial state mismatch",
+        )
+
+    transfer_rows = read_csv_rows(output, "transfer-summary.csv", TRANSFER_SUMMARY_FIELDS)
+    transfer_rows_by_id = {
+        int_field(row, "transfer_id"): row for row in transfer_rows
+    }
+    require(
+        len(transfer_rows) == len(expected_transfers)
+        and len(transfer_rows_by_id) == len(expected_transfers)
+        and set(transfer_rows_by_id) == set(expected_transfers),
+        "partial transfer-summary coverage mismatch",
+    )
+    incomplete_transfer_rows = read_csv_rows(
+        output, "incomplete-transfers.csv", INCOMPLETE_TRANSFER_FIELDS
+    )
+    incomplete_transfer_ids = {
+        int_field(row, "transfer_id") for row in incomplete_transfer_rows
+    }
+    require(
+        len(incomplete_transfer_ids) == len(incomplete_transfer_rows),
+        "incomplete transfer IDs must be unique",
+    )
+    require(
+        len(incomplete_transfer_rows) == diagnostic["incomplete_transfer_count"],
+        "incomplete transfer diagnostic count mismatch",
+    )
+    sender_complete_receiver_incomplete = False
+    for row in incomplete_transfer_rows:
+        transfer_id = int_field(row, "transfer_id")
+        require(transfer_id in expected_transfers, "unknown incomplete transfer ID")
+        expected = expected_transfers[transfer_id]
+        declared = int_field(row, "declared_size_bytes")
+        sent_bytes = int_field(row, "sent_application_bytes")
+        sent_packets = int_field(row, "sent_packet_count")
+        received_bytes = int_field(row, "received_application_bytes")
+        received_packets = int_field(row, "received_packet_count")
+        derived_packets = int_field(row, "derived_packet_count")
+        require(
+            int_field(row, "source_node_id") == expected["source_node_id"]
+            and int_field(row, "destination_node_id")
+            == expected["destination_node_id"]
+            and declared == expected["declared_size_bytes"],
+            f"transfer {transfer_id} endpoint/size mismatch",
+        )
+        require(
+            0 <= received_bytes <= sent_bytes <= declared,
+            f"transfer {transfer_id} partial byte counters invalid",
+        )
+        require(
+            0 <= received_packets <= sent_packets <= derived_packets,
+            f"transfer {transfer_id} partial packet counters invalid",
+        )
+        require(
+            int_field(row, "missing_application_bytes") == declared - received_bytes
+            and int_field(row, "missing_packet_count_lower_bound")
+            == derived_packets - received_packets,
+            f"transfer {transfer_id} missing amount mismatch",
+        )
+        require(
+            row["transfer_state"] in {"REGISTERED", "STARTED"},
+            f"transfer {transfer_id} invalid incomplete state",
+        )
+        if row["transfer_state"] == "REGISTERED":
+            require(
+                sent_bytes == 0 and sent_packets == 0,
+                f"registered transfer {transfer_id} must be unstarted",
+            )
+        if sent_bytes == declared and received_bytes < declared:
+            sender_complete_receiver_incomplete = True
+        summary = transfer_rows_by_id[transfer_id]
+        require(
+            int_field(summary, "sent_application_bytes") == sent_bytes
+            and int_field(summary, "received_application_bytes") == received_bytes
+            and int_field(summary, "received_packet_count") == received_packets,
+            f"transfer {transfer_id} partial summary mismatch",
+        )
+    require(
+        sender_complete_receiver_incomplete,
+        "fixture must expose a fully sent but incompletely received transfer",
+    )
+
+    flow_rows = read_csv_rows(output, "network-flow-details.csv", FLOW_DETAIL_FIELDS)
+    require(
+        len(flow_rows) == len(expected_transfers)
+        and {int_field(row, "transfer_id") for row in flow_rows}
+            == set(expected_transfers),
+        "failure FlowMonitor transfer coverage mismatch",
+    )
+    flow_tx_packets = sum(int_field(row, "tx_packets") for row in flow_rows)
+    flow_rx_packets = sum(int_field(row, "rx_packets") for row in flow_rows)
+    flow_lost_packets = sum(int_field(row, "lost_packets") for row in flow_rows)
+    require(
+        diagnostic["flowmonitor_tx_packets"] == flow_tx_packets
+        and diagnostic["flowmonitor_rx_packets"] == flow_rx_packets
+        and diagnostic["flowmonitor_lost_packets"] == flow_lost_packets,
+        "FlowMonitor diagnostic aggregate mismatch",
+    )
+
+    drop_rows = read_csv_rows(output, "isl-queue-drops.csv", QUEUE_DROP_FIELDS)
+    require(drop_rows, "small failure fixture must produce an ISL queue drop")
+    drop_totals = {}
+    previous_time = -1
+    simulation_duration_ns = round(run["simulation_duration_s"] * 1_000_000_000)
+    for row in drop_rows:
+        key = directed_link_key(row)
+        event_time = int_field(row, "simulation_time_ns")
+        packet_bytes = int_field(row, "packet_size_bytes")
+        require(previous_time <= event_time <= simulation_duration_ns, "drop time invalid")
+        previous_time = event_time
+        require(
+            tuple(sorted(key[:2])) in topology_links,
+            f"queue drop does not map to an ISL: {key}",
+        )
+        require(packet_bytes > 0, "queue drop packet size must be positive")
+        aggregate = drop_totals.setdefault(
+            key, {"packets": 0, "bytes": 0, "first": event_time, "last": event_time}
+        )
+        aggregate["packets"] += 1
+        aggregate["bytes"] += packet_bytes
+        aggregate["last"] = event_time
+        require(
+            int_field(row, "cumulative_drop_packets") == aggregate["packets"]
+            and int_field(row, "cumulative_drop_bytes") == aggregate["bytes"],
+            f"queue drop cumulative total mismatch: {key}",
+        )
+
+    drop_summary_rows = read_csv_rows(
+        output, "isl-queue-drop-summary.csv", QUEUE_DROP_SUMMARY_FIELDS
+    )
+    expected_drop_order = sorted(
+        drop_totals,
+        key=lambda key: (
+            -drop_totals[key]["bytes"],
+            -drop_totals[key]["packets"],
+            key,
+        ),
+    )
+    require(
+        [directed_link_key(row) for row in drop_summary_rows] == expected_drop_order,
+        "queue drop summary order/coverage mismatch",
+    )
+    for row in drop_summary_rows:
+        key = directed_link_key(row)
+        expected = drop_totals[key]
+        require(
+            int_field(row, "drop_packets") == expected["packets"]
+            and int_field(row, "drop_bytes") == expected["bytes"]
+            and int_field(row, "first_drop_time_ns") == expected["first"]
+            and int_field(row, "last_drop_time_ns") == expected["last"],
+            f"queue drop summary mismatch: {key}",
+        )
+    total_drop_packets = sum(item["packets"] for item in drop_totals.values())
+    total_drop_bytes = sum(item["bytes"] for item in drop_totals.values())
+    require(
+        diagnostic["queue_drop_packets"] == total_drop_packets
+        and diagnostic["queue_drop_bytes"] == total_drop_bytes
+        and diagnostic["dropped_directed_link_count"] == len(drop_totals),
+        "queue drop diagnostic aggregate mismatch",
+    )
+
+    concentration_rows = read_csv_rows(
+        output, "flow-link-concentration.csv", FLOW_LINK_FIELDS
+    )
+    concentration_keys = [directed_link_key(row) for row in concentration_rows]
+    require(
+        len(concentration_keys) == len(set(concentration_keys)),
+        "flow-link concentration keys must be unique",
+    )
+    expected_concentration_order = sorted(
+        concentration_rows,
+        key=lambda row: (
+            -int_field(row, "planned_application_bytes"),
+            -int_field(row, "unique_transfer_count"),
+            directed_link_key(row),
+        ),
+    )
+    require(
+        concentration_keys
+        == [directed_link_key(row) for row in expected_concentration_order],
+        "flow-link concentration order mismatch",
+    )
+    concentration_by_key = {
+        directed_link_key(row): row for row in concentration_rows
+    }
+    for key, row in concentration_by_key.items():
+        require(
+            tuple(sorted(key[:2])) in topology_links,
+            f"flow concentration does not map to an ISL: {key}",
+        )
+        unique_transfers = int_field(row, "unique_transfer_count")
+        input_transfers = int_field(row, "input_transfer_count")
+        result_transfers = int_field(row, "result_transfer_count")
+        large_transfers = int_field(row, "large_transfer_count")
+        require(
+            input_transfers + result_transfers == unique_transfers
+            and 0 <= large_transfers <= unique_transfers,
+            f"flow concentration transfer counts invalid: {key}",
+        )
+        require(
+            int_field(row, "adjacent_to_compute_node")
+            == int(key[0] in compute_nodes or key[1] in compute_nodes),
+            f"flow concentration compute adjacency mismatch: {key}",
+        )
+        if key in drop_totals:
+            require(
+                int_field(row, "drop_packets") == drop_totals[key]["packets"]
+                and int_field(row, "drop_bytes") == drop_totals[key]["bytes"],
+                f"flow concentration drop mismatch: {key}",
+            )
+    require(
+        set(drop_totals) <= set(concentration_by_key),
+        "dropped link missing from flow concentration",
+    )
+
+    expected_top_drops = drop_summary_rows[:10]
+    actual_top_drops = diagnostic.get("top_dropped_links")
+    require(
+        isinstance(actual_top_drops, list)
+        and len(actual_top_drops) == len(expected_top_drops),
+        "diagnostic top dropped links count mismatch",
+    )
+    for actual, expected in zip(actual_top_drops, expected_top_drops):
+        require(
+            (
+                actual["source_node_id"],
+                actual["destination_node_id"],
+                actual["output_interface"],
+                actual["drop_packets"],
+                actual["drop_bytes"],
+                actual["first_drop_time_ns"],
+                actual["last_drop_time_ns"],
+            )
+            == (
+                *directed_link_key(expected),
+                int_field(expected, "drop_packets"),
+                int_field(expected, "drop_bytes"),
+                int_field(expected, "first_drop_time_ns"),
+                int_field(expected, "last_drop_time_ns"),
+            ),
+            "diagnostic top dropped link mismatch",
+        )
+
+    planned_rows = [
+        row
+        for row in concentration_rows
+        if int_field(row, "planned_application_bytes") > 0
+    ][:10]
+    actual_top_planned = diagnostic.get("top_planned_load_links")
+    require(
+        isinstance(actual_top_planned, list)
+        and len(actual_top_planned) == len(planned_rows),
+        "diagnostic top planned links count mismatch",
+    )
+    for actual, expected in zip(actual_top_planned, planned_rows):
+        require(
+            (
+                actual["source_node_id"],
+                actual["destination_node_id"],
+                actual["output_interface"],
+                actual["unique_transfer_count"],
+                actual["planned_application_bytes"],
+                actual["large_transfer_count"],
+                actual["adjacent_to_compute_node"],
+                actual["drop_packets"],
+                actual["drop_bytes"],
+            )
+            == (
+                *directed_link_key(expected),
+                int_field(expected, "unique_transfer_count"),
+                int_field(expected, "planned_application_bytes"),
+                int_field(expected, "large_transfer_count"),
+                bool(int_field(expected, "adjacent_to_compute_node")),
+                int_field(expected, "drop_packets"),
+                int_field(expected, "drop_bytes"),
+            ),
+            "diagnostic top planned link mismatch",
+        )
+
+    require(
+        flow_lost_packets > 0 or total_drop_packets > 0,
+        "failure diagnostics contain no direct packet-loss evidence",
+    )
+    print(
+        "PASS: incomplete run preserved strict diagnostics "
+        f"({len(incomplete_task_rows)} tasks, "
+        f"{len(incomplete_transfer_rows)} transfers, "
+        f"{total_drop_packets} directed-queue drops)"
+    )
+
+
 def main():
     argv = sys.argv[1:]
+    if argv[:1] == ["failure"]:
+        parser = argparse.ArgumentParser(
+            description="Validate one incomplete SatCompute task run."
+        )
+        parser.add_argument("--topology-dir", required=True)
+        parser.add_argument("--compute-profile", required=True)
+        parser.add_argument("--task-trace", required=True)
+        parser.add_argument("--output-dir", required=True)
+        args = parser.parse_args(argv[1:])
+        validate_failure_diagnostics(
+            args.output_dir,
+            args.topology_dir,
+            args.compute_profile,
+            args.task_trace,
+        )
+        return
+
     if argv[:1] == ["run"]:
         parser = argparse.ArgumentParser(
             description="Validate one arbitrary SatCompute TaskTrace run."

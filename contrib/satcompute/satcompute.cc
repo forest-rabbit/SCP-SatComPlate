@@ -325,6 +325,7 @@ main(int argc, char* argv[])
     config.ecmpHashSeed,
     config.islMtuBytes,
     config.islQueueBytes,
+    taskMode,
     !silentRun
   };
   SatelliteTopology topology(topologyConfig);
@@ -440,6 +441,8 @@ main(int argc, char* argv[])
                           transferFlowMetadata,
                           transferSummaries,
                           routeRecorder.GetEvents(),
+                          topology.GetIslDirectedLinks(),
+                          topology.GetIslQueueDropEvents(),
                           taskMode ? PeekPointer(taskCoordinator) : nullptr,
                           config.outputDirectory);
   metrics.Record();

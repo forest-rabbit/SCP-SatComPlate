@@ -351,6 +351,36 @@ python3 contrib/satcompute/tools/check-ecmp-output.py \
 64000-byte effective payload 只用于降低大数据仿真的事件数量，不宣称真实卫星
 网络使用 64 KB 物理帧。
 
+## 失败诊断最小验证
+
+下面的 4 星用例故意把每设备队列设为 1000 bytes，小于 1024-byte 应用
+payload 加协议头后的单包大小。它只验证“失败后先落盘、再返回非零”以及
+有向 ISL queue Drop 映射，不代表正式压力场景：
+
+```bash
+./waf --run-no-build "satcompute \
+  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+  --simulationDuration=2 \
+  --offeredLoad=0 \
+  --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+  --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+  --transferChunkMode=size-aware \
+  --islMtuBytes=65535 \
+  --islQueueBytes=1000 \
+  --routingMode=global-hash-per-flow \
+  --ecmpHashSeed=1 \
+  --transferLogMode=silent \
+  --taskLogMode=silent \
+  --outputDir=/tmp/satcompute-task-failure"
+
+# 上一条命令的预期退出码为 1。
+python3 contrib/satcompute/tools/check-task-output.py failure \
+  --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+  --compute-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+  --task-trace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+  --output-dir=/tmp/satcompute-task-failure
+```
+
 ## 输出与当前边界
 
 - `network-flow-metrics.csv`：所有 IPv4 FlowMonitor 流的聚合结果；
@@ -361,7 +391,14 @@ python3 contrib/satcompute/tools/check-ecmp-output.py \
 - `task-summary.csv`：每个任务的输入、排队、计算、结果和端到端时间；
 - `compute-node-summary.csv`：计算节点的完成数、忙时、最大队列和利用率；
 - `run-summary.json`：本次运行及网络、传输、任务聚合结果。
+- `incomplete-tasks.csv`、`incomplete-transfers.csv`：失败任务运行中的全部
+  未完成对象及 partial 收发状态；
+- `isl-queue-drops.csv`、`isl-queue-drop-summary.csv`：按有向 ISL 输出
+  队列记录的逐次 Drop 与聚合；
+- `flow-link-concentration.csv`、`diagnostic-summary.json`：计划业务量、
+  ECMP 链路集中度、丢包和完成状态摘要。
 
-三份任务 CSV 只在任务模式生成。未匹配 NetworkTransfer 的 legacy FlowMonitor
-行使用 `transfer_id=0`。当前任务调度仅支持单服务台、非抢占 FCFS；尚未实现
-故障、checkpoint、备份或恢复语义。
+任务与计算 CSV 只在任务模式生成；失败诊断文件只在任务未全部完成时生成。
+未匹配 NetworkTransfer 的 legacy FlowMonitor 行使用 `transfer_id=0`。当前
+任务调度仅支持单服务台、非抢占 FCFS；尚未实现可靠重传、故障、
+checkpoint、备份或恢复语义。

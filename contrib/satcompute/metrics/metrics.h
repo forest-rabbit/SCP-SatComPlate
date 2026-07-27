@@ -1,6 +1,7 @@
 #ifndef SATCOMPUTE_METRICS_H
 #define SATCOMPUTE_METRICS_H
 
+#include "../jsontopo/topo-link-state.h"
 #include "../routing/satcompute-ipv4-global-routing.h"
 
 #include "ns3/flow-monitor-module.h"
@@ -86,6 +87,8 @@ public:
                   const std::vector<TransferFlowMetadata>& transferFlows,
                   const std::vector<TransferSummaryRecord>& transferSummaries,
                   const std::vector<EcmpRouteDecisionEvent>& routeEvents,
+                  const std::vector<IslDirectedLink>& directedLinks,
+                  const std::vector<IslQueueDropEvent>& queueDropEvents,
                   const TaskCoordinator* taskCoordinator,
                   const std::string& outputDirectory);
 
@@ -100,6 +103,8 @@ private:
   std::vector<TransferFlowMetadata> m_transferFlows;
   std::vector<TransferSummaryRecord> m_transferSummaries;
   std::vector<EcmpRouteDecisionEvent> m_routeEvents;
+  const std::vector<IslDirectedLink>& m_directedLinks;
+  const std::vector<IslQueueDropEvent>& m_queueDropEvents;
   const TaskCoordinator* m_taskCoordinator;
   std::string m_outputDirectory;
 };

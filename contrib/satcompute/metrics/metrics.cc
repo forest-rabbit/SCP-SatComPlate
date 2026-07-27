@@ -15,6 +15,7 @@
 #include <map>
 #include <set>
 #include <sys/stat.h>
+#include <tuple>
 
 namespace ns3 {
 
@@ -98,6 +99,410 @@ struct FlowAggregate
              : 0.0;
   }
 };
+
+typedef std::pair<uint32_t, uint32_t> OutputQueueKey;
+typedef std::tuple<uint32_t, uint32_t, uint32_t> DirectedLinkKey;
+
+struct QueueDropSummaryRecord
+{
+  uint32_t sourceNodeId;
+  uint32_t destinationNodeId;
+  uint32_t outputInterface;
+  uint64_t dropPackets;
+  uint64_t dropBytes;
+  int64_t firstDropTimeNs;
+  int64_t lastDropTimeNs;
+};
+
+struct FlowLinkSummaryRecord
+{
+  uint32_t sourceNodeId;
+  uint32_t destinationNodeId;
+  uint32_t outputInterface;
+  uint64_t uniqueTransferCount;
+  uint64_t plannedApplicationBytes;
+  uint64_t largeTransferCount;
+  uint64_t inputTransferCount;
+  uint64_t resultTransferCount;
+  bool adjacentToComputeNode;
+  uint64_t dropPackets;
+  uint64_t dropBytes;
+};
+
+DirectedLinkKey
+MakeDirectedLinkKey(uint32_t sourceNodeId,
+                    uint32_t destinationNodeId,
+                    uint32_t outputInterface)
+{
+  return std::make_tuple(sourceNodeId,
+                         destinationNodeId,
+                         outputInterface);
+}
+
+std::map<OutputQueueKey, IslDirectedLink>
+IndexDirectedLinks(const std::vector<IslDirectedLink>& directedLinks)
+{
+  std::map<OutputQueueKey, IslDirectedLink> linksByOutputQueue;
+  for (const auto& link : directedLinks)
+    {
+      OutputQueueKey key =
+        std::make_pair(link.sourceNodeId, link.outputInterface);
+      NS_ABORT_MSG_IF(
+        !linksByOutputQueue.insert(std::make_pair(key, link)).second,
+        "重复 ISL directed queue 映射: source="
+          << link.sourceNodeId << " interface=" << link.outputInterface);
+    }
+  return linksByOutputQueue;
+}
+
+std::vector<QueueDropSummaryRecord>
+CollectQueueDropSummaries(
+  const std::vector<IslDirectedLink>& directedLinks,
+  const std::vector<IslQueueDropEvent>& queueDropEvents)
+{
+  std::map<OutputQueueKey, IslDirectedLink> linksByOutputQueue =
+    IndexDirectedLinks(directedLinks);
+  std::map<DirectedLinkKey, QueueDropSummaryRecord> summariesByLink;
+
+  for (const auto& event : queueDropEvents)
+    {
+      OutputQueueKey outputQueue =
+        std::make_pair(event.sourceNodeId, event.outputInterface);
+      auto mappedLink = linksByOutputQueue.find(outputQueue);
+      NS_ABORT_MSG_IF(
+        mappedLink == linksByOutputQueue.end()
+          || mappedLink->second.destinationNodeId != event.destinationNodeId,
+        "ISL queue drop 无法映射到有向链路: source="
+          << event.sourceNodeId << " destination="
+          << event.destinationNodeId << " interface="
+          << event.outputInterface);
+      NS_ABORT_MSG_IF(event.packetSizeBytes == 0,
+                      "ISL queue drop packet size 不能为 0");
+
+      DirectedLinkKey key =
+        MakeDirectedLinkKey(event.sourceNodeId,
+                            event.destinationNodeId,
+                            event.outputInterface);
+      auto insertion = summariesByLink.insert(
+        std::make_pair(
+          key,
+          QueueDropSummaryRecord{
+            event.sourceNodeId,
+            event.destinationNodeId,
+            event.outputInterface,
+            0,
+            0,
+            event.simulationTimeNs,
+            event.simulationTimeNs
+          }));
+      QueueDropSummaryRecord& summary = insertion.first->second;
+      ++summary.dropPackets;
+      summary.dropBytes =
+        CheckedAdd(summary.dropBytes,
+                   event.packetSizeBytes,
+                   "ISL queue drop bytes");
+      summary.lastDropTimeNs = event.simulationTimeNs;
+      NS_ABORT_MSG_IF(
+        event.cumulativeDropPackets != summary.dropPackets
+          || event.cumulativeDropBytes != summary.dropBytes,
+        "ISL queue drop cumulative totals 不一致: source="
+          << event.sourceNodeId << " destination="
+          << event.destinationNodeId << " interface="
+          << event.outputInterface);
+    }
+
+  std::vector<QueueDropSummaryRecord> summaries;
+  summaries.reserve(summariesByLink.size());
+  for (const auto& item : summariesByLink)
+    {
+      summaries.push_back(item.second);
+    }
+  std::sort(
+    summaries.begin(),
+    summaries.end(),
+    [](const QueueDropSummaryRecord& left,
+       const QueueDropSummaryRecord& right) {
+      if (left.dropBytes != right.dropBytes)
+        {
+          return left.dropBytes > right.dropBytes;
+        }
+      if (left.dropPackets != right.dropPackets)
+        {
+          return left.dropPackets > right.dropPackets;
+        }
+      return std::make_tuple(left.sourceNodeId,
+                             left.destinationNodeId,
+                             left.outputInterface)
+             < std::make_tuple(right.sourceNodeId,
+                               right.destinationNodeId,
+                               right.outputInterface);
+    });
+  return summaries;
+}
+
+void
+WriteIslQueueDrops(
+  const std::vector<IslQueueDropEvent>& queueDropEvents,
+  const std::string& outputDirectory)
+{
+  std::ofstream output(OutputPath(outputDirectory, "isl-queue-drops.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 ISL queue drops CSV");
+  output
+    << "simulation_time_ns,source_node_id,destination_node_id,"
+       "output_interface,packet_size_bytes,cumulative_drop_packets,"
+       "cumulative_drop_bytes\n";
+  for (const auto& event : queueDropEvents)
+    {
+      output << event.simulationTimeNs << ","
+             << event.sourceNodeId << ","
+             << event.destinationNodeId << ","
+             << event.outputInterface << ","
+             << event.packetSizeBytes << ","
+             << event.cumulativeDropPackets << ","
+             << event.cumulativeDropBytes << "\n";
+    }
+}
+
+void
+WriteIslQueueDropSummaries(
+  const std::vector<QueueDropSummaryRecord>& summaries,
+  const std::string& outputDirectory)
+{
+  std::ofstream output(
+    OutputPath(outputDirectory, "isl-queue-drop-summary.csv"),
+    std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(),
+                  "无法写入 ISL queue drop summary CSV");
+  output
+    << "source_node_id,destination_node_id,output_interface,"
+       "drop_packets,drop_bytes,first_drop_time_ns,last_drop_time_ns\n";
+  for (const auto& summary : summaries)
+    {
+      output << summary.sourceNodeId << ","
+             << summary.destinationNodeId << ","
+             << summary.outputInterface << ","
+             << summary.dropPackets << ","
+             << summary.dropBytes << ","
+             << summary.firstDropTimeNs << ","
+             << summary.lastDropTimeNs << "\n";
+    }
+}
+
+std::vector<FlowLinkSummaryRecord>
+CollectFlowLinkSummaries(
+  const std::vector<TransferFlowMetadata>& transferFlows,
+  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
+  const std::vector<IslDirectedLink>& directedLinks,
+  const std::vector<QueueDropSummaryRecord>& queueDropSummaries,
+  const TaskCoordinator* coordinator)
+{
+  struct FlowLinkAccumulator
+  {
+    explicit FlowLinkAccumulator(const IslDirectedLink& directedLink)
+      : link(directedLink)
+    {
+    }
+
+    IslDirectedLink link;
+    std::set<uint64_t> transferIds;
+    uint64_t plannedApplicationBytes = 0;
+    uint64_t largeTransferCount = 0;
+    uint64_t inputTransferCount = 0;
+    uint64_t resultTransferCount = 0;
+    uint64_t dropPackets = 0;
+    uint64_t dropBytes = 0;
+  };
+
+  std::map<OutputQueueKey, IslDirectedLink> linksByOutputQueue =
+    IndexDirectedLinks(directedLinks);
+  std::map<EcmpFlowKey, TransferFlowMetadata> metadataByFlow;
+  for (const auto& metadata : transferFlows)
+    {
+      EcmpFlowKey key;
+      key.sourceAddress = metadata.sourceAddress;
+      key.destinationAddress = metadata.destinationAddress;
+      key.protocol = metadata.protocol;
+      key.sourcePort = metadata.sourcePort;
+      key.destinationPort = metadata.destinationPort;
+      NS_ABORT_MSG_IF(
+        !metadataByFlow.insert(std::make_pair(key, metadata)).second,
+        "NetworkTransfer metadata 包含重复 ECMP flow key，transfer_id="
+          << metadata.transferId);
+    }
+
+  std::set<uint64_t> inputTransferIds;
+  std::set<uint64_t> resultTransferIds;
+  std::set<uint32_t> computeNodeIds;
+  if (coordinator != nullptr)
+    {
+      for (const auto& task : coordinator->GetTaskRuntimes())
+        {
+          inputTransferIds.insert(task.definition.inputTransferId);
+          resultTransferIds.insert(task.definition.resultTransferId);
+        }
+      for (const auto& service : coordinator->GetComputeServices())
+        {
+          computeNodeIds.insert(service->GetNodeId());
+        }
+    }
+
+  std::map<DirectedLinkKey, FlowLinkAccumulator> accumulators;
+  for (const auto& event : routeEvents)
+    {
+      if (!event.hasFiveTuple || event.selectedOutputInterface < 0)
+        {
+          continue;
+        }
+      auto metadata = metadataByFlow.find(event.flowKey);
+      if (metadata == metadataByFlow.end())
+        {
+          continue;
+        }
+
+      uint32_t outputInterface =
+        static_cast<uint32_t>(event.selectedOutputInterface);
+      OutputQueueKey outputQueue =
+        std::make_pair(event.nodeId, outputInterface);
+      auto mappedLink = linksByOutputQueue.find(outputQueue);
+      NS_ABORT_MSG_IF(
+        mappedLink == linksByOutputQueue.end(),
+        "ECMP route event 无法映射到有向 ISL: node="
+          << event.nodeId << " interface=" << outputInterface
+          << " transfer_id=" << metadata->second.transferId);
+      const IslDirectedLink& link = mappedLink->second;
+      DirectedLinkKey linkKey =
+        MakeDirectedLinkKey(link.sourceNodeId,
+                            link.destinationNodeId,
+                            link.outputInterface);
+      auto insertion = accumulators.insert(
+        std::make_pair(linkKey, FlowLinkAccumulator{link}));
+      FlowLinkAccumulator& accumulator = insertion.first->second;
+      if (!accumulator.transferIds.insert(metadata->second.transferId).second)
+        {
+          continue;
+        }
+
+      accumulator.plannedApplicationBytes =
+        CheckedAdd(accumulator.plannedApplicationBytes,
+                   metadata->second.plannedApplicationPayloadBytes,
+                   "flow-link planned application bytes");
+      if (metadata->second.plannedApplicationPayloadBytes > 64ull * 1024 * 1024)
+        {
+          ++accumulator.largeTransferCount;
+        }
+      if (inputTransferIds.find(metadata->second.transferId)
+          != inputTransferIds.end())
+        {
+          ++accumulator.inputTransferCount;
+        }
+      else if (resultTransferIds.find(metadata->second.transferId)
+               != resultTransferIds.end())
+        {
+          ++accumulator.resultTransferCount;
+        }
+      else
+        {
+          NS_ABORT_MSG_IF(
+            coordinator != nullptr,
+            "任务 transfer 无法区分 INPUT/RESULT，transfer_id="
+              << metadata->second.transferId);
+        }
+    }
+
+  for (const auto& drop : queueDropSummaries)
+    {
+      DirectedLinkKey linkKey =
+        MakeDirectedLinkKey(drop.sourceNodeId,
+                            drop.destinationNodeId,
+                            drop.outputInterface);
+      auto insertion = accumulators.insert(
+        std::make_pair(
+          linkKey,
+          FlowLinkAccumulator{
+            {drop.sourceNodeId,
+             drop.destinationNodeId,
+             drop.outputInterface}
+          }));
+      insertion.first->second.dropPackets = drop.dropPackets;
+      insertion.first->second.dropBytes = drop.dropBytes;
+    }
+
+  std::vector<FlowLinkSummaryRecord> summaries;
+  summaries.reserve(accumulators.size());
+  for (const auto& item : accumulators)
+    {
+      const FlowLinkAccumulator& accumulator = item.second;
+      summaries.push_back(
+        {accumulator.link.sourceNodeId,
+         accumulator.link.destinationNodeId,
+         accumulator.link.outputInterface,
+         accumulator.transferIds.size(),
+         accumulator.plannedApplicationBytes,
+         accumulator.largeTransferCount,
+         accumulator.inputTransferCount,
+         accumulator.resultTransferCount,
+         computeNodeIds.find(accumulator.link.sourceNodeId)
+               != computeNodeIds.end()
+           || computeNodeIds.find(accumulator.link.destinationNodeId)
+                != computeNodeIds.end(),
+         accumulator.dropPackets,
+         accumulator.dropBytes});
+    }
+  std::sort(
+    summaries.begin(),
+    summaries.end(),
+    [](const FlowLinkSummaryRecord& left,
+       const FlowLinkSummaryRecord& right) {
+      if (left.plannedApplicationBytes != right.plannedApplicationBytes)
+        {
+          return left.plannedApplicationBytes
+                 > right.plannedApplicationBytes;
+        }
+      if (left.uniqueTransferCount != right.uniqueTransferCount)
+        {
+          return left.uniqueTransferCount > right.uniqueTransferCount;
+        }
+      return std::make_tuple(left.sourceNodeId,
+                             left.destinationNodeId,
+                             left.outputInterface)
+             < std::make_tuple(right.sourceNodeId,
+                               right.destinationNodeId,
+                               right.outputInterface);
+    });
+  return summaries;
+}
+
+void
+WriteFlowLinkSummaries(
+  const std::vector<FlowLinkSummaryRecord>& summaries,
+  const std::string& outputDirectory)
+{
+  std::ofstream output(
+    OutputPath(outputDirectory, "flow-link-concentration.csv"),
+    std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(),
+                  "无法写入 flow-link concentration CSV");
+  output
+    << "source_node_id,destination_node_id,output_interface,"
+       "unique_transfer_count,planned_application_bytes,"
+       "large_transfer_count,input_transfer_count,result_transfer_count,"
+       "adjacent_to_compute_node,drop_packets,drop_bytes\n";
+  for (const auto& summary : summaries)
+    {
+      output << summary.sourceNodeId << ","
+             << summary.destinationNodeId << ","
+             << summary.outputInterface << ","
+             << summary.uniqueTransferCount << ","
+             << summary.plannedApplicationBytes << ","
+             << summary.largeTransferCount << ","
+             << summary.inputTransferCount << ","
+             << summary.resultTransferCount << ","
+             << (summary.adjacentToComputeNode ? 1 : 0) << ","
+             << summary.dropPackets << ","
+             << summary.dropBytes << "\n";
+    }
+}
 
 void
 PrintNetworkMetrics(const FlowAggregate& metrics)
@@ -808,6 +1213,8 @@ WriteDiagnosticSummary(
   double simulationDurationSeconds,
   const RunMetadata& runMetadata,
   const std::vector<TransferSummaryRecord>& transferSummaries,
+  const std::vector<QueueDropSummaryRecord>& queueDropSummaries,
+  const std::vector<FlowLinkSummaryRecord>& flowLinkSummaries,
   const TaskCoordinator& coordinator,
   const std::string& outputDirectory)
 {
@@ -831,6 +1238,20 @@ WriteDiagnosticSummary(
         {
           ++completedTransfers;
         }
+    }
+
+  uint64_t queueDropPackets = 0;
+  uint64_t queueDropBytes = 0;
+  for (const auto& drop : queueDropSummaries)
+    {
+      queueDropPackets =
+        CheckedAdd(queueDropPackets,
+                   drop.dropPackets,
+                   "queue drop packets");
+      queueDropBytes =
+        CheckedAdd(queueDropBytes,
+                   drop.dropBytes,
+                   "queue drop bytes");
     }
 
   std::ofstream output(OutputPath(outputDirectory, "diagnostic-summary.json"),
@@ -871,10 +1292,55 @@ WriteDiagnosticSummary(
          << aggregate.rxPackets << ",\n"
          << "  \"flowmonitor_lost_packets\": "
          << aggregate.lostPackets << ",\n"
-         << "  \"queue_drop_packets\": 0,\n"
-         << "  \"queue_drop_bytes\": 0,\n"
-         << "  \"dropped_directed_link_count\": 0,\n"
-         << "  \"top_dropped_links\": [],\n"
+         << "  \"queue_drop_packets\": " << queueDropPackets << ",\n"
+         << "  \"queue_drop_bytes\": " << queueDropBytes << ",\n"
+         << "  \"dropped_directed_link_count\": "
+         << queueDropSummaries.size() << ",\n"
+         << "  \"top_dropped_links\": [";
+  uint32_t droppedLinkLimit =
+    std::min<uint32_t>(10, queueDropSummaries.size());
+  for (uint32_t index = 0; index < droppedLinkLimit; ++index)
+    {
+      const QueueDropSummaryRecord& drop = queueDropSummaries[index];
+      output << (index == 0 ? "\n" : ",\n")
+             << "    {\"source_node_id\": " << drop.sourceNodeId
+             << ", \"destination_node_id\": " << drop.destinationNodeId
+             << ", \"output_interface\": " << drop.outputInterface
+             << ", \"drop_packets\": " << drop.dropPackets
+             << ", \"drop_bytes\": " << drop.dropBytes
+             << ", \"first_drop_time_ns\": " << drop.firstDropTimeNs
+             << ", \"last_drop_time_ns\": " << drop.lastDropTimeNs
+             << "}";
+    }
+  output << (droppedLinkLimit == 0 ? "" : "\n  ")
+         << "],\n"
+         << "  \"top_planned_load_links\": [";
+  uint32_t plannedLinkCount = 0;
+  for (const auto& link : flowLinkSummaries)
+    {
+      if (plannedLinkCount == 10 || link.plannedApplicationBytes == 0)
+        {
+          break;
+        }
+      output << (plannedLinkCount == 0 ? "\n" : ",\n")
+             << "    {\"source_node_id\": " << link.sourceNodeId
+             << ", \"destination_node_id\": " << link.destinationNodeId
+             << ", \"output_interface\": " << link.outputInterface
+             << ", \"unique_transfer_count\": "
+             << link.uniqueTransferCount
+             << ", \"planned_application_bytes\": "
+             << link.plannedApplicationBytes
+             << ", \"large_transfer_count\": "
+             << link.largeTransferCount
+             << ", \"adjacent_to_compute_node\": "
+             << (link.adjacentToComputeNode ? "true" : "false")
+             << ", \"drop_packets\": " << link.dropPackets
+             << ", \"drop_bytes\": " << link.dropBytes
+             << "}";
+      ++plannedLinkCount;
+    }
+  output << (plannedLinkCount == 0 ? "" : "\n  ")
+         << "],\n"
          << "  \"compute_node_count\": "
          << coordinator.GetComputeServices().size() << ",\n"
          << "  \"queue_bytes_per_device\": "
@@ -899,6 +1365,8 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
                                  const std::vector<TransferFlowMetadata>& transferFlows,
                                  const std::vector<TransferSummaryRecord>& transferSummaries,
                                  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
+                                 const std::vector<IslDirectedLink>& directedLinks,
+                                 const std::vector<IslQueueDropEvent>& queueDropEvents,
                                  const TaskCoordinator* taskCoordinator,
                                  const std::string& outputDirectory)
   : m_monitor(monitor),
@@ -909,6 +1377,8 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
     m_transferFlows(transferFlows),
     m_transferSummaries(transferSummaries),
     m_routeEvents(routeEvents),
+    m_directedLinks(directedLinks),
+    m_queueDropEvents(queueDropEvents),
     m_taskCoordinator(taskCoordinator),
     m_outputDirectory(outputDirectory)
 {
@@ -926,6 +1396,19 @@ MetricsRecorder::Record()
 
   bool taskRunComplete =
     m_taskCoordinator == nullptr || m_taskCoordinator->IsComplete();
+  std::vector<QueueDropSummaryRecord> queueDropSummaries;
+  std::vector<FlowLinkSummaryRecord> flowLinkSummaries;
+  if (!taskRunComplete)
+    {
+      queueDropSummaries =
+        CollectQueueDropSummaries(m_directedLinks, m_queueDropEvents);
+      flowLinkSummaries =
+        CollectFlowLinkSummaries(m_transferFlows,
+                                 m_routeEvents,
+                                 m_directedLinks,
+                                 queueDropSummaries,
+                                 m_taskCoordinator);
+    }
   PrintNetworkMetrics(aggregate);
   WriteNetworkMetrics(aggregate, m_outputDirectory);
   WriteNetworkFlowDetails(m_monitor,
@@ -945,10 +1428,15 @@ MetricsRecorder::Record()
         {
           WriteIncompleteTasks(*m_taskCoordinator, m_outputDirectory);
           WriteIncompleteTransfers(m_transferSummaries, m_outputDirectory);
+          WriteIslQueueDrops(m_queueDropEvents, m_outputDirectory);
+          WriteIslQueueDropSummaries(queueDropSummaries, m_outputDirectory);
+          WriteFlowLinkSummaries(flowLinkSummaries, m_outputDirectory);
           WriteDiagnosticSummary(aggregate,
                                  m_simulationDurationSeconds,
                                  m_runMetadata,
                                  m_transferSummaries,
+                                 queueDropSummaries,
+                                 flowLinkSummaries,
                                  *m_taskCoordinator,
                                  m_outputDirectory);
         }
@@ -991,6 +1479,15 @@ MetricsRecorder::Record()
             << std::endl
             << "  incomplete transfers : "
             << OutputPath(m_outputDirectory, "incomplete-transfers.csv")
+            << std::endl
+            << "  ISL queue drops      : "
+            << OutputPath(m_outputDirectory, "isl-queue-drops.csv")
+            << std::endl
+            << "  ISL drop summary     : "
+            << OutputPath(m_outputDirectory, "isl-queue-drop-summary.csv")
+            << std::endl
+            << "  flow/link load       : "
+            << OutputPath(m_outputDirectory, "flow-link-concentration.csv")
             << std::endl
             << "  diagnostics          : "
             << OutputPath(m_outputDirectory, "diagnostic-summary.json")

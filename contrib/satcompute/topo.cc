@@ -148,7 +148,8 @@ SatelliteTopology::Initialize()
     new SatelliteLinkState(m_nodes,
                            m_nodeIndexes,
                            m_config.islMtuBytes,
-                           m_config.islQueueBytes));
+                           m_config.islQueueBytes,
+                           m_config.collectQueueDrops));
   TopologyLinkUpdateSummary summary = m_linkState->ApplyFullSnapshot(initial.links);
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
@@ -226,6 +227,20 @@ Ipv4Address
 SatelliteTopology::GetServiceAddressBySatelliteId(uint32_t satelliteId) const
 {
   return GetServiceAddress(GetNodeIndexBySatelliteId(satelliteId));
+}
+
+const std::vector<IslDirectedLink>&
+SatelliteTopology::GetIslDirectedLinks() const
+{
+  NS_ABORT_MSG_IF(m_linkState == nullptr, "卫星拓扑尚未初始化");
+  return m_linkState->GetDirectedLinks();
+}
+
+const std::vector<IslQueueDropEvent>&
+SatelliteTopology::GetIslQueueDropEvents() const
+{
+  NS_ABORT_MSG_IF(m_linkState == nullptr, "卫星拓扑尚未初始化");
+  return m_linkState->GetQueueDropEvents();
 }
 
 } // namespace ns3
