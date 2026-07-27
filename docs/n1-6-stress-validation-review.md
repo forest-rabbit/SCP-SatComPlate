@@ -6,15 +6,16 @@
 >
 > 正式 review base：`71f23ef20bd0e342096e1c25c0a3e6e452d2abdc`
 >
-> 本报告验证的代码 HEAD：`2e7b5e3`
+> 本报告验证的代码 HEAD：`500c901a646702b30729e0967a894b94466a4648`
 >
-> 当前状态：`READY_FOR_GPT_AUTHOR_REVIEW`
+> 当前状态：`PR1_FINALIZATION`
 >
-> Draft PR 状态：`NOT_READY_TO_OPEN_DRAFT_PR`
+> Draft PR：[#1 feat: add SatCompute task execution and N1.6 stress diagnostics](https://github.com/forest-rabbit/SatCompute/pull/1)
 
 本报告是 N1.6 压力验证的唯一审查报告。大型 TaskTrace、FlowMonitor
 输出、CSV 指标和性能日志全部保留在 `/tmp`，没有提交仓库。本轮没有运行
-GitHub CI、没有创建 PR，也没有实现可靠重传。
+75% 或 109 GB 正式压力场景，也没有实现可靠重传。PR1 当前 HEAD 的
+`SatCompute deterministic smoke` 已通过；后续综合压力矩阵留给 PR2。
 
 ## 1. 结论
 
@@ -53,12 +54,28 @@ workload/seed 的重要诱因，但现有证据不足以把它称为唯一根因
 压力基准建议使用 66 个计算节点；22 节点配置保留为“计算端点受限/集中”
 对照。
 
+在 `500c901` 上使用相同冻结输入再次运行 22 节点场景，精确复现
+`999/1000`、FlowMonitor lost 25，但新增 UDP socket Drop 探针记录为 0。
+人为把接收缓冲区缩小到 1000 bytes 的最小 fixture 则记录
+FlowMonitor `4/4/0`、application rx 0、UDP socket Drop 4。两种计数特征
+不同，因此现有证据不支持 UDP socket 接收缓冲区溢出是 transfer 1812
+失败的直接原因。精确丢弃层不再作为 N1 阻塞项继续追查。
+
+本阶段同时冻结压力测试判定：高压力运行允许部分任务未完成。
+`PARTIAL_COMPLETION` 不等于无效实验；只要状态、字节、时间戳和汇总合同
+一致，结果就应作为平台能力边界如实报告。
+
 ## 2. 本轮诊断提交
 
 ```text
 3c29433 fix: record incomplete task and transfer diagnostics
 bd89358 test: add per-link queue drop and flow concentration diagnostics
 2e7b5e3 fix: accept FlowMonitor-only failure diagnostics
+49e33f7 fix: make failure diagnostics opt-in
+6a3c7f3..fdb5c99 refactor: split metrics writers by responsibility
+b0c3621 feat: configure UDP receiver buffer
+6d9f9fc fix: trace UDP receiver buffer drops
+500c901 feat: write UDP socket drop diagnostics
 ```
 
 `3c29433` 将严格失败改为“先落盘、后返回非零”，并增加：
@@ -81,6 +98,16 @@ bd89358 test: add per-link queue drop and flow concentration diagnostics
 “FlowMonitor loss > 0、device queue drop = 0”；4 星最小 fixture 使用
 `--require-queue-drop`，继续强制验证队列 Drop 的采集和有向链路映射。
 
+`49e33f7..fdb5c99` 将失败诊断设为显式 opt-in，并把原先职责过重的
+`metrics.cc` 拆为 flow、transfer、task、run-summary 和 failure-diagnostics
+writer。该重构不调度 Simulator 事件，也不修改任务、计算、路由或传输状态。
+
+`b0c3621..500c901` 增加默认值为 131072 bytes 的
+`receiverRcvBufBytes` 实验参数，并在诊断模式下直接连接 UDP socket
+`Drop` trace。1000-byte 最小 fixture 同时验证事件、聚合和检查器；正式
+22 节点复测记录 UDP socket Drop 0，因此该参数保留为诊断控制项，不作为
+强制完成压力任务的调优手段。
+
 失败运行新增文件：
 
 ```text
@@ -88,6 +115,8 @@ incomplete-tasks.csv
 incomplete-transfers.csv
 isl-queue-drops.csv
 isl-queue-drop-summary.csv
+udp-socket-drops.csv
+udp-socket-drop-summary.csv
 flow-link-concentration.csv
 diagnostic-summary.json
 ```
@@ -135,9 +164,7 @@ aggregate theoretical queue capacity: 15.736 GiB, not preallocated
 
 ## 4. 本地验证
 
-本轮按作者要求只做本地验证，没有运行 GitHub CI。
-
-在 `2e7b5e3` 上通过：
+在 `500c901` 上通过：
 
 - `./waf build`；
 - N0 110 s smoke：66 星、132 ISL、0～110 s 共 12 个静态快照；
@@ -147,9 +174,19 @@ aggregate theoretical queue capacity: 15.736 GiB, not preallocated
 - TaskTrace 数组顺序确定性；
 - ComputeProfile 数组顺序确定性；
 - 40-task 生成 workload：40/40 tasks、80/80 transfers、零丢包；
-- 4 星故意失败 fixture：严格退出 1，记录 1 个有向队列 Drop；
-- 22 节点正式失败输出：FlowMonitor-only 丢包证据检查通过；
+- 4 星小设备队列 fixture：严格退出 1，记录 1 个有向队列 Drop、
+  UDP socket Drop 0；
+- 4 星 1000-byte 接收缓冲 fixture：严格退出 1，记录 UDP socket Drop 4、
+  有向队列 Drop 0；
+- 诊断关闭时清理全部 8 个旧失败诊断文件；
+- 8 MiB 接收缓冲不改变小型成功用例的确定性输出，0-byte 参数被拒绝；
+- 22 节点正式失败复测：999/1000，FlowMonitor lost 25、
+  UDP socket Drop 0、ISL queue Drop 0，严格检查器通过；
 - 66 节点对照：通用成功检查器通过。
+
+GitHub Draft PR #1 的 `500c901` head 也通过
+[`SatCompute deterministic smoke`](https://github.com/forest-rabbit/SatCompute/actions/runs/30237602991)。
+审查报告更新后必须以新的最终 head CI 为合并门槛。
 
 当前检查器还重新验收了既有输出：
 
@@ -180,15 +217,15 @@ PASS。25% 场景在 32 MB/设备队列下通过；8 MB 和 16 MB 均失败。
 运行位置：
 
 ```text
-/tmp/satcompute-n1.6/level4-50/bd89358-diagnostics/queue-64000000/
+/tmp/satcompute-n1.6-buffer-a-128k-500c901/
 ```
 
 性能和退出：
 
 ```text
-wall-clock: 34:54.30
-user time: 2094.37s
-peak RSS: 88232 KB
+wall-clock: 35:32.28
+user time: 2132.32s
+peak RSS: 88352 KB
 simulation duration reached: 1000s
 exit status: 1
 ```
@@ -213,11 +250,15 @@ lost packets: 25
 tx bytes: 72360336419
 rx bytes: 72358735719
 loss ratio: 0.00056141%
+UDP socket drop packets/bytes: 0/0
+ISL queue drop packets/bytes: 0/0
 ```
 
 FlowMonitor 的 `lostPackets` 包括超过默认 10 s 未再被观察到的包；它本身
 不是丢弃层定位。这里 receiver 同时精确缺少相同的 25 个包，因此可以确认
-这些数据报截至 1000 s 没有抵达目的应用。
+这些数据报截至 1000 s 没有抵达目的应用。由于 FlowMonitor 与 application
+都收到 4500 包，而 UDP socket Drop 为 0，这 25 个包没有呈现目的端 UDP
+接收缓冲区溢出的计数特征。
 
 ### 唯一未完成任务与 transfer
 
@@ -304,7 +345,7 @@ transfer 1812 的固定 ECMP 路径：
 27->28: rank 5,   3034842548 planned bytes
 ```
 
-### pacing 竞争证据
+### 并发发送背景
 
 成功的 transfer 1725（38→30，99,856,586 bytes）和失败的 transfer
 1812 都选择了 `27→28`。它们的 sender 时间窗为：
@@ -319,9 +360,10 @@ source-send overlap: 0.300145950s
 只有 2 Gbit/s。代码使用 payload 加 UDP/IP/PPP 头计算发送间隔，不是简单
 以 payload 假定带宽。
 
-因此 `PACING_CONCLUSION = SUPPORTED`：独立 line-rate pacing 和 ECMP
-汇聚是瞬时竞争的重要诱因。由于没有对应的 device-queue Drop 事件，不能
-声称已精确定位 transfer 1812 的 25 个包在 `27→28` 被丢弃。
+这些时间窗证明存在共享链路上的并发发送，但没有对应的 device-queue、
+UDP socket Drop 事件，不能把 25 个包精确定位到 `27→28`，也不能据此把
+竞争感知 pacing 设为 N1 的必要修复。N1 保留当前逐流首跳序列化语义，不
+实现 max-min 公平、全局拥塞控制或新的 pacing 模型。
 
 ## 8. 66 计算节点条件对照
 
@@ -429,14 +471,15 @@ generic checker: PASS
 ```
 
 单个固定 remap 的通过不代表任意 66 节点 workload 都可靠。可靠 UDP
-完成仍然没有协议保证。
+完成仍然没有协议保证，但部分完成是合法的压力结果，不再要求通过调参使
+任意压力输入达到 100%。
 
 ## 10. 当前能力边界
 
 | 场景 | 状态 |
 |---|---|
 | 25% / 22 nodes / 32 MB | PASS，500/500，零丢包 |
-| 50% / 22 nodes / 64 MB | FAIL，999/1000，lost 25 |
+| 50% / 22 nodes / 64 MB | RUN_VALID / PARTIAL，999/1000，lost 25 |
 | 50% / 66 nodes / 64 MB | PASS，1000/1000，零丢包 |
 | 75% | NOT RUN |
 | 109 GB / 2000 tasks preflight | PASS |
@@ -458,7 +501,7 @@ recommended duration lower bound: 767.840s
 
 ## 11. Draft PR 决策
 
-技术诊断门槛已满足：
+Draft PR #1 已创建，当前技术门槛如下：
 
 ```text
 [x] 失败运行先落盘后严格失败
@@ -466,23 +509,30 @@ recommended duration lower bound: 767.840s
 [x] partial sent/received bytes 和 packets 可读取
 [x] FlowMonitor loss 可在失败场景落盘
 [x] 有向 ISL queue Drop 采集和映射经最小 fixture 验证
+[x] UDP socket Drop 采集经 1000-byte fixture 验证
+[x] 正式 22 节点复测记录 UDP socket Drop 0
 [x] flow/link concentration 已分析
 [x] 冻结 50%/22 节点/64 MB 已重跑
 [x] 条件触发的 66 节点对照已完成
 [x] 既有 N1 成功检查和 25% 输出继续通过
+[x] metrics 输出职责已拆分且本地回归通过
+[x] 500c901 Draft PR CI 成功
 [x] 没有实现可靠重传或 checkpoint/failure
 ```
 
-当前仍标记：
+当前标记：
 
 ```text
-Draft PR readiness: NOT_READY_TO_OPEN_DRAFT_PR
-Recommended next step: GPT/author review
-Recommended merge path: REQUEST_AUTHOR_DECISION
+Draft PR: OPEN
+PR number: 1
+PR head: 500c901a646702b30729e0967a894b94466a4648
+CI conclusion: SUCCESS
+Merge readiness: PENDING_FINAL_REPORT_HEAD
 ```
 
-原因是作者要求先完成本轮审查和可能的修改，再决定是否创建 Draft PR。
-本报告不自行创建 PR，也不自行合并。
+本次报告修正提交推送后，需要等待新 head CI。CI 绿色后，在合并前创建
+`n1-pr1-final` 标签并保留功能分支；作者已授权满足门槛后合并 PR1。
+75% 和 109 GB 不属于 PR1，留给从合并后 `main` 创建的 PR2。
 
 ## 12. 本轮没有实现
 
@@ -502,18 +552,24 @@ task_profile_id
 ```
 
 没有修改 `src/internet`、`src/point-to-point` 或 TaskTrace schema。可靠
-NetworkTransfer 和竞争感知 pacing 应作为后续独立阶段设计，不能混入
-N1.6 诊断提交。
+NetworkTransfer、竞争感知 pacing、checkpoint 和动态拓扑均不属于 N1
+压力收尾；351/720 星与 Hypatia 推迟到独立 N2 阶段。
 
-## 13. 给 GPT/作者的审查重点
+## 13. N1 压力收尾决定
 
-1. 是否接受 `CONTRIBUTING_FACTOR`，并把 66 计算节点设为后续综合压力
-   基准；
-2. 是否接受 22 节点 50% 失败作为当前 UDP 无可靠传输边界，而不是要求
-   N1.6 内实现重传；
-3. 是否需要在后续阶段补充 FlowMonitor drop-reason 或 NetDevice
-   Mac/Phy drop 诊断，以定位本次未被 queue trace 捕获的 25 个包；
-4. 是否在本轮审查通过后创建 Draft PR；
-5. N1.7 优先设计可靠 NetworkTransfer，还是先设计竞争感知 pacing。
+作者与 GPT 已冻结：
 
-停止：是。等待 GPT/作者审查；不创建 PR，不合并。
+```text
+精确丢包层: 不再作为N1阻塞项
+8 MiB receiver buffer对照: 不再运行
+竞争感知pacing、ACK/NACK、重传: 不实现
+PR2综合基准: 66 satellites / 66 compute nodes
+PR2压力矩阵: 50% / 75% / 109 GB
+部分完成: 合法压力结果
+继续阈值: RUN_VALID且completion rate >= 90%
+351/720星与Hypatia: 推迟到N2
+```
+
+PR1 合并后，PR2 将增加仅影响结束判定与退出码的
+`taskCompletionPolicy=strict|report`，在 report 模式下完整记录
+`PARTIAL` 结果。任何任务调度、计算、路由或传输完成语义都不得因此改变。
