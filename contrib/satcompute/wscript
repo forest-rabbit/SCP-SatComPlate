@@ -15,6 +15,7 @@ def build(bld):
         'jsontopo/topo-json.cc',
         'jsontopo/topo-link-state.cc',
         'metrics/ecmp-route-recorder.cc',
+        'metrics/flow-metrics.cc',
         'metrics/metrics.cc',
         'routing/satcompute-ipv4-global-routing.cc',
         'routing/satcompute-ipv4-global-routing-helper.cc',

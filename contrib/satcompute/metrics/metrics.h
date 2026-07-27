@@ -75,8 +75,6 @@ struct TransferSummaryRecord
   uint64_t sentPacketCount;
 };
 
-Ptr<FlowMonitor> InstallSimulationFlowMonitor();
-
 class MetricsRecorder
 {
 public:
