@@ -43,6 +43,7 @@ islMtuBytes              = 1500
 islQueueBytes            = 1500000
 transferLogMode          = summary
 taskLogMode              = summary
+diagnosticMode           = off
 routingMode              = global-hash-per-flow
 ecmpHashSeed             = 1
 outputDir                = contrib/satcompute/output
@@ -65,6 +66,8 @@ outputDir                = contrib/satcompute/output
   1500000；容量不随 payload 大小变化。
 - `--transferLogMode`：`summary`、`verbose` 或 `silent`。
 - `--taskLogMode`：`summary`、`verbose` 或 `silent`，只影响任务输入日志。
+- `--diagnosticMode`：`off` 只保留基础指标；`failure` 在任务失败时额外
+  采集并写出未完成对象、ISL 队列 Drop 和 ECMP 链路集中度。默认 `off`。
 - `--routingMode`：`global-first` 或 `global-hash-per-flow`，默认
   `global-hash-per-flow`。
 - `--ecmpHashSeed`：确定性 FNV-1a-64 输入的 64-bit seed 前缀。
@@ -371,6 +374,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
   --ecmpHashSeed=1 \
   --transferLogMode=silent \
   --taskLogMode=silent \
+  --diagnosticMode=failure \
   --outputDir=/tmp/satcompute-task-failure"
 
 # 上一条命令的预期退出码为 1。
@@ -391,7 +395,8 @@ python3 contrib/satcompute/tools/check-task-output.py failure \
 - `task-events.csv`：每个完整任务恰好五条状态转换；
 - `task-summary.csv`：每个任务的输入、排队、计算、结果和端到端时间；
 - `compute-node-summary.csv`：计算节点的完成数、忙时、最大队列和利用率；
-- `run-summary.json`：本次运行及网络、传输、任务聚合结果。
+- `run-summary.json`：本次运行及网络、传输、任务聚合结果，包含任务完成数、
+  完成率以及完成任务的平均/最大端到端时间。
 - `incomplete-tasks.csv`、`incomplete-transfers.csv`：失败任务运行中的全部
   未完成对象及 partial 收发状态；
 - `isl-queue-drops.csv`、`isl-queue-drop-summary.csv`：按有向 ISL 输出
@@ -399,7 +404,10 @@ python3 contrib/satcompute/tools/check-task-output.py failure \
 - `flow-link-concentration.csv`、`diagnostic-summary.json`：计划业务量、
   ECMP 链路集中度、丢包和完成状态摘要。
 
-任务与计算 CSV 只在任务模式生成；失败诊断文件只在任务未全部完成时生成。
+任务与计算 CSV 只在任务模式生成；失败诊断文件仅在
+`diagnosticMode=failure` 且任务未全部完成时生成。
+复用同一个 `outputDir` 时，如果本次不会写诊断，程序会清理上述六个旧诊断
+文件，避免把历史失败误认为本次结果。
 未匹配 NetworkTransfer 的 legacy FlowMonitor 行使用 `transfer_id=0`。当前
 任务调度仅支持单服务台、非抢占 FCFS；尚未实现可靠重传、故障、
 checkpoint、备份或恢复语义。

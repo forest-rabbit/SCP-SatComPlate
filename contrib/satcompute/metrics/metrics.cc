@@ -8,6 +8,8 @@
 #include "ns3/ipv4-flow-classifier.h"
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdio>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -46,6 +48,27 @@ OutputPath(const std::string& directory, const std::string& filename)
     }
   mkdir(directory.c_str(), 0755);
   return directory.back() == '/' ? directory + filename : directory + "/" + filename;
+}
+
+void
+RemoveDiagnosticOutputs(const std::string& outputDirectory)
+{
+  const std::vector<std::string> filenames = {
+    "incomplete-tasks.csv",
+    "incomplete-transfers.csv",
+    "isl-queue-drops.csv",
+    "isl-queue-drop-summary.csv",
+    "flow-link-concentration.csv",
+    "diagnostic-summary.json"
+  };
+  for (const auto& filename : filenames)
+    {
+      std::string path = OutputPath(outputDirectory, filename);
+      errno = 0;
+      int result = std::remove(path.c_str());
+      NS_ABORT_MSG_IF(result != 0 && errno != ENOENT,
+                      "无法清理旧诊断输出: " << path);
+    }
 }
 
 struct FlowAggregate
@@ -1147,6 +1170,8 @@ WriteRunSummary(
          << "  \"ecmp_hash_seed\": " << runMetadata.ecmpHashSeed << ",\n"
          << "  \"isl_mtu_bytes\": " << runMetadata.islMtuBytes << ",\n"
          << "  \"isl_queue_bytes\": " << runMetadata.islQueueBytes << ",\n"
+         << "  \"diagnostic_mode\": \"" << runMetadata.diagnosticMode
+         << "\",\n"
          << "  \"pacing_mode\": \"" << runMetadata.pacingMode << "\",\n"
          << "  \"transfer_chunk_mode\": \""
          << runMetadata.transferChunkMode << "\",\n"
@@ -1194,6 +1219,10 @@ WriteRunSummary(
          << "  \"task_count\": " << taskAggregate.taskCount << ",\n"
          << "  \"completed_task_count\": "
          << taskAggregate.completedTaskCount << ",\n"
+         << "  \"task_completion_rate_percent\": "
+         << SafeDivide(taskAggregate.completedTaskCount * 100.0,
+                       taskAggregate.taskCount)
+         << ",\n"
          << "  \"total_input_bytes\": "
          << taskAggregate.totalInputBytes << ",\n"
          << "  \"total_output_bytes\": "
@@ -1396,9 +1425,17 @@ MetricsRecorder::Record()
 
   bool taskRunComplete =
     m_taskCoordinator == nullptr || m_taskCoordinator->IsComplete();
+  bool diagnosticsEnabled =
+    m_taskCoordinator != nullptr
+    && m_runMetadata.diagnosticMode == "failure";
+  bool writeDiagnostics = !taskRunComplete && diagnosticsEnabled;
+  if (!writeDiagnostics)
+    {
+      RemoveDiagnosticOutputs(m_outputDirectory);
+    }
   std::vector<QueueDropSummaryRecord> queueDropSummaries;
   std::vector<FlowLinkSummaryRecord> flowLinkSummaries;
-  if (!taskRunComplete)
+  if (writeDiagnostics)
     {
       queueDropSummaries =
         CollectQueueDropSummaries(m_directedLinks, m_queueDropEvents);
@@ -1424,7 +1461,7 @@ MetricsRecorder::Record()
       WriteComputeNodeSummaries(*m_taskCoordinator,
                                 m_simulationDurationSeconds,
                                 m_outputDirectory);
-      if (!taskRunComplete)
+      if (writeDiagnostics)
         {
           WriteIncompleteTasks(*m_taskCoordinator, m_outputDirectory);
           WriteIncompleteTransfers(m_transferSummaries, m_outputDirectory);
@@ -1471,7 +1508,7 @@ MetricsRecorder::Record()
         << "  compute : "
         << OutputPath(m_outputDirectory, "compute-node-summary.csv")
         << std::endl;
-      if (!taskRunComplete)
+      if (writeDiagnostics)
         {
           std::cout
             << "  incomplete tasks     : "

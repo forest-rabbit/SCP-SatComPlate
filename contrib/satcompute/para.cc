@@ -69,6 +69,11 @@ GetDefaultSatComputeConfig()
   // "silent" 关闭任务输入日志；三种模式都不改变任务行为。
   config.taskLogMode = "summary";
 
+  // --diagnosticMode：
+  // "off" 关闭失败诊断采集与诊断文件，只保留基础指标；
+  // "failure" 在任务未全部完成时写出未完成对象、队列 Drop 和链路集中度。
+  config.diagnosticMode = "off";
+
   // --transferChunkMode：
   // "fixed" 让所有 transfer 使用 transferPayloadBytes 作为 UDP payload 上限；
   // "size-aware" 对 <=1 MiB、>1 MiB 且 <=64 MiB、>64 MiB 的逻辑传输

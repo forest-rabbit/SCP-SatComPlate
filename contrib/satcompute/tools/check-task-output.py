@@ -784,6 +784,15 @@ def validate_run_summary(
     require(run["task_count"] == len(tasks), "task count mismatch")
     require(run["completed_task_count"] == len(tasks), "completed task count mismatch")
     require(
+        math.isclose(
+            run["task_completion_rate_percent"],
+            100.0,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ),
+        "task completion rate mismatch",
+    )
+    require(
         run["total_input_bytes"] == sum(task["input_bytes"] for task in tasks)
         and run["total_output_bytes"] == sum(task["output_bytes"] for task in tasks)
         and run["total_compute_work_units"]
@@ -1058,6 +1067,16 @@ def validate_failure_diagnostics(
         "diagnostic task completion counts mismatch",
     )
     require(diagnostic["incomplete_task_count"] > 0, "failure run has no incomplete task")
+    require(run.get("diagnostic_mode") == "failure", "failure diagnostics not enabled")
+    require(
+        math.isclose(
+            run["task_completion_rate_percent"],
+            100.0 * run["completed_task_count"] / run["task_count"],
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ),
+        "failure task completion rate mismatch",
+    )
     require(
         isinstance(diagnostic.get("tasks_by_state"), dict)
         and sum(diagnostic["tasks_by_state"].values()) == len(tasks),

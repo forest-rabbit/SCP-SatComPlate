@@ -30,6 +30,7 @@ struct RunMetadata
   uint64_t ecmpHashSeed;
   uint16_t islMtuBytes;
   uint32_t islQueueBytes;
+  std::string diagnosticMode;
   std::string pacingMode;
   std::string transferChunkMode;
   uint32_t fixedPayloadBytes;

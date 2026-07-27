@@ -89,6 +89,9 @@ main(int argc, char* argv[])
   commandLine.AddValue("taskLogMode",
                        "Task input logging: summary, verbose, or silent",
                        config.taskLogMode);
+  commandLine.AddValue("diagnosticMode",
+                       "Failure diagnostics: off or failure",
+                       config.diagnosticMode);
   commandLine.AddValue("routingMode",
                        "Routing mode: global-first or global-hash-per-flow",
                        config.routingMode);
@@ -121,6 +124,12 @@ main(int argc, char* argv[])
   std::transform(config.taskLogMode.begin(),
                  config.taskLogMode.end(),
                  config.taskLogMode.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
+  std::transform(config.diagnosticMode.begin(),
+                 config.diagnosticMode.end(),
+                 config.diagnosticMode.begin(),
                  [](unsigned char character) {
                    return static_cast<char>(std::tolower(character));
                  });
@@ -239,6 +248,13 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
+  if (config.diagnosticMode != "off"
+      && config.diagnosticMode != "failure")
+    {
+      std::cerr << "[RUN:Error] diagnosticMode must be off or failure"
+                << std::endl;
+      return EXIT_FAILURE;
+    }
 
   bool legacyMode = !taskMode && !transferMode && config.offeredLoad > 0.0;
   std::string runMode =
@@ -266,6 +282,8 @@ main(int argc, char* argv[])
                     << "  taskTrace          : " << config.taskTrace
                     << std::endl
                     << "  taskLogMode        : " << config.taskLogMode
+                    << std::endl
+                    << "  diagnosticMode     : " << config.diagnosticMode
                     << std::endl
                     << "  transferChunkMode  : "
                     << config.transferChunkMode << std::endl;
@@ -325,7 +343,7 @@ main(int argc, char* argv[])
     config.ecmpHashSeed,
     config.islMtuBytes,
     config.islQueueBytes,
-    taskMode,
+    taskMode && config.diagnosticMode == "failure",
     !silentRun
   };
   SatelliteTopology topology(topologyConfig);
@@ -425,6 +443,7 @@ main(int argc, char* argv[])
     config.ecmpHashSeed,
     config.islMtuBytes,
     config.islQueueBytes,
+    config.diagnosticMode,
     transferMode || taskMode ? "first-hop-serialization" : "none",
     transferMode || taskMode ? config.transferChunkMode : "none",
     (transferMode || taskMode) && config.transferChunkMode == "fixed"
@@ -455,9 +474,12 @@ main(int argc, char* argv[])
         }
       else
         {
-          std::cerr
-            << "[RUN:Error] task run incomplete; diagnostics were written to "
-            << config.outputDirectory << std::endl;
+          std::cerr << "[RUN:Error] task run incomplete; "
+                    << (config.diagnosticMode == "failure"
+                          ? "diagnostics"
+                          : "base metrics")
+                    << " were written to " << config.outputDirectory
+                    << std::endl;
           exitCode = EXIT_FAILURE;
         }
     }
