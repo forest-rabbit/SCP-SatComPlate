@@ -44,9 +44,13 @@ NetworkTransferReceiver::GetTypeId()
 }
 
 NetworkTransferReceiver::NetworkTransferReceiver()
-  : m_destinationPort(0),
+  : m_destinationSatelliteId(0),
+    m_destinationPort(0),
     m_receiverRcvBufBytes(0),
-    m_totalReceivedBytes(0)
+    m_collectUdpSocketDrops(false),
+    m_totalReceivedBytes(0),
+    m_udpSocketDropPackets(0),
+    m_udpSocketDropBytes(0)
 {
 }
 
@@ -68,9 +72,11 @@ NetworkTransferReceiver::FourTuple::operator<(const FourTuple& other) const
 }
 
 void
-NetworkTransferReceiver::Configure(Ipv4Address destinationAddress,
+NetworkTransferReceiver::Configure(uint32_t destinationSatelliteId,
+                                   Ipv4Address destinationAddress,
                                    uint16_t destinationPort,
-                                   uint32_t receiverRcvBufBytes)
+                                   uint32_t receiverRcvBufBytes,
+                                   bool collectUdpSocketDrops)
 {
   NS_ABORT_MSG_IF(m_socket != nullptr,
                   "运行中的 NetworkTransferReceiver 不能重新配置");
@@ -79,9 +85,11 @@ NetworkTransferReceiver::Configure(Ipv4Address destinationAddress,
                   "NetworkTransferReceiver 要求明确的目的地址和端口");
   NS_ABORT_MSG_IF(receiverRcvBufBytes == 0,
                   "NetworkTransferReceiver RcvBufSize 必须大于 0");
+  m_destinationSatelliteId = destinationSatelliteId;
   m_destinationAddress = destinationAddress;
   m_destinationPort = destinationPort;
   m_receiverRcvBufBytes = receiverRcvBufBytes;
+  m_collectUdpSocketDrops = collectUdpSocketDrops;
 }
 
 void
@@ -194,6 +202,12 @@ NetworkTransferReceiver::GetTransferCompletionTimeNs(
   return GetReception(transferId).completionTimeNs;
 }
 
+const std::vector<UdpSocketDropEvent>&
+NetworkTransferReceiver::GetUdpSocketDropEvents() const
+{
+  return m_udpSocketDropEvents;
+}
+
 void
 NetworkTransferReceiver::StartApplication()
 {
@@ -204,6 +218,14 @@ NetworkTransferReceiver::StartApplication()
     Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
   m_socket->SetAttribute("RcvBufSize",
                          UintegerValue(m_receiverRcvBufBytes));
+  if (m_collectUdpSocketDrops)
+    {
+      bool connected = m_socket->TraceConnectWithoutContext(
+        "Drop",
+        MakeCallback(&NetworkTransferReceiver::HandleSocketDrop, this));
+      NS_ABORT_MSG_IF(!connected,
+                      "无法连接 NetworkTransfer UDP socket Drop trace");
+    }
   int bindResult = m_socket->Bind(
     InetSocketAddress(m_destinationAddress, m_destinationPort));
   NS_ABORT_MSG_IF(bindResult != 0,
@@ -285,6 +307,30 @@ NetworkTransferReceiver::HandleRead(Ptr<Socket> socket)
                                reception->second.completionTimeNs);
         }
     }
+}
+
+void
+NetworkTransferReceiver::HandleSocketDrop(Ptr<const Packet> packet)
+{
+  NS_ABORT_MSG_IF(!m_collectUdpSocketDrops,
+                  "未启用 UDP socket Drop 采集却收到回调");
+  NS_ABORT_MSG_IF(packet == nullptr || packet->GetSize() == 0,
+                  "UDP socket Drop packet 无效");
+  NS_ABORT_MSG_IF(
+    m_udpSocketDropBytes
+      > std::numeric_limits<uint64_t>::max() - packet->GetSize(),
+    "UDP socket Drop bytes 溢出");
+  ++m_udpSocketDropPackets;
+  m_udpSocketDropBytes += packet->GetSize();
+  m_udpSocketDropEvents.push_back(
+    {Simulator::Now().GetNanoSeconds(),
+     m_destinationSatelliteId,
+     m_destinationAddress,
+     m_destinationPort,
+     packet->GetSize(),
+     m_udpSocketDropPackets,
+     m_udpSocketDropBytes,
+     m_receiverRcvBufBytes});
 }
 
 } // namespace ns3

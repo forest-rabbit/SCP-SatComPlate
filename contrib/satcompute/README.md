@@ -399,7 +399,8 @@ python3 contrib/satcompute/tools/check-task-output.py failure \
 - `task-summary.csv`：每个任务的输入、排队、计算、结果和端到端时间；
 - `compute-node-summary.csv`：计算节点的完成数、忙时、最大队列和利用率；
 - `run-summary.json`：本次运行及网络、传输、任务聚合结果，包含任务完成数、
-  完成率、完成任务的平均/最大端到端时间及接收缓冲区配置。
+  完成率、完成任务的平均/最大端到端时间、接收缓冲区配置及可用时的 UDP
+  socket Drop 聚合；诊断关闭时 Drop 聚合为 `null`，不会误报为零。
 - `incomplete-tasks.csv`、`incomplete-transfers.csv`：失败任务运行中的全部
   未完成对象及 partial 收发状态；
 - `isl-queue-drops.csv`、`isl-queue-drop-summary.csv`：按有向 ISL 输出

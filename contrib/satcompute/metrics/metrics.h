@@ -3,6 +3,7 @@
 
 #include "../jsontopo/topo-link-state.h"
 #include "../routing/satcompute-ipv4-global-routing.h"
+#include "../traffic/network-transfer-receiver.h"
 
 #include "ns3/flow-monitor-module.h"
 #include "ns3/ipv4-address.h"
@@ -31,6 +32,7 @@ struct RunMetadata
   uint16_t islMtuBytes;
   uint32_t islQueueBytes;
   uint32_t receiverRcvBufBytes;
+  bool udpSocketDropCollectionEnabled;
   std::string diagnosticMode;
   std::string pacingMode;
   std::string transferChunkMode;
@@ -89,6 +91,7 @@ public:
                   const std::vector<EcmpRouteDecisionEvent>& routeEvents,
                   const std::vector<IslDirectedLink>& directedLinks,
                   const std::vector<IslQueueDropEvent>& queueDropEvents,
+                  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
                   const TaskCoordinator* taskCoordinator,
                   const std::string& outputDirectory);
 
@@ -105,6 +108,7 @@ private:
   std::vector<EcmpRouteDecisionEvent> m_routeEvents;
   const std::vector<IslDirectedLink>& m_directedLinks;
   const std::vector<IslQueueDropEvent>& m_queueDropEvents;
+  const std::vector<UdpSocketDropEvent>& m_udpSocketDropEvents;
   const TaskCoordinator* m_taskCoordinator;
   std::string m_outputDirectory;
 };

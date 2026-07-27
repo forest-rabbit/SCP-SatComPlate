@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <tuple>
 
 namespace ns3 {
 
@@ -56,6 +57,7 @@ NetworkTransferEngine::NetworkTransferEngine()
     m_fixedPayloadBytes(0),
     m_islMtuBytes(0),
     m_receiverRcvBufBytes(0),
+    m_collectUdpSocketDrops(false),
     m_simulationDurationNs(0),
     m_configured(false),
     m_registered(false)
@@ -72,6 +74,7 @@ NetworkTransferEngine::Configure(const SatelliteTopology& topology,
                                  uint32_t fixedPayloadBytes,
                                  uint16_t islMtuBytes,
                                  uint32_t receiverRcvBufBytes,
+                                 bool collectUdpSocketDrops,
                                  double simulationDurationSeconds)
 {
   NS_ABORT_MSG_IF(m_configured || m_registered,
@@ -100,6 +103,7 @@ NetworkTransferEngine::Configure(const SatelliteTopology& topology,
   m_fixedPayloadBytes = fixedPayloadBytes;
   m_islMtuBytes = islMtuBytes;
   m_receiverRcvBufBytes = receiverRcvBufBytes;
+  m_collectUdpSocketDrops = collectUdpSocketDrops;
   m_simulationDurationNs = durationNs;
   m_configured = true;
 }
@@ -192,9 +196,11 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
       if (receiver == nullptr)
         {
           receiver = CreateObject<NetworkTransferReceiver>();
-          receiver->Configure(plan.destinationAddress,
+          receiver->Configure(plan.destinationSatelliteId,
+                              plan.destinationAddress,
                               plan.destinationPort,
-                              m_receiverRcvBufBytes);
+                              m_receiverRcvBufBytes,
+                              m_collectUdpSocketDrops);
           receiver->SetCompletionCallback(
             MakeCallback(&NetworkTransferEngine::HandleTransferComplete, this));
           m_topology->GetNodeBySatelliteId(plan.destinationSatelliteId)
@@ -460,6 +466,37 @@ NetworkTransferEngine::CollectSummaries() const
       summaries.push_back(summary);
     }
   return summaries;
+}
+
+std::vector<UdpSocketDropEvent>
+NetworkTransferEngine::CollectUdpSocketDropEvents() const
+{
+  std::vector<UdpSocketDropEvent> events;
+  for (const auto& receiver : m_receivers)
+    {
+      const std::vector<UdpSocketDropEvent>& receiverEvents =
+        receiver->GetUdpSocketDropEvents();
+      events.insert(events.end(),
+                    receiverEvents.begin(),
+                    receiverEvents.end());
+    }
+  std::sort(
+    events.begin(),
+    events.end(),
+    [](const UdpSocketDropEvent& left,
+       const UdpSocketDropEvent& right) {
+      return std::make_tuple(left.simulationTimeNs,
+                             left.destinationSatelliteId,
+                             left.destinationAddress.Get(),
+                             left.destinationPort,
+                             left.cumulativeDropPackets)
+             < std::make_tuple(right.simulationTimeNs,
+                               right.destinationSatelliteId,
+                               right.destinationAddress.Get(),
+                               right.destinationPort,
+                               right.cumulativeDropPackets);
+    });
+  return events;
 }
 
 } // namespace ns3

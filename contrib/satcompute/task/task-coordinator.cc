@@ -56,6 +56,7 @@ TaskCoordinator::Initialize(const ComputeProfile& computeProfile,
                             uint32_t transferPayloadBytes,
                             uint16_t islMtuBytes,
                             uint32_t receiverRcvBufBytes,
+                            bool collectUdpSocketDrops,
                             double simulationDurationSeconds,
                             const std::string& taskLogMode)
 {
@@ -140,6 +141,7 @@ TaskCoordinator::Initialize(const ComputeProfile& computeProfile,
                               transferPayloadBytes,
                               islMtuBytes,
                               receiverRcvBufBytes,
+                              collectUdpSocketDrops,
                               simulationDurationSeconds);
   m_transferEngine->RegisterPlans(plans);
 

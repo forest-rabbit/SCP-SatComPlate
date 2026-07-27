@@ -33,6 +33,7 @@ void WriteRunSummary(
   const RunMetadata& runMetadata,
   const ApplicationMetrics& applicationMetrics,
   const std::vector<TransferSummaryRecord>& transferSummaries,
+  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
   const TaskCoordinator* taskCoordinator,
   const std::string& outputDirectory);
 

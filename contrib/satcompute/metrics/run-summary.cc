@@ -25,6 +25,7 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <set>
 #include <sys/stat.h>
 
 namespace ns3 {
@@ -66,6 +67,7 @@ WriteRunSummary(
   const RunMetadata& runMetadata,
   const ApplicationMetrics& applicationMetrics,
   const std::vector<TransferSummaryRecord>& transferSummaries,
+  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
   const TaskCoordinator* taskCoordinator,
   const std::string& outputDirectory)
 {
@@ -73,6 +75,9 @@ WriteRunSummary(
   uint64_t sentBytes = 0;
   uint64_t receivedBytes = 0;
   uint64_t derivedPackets = 0;
+  uint64_t udpSocketDropPackets = 0;
+  uint64_t udpSocketDropBytes = 0;
+  std::set<std::pair<uint32_t, uint16_t>> droppedReceivers;
   for (const auto& summary : transferSummaries)
     {
       declaredBytes =
@@ -87,6 +92,24 @@ WriteRunSummary(
         CheckedAdd(derivedPackets,
                    summary.derivedPacketCount,
                    "derived packet count");
+    }
+  NS_ABORT_MSG_IF(!runMetadata.udpSocketDropCollectionEnabled
+                    && !udpSocketDropEvents.empty(),
+                  "UDP socket Drop 采集关闭但事件列表非空");
+  for (const auto& event : udpSocketDropEvents)
+    {
+      NS_ABORT_MSG_IF(
+        event.receiverRcvBufBytes != runMetadata.receiverRcvBufBytes,
+        "UDP socket Drop 事件的 RcvBufSize 与运行配置不一致");
+      udpSocketDropPackets =
+        CheckedAdd(udpSocketDropPackets, 1, "UDP socket drop packets");
+      udpSocketDropBytes =
+        CheckedAdd(udpSocketDropBytes,
+                   event.packetSizeBytes,
+                   "UDP socket drop bytes");
+      droppedReceivers.insert(
+        std::make_pair(event.destinationSatelliteId,
+                       event.destinationPort));
     }
 
   TaskAggregate taskAggregate = CollectTaskAggregate(taskCoordinator);
@@ -123,6 +146,39 @@ WriteRunSummary(
          << "  \"isl_queue_bytes\": " << runMetadata.islQueueBytes << ",\n"
          << "  \"receiver_rcv_buf_bytes\": "
          << runMetadata.receiverRcvBufBytes << ",\n"
+         << "  \"udp_socket_drop_collection_enabled\": "
+         << (runMetadata.udpSocketDropCollectionEnabled ? "true" : "false")
+         << ",\n"
+         << "  \"udp_socket_drop_packets\": ";
+  if (runMetadata.udpSocketDropCollectionEnabled)
+    {
+      output << udpSocketDropPackets;
+    }
+  else
+    {
+      output << "null";
+    }
+  output << ",\n"
+         << "  \"udp_socket_drop_bytes\": ";
+  if (runMetadata.udpSocketDropCollectionEnabled)
+    {
+      output << udpSocketDropBytes;
+    }
+  else
+    {
+      output << "null";
+    }
+  output << ",\n"
+         << "  \"udp_socket_dropped_receiver_count\": ";
+  if (runMetadata.udpSocketDropCollectionEnabled)
+    {
+      output << droppedReceivers.size();
+    }
+  else
+    {
+      output << "null";
+    }
+  output << ",\n"
          << "  \"diagnostic_mode\": \"" << runMetadata.diagnosticMode
          << "\",\n"
          << "  \"pacing_mode\": \"" << runMetadata.pacingMode << "\",\n"

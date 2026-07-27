@@ -47,6 +47,7 @@ public:
                  uint32_t fixedPayloadBytes,
                  uint16_t islMtuBytes,
                  uint32_t receiverRcvBufBytes,
+                 bool collectUdpSocketDrops,
                  double simulationDurationSeconds);
   void RegisterPlans(std::vector<NetworkTransfer> plans);
   void StartTransferNow(
@@ -60,6 +61,7 @@ public:
   ApplicationMetrics CollectApplicationMetrics() const;
   std::vector<TransferFlowMetadata> CollectFlowMetadata() const;
   std::vector<TransferSummaryRecord> CollectSummaries() const;
+  std::vector<UdpSocketDropEvent> CollectUdpSocketDropEvents() const;
 
 private:
   enum TransferState
@@ -79,6 +81,7 @@ private:
   uint32_t m_fixedPayloadBytes;
   uint16_t m_islMtuBytes;
   uint32_t m_receiverRcvBufBytes;
+  bool m_collectUdpSocketDrops;
   int64_t m_simulationDurationNs;
   bool m_configured;
   bool m_registered;

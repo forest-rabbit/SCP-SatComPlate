@@ -60,6 +60,7 @@ public:
                   uint32_t transferPayloadBytes,
                   uint16_t islMtuBytes,
                   uint32_t receiverRcvBufBytes,
+                  bool collectUdpSocketDrops,
                   double simulationDurationSeconds,
                   const std::string& taskLogMode);
   bool IsComplete() const;

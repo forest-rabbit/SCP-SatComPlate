@@ -385,6 +385,7 @@ main(int argc, char* argv[])
                                   config.transferPayloadBytes,
                                   config.islMtuBytes,
                                   config.receiverRcvBufBytes,
+                                  config.diagnosticMode == "failure",
                                   config.simulationDurationSeconds,
                                   config.taskLogMode);
     }
@@ -402,6 +403,7 @@ main(int argc, char* argv[])
                                 config.transferPayloadBytes,
                                 config.islMtuBytes,
                                 config.receiverRcvBufBytes,
+                                config.diagnosticMode == "failure",
                                 config.transferLogMode,
                                 config.simulationDurationSeconds,
                                 topology);
@@ -437,12 +439,15 @@ main(int argc, char* argv[])
     }
   std::vector<TransferFlowMetadata> transferFlowMetadata;
   std::vector<TransferSummaryRecord> transferSummaries;
+  std::vector<UdpSocketDropEvent> udpSocketDropEvents;
   if (transferMode)
     {
       transferFlowMetadata =
         CollectNetworkTransferFlowMetadata(networkTransfers);
       transferSummaries =
         CollectNetworkTransferSummaries(networkTransfers);
+      udpSocketDropEvents =
+        networkTransfers.engine->CollectUdpSocketDropEvents();
     }
   else if (taskMode)
     {
@@ -450,6 +455,8 @@ main(int argc, char* argv[])
         taskCoordinator->GetTransferEngine()->CollectFlowMetadata();
       transferSummaries =
         taskCoordinator->GetTransferEngine()->CollectSummaries();
+      udpSocketDropEvents =
+        taskCoordinator->GetTransferEngine()->CollectUdpSocketDropEvents();
     }
   RunMetadata runMetadata = {
     runMode,
@@ -458,6 +465,7 @@ main(int argc, char* argv[])
     config.islMtuBytes,
     config.islQueueBytes,
     config.receiverRcvBufBytes,
+    (taskMode || transferMode) && config.diagnosticMode == "failure",
     config.diagnosticMode,
     transferMode || taskMode ? "first-hop-serialization" : "none",
     transferMode || taskMode ? config.transferChunkMode : "none",
@@ -477,6 +485,7 @@ main(int argc, char* argv[])
                           routeRecorder.GetEvents(),
                           topology.GetIslDirectedLinks(),
                           topology.GetIslQueueDropEvents(),
+                          udpSocketDropEvents,
                           taskMode ? PeekPointer(taskCoordinator) : nullptr,
                           config.outputDirectory);
   metrics.Record();

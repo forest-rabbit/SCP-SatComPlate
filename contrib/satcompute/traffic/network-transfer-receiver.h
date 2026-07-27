@@ -27,8 +27,21 @@
 
 #include <cstdint>
 #include <map>
+#include <vector>
 
 namespace ns3 {
+
+struct UdpSocketDropEvent
+{
+  int64_t simulationTimeNs;
+  uint32_t destinationSatelliteId;
+  Ipv4Address destinationAddress;
+  uint16_t destinationPort;
+  uint32_t packetSizeBytes;
+  uint64_t cumulativeDropPackets;
+  uint64_t cumulativeDropBytes;
+  uint32_t receiverRcvBufBytes;
+};
 
 class NetworkTransferReceiver : public Application
 {
@@ -38,9 +51,11 @@ public:
   NetworkTransferReceiver();
   ~NetworkTransferReceiver() override;
 
-  void Configure(Ipv4Address destinationAddress,
+  void Configure(uint32_t destinationSatelliteId,
+                 Ipv4Address destinationAddress,
                  uint16_t destinationPort,
-                 uint32_t receiverRcvBufBytes);
+                 uint32_t receiverRcvBufBytes,
+                 bool collectUdpSocketDrops);
   void AddExpectedTransfer(const NetworkTransfer& transfer);
   void SetCompletionCallback(
     Callback<void, uint64_t, int64_t> completionCallback);
@@ -50,6 +65,7 @@ public:
   uint64_t GetTransferReceivedBytes(uint64_t transferId) const;
   uint64_t GetTransferReceivedPacketCount(uint64_t transferId) const;
   int64_t GetTransferCompletionTimeNs(uint64_t transferId) const;
+  const std::vector<UdpSocketDropEvent>& GetUdpSocketDropEvents() const;
 
 private:
   struct FourTuple
@@ -78,14 +94,20 @@ private:
   void StopApplication() override;
   void DoDispose() override;
   void HandleRead(Ptr<Socket> socket);
+  void HandleSocketDrop(Ptr<const Packet> packet);
 
+  uint32_t m_destinationSatelliteId;
   Ipv4Address m_destinationAddress;
   uint16_t m_destinationPort;
   uint32_t m_receiverRcvBufBytes;
+  bool m_collectUdpSocketDrops;
   Ptr<Socket> m_socket;
   std::map<FourTuple, Reception> m_receptions;
   std::map<uint64_t, FourTuple> m_transferTuples;
   uint64_t m_totalReceivedBytes;
+  uint64_t m_udpSocketDropPackets;
+  uint64_t m_udpSocketDropBytes;
+  std::vector<UdpSocketDropEvent> m_udpSocketDropEvents;
   Callback<void, uint64_t, int64_t> m_completionCallback;
 };
 

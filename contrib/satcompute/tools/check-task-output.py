@@ -384,6 +384,29 @@ def expected_payload(run, size_bytes):
     return 64000
 
 
+def validate_udp_socket_drop_aggregate(run):
+    enabled = run.get("udp_socket_drop_collection_enabled")
+    require(isinstance(enabled, bool), "invalid UDP socket Drop collection flag")
+    fields = (
+        "udp_socket_drop_packets",
+        "udp_socket_drop_bytes",
+        "udp_socket_dropped_receiver_count",
+    )
+    if not enabled:
+        require(
+            all(run.get(field) is None for field in fields),
+            "disabled UDP socket Drop aggregate must be null",
+        )
+        return
+    for field in fields:
+        require_integer(run.get(field), field, 0, UINT64_MAX)
+    require(
+        run["udp_socket_dropped_receiver_count"]
+        <= run["udp_socket_drop_packets"],
+        "UDP socket dropped receiver count exceeds packet count",
+    )
+
+
 def validate_task_summaries(tasks, profile, rows):
     require(len(rows) == len(tasks), "task-summary row count mismatch")
     require(
@@ -784,6 +807,7 @@ def validate_run_summary(
         1,
         UINT32_MAX,
     )
+    validate_udp_socket_drop_aggregate(run)
     require(run["compute_profile_path"] == str(profile_path), "profile path mismatch")
     require(run["task_trace_path"] == str(trace_path), "task trace path mismatch")
     require(run["compute_node_count"] == len(profile), "compute node count mismatch")
@@ -1080,6 +1104,7 @@ def validate_failure_diagnostics(
         1,
         UINT32_MAX,
     )
+    validate_udp_socket_drop_aggregate(run)
     require(
         math.isclose(
             run["task_completion_rate_percent"],

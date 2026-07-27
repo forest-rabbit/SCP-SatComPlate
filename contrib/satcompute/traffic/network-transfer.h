@@ -41,6 +41,7 @@ NetworkTransferState InstallNetworkTransfers(
   uint32_t payloadBytes,
   uint16_t islMtuBytes,
   uint32_t receiverRcvBufBytes,
+  bool collectUdpSocketDrops,
   const std::string& logMode,
   double simulationDurationSeconds,
   const SatelliteTopology& topology);

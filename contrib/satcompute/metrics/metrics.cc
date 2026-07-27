@@ -55,6 +55,7 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
                                  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
                                  const std::vector<IslDirectedLink>& directedLinks,
                                  const std::vector<IslQueueDropEvent>& queueDropEvents,
+                                 const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
                                  const TaskCoordinator* taskCoordinator,
                                  const std::string& outputDirectory)
   : m_monitor(monitor),
@@ -67,6 +68,7 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
     m_routeEvents(routeEvents),
     m_directedLinks(directedLinks),
     m_queueDropEvents(queueDropEvents),
+    m_udpSocketDropEvents(udpSocketDropEvents),
     m_taskCoordinator(taskCoordinator),
     m_outputDirectory(outputDirectory)
 {
@@ -120,6 +122,7 @@ MetricsRecorder::Record()
                   m_runMetadata,
                   m_applicationMetrics,
                   m_transferSummaries,
+                  m_udpSocketDropEvents,
                   m_taskCoordinator,
                   m_outputDirectory);
 
