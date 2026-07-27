@@ -6,394 +6,514 @@
 >
 > 正式 review base：`71f23ef20bd0e342096e1c25c0a3e6e452d2abdc`
 >
-> 历史 N0 里程碑：`d67ca0a164db5b1eacca04d4fcca3a1a295ca8cf`
+> 本报告验证的代码 HEAD：`2e7b5e3`
 >
-> 已完成本地验证的代码 HEAD：`c1541a4951c682376f600cb8185205df6db044a0`
+> 当前状态：`READY_FOR_GPT_AUTHOR_REVIEW`
 >
-> 结论：`NOT_READY_TO_OPEN_PR`
+> Draft PR 状态：`NOT_READY_TO_OPEN_DRAFT_PR`
 
-本报告用于 GPT/作者审查当前 N1/N1.6 分支。报告提交本身只增加本文档，
-不改变已经在 `c1541a4` 上验证过的程序、输入和测试逻辑。大型 TaskTrace、
-FlowMonitor 输出、CSV 指标和性能日志均保留在 `/tmp`，没有提交仓库。
+本报告是 N1.6 压力验证的唯一审查报告。大型 TaskTrace、FlowMonitor
+输出、CSV 指标和性能日志全部保留在 `/tmp`，没有提交仓库。本轮没有运行
+GitHub CI、没有创建 PR，也没有实现可靠重传。
 
-## 1. 当前结论
+## 1. 结论
 
-N1.6 的生成器、preflight、通用输出检查器、静态 2 Gbit/s 压力拓扑和
-轻量验证 fixture 已完成。Level 0～Level 3 全部通过，Level 4-A 的 25%
-综合场景在每设备 32 MB 队列下通过且零丢包。
-
-Level 4-B 的 50% 综合场景分别使用 32 MB 和 64 MB 队列运行。两次仿真
-都完整推进到仿真时间 1000 s，随后因为仍有任务处于
-`RESULT_TRANSFERRING`，在结束完整性检查中退出。它们不是中途被外部超时
-或内存不足终止。
-
-根据压力方案的停止条件，本轮没有继续运行 75% 和 109 GB 最大综合场景，
-也没有创建 PR。
-
-## 2. N1.6 提交
-
-完成本地验证的代码 HEAD 包含以下五个 N1.6 提交：
+冻结的 50% workload 在 22 个计算节点、64 MB/设备队列下完整仿真到
+1000 s，结果为：
 
 ```text
-7983e5e fix: scale task output checks and add generic validation
-564964f test: add deterministic N1 stress workload inputs
-8991ec9 test: add deterministic task workload preflight
-f8bcd07 test: add layered N1 stress validation smoke
-c1541a4 fix: validate FCFS ordering for arbitrary task runs
+999/1000 tasks completed
+1999/2000 transfers completed
+FlowMonitor tx/rx/lost = 4453074/4453049/25 packets
+ISL device-queue drops = 0 packets
+strict exit code = 1
 ```
 
-主要新增或加固内容：
+唯一未完成项是 task 906 的 RESULT transfer 1812。sender 已发送完整
+289,600,000 bytes/4,525 packets，receiver 收到
+288,000,000 bytes/4,500 packets，缺少 1,600,000 bytes/25 packets。
+因此可以确认 transfer 未完成是网络数据报未抵达直接造成的，不是任务仍在
+计算、sender 未发完或仿真被外部中断。
 
-- `contrib/satcompute/tools/generate-task-workload.py`
-- `contrib/satcompute/tools/preflight-task-workload.py`
-- `contrib/satcompute/tools/check-task-output.py`
-- `contrib/satcompute/tools/generate-stress-topology.py`
-- `contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g/`
-- `contrib/satcompute/input/topology/json/resources/workload/`
-- `contrib/satcompute/input/traffic/json/task/test/stress-generated-40.json`
-- `.github/workflows/satcompute-smoke.yml` 中的轻量生成器、preflight 和
-  40-task 端到端验证
-
-Level 2～Level 5 的大型压力运行没有加入 GitHub CI。
-
-## 3. 生成器合同
-
-生成器版本为 `1.0.0`，本轮使用规则版本 `n1.6-v1`。
-
-确定性方法：
+由于设备队列 Drop trace 没有记录到这 25 个包，22 节点结果本身无法定位
+具体丢弃层。按审查方案触发的 66 计算节点对照保持 workload 数据量、
+source/result、到达时间、ECMP seed、链路、队列和仿真时间不变，只确定性
+重映射 `compute_node_id`，结果为：
 
 ```text
-SHA-256(seed, rules_version, task_id, field_name)
+1000/1000 tasks completed
+2000/2000 transfers completed
+FlowMonitor tx/rx/lost = 4453074/4453074/0 packets
+exit code = 0
+generic checker = PASS
 ```
 
-已经验证：
+本轮将 22 节点判定为 `CONTRIBUTING_FACTOR`：计算端点集中是这个冻结
+workload/seed 的重要诱因，但现有证据不足以把它称为唯一根因。后续综合
+压力基准建议使用 66 个计算节点；22 节点配置保留为“计算端点受限/集中”
+对照。
 
-- 相同 seed 和参数逐字节生成相同 TaskTrace 与 workload summary；
-- 不同 seed 生成不同 TaskTrace；
-- TaskTrace 继续使用 schema `0.1` 的八字段 closed-world 合同；
-- workload summary 记录 TaskTrace SHA-256 和全部聚合量；
-- 类别、尾部数量和尾部类别分配均使用整数 basis points 与
-  largest-remainder；
-- 所有 output byte 规则均为整数运算；
-- 每个类别分别验证 input/work 正相关。
-
-默认类别比例：
+## 2. 本轮诊断提交
 
 ```text
-image-enhancement    1500 bp
-image-detection      2500 bp
-dnn-inference        3500 bp
-preprocess-compress  2500 bp
+3c29433 fix: record incomplete task and transfer diagnostics
+bd89358 test: add per-link queue drop and flow concentration diagnostics
+2e7b5e3 fix: accept FlowMonitor-only failure diagnostics
 ```
 
-最大场景严格生成：
+`3c29433` 将严格失败改为“先落盘、后返回非零”，并增加：
+
+- 全部未完成 task/transfer 枚举；
+- partial sender/receiver bytes 与 packets；
+- 失败运行中的 FlowMonitor 逐流指标；
+- `diagnostic-summary.json`；
+- 状态聚合和严格退出码。
+
+`bd89358` 增加：
+
+- 每个有向 ISL PointToPointNetDevice 队列的 Drop trace；
+- 队列 Drop 事件和有向链路聚合；
+- ECMP flow/path/link planned-load 聚合；
+- top dropped/planned links；
+- 计算节点相邻链路标记。
+
+`2e7b5e3` 修正失败检查器的约束：正式压力结果允许
+“FlowMonitor loss > 0、device queue drop = 0”；4 星最小 fixture 使用
+`--require-queue-drop`，继续强制验证队列 Drop 的采集和有向链路映射。
+
+失败运行新增文件：
 
 ```text
-2000 tasks
-109000000000 input bytes
-20 x 1000000000-byte tasks
-40 x 500000000-byte tasks
-arrival window: 1s..600s, uniform
+incomplete-tasks.csv
+incomplete-transfers.csv
+isl-queue-drops.csv
+isl-queue-drop-summary.csv
+flow-link-concentration.csv
+diagnostic-summary.json
 ```
 
-最大场景类别数量为 `300/500/700/500`。大尾部按 75% 分给
-`preprocess-compress`、25% 分给 `image-enhancement`。四个类别的
-Spearman input/work 系数均约为 `0.99988～1.0`。
+成功运行的既有输出合同不变。
 
-最大 TaskTrace 的 SHA-256 为：
+## 3. 冻结 50% 配置
+
+22 节点主测试：
 
 ```text
-3908783dbacd1a517a66a91f93b839f11e6c7dff633504f18a27fd2b5fb36ba7
-```
+TaskTrace SHA-256:
+78c90424c11216ef8cfb83d7c5d3e2bcf699af09d0ab5c4271d5d99ef54445bc
 
-## 4. Preflight 与通用检查器
-
-Preflight 在仿真前检查：
-
-- 拓扑、ComputeProfile、TaskTrace 和 workload summary 合同；
-- 节点、任务、transfer ID、UDP source port 和整数范围；
-- 精确输入预算及 summary SHA-256；
-- size-aware/fixed packetization、UDP payload、MTU 和无 IPv4 分片；
-- INPUT/RESULT 包数和最短路径 packet-hop 估算；
-- 每计算节点工作量、理论利用率和推荐仿真时长；
-- ISL 数量、设备队列数量、每队列容量、聚合理论容量和排空时间。
-
-通用检查器入口：
-
-```bash
-python3 contrib/satcompute/tools/check-task-output.py run \
-  --topology-dir=... \
-  --compute-profile=... \
-  --task-trace=... \
-  --workload-summary=... \
-  --output-dir=...
-```
-
-它验证完整状态转换、计算时间、非抢占 FCFS、transfer ID/端口、
-packetization、收发字节、FlowMonitor 零丢包、ECMP route evidence、
-运行聚合量和 workload SHA。route evidence 使用 five-tuple 索引，
-FCFS 使用排序，整体没有明显的 O(N²) 检查路径。
-
-## 5. 拓扑与带宽
-
-原始 `xw-66sat` 没有被修改，其 JSON 中：
-
-```text
-link_bandwidth = 10000000 kbps = 10 Gbit/s
-```
-
-压力测试使用独立的 `xw-66sat-static-2g`：
-
-```text
-66 satellites
-132 undirected ISLs
-link_bandwidth = 2000000 kbps = 2 Gbit/s
-```
-
-该压力拓扑只有 `nodes_0s.json` 和 `topology_0s.json`。这是有意设计的
-静态 fixture：0 s 加载后一直保持到仿真结束，不发生节点或链路变化，
-因此不需要复制 10 s、20 s 等冗余快照，也不触发无意义的路由重算。
-它不替代用于验证定时快照加载的原始 66 星输入。
-
-132 条无向 ISL 产生 264 个 PointToPointNetDevice 发送队列。队列容量是
-上限而非启动时预分配内存。
-
-## 6. 本地构建与回归
-
-以下命令在 `c1541a4` 上通过：
-
-```bash
-./waf configure --disable-examples --disable-tests --enable-modules=satcompute
-./waf build
-```
-
-回归结果：
-
-- N0 static/dynamic/canonical：通过；
-- 5000 varied transfers：53,100 packets，零丢包；
-- mixed large workload：41,507 packets，零丢包；
-- 单任务 ECMP、FCFS、异构 R/2R、TaskTrace 顺序确定性和
-  ComputeProfile 顺序确定性：通过；
-- 40-task 生成器端到端 fixture：40/40 tasks、80/80 transfers、零丢包；
-- 当前通用检查器重新验收 Level 2、Level 3 和 25% 输出：全部通过。
-
-Level 2 仿真产生于 `f8bcd07`，之后到 `c1541a4` 只修改了 Python 通用
-检查器，没有改变 C++ 仿真路径或压力输入；这些输出已经使用
-`c1541a4` 的检查器重新验收。
-
-## 7. 已完成压力结果
-
-所有下表中的完成场景均满足：
-
-```text
-all tasks COMPLETED
-all INPUT/RESULT transfers complete
-FlowMonitor lost_packets = 0
-generic checker PASS
-```
-
-| 场景 | 仿真时间 | tasks/transfers | INPUT bytes | OUTPUT bytes | 包数 | packet hops | wall-clock | peak RSS |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Level 1 | 20 s | 40/80 | 4,000,000 | 3,332,332 | 7,199 | 32,150 | 3.78 s | 未单独记录 |
-| Level 2-500 | 100 s | 500/1,000 | 4,096,000 | 23,433,252 | 27,433 | 113,598 | 12.77 s | 64,528 KB |
-| Level 2-1000 | 200 s | 1,000/2,000 | 8,192,000 | 46,180,167 | 54,173 | 232,349 | 25.43 s | 82,304 KB |
-| Level 2-2000 | 400 s | 2,000/4,000 | 16,384,000 | 94,077,643 | 110,016 | 470,849 | 52.06 s | 116,640 KB |
-| Level 3 compute | 240 s | 500/1,000 | 4,096,000 | 25,065,859 | 29,012 | 123,179 | 13.93 s | 64,060 KB |
-| Level 4-A 25% | 1000 s | 500/1,000 | 27,250,000,000 | 8,473,331,744 | 2,283,410 | 9,861,490 | 17:02.59 | 67,984 KB |
-
-25% 场景还包含：
-
-```text
-compute work units: 1194978357
-large tail: 5 x 1 GB, 10 x 500 MB
-mean/max task delay: 2.014 s / 10.935 s
-max compute queue length: 2
-max per-node full-run utilization: 4.273%
-aggregate active-window utilization: 6.034%
-```
-
-## 8. 队列校准
-
-25% 场景使用相同 TaskTrace、seed、拓扑和 ComputeProfile：
-
-| 每设备队列 | 264 队列聚合理论容量 | 排空时间/2 Gbit/s | 结果 |
-|---:|---:|---:|---|
-| 8,000,000 bytes | 1.967 GiB | 32 ms | 失败：task 143 INPUT 未完成 |
-| 16,000,000 bytes | 3.934 GiB | 64 ms | 失败：同一 task 143 |
-| 32,000,000 bytes | 7.868 GiB | 128 ms | 通过：500/500，零丢包 |
-| 64,000,000 bytes | 15.736 GiB | 256 ms | 25% 未继续；50% 下仍失败 |
-
-因此 25% 的最小通过值为 32 MB，但该值不能保证 50% 场景成功。
-
-## 9. 50% 场景停止证据
-
-50% workload：
-
-```text
 tasks: 1000
 INPUT bytes: 54500000000
 OUTPUT bytes: 17735650347
 compute work units: 2390026806
 large tail: 10 x 1 GB, 20 x 500 MB
+arrival window: 1.318157677s..599.410171627s
+topology: 66 satellites, 132 undirected ISLs
+bandwidth: 2000000 kbps = 2 Gbit/s per ISL
+compute nodes: 22, each 1500000 work units/s
+simulation duration: 1000s
+queue: 64000000 bytes per directed device
+routing: global-hash-per-flow
+ECMP seed: 1
+packetization: size-aware
+MTU: 65535 bytes
+```
+
+Preflight：
+
+```text
 INPUT packets: 3254828
 RESULT packets: 1198246
 total packets: 4453074
 estimated packet hops: 18942110
-arrival window: 1.318s..599.410s
-simulation duration: 1000s
+recommended duration lower bound: 687.431s
+264 device queues x 64000000 bytes
+aggregate theoretical queue capacity: 15.736 GiB, not preallocated
+```
+
+主测试复用了冻结输入，没有重新随机生成，也没有改变任何 workload 参数。
+
+## 4. 本地验证
+
+本轮按作者要求只做本地验证，没有运行 GitHub CI。
+
+在 `2e7b5e3` 上通过：
+
+- `./waf build`；
+- N0 110 s smoke：66 星、132 ISL、0～110 s 共 12 个静态快照；
+- 单任务 ECMP；
+- non-preemptive FCFS；
+- heterogeneous R/2R；
+- TaskTrace 数组顺序确定性；
+- ComputeProfile 数组顺序确定性；
+- 40-task 生成 workload：40/40 tasks、80/80 transfers、零丢包；
+- 4 星故意失败 fixture：严格退出 1，记录 1 个有向队列 Drop；
+- 22 节点正式失败输出：FlowMonitor-only 丢包证据检查通过；
+- 66 节点对照：通用成功检查器通过。
+
+当前检查器还重新验收了既有输出：
+
+```text
+Level 2-500:  PASS, 500 tasks / 1000 transfers
+Level 2-1000: PASS, 1000 tasks / 2000 transfers
+Level 2-2000: PASS, 2000 tasks / 4000 transfers
+Level 3:      PASS, 500 tasks / 1000 transfers
+Level 4 25%: PASS, 500 tasks / 1000 transfers
+```
+
+## 5. 既有成功压力证据
+
+| 场景 | 仿真时间 | tasks/transfers | INPUT bytes | OUTPUT bytes | 包数 | wall-clock | peak RSS |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Level 1 | 20 s | 40/80 | 4,000,000 | 3,332,332 | 7,199 | 3.78 s | 未单独记录 |
+| Level 2-500 | 100 s | 500/1,000 | 4,096,000 | 23,433,252 | 27,433 | 12.77 s | 64,528 KB |
+| Level 2-1000 | 200 s | 1,000/2,000 | 8,192,000 | 46,180,167 | 54,173 | 25.43 s | 82,304 KB |
+| Level 2-2000 | 400 s | 2,000/4,000 | 16,384,000 | 94,077,643 | 110,016 | 52.06 s | 116,640 KB |
+| Level 3 compute | 240 s | 500/1,000 | 4,096,000 | 25,065,859 | 29,012 | 13.93 s | 64,060 KB |
+| Level 4 25% | 1000 s | 500/1,000 | 27,250,000,000 | 8,473,331,744 | 2,283,410 | 17:02.59 | 67,984 KB |
+
+这些成功场景都满足 task/transfer 完成、FlowMonitor 零丢包和检查器
+PASS。25% 场景在 32 MB/设备队列下通过；8 MB 和 16 MB 均失败。
+
+## 6. 22 节点 50% 主测试
+
+运行位置：
+
+```text
+/tmp/satcompute-n1.6/level4-50/bd89358-diagnostics/queue-64000000/
+```
+
+性能和退出：
+
+```text
+wall-clock: 34:54.30
+user time: 2094.37s
+peak RSS: 88232 KB
+simulation duration reached: 1000s
+exit status: 1
+```
+
+完整性：
+
+```text
+tasks: 1000 total, 999 completed, 1 RESULT_TRANSFERRING
+transfers: 2000 total, 1999 completed, 1 STARTED
+all other task states: 0
+all compute jobs completed: 1000
+maximum compute queue length: 3
+maximum full-run compute utilization: 8.0503%
+```
+
+FlowMonitor：
+
+```text
+tx packets: 4453074
+rx packets: 4453049
+lost packets: 25
+tx bytes: 72360336419
+rx bytes: 72358735719
+loss ratio: 0.00056141%
+```
+
+FlowMonitor 的 `lostPackets` 包括超过默认 10 s 未再被观察到的包；它本身
+不是丢弃层定位。这里 receiver 同时精确缺少相同的 25 个包，因此可以确认
+这些数据报截至 1000 s 没有抵达目的应用。
+
+### 唯一未完成任务与 transfer
+
+```text
+task_id: 906
+state: RESULT_TRANSFERRING
+task source/compute/result: 18/15/28
+input transfer: 1811, completed
+result transfer: 1812, STARTED
+RESULT start: 424.529159580s
+```
+
+```text
+transfer_id: 1812
+source/destination: 15 -> 28
+declared bytes: 289600000
+payload bytes per packet: 64000
+derived/sent packets: 4525/4525
+received packets: 4500
+sent/received bytes: 289600000/288000000
+missing bytes: 1600000
+missing packet lower bound: 25
+last sender packet: 425.687846460s
+completion time: absent
+```
+
+同一 five-tuple 的 FlowMonitor 记录也是
+`tx/rx/lost = 4525/4500/25`。sender、receiver 和 FlowMonitor 三套计数
+一致。
+
+## 7. 有向队列与 ECMP 集中度
+
+22 节点正式运行：
+
+```text
+ISL directed links: 264
+queue drop packets/bytes: 0/0
+dropped directed links: 0
+top dropped links: none
+compute-adjacent drop share: N/A because total drop bytes = 0
+```
+
+4 星最小失败 fixture 已验证相同采集代码能够记录并映射队列 Drop。因此
+正式运行中的 0 表示没有观察到 PointToPointNetDevice DropTail 队列
+Drop，不能把 FlowMonitor 的 25 个 lost packets 直接写成“64 MB 队列
+溢出”。
+
+planned-load 集中度：
+
+```text
+total planned application hop-bytes: 298441870038
+top-1 share: 1.357453%
+top-5 share: 5.743627%
+top-10 share: 10.265636%
+compute-adjacent directed links: 176/264 = 66.666667%
+compute-adjacent planned bytes: 66.734626%
+compute-adjacent links in top-10: 6/10
+```
+
+计算相邻链路的 planned-byte 占比几乎等于它们的链路数量占比，不能仅凭
+全局 planned load 证明计算节点周边存在普遍热点。
+
+top-5 planned links：
+
+| rank | directed link | planned bytes | transfers | >500 MB transfers | compute-adjacent |
+|---:|---|---:|---:|---:|---|
+| 1 | 24→23 | 4,051,208,136 | 40 | 8 | yes |
+| 2 | 25→24 | 3,768,071,452 | 42 | 7 | yes |
+| 3 | 26→27 | 3,199,813,296 | 42 | 8 | yes |
+| 4 | 23→22 | 3,087,452,086 | 37 | 5 | no |
+| 5 | 27→28 | 3,034,842,548 | 49 | 8 | yes |
+
+transfer 1812 的固定 ECMP 路径：
+
+```text
+15 -> 26 -> 27 -> 28
+```
+
+对应链路排名：
+
+```text
+15->26: rank 158, 873652580 planned bytes
+26->27: rank 3,   3199813296 planned bytes
+27->28: rank 5,   3034842548 planned bytes
+```
+
+### pacing 竞争证据
+
+成功的 transfer 1725（38→30，99,856,586 bytes）和失败的 transfer
+1812 都选择了 `27→28`。它们的 sender 时间窗为：
+
+```text
+transfer 1725: 424.429758330s..424.829305530s
+transfer 1812: 424.529159580s..425.687846460s
+source-send overlap: 0.300145950s
+```
+
+两条 flow 都按各自首跳的 2 Gbit/s 线速独立 pacing，共享的 `27→28`
+只有 2 Gbit/s。代码使用 payload 加 UDP/IP/PPP 头计算发送间隔，不是简单
+以 payload 假定带宽。
+
+因此 `PACING_CONCLUSION = SUPPORTED`：独立 line-rate pacing 和 ECMP
+汇聚是瞬时竞争的重要诱因。由于没有对应的 device-queue Drop 事件，不能
+声称已精确定位 transfer 1812 的 25 个包在 `27→28` 被丢弃。
+
+## 8. 66 计算节点条件对照
+
+本地对照输入位置：
+
+```text
+/tmp/satcompute-n1.6/level4-50/66-compute-remap-v1/
+```
+
+原 TaskTrace 未被修改。新输入只改变 `compute_node_id`：
+
+```text
+method:
+candidate = (task_id - 1) % 66
+while candidate equals source or result:
+  candidate = (candidate + 1) % 66
+
+changed compute assignments: 985/1000
+used compute nodes: 66
+tasks per compute node: 13..17
+compute rate per node: 1500000 work units/s
+```
+
+逐任务验证确认以下字段完全不变：
+
+```text
+task_id
+source_node_id
+result_node_id
+input_bytes
+output_bytes
+compute_work_units
+arrival_time_ns
+```
+
+对照 TaskTrace SHA-256：
+
+```text
+53480581b44d401367df44c2211ce600518e56676a2c621b242f53e95a412a66
+```
+
+Preflight：
+
+```text
+tasks: 1000
+INPUT/OUTPUT bytes: 54500000000/17735650347
+derived packets: 4453074
+estimated packet hops: 18730916
+recommended duration lower bound: 637.996s
+```
+
+运行位置：
+
+```text
+/tmp/satcompute-n1.6/level4-50/66-compute-remap-v1/
+  bd89358-diagnostics/queue-64000000/
 ```
 
 结果：
 
-| 每设备队列 | wall-clock | peak RSS | 结束检查发现的首个未完成任务 |
-|---:|---:|---:|---|
-| 32 MB | 32:58.68 | 85,620 KB | task 57，RESULT transfer 114 |
-| 64 MB | 33:03.27 | 85,760 KB | task 906，RESULT transfer 1812 |
-
-两次都已经运行到仿真时间 1000 s。当前 `ValidateCompleted()` 遇到第一个
-未完成任务就终止，所以只能证明“至少一个任务未完成”，不能从现有输出
-得出未完成任务总数。
-
-64 MB 场景中的 task 906：
-
 ```text
-source node: 18
-compute node: 15
-result node: 28
-INPUT bytes: 1000000000
-OUTPUT bytes: 289600000
-RESULT transfer: 1812
-RESULT_TRANSFERRING since: 424.529159580s
+wall-clock: 34:45.49
+user time: 2085.44s
+peak RSS: 88116 KB
+exit status: 0
+tasks: 1000/1000 completed
+transfers: 2000/2000 completed
+application bytes sent/received: 72235650347/72235650347
+FlowMonitor tx/rx/lost: 4453074/4453074/0
+max compute queue length: 1
+max full-run compute utilization: 3.1067%
+generic checker: PASS
 ```
 
-其 RESULT 首跳纯序列化时间约为 1.16 s，即使加入三跳传播和每跳
-64 MB 队列的理论排空时间，也不应持续到 1000 s。因此失败不是
-仿真时长不足。
+对照的 estimated packet hops 比 22 节点少 211,194，约 1.12%。这是计算
+端点重映射产生的路径变化，属于对照变量的自然结果，解释时不能忽略。
 
-## 10. 当前失败机制判断
+## 9. 22/66 节点判定
 
-代码证据：
+```text
+22-node conclusion: CONTRIBUTING_FACTOR
+66-node comparison: RUN, PASS
+```
 
-1. `NetworkTransferApplication` 使用 UDP；
-2. 每条 transfer 独立按照自身首跳链路的序列化时间发送；
-3. 多条并发流可能分别以 2 Gbit/s 注入，并在共享下游输出链路形成
-   瞬时过载；
-4. ISL 设备使用有限容量 DropTail 队列；
-5. UDP 路径没有 ACK 或重传；
-6. Receiver 只有在 `receivedBytes == expectedBytes` 时才触发完成。
+依据：
 
-因此，最符合现有证据的解释是：竞争期间至少一个 UDP 数据报没有抵达
-Receiver；没有重传时，该 transfer 会永久保持未完成。32 MB 与 64 MB
-出现不同受害 transfer，也符合瞬时竞争和 ECMP 路径碰撞，而非固定非法
-TaskTrace。
+- 22 节点固定配置只差 25 个包便无法可靠完成；
+- 66 节点对照在相同总数据、到达、链路、队列和 ECMP seed 下零丢包通过；
+- 22 节点计算侧本身已完成全部 1000 个任务，计算队列很浅；
+- 改变计算端点分布会改变 INPUT/RESULT 路径及并发汇聚关系；
+- 22 节点全局 compute-adjacent planned-load 比例并未显著超出其链路比例；
+- 正式运行没有取得可定位的 device-queue Drop。
 
-目前不能确认具体丢包链路或精确缺失包数。原因是 `satcompute.cc` 在
-`Simulator::Run()` 后先执行 `TaskCoordinator::ValidateCompleted()`，
-成功后才收集并写出 FlowMonitor、transfer 和 task 指标。失败时程序在
-指标落盘之前退出。
+所以当前证据支持“计算端点集中是重要诱因”，但不能证明“22 个节点导致
+计算容量不足”，也不能证明它是唯一根因。
 
-## 11. 最大场景 preflight
+后续约定：
 
-109 GB/2000-task preflight 已通过：
+```text
+66 compute nodes:
+  后续综合压力基准
+
+22 compute nodes:
+  计算端点受限/集中对照
+```
+
+单个固定 remap 的通过不代表任意 66 节点 workload 都可靠。可靠 UDP
+完成仍然没有协议保证。
+
+## 10. 当前能力边界
+
+| 场景 | 状态 |
+|---|---|
+| 25% / 22 nodes / 32 MB | PASS，500/500，零丢包 |
+| 50% / 22 nodes / 64 MB | FAIL，999/1000，lost 25 |
+| 50% / 66 nodes / 64 MB | PASS，1000/1000，零丢包 |
+| 75% | NOT RUN |
+| 109 GB / 2000 tasks preflight | PASS |
+| 109 GB / 2000 tasks actual | NOT RUN |
+
+109 GB preflight：
 
 ```text
 INPUT bytes: 109000000000
 OUTPUT bytes: 35877906094
-compute work units: 4779959062
-20 x 1 GB, 40 x 500 MB
-INPUT packets: 6277117
-RESULT packets: 2447223
+tasks: 2000
 total packets: 8724340
 estimated packet hops: 37406704
-max UDP source ports on one node: 122 / 55536
-recommended duration lower-bound: 767.840s
-max per-node full-run compute utilization: 16.06%
-max per-node arrival-window compute utilization: 26.82%
+recommended duration lower bound: 767.840s
 ```
 
-该结果只证明输入合同、端口、packetization、计算容量和 1000 s 下界检查
-通过，不代表 109 GB 实际运行通过。由于 50%/64 MB 已触发停止条件，
-75% 和 109 GB 均未实跑。
+它只证明输入、端口、packetization、计算容量和时长下界合同通过，不代表
+109 GB 实际仿真通过。
 
-## 12. 复现 50%/64 MB
+## 11. Draft PR 决策
 
-重新生成 50% TaskTrace：
-
-```bash
-python3 contrib/satcompute/tools/generate-task-workload.py \
-  --nodes-file=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g/nodes_0s.json \
-  --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
-  --task-count=1000 \
-  --total-input-bytes=54500000000 \
-  --seed=20260726 \
-  --rules-version=n1.6-v1 \
-  --arrival-start-ns=1000000000 \
-  --arrival-end-ns=600000000000 \
-  --arrival-mode=uniform \
-  --large-1gb-count=20 \
-  --large-500mb-count=40 \
-  --scenario-scale-bp=5000 \
-  --non-tail-min-input-bytes=1048576 \
-  --non-tail-max-input-bytes=300000000 \
-  --output-task-trace=/tmp/satcompute-n1-6-50-task-trace.json \
-  --output-workload-summary=/tmp/satcompute-n1-6-50-summary.json
-```
-
-运行 64 MB 场景，当前机器预计约需 33 分钟：
-
-```bash
-./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
-  --computeProfile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
-  --taskTrace=/tmp/satcompute-n1-6-50-task-trace.json \
-  --simulationDuration=1000 \
-  --offeredLoad=0 \
-  --taskLogMode=silent \
-  --transferChunkMode=size-aware \
-  --islMtuBytes=65535 \
-  --islQueueBytes=64000000 \
-  --transferLogMode=silent \
-  --routingMode=global-hash-per-flow \
-  --ecmpHashSeed=1 \
-  --outputDir=/tmp/satcompute-n1-6-50-64m-output"
-```
-
-## 13. 建议 GPT 重点审查
-
-请重点判断：
-
-1. 是否先增加“失败诊断模式”：在不关闭完成性检查的前提下，枚举全部
-   未完成任务和 transfer，并在退出前记录已发送/已接收字节、包数、
-   FlowMonitor loss 和可获得的 DropTail drop evidence；
-2. N1 是否继续保持 UDP 语义并增加应用层可靠重传，或改为 TCP/其他可靠
-   bulk transfer；
-3. 是否需要把每流首跳 2 Gbit/s pacing 改为竞争感知或全局限速；
-4. 是否保持冻结 workload 不变，还是允许调整大任务的到达相关性、
-   source/compute/result 映射或并发度；
-5. 如果本轮只声明 25% 为当前平台已验证能力，是否允许先进入 PR，还是
-   必须先解决 50% 和 109 GB。
-
-不建议在缺少丢包证据时直接把队列提高到 128 MB。64 MB 已对应
-15.736 GiB 的全部设备队列理论容量，而且增大队列只改变了首个失败
-transfer，没有解决可靠完成问题。
-
-## 14. 当前门槛状态
+技术诊断门槛已满足：
 
 ```text
-Local implementation: complete
-Level 0: PASS
-Level 1: PASS
-Level 2: PASS
-Level 3: PASS
-Level 4-A 25%: PASS at 32 MB
-Level 4-B 50%: FAIL at 32 MB and 64 MB
-Level 4-C 75%: NOT RUN
-Level 5 109 GB/2000 preflight: PASS
-Level 5 109 GB/2000 actual run: NOT RUN
-Open-PR readiness: NOT_READY_TO_OPEN_PR
-Merge readiness: NOT_APPLICABLE
+[x] 失败运行先落盘后严格失败
+[x] 全部未完成 task/transfer 可枚举
+[x] partial sent/received bytes 和 packets 可读取
+[x] FlowMonitor loss 可在失败场景落盘
+[x] 有向 ISL queue Drop 采集和映射经最小 fixture 验证
+[x] flow/link concentration 已分析
+[x] 冻结 50%/22 节点/64 MB 已重跑
+[x] 条件触发的 66 节点对照已完成
+[x] 既有 N1 成功检查和 25% 输出继续通过
+[x] 没有实现可靠重传或 checkpoint/failure
 ```
 
-本轮未引入 `TaskProfileCatalog`、`task_profile_id`、failure、checkpoint、
-backup、recovery、RTO 或 RPO，也没有修改 `src/internet` 或
-`src/point-to-point`。
+当前仍标记：
+
+```text
+Draft PR readiness: NOT_READY_TO_OPEN_DRAFT_PR
+Recommended next step: GPT/author review
+Recommended merge path: REQUEST_AUTHOR_DECISION
+```
+
+原因是作者要求先完成本轮审查和可能的修改，再决定是否创建 Draft PR。
+本报告不自行创建 PR，也不自行合并。
+
+## 12. 本轮没有实现
+
+```text
+UDP ACK/NACK
+timeout/selective retransmission
+TCP replacement
+global congestion control
+congestion-aware pacing
+checkpoint
+backup
+failure
+recovery
+RTO/RPO
+TaskProfileCatalog
+task_profile_id
+```
+
+没有修改 `src/internet`、`src/point-to-point` 或 TaskTrace schema。可靠
+NetworkTransfer 和竞争感知 pacing 应作为后续独立阶段设计，不能混入
+N1.6 诊断提交。
+
+## 13. 给 GPT/作者的审查重点
+
+1. 是否接受 `CONTRIBUTING_FACTOR`，并把 66 计算节点设为后续综合压力
+   基准；
+2. 是否接受 22 节点 50% 失败作为当前 UDP 无可靠传输边界，而不是要求
+   N1.6 内实现重传；
+3. 是否需要在后续阶段补充 FlowMonitor drop-reason 或 NetDevice
+   Mac/Phy drop 诊断，以定位本次未被 queue trace 捕获的 25 个包；
+4. 是否在本轮审查通过后创建 Draft PR；
+5. N1.7 优先设计可靠 NetworkTransfer，还是先设计竞争感知 pacing。
+
+停止：是。等待 GPT/作者审查；不创建 PR，不合并。
