@@ -18,6 +18,7 @@ def build(bld):
         'metrics/failure-diagnostics.cc',
         'metrics/flow-metrics.cc',
         'metrics/metrics.cc',
+        'metrics/task-metrics.cc',
         'metrics/transfer-metrics.cc',
         'routing/satcompute-ipv4-global-routing.cc',
         'routing/satcompute-ipv4-global-routing-helper.cc',
