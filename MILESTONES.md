@@ -71,7 +71,7 @@ PR1 已通过 CI、标记 `n1-pr1-final` 并合并为
 `n1-pr2-review-final` 冻结了 PR2 的最终审查候选。PR2 已于 2026-07-28
 合并为 `32d70374cf0f93396845e5f067fb9beb560fc6d9`，N1 随后以 annotated tag
 `n1-complete` 正式关闭。大型输入和运行输出只保留在 `/tmp`，仓库只保存
-小型 66 节点计算配置与 `docs/n1-6-stress-validation-review.md` 中的哈希
+小型 66 节点计算配置与 `docs/reviews/n1-6-stress-validation-review.md` 中的哈希
 和结果。
 
 ### 验证与冻结

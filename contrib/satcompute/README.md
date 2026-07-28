@@ -150,7 +150,7 @@ traffic/json/task/...        TaskTrace：任务、数据量、计算量与到达
 `xw-66sat-static-2g-all-compute-profile.json` 覆盖卫星 0–65，是 66
 计算节点正式压力矩阵的配置。大型压力 TaskTrace 和输出不提交仓库，精确
 生成参数、输入哈希及 50%/75%/109 GB 结果记录在
-`docs/n1-6-stress-validation-review.md`。
+`docs/reviews/n1-6-stress-validation-review.md`。
 
 `ComputeProfile` 根对象只允许 `schema_version` 和 `compute_nodes`，版本为
 `0.1`。每个计算节点只允许：
@@ -338,7 +338,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ecmp-dynamic"
 
-python3 contrib/satcompute/tools/check-ecmp-output.py \
+python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --first=/tmp/satcompute-ecmp-static-a \
   --second=/tmp/satcompute-ecmp-static-b \
   --dynamic=/tmp/satcompute-ecmp-dynamic
@@ -379,7 +379,7 @@ HRW 分数，验证候选顺序、跨 epoch 稳定性、增删候选的最小迁
 使用恢复后的较轻候选。两类场景各重复两次后运行：
 
 ```bash
-python3 contrib/satcompute/tools/check-size-aware-output.py \
+python3 contrib/satcompute/tools/validation/check-size-aware-output.py \
   --static-hrw=<pure-hrw-output> \
   --static-first=<size-aware-static-a> \
   --static-second=<size-aware-static-b> \
@@ -404,7 +404,7 @@ python3 contrib/satcompute/tools/check-size-aware-output.py \
 应用字节等场景合同，并要求任务完成数不低于 1493、QueueDisc 丢包少于
 54、受害 transfer 不增加，以及 device queue、UDP socket 和未归因丢包
 保持为零。最终本地结果和输入哈希记录在
-`docs/pre-n2-size-aware-hrw-validation.md`。
+`docs/reviews/pre-n2-size-aware-hrw-validation.md`。
 
 ## 变长规模输入
 
@@ -444,7 +444,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
   --routingMode=global-hash-per-flow \
   --outputDir=/tmp/satcompute-mixed-large-ci"
 
-python3 contrib/satcompute/tools/check-ecmp-output.py \
+python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --large=/tmp/satcompute-mixed-large-ci \
   --large-input=contrib/satcompute/input/traffic/json/test/mixed-large-ci.json
 ```
@@ -465,7 +465,7 @@ python3 contrib/satcompute/tools/check-ecmp-output.py \
   --routingMode=global-hash-per-flow \
   --outputDir=/tmp/satcompute-mixed-large-local"
 
-python3 contrib/satcompute/tools/check-ecmp-output.py \
+python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --large-local=/tmp/satcompute-mixed-large-local \
   --large-local-input=contrib/satcompute/input/traffic/json/workload/mixed-large-local.json
 ```
@@ -498,7 +498,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
   --outputDir=/tmp/satcompute-task-failure"
 
 # 上一条命令的预期退出码为 1。
-python3 contrib/satcompute/tools/check-task-output.py failure \
+python3 contrib/satcompute/tools/validation/check-task-output.py failure \
   --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --compute-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
   --task-trace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
@@ -517,7 +517,7 @@ socket 缓冲区 Drop；FlowMonitor 可能仍将这些包记为 IP 层已接收�
 传输字节/包计数、计算节点计数、FlowMonitor 与失败诊断聚合：
 
 ```bash
-python3 contrib/satcompute/tools/check-task-output.py stress \
+python3 contrib/satcompute/tools/validation/check-task-output.py stress \
   --topology-dir=<topology-dir> \
   --compute-profile=<compute-profile.json> \
   --task-trace=<task-trace.json> \
@@ -556,7 +556,7 @@ python3 contrib/satcompute/tools/check-task-output.py stress \
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-fqcodel"
 
-python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
+python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
   --output-dir=/tmp/satcompute-fqcodel \
   --require-reason=QUEUE_DISC \
   --forbid-reason=QUEUE \
@@ -566,7 +566,7 @@ python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
 
 检查器交叉验证 DropReason CSV、逐流详情和 `run-summary.json`。完整 75%
 诊断及局部 replay 结果记录在
-`docs/n1-6-stress-validation-review.md`，大型输入与输出不提交仓库。
+`docs/reviews/n1-6-stress-validation-review.md`，大型输入与输出不提交仓库。
 
 ## 输出与当前边界
 

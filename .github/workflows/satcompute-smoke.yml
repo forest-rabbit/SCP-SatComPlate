@@ -126,7 +126,7 @@ jobs:
             --routingMode=global-hrw-per-flow \
             --ecmpHashSeed=2 \
             --outputDir=/tmp/satcompute-ci-hrw-seed2-b"
-          python3 contrib/satcompute/tools/check-ecmp-output.py \
+          python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
             --hrw-first=/tmp/satcompute-ci-hrw-seed1-a \
             --hrw-second=/tmp/satcompute-ci-hrw-seed1-b \
             --hrw-seed-two-first=/tmp/satcompute-ci-hrw-seed2-a \
@@ -175,7 +175,7 @@ jobs:
               --ecmpHashSeed=1 \
               --outputDir=/tmp/satcompute-ci-size-dynamic-$suffix"
           done
-          python3 contrib/satcompute/tools/check-size-aware-output.py \
+          python3 contrib/satcompute/tools/validation/check-size-aware-output.py \
             --static-hrw=/tmp/satcompute-ci-size-static-hrw \
             --static-first=/tmp/satcompute-ci-size-static-a \
             --static-second=/tmp/satcompute-ci-size-static-b \
@@ -274,7 +274,7 @@ jobs:
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-fqcodel"
-          python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
+          python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
             --output-dir=/tmp/satcompute-ci-fqcodel \
             --require-reason=QUEUE_DISC \
             --forbid-reason=QUEUE \
@@ -355,13 +355,13 @@ jobs:
           strict_status=$?
           set -e
           test "$strict_status" -eq 1
-          python3 contrib/satcompute/tools/check-task-output.py failure \
+          python3 contrib/satcompute/tools/validation/check-task-output.py failure \
             --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
             --compute-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
             --task-trace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
             --output-dir=/tmp/satcompute-ci-task-strict \
             --require-queue-drop
-          python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
+          python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
             --output-dir=/tmp/satcompute-ci-task-strict \
             --require-reason=QUEUE \
             --forbid-reason=QUEUE_DISC \
@@ -384,7 +384,7 @@ jobs:
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-task-report"
-          python3 contrib/satcompute/tools/check-task-output.py stress \
+          python3 contrib/satcompute/tools/validation/check-task-output.py stress \
             --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
             --compute-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
             --task-trace=contrib/satcompute/input/traffic/json/task/test/task-fcfs.json \
@@ -477,7 +477,7 @@ jobs:
 
       - name: Check deterministic outputs
         run: |
-          python3 contrib/satcompute/tools/check-ecmp-output.py \
+          python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
             --first=/tmp/satcompute-ci-static-a \
             --second=/tmp/satcompute-ci-static-b \
             --dynamic=/tmp/satcompute-ci-dynamic \
@@ -489,13 +489,13 @@ jobs:
             --scale-log=/tmp/satcompute-ci-scale.log \
             --large=/tmp/satcompute-ci-mixed-large \
             --large-input=contrib/satcompute/input/traffic/json/test/mixed-large-ci.json
-          python3 contrib/satcompute/tools/check-ecmp-output.py \
+          python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
             --canonical-first=/tmp/satcompute-ci-canonical-a \
             --canonical-second=/tmp/satcompute-ci-canonical-order-b
 
       - name: Check task outputs
         run: |
-          python3 contrib/satcompute/tools/check-task-output.py \
+          python3 contrib/satcompute/tools/validation/check-task-output.py \
             --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
             --single-output=/tmp/satcompute-ci-task-single \
             --hrw-single-output=/tmp/satcompute-ci-task-single-hrw \
@@ -520,7 +520,7 @@ jobs:
 
       - name: Generated task workload contract
         run: |
-          python3 contrib/satcompute/tools/generate-task-workload.py \
+          python3 contrib/satcompute/tools/generation/generate-task-workload.py \
             --nodes-file=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g/nodes_0s.json \
             --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
             --task-count=40 \
@@ -541,7 +541,7 @@ jobs:
             /tmp/satcompute-ci-generated-a.json
           cmp contrib/satcompute/input/traffic/json/task/test/stress-generated-40-summary.json \
             /tmp/satcompute-ci-generated-a-summary.json
-          python3 contrib/satcompute/tools/generate-task-workload.py \
+          python3 contrib/satcompute/tools/generation/generate-task-workload.py \
             --nodes-file=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g/nodes_0s.json \
             --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
             --task-count=40 \
@@ -563,7 +563,7 @@ jobs:
             echo "different seed produced an identical TaskTrace"
             exit 1
           fi
-          python3 contrib/satcompute/tools/generate-task-workload.py \
+          python3 contrib/satcompute/tools/generation/generate-task-workload.py \
             --nodes-file=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g/nodes_0s.json \
             --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
             --task-count=40 \
@@ -583,7 +583,7 @@ jobs:
 
       - name: Generated task workload preflight
         run: |
-          python3 contrib/satcompute/tools/preflight-task-workload.py \
+          python3 contrib/satcompute/tools/validation/preflight-task-workload.py \
             --topology-dir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
             --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
             --task-trace=/tmp/satcompute-ci-generated-a.json \
@@ -593,7 +593,7 @@ jobs:
             --isl-mtu-bytes=65535 \
             --isl-queue-bytes=8000000 \
             --output-report=/tmp/satcompute-ci-generated-preflight.json
-          python3 contrib/satcompute/tools/preflight-task-workload.py \
+          python3 contrib/satcompute/tools/validation/preflight-task-workload.py \
             --topology-dir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
             --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
             --task-trace=/tmp/satcompute-ci-generated-tail.json \
@@ -602,7 +602,7 @@ jobs:
             --chunk-mode=size-aware \
             --isl-mtu-bytes=65535 \
             --isl-queue-bytes=8000000
-          if python3 contrib/satcompute/tools/preflight-task-workload.py \
+          if python3 contrib/satcompute/tools/validation/preflight-task-workload.py \
             --topology-dir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
             --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
             --task-trace=/tmp/satcompute-ci-generated-a.json \
@@ -615,7 +615,7 @@ jobs:
             echo "preflight accepted an over-budget workload"
             exit 1
           fi
-          python3 contrib/satcompute/tools/preflight-task-workload.py \
+          python3 contrib/satcompute/tools/validation/preflight-task-workload.py \
             --topology-dir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
             --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
             --task-trace=/tmp/satcompute-ci-generated-a.json \
@@ -644,7 +644,7 @@ jobs:
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-generated-run"
-          python3 contrib/satcompute/tools/check-task-output.py run \
+          python3 contrib/satcompute/tools/validation/check-task-output.py run \
             --topology-dir=contrib/satcompute/input/topology/json/examples/xw-66sat-static-2g \
             --compute-profile=contrib/satcompute/input/topology/json/resources/workload/xw-66sat-static-2g-compute-profile.json \
             --task-trace=/tmp/satcompute-ci-generated-a.json \
