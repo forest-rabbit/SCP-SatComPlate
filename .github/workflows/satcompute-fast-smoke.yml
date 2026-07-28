@@ -1,0 +1,39 @@
+name: SatCompute Fast Smoke
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: satcompute-fast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-smoke:
+    name: fast-smoke
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure
+        run: ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
+
+      - name: Build
+        run: ./waf build
+
+      - name: Routing contracts
+        run: contrib/satcompute/tools/ci/run-routing-smoke.sh
+
+      - name: Task contracts
+        run: contrib/satcompute/tools/ci/run-task-smoke.sh
+
+      - name: Diagnostics contracts
+        run: contrib/satcompute/tools/ci/run-diagnostics-smoke.sh
+
+      - name: Verify clean source tree
+        run: test -z "$(git status --short)"

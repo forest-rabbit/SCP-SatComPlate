@@ -2547,6 +2547,43 @@ def validate_stress_report(
 
 def main():
     argv = sys.argv[1:]
+    if argv[:1] == ["smoke"]:
+        parser = argparse.ArgumentParser(
+            description="Validate the fast single-task and FCFS contracts."
+        )
+        parser.add_argument("--topology-dir", required=True)
+        parser.add_argument("--single-output", required=True)
+        parser.add_argument("--hrw-single-output", required=True)
+        parser.add_argument("--single-profile", required=True)
+        parser.add_argument("--single-trace", required=True)
+        parser.add_argument("--fcfs-output", required=True)
+        parser.add_argument("--fcfs-profile", required=True)
+        parser.add_argument("--fcfs-trace", required=True)
+        args = parser.parse_args(argv[1:])
+
+        single = validate_scenario(
+            args.single_output,
+            args.topology_dir,
+            args.single_profile,
+            args.single_trace,
+        )
+        validate_single(single, "global-hash-per-flow")
+        hrw_single = validate_scenario(
+            args.hrw_single_output,
+            args.topology_dir,
+            args.single_profile,
+            args.single_trace,
+        )
+        validate_single(hrw_single, "global-hrw-per-flow")
+        fcfs = validate_scenario(
+            args.fcfs_output,
+            args.topology_dir,
+            args.fcfs_profile,
+            args.fcfs_trace,
+        )
+        validate_fcfs(fcfs)
+        return
+
     if argv[:1] == ["failure"]:
         parser = argparse.ArgumentParser(
             description="Validate one incomplete SatCompute task run."

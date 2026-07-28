@@ -48,6 +48,33 @@ ecmpHashSeed             = 1
 outputDir                = /tmp/satcompute-output
 ```
 
+## CI 分级
+
+Pull request 只运行 `SatCompute Fast Smoke`，覆盖核心路由、任务和失败诊断
+合同。`main` push 与手动触发运行 `SatCompute Full Regression`；Full 先执行
+全部 Fast 脚本，再补充规模、顺序、generator 和 preflight 边界。
+
+完成上述 configure/build 后，可在本地直接运行 Fast：
+
+```bash
+contrib/satcompute/tools/ci/run-routing-smoke.sh
+contrib/satcompute/tools/ci/run-task-smoke.sh
+contrib/satcompute/tools/ci/run-diagnostics-smoke.sh
+```
+
+完整回归必须在同一工作区按顺序继续运行：
+
+```bash
+contrib/satcompute/tools/ci/run-full-routing-regression.sh
+contrib/satcompute/tools/ci/run-full-workload-regression.sh
+```
+
+前三级脚本保留 topology-only、Hash/HRW/size-aware、单任务、FCFS、
+strict/report、FqCoDel、设备队列和 UDP socket 合同。后两级保留 canonical
+ordering、5000-transfer、mixed-large、TaskTrace/ComputeProfile 换序、
+generator seed/tail、preflight 成功/失败/warning 及全部扩展检查器。测试仅按
+频率分级，没有从回归集合中删除。
+
 ## 参数合同
 
 - `--topologyDir`：卫星 JSON 全量快照目录。
