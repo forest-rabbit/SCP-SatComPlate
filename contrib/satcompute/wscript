@@ -13,7 +13,7 @@ def build(bld):
         'topo.cc',
         'topology/snapshot/snapshot-reader.cc',
         'topology/snapshot/snapshot-schedule.cc',
-        'jsontopo/topo-link-state.cc',
+        'topology/link/satellite-link-state.cc',
         'metrics/core/flow-metrics.cc',
         'metrics/core/run-summary.cc',
         'metrics/core/task-metrics.cc',

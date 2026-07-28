@@ -1,6 +1,6 @@
 // 创建和维护 PointToPoint ISL 的带宽、时延、MTU、队列及启停状态。
 
-#include "topo-link-state.h"
+#include "satellite-link-state.h"
 
 #include "ns3/data-rate.h"
 #include "ns3/callback.h"

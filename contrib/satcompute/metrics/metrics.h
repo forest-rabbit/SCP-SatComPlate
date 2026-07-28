@@ -1,7 +1,7 @@
 #ifndef SATCOMPUTE_METRICS_H
 #define SATCOMPUTE_METRICS_H
 
-#include "../jsontopo/topo-link-state.h"
+#include "../topology/link/satellite-link-state.h"
 #include "../routing/satcompute-ipv4-global-routing.h"
 #include "../traffic/network-transfer-receiver.h"
 
