@@ -1,5 +1,5 @@
-#ifndef SATCOMPUTE_TOPO_DATA_H
-#define SATCOMPUTE_TOPO_DATA_H
+#ifndef SATCOMPUTE_SNAPSHOT_TYPES_H
+#define SATCOMPUTE_SNAPSHOT_TYPES_H
 
 #include <cstdint>
 #include <string>

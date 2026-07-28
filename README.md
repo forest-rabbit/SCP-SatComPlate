@@ -16,13 +16,16 @@ contrib/satcompute/
 ├── wscript                # 独立 ns3-satcompute 模块和运行程序
 ├── satcompute.cc          # 主程序和 CLI
 ├── para.cc                # 当前有效默认参数
-├── topo.cc                # 卫星、ISL 和动态快照
-├── jsontopo/              # JSON 拓扑解析与链路状态
+├── topology/
+│   ├── satellite-topology.cc/.h # 卫星与 ISL 拓扑编排
+│   ├── snapshot/          # 全量快照类型、读取与时间调度
+│   └── link/              # 运行期 ISL 状态与设备队列事件
 ├── routing/               # 原生全局路由之上的确定性逐流 ECMP 选择
 ├── traffic/               # JSON NetworkTransfer UDP 运行时
 ├── task/                  # TaskTrace、FCFS 计算服务与任务协调
 ├── metrics/               # 聚合、逐流和 ECMP 路由证据
-├── tools/                 # 最小确定性检查器
+├── third-party/nlohmann/  # 共享的 nlohmann JSON 3.11.3（MIT）
+├── tools/                 # CI、生成器与确定性检查器
 └── input/
     ├── topology/examples/xw-66sat/
     ├── topology/tests/diamond-4-*/

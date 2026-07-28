@@ -1,7 +1,7 @@
-#ifndef SATCOMPUTE_TOPO_LINK_STATE_H
-#define SATCOMPUTE_TOPO_LINK_STATE_H
+#ifndef SATCOMPUTE_SATELLITE_LINK_STATE_H
+#define SATCOMPUTE_SATELLITE_LINK_STATE_H
 
-#include "topo-data.h"
+#include "../snapshot/snapshot-types.h"
 
 #include "ns3/net-device-container.h"
 #include "ns3/node-container.h"

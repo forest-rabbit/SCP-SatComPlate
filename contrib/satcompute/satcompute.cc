@@ -24,7 +24,7 @@
 #include "task/compute-profile.h"
 #include "task/task-coordinator.h"
 #include "task/task-trace.h"
-#include "topo.h"
+#include "topology/satellite-topology.h"
 #include "traffic/network-transfer.h"
 
 #include "ns3/core-module.h"

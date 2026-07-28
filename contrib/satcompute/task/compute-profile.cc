@@ -18,8 +18,8 @@
 
 #include "compute-profile.h"
 
-#include "../jsontopo/json.hpp"
-#include "../topo.h"
+#include "../third-party/nlohmann/json.hpp"
+#include "../topology/satellite-topology.h"
 
 #include "ns3/abort.h"
 #include "ns3/fatal-error.h"

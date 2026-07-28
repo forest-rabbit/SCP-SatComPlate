@@ -17,7 +17,7 @@
 #ifndef SATCOMPUTE_NETWORK_TRANSFER_CONFIG_H
 #define SATCOMPUTE_NETWORK_TRANSFER_CONFIG_H
 
-#include "../topo.h"
+#include "../topology/satellite-topology.h"
 
 #include "ns3/ipv4-address.h"
 

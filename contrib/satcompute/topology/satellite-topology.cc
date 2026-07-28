@@ -1,9 +1,10 @@
 // 创建卫星节点与 ISL，并按 JSON 快照更新链路和重算全局路由。
 
-#include "topo.h"
+#include "satellite-topology.h"
 
-#include "jsontopo/topo-json.h"
-#include "routing/satcompute-ipv4-global-routing-helper.h"
+#include "../routing/satcompute-ipv4-global-routing-helper.h"
+#include "snapshot/snapshot-reader.h"
+#include "snapshot/snapshot-schedule.h"
 
 #include "ns3/abort.h"
 #include "ns3/csma-net-device.h"

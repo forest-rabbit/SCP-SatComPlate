@@ -10,8 +10,9 @@ intra/inter-cluster routing, SDN routing, or OpenFlow experiments.
 
 The main program is `contrib/satcompute/satcompute.cc`; active default
 parameters are in `contrib/satcompute/para.cc`. Topology orchestration is in
-`contrib/satcompute/topo.cc`; JSON parsing and runtime link state are in
-`contrib/satcompute/jsontopo/`; metrics are in
+`contrib/satcompute/topology/satellite-topology.cc`; snapshot types, JSON
+parsing, and scheduling are in `contrib/satcompute/topology/snapshot/`;
+runtime ISL state is in `contrib/satcompute/topology/link/`; metrics are in
 `contrib/satcompute/metrics/`. The committed input is a small, pure-satellite
 example under `contrib/satcompute/input/`.
 
