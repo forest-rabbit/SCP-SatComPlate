@@ -23,6 +23,7 @@ def build(bld):
         'metrics/transfer-metrics.cc',
         'routing/satcompute-ipv4-global-routing.cc',
         'routing/satcompute-ipv4-global-routing-helper.cc',
+        'routing/size-aware-flow-registry.cc',
         'task/compute-profile.cc',
         'task/compute-service.cc',
         'task/compute-task.cc',
