@@ -18,7 +18,7 @@
 
 #include "failure-diagnostics.h"
 
-#include "../task/task-coordinator.h"
+#include "../../task/task-coordinator.h"
 
 #include "ns3/abort.h"
 

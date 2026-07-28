@@ -18,12 +18,14 @@
 
 #include "metrics.h"
 
-#include "failure-diagnostics.h"
-#include "flow-metrics.h"
-#include "run-summary.h"
-#include "size-aware-metrics.h"
-#include "task-metrics.h"
-#include "transfer-metrics.h"
+#include "core/flow-metrics.h"
+#include "core/run-summary.h"
+#include "core/task-metrics.h"
+#include "core/transfer-metrics.h"
+#include "diagnostics/failure-diagnostics.h"
+#include "diagnostics/flow-drop-reason-diagnostics.h"
+#include "routing/ecmp-metrics.h"
+#include "routing/size-aware-metrics.h"
 #include "../task/task-coordinator.h"
 
 #include <iostream>

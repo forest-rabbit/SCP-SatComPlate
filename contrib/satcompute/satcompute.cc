@@ -16,9 +16,9 @@
 
 // SatCompute 可执行程序入口：解析参数、运行仿真并写出网络指标。
 
-#include "metrics/ecmp-route-recorder.h"
-#include "metrics/flow-metrics.h"
+#include "metrics/core/flow-metrics.h"
 #include "metrics/metrics.h"
+#include "metrics/routing/ecmp-route-recorder.h"
 #include "para.h"
 #include "task/compute-profile.h"
 #include "task/task-coordinator.h"

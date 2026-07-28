@@ -14,20 +14,23 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_SIZE_AWARE_METRICS_H
-#define SATCOMPUTE_SIZE_AWARE_METRICS_H
+#ifndef SATCOMPUTE_FLOW_DROP_REASON_DIAGNOSTICS_H
+#define SATCOMPUTE_FLOW_DROP_REASON_DIAGNOSTICS_H
 
-#include "../routing/size-aware-flow-registry.h"
+#include "../metrics.h"
 
+#include "ns3/flow-monitor-module.h"
 #include "ns3/ptr.h"
 
 #include <string>
+#include <vector>
 
 namespace ns3 {
 
-void WriteSizeAwareMetrics(Ptr<SizeAwareFlowRegistry> registry,
-                           const std::string& outputDirectory);
-void RemoveSizeAwareMetrics(const std::string& outputDirectory);
+void WriteFlowDropReasons(
+  Ptr<FlowMonitor> monitor,
+  const std::vector<TransferFlowMetadata>& transferFlows,
+  const std::string& outputDirectory);
 
 } // namespace ns3
 

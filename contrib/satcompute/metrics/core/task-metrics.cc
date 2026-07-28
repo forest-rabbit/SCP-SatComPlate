@@ -18,7 +18,7 @@
 
 #include "task-metrics.h"
 
-#include "../task/task-coordinator.h"
+#include "../../task/task-coordinator.h"
 
 #include "ns3/abort.h"
 #include "ns3/nstime.h"
