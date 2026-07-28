@@ -698,3 +698,111 @@ task_profile_id
 没有修改 `src/internet`、`src/point-to-point` 或 TaskTrace schema。可靠
 NetworkTransfer、竞争感知 pacing、checkpoint 和动态拓扑均不属于 N1
 压力收尾；351/720 星与 Hypatia 推迟到独立 N2 阶段。
+
+## 16. Pre-Hypatia FqCoDel / ECMP 诊断补充
+
+> 诊断日期：2026-07-28
+>
+> 诊断基线：`n1-complete`
+>
+> 诊断分支：`investigate/n1-fqcodel-ecmp`
+
+本节是 N1 关闭后的非阻塞诊断补充，不修改本报告第 14 节的 N1 判定。
+
+### 16.1 两级排队模型
+
+`Ipv4AddressHelper::Assign()` 会为支持 `NetDeviceQueueInterface` 且尚未配置
+QueueDisc 的单队列 PointToPointNetDevice 安装默认
+`FqCoDelQueueDisc`。因此当前 ISL 同时存在：
+
+```text
+traffic-control FqCoDel QueueDisc
+→ PointToPointNetDevice DropTail queue
+```
+
+`islQueueBytes` 只设置后者；前者继续使用 ns-3.33 默认值，包括
+`MaxSize=10240p`、`Target=5ms` 和 `Interval=100ms`。FlowMonitor
+DropReason 3 `QUEUE` 表示 NetDevice queue，DropReason 4
+`QUEUE_DISC` 表示 traffic-control QueueDisc。
+
+诊断分支新增独立 `flow-drop-reasons.csv` 和运行级 JSON 汇总，不修改现有
+`network-flow-metrics.csv` 或 `network-flow-details.csv` schema。
+未对应显式 DropReason 的 `lostPackets` 单列为
+`UNATTRIBUTED_TIMEOUT`，不会被误归因到队列。
+
+### 16.2 75% seed 1 全量复现与直接归因
+
+由于原 `/tmp` 产物已不存在，本轮按冻结参数重新生成 75% 输入。TaskTrace
+和 workload summary SHA-256 分别为：
+
+```text
+b2fc74f11b2074c7f29772464cf53877b6946f9905677f8c43f21c5740708237
+2a82521eec2f2ee2ac11666480df02344153da521cd7c2e5a8bed27bdcf43eb3
+```
+
+Preflight 仍为 1,500 个任务、81,750,000,000 INPUT bytes、6,584,966
+派生包和 28,707,289 packet-hops。完整 1000 s 仿真用时 52:48.08，
+峰值 RSS 109,020 KB，退出码为 0，并精确复现：
+
+```text
+PARTIAL
+1493 / 1500 tasks
+2988 / 3000 transfers
+FlowMonitor tx/rx/lost = 6578160 / 6578106 / 54
+RUN_VALID / CONTINUE at 90%
+```
+
+54 个 loss 全部具有显式 `QUEUE_DISC`：
+
+| transfer | drop packets | drop bytes |
+|---:|---:|---:|
+| 198 | 11 | 704,308 |
+| 1287 | 1 | 64,028 |
+| 2491 | 1 | 8,220 |
+| 1303 | 38 | 2,433,064 |
+| 2506 | 1 | 64,028 |
+| 1465 | 1 | 64,028 |
+| 401 | 1 | 64,028 |
+
+汇总证据为：
+
+```text
+QUEUE_DISC packets/bytes = 54 / 3401704
+QUEUE packets = 0
+UDP socket drop packets = 0
+UNATTRIBUTED_TIMEOUT packets = 0
+```
+
+因此此前 `isl-queue-drops.csv=0` 与 `FlowMonitor lostPackets=54` 并不
+矛盾：前者只连接 device DropTail trace，后者还观察默认 FqCoDel。
+
+### 16.3 局部 replay 与 seed 对照
+
+244.526–246.320 s 的三个受损 transfer 构成自足竞争簇：
+
+| transfer | seed 1 路径 | drop packets |
+|---:|---|---:|
+| 198 | `36→37→38→39→40→51→62` | 11 |
+| 1287 | `35→36→37→38→49→60→5` | 1 |
+| 2491 | `35→36→37→48` | 1 |
+
+5 秒 replay 保留原 size、相对到达时间和 source-port ordinal；38 条
+1-byte 占位流在 0 s 完成，只用于保持五元组，不参与后续竞争。Replay
+精确保留三条目标流每跳候选、selected index、gateway、interface、hash
+和 selection reason，并复现相同的 11/1/1 个 `QUEUE_DISC`。
+
+仅改变 replay 的 ECMP seed：
+
+| seed | 目标流共享有向边 | lost | mean delay |
+|---:|---|---:|---:|
+| 1 | `35→36`×2，`36→37`×3，`37→38`×2 | 13 | 223.787 ms |
+| 2 | 无 | 0 | 56.7752 ms |
+| 3 | `36→37`×2 | 0 | 77.5558 ms |
+
+这证明该 replay 的丢弃与固定 ECMP 映射造成的路径集中有关，但不证明 seed
+2 或 seed 3 对完整 workload 普遍更优。FlowMonitor DropReason 不包含
+丢弃节点/接口，因此具体 FqCoDel 实例仍属于路径证据推断。
+
+长期只保留通用 DropReason 输出、运行级汇总、检查器和小型 FqCoDel
+fixture；不提交完整 75% 输入、运行输出、逐包探索日志或 FqCoDel 参数修改。
+后续 HRW 只解决候选集合变化时的最小重映射，不作为负载感知或完成率优化。

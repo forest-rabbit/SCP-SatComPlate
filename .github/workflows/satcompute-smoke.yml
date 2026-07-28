@@ -148,6 +148,29 @@ jobs:
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-mixed-large"
 
+      - name: FlowMonitor DropReason
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/fqcodel-bottleneck \
+            --simulationDuration=3 \
+            --offeredLoad=0 \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/fqcodel-bottleneck-transfers.json \
+            --diagnosticMode=failure \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1400 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-fqcodel"
+          python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
+            --output-dir=/tmp/satcompute-ci-fqcodel \
+            --require-reason=QUEUE_DISC \
+            --forbid-reason=QUEUE \
+            --require-zero-unattributed \
+            --expected-explicit-drop-packets=6262
+
       - name: Task single ECMP
         run: |
           ./waf --run-no-build "satcompute \
@@ -213,6 +236,12 @@ jobs:
             --task-trace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
             --output-dir=/tmp/satcompute-ci-task-strict \
             --require-queue-drop
+          python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
+            --output-dir=/tmp/satcompute-ci-task-strict \
+            --require-reason=QUEUE \
+            --forbid-reason=QUEUE_DISC \
+            --require-zero-unattributed \
+            --expected-explicit-drop-packets=1
           ./waf --run-no-build "satcompute \
             --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
             --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \

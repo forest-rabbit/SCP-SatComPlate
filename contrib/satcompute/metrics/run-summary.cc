@@ -22,6 +22,7 @@
 
 #include "ns3/abort.h"
 
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <limits>
@@ -210,6 +211,34 @@ WriteRunSummary(
          << "  \"flow_monitor_rx_packets\": " << aggregate.rxPackets << ",\n"
          << "  \"flow_monitor_lost_packets\": "
          << aggregate.lostPackets << ",\n"
+         << "  \"flow_monitor_reported_drop_packets\": "
+         << aggregate.ReportedDropPackets() << ",\n"
+         << "  \"flow_monitor_unattributed_lost_packets\": "
+         << aggregate.UnattributedLostPackets() << ",\n"
+         << "  \"flow_monitor_drop_reasons\": [\n";
+  std::size_t dropReasonCount =
+    std::max<std::size_t>(
+      GetIpv4DropReasonCount(),
+      std::max(aggregate.droppedPacketsByReason.size(),
+               aggregate.droppedBytesByReason.size()));
+  for (std::size_t reason = 0; reason < dropReasonCount; ++reason)
+    {
+      uint64_t droppedPackets =
+        reason < aggregate.droppedPacketsByReason.size()
+          ? aggregate.droppedPacketsByReason[reason]
+          : 0;
+      uint64_t droppedBytes =
+        reason < aggregate.droppedBytesByReason.size()
+          ? aggregate.droppedBytesByReason[reason]
+          : 0;
+      output << "    {\"reason_code\": " << reason
+             << ", \"reason_name\": \""
+             << GetIpv4DropReasonName(static_cast<uint32_t>(reason))
+             << "\", \"dropped_packets\": " << droppedPackets
+             << ", \"dropped_bytes\": " << droppedBytes << "}"
+             << (reason + 1 == dropReasonCount ? "\n" : ",\n");
+    }
+  output << "  ],\n"
          << "  \"compute_profile_path\": ";
   if (runMetadata.computeProfilePath.empty())
     {

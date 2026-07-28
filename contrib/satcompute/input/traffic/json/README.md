@@ -16,7 +16,9 @@
   包；
 - `diamond-4-static-transfers.json`：验证静态 ECMP 双路径与重复确定性；
 - `diamond-4-dynamic-transfers.json`：验证链路变化后的 `2 → 1 → 2` 路由候选；
-- `mixed-large-ci.json`：验证至少 10 条大流量以及全部 size-aware 分包档位。
+- `mixed-large-ci.json`：验证至少 10 条大流量以及全部 size-aware 分包档位；
+- `fqcodel-bottleneck-transfers.json`：两个高速入口汇入低速出口，确定性触发
+  默认 FqCoDel `QUEUE_DISC` 丢弃。
 
 这些文件由 `--transferTrace=<file>` 读取，每条记录直接声明一次网络传输。其
 closed-world 字段为 `transfer_id`、`source_node_id`、

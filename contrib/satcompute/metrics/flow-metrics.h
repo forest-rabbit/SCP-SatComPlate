@@ -36,6 +36,8 @@ struct FlowAggregate
   uint64_t txBytes = 0;
   uint64_t rxBytes = 0;
   uint64_t jitterSamples = 0;
+  std::vector<uint64_t> droppedPacketsByReason;
+  std::vector<uint64_t> droppedBytesByReason;
   double delaySumSeconds = 0.0;
   double jitterSumSeconds = 0.0;
   double measurementStartSeconds = 0.0;
@@ -44,7 +46,13 @@ struct FlowAggregate
 
   void Add(const FlowMonitor::FlowStats& flow);
   double MeasurementDurationSeconds() const;
+  uint64_t ReportedDropPackets() const;
+  uint64_t UnattributedLostPackets() const;
 };
+
+uint32_t GetIpv4DropReasonCount();
+
+const char* GetIpv4DropReasonName(uint32_t reasonCode);
 
 Ptr<FlowMonitor> InstallSimulationFlowMonitor();
 
@@ -60,6 +68,11 @@ void WriteNetworkFlowDetails(
   const std::vector<TransferFlowMetadata>& transferFlows,
   const std::string& outputDirectory,
   bool requireCompleteCoverage);
+
+void WriteFlowDropReasons(
+  Ptr<FlowMonitor> monitor,
+  const std::vector<TransferFlowMetadata>& transferFlows,
+  const std::string& outputDirectory);
 
 } // namespace ns3
 
