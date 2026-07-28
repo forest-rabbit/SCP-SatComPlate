@@ -18,6 +18,7 @@
 #define SATCOMPUTE_IPV4_GLOBAL_ROUTING_H
 
 #include "ecmp-route-selector.h"
+#include "size-aware-flow-registry.h"
 
 #include "ns3/ipv4-global-routing.h"
 #include "ns3/traced-callback.h"
@@ -53,7 +54,9 @@ public:
   SatComputeIpv4GlobalRouting();
   ~SatComputeIpv4GlobalRouting() override;
 
-  void Configure(EcmpRouteSelectionMode selectionMode, uint64_t hashSeed);
+  void Configure(EcmpRouteSelectionMode selectionMode,
+                 uint64_t hashSeed,
+                 Ptr<SizeAwareFlowRegistry> sizeAwareRegistry);
   void SetSatelliteId(uint32_t satelliteId);
   void AdvanceRouteEpoch();
   uint64_t GetRouteEpoch() const;
@@ -101,6 +104,7 @@ private:
 
   EcmpRouteSelectionMode m_selectionMode;
   uint64_t m_hashSeed;
+  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
   bool m_hasSatelliteId;
   uint32_t m_satelliteId;
   uint64_t m_routeEpoch;

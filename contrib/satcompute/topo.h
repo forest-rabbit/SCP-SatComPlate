@@ -3,6 +3,7 @@
 
 #include "jsontopo/topo-data.h"
 #include "jsontopo/topo-link-state.h"
+#include "routing/size-aware-flow-registry.h"
 
 #include "ns3/ipv4-address.h"
 #include "ns3/node-container.h"
@@ -44,6 +45,7 @@ public:
   Ipv4Address GetServiceAddressBySatelliteId(uint32_t satelliteId) const;
   const std::vector<IslDirectedLink>& GetIslDirectedLinks() const;
   const std::vector<IslQueueDropEvent>& GetIslQueueDropEvents() const;
+  Ptr<SizeAwareFlowRegistry> GetSizeAwareFlowRegistry() const;
 
 private:
   void CreateSatelliteNodes(const std::vector<uint32_t>& satelliteIds);
@@ -62,6 +64,7 @@ private:
   std::vector<Ipv4Address> m_serviceAddresses;
   std::map<uint32_t, uint32_t> m_nodeIndexes;
   std::unique_ptr<SatelliteLinkState> m_linkState;
+  Ptr<SizeAwareFlowRegistry> m_sizeAwareFlowRegistry;
 };
 
 } // namespace ns3

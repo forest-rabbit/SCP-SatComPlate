@@ -65,10 +65,15 @@ SatComputeIpv4GlobalRouting::~SatComputeIpv4GlobalRouting()
 void
 SatComputeIpv4GlobalRouting::Configure(
   EcmpRouteSelectionMode selectionMode,
-  uint64_t hashSeed)
+  uint64_t hashSeed,
+  Ptr<SizeAwareFlowRegistry> sizeAwareRegistry)
 {
+  NS_ABORT_MSG_IF(selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+                    && sizeAwareRegistry == nullptr,
+                  "size-aware HRW routing 缺少 flow registry");
   m_selectionMode = selectionMode;
   m_hashSeed = hashSeed;
+  m_sizeAwareRegistry = sizeAwareRegistry;
 }
 
 void
@@ -109,6 +114,7 @@ SatComputeIpv4GlobalRouting::DoDispose()
 {
   m_hostRouteIndex.clear();
   m_decisionCache.clear();
+  m_sizeAwareRegistry = nullptr;
   m_ipv4 = nullptr;
   Ipv4GlobalRouting::DoDispose();
 }
