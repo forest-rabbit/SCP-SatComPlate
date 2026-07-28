@@ -123,11 +123,20 @@ N1 ECMP 收尾在 N1 任务闭环之上完成了路由、输入、诊断和验�
 - CI 拆为 pull request 的 Fast Smoke 与 `main`/`workflow_dispatch` 的 Full
   Regression；Full 顺序复用全部 Fast 脚本，再执行规模、顺序、generator 和
   preflight 回归。
+- Topology 子系统结构冻结到 `contrib/satcompute/topology/`：
+  `SatelliteTopology` 编排位于根层，JSON 快照类型、读取和目录调度位于
+  `snapshot/`，运行期 ISL 状态位于 `link/`；旧根层 `topo.cc/.h` 与
+  `jsontopo/` 路径退出。
+- 任务、流量和拓扑共用的 nlohmann JSON 3.11.3 依赖迁入
+  `contrib/satcompute/third-party/nlohmann/`，MIT 文件内容保持不变。
 
 ### 验证与冻结
 
 - 功能冻结提交：`35a6258de3ac9438551e3dba254a4129089cf5d0`
-- 最终 annotated tag：`n1-ecmp-complete`
+- Git 引用、CI 与文档收尾提交：
+  `a39f728b8e161e6c9f78ddaa1c8ab803017210c8`
+- 最终 annotated tag：`n1-ecmp-complete`（指向拓扑收尾的最终 merge
+  commit；精确 SHA 与 CI URL 记录在 tag message 和收尾 PR）
 - 输入、文档与平台清理：
   [PR #7](https://github.com/forest-rabbit/SatCompute/pull/7)
 - CI 分级：
@@ -141,6 +150,8 @@ N1 ECMP 收尾在 N1 任务闭环之上完成了路由、输入、诊断和验�
 - PR #8 合并后的 Full Regression：
   [run #30353450349](https://github.com/forest-rabbit/SatCompute/actions/runs/30353450349)，
   `conclusion=success`
+- 拓扑目录重组、确定性对照与临时标签替换：
+  [`docs/reviews/n1-ecmp-topology-closeout.md`](docs/reviews/n1-ecmp-topology-closeout.md)
 
 最终标签只在收尾提交的自动 Full Regression 和独立
 `workflow_dispatch` Full Regression 都成功后创建。历史开发分支与中间标签的

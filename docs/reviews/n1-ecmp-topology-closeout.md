@@ -50,8 +50,8 @@ ecmpHashSeed=1
 | `ecmp-route-events.csv` | `7dfc17e125eebd7471a266a73a652a062be0b04410f749f4743d31651f99c768` |
 | `transfer-summary.csv` | `6960530ab502c5e287dfdf154c25762371c8ec78dba498e05edd0111666b80b9` |
 
-最终验证必须在重构后重新运行同一命令，并满足规范化 JSON 相同、两个 CSV
-逐字节相同。
+重构后已重新运行同一命令：规范化 JSON 相同，两个 CSV 逐字节相同，三个
+SHA-256 均保持不变。
 
 ## 3. 最终门禁与标签合同
 
@@ -68,3 +68,54 @@ Fast workflow 只由 pull request 触发，因此执行顺序是：
 run URL、自动 Full run URL和手动 Full run URL。最终 Git 引用集合保持为
 唯一远端分支 `main`，以及 `n0-complete`、`n1-complete` 和
 `n1-ecmp-complete` 三个阶段标签。
+
+## 4. 冻结后的源码布局
+
+```text
+contrib/satcompute/
+├── topology/
+│   ├── satellite-topology.cc
+│   ├── satellite-topology.h
+│   ├── snapshot/
+│   │   ├── snapshot-types.h
+│   │   ├── snapshot-reader.cc
+│   │   ├── snapshot-reader.h
+│   │   ├── snapshot-schedule.cc
+│   │   └── snapshot-schedule.h
+│   └── link/
+│       ├── satellite-link-state.cc
+│       └── satellite-link-state.h
+└── third-party/nlohmann/json.hpp
+```
+
+`SatelliteTopology`、`TopologyConfig`、`SatelliteLinkState` 及其公开方法没有
+重命名。旧根层 `topo.cc/.h` 和 `jsontopo/` 不再存在。共享的 nlohmann JSON
+3.11.3 单头文件只改变路径，内容和 MIT 许可头保持不变。
+
+## 5. 本地验收
+
+在同一次干净构建上按 Full workflow 顺序执行：
+
+| 验收项 | 结果 |
+| --- | --- |
+| configure、clean、SatCompute build | PASS |
+| `run-routing-smoke.sh` | PASS |
+| `run-task-smoke.sh` | PASS |
+| `run-diagnostics-smoke.sh` | PASS |
+| `run-full-routing-regression.sh` | PASS |
+| `run-full-workload-regression.sh` | PASS |
+| 重构前后确定性输出对照 | PASS |
+| `git diff --check` | PASS |
+
+关键回归结果：
+
+```text
+topology-only: 66 satellites, 132 ISLs, 12/12 snapshots
+5000-transfer: 5000/5000, 53100 packets, lost=0
+mixed-large:   12/12, 41507 packets, lost=0
+generated:     40/40 tasks, 80/80 transfers, lost=0
+```
+
+运行时代码、`wscript` 和 CI 脚本中的 `jsontopo`、旧 `topo.cc/.h`、
+`topo-data`、`topo-json` 与 `topo-link-state` 路径引用均为 0。审计文档中的
+旧路径说明和 `customer-jsontopo-*` 历史标签名只作为来源记录保留。

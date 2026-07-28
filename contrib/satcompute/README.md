@@ -13,6 +13,18 @@
 程序不会创建地面站，不解析 cluster，也不支持 CSV 拓扑。当前默认值集中在
 `para.cc`。
 
+## 源码布局
+
+`topology/satellite-topology.cc` 负责创建卫星、编排初始和运行期快照，并在
+完整快照应用后调用 ns-3 全局路由重算。`topology/snapshot/` 分别保存快照数据
+类型、单对 JSON 文件读取器和快照目录调度器；`topology/link/` 保存运行期 ISL
+设备、带宽、时延、MTU、队列、启停状态和设备队列丢包事件。
+
+任务、流量和拓扑 JSON 共用
+`third-party/nlohmann/json.hpp` 中未经修改的 nlohmann JSON 3.11.3 单头文件
+（MIT）。它是运行时依赖，不属于 `tools/`；`tools/` 只保存外部 CI、输入生成器、
+preflight 和输出检查器。
+
 ## 构建与默认值
 
 ```bash
