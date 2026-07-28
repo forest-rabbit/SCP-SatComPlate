@@ -2,7 +2,7 @@
 
 #include "topo-json.h"
 
-#include "json.hpp"
+#include "../third-party/nlohmann/json.hpp"
 #include "ns3/abort.h"
 #include "ns3/fatal-error.h"
 
