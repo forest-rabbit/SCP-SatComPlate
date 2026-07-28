@@ -1,9 +1,9 @@
 #ifndef SATCOMPUTE_TOPO_H
 #define SATCOMPUTE_TOPO_H
 
-#include "jsontopo/topo-data.h"
 #include "jsontopo/topo-link-state.h"
 #include "routing/size-aware-flow-registry.h"
+#include "topology/snapshot/snapshot-types.h"
 
 #include "ns3/ipv4-address.h"
 #include "ns3/node-container.h"

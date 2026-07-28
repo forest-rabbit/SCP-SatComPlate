@@ -2,8 +2,9 @@
 
 #include "topo.h"
 
-#include "jsontopo/topo-json.h"
 #include "routing/satcompute-ipv4-global-routing-helper.h"
+#include "topology/snapshot/snapshot-reader.h"
+#include "topology/snapshot/snapshot-schedule.h"
 
 #include "ns3/abort.h"
 #include "ns3/csma-net-device.h"

@@ -11,7 +11,8 @@ def build(bld):
     module.source = [
         'para.cc',
         'topo.cc',
-        'jsontopo/topo-json.cc',
+        'topology/snapshot/snapshot-reader.cc',
+        'topology/snapshot/snapshot-schedule.cc',
         'jsontopo/topo-link-state.cc',
         'metrics/core/flow-metrics.cc',
         'metrics/core/run-summary.cc',
