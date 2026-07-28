@@ -544,7 +544,7 @@ CONTINUE:
 66 节点 ComputeProfile 已作为小型可复现配置提交：
 
 ```text
-input/topology/json/resources/workload/
+input/topology/resources/workload/
   xw-66sat-static-2g-all-compute-profile.json
 SHA-256:
 96e46227ac94241c11f53ef899379f160280da5ee9bd4ddc3829d1008d28dcc0

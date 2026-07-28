@@ -122,6 +122,10 @@ NetworkTransfer/TaskTrace 的 UDP 传输。
 `ApplicationMetrics` 仍被 NetworkTransfer engine、task engine 和
 `run-summary.json` 使用，不随 legacy background traffic 删除。
 
+路径迁移说明：本表记录的是清理审计当时的文件位置。其历史路径
+`contrib/satcompute/input/traffic/json/README.md` 在后续输入扁平化中合并至
+`contrib/satcompute/input/traffic/README.md`，不表示运行时仍接受旧路径。
+
 README 处理仅删除 legacy 专用章节、命令和 CLI 参数说明；根 README、模块
 README、traffic README 和 JSON README 文件本身全部保留。
 

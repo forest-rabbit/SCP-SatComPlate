@@ -24,10 +24,10 @@ contrib/satcompute/
 ├── metrics/               # 聚合、逐流和 ECMP 路由证据
 ├── tools/                 # 最小确定性检查器
 └── input/
-    ├── topology/json/examples/xw-66sat/
-    ├── topology/json/tests/diamond-4-*/
-    ├── topology/json/resources/ # 静态 ComputeProfile
-    └── traffic/json/
+    ├── topology/examples/xw-66sat/
+    ├── topology/tests/diamond-4-*/
+    ├── topology/resources/ # 静态 ComputeProfile
+    └── traffic/
         ├── workload/     # 正式规模与本地压力输入
         ├── test/         # NetworkTransfer CI 和回归输入
         └── task/         # TaskTrace
@@ -61,7 +61,7 @@ SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests
 --simulationDuration=<s>               仿真时长
 --transferTrace=<file>                 NetworkTransfer JSON；默认关闭
 --computeProfile=<file>                topology/resources 下的静态计算能力
---taskTrace=<file>                     traffic/json/task 下的任务到达
+--taskTrace=<file>                     traffic/task 下的任务到达
 --transferChunkMode=<fixed|size-aware>  NetworkTransfer 分包模式
 --transferPayloadBytes=<uint32>         fixed 模式的 UDP payload 上限
 --islMtuBytes=<uint16>                  所有 ISL 的 MTU
@@ -109,8 +109,8 @@ fixed 4096-byte cap 下覆盖 1–20 包。`mixed-large-ci.json` 含两个分级
 ## 任务计算
 
 输入按职责分离：静态计算能力 `ComputeProfile` 属于
-`input/topology/json/resources/`，任务到达 `TaskTrace` 属于
-`input/traffic/json/task/`。任务依次经历：
+`input/topology/resources/`，任务到达 `TaskTrace` 属于
+`input/traffic/task/`。任务依次经历：
 
 ```text
 PENDING → INPUT_TRANSFERRING → QUEUED → RUNNING
@@ -125,9 +125,9 @@ ID 为 `2 × task_id`。输入完整到达后才进入计算节点的非抢占�
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
-  --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --simulationDuration=10 \
   --taskLogMode=verbose \
   --transferChunkMode=fixed \
@@ -150,9 +150,9 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -192,9 +192,9 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 三份任务 CSV 只在任务模式生成。
 
 拓扑协议见
-[`contrib/satcompute/input/topology/json/README.md`](contrib/satcompute/input/topology/json/README.md)。
+[`contrib/satcompute/input/topology/README.md`](contrib/satcompute/input/topology/README.md)。
 流量输入的 `workload`/`test` 分类见
-[`contrib/satcompute/input/traffic/json/README.md`](contrib/satcompute/input/traffic/json/README.md)。
+[`contrib/satcompute/input/traffic/README.md`](contrib/satcompute/input/traffic/README.md)。
 当前只实现无抢占 FCFS 任务闭环；故障、checkpoint、备份和恢复语义尚未实现。
 64000-byte payload 仅是降低大数据仿真事件数量的可扩展性配置，不表示真实
 卫星网络使用 64 KB 物理帧。

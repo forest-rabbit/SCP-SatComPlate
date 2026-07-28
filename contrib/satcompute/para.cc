@@ -28,7 +28,7 @@ GetDefaultSatComputeConfig()
   // --topologyDir：节点、链路分离的 JSON 全量快照目录。目录必须包含时间匹配的
   // nodes_<time>s.json 和 topology_<time>s.json；可填写仓库相对路径或绝对路径。
   config.topologyDirectory =
-    "contrib/satcompute/input/topology/json/examples/xw-66sat";
+    "contrib/satcompute/input/topology/examples/xw-66sat";
 
   // --transferTrace：NetworkTransfer JSON 路径。非空时启用 schema_version=0.1
   // 的逐流 UDP 输入；空字符串且没有任务输入时运行纯拓扑模式。
@@ -38,7 +38,7 @@ GetDefaultSatComputeConfig()
   // 必须与 taskTrace 同时提供；空字符串表示不启用任务模式。
   config.computeProfile = "";
 
-  // --taskTrace：traffic/json/task 下的任务到达 JSON。
+  // --taskTrace：traffic/task 下的任务到达 JSON。
   // 必须与 computeProfile 同时提供，且不能与 transferTrace 混用。
   config.taskTrace = "";
 
