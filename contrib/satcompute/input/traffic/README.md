@@ -1,42 +1,88 @@
-# 业务流量输入
+# NetworkTransfer 与 TaskTrace JSON 输入
 
-本目录统一保存业务输入：
-
-```text
-csv/   临时保留的 legacy 业务矩阵
-json/  NetworkTransfer 逻辑传输输入
-```
-
-CSV 不参与拓扑构建。`csv/traffic_matrix(66).csv` 从 xw 原始文件
-`examples/link-selection/input/traffic/traffic_matrix(324).csv` 机械截取得到：
-
-```bash
-head -n 6600 traffic_matrix\(324\).csv | cut -d, -f1-66 \
-  > traffic_matrix\(66\).csv
-```
-
-这一规则与 xw 已有 `traffic_matrix(73).csv` 的生成方式一致：原文件是
-32400 行×324 列，66 星文件保留前 6600 行和每行前 66 列，最终尺寸是
-6600 行×66 列。
-
-N 必须等于卫星数。程序每 N 行读取一个时间片，共读取 100 个时间片，并按照
-旧版 xw 逻辑将同一源节点的 100 行逐列累计为实际 N×N 发送矩阵。行列按外部
-`sat_id` 数值升序，单元值和累计结果的单位均为 Gbps。
-
-当前 CSV/UDP 路径用于临时兼容旧 xw。每个非零源宿对创建一个 `UdpClient`，
-使用 1024 字节包，并按以下规则在 100 秒内均匀发送：
+本目录只保存 SatCompute 当前支持的 JSON 业务输入：
 
 ```text
-scaled_value = accumulated_value × offeredLoad
-MaxPackets = max(1, floor(scaled_value × 2^30 / (1024 × 8 × 10000)))
-Interval = 100 s / MaxPackets
+workload/  NetworkTransfer 正式和本地压力输入
+test/      NetworkTransfer 小型回归输入
+task/      TaskTrace 任务到达输入
 ```
 
-TCP 不使用该包数限制，仍按
-`accumulated_value × offeredLoad × 1e9 bps` 连续发送。
-当 `--offeredLoad=0` 时，程序不读取业务文件，也不创建客户端流。
+程序只读取命令行显式指定的输入，不会自动加载本目录下的其他 JSON。JSON
+记录描述源、目的、应用字节数和到达时间；分包模式、MTU 和 UDP 端口由运行
+参数及程序确定性派生。NetworkTransfer 不设置人工应用发送速率，每包按当前
+选定首跳的链路序列化时间调度。
 
-JSON 每条记录只描述 transfer ID、源卫星、目的卫星、应用字节数和到达时间。
-分包模式、MTU 和 UDP 端口由运行参数及程序确定性派生。NetworkTransfer
-不设置人工应用发送速率；每包按当前选定首跳的链路序列化时间调度。CSV 本轮
-仅作兼容保留，后续 N0 审查完成后再单独删除。
+旧版 traffic-matrix 倍率、TCP OnOff 和 legacy UDP 聚合能力已作为批准的
+范围收缩退出项目，不迁移到 JSON。这里的 CSV 退出只涉及 SatCompute 自有
+业务输入，不影响 ns-3 上游 CSV helper，也不改变 JSON 拓扑快照格式。
+
+## NetworkTransfer workload
+
+- `workload-5000-varied.json`：5000 条不同大小的规模输入，同时作为 CI 的规模
+  回归；
+- `mixed-large-local.json`：10 条 128 MiB–1 GiB 的本地完整压力输入，不在每次
+  CI 中运行。
+
+## NetworkTransfer test
+
+- `canonical-order-a.json`、`canonical-order-b.json`：验证记录顺序规范化和余数
+  包；
+- `diamond-4-static-transfers.json`：验证静态 ECMP 双路径与重复确定性；
+- `diamond-4-dynamic-transfers.json`：验证链路变化后的 `2 → 1 → 2` 路由候选；
+- `diamond-4-hrw-dynamic-transfers.json`：四条 flow 跨越候选不变、删除和恢复
+  的四个 route epoch，验证 HRW 最小迁移语义；
+- `size-aware-static-transfers.json`：八条同时到达、大小不同的 flow，验证
+  HRW top-2 物理下一跳预留和发送完成释放；
+- `size-aware-dynamic-transfers.json`：验证 size-aware sticky、候选失效重选、
+  恢复后旧 flow 不迁回和新 flow 使用恢复候选；
+- `mixed-large-ci.json`：验证至少 10 条大流量以及全部 size-aware 分包档位；
+- `fqcodel-bottleneck-transfers.json`：两个高速入口汇入低速出口，确定性触发
+  默认 FqCoDel `QUEUE_DISC` 丢弃；
+- `n1-75-fqcodel-replay.json`：三条 N1 目标流及 38 条 1-byte source-port
+  占位流，用于比较旧 hash、纯 HRW 与大小感知 HRW；占位流不参与竞争窗口。
+
+这些文件由 `--transferTrace=<file>` 读取，每条记录直接声明一次网络传输。其
+closed-world 字段为 `transfer_id`、`source_node_id`、
+`destination_node_id`、`size_bytes` 和 `arrival_time_ns`。
+
+## TaskTrace
+
+任务到达属于 traffic side，统一放在 `task/`，通过 `--taskTrace=<file>` 读取：
+
+```json
+{
+  "schema_version": "0.1",
+  "tasks": [
+    {
+      "task_id": 1,
+      "source_node_id": 0,
+      "compute_node_id": 3,
+      "result_node_id": 0,
+      "input_bytes": 4096,
+      "output_bytes": 2050,
+      "compute_work_units": 1000000,
+      "arrival_time_ns": 100000000
+    }
+  ]
+}
+```
+
+根对象只允许 `schema_version` 和 `tasks`；每项只允许示例中的八个字段。
+ID、字节数、计算量和到达时间都是整数；数据量与计算量必须大于 0。
+`source_node_id`、`compute_node_id` 和 `result_node_id` 必须引用拓扑卫星，
+其中 `compute_node_id` 还必须引用本次 `--computeProfile` 中的节点。任务按
+`task_id` canonical sort，所以数组排列不影响执行和结构化输出。
+
+`task/test/` 包含单任务 ECMP、三任务 FCFS、异构算力、TaskTrace 换序输入，
+以及不进入每次 CI 的 60-task size-aware 中型碰撞输入及生成摘要。
+静态算力不是流量，单独位于
+[`../topology/resources/`](../topology/resources/)。
+`--computeProfile` 与 `--taskTrace` 必须同时指定，并与 `--transferTrace`
+互斥。
+
+进入 N1 后继续保留这些 N0 输入和
+`tools/validation/check-ecmp-output.py`，用于确认任务计算与调度没有破坏
+N0 网络传输基线；`tools/validation/check-task-output.py` 验证完整任务闭环。
+快速用例继续进入每次 CI，完整本地压力输入按需运行。只有当某项 N0 行为被
+明确废弃且已有替代验证时，才应同时删除其输入和检查代码。

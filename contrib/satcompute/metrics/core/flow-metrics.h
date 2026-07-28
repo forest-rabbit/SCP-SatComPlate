@@ -17,9 +17,10 @@
 #ifndef SATCOMPUTE_FLOW_METRICS_H
 #define SATCOMPUTE_FLOW_METRICS_H
 
-#include "metrics.h"
+#include "../metrics.h"
 
 #include "ns3/flow-monitor-module.h"
+#include "ns3/ipv4-flow-classifier.h"
 #include "ns3/ptr.h"
 
 #include <cstdint>
@@ -56,9 +57,9 @@ const char* GetIpv4DropReasonName(uint32_t reasonCode);
 
 Ptr<FlowMonitor> InstallSimulationFlowMonitor();
 
-FlowAggregate CollectFlowAggregate(Ptr<FlowMonitor> monitor);
+Ptr<Ipv4FlowClassifier> GetSimulationIpv4FlowClassifier();
 
-void PrintNetworkMetrics(const FlowAggregate& metrics);
+FlowAggregate CollectFlowAggregate(Ptr<FlowMonitor> monitor);
 
 void WriteNetworkMetrics(const FlowAggregate& metrics,
                          const std::string& outputDirectory);
@@ -68,11 +69,6 @@ void WriteNetworkFlowDetails(
   const std::vector<TransferFlowMetadata>& transferFlows,
   const std::string& outputDirectory,
   bool requireCompleteCoverage);
-
-void WriteFlowDropReasons(
-  Ptr<FlowMonitor> monitor,
-  const std::vector<TransferFlowMetadata>& transferFlows,
-  const std::string& outputDirectory);
 
 } // namespace ns3
 

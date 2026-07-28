@@ -21,7 +21,7 @@ example under `contrib/satcompute/input/`.
 source .venv/bin/activate
 ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
 ./waf build
-./waf --run-no-build "satcompute --simulationDuration=110 --offeredLoad=0 --outputDir=/tmp/satcompute-smoke"
+./waf --run-no-build "satcompute --simulationDuration=110 --outputDir=/tmp/satcompute-smoke"
 ```
 
 The smoke test must create 66 satellites, load only ISLs, apply all static

@@ -419,7 +419,10 @@ def flow_drop_metrics(directory):
         reason["reason_name"]: reason["dropped_packets"]
         for reason in run.get("flow_monitor_drop_reasons", [])
     }
-    drop_rows = read_optional_rows(directory, "flow-drop-reasons.csv")
+    drop_rows = read_optional_rows(
+        directory,
+        "diagnostics/failure/flow-drop-reasons.csv",
+    )
     csv_reasons = Counter()
     unattributed_by_flow = {}
     for row in drop_rows:

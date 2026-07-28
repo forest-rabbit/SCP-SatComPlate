@@ -14,22 +14,37 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_TRANSFER_METRICS_H
-#define SATCOMPUTE_TRANSFER_METRICS_H
+#ifndef SATCOMPUTE_FAILURE_DIAGNOSTICS_H
+#define SATCOMPUTE_FAILURE_DIAGNOSTICS_H
 
-#include "metrics.h"
+#include "../core/flow-metrics.h"
 
 #include <string>
 #include <vector>
 
 namespace ns3 {
 
-void WriteEcmpRouteEvents(
-  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
+class TaskCoordinator;
+
+std::string GetFailureDiagnosticDirectory(
   const std::string& outputDirectory);
 
-void WriteTransferSummaries(
-  const std::vector<TransferSummaryRecord>& summaries,
+void PrepareFailureDiagnosticDirectory(
+  const std::string& outputDirectory);
+
+void RemoveFailureDiagnosticOutputs(const std::string& outputDirectory);
+
+void WriteFailureDiagnostics(
+  const FlowAggregate& aggregate,
+  double simulationDurationSeconds,
+  const RunMetadata& runMetadata,
+  const std::vector<TransferFlowMetadata>& transferFlows,
+  const std::vector<TransferSummaryRecord>& transferSummaries,
+  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
+  const std::vector<IslDirectedLink>& directedLinks,
+  const std::vector<IslQueueDropEvent>& queueDropEvents,
+  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
+  const TaskCoordinator& coordinator,
   const std::string& outputDirectory);
 
 } // namespace ns3

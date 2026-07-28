@@ -16,15 +16,15 @@
 
 // SatCompute 可执行程序入口：解析参数、运行仿真并写出网络指标。
 
-#include "metrics/ecmp-route-recorder.h"
-#include "metrics/flow-metrics.h"
+#include "metrics/core/flow-metrics.h"
+#include "metrics/diagnostics/failure-diagnostics.h"
 #include "metrics/metrics.h"
+#include "metrics/routing/ecmp-route-recorder.h"
 #include "para.h"
 #include "task/compute-profile.h"
 #include "task/task-coordinator.h"
 #include "task/task-trace.h"
 #include "topo.h"
-#include "traffic/background-traffic.h"
 #include "traffic/network-transfer.h"
 
 #include "ns3/core-module.h"
@@ -54,15 +54,6 @@ main(int argc, char* argv[])
   commandLine.AddValue("simulationDuration",
                        "Simulation duration in seconds",
                        config.simulationDurationSeconds);
-  commandLine.AddValue("offeredLoad",
-                       "Multiplier applied to the traffic matrix",
-                       config.offeredLoad);
-  commandLine.AddValue("transport",
-                       "Application transport: udp or tcp",
-                       config.transport);
-  commandLine.AddValue("trafficMatrix",
-                       "100N-row by N-column traffic input in Gbps",
-                       config.trafficMatrix);
   commandLine.AddValue("transferTrace",
                        "Optional NetworkTransfer JSON trace",
                        config.transferTrace);
@@ -111,12 +102,6 @@ main(int argc, char* argv[])
                        config.outputDirectory);
   commandLine.Parse(argc, argv);
 
-  std::transform(config.transport.begin(),
-                 config.transport.end(),
-                 config.transport.begin(),
-                 [](unsigned char character) {
-                   return static_cast<char>(std::tolower(character));
-                 });
   std::transform(config.transferLogMode.begin(),
                  config.transferLogMode.end(),
                  config.transferLogMode.begin(),
@@ -153,17 +138,6 @@ main(int argc, char* argv[])
     {
       std::cerr << "[RUN:Error] simulationDuration must be a finite positive number"
                 << std::endl;
-      return EXIT_FAILURE;
-    }
-  if (!std::isfinite(config.offeredLoad) || config.offeredLoad < 0.0)
-    {
-      std::cerr << "[RUN:Error] offeredLoad must be a finite non-negative number"
-                << std::endl;
-      return EXIT_FAILURE;
-    }
-  if (config.transport != "udp" && config.transport != "tcp")
-    {
-      std::cerr << "[RUN:Error] transport must be udp or tcp" << std::endl;
       return EXIT_FAILURE;
     }
   if (config.transferPayloadBytes == 0
@@ -226,24 +200,6 @@ main(int argc, char* argv[])
                 << std::endl;
       return EXIT_FAILURE;
     }
-  if (taskMode && config.offeredLoad > 0.0)
-    {
-      std::cerr << "[RUN:Error] task mode requires offeredLoad=0"
-                << std::endl;
-      return EXIT_FAILURE;
-    }
-  if (transferMode && config.offeredLoad > 0.0)
-    {
-      std::cerr << "[RUN:Error] transferTrace requires offeredLoad=0"
-                << std::endl;
-      return EXIT_FAILURE;
-    }
-  if ((transferMode || taskMode) && config.transport != "udp")
-    {
-      std::cerr << "[RUN:Error] NetworkTransfer and task modes support udp only"
-                << std::endl;
-      return EXIT_FAILURE;
-    }
   if (config.routingMode != "global-first"
       && config.routingMode != "global-hash-per-flow"
       && config.routingMode != "global-hrw-per-flow"
@@ -286,13 +242,10 @@ main(int argc, char* argv[])
       return EXIT_FAILURE;
     }
 
-  bool legacyMode = !taskMode && !transferMode && config.offeredLoad > 0.0;
   std::string runMode =
     taskMode
       ? "task"
-      : (transferMode
-           ? "network-transfer"
-           : (legacyMode ? "legacy-traffic" : "no-workload"));
+      : (transferMode ? "network-transfer" : "topology-only");
   bool silentRun =
     (transferMode && config.transferLogMode == "silent")
     || (taskMode && config.taskLogMode == "silent");
@@ -344,12 +297,6 @@ main(int argc, char* argv[])
                     << std::endl
                     << "  transferLogMode    : "
                     << config.transferLogMode << std::endl;
-        }
-      else if (legacyMode)
-        {
-          std::cout << "  trafficMatrix      : " << config.trafficMatrix << std::endl
-                    << "  offeredLoad        : " << config.offeredLoad << std::endl
-                    << "  transport          : " << config.transport << std::endl;
         }
       else
         {
@@ -411,13 +358,8 @@ main(int argc, char* argv[])
                                   config.simulationDurationSeconds,
                                   config.taskLogMode);
     }
-  ApplicationState backgroundApplications;
   NetworkTransferState networkTransfers;
-  if (!taskMode && !transferMode)
-    {
-      backgroundApplications = InstallApplications(config, topology);
-    }
-  else if (transferMode)
+  if (transferMode)
     {
       networkTransfers =
         InstallNetworkTransfers(config.transferTrace,
@@ -454,10 +396,6 @@ main(int argc, char* argv[])
     {
       applicationMetrics =
         taskCoordinator->GetTransferEngine()->CollectApplicationMetrics();
-    }
-  else if (!taskMode)
-    {
-      applicationMetrics = CollectApplicationMetrics(backgroundApplications);
     }
   std::vector<TransferFlowMetadata> transferFlowMetadata;
   std::vector<TransferSummaryRecord> transferSummaries;
@@ -531,7 +469,11 @@ main(int argc, char* argv[])
                   << (config.diagnosticMode == "failure"
                         ? "diagnostics"
                         : "base metrics")
-                  << " were written to " << config.outputDirectory
+                  << " were written to "
+                  << (config.diagnosticMode == "failure"
+                        ? GetFailureDiagnosticDirectory(
+                            config.outputDirectory)
+                        : config.outputDirectory)
                   << std::endl;
           if (config.taskCompletionPolicy == "strict")
             {

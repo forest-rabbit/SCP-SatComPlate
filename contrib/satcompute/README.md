@@ -6,7 +6,7 @@
 2. 按外部卫星 ID 的稳定顺序创建节点和 `/32` service 地址；
 3. 按无向端点 ID 的 canonical 顺序创建 ISL 和 `/30` 网段；
 4. 由原生 `GlobalRouteManager` 填充路由表；
-5. 可选安装 legacy CSV 背景流量、NetworkTransfer JSON，或分离输入的任务闭环；
+5. 可选安装 NetworkTransfer JSON 或分离输入的任务闭环；无输入时只运行拓扑；
 6. 后续快照统一更新链路，再调用原生 `RecomputeRoutingTables()` 并推进 epoch；
 7. 输出网络、传输、任务和计算节点的结构化证据。
 
@@ -22,18 +22,15 @@ source .venv/bin/activate
 ./waf --run-no-build satcompute
 ```
 
-`input/topology/json/tests/`、`input/topology/json/resources/test/`、
-`input/traffic/json/test/`、`input/traffic/json/task/test/` 和 `tools/`
+`input/topology/tests/`、`input/topology/resources/test/`、
+`input/traffic/test/`、`input/traffic/task/test/` 和 `tools/`
 中的检查器是外部端到端验证资产，不进入 `ns3-satcompute` 模块编译。需要运行
 ns-3 上游单元测试时再显式启用 `--enable-tests`；日常平台构建不启用
 examples 或 tests。
 
 ```text
-topologyDir              = contrib/satcompute/input/topology/json/examples/xw-66sat
+topologyDir              = contrib/satcompute/input/topology/examples/xw-66sat
 simulationDuration       = 110
-offeredLoad              = 0
-transport                = udp
-trafficMatrix            = contrib/satcompute/input/traffic/csv/traffic_matrix(66).csv
 transferTrace            = empty
 computeProfile           = empty
 taskTrace                = empty
@@ -48,19 +45,16 @@ taskCompletionPolicy     = strict
 diagnosticMode           = off
 routingMode              = global-hash-per-flow
 ecmpHashSeed             = 1
-outputDir                = contrib/satcompute/output
+outputDir                = /tmp/satcompute-output
 ```
 
 ## 参数合同
 
 - `--topologyDir`：卫星 JSON 全量快照目录。
 - `--simulationDuration`：有限正秒数。
-- `--offeredLoad`：legacy 业务矩阵倍率；为 0 时不读取矩阵。
-- `--transport`：legacy 模式支持 `udp` 或 `tcp`。
-- `--trafficMatrix`：legacy 100×N 行、N 列 CSV，单位 Gbps。
 - `--transferTrace`：可选 NetworkTransfer JSON。
-- `--computeProfile`：`topology/json/resources` 下的静态计算能力 JSON。
-- `--taskTrace`：`traffic/json/task` 下的任务到达 JSON。
+- `--computeProfile`：`topology/resources` 下的静态计算能力 JSON。
+- `--taskTrace`：`traffic/task` 下的任务到达 JSON。
 - `--transferChunkMode`：`fixed` 或 `size-aware`，默认 `fixed`。
 - `--transferPayloadBytes`：`fixed` 模式的 UDP payload 上限，默认 1024。
 - `--islMtuBytes`：所有当前及后续 ISL 的 MTU，默认 1500。
@@ -79,24 +73,13 @@ outputDir                = contrib/satcompute/output
   `global-hash-per-flow`。
 - `--ecmpHashSeed`：三种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
   前缀。
-- `--outputDir`：结构化指标目录。
+- `--outputDir`：结构化指标目录，默认 `/tmp/satcompute-output`。正式实验应
+  显式填写仓库外的持久绝对路径。
 
-指定 `transferTrace` 时必须保持 `offeredLoad=0`，且只支持 UDP；此模式不会读取
-`trafficMatrix`。`computeProfile` 与 `taskTrace` 必须同时指定；任务模式不能再
-指定 `transferTrace` 或正的 `offeredLoad`，同样只支持 UDP。
-
-## Legacy 背景流量
-
-业务文件必须恰好有 100×N 行、N 列。当前 UDP 兼容公式为：
-
-```text
-scaled_value = matrix_value × offeredLoad
-MaxPackets = max(1, floor(scaled_value × 2^30 / (1024 × 8 × 10000)))
-Interval = 100 s / MaxPackets
-```
-
-默认 66 星输入下，`offeredLoad=0.0001` 计划 4356 个包，
-`offeredLoad=0.001` 计划 17712 个包。TCP 仍使用连续 `OnOff`。
+`computeProfile` 与 `taskTrace` 必须同时指定，任务模式不能同时指定
+`transferTrace`。NetworkTransfer 与任务模式都使用 UDP；三项输入均为空时
+运行 `topology-only`，不安装 PacketSink、NetworkTransfer 或
+TaskCoordinator。
 
 ## NetworkTransfer
 
@@ -142,15 +125,15 @@ NetworkTransfer 不依赖 IPv4 分片。
 Task 模式保持两类输入独立：
 
 ```text
-topology/json/resources/...  ComputeProfile：节点静态计算能力
-traffic/json/task/...        TaskTrace：任务、数据量、计算量与到达时间
+topology/resources/...  ComputeProfile：节点静态计算能力
+traffic/task/...        TaskTrace：任务、数据量、计算量与到达时间
 ```
 
 `xw-66sat-static-2g-compute-profile.json` 是 22 个计算节点的受限对照；
 `xw-66sat-static-2g-all-compute-profile.json` 覆盖卫星 0–65，是 66
 计算节点正式压力矩阵的配置。大型压力 TaskTrace 和输出不提交仓库，精确
 生成参数、输入哈希及 50%/75%/109 GB 结果记录在
-`docs/n1-6-stress-validation-review.md`。
+`docs/reviews/n1-6-stress-validation-review.md`。
 
 `ComputeProfile` 根对象只允许 `schema_version` 和 `compute_nodes`，版本为
 `0.1`。每个计算节点只允许：
@@ -208,11 +191,10 @@ ceil(compute_work_units × 1,000,000,000
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
-  --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --simulationDuration=10 \
-  --offeredLoad=0 \
   --taskLogMode=verbose \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
@@ -225,7 +207,8 @@ ceil(compute_work_units × 1,000,000,000
 ```
 
 FCFS 运行只需把 `taskTrace` 改为 `task-fcfs.json`，并把输出目录改为
-`/tmp/satcompute-task-fcfs`。`tools/check-task-output.py` 同时验证单任务两段
+`/tmp/satcompute-task-fcfs`。`tools/validation/check-task-output.py` 同时
+验证单任务两段
 ECMP、FCFS、异构算力和两类 JSON 数组换序确定性。
 
 ## 地址与路由
@@ -279,8 +262,8 @@ gateway 和 output interface，就进入同一个物理下一跳负载桶；dest
 mask 仍参与 HRW 分数及 sticky 身份，但不拆分链路负载。拓扑 epoch 更新后，
 完整 sticky candidate 仍存在就保持原选择；只有它消失时才释放并重选，恢复
 候选不会让已有 flow 自动迁回。sender 把最后一个 payload 成功交给 UDP socket
-后，释放该 flow 在全部节点的预留。已发送完的尾包、未登记 flow 和 legacy
-流量回退纯 HRW，且不会重新建立预留。
+后，释放该 flow 在全部节点的预留。已发送完的尾包和未登记 flow 回退纯 HRW，
+且不会重新建立预留。
 
 该模式不设置大流阈值；大 transfer 仅因声明字节更大而具有更高权重。它不读取
 FqCoDel、DropTail、实时利用率或时延，也不实现周期采样、中途主动迁移、速率
@@ -296,10 +279,9 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
   --simulationDuration=3 \
-  --offeredLoad=0 \
-  --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -309,10 +291,9 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --outputDir=/tmp/satcompute-ecmp-static-a"
 
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
   --simulationDuration=3 \
-  --offeredLoad=0 \
-  --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -326,10 +307,9 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-dynamic \
+  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-dynamic \
   --simulationDuration=6 \
-  --offeredLoad=0 \
-  --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -338,7 +318,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ecmp-dynamic"
 
-python3 contrib/satcompute/tools/check-ecmp-output.py \
+python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --first=/tmp/satcompute-ecmp-static-a \
   --second=/tmp/satcompute-ecmp-static-b \
   --dynamic=/tmp/satcompute-ecmp-dynamic
@@ -352,10 +332,9 @@ HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序�
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-hrw-dynamic \
+  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
-  --offeredLoad=0 \
-  --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-hrw-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=64000 \
   --islMtuBytes=65535 \
@@ -366,7 +345,8 @@ HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序�
   --outputDir=/tmp/satcompute-hrw-seed1-a"
 ```
 
-CI 对 seed 1 和 2 各重复两次，并由 `tools/check-ecmp-output.py` 独立重算
+CI 对 seed 1 和 2 各重复两次，并由
+`tools/validation/check-ecmp-output.py` 独立重算
 HRW 分数，验证候选顺序、跨 epoch 稳定性、增删候选的最小迁移、seed
 可复现性，以及旧 `global-hash-per-flow` 的固定黄金结果。
 
@@ -379,7 +359,7 @@ HRW 分数，验证候选顺序、跨 epoch 稳定性、增删候选的最小迁
 使用恢复后的较轻候选。两类场景各重复两次后运行：
 
 ```bash
-python3 contrib/satcompute/tools/check-size-aware-output.py \
+python3 contrib/satcompute/tools/validation/check-size-aware-output.py \
   --static-hrw=<pure-hrw-output> \
   --static-first=<size-aware-static-a> \
   --static-second=<size-aware-static-b> \
@@ -395,7 +375,8 @@ python3 contrib/satcompute/tools/check-size-aware-output.py \
 
 `n1-75-fqcodel-replay.json` 包含三条目标流和 38 条 1-byte source-port
 占位流。旧 hash、纯 HRW 和大小感知模式的本地输出由
-`tools/check-size-aware-replay.py` 比较；占位流必须在 0 ns 完成释放，
+`tools/validation/check-size-aware-replay.py` 比较；占位流必须在 0 ns
+完成释放，
 0.1 s 目标流开始前总预留必须为零。
 
 冻结 75% 压力输入不提交仓库。保留基线和大小感知输出时，可在主检查命令
@@ -404,19 +385,19 @@ python3 contrib/satcompute/tools/check-size-aware-output.py \
 应用字节等场景合同，并要求任务完成数不低于 1493、QueueDisc 丢包少于
 54、受害 transfer 不增加，以及 device queue、UDP socket 和未归因丢包
 保持为零。最终本地结果和输入哈希记录在
-`docs/pre-n2-size-aware-hrw-validation.md`。
+`docs/reviews/pre-n2-size-aware-hrw-validation.md`。
 
 ## 变长规模输入
 
-`input/traffic/json/workload/workload-5000-varied.json` 由
-`tools/generate-transfer-workload.py` 确定性生成。5000 条记录的
+`input/traffic/workload/workload-5000-varied.json` 由
+`tools/generation/generate-transfer-workload.py` 确定性生成。5000 条记录的
 `size_bytes` 均不同，范围为 1024–81920 bytes；使用 4096-byte cap 时，每条
 transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节。
 
 ```bash
 ./waf --run-no-build "satcompute \
   --simulationDuration=8 \
-  --transferTrace=contrib/satcompute/input/traffic/json/workload/workload-5000-varied.json \
+  --transferTrace=contrib/satcompute/input/traffic/workload/workload-5000-varied.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=4096 \
   --islMtuBytes=9000 \
@@ -433,10 +414,9 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
   --simulationDuration=45 \
-  --offeredLoad=0 \
-  --transferTrace=contrib/satcompute/input/traffic/json/test/mixed-large-ci.json \
+  --transferTrace=contrib/satcompute/input/traffic/test/mixed-large-ci.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1500000 \
@@ -444,9 +424,9 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
   --routingMode=global-hash-per-flow \
   --outputDir=/tmp/satcompute-mixed-large-ci"
 
-python3 contrib/satcompute/tools/check-ecmp-output.py \
+python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --large=/tmp/satcompute-mixed-large-ci \
-  --large-input=contrib/satcompute/input/traffic/json/test/mixed-large-ci.json
+  --large-input=contrib/satcompute/input/traffic/test/mixed-large-ci.json
 ```
 
 `mixed-large-local.json` 是不放入 CI 的完整压力输入，含 10 条不同大流量，
@@ -454,10 +434,9 @@ python3 contrib/satcompute/tools/check-ecmp-output.py \
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
   --simulationDuration=340 \
-  --offeredLoad=0 \
-  --transferTrace=contrib/satcompute/input/traffic/json/workload/mixed-large-local.json \
+  --transferTrace=contrib/satcompute/input/traffic/workload/mixed-large-local.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1500000 \
@@ -465,9 +444,9 @@ python3 contrib/satcompute/tools/check-ecmp-output.py \
   --routingMode=global-hash-per-flow \
   --outputDir=/tmp/satcompute-mixed-large-local"
 
-python3 contrib/satcompute/tools/check-ecmp-output.py \
+python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --large-local=/tmp/satcompute-mixed-large-local \
-  --large-local-input=contrib/satcompute/input/traffic/json/workload/mixed-large-local.json
+  --large-local-input=contrib/satcompute/input/traffic/workload/mixed-large-local.json
 ```
 
 64000-byte effective payload 只用于降低大数据仿真的事件数量，不宣称真实卫星
@@ -481,11 +460,10 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
   --simulationDuration=2 \
-  --offeredLoad=0 \
-  --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1000 \
@@ -498,18 +476,19 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
   --outputDir=/tmp/satcompute-task-failure"
 
 # 上一条命令的预期退出码为 1。
-python3 contrib/satcompute/tools/check-task-output.py failure \
-  --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
-  --compute-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
-  --task-trace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+python3 contrib/satcompute/tools/validation/check-task-output.py failure \
+  --topology-dir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --compute-profile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --task-trace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --output-dir=/tmp/satcompute-task-failure \
   --require-queue-drop
 ```
 
 验证接收端缓冲区证据时，复用同一 fixture，将运行参数改为
 `--islQueueBytes=1500000 --receiverRcvBufBytes=1000`，并把检查器末尾改为
-`--require-udp-socket-drop`。该用例应由 `udp-socket-drops.csv` 直接记录
-socket 缓冲区 Drop；FlowMonitor 可能仍将这些包记为 IP 层已接收。
+`--require-udp-socket-drop`。该用例应由
+`diagnostics/failure/udp-socket-drops.csv` 直接记录 socket 缓冲区 Drop；
+FlowMonitor 可能仍将这些包记为 IP 层已接收。
 
 正式压力运行使用
 `--taskCompletionPolicy=report --diagnosticMode=failure`。无论结果为
@@ -517,7 +496,7 @@ socket 缓冲区 Drop；FlowMonitor 可能仍将这些包记为 IP 层已接收�
 传输字节/包计数、计算节点计数、FlowMonitor 与失败诊断聚合：
 
 ```bash
-python3 contrib/satcompute/tools/check-task-output.py stress \
+python3 contrib/satcompute/tools/validation/check-task-output.py stress \
   --topology-dir=<topology-dir> \
   --compute-profile=<compute-profile.json> \
   --task-trace=<task-trace.json> \
@@ -531,9 +510,10 @@ python3 contrib/satcompute/tools/check-task-output.py stress \
 
 ### FlowMonitor DropReason
 
-`diagnosticMode=failure` 会额外写出 `flow-drop-reasons.csv`。每行记录一个
-五元组的一种非零 IPv4 FlowMonitor DropReason；`QUEUE` 表示 NetDevice
-发送队列丢弃，`QUEUE_DISC` 表示流量控制层 QueueDisc 丢弃。
+`diagnosticMode=failure` 会额外写出
+`diagnostics/failure/flow-drop-reasons.csv`。每行记录一个五元组的一种
+非零 IPv4 FlowMonitor DropReason；`QUEUE` 表示 NetDevice 发送队列丢弃，
+`QUEUE_DISC` 表示流量控制层 QueueDisc 丢弃。
 `UNATTRIBUTED_TIMEOUT` 只表示 `lostPackets` 没有对应显式 DropReason，
 不能据此推断具体丢弃层。
 
@@ -542,10 +522,9 @@ python3 contrib/satcompute/tools/check-task-output.py stress \
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/json/tests/fqcodel-bottleneck \
+  --topologyDir=contrib/satcompute/input/topology/tests/fqcodel-bottleneck \
   --simulationDuration=3 \
-  --offeredLoad=0 \
-  --transferTrace=contrib/satcompute/input/traffic/json/test/fqcodel-bottleneck-transfers.json \
+  --transferTrace=contrib/satcompute/input/traffic/test/fqcodel-bottleneck-transfers.json \
   --diagnosticMode=failure \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1400 \
@@ -556,7 +535,7 @@ python3 contrib/satcompute/tools/check-task-output.py stress \
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-fqcodel"
 
-python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
+python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
   --output-dir=/tmp/satcompute-fqcodel \
   --require-reason=QUEUE_DISC \
   --forbid-reason=QUEUE \
@@ -566,14 +545,12 @@ python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
 
 检查器交叉验证 DropReason CSV、逐流详情和 `run-summary.json`。完整 75%
 诊断及局部 replay 结果记录在
-`docs/n1-6-stress-validation-review.md`，大型输入与输出不提交仓库。
+`docs/reviews/n1-6-stress-validation-review.md`，大型输入与输出不提交仓库。
 
 ## 输出与当前边界
 
 - `network-flow-metrics.csv`：所有 IPv4 FlowMonitor 流的聚合结果；
 - `network-flow-details.csv`：五元组、transfer ID、应用 payload 与逐流 IP 指标；
-- `flow-drop-reasons.csv`：诊断模式下按五元组和 IPv4 DropReason 输出显式
-  丢弃，并单列未归因/超时 loss；
 - `ecmp-route-events.csv`：每个 epoch、外部卫星 ID 和五元组的首次选择；
   `hash_value` 在旧模式中是 five-tuple hash，在 HRW 模式中是获胜候选分数；
 - `size-aware-reservation-events.csv`：仅在 `global-size-aware-hrw` 中写出
@@ -590,6 +567,11 @@ python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
   端到端时间、接收缓冲区配置及可用时的 UDP socket Drop 聚合；诊断关闭时
   UDP Drop 聚合为 `null`，不会误报为零；同时汇总 FlowMonitor 显式
   DropReason 与未归因 loss。
+
+失败输出统一位于 `<outputDir>/diagnostics/failure/`：
+
+- `flow-drop-reasons.csv`：按五元组和 IPv4 DropReason 输出显式丢弃，并
+  单列未归因/超时 loss；
 - `incomplete-tasks.csv`、`incomplete-transfers.csv`：失败任务运行中的全部
   未完成对象及 partial 收发状态；
 - `isl-queue-drops.csv`、`isl-queue-drop-summary.csv`：按有向 ISL 输出
@@ -599,12 +581,13 @@ python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
 - `flow-link-concentration.csv`、`diagnostic-summary.json`：计划业务量、
   ECMP 链路集中度、ISL/UDP socket 丢包和完成状态摘要。
 
-任务与计算 CSV 只在任务模式生成；任务失败诊断文件仅在
-`diagnosticMode=failure` 且任务未全部完成时生成。
-`flow-drop-reasons.csv` 还会在显式启用诊断的 NetworkTransfer 模式中
-生成。复用同一个 `outputDir` 时，如果本次不会写诊断，程序会清理上述九个
-旧诊断文件；非 size-aware 运行也会清理两个旧的 size-aware 文件，避免把
-历史结果误认为本次结果。
-未匹配 NetworkTransfer 的 legacy FlowMonitor 行使用 `transfer_id=0`。当前
+任务与计算 CSV 只在任务模式生成；完整失败目录仅在
+`diagnosticMode=failure` 且任务未全部完成时生成。显式启用诊断的
+NetworkTransfer 模式保留例外，只在该目录生成 `flow-drop-reasons.csv`。
+复用同一个 `outputDir` 时，程序先清理根目录旧路径及 failure 目录中的
+九个已知诊断文件；不会递归删除未知用户文件，并且只在目录为空时移除
+`failure/` 和 `diagnostics/`。非 size-aware 运行也会清理两个旧的
+size-aware 文件，避免把历史结果误认为本次结果。
+未匹配 NetworkTransfer 的 FlowMonitor 行使用 `transfer_id=0`。当前
 任务调度仅支持单服务台、非抢占 FCFS；尚未实现可靠重传、故障、
 checkpoint、备份或恢复语义。

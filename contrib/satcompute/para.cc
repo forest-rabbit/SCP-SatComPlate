@@ -28,31 +28,23 @@ GetDefaultSatComputeConfig()
   // --topologyDir：节点、链路分离的 JSON 全量快照目录。目录必须包含时间匹配的
   // nodes_<time>s.json 和 topology_<time>s.json；可填写仓库相对路径或绝对路径。
   config.topologyDirectory =
-    "contrib/satcompute/input/topology/json/examples/xw-66sat";
+    "contrib/satcompute/input/topology/examples/xw-66sat";
 
-  // --trafficMatrix：临时保留的 legacy CSV 业务输入。N 颗卫星要求 100*N 行、
-  // 每行 N 列，数值表示 Gbps；仅 legacy 模式且 offeredLoad>0 时读取。
-  config.trafficMatrix =
-    "contrib/satcompute/input/traffic/csv/traffic_matrix(66).csv";
-
-  // --transferTrace：NetworkTransfer JSON 路径。空字符串表示使用 legacy 模式；
-  // 非空时启用 schema_version=0.1 的逐流输入，并要求 offeredLoad=0、transport=udp。
+  // --transferTrace：NetworkTransfer JSON 路径。非空时启用 schema_version=0.1
+  // 的逐流 UDP 输入；空字符串且没有任务输入时运行纯拓扑模式。
   config.transferTrace = "";
 
   // --computeProfile：topology/resources 下的静态计算能力 JSON。
   // 必须与 taskTrace 同时提供；空字符串表示不启用任务模式。
   config.computeProfile = "";
 
-  // --taskTrace：traffic/json/task 下的任务到达 JSON。
-  // 必须与 computeProfile 同时提供，且不能与 transferTrace 或 offeredLoad 混用。
+  // --taskTrace：traffic/task 下的任务到达 JSON。
+  // 必须与 computeProfile 同时提供，且不能与 transferTrace 混用。
   config.taskTrace = "";
 
-  // --outputDir：结构化指标输出目录；可填写仓库相对路径或绝对路径。
-  config.outputDirectory = "contrib/satcompute/output";
-
-  // --transport：legacy 流量的传输协议，可填 "udp" 或 "tcp"。
-  // NetworkTransfer 当前只支持 "udp"。
-  config.transport = "udp";
+  // --outputDir：结构化指标输出目录。默认写入 /tmp，避免污染工作树；
+  // 正式实验应显式填写仓库外的持久绝对路径。
+  config.outputDirectory = "/tmp/satcompute-output";
 
   // --routingMode：
   // "global-first" 使用 ns-3 Ipv4GlobalRouting 的默认路由选择；
@@ -113,9 +105,6 @@ GetDefaultSatComputeConfig()
   // --simulationDuration：仿真停止时间，单位为秒，必须是有限正数。
   config.simulationDurationSeconds = 110.0;
 
-  // --offeredLoad：legacy CSV 业务需求的非负倍率；0 表示不安装 client flow。
-  // NetworkTransfer 模式必须保持为 0。
-  config.offeredLoad = 0.0;
   return config;
 }
 

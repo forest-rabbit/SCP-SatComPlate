@@ -17,8 +17,8 @@
 #ifndef SATCOMPUTE_ECMP_ROUTE_RECORDER_H
 #define SATCOMPUTE_ECMP_ROUTE_RECORDER_H
 
-#include "../routing/satcompute-ipv4-global-routing.h"
-#include "../topo.h"
+#include "../../routing/satcompute-ipv4-global-routing.h"
+#include "../../topo.h"
 
 #include <vector>
 

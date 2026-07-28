@@ -18,7 +18,7 @@
 
 #include "failure-diagnostics.h"
 
-#include "../task/task-coordinator.h"
+#include "../../task/task-coordinator.h"
 
 #include "ns3/abort.h"
 
@@ -32,6 +32,7 @@
 #include <set>
 #include <sys/stat.h>
 #include <tuple>
+#include <unistd.h>
 
 namespace ns3 {
 
@@ -54,6 +55,72 @@ OutputPath(const std::string& directory, const std::string& filename)
     }
   mkdir(directory.c_str(), 0755);
   return directory.back() == '/' ? directory + filename : directory + "/" + filename;
+}
+
+std::string
+JoinPath(const std::string& directory, const std::string& filename)
+{
+  if (directory.empty() || directory == ".")
+    {
+      return filename;
+    }
+  return directory.back() == '/'
+           ? directory + filename
+           : directory + "/" + filename;
+}
+
+void
+EnsureDirectory(const std::string& directory)
+{
+  if (directory.empty() || directory == ".")
+    {
+      return;
+    }
+  errno = 0;
+  if (mkdir(directory.c_str(), 0755) == 0)
+    {
+      return;
+    }
+  int error = errno;
+  if (error == EEXIST)
+    {
+      struct stat status;
+      NS_ABORT_MSG_IF(stat(directory.c_str(), &status) != 0
+                        || !S_ISDIR(status.st_mode),
+                      "诊断输出路径不是目录: " << directory);
+      return;
+    }
+  NS_ABORT_MSG("无法创建诊断输出目录: " << directory
+               << " errno=" << error);
+}
+
+void
+RemoveKnownFile(const std::string& path)
+{
+  errno = 0;
+  struct stat status;
+  int result = lstat(path.c_str(), &status);
+  NS_ABORT_MSG_IF(result != 0 && errno != ENOENT,
+                  "无法检查旧诊断输出: " << path);
+  if (result != 0 || !S_ISREG(status.st_mode))
+    {
+      return;
+    }
+  errno = 0;
+  NS_ABORT_MSG_IF(unlink(path.c_str()) != 0,
+                  "无法清理旧诊断输出: " << path);
+}
+
+void
+RemoveEmptyDirectory(const std::string& path)
+{
+  errno = 0;
+  int result = rmdir(path.c_str());
+  NS_ABORT_MSG_IF(result != 0
+                    && errno != ENOENT
+                    && errno != ENOTEMPTY
+                    && errno != EEXIST,
+                  "无法清理空诊断目录: " << path);
 }
 
 typedef std::pair<uint32_t, uint32_t> OutputQueueKey;
@@ -871,6 +938,22 @@ WriteDiagnosticSummary(
 
 } // namespace
 
+std::string
+GetFailureDiagnosticDirectory(const std::string& outputDirectory)
+{
+  return JoinPath(JoinPath(outputDirectory, "diagnostics"), "failure");
+}
+
+void
+PrepareFailureDiagnosticDirectory(const std::string& outputDirectory)
+{
+  EnsureDirectory(outputDirectory);
+  std::string diagnosticsDirectory =
+    JoinPath(outputDirectory, "diagnostics");
+  EnsureDirectory(diagnosticsDirectory);
+  EnsureDirectory(GetFailureDiagnosticDirectory(outputDirectory));
+}
+
 void
 RemoveFailureDiagnosticOutputs(const std::string& outputDirectory)
 {
@@ -885,14 +968,15 @@ RemoveFailureDiagnosticOutputs(const std::string& outputDirectory)
     "flow-drop-reasons.csv",
     "diagnostic-summary.json"
   };
+  std::string failureDirectory =
+    GetFailureDiagnosticDirectory(outputDirectory);
   for (const auto& filename : filenames)
     {
-      std::string path = OutputPath(outputDirectory, filename);
-      errno = 0;
-      int result = std::remove(path.c_str());
-      NS_ABORT_MSG_IF(result != 0 && errno != ENOENT,
-                      "无法清理旧诊断输出: " << path);
+      RemoveKnownFile(JoinPath(outputDirectory, filename));
+      RemoveKnownFile(JoinPath(failureDirectory, filename));
     }
+  RemoveEmptyDirectory(failureDirectory);
+  RemoveEmptyDirectory(JoinPath(outputDirectory, "diagnostics"));
 }
 
 void
@@ -911,6 +995,9 @@ WriteFailureDiagnostics(
 {
   NS_ABORT_MSG_IF(!runMetadata.udpSocketDropCollectionEnabled,
                   "失败诊断要求启用 UDP socket Drop 采集");
+  PrepareFailureDiagnosticDirectory(outputDirectory);
+  std::string failureDirectory =
+    GetFailureDiagnosticDirectory(outputDirectory);
   std::vector<QueueDropSummaryRecord> queueDropSummaries =
     CollectQueueDropSummaries(directedLinks, queueDropEvents);
   std::vector<UdpSocketDropSummaryRecord> udpSocketDropSummaries =
@@ -922,13 +1009,13 @@ WriteFailureDiagnostics(
                              queueDropSummaries,
                              &coordinator);
 
-  WriteIncompleteTasks(coordinator, outputDirectory);
-  WriteIncompleteTransfers(transferSummaries, outputDirectory);
-  WriteIslQueueDrops(queueDropEvents, outputDirectory);
-  WriteIslQueueDropSummaries(queueDropSummaries, outputDirectory);
-  WriteUdpSocketDrops(udpSocketDropEvents, outputDirectory);
-  WriteUdpSocketDropSummaries(udpSocketDropSummaries, outputDirectory);
-  WriteFlowLinkSummaries(flowLinkSummaries, outputDirectory);
+  WriteIncompleteTasks(coordinator, failureDirectory);
+  WriteIncompleteTransfers(transferSummaries, failureDirectory);
+  WriteIslQueueDrops(queueDropEvents, failureDirectory);
+  WriteIslQueueDropSummaries(queueDropSummaries, failureDirectory);
+  WriteUdpSocketDrops(udpSocketDropEvents, failureDirectory);
+  WriteUdpSocketDropSummaries(udpSocketDropSummaries, failureDirectory);
+  WriteFlowLinkSummaries(flowLinkSummaries, failureDirectory);
   WriteDiagnosticSummary(aggregate,
                          simulationDurationSeconds,
                          runMetadata,
@@ -937,7 +1024,7 @@ WriteFailureDiagnostics(
                          udpSocketDropSummaries,
                          flowLinkSummaries,
                          coordinator,
-                         outputDirectory);
+                         failureDirectory);
 }
 
 } // namespace ns3

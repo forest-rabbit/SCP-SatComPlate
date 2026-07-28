@@ -14,36 +14,19 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_PARA_H
-#define SATCOMPUTE_PARA_H
+#ifndef SATCOMPUTE_ECMP_METRICS_H
+#define SATCOMPUTE_ECMP_METRICS_H
 
-#include <cstdint>
+#include "../metrics.h"
+
 #include <string>
+#include <vector>
 
 namespace ns3 {
 
-struct SatComputeConfig
-{
-  std::string topologyDirectory;
-  std::string transferTrace;
-  std::string computeProfile;
-  std::string taskTrace;
-  std::string outputDirectory;
-  std::string routingMode;
-  std::string transferLogMode;
-  std::string taskLogMode;
-  std::string taskCompletionPolicy;
-  std::string diagnosticMode;
-  std::string transferChunkMode;
-  uint32_t transferPayloadBytes;
-  uint16_t islMtuBytes;
-  uint32_t islQueueBytes;
-  uint32_t receiverRcvBufBytes;
-  uint64_t ecmpHashSeed;
-  double simulationDurationSeconds;
-};
-
-SatComputeConfig GetDefaultSatComputeConfig();
+void WriteEcmpRouteEvents(
+  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
+  const std::string& outputDirectory);
 
 } // namespace ns3
 

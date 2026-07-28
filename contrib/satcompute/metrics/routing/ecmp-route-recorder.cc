@@ -18,7 +18,7 @@
 
 #include "ecmp-route-recorder.h"
 
-#include "../routing/satcompute-ipv4-global-routing-helper.h"
+#include "../../routing/satcompute-ipv4-global-routing-helper.h"
 
 #include "ns3/abort.h"
 #include "ns3/callback.h"

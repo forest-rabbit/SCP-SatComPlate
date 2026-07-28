@@ -166,7 +166,7 @@ CI 结果；本报告本身不声称 CI 已绿色。
 全量结果可与小型/中型输出一起复核：
 
 ```bash
-python3 contrib/satcompute/tools/check-size-aware-output.py \
+python3 contrib/satcompute/tools/validation/check-size-aware-output.py \
   --static-hrw=<pure-hrw-output> \
   --static-first=<size-static-a> \
   --static-second=<size-static-b> \

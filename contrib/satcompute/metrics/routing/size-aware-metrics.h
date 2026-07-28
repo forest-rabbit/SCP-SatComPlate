@@ -14,32 +14,20 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_FAILURE_DIAGNOSTICS_H
-#define SATCOMPUTE_FAILURE_DIAGNOSTICS_H
+#ifndef SATCOMPUTE_SIZE_AWARE_METRICS_H
+#define SATCOMPUTE_SIZE_AWARE_METRICS_H
 
-#include "flow-metrics.h"
+#include "../../routing/size-aware-flow-registry.h"
+
+#include "ns3/ptr.h"
 
 #include <string>
-#include <vector>
 
 namespace ns3 {
 
-class TaskCoordinator;
-
-void RemoveFailureDiagnosticOutputs(const std::string& outputDirectory);
-
-void WriteFailureDiagnostics(
-  const FlowAggregate& aggregate,
-  double simulationDurationSeconds,
-  const RunMetadata& runMetadata,
-  const std::vector<TransferFlowMetadata>& transferFlows,
-  const std::vector<TransferSummaryRecord>& transferSummaries,
-  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
-  const std::vector<IslDirectedLink>& directedLinks,
-  const std::vector<IslQueueDropEvent>& queueDropEvents,
-  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
-  const TaskCoordinator& coordinator,
-  const std::string& outputDirectory);
+void WriteSizeAwareMetrics(Ptr<SizeAwareFlowRegistry> registry,
+                           const std::string& outputDirectory);
+void RemoveSizeAwareMetrics(const std::string& outputDirectory);
 
 } // namespace ns3
 

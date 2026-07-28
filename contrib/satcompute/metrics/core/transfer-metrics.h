@@ -14,33 +14,19 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_BACKGROUND_TRAFFIC_H
-#define SATCOMPUTE_BACKGROUND_TRAFFIC_H
+#ifndef SATCOMPUTE_TRANSFER_METRICS_H
+#define SATCOMPUTE_TRANSFER_METRICS_H
 
-#include "../metrics/metrics.h"
-#include "../para.h"
-#include "../topo.h"
+#include "../metrics.h"
 
-#include "ns3/packet-sink.h"
-#include "ns3/ptr.h"
-
-#include <cstdint>
+#include <string>
 #include <vector>
 
 namespace ns3 {
 
-struct ApplicationState
-{
-  std::vector<Ptr<PacketSink>> sinks;
-  uint32_t clientCount = 0;
-  uint64_t plannedPacketCount = 0;
-};
-
-ApplicationState InstallApplications(const SatComputeConfig& config,
-                                     const SatelliteTopology& topology);
-
-ApplicationMetrics
-CollectApplicationMetrics(const ApplicationState& applications);
+void WriteTransferSummaries(
+  const std::vector<TransferSummaryRecord>& summaries,
+  const std::string& outputDirectory);
 
 } // namespace ns3
 

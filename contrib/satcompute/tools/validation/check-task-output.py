@@ -1872,8 +1872,9 @@ def validate_failure_diagnostics(
         }
 
     output = Path(output)
+    failure_output = output / "diagnostics" / "failure"
     run = read_json(output / "run-summary.json")
-    diagnostic = read_json(output / "diagnostic-summary.json")
+    diagnostic = read_json(failure_output / "diagnostic-summary.json")
     simulation_duration_ns = round(
         run["simulation_duration_s"] * 1_000_000_000
     )
@@ -1954,7 +1955,7 @@ def validate_failure_diagnostics(
         "partial task-summary contains duplicate task IDs",
     )
     incomplete_task_rows = read_csv_rows(
-        output, "incomplete-tasks.csv", INCOMPLETE_TASK_FIELDS
+        failure_output, "incomplete-tasks.csv", INCOMPLETE_TASK_FIELDS
     )
     incomplete_task_ids = {
         int_field(row, "task_id") for row in incomplete_task_rows
@@ -2026,7 +2027,9 @@ def validate_failure_diagnostics(
         "partial transfer-summary coverage mismatch",
     )
     incomplete_transfer_rows = read_csv_rows(
-        output, "incomplete-transfers.csv", INCOMPLETE_TRANSFER_FIELDS
+        failure_output,
+        "incomplete-transfers.csv",
+        INCOMPLETE_TRANSFER_FIELDS,
     )
     incomplete_transfer_ids = {
         int_field(row, "transfer_id") for row in incomplete_transfer_rows
@@ -2142,7 +2145,11 @@ def validate_failure_diagnostics(
         "diagnostic task state histogram mismatch",
     )
 
-    drop_rows = read_csv_rows(output, "isl-queue-drops.csv", QUEUE_DROP_FIELDS)
+    drop_rows = read_csv_rows(
+        failure_output,
+        "isl-queue-drops.csv",
+        QUEUE_DROP_FIELDS,
+    )
     if require_queue_drop:
         require(drop_rows, "small failure fixture must produce an ISL queue drop")
     drop_totals = {}
@@ -2171,7 +2178,9 @@ def validate_failure_diagnostics(
         )
 
     drop_summary_rows = read_csv_rows(
-        output, "isl-queue-drop-summary.csv", QUEUE_DROP_SUMMARY_FIELDS
+        failure_output,
+        "isl-queue-drop-summary.csv",
+        QUEUE_DROP_SUMMARY_FIELDS,
     )
     expected_drop_order = sorted(
         drop_totals,
@@ -2205,7 +2214,9 @@ def validate_failure_diagnostics(
     )
 
     udp_drop_rows = read_csv_rows(
-        output, "udp-socket-drops.csv", UDP_SOCKET_DROP_FIELDS
+        failure_output,
+        "udp-socket-drops.csv",
+        UDP_SOCKET_DROP_FIELDS,
     )
     if require_udp_socket_drop:
         require(
@@ -2246,7 +2257,7 @@ def validate_failure_diagnostics(
         )
 
     udp_drop_summary_rows = read_csv_rows(
-        output,
+        failure_output,
         "udp-socket-drop-summary.csv",
         UDP_SOCKET_DROP_SUMMARY_FIELDS,
     )
@@ -2294,7 +2305,9 @@ def validate_failure_diagnostics(
     )
 
     concentration_rows = read_csv_rows(
-        output, "flow-link-concentration.csv", FLOW_LINK_FIELDS
+        failure_output,
+        "flow-link-concentration.csv",
+        FLOW_LINK_FIELDS,
     )
     concentration_keys = [directed_link_key(row) for row in concentration_rows]
     require(
@@ -2468,11 +2481,20 @@ def validate_stress_report(
             profile_path,
             trace_path,
         )
+        failure_output = output / "diagnostics" / "failure"
         for filename in FAILURE_DIAGNOSTIC_FILES:
             require(
                 not (output / filename).exists(),
+                f"complete stress run retained legacy diagnostics: {filename}",
+            )
+            require(
+                not (failure_output / filename).exists(),
                 f"complete stress run retained stale diagnostics: {filename}",
             )
+        require(
+            not failure_output.exists(),
+            "complete stress run retained diagnostics/failure",
+        )
         tasks = result["tasks"]
         completed_task_count = len(tasks)
     else:

@@ -70,7 +70,7 @@ def selected_candidate(row):
 def compare_repeat(first, second):
     for filename in (
         "ecmp-route-events.csv",
-        "flow-drop-reasons.csv",
+        "diagnostics/failure/flow-drop-reasons.csv",
         "network-flow-details.csv",
         "size-aware-reservation-events.csv",
         "size-aware-summary.json",
@@ -107,7 +107,10 @@ def validate_run(directory, mode, expected_lost):
 
 
 def validate_hash_drop_owners(directory):
-    rows = read_rows(directory, "flow-drop-reasons.csv")
+    rows = read_rows(
+        directory,
+        "diagnostics/failure/flow-drop-reasons.csv",
+    )
     observed = defaultdict(int)
     for row in rows:
         if row["reason_name"] == "QUEUE_DISC":

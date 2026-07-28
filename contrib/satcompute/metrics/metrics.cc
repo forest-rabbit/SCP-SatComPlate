@@ -18,30 +18,126 @@
 
 #include "metrics.h"
 
-#include "failure-diagnostics.h"
-#include "flow-metrics.h"
-#include "run-summary.h"
-#include "size-aware-metrics.h"
-#include "task-metrics.h"
-#include "transfer-metrics.h"
+#include "core/flow-metrics.h"
+#include "core/run-summary.h"
+#include "core/task-metrics.h"
+#include "core/transfer-metrics.h"
+#include "diagnostics/failure-diagnostics.h"
+#include "diagnostics/flow-drop-reason-diagnostics.h"
+#include "routing/ecmp-metrics.h"
+#include "routing/size-aware-metrics.h"
 #include "../task/task-coordinator.h"
 
+#include "ns3/ipv4-flow-probe.h"
+
+#include <algorithm>
 #include <iostream>
-#include <sys/stat.h>
 
 namespace ns3 {
 
 namespace {
 
-std::string
-OutputPath(const std::string& directory, const std::string& filename)
+uint64_t
+GetDropPacketCount(const FlowAggregate& aggregate, uint32_t reasonCode)
 {
-  if (directory.empty() || directory == ".")
+  std::size_t index = static_cast<std::size_t>(reasonCode);
+  return index < aggregate.droppedPacketsByReason.size()
+           ? aggregate.droppedPacketsByReason[index]
+           : 0;
+}
+
+uint64_t
+GetCompletedTransferCount(
+  const std::vector<TransferSummaryRecord>& transferSummaries)
+{
+  return static_cast<uint64_t>(
+    std::count_if(
+      transferSummaries.begin(),
+      transferSummaries.end(),
+      [](const TransferSummaryRecord& transfer)
+      {
+        return transfer.transferState == "COMPLETED";
+      }));
+}
+
+void
+PrintRuntimeSummary(
+  const FlowAggregate& aggregate,
+  const RunMetadata& runMetadata,
+  const std::vector<TransferSummaryRecord>& transferSummaries,
+  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
+  const TaskCoordinator* taskCoordinator,
+  const std::string& outputDirectory,
+  bool diagnosticsGenerated)
+{
+  TaskAggregate tasks = CollectTaskAggregate(taskCoordinator);
+  uint64_t completedTransfers =
+    GetCompletedTransferCount(transferSummaries);
+  bool taskMode = taskCoordinator != nullptr;
+  bool taskRunComplete =
+    !taskMode || tasks.completedTaskCount == tasks.taskCount;
+
+  std::cout << "[SUMMARY]" << std::endl
+            << "  run status          : "
+            << (taskRunComplete ? "COMPLETE" : "PARTIAL") << std::endl
+            << "  tasks completed     : ";
+  if (taskMode)
     {
-      return filename;
+      std::cout << tasks.completedTaskCount << "/" << tasks.taskCount;
     }
-  mkdir(directory.c_str(), 0755);
-  return directory.back() == '/' ? directory + filename : directory + "/" + filename;
+  else
+    {
+      std::cout << "n/a";
+    }
+  std::cout << std::endl
+            << "  transfers completed : " << completedTransfers
+            << "/" << transferSummaries.size() << std::endl
+            << "  completion rate     : ";
+  if (taskMode && tasks.taskCount > 0)
+    {
+      std::cout
+        << tasks.completedTaskCount * 100.0 / tasks.taskCount << " %";
+    }
+  else if (!taskMode && !transferSummaries.empty())
+    {
+      std::cout
+        << completedTransfers * 100.0 / transferSummaries.size() << " %";
+    }
+  else
+    {
+      std::cout << "n/a";
+    }
+  std::cout
+    << std::endl
+    << "  FlowMonitor         : tx=" << aggregate.txPackets
+    << " rx=" << aggregate.rxPackets
+    << " lost=" << aggregate.lostPackets << std::endl
+    << "  QueueDisc drops     : "
+    << GetDropPacketCount(aggregate, Ipv4FlowProbe::DROP_QUEUE_DISC)
+    << std::endl
+    << "  device queue drops  : "
+    << GetDropPacketCount(aggregate, Ipv4FlowProbe::DROP_QUEUE)
+    << std::endl
+    << "  UDP socket drops    : ";
+  if (runMetadata.udpSocketDropCollectionEnabled)
+    {
+      std::cout << udpSocketDropEvents.size();
+    }
+  else
+    {
+      std::cout << "n/a";
+    }
+  std::cout
+    << std::endl
+    << "  unattributed losses : " << aggregate.UnattributedLostPackets()
+    << std::endl
+    << "  output root         : " << outputDirectory << std::endl;
+  if (diagnosticsGenerated)
+    {
+      std::cout
+        << "  failure diagnostics : "
+        << GetFailureDiagnosticDirectory(outputDirectory) << std::endl;
+    }
 }
 
 } // namespace
@@ -88,14 +184,13 @@ MetricsRecorder::Record()
     m_taskCoordinator != nullptr
     && m_runMetadata.diagnosticMode == "failure";
   bool writeDiagnostics = !taskRunComplete && diagnosticsEnabled;
+  bool transferOnlyRun =
+    m_runMetadata.mode == "network-transfer";
   bool writeFlowDropReasons =
     m_runMetadata.diagnosticMode == "failure"
-    && (m_taskCoordinator == nullptr || !taskRunComplete);
-  if (!writeDiagnostics)
-    {
-      RemoveFailureDiagnosticOutputs(m_outputDirectory);
-    }
-  PrintNetworkMetrics(aggregate);
+    && (transferOnlyRun
+        || (m_taskCoordinator != nullptr && !taskRunComplete));
+  RemoveFailureDiagnosticOutputs(m_outputDirectory);
   WriteNetworkMetrics(aggregate, m_outputDirectory);
   WriteNetworkFlowDetails(m_monitor,
                           m_transferFlows,
@@ -148,75 +243,13 @@ MetricsRecorder::Record()
                   m_udpSocketDropEvents,
                   m_taskCoordinator,
                   m_outputDirectory);
-
-  std::cout << "[METRICS] Output" << std::endl
-            << "  network : "
-            << OutputPath(m_outputDirectory, "network-flow-metrics.csv") << std::endl
-            << "  details : "
-            << OutputPath(m_outputDirectory, "network-flow-details.csv") << std::endl
-            << "  ECMP    : "
-            << OutputPath(m_outputDirectory, "ecmp-route-events.csv") << std::endl
-            << "  transfer: "
-            << OutputPath(m_outputDirectory, "transfer-summary.csv") << std::endl
-            << "  run     : "
-            << OutputPath(m_outputDirectory, "run-summary.json") << std::endl;
-  if (m_sizeAwareRegistry != nullptr)
-    {
-      std::cout
-        << "  reserve : "
-        << OutputPath(m_outputDirectory,
-                      "size-aware-reservation-events.csv")
-        << std::endl
-        << "  size-aware summary: "
-        << OutputPath(m_outputDirectory, "size-aware-summary.json")
-        << std::endl;
-    }
-  if (m_taskCoordinator != nullptr)
-    {
-      std::cout
-        << "  task    : "
-        << OutputPath(m_outputDirectory, "task-summary.csv") << std::endl
-        << "  events  : "
-        << OutputPath(m_outputDirectory, "task-events.csv") << std::endl
-        << "  compute : "
-        << OutputPath(m_outputDirectory, "compute-node-summary.csv")
-        << std::endl;
-      if (writeDiagnostics)
-        {
-          std::cout
-            << "  incomplete tasks     : "
-            << OutputPath(m_outputDirectory, "incomplete-tasks.csv")
-            << std::endl
-            << "  incomplete transfers : "
-            << OutputPath(m_outputDirectory, "incomplete-transfers.csv")
-            << std::endl
-            << "  ISL queue drops      : "
-            << OutputPath(m_outputDirectory, "isl-queue-drops.csv")
-            << std::endl
-            << "  ISL drop summary     : "
-            << OutputPath(m_outputDirectory, "isl-queue-drop-summary.csv")
-            << std::endl
-            << "  UDP socket drops     : "
-            << OutputPath(m_outputDirectory, "udp-socket-drops.csv")
-            << std::endl
-            << "  UDP drop summary     : "
-            << OutputPath(m_outputDirectory, "udp-socket-drop-summary.csv")
-            << std::endl
-            << "  flow/link load       : "
-            << OutputPath(m_outputDirectory, "flow-link-concentration.csv")
-            << std::endl
-            << "  diagnostics          : "
-            << OutputPath(m_outputDirectory, "diagnostic-summary.json")
-            << std::endl;
-        }
-    }
-  if (writeFlowDropReasons)
-    {
-      std::cout
-        << "  FlowMonitor drops    : "
-        << OutputPath(m_outputDirectory, "flow-drop-reasons.csv")
-        << std::endl;
-    }
+  PrintRuntimeSummary(aggregate,
+                      m_runMetadata,
+                      m_transferSummaries,
+                      m_udpSocketDropEvents,
+                      m_taskCoordinator,
+                      m_outputDirectory,
+                      writeDiagnostics || writeFlowDropReasons);
 }
 
 } // namespace ns3

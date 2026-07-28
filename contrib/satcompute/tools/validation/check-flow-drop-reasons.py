@@ -142,6 +142,7 @@ def main():
         for value in args.expect_transfer_drop
     ]
     output_dir = Path(args.output_dir)
+    failure_dir = output_dir / "diagnostics" / "failure"
     detail_rows = read_rows(output_dir / "network-flow-details.csv")
     positive_detail_rows = [
         row
@@ -157,7 +158,10 @@ def main():
         "duplicate positive flow ID",
     )
 
-    drop_rows = read_rows(output_dir / "flow-drop-reasons.csv", DROP_FIELDS)
+    drop_rows = read_rows(
+        failure_dir / "flow-drop-reasons.csv",
+        DROP_FIELDS,
+    )
     rows_by_flow = defaultdict(list)
     observed_reasons = set()
     seen_flow_reasons = set()
