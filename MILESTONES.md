@@ -9,6 +9,7 @@
 | --- | --- | --- | --- |
 | N0：初始网络平台 | 已完成 | `n0-complete` / `d67ca0a` | 2026-07-26 |
 | N1：最小任务计算闭环 | 已完成 | `n1-complete` | 2026-07-28 |
+| N1 ECMP：路由与平台收尾 | 已完成 | `n1-ecmp-complete` | 2026-07-28 |
 
 ## N0：初始网络平台
 
@@ -98,6 +99,57 @@ PR1 已通过 CI、标记 `n1-pr1-final` 并合并为
 
 N1 不包含可靠重传、拥塞控制、竞争感知 pacing、故障、checkpoint、backup
 或恢复；351/720 星及 Hypatia 动态拓扑属于后续独立阶段。
+
+## N1 ECMP：路由与平台收尾
+
+N1 ECMP 收尾在 N1 任务闭环之上完成了路由、输入、诊断和验证边界的正式冻结：
+
+- 保留 `global-first`、`global-hash-per-flow`、`global-hrw-per-flow` 和
+  `global-size-aware-hrw` 四种模式；四者都只在 ns-3
+  `Ipv4GlobalRouting` 生成的等价下一跳中选择，不实现独立路由协议。
+- 稳定 HRW 使用 canonical flow identity，确保同一流跨 route epoch 保持确定性；
+  size-aware HRW 以逻辑 transfer 的声明字节维护逐候选路径预留，并在完成或失败
+  时释放。
+- N1 的 75% 压力重放验证了大小感知 HRW 可把旧 Hash 基线的
+  1493/1500、lost=54 改善为 1500/1500、lost=0；该结果只证明这一固定场景，
+  不外推为所有星座和负载下的完成率保证。
+- SatCompute 输入扁平为 `topology/{examples,tests,resources}` 与
+  `traffic/{workload,test,task}`，删除迁移兼容别名；拓扑快照仍严格使用成对的
+  `nodes_<time>s.json` 和 `topology_<time>s.json`。
+- Legacy CSV/TCP offered-load 运行模式已按批准的范围收缩退出；上游 ns-3
+  内容继续保留，并通过 `--enable-modules=satcompute` 从日常构建中排除。
+- 失败诊断按 task/transfer-only 合同拆分，成功运行或
+  `diagnosticMode=off` 不遗留旧的 `diagnostics/failure/`。
+- CI 拆为 pull request 的 Fast Smoke 与 `main`/`workflow_dispatch` 的 Full
+  Regression；Full 顺序复用全部 Fast 脚本，再执行规模、顺序、generator 和
+  preflight 回归。
+
+### 验证与冻结
+
+- 功能冻结提交：`35a6258de3ac9438551e3dba254a4129089cf5d0`
+- 最终 annotated tag：`n1-ecmp-complete`
+- 输入、文档与平台清理：
+  [PR #7](https://github.com/forest-rabbit/SatCompute/pull/7)
+- CI 分级：
+  [PR #8](https://github.com/forest-rabbit/SatCompute/pull/8)
+- PR #7 Fast Smoke：
+  [run #30352000552](https://github.com/forest-rabbit/SatCompute/actions/runs/30352000552)，
+  `conclusion=success`
+- PR #8 Fast Smoke：
+  [run #30353113556](https://github.com/forest-rabbit/SatCompute/actions/runs/30353113556)，
+  `conclusion=success`
+- PR #8 合并后的 Full Regression：
+  [run #30353450349](https://github.com/forest-rabbit/SatCompute/actions/runs/30353450349)，
+  `conclusion=success`
+
+最终标签只在收尾提交的自动 Full Regression 和独立
+`workflow_dispatch` Full Regression 都成功后创建。历史开发分支与中间标签的
+逐项分类、替代证据和删除集合见
+`docs/reviews/n1-ecmp-ref-cleanup-audit.md`；长期保留的远端分支只有 `main`，
+阶段标签只有 `n0-complete`、`n1-complete` 和 `n1-ecmp-complete`。
+
+N1 ECMP 不引入可靠传输、动态流量工程、任务迁移、故障恢复或 Hypatia；这些能力
+必须作为后续阶段独立设计和验证。
 
 ## 更新约定
 

@@ -63,4 +63,28 @@ mixed-large:   12/12, 41507 packets, lost=0
 generated:     40/40 tasks, 80/80 transfers, lost=0
 ```
 
-远程 Fast/Full run URL 与 conclusion 在 PR 和阶段收尾记录中补充。
+远程验证：
+
+```text
+PR Fast:
+  https://github.com/forest-rabbit/SatCompute/actions/runs/30353113556
+  status=completed, conclusion=success
+
+main push Full:
+  https://github.com/forest-rabbit/SatCompute/actions/runs/30353450349
+  status=completed, conclusion=success
+```
+
+Full 还以 `satcompute/full-regression` commit status 发布精确 run URL，供不返回
+push/workflow_dispatch run 的审查连接器读取。最终收尾的自动 Full 与
+`workflow_dispatch` Full 证据记录在收尾 PR 和 `n1-ecmp-complete` annotated
+tag 中。
+
+## 4. 仓库级门禁
+
+`fast-smoke` 是本项目规定的 PR 合并门禁。本次收尾分别读取 GitHub branch
+protection 与 repository ruleset API；当前私有仓库的两个接口都返回
+`HTTP 403: Upgrade to GitHub Pro or make this repository public to enable this
+feature`。因此当前只能在 PR 流程中先验证再合并，不能声称已配置仓库级 required
+check。仓库升级套餐或改为公开后，应把 `fast-smoke` 配置为 `main` 的 required
+status check；这不会要求修改 SatCompute 代码或测试脚本。
