@@ -42,7 +42,8 @@ CI 覆盖全新构建、静态与动态 Diamond、canonical endpoint、remainder
 
 N0 不包含任务计算、计算服务时间、任务调度、故障、checkpoint、backup 或恢复。
 平台也不包含地面站、星地链路、cluster、CSV 拓扑构建、簇内/簇间路由和
-SDN/OpenFlow。CSV 背景流量仅作为临时兼容输入保留。
+SDN/OpenFlow。CSV 背景流量在 N0 冻结时仅作为临时兼容输入保留，后于
+Pre-N2 清理中经批准退出项目范围，且没有迁移到 JSON。
 
 ### 后续关注项
 
@@ -73,6 +74,17 @@ PR1 已通过 CI、标记 `n1-pr1-final` 并合并为
 `n1-complete` 正式关闭。大型输入和运行输出只保留在 `/tmp`，仓库只保存
 小型 66 节点计算配置与 `docs/reviews/n1-6-stress-validation-review.md` 中的哈希
 和结果。
+
+### 关键压力测试时间线
+
+| 日期 | 场景与配置 | 路由阶段 | 结果 |
+| --- | --- | --- | --- |
+| 2026-07-27 | 100%：2000 个任务、109 GB INPUT；`transferChunkMode=size-aware` | `global-hash-per-flow`，当时尚未实现声明字节预留的大小感知路由 | 完成 1992/2000（99.6%），FlowMonitor lost=429 |
+| 2026-07-28 | 75%：1500 个任务、81.75 GB INPUT；`transferChunkMode=size-aware` | 冻结旧 Hash 基线为 1493/1500、lost=54；随后使用 `global-size-aware-hrw` | 完成 1500/1500（100%），FlowMonitor lost=0 |
+
+两次测试都使用 size-aware 分包；只有 2026-07-28 的后一次运行使用
+`global-size-aware-hrw` 的声明字节预留选路。分包模式负责把逻辑 transfer
+切成 UDP payload，路由模式负责选择等价物理下一跳，二者不是同一机制。
 
 ### 验证与冻结
 
