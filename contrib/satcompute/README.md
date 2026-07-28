@@ -225,7 +225,8 @@ ceil(compute_work_units × 1,000,000,000
 ```
 
 FCFS 运行只需把 `taskTrace` 改为 `task-fcfs.json`，并把输出目录改为
-`/tmp/satcompute-task-fcfs`。`tools/check-task-output.py` 同时验证单任务两段
+`/tmp/satcompute-task-fcfs`。`tools/validation/check-task-output.py` 同时
+验证单任务两段
 ECMP、FCFS、异构算力和两类 JSON 数组换序确定性。
 
 ## 地址与路由
@@ -366,7 +367,8 @@ HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序�
   --outputDir=/tmp/satcompute-hrw-seed1-a"
 ```
 
-CI 对 seed 1 和 2 各重复两次，并由 `tools/check-ecmp-output.py` 独立重算
+CI 对 seed 1 和 2 各重复两次，并由
+`tools/validation/check-ecmp-output.py` 独立重算
 HRW 分数，验证候选顺序、跨 epoch 稳定性、增删候选的最小迁移、seed
 可复现性，以及旧 `global-hash-per-flow` 的固定黄金结果。
 
@@ -395,7 +397,8 @@ python3 contrib/satcompute/tools/validation/check-size-aware-output.py \
 
 `n1-75-fqcodel-replay.json` 包含三条目标流和 38 条 1-byte source-port
 占位流。旧 hash、纯 HRW 和大小感知模式的本地输出由
-`tools/check-size-aware-replay.py` 比较；占位流必须在 0 ns 完成释放，
+`tools/validation/check-size-aware-replay.py` 比较；占位流必须在 0 ns
+完成释放，
 0.1 s 目标流开始前总预留必须为零。
 
 冻结 75% 压力输入不提交仓库。保留基线和大小感知输出时，可在主检查命令
@@ -409,7 +412,7 @@ python3 contrib/satcompute/tools/validation/check-size-aware-output.py \
 ## 变长规模输入
 
 `input/traffic/json/workload/workload-5000-varied.json` 由
-`tools/generate-transfer-workload.py` 确定性生成。5000 条记录的
+`tools/generation/generate-transfer-workload.py` 确定性生成。5000 条记录的
 `size_bytes` 均不同，范围为 1024–81920 bytes；使用 4096-byte cap 时，每条
 transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节。
 
@@ -508,8 +511,9 @@ python3 contrib/satcompute/tools/validation/check-task-output.py failure \
 
 验证接收端缓冲区证据时，复用同一 fixture，将运行参数改为
 `--islQueueBytes=1500000 --receiverRcvBufBytes=1000`，并把检查器末尾改为
-`--require-udp-socket-drop`。该用例应由 `udp-socket-drops.csv` 直接记录
-socket 缓冲区 Drop；FlowMonitor 可能仍将这些包记为 IP 层已接收。
+`--require-udp-socket-drop`。该用例应由
+`diagnostics/failure/udp-socket-drops.csv` 直接记录 socket 缓冲区 Drop；
+FlowMonitor 可能仍将这些包记为 IP 层已接收。
 
 正式压力运行使用
 `--taskCompletionPolicy=report --diagnosticMode=failure`。无论结果为
@@ -531,9 +535,10 @@ python3 contrib/satcompute/tools/validation/check-task-output.py stress \
 
 ### FlowMonitor DropReason
 
-`diagnosticMode=failure` 会额外写出 `flow-drop-reasons.csv`。每行记录一个
-五元组的一种非零 IPv4 FlowMonitor DropReason；`QUEUE` 表示 NetDevice
-发送队列丢弃，`QUEUE_DISC` 表示流量控制层 QueueDisc 丢弃。
+`diagnosticMode=failure` 会额外写出
+`diagnostics/failure/flow-drop-reasons.csv`。每行记录一个五元组的一种
+非零 IPv4 FlowMonitor DropReason；`QUEUE` 表示 NetDevice 发送队列丢弃，
+`QUEUE_DISC` 表示流量控制层 QueueDisc 丢弃。
 `UNATTRIBUTED_TIMEOUT` 只表示 `lostPackets` 没有对应显式 DropReason，
 不能据此推断具体丢弃层。
 
@@ -572,8 +577,6 @@ python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
 
 - `network-flow-metrics.csv`：所有 IPv4 FlowMonitor 流的聚合结果；
 - `network-flow-details.csv`：五元组、transfer ID、应用 payload 与逐流 IP 指标；
-- `flow-drop-reasons.csv`：诊断模式下按五元组和 IPv4 DropReason 输出显式
-  丢弃，并单列未归因/超时 loss；
 - `ecmp-route-events.csv`：每个 epoch、外部卫星 ID 和五元组的首次选择；
   `hash_value` 在旧模式中是 five-tuple hash，在 HRW 模式中是获胜候选分数；
 - `size-aware-reservation-events.csv`：仅在 `global-size-aware-hrw` 中写出
@@ -590,6 +593,11 @@ python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
   端到端时间、接收缓冲区配置及可用时的 UDP socket Drop 聚合；诊断关闭时
   UDP Drop 聚合为 `null`，不会误报为零；同时汇总 FlowMonitor 显式
   DropReason 与未归因 loss。
+
+失败输出统一位于 `<outputDir>/diagnostics/failure/`：
+
+- `flow-drop-reasons.csv`：按五元组和 IPv4 DropReason 输出显式丢弃，并
+  单列未归因/超时 loss；
 - `incomplete-tasks.csv`、`incomplete-transfers.csv`：失败任务运行中的全部
   未完成对象及 partial 收发状态；
 - `isl-queue-drops.csv`、`isl-queue-drop-summary.csv`：按有向 ISL 输出
@@ -599,12 +607,13 @@ python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
 - `flow-link-concentration.csv`、`diagnostic-summary.json`：计划业务量、
   ECMP 链路集中度、ISL/UDP socket 丢包和完成状态摘要。
 
-任务与计算 CSV 只在任务模式生成；任务失败诊断文件仅在
-`diagnosticMode=failure` 且任务未全部完成时生成。
-`flow-drop-reasons.csv` 还会在显式启用诊断的 NetworkTransfer 模式中
-生成。复用同一个 `outputDir` 时，如果本次不会写诊断，程序会清理上述九个
-旧诊断文件；非 size-aware 运行也会清理两个旧的 size-aware 文件，避免把
-历史结果误认为本次结果。
+任务与计算 CSV 只在任务模式生成；完整失败目录仅在
+`diagnosticMode=failure` 且任务未全部完成时生成。显式启用诊断的
+NetworkTransfer 模式保留例外，只在该目录生成 `flow-drop-reasons.csv`。
+复用同一个 `outputDir` 时，程序先清理根目录旧路径及 failure 目录中的
+九个已知诊断文件；不会递归删除未知用户文件，并且只在目录为空时移除
+`failure/` 和 `diagnostics/`。非 size-aware 运行也会清理两个旧的
+size-aware 文件，避免把历史结果误认为本次结果。
 未匹配 NetworkTransfer 的 legacy FlowMonitor 行使用 `transfer_id=0`。当前
 任务调度仅支持单服务台、非抢占 FCFS；尚未实现可靠重传、故障、
 checkpoint、备份或恢复语义。

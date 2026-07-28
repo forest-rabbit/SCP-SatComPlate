@@ -19,6 +19,7 @@
 #include "flow-drop-reason-diagnostics.h"
 
 #include "../core/flow-metrics.h"
+#include "failure-diagnostics.h"
 
 #include "ns3/abort.h"
 #include "ns3/ipv4-flow-classifier.h"
@@ -107,8 +108,11 @@ WriteFlowDropReasons(
   const std::string& outputDirectory)
 {
   NS_ABORT_MSG_IF(monitor == nullptr, "FlowMonitor 不可为空");
-  std::ofstream output(OutputPath(outputDirectory, "flow-drop-reasons.csv"),
-                       std::ios::out | std::ios::trunc);
+  PrepareFailureDiagnosticDirectory(outputDirectory);
+  std::ofstream output(
+    OutputPath(GetFailureDiagnosticDirectory(outputDirectory),
+               "flow-drop-reasons.csv"),
+    std::ios::out | std::ios::trunc);
   NS_ABORT_MSG_IF(!output.is_open(), "无法写入 FlowMonitor DropReason CSV");
   output
     << "flow_monitor_id,transfer_id,source_address,destination_address,"

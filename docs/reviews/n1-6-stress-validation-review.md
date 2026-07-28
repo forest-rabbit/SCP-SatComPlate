@@ -89,7 +89,7 @@ b0c3621 feat: configure UDP receiver buffer
 - 全部未完成 task/transfer 枚举；
 - partial sender/receiver bytes 与 packets；
 - 失败运行中的 FlowMonitor 逐流指标；
-- `diagnostic-summary.json`；
+- `diagnostics/failure/diagnostic-summary.json`；
 - 状态聚合和严格退出码。
 
 `bd89358` 增加：
@@ -117,14 +117,14 @@ writer。该重构不调度 Simulator 事件，也不修改任务、计算、路
 失败运行新增文件：
 
 ```text
-incomplete-tasks.csv
-incomplete-transfers.csv
-isl-queue-drops.csv
-isl-queue-drop-summary.csv
-udp-socket-drops.csv
-udp-socket-drop-summary.csv
-flow-link-concentration.csv
-diagnostic-summary.json
+diagnostics/failure/incomplete-tasks.csv
+diagnostics/failure/incomplete-transfers.csv
+diagnostics/failure/isl-queue-drops.csv
+diagnostics/failure/isl-queue-drop-summary.csv
+diagnostics/failure/udp-socket-drops.csv
+diagnostics/failure/udp-socket-drop-summary.csv
+diagnostics/failure/flow-link-concentration.csv
+diagnostics/failure/diagnostic-summary.json
 ```
 
 成功运行的既有输出合同不变。
@@ -725,8 +725,9 @@ traffic-control FqCoDel QueueDisc
 DropReason 3 `QUEUE` 表示 NetDevice queue，DropReason 4
 `QUEUE_DISC` 表示 traffic-control QueueDisc。
 
-诊断分支新增独立 `flow-drop-reasons.csv` 和运行级 JSON 汇总，不修改现有
-`network-flow-metrics.csv` 或 `network-flow-details.csv` schema。
+诊断分支新增独立 `diagnostics/failure/flow-drop-reasons.csv` 和运行级
+JSON 汇总，不修改现有 `network-flow-metrics.csv` 或
+`network-flow-details.csv` schema。
 未对应显式 DropReason 的 `lostPackets` 单列为
 `UNATTRIBUTED_TIMEOUT`，不会被误归因到队列。
 
@@ -773,8 +774,9 @@ UDP socket drop packets = 0
 UNATTRIBUTED_TIMEOUT packets = 0
 ```
 
-因此此前 `isl-queue-drops.csv=0` 与 `FlowMonitor lostPackets=54` 并不
-矛盾：前者只连接 device DropTail trace，后者还观察默认 FqCoDel。
+因此此前 `diagnostics/failure/isl-queue-drops.csv=0` 与
+`FlowMonitor lostPackets=54` 并不矛盾：前者只连接 device DropTail
+trace，后者还观察默认 FqCoDel。
 
 ### 16.3 局部 replay 与 seed 对照
 

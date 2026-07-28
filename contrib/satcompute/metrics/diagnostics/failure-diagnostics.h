@@ -26,6 +26,12 @@ namespace ns3 {
 
 class TaskCoordinator;
 
+std::string GetFailureDiagnosticDirectory(
+  const std::string& outputDirectory);
+
+void PrepareFailureDiagnosticDirectory(
+  const std::string& outputDirectory);
+
 void RemoveFailureDiagnosticOutputs(const std::string& outputDirectory);
 
 void WriteFailureDiagnostics(

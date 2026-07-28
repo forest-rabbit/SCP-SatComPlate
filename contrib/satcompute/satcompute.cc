@@ -17,6 +17,7 @@
 // SatCompute 可执行程序入口：解析参数、运行仿真并写出网络指标。
 
 #include "metrics/core/flow-metrics.h"
+#include "metrics/diagnostics/failure-diagnostics.h"
 #include "metrics/metrics.h"
 #include "metrics/routing/ecmp-route-recorder.h"
 #include "para.h"
@@ -531,7 +532,11 @@ main(int argc, char* argv[])
                   << (config.diagnosticMode == "failure"
                         ? "diagnostics"
                         : "base metrics")
-                  << " were written to " << config.outputDirectory
+                  << " were written to "
+                  << (config.diagnosticMode == "failure"
+                        ? GetFailureDiagnosticDirectory(
+                            config.outputDirectory)
+                        : config.outputDirectory)
                   << std::endl;
           if (config.taskCompletionPolicy == "strict")
             {

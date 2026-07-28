@@ -93,10 +93,7 @@ MetricsRecorder::Record()
   bool writeFlowDropReasons =
     m_runMetadata.diagnosticMode == "failure"
     && (m_taskCoordinator == nullptr || !taskRunComplete);
-  if (!writeDiagnostics)
-    {
-      RemoveFailureDiagnosticOutputs(m_outputDirectory);
-    }
+  RemoveFailureDiagnosticOutputs(m_outputDirectory);
   PrintNetworkMetrics(aggregate);
   WriteNetworkMetrics(aggregate, m_outputDirectory);
   WriteNetworkFlowDetails(m_monitor,
@@ -175,6 +172,8 @@ MetricsRecorder::Record()
     }
   if (m_taskCoordinator != nullptr)
     {
+      std::string failureDirectory =
+        GetFailureDiagnosticDirectory(m_outputDirectory);
       std::cout
         << "  task    : "
         << OutputPath(m_outputDirectory, "task-summary.csv") << std::endl
@@ -187,28 +186,28 @@ MetricsRecorder::Record()
         {
           std::cout
             << "  incomplete tasks     : "
-            << OutputPath(m_outputDirectory, "incomplete-tasks.csv")
+            << OutputPath(failureDirectory, "incomplete-tasks.csv")
             << std::endl
             << "  incomplete transfers : "
-            << OutputPath(m_outputDirectory, "incomplete-transfers.csv")
+            << OutputPath(failureDirectory, "incomplete-transfers.csv")
             << std::endl
             << "  ISL queue drops      : "
-            << OutputPath(m_outputDirectory, "isl-queue-drops.csv")
+            << OutputPath(failureDirectory, "isl-queue-drops.csv")
             << std::endl
             << "  ISL drop summary     : "
-            << OutputPath(m_outputDirectory, "isl-queue-drop-summary.csv")
+            << OutputPath(failureDirectory, "isl-queue-drop-summary.csv")
             << std::endl
             << "  UDP socket drops     : "
-            << OutputPath(m_outputDirectory, "udp-socket-drops.csv")
+            << OutputPath(failureDirectory, "udp-socket-drops.csv")
             << std::endl
             << "  UDP drop summary     : "
-            << OutputPath(m_outputDirectory, "udp-socket-drop-summary.csv")
+            << OutputPath(failureDirectory, "udp-socket-drop-summary.csv")
             << std::endl
             << "  flow/link load       : "
-            << OutputPath(m_outputDirectory, "flow-link-concentration.csv")
+            << OutputPath(failureDirectory, "flow-link-concentration.csv")
             << std::endl
             << "  diagnostics          : "
-            << OutputPath(m_outputDirectory, "diagnostic-summary.json")
+            << OutputPath(failureDirectory, "diagnostic-summary.json")
             << std::endl;
         }
     }
@@ -216,7 +215,8 @@ MetricsRecorder::Record()
     {
       std::cout
         << "  FlowMonitor drops    : "
-        << OutputPath(m_outputDirectory, "flow-drop-reasons.csv")
+        << OutputPath(GetFailureDiagnosticDirectory(m_outputDirectory),
+                      "flow-drop-reasons.csv")
         << std::endl;
     }
 }

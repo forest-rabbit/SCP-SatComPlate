@@ -68,7 +68,8 @@ ID、字节数、计算量和到达时间都是整数；数据量与计算量必
 `--offeredLoad` 互斥。
 
 进入 N1 后继续保留这些 N0 输入和
-`tools/check-ecmp-output.py`，用于确认任务计算与调度没有破坏 N0 网络传输
-基线；`tools/check-task-output.py` 验证完整任务闭环。快速用例继续进入每次
+`tools/validation/check-ecmp-output.py`，用于确认任务计算与调度没有破坏
+N0 网络传输基线；`tools/validation/check-task-output.py` 验证完整任务闭环。
+快速用例继续进入每次
 CI，完整本地压力输入按需运行。只有当某项 N0 行为被明确废弃且已有替代验证时，
 才应同时删除其输入和检查代码。
