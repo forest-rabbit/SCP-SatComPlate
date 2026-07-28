@@ -248,6 +248,21 @@ jobs:
             --routingMode=global-hash-per-flow \
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-task-single"
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+            --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+            --simulationDuration=3 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1024 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hrw-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-task-single-hrw"
 
       - name: Task FCFS
         run: |
@@ -433,6 +448,7 @@ jobs:
           python3 contrib/satcompute/tools/check-task-output.py \
             --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
             --single-output=/tmp/satcompute-ci-task-single \
+            --hrw-single-output=/tmp/satcompute-ci-task-single-hrw \
             --single-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
             --single-trace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
             --fcfs-output=/tmp/satcompute-ci-task-fcfs \
