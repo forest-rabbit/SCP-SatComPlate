@@ -74,9 +74,10 @@ outputDir                = contrib/satcompute/output
   `report` 写出相同结果后正常退出。默认 `strict`。
 - `--diagnosticMode`：`off` 只保留基础指标；`failure` 在任务失败时额外
   采集并写出未完成对象、ISL 队列 Drop 和 ECMP 链路集中度。默认 `off`。
-- `--routingMode`：`global-first`、`global-hash-per-flow` 或
-  `global-hrw-per-flow`，默认保留 N1 基线 `global-hash-per-flow`。
-- `--ecmpHashSeed`：两种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
+- `--routingMode`：`global-first`、`global-hash-per-flow`、
+  `global-hrw-per-flow` 或 `global-size-aware-hrw`，默认保留 N1 基线
+  `global-hash-per-flow`。
+- `--ecmpHashSeed`：三种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
   前缀。
 - `--outputDir`：结构化指标目录。
 
@@ -233,7 +234,7 @@ ECMP、FCFS、异构算力和两类 JSON 数组换序确定性。
 `172.16.0.0/12` 的 `/32`，ISL 来自 `10.0.0.0/8` 的 `/30`。JSON 中
 `links[]` 的排列以及 `node1_id/node2_id` 的端点方向都不影响地址分配。
 
-`global-first` 完整使用原生 `Ipv4GlobalRouting` 首条路由。两种逐流模式都只
+`global-first` 完整使用原生 `Ipv4GlobalRouting` 首条路由。三种逐流模式都只
 枚举公开可读的 exact service `/32` host routes，并按 gateway、output
 interface、destination 和 mask 排序去重。
 
@@ -260,6 +261,30 @@ score(candidate) = FNV-1a-64(
 该 flow，删除已选候选才会重选，新增候选也只迁移由新候选取得更高分的 flow。
 这是 hop-by-hop 的稳定逐流选择，不读取队列、FqCoDel backlog 或实时负载，
 也不实现逐包 ECMP、端到端 path pinning、pacing 或拥塞控制。
+
+`global-size-aware-hrw` 只对已登记且 sender 仍在发送的
+NetworkTransfer 生效。每条 flow 在当前节点首次查路时：
+
+```text
+1. 按纯 HRW 对完整 route candidate 排名；
+2. 只比较 HRW 前两名；
+3. 读取两者物理下一跳的逻辑预留：
+   reserved_bytes[node, gateway, output interface]；
+4. 选择预留较小者；相等时选择 HRW 第一名；
+5. 以完整 candidate 身份建立 node+flow sticky assignment。
+```
+
+预留值使用该 transfer 的声明字节，不逐包递减。不同最终目的地只要共用同一
+gateway 和 output interface，就进入同一个物理下一跳负载桶；destination 和
+mask 仍参与 HRW 分数及 sticky 身份，但不拆分链路负载。拓扑 epoch 更新后，
+完整 sticky candidate 仍存在就保持原选择；只有它消失时才释放并重选，恢复
+候选不会让已有 flow 自动迁回。sender 把最后一个 payload 成功交给 UDP socket
+后，释放该 flow 在全部节点的预留。已发送完的尾包、未登记 flow 和 legacy
+流量回退纯 HRW，且不会重新建立预留。
+
+该模式不设置大流阈值；大 transfer 仅因声明字节更大而具有更高权重。它不读取
+FqCoDel、DropTail、实时利用率或时延，也不实现周期采样、中途主动迁移、速率
+控制、重传或全局流量工程。
 
 没有 exact host route 或不能解析合法五元组时回退原生行为。项目不复制
 GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 ECMP。
@@ -344,6 +369,34 @@ HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序�
 CI 对 seed 1 和 2 各重复两次，并由 `tools/check-ecmp-output.py` 独立重算
 HRW 分数，验证候选顺序、跨 epoch 稳定性、增删候选的最小迁移、seed
 可复现性，以及旧 `global-hash-per-flow` 的固定黄金结果。
+
+## Size-aware HRW 验证
+
+`size-aware-static-transfers.json` 使用八条同时到达且大小不同的 flow，
+验证 HRW 前两名、相等负载回退第一名、声明字节预留、第二候选分流及最终
+释放。`size-aware-dynamic-transfers.json` 复用动态 diamond，验证候选顺序
+变化不迁移、已选候选消失才迁移、恢复后旧 flow 不迁回，以及新 flow 可以
+使用恢复后的较轻候选。两类场景各重复两次后运行：
+
+```bash
+python3 contrib/satcompute/tools/check-size-aware-output.py \
+  --static-hrw=<pure-hrw-output> \
+  --static-first=<size-aware-static-a> \
+  --static-second=<size-aware-static-b> \
+  --dynamic-first=<size-aware-dynamic-a> \
+  --dynamic-second=<size-aware-dynamic-b>
+```
+
+检查器独立重算 HRW 排名，逐事件重放物理下一跳预留账本，并检查最终
+`active=0`、`assignments=0`、`reserved=0`。66 星中型本地场景使用
+`task/test/size-aware-medium-60.json`：60 个集中到达任务、3 GB 输入，其中
+17 个输入大于 64 MiB；预估 243,028 个 UDP 包，不进入每次 CI。可在上述命令
+追加 `--medium-hrw=<dir> --medium-size=<dir>` 验证冻结的对照结果。
+
+`n1-75-fqcodel-replay.json` 包含三条目标流和 38 条 1-byte source-port
+占位流。旧 hash、纯 HRW 和大小感知模式的本地输出由
+`tools/check-size-aware-replay.py` 比较；占位流必须在 0 ns 完成释放，
+0.1 s 目标流开始前总预留必须为零。
 
 ## 变长规模输入
 
@@ -515,6 +568,11 @@ python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
   丢弃，并单列未归因/超时 loss；
 - `ecmp-route-events.csv`：每个 epoch、外部卫星 ID 和五元组的首次选择；
   `hash_value` 在旧模式中是 five-tuple hash，在 HRW 模式中是获胜候选分数；
+- `size-aware-reservation-events.csv`：仅在 `global-size-aware-hrw` 中写出
+  assignment、sticky reuse、候选失效释放和 sender-finish 释放，以及物理
+  下一跳和全局预留的前后值；
+- `size-aware-summary.json`：仅在 `global-size-aware-hrw` 中汇总登记/活动
+  flow、结束时 assignment、最终/峰值总预留及峰值物理下一跳预留；
 - `transfer-summary.csv`：每条逻辑 transfer 的声明大小、分包、收发和完成时间；
 - `task-events.csv`：每个完整任务恰好五条状态转换；
 - `task-summary.csv`：每个任务的输入、排队、计算、结果和端到端时间；
@@ -537,7 +595,8 @@ python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
 `diagnosticMode=failure` 且任务未全部完成时生成。
 `flow-drop-reasons.csv` 还会在显式启用诊断的 NetworkTransfer 模式中
 生成。复用同一个 `outputDir` 时，如果本次不会写诊断，程序会清理上述九个
-旧诊断文件，避免把历史失败误认为本次结果。
+旧诊断文件；非 size-aware 运行也会清理两个旧的 size-aware 文件，避免把
+历史结果误认为本次结果。
 未匹配 NetworkTransfer 的 legacy FlowMonitor 行使用 `transfer_id=0`。当前
 任务调度仅支持单服务台、非抢占 FCFS；尚未实现可靠重传、故障、
 checkpoint、备份或恢复语义。

@@ -132,6 +132,56 @@ jobs:
             --hrw-seed-two-first=/tmp/satcompute-ci-hrw-seed2-a \
             --hrw-seed-two-second=/tmp/satcompute-ci-hrw-seed2-b
 
+      - name: Size-aware HRW lifecycle
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --simulationDuration=2 \
+            --offeredLoad=0 \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/size-aware-static-transfers.json \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=64000 \
+            --islMtuBytes=65535 \
+            --islQueueBytes=64000000 \
+            --transferLogMode=silent \
+            --routingMode=global-hrw-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-size-static-hrw"
+          for suffix in a b; do
+            ./waf --run-no-build "satcompute \
+              --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+              --simulationDuration=2 \
+              --offeredLoad=0 \
+              --transferTrace=contrib/satcompute/input/traffic/json/test/size-aware-static-transfers.json \
+              --transferChunkMode=fixed \
+              --transferPayloadBytes=64000 \
+              --islMtuBytes=65535 \
+              --islQueueBytes=64000000 \
+              --transferLogMode=silent \
+              --routingMode=global-size-aware-hrw \
+              --ecmpHashSeed=1 \
+              --outputDir=/tmp/satcompute-ci-size-static-$suffix"
+            ./waf --run-no-build "satcompute \
+              --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-hrw-dynamic \
+              --simulationDuration=7 \
+              --offeredLoad=0 \
+              --transferTrace=contrib/satcompute/input/traffic/json/test/size-aware-dynamic-transfers.json \
+              --transferChunkMode=fixed \
+              --transferPayloadBytes=64000 \
+              --islMtuBytes=65535 \
+              --islQueueBytes=64000000 \
+              --transferLogMode=silent \
+              --routingMode=global-size-aware-hrw \
+              --ecmpHashSeed=1 \
+              --outputDir=/tmp/satcompute-ci-size-dynamic-$suffix"
+          done
+          python3 contrib/satcompute/tools/check-size-aware-output.py \
+            --static-hrw=/tmp/satcompute-ci-size-static-hrw \
+            --static-first=/tmp/satcompute-ci-size-static-a \
+            --static-second=/tmp/satcompute-ci-size-static-b \
+            --dynamic-first=/tmp/satcompute-ci-size-dynamic-a \
+            --dynamic-second=/tmp/satcompute-ci-size-dynamic-b
+
       - name: Canonical endpoint and remainder
         run: |
           ./waf --run-no-build "satcompute \
