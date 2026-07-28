@@ -18,8 +18,6 @@
 
 #include "satcompute-ipv4-global-routing.h"
 
-#include "fnv1a64.h"
-
 #include "ns3/abort.h"
 #include "ns3/ipv4-route.h"
 #include "ns3/ipv4-routing-table-entry.h"
@@ -28,7 +26,6 @@
 
 #include <algorithm>
 #include <limits>
-#include <tuple>
 
 namespace ns3 {
 
@@ -52,7 +49,7 @@ SatComputeIpv4GlobalRouting::GetTypeId()
 }
 
 SatComputeIpv4GlobalRouting::SatComputeIpv4GlobalRouting()
-  : m_hashPerFlow(false),
+  : m_selectionMode(EcmpRouteSelectionMode::GLOBAL_FIRST),
     m_hashSeed(1),
     m_hasSatelliteId(false),
     m_satelliteId(0),
@@ -66,9 +63,11 @@ SatComputeIpv4GlobalRouting::~SatComputeIpv4GlobalRouting()
 }
 
 void
-SatComputeIpv4GlobalRouting::Configure(bool hashPerFlow, uint64_t hashSeed)
+SatComputeIpv4GlobalRouting::Configure(
+  EcmpRouteSelectionMode selectionMode,
+  uint64_t hashSeed)
 {
-  m_hashPerFlow = hashPerFlow;
+  m_selectionMode = selectionMode;
   m_hashSeed = hashSeed;
 }
 
@@ -112,30 +111,6 @@ SatComputeIpv4GlobalRouting::DoDispose()
   m_decisionCache.clear();
   m_ipv4 = nullptr;
   Ipv4GlobalRouting::DoDispose();
-}
-
-bool
-SatComputeIpv4GlobalRouting::RouteCandidate::operator<(
-  const RouteCandidate& other) const
-{
-  return std::make_tuple(gateway.Get(),
-                         outputInterface,
-                         destination.Get(),
-                         destinationMask.Get())
-         < std::make_tuple(other.gateway.Get(),
-                           other.outputInterface,
-                           other.destination.Get(),
-                           other.destinationMask.Get());
-}
-
-bool
-SatComputeIpv4GlobalRouting::RouteCandidate::operator==(
-  const RouteCandidate& other) const
-{
-  return gateway == other.gateway
-         && outputInterface == other.outputInterface
-         && destination == other.destination
-         && destinationMask == other.destinationMask;
 }
 
 bool
@@ -197,7 +172,7 @@ SatComputeIpv4GlobalRouting::BuildHostRouteIndex()
           continue;
         }
 
-      RouteCandidate candidate = {
+      EcmpRouteCandidate candidate = {
         route->GetGateway(),
         route->GetInterface(),
         route->GetDest(),
@@ -208,7 +183,7 @@ SatComputeIpv4GlobalRouting::BuildHostRouteIndex()
   m_hostRouteIndexValid = true;
 }
 
-std::vector<SatComputeIpv4GlobalRouting::RouteCandidate>
+std::vector<EcmpRouteCandidate>
 SatComputeIpv4GlobalRouting::FindHostCandidates(
   Ipv4Address destination,
   Ptr<NetDevice> outputInterface,
@@ -219,7 +194,7 @@ SatComputeIpv4GlobalRouting::FindHostCandidates(
       BuildHostRouteIndex();
     }
 
-  std::vector<RouteCandidate> candidates;
+  std::vector<EcmpRouteCandidate> candidates;
   auto indexedCandidates = m_hostRouteIndex.find(destination.Get());
   if (indexedCandidates != m_hostRouteIndex.end())
     {
@@ -245,7 +220,7 @@ SatComputeIpv4GlobalRouting::FindHostCandidates(
 
 Ptr<Ipv4Route>
 SatComputeIpv4GlobalRouting::BuildRoute(
-  const RouteCandidate& candidate) const
+  const EcmpRouteCandidate& candidate) const
 {
   Ptr<Ipv4Route> route = Create<Ipv4Route>();
   route->SetDestination(candidate.destination);
@@ -286,7 +261,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
             {
               return nullptr;
             }
-          RouteCandidate selected = {
+          EcmpRouteCandidate selected = {
             event.selectedGateway,
             static_cast<uint32_t>(event.selectedOutputInterface),
             header.GetDestination(),
@@ -298,7 +273,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
     }
 
   uint32_t countBeforeDedup = 0;
-  std::vector<RouteCandidate> candidates =
+  std::vector<EcmpRouteCandidate> candidates =
     FindHostCandidates(header.GetDestination(),
                        outputInterface,
                        countBeforeDedup);
@@ -340,14 +315,23 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
     Fnv1a64(EncodeEcmpFlowKey(m_hashSeed, flowKey));
   uint32_t selectedIndex =
     static_cast<uint32_t>(hashValue % candidates.size());
-  const RouteCandidate& selected = candidates[selectedIndex];
+  std::string selectionReason = "HASH_PER_FLOW";
+  if (m_selectionMode == EcmpRouteSelectionMode::HRW_PER_FLOW)
+    {
+      EcmpHrwSelection selection =
+        SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
+      selectedIndex = selection.candidateIndex;
+      hashValue = selection.score;
+      selectionReason = "HRW_PER_FLOW";
+    }
+  const EcmpRouteCandidate& selected = candidates[selectedIndex];
 
   event.selectedIndex = selectedIndex;
   event.selectedGateway = selected.gateway;
   event.selectedOutputInterface = selected.outputInterface;
   event.hashValue = hashValue;
   event.selectionReason =
-    candidates.size() == 1 ? "SINGLE_CANDIDATE" : "HASH_PER_FLOW";
+    candidates.size() == 1 ? "SINGLE_CANDIDATE" : selectionReason;
   if (outputInterface == nullptr)
     {
       RecordDecision(event);
@@ -393,7 +377,8 @@ SatComputeIpv4GlobalRouting::RouteOutput(
   Ptr<NetDevice> outputInterface,
   Socket::SocketErrno& socketError)
 {
-  if (!m_hashPerFlow || header.GetDestination().IsMulticast())
+  if (m_selectionMode == EcmpRouteSelectionMode::GLOBAL_FIRST
+      || header.GetDestination().IsMulticast())
     {
       return Ipv4GlobalRouting::RouteOutput(packet,
                                             header,
@@ -425,7 +410,8 @@ SatComputeIpv4GlobalRouting::RouteInput(
   LocalDeliverCallback localDeliverCallback,
   ErrorCallback errorCallback)
 {
-  if (!m_hashPerFlow || header.GetDestination().IsMulticast())
+  if (m_selectionMode == EcmpRouteSelectionMode::GLOBAL_FIRST
+      || header.GetDestination().IsMulticast())
     {
       return Ipv4GlobalRouting::RouteInput(packet,
                                            header,

@@ -56,7 +56,8 @@ GetDefaultSatComputeConfig()
 
   // --routingMode：
   // "global-first" 使用 ns-3 Ipv4GlobalRouting 的默认路由选择；
-  // "global-hash-per-flow" 对等价最短路执行确定性的五元组逐流 hash。
+  // "global-hash-per-flow" 对等价最短路执行确定性的五元组逐流取模 hash；
+  // "global-hrw-per-flow" 用 HRW/Rendezvous hash 在候选变化时减少无关流迁移。
   config.routingMode = "global-hash-per-flow";
 
   // --transferLogMode：
@@ -102,8 +103,8 @@ GetDefaultSatComputeConfig()
   // 单位为 bytes，必须大于 0。默认值与 ns-3 UdpSocket 一致。
   config.receiverRcvBufBytes = 131072;
 
-  // --ecmpHashSeed：逐流 ECMP 的 uint64 hash seed；任意 uint64 值均可。
-  // 相同 seed 和输入保持相同选路，改变 seed 会重新映射等价路径。
+  // --ecmpHashSeed：hash-per-flow 和 HRW ECMP 的 uint64 seed；任意 uint64
+  // 值均可。相同 seed 和输入保持相同选路，改变 seed 会重新映射等价路径。
   config.ecmpHashSeed = 1;
 
   // --simulationDuration：仿真停止时间，单位为秒，必须是有限正数。
