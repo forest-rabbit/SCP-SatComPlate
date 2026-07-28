@@ -34,6 +34,14 @@ def read_rows(directory, filename):
         return list(csv.DictReader(stream))
 
 
+def read_optional_rows(directory, filename):
+    path = Path(directory) / filename
+    if not path.is_file():
+        return []
+    with path.open(newline="", encoding="utf-8") as stream:
+        return list(csv.DictReader(stream))
+
+
 def read_json(directory, filename):
     path = Path(directory) / filename
     require(path.is_file(), f"missing {path}")
@@ -393,42 +401,80 @@ def validate_dynamic_size_aware(directory):
     )
 
 
-def completed_task_delays(directory):
+def completed_task_delays(directory, expected_task_count=60):
     rows = read_rows(directory, "task-summary.csv")
     delays = sorted(
         int_field(row, "end_to_end_completion_delay_ns")
         for row in rows
         if row["final_state"] == "COMPLETED"
     )
-    require(len(rows) == 60, "medium fixture task count mismatch")
-    require(delays, "medium fixture completed no tasks")
+    require(len(rows) == expected_task_count, "task summary count mismatch")
+    require(delays, "fixture completed no tasks")
     return delays
 
 
-def queue_disc_metrics(directory):
+def flow_drop_metrics(directory):
     run = read_json(directory, RUN_FILE)
-    reasons = {
+    summary_reasons = {
         reason["reason_name"]: reason["dropped_packets"]
-        for reason in run["flow_monitor_drop_reasons"]
+        for reason in run.get("flow_monitor_drop_reasons", [])
     }
-    drop_rows = read_rows(directory, "flow-drop-reasons.csv")
+    drop_rows = read_optional_rows(directory, "flow-drop-reasons.csv")
+    csv_reasons = Counter()
+    unattributed_by_flow = {}
+    for row in drop_rows:
+        reason_name = row["reason_name"]
+        if reason_name != "UNATTRIBUTED_TIMEOUT":
+            csv_reasons[reason_name] += int_field(row, "dropped_packets")
+        unattributed_by_flow[row["flow_monitor_id"]] = int_field(
+            row, "flow_unattributed_lost_packets"
+        )
+    if summary_reasons:
+        for reason_name in set(summary_reasons) | set(csv_reasons):
+            require(
+                summary_reasons.get(reason_name, 0)
+                == csv_reasons.get(reason_name, 0),
+                f"{reason_name} run-summary and CSV counts differ",
+            )
+        reasons = summary_reasons
+    else:
+        reasons = csv_reasons
+
     victims = {
         int_field(row, "transfer_id")
         for row in drop_rows
         if row["reason_name"] == "QUEUE_DISC"
         and int_field(row, "transfer_id") > 0
     }
-    require(reasons["QUEUE"] == 0, "medium fixture has device queue drops")
-    require(run["udp_socket_drop_packets"] == 0, "medium fixture has UDP drops")
+    unattributed = run.get(
+        "flow_monitor_unattributed_lost_packets",
+        sum(unattributed_by_flow.values()),
+    )
+    explicit = sum(reasons.values())
     require(
-        run["flow_monitor_unattributed_lost_packets"] == 0,
+        run["flow_monitor_lost_packets"] == explicit + unattributed,
+        "FlowMonitor losses are not fully classified",
+    )
+    if run["flow_monitor_lost_packets"] > 0:
+        require(drop_rows, "losses exist but flow-drop-reasons.csv is missing")
+    return {
+        "queue": reasons.get("QUEUE", 0),
+        "queue_disc": reasons.get("QUEUE_DISC", 0),
+        "udp": run["udp_socket_drop_packets"],
+        "unattributed": unattributed,
+        "victims": len(victims),
+    }
+
+
+def queue_disc_metrics(directory):
+    metrics = flow_drop_metrics(directory)
+    require(metrics["queue"] == 0, "medium fixture has device queue drops")
+    require(metrics["udp"] == 0, "medium fixture has UDP drops")
+    require(
+        metrics["unattributed"] == 0,
         "medium fixture has unattributed losses",
     )
-    require(
-        run["flow_monitor_lost_packets"] == reasons["QUEUE_DISC"],
-        "medium fixture losses are not fully attributed to QueueDisc",
-    )
-    return reasons["QUEUE_DISC"], len(victims)
+    return metrics["queue_disc"], metrics["victims"]
 
 
 def nearest_rank_p95(values):
@@ -481,6 +527,117 @@ def validate_medium(hrw_directory, size_directory):
     )
 
 
+def completed_transfer_count(directory, expected_transfer_count):
+    rows = read_rows(directory, TRANSFER_FILE)
+    require(len(rows) == expected_transfer_count, "transfer summary count mismatch")
+    return sum(
+        int_field(row, "declared_size_bytes")
+        == int_field(row, "sent_application_bytes")
+        == int_field(row, "received_application_bytes")
+        for row in rows
+    )
+
+
+def validate_full_75(baseline_directory, size_directory):
+    baseline = validate_mode(baseline_directory, "global-hash-per-flow", 3000)
+    size_run = validate_mode(size_directory, "global-size-aware-hrw", 3000)
+    frozen_fields = {
+        "simulation_duration_s": 1000,
+        "isl_mtu_bytes": 65535,
+        "isl_queue_bytes": 64000000,
+        "receiver_rcv_buf_bytes": 131072,
+        "diagnostic_mode": "failure",
+        "pacing_mode": "first-hop-serialization",
+        "transfer_chunk_mode": "size-aware",
+        "task_completion_policy": "report",
+        "declared_application_bytes": 109263294080,
+        "derived_udp_packets": 6584966,
+        "compute_node_count": 66,
+        "task_count": 1500,
+        "total_input_bytes": 81750000000,
+        "total_output_bytes": 27513294080,
+        "total_compute_work_units": 3585007107,
+    }
+    for field, expected in frozen_fields.items():
+        require(baseline.get(field) == expected, f"baseline {field} changed")
+        require(size_run.get(field) == expected, f"size-aware {field} changed")
+
+    baseline_delays = completed_task_delays(baseline_directory, 1500)
+    size_delays = completed_task_delays(size_directory, 1500)
+    baseline_completed_transfers = completed_transfer_count(baseline_directory, 3000)
+    size_completed_transfers = completed_transfer_count(size_directory, 3000)
+    baseline_drops = flow_drop_metrics(baseline_directory)
+    size_drops = flow_drop_metrics(size_directory)
+
+    require(len(baseline_delays) == 1493, "full baseline completed-task count changed")
+    require(
+        baseline_completed_transfers == 2988,
+        "full baseline completed-transfer count changed",
+    )
+    require(
+        (
+            baseline_drops["queue"],
+            baseline_drops["queue_disc"],
+            baseline_drops["udp"],
+            baseline_drops["unattributed"],
+            baseline_drops["victims"],
+        )
+        == (0, 54, 0, 0, 7),
+        "full baseline drop attribution changed",
+    )
+
+    require(len(size_delays) >= len(baseline_delays), "full completion regressed")
+    require(
+        size_completed_transfers >= baseline_completed_transfers,
+        "full completed-transfer count regressed",
+    )
+    require(
+        size_drops["queue_disc"] < baseline_drops["queue_disc"],
+        "full QueueDisc drops did not improve",
+    )
+    require(
+        size_drops["victims"] <= baseline_drops["victims"],
+        "full victim-transfer count increased",
+    )
+    require(size_drops["queue"] == 0, "full run introduced device queue drops")
+    require(size_drops["udp"] == 0, "full run introduced UDP socket drops")
+    require(size_drops["unattributed"] == 0, "full run introduced unattributed loss")
+
+    _, summary = validate_reservation_ledger(size_directory, 3000)
+    require(summary["active_flow_count_at_end"] == 0, "full active flows remain")
+    require(summary["assignment_count_at_end"] == 0, "full assignments remain")
+    require(summary["final_total_reserved_bytes"] == 0, "full reservations remain")
+    require(summary["peak_total_reserved_bytes"] > 0, "full total reservation peak is zero")
+    require(
+        summary["peak_candidate_reserved_bytes"] > 0,
+        "full next-hop reservation peak is zero",
+    )
+
+    reservation_rows = read_rows(size_directory, RESERVATION_FILE)
+    secondary_count = sum(
+        row["action"] == "ASSIGN"
+        and row["selection_reason"] == "SIZE_AWARE_HRW_SECONDARY"
+        for row in reservation_rows
+    )
+    require(secondary_count > 0, "full run never selected HRW rank two")
+    print(
+        "PASS: full 75% baseline "
+        f"{len(baseline_delays)}/1500 tasks, {baseline_drops['queue_disc']} drops, "
+        f"{baseline_drops['victims']} victims; size-aware "
+        f"{len(size_delays)}/1500 tasks, {size_drops['queue_disc']} drops, "
+        f"{size_drops['victims']} victims"
+    )
+    print(
+        "PASS: full 75% size-aware "
+        f"{size_completed_transfers}/3000 transfers, "
+        f"mean/p95/max={sum(size_delays) / len(size_delays) / 1e9:.9f}/"
+        f"{nearest_rank_p95(size_delays) / 1e9:.9f}/{max(size_delays) / 1e9:.9f}s, "
+        f"secondary={secondary_count}, "
+        f"peak-total/next-hop={summary['peak_total_reserved_bytes']}/"
+        f"{summary['peak_candidate_reserved_bytes']} bytes"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate deterministic size-aware HRW ECMP fixtures."
@@ -492,10 +649,16 @@ def main():
     parser.add_argument("--dynamic-second", required=True)
     parser.add_argument("--medium-hrw")
     parser.add_argument("--medium-size")
+    parser.add_argument("--full-baseline")
+    parser.add_argument("--full-size")
     arguments = parser.parse_args()
     require(
         (arguments.medium_hrw is None) == (arguments.medium_size is None),
         "medium HRW and size-aware directories must be supplied together",
+    )
+    require(
+        (arguments.full_baseline is None) == (arguments.full_size is None),
+        "full baseline and size-aware directories must be supplied together",
     )
 
     compare_files(
@@ -513,6 +676,8 @@ def main():
     validate_dynamic_size_aware(arguments.dynamic_first)
     if arguments.medium_hrw is not None:
         validate_medium(arguments.medium_hrw, arguments.medium_size)
+    if arguments.full_baseline is not None:
+        validate_full_75(arguments.full_baseline, arguments.full_size)
     print("PASS: deterministic size-aware HRW static and dynamic contracts")
 
 
