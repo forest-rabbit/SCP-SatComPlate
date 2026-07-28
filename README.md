@@ -70,7 +70,7 @@ SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests
 --taskLogMode=<summary|verbose|silent>
 --routingMode=<global-first|global-hash-per-flow>
 --ecmpHashSeed=<uint64>                 FNV-1a-64 seed 前缀
---outputDir=<dir>                       指标输出目录
+--outputDir=<dir>                       指标输出目录，默认 /tmp/satcompute-output
 ```
 
 `computeProfile` 与 `taskTrace` 必须同时提供，任务模式不能同时指定

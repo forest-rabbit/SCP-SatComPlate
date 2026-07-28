@@ -25,7 +25,6 @@
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
-#include <iostream>
 #include <map>
 #include <set>
 #include <sys/stat.h>
@@ -215,32 +214,6 @@ CollectFlowAggregate(Ptr<FlowMonitor> monitor)
       aggregate.Add(flow.second);
     }
   return aggregate;
-}
-
-void
-PrintNetworkMetrics(const FlowAggregate& metrics)
-{
-  double duration = metrics.MeasurementDurationSeconds();
-  std::cout << "[METRICS] IPv4 network flows" << std::endl
-            << "  Tx Packets          : " << metrics.txPackets << std::endl
-            << "  Rx Packets          : " << metrics.rxPackets << std::endl
-            << "  Lost Packets        : " << metrics.lostPackets << std::endl
-            << "  Tx Bytes            : " << metrics.txBytes << std::endl
-            << "  Rx Bytes            : " << metrics.rxBytes << std::endl
-            << "  Measurement Duration: " << duration << " s" << std::endl
-            << "  Mean Delay          : "
-            << SafeDivide(metrics.delaySumSeconds, metrics.rxPackets) * 1000.0
-            << " ms" << std::endl
-            << "  Mean Jitter         : "
-            << SafeDivide(metrics.jitterSumSeconds, metrics.jitterSamples) * 1000.0
-            << " ms" << std::endl
-            << "  Throughput          : "
-            << SafeDivide(metrics.rxBytes * 8.0, duration * 1000000.0)
-            << " Mbps" << std::endl
-            << "  Loss Ratio          : "
-            << SafeDivide(metrics.lostPackets * 100.0, metrics.txPackets)
-            << " %" << std::endl
-            << std::endl;
 }
 
 void

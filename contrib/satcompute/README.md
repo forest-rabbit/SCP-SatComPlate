@@ -45,7 +45,7 @@ taskCompletionPolicy     = strict
 diagnosticMode           = off
 routingMode              = global-hash-per-flow
 ecmpHashSeed             = 1
-outputDir                = contrib/satcompute/output
+outputDir                = /tmp/satcompute-output
 ```
 
 ## 参数合同
@@ -73,7 +73,8 @@ outputDir                = contrib/satcompute/output
   `global-hash-per-flow`。
 - `--ecmpHashSeed`：三种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
   前缀。
-- `--outputDir`：结构化指标目录。
+- `--outputDir`：结构化指标目录，默认 `/tmp/satcompute-output`。正式实验应
+  显式填写仓库外的持久绝对路径。
 
 `computeProfile` 与 `taskTrace` 必须同时指定，任务模式不能同时指定
 `transferTrace`。NetworkTransfer 与任务模式都使用 UDP；三项输入均为空时

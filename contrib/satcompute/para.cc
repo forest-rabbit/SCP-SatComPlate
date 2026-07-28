@@ -42,8 +42,9 @@ GetDefaultSatComputeConfig()
   // 必须与 computeProfile 同时提供，且不能与 transferTrace 混用。
   config.taskTrace = "";
 
-  // --outputDir：结构化指标输出目录；可填写仓库相对路径或绝对路径。
-  config.outputDirectory = "contrib/satcompute/output";
+  // --outputDir：结构化指标输出目录。默认写入 /tmp，避免污染工作树；
+  // 正式实验应显式填写仓库外的持久绝对路径。
+  config.outputDirectory = "/tmp/satcompute-output";
 
   // --routingMode：
   // "global-first" 使用 ns-3 Ipv4GlobalRouting 的默认路由选择；

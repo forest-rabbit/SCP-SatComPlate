@@ -61,8 +61,6 @@ Ptr<Ipv4FlowClassifier> GetSimulationIpv4FlowClassifier();
 
 FlowAggregate CollectFlowAggregate(Ptr<FlowMonitor> monitor);
 
-void PrintNetworkMetrics(const FlowAggregate& metrics);
-
 void WriteNetworkMetrics(const FlowAggregate& metrics,
                          const std::string& outputDirectory);
 
