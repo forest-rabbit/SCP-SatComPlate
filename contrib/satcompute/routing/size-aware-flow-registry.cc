@@ -60,14 +60,13 @@ SizeAwareFlowRegistry::NodeFlowKey::operator<(
 }
 
 bool
-SizeAwareFlowRegistry::NodeCandidateKey::operator<(
-  const NodeCandidateKey& other) const
+SizeAwareFlowRegistry::NodeNextHopKey::operator<(
+  const NodeNextHopKey& other) const
 {
-  if (nodeId != other.nodeId)
-    {
-      return nodeId < other.nodeId;
-    }
-  return candidate < other.candidate;
+  return std::make_tuple(nodeId, gateway.Get(), outputInterface)
+         < std::make_tuple(other.nodeId,
+                           other.gateway.Get(),
+                           other.outputInterface);
 }
 
 void
@@ -215,12 +214,13 @@ SizeAwareFlowRegistry::RecordAssignment(
       std::make_pair(assignmentKey, assignment)).second,
     "size-aware registry 的 node+flow assignment 已存在");
 
-  NodeCandidateKey candidateKey = {
+  NodeNextHopKey nextHopKey = {
     nodeId,
-    candidate
+    candidate.gateway,
+    candidate.outputInterface
   };
   uint64_t& candidateReserved =
-    m_candidateReservedBytes[candidateKey];
+    m_nextHopReservedBytes[nextHopKey];
   uint64_t candidateReservedBefore = candidateReserved;
   uint64_t totalReservedBefore = m_totalReservedBytes;
   NS_ABORT_MSG_IF(
@@ -309,14 +309,15 @@ SizeAwareFlowRegistry::ReleaseAssignment(
   NS_ABORT_MSG_IF(action != "RELEASE_CANDIDATE_INVALID"
                     && action != "RELEASE_SENDER_FINISHED",
                   "size-aware release action 无效");
-  NodeCandidateKey candidateKey = {
+  NodeNextHopKey nextHopKey = {
     assignment->first.nodeId,
-    assignment->second.candidate
+    assignment->second.candidate.gateway,
+    assignment->second.candidate.outputInterface
   };
   auto candidateReserved =
-    m_candidateReservedBytes.find(candidateKey);
+    m_nextHopReservedBytes.find(nextHopKey);
   NS_ABORT_MSG_IF(
-    candidateReserved == m_candidateReservedBytes.end()
+    candidateReserved == m_nextHopReservedBytes.end()
       || candidateReserved->second < assignment->second.reservedBytes
       || m_totalReservedBytes < assignment->second.reservedBytes,
     "size-aware reserved bytes 状态不一致");
@@ -338,7 +339,7 @@ SizeAwareFlowRegistry::ReleaseAssignment(
               m_totalReservedBytes);
   if (candidateReserved->second == 0)
     {
-      m_candidateReservedBytes.erase(candidateReserved);
+      m_nextHopReservedBytes.erase(candidateReserved);
     }
   m_assignments.erase(assignment);
 }
@@ -348,12 +349,13 @@ SizeAwareFlowRegistry::GetReservedBytes(
   uint32_t nodeId,
   const EcmpRouteCandidate& candidate) const
 {
-  NodeCandidateKey key = {
+  NodeNextHopKey key = {
     nodeId,
-    candidate
+    candidate.gateway,
+    candidate.outputInterface
   };
-  auto found = m_candidateReservedBytes.find(key);
-  return found == m_candidateReservedBytes.end() ? 0 : found->second;
+  auto found = m_nextHopReservedBytes.find(key);
+  return found == m_nextHopReservedBytes.end() ? 0 : found->second;
 }
 
 uint64_t
@@ -436,7 +438,7 @@ SizeAwareFlowRegistry::Clear()
   m_flows.clear();
   m_flowKeysByTransferId.clear();
   m_assignments.clear();
-  m_candidateReservedBytes.clear();
+  m_nextHopReservedBytes.clear();
   m_events.clear();
   m_totalReservedBytes = 0;
   m_peakReservedBytes = 0;

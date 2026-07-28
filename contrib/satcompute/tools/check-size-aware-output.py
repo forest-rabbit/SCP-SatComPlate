@@ -176,7 +176,7 @@ def validate_reservation_ledger(directory, expected_registered):
         transfer_id = int_field(row, "transfer_id")
         declared = int_field(row, "declared_bytes")
         candidate = reservation_candidate(row)
-        candidate_key = (node_id, candidate)
+        candidate_key = (node_id, candidate[0], candidate[1])
         assignment_key = (node_id, transfer_id)
         candidate_before = int_field(row, "candidate_reserved_before")
         candidate_after = int_field(row, "candidate_reserved_after")
@@ -393,6 +393,94 @@ def validate_dynamic_size_aware(directory):
     )
 
 
+def completed_task_delays(directory):
+    rows = read_rows(directory, "task-summary.csv")
+    delays = sorted(
+        int_field(row, "end_to_end_completion_delay_ns")
+        for row in rows
+        if row["final_state"] == "COMPLETED"
+    )
+    require(len(rows) == 60, "medium fixture task count mismatch")
+    require(delays, "medium fixture completed no tasks")
+    return delays
+
+
+def queue_disc_metrics(directory):
+    run = read_json(directory, RUN_FILE)
+    reasons = {
+        reason["reason_name"]: reason["dropped_packets"]
+        for reason in run["flow_monitor_drop_reasons"]
+    }
+    drop_rows = read_rows(directory, "flow-drop-reasons.csv")
+    victims = {
+        int_field(row, "transfer_id")
+        for row in drop_rows
+        if row["reason_name"] == "QUEUE_DISC"
+        and int_field(row, "transfer_id") > 0
+    }
+    require(reasons["QUEUE"] == 0, "medium fixture has device queue drops")
+    require(run["udp_socket_drop_packets"] == 0, "medium fixture has UDP drops")
+    require(
+        run["flow_monitor_unattributed_lost_packets"] == 0,
+        "medium fixture has unattributed losses",
+    )
+    require(
+        run["flow_monitor_lost_packets"] == reasons["QUEUE_DISC"],
+        "medium fixture losses are not fully attributed to QueueDisc",
+    )
+    return reasons["QUEUE_DISC"], len(victims)
+
+
+def nearest_rank_p95(values):
+    return values[(95 * len(values) + 99) // 100 - 1]
+
+
+def validate_medium(hrw_directory, size_directory):
+    validate_mode(hrw_directory, "global-hrw-per-flow", 120)
+    validate_mode(size_directory, "global-size-aware-hrw", 120)
+    hrw_delays = completed_task_delays(hrw_directory)
+    size_delays = completed_task_delays(size_directory)
+    hrw_drops, hrw_victims = queue_disc_metrics(hrw_directory)
+    size_drops, size_victims = queue_disc_metrics(size_directory)
+
+    require(
+        (len(hrw_delays), hrw_drops, hrw_victims) == (51, 20, 9),
+        "medium pure-HRW baseline changed",
+    )
+    require(
+        (len(size_delays), size_drops, size_victims) == (53, 10, 7),
+        "medium size-aware result changed",
+    )
+    require(len(size_delays) >= len(hrw_delays), "medium completion regressed")
+    require(size_drops < hrw_drops, "medium QueueDisc drops did not improve")
+    require(size_victims <= hrw_victims, "medium victim transfers increased")
+    require(
+        sum(size_delays) / len(size_delays)
+        <= sum(hrw_delays) / len(hrw_delays),
+        "medium mean completion delay regressed",
+    )
+    require(
+        nearest_rank_p95(size_delays) <= nearest_rank_p95(hrw_delays),
+        "medium p95 completion delay regressed",
+    )
+    require(max(size_delays) <= max(hrw_delays), "medium max completion delay regressed")
+
+    _, summary = validate_reservation_ledger(size_directory, 120)
+    require(summary["active_flow_count_at_end"] == 0, "medium active flows remain")
+    require(summary["final_total_reserved_bytes"] == 0, "medium reservations remain")
+    events = read_rows(size_directory, RESERVATION_FILE)
+    secondary_count = sum(
+        row["action"] == "ASSIGN"
+        and row["selection_reason"] == "SIZE_AWARE_HRW_SECONDARY"
+        for row in events
+    )
+    require(secondary_count == 12, "medium secondary selection count changed")
+    print(
+        "PASS: medium HRW 51/60, 20 drops, 9 victims; "
+        "size-aware 53/60, 10 drops, 7 victims"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate deterministic size-aware HRW ECMP fixtures."
@@ -402,7 +490,13 @@ def main():
     parser.add_argument("--static-second", required=True)
     parser.add_argument("--dynamic-first", required=True)
     parser.add_argument("--dynamic-second", required=True)
+    parser.add_argument("--medium-hrw")
+    parser.add_argument("--medium-size")
     arguments = parser.parse_args()
+    require(
+        (arguments.medium_hrw is None) == (arguments.medium_size is None),
+        "medium HRW and size-aware directories must be supplied together",
+    )
 
     compare_files(
         arguments.static_first,
@@ -417,6 +511,8 @@ def main():
     candidates, pure_selections = validate_static_hrw(arguments.static_hrw)
     validate_static_size_aware(arguments.static_first, candidates, pure_selections)
     validate_dynamic_size_aware(arguments.dynamic_first)
+    if arguments.medium_hrw is not None:
+        validate_medium(arguments.medium_hrw, arguments.medium_size)
     print("PASS: deterministic size-aware HRW static and dynamic contracts")
 
 

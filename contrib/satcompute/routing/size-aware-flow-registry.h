@@ -92,6 +92,8 @@ public:
                                 const EcmpFlowKey& flowKey,
                                 uint64_t routeEpoch);
 
+  // Sticky identity uses the full route candidate, while load is aggregated
+  // by its physical next hop (gateway and output interface).
   uint64_t GetReservedBytes(
     uint32_t nodeId,
     const EcmpRouteCandidate& candidate) const;
@@ -113,12 +115,13 @@ private:
     bool operator<(const NodeFlowKey& other) const;
   };
 
-  struct NodeCandidateKey
+  struct NodeNextHopKey
   {
     uint32_t nodeId;
-    EcmpRouteCandidate candidate;
+    Ipv4Address gateway;
+    uint32_t outputInterface;
 
-    bool operator<(const NodeCandidateKey& other) const;
+    bool operator<(const NodeNextHopKey& other) const;
   };
 
   void ReleaseAssignment(
@@ -139,7 +142,7 @@ private:
   std::map<EcmpFlowKey, SizeAwareFlowMetadata> m_flows;
   std::map<uint64_t, EcmpFlowKey> m_flowKeysByTransferId;
   std::map<NodeFlowKey, SizeAwareFlowAssignment> m_assignments;
-  std::map<NodeCandidateKey, uint64_t> m_candidateReservedBytes;
+  std::map<NodeNextHopKey, uint64_t> m_nextHopReservedBytes;
   std::vector<SizeAwareReservationEvent> m_events;
   uint64_t m_totalReservedBytes;
   uint64_t m_peakReservedBytes;
