@@ -426,10 +426,51 @@ python3 contrib/satcompute/tools/check-task-output.py stress \
 检查器先输出 `RUN_VALID`，再按完成率给出 `CONTINUE` 或 `STOP`；低于阈值
 表示停止后续更大压力场景，不表示当前部分完成结果的结构合同无效。
 
+### FlowMonitor DropReason
+
+`diagnosticMode=failure` 会额外写出 `flow-drop-reasons.csv`。每行记录一个
+五元组的一种非零 IPv4 FlowMonitor DropReason；`QUEUE` 表示 NetDevice
+发送队列丢弃，`QUEUE_DISC` 表示流量控制层 QueueDisc 丢弃。
+`UNATTRIBUTED_TIMEOUT` 只表示 `lostPackets` 没有对应显式 DropReason，
+不能据此推断具体丢弃层。
+
+四节点 fixture 使用两个 1 Gbit/s 入口汇入一个 10 Mbit/s 出口，确定性
+验证默认 FqCoDel QueueDisc：
+
+```bash
+./waf --run-no-build "satcompute \
+  --topologyDir=contrib/satcompute/input/topology/json/tests/fqcodel-bottleneck \
+  --simulationDuration=3 \
+  --offeredLoad=0 \
+  --transferTrace=contrib/satcompute/input/traffic/json/test/fqcodel-bottleneck-transfers.json \
+  --diagnosticMode=failure \
+  --transferChunkMode=fixed \
+  --transferPayloadBytes=1400 \
+  --islMtuBytes=1500 \
+  --islQueueBytes=1500000 \
+  --transferLogMode=silent \
+  --routingMode=global-hash-per-flow \
+  --ecmpHashSeed=1 \
+  --outputDir=/tmp/satcompute-fqcodel"
+
+python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
+  --output-dir=/tmp/satcompute-fqcodel \
+  --require-reason=QUEUE_DISC \
+  --forbid-reason=QUEUE \
+  --require-zero-unattributed \
+  --expected-explicit-drop-packets=6262
+```
+
+检查器交叉验证 DropReason CSV、逐流详情和 `run-summary.json`。完整 75%
+诊断及局部 replay 结果记录在
+`docs/n1-6-stress-validation-review.md`，大型输入与输出不提交仓库。
+
 ## 输出与当前边界
 
 - `network-flow-metrics.csv`：所有 IPv4 FlowMonitor 流的聚合结果；
 - `network-flow-details.csv`：五元组、transfer ID、应用 payload 与逐流 IP 指标；
+- `flow-drop-reasons.csv`：诊断模式下按五元组和 IPv4 DropReason 输出显式
+  丢弃，并单列未归因/超时 loss；
 - `ecmp-route-events.csv`：每个 epoch、外部卫星 ID 和五元组的首次选择；
 - `transfer-summary.csv`：每条逻辑 transfer 的声明大小、分包、收发和完成时间；
 - `task-events.csv`：每个完整任务恰好五条状态转换；
@@ -438,7 +479,8 @@ python3 contrib/satcompute/tools/check-task-output.py stress \
 - `run-summary.json`：本次运行及网络、传输、任务聚合结果，包含任务完成数、
   完成率、`COMPLETE/PARTIAL` 运行状态、完成策略、完成任务的平均/最大
   端到端时间、接收缓冲区配置及可用时的 UDP socket Drop 聚合；诊断关闭时
-  Drop 聚合为 `null`，不会误报为零。
+  UDP Drop 聚合为 `null`，不会误报为零；同时汇总 FlowMonitor 显式
+  DropReason 与未归因 loss。
 - `incomplete-tasks.csv`、`incomplete-transfers.csv`：失败任务运行中的全部
   未完成对象及 partial 收发状态；
 - `isl-queue-drops.csv`、`isl-queue-drop-summary.csv`：按有向 ISL 输出
@@ -448,10 +490,11 @@ python3 contrib/satcompute/tools/check-task-output.py stress \
 - `flow-link-concentration.csv`、`diagnostic-summary.json`：计划业务量、
   ECMP 链路集中度、ISL/UDP socket 丢包和完成状态摘要。
 
-任务与计算 CSV 只在任务模式生成；失败诊断文件仅在
+任务与计算 CSV 只在任务模式生成；任务失败诊断文件仅在
 `diagnosticMode=failure` 且任务未全部完成时生成。
-复用同一个 `outputDir` 时，如果本次不会写诊断，程序会清理上述八个旧诊断
-文件，避免把历史失败误认为本次结果。
+`flow-drop-reasons.csv` 还会在显式启用诊断的 NetworkTransfer 模式中
+生成。复用同一个 `outputDir` 时，如果本次不会写诊断，程序会清理上述九个
+旧诊断文件，避免把历史失败误认为本次结果。
 未匹配 NetworkTransfer 的 legacy FlowMonitor 行使用 `transfer_id=0`。当前
 任务调度仅支持单服务台、非抢占 FCFS；尚未实现可靠重传、故障、
 checkpoint、备份或恢复语义。

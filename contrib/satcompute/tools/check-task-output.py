@@ -227,6 +227,7 @@ FAILURE_DIAGNOSTIC_FILES = [
     "udp-socket-drops.csv",
     "udp-socket-drop-summary.csv",
     "flow-link-concentration.csv",
+    "flow-drop-reasons.csv",
     "diagnostic-summary.json",
 ]
 DETERMINISTIC_FILES = [

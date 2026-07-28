@@ -85,6 +85,9 @@ MetricsRecorder::Record()
     m_taskCoordinator != nullptr
     && m_runMetadata.diagnosticMode == "failure";
   bool writeDiagnostics = !taskRunComplete && diagnosticsEnabled;
+  bool writeFlowDropReasons =
+    m_runMetadata.diagnosticMode == "failure"
+    && (m_taskCoordinator == nullptr || !taskRunComplete);
   if (!writeDiagnostics)
     {
       RemoveFailureDiagnosticOutputs(m_outputDirectory);
@@ -95,6 +98,12 @@ MetricsRecorder::Record()
                           m_transferFlows,
                           m_outputDirectory,
                           taskRunComplete);
+  if (writeFlowDropReasons)
+    {
+      WriteFlowDropReasons(m_monitor,
+                           m_transferFlows,
+                           m_outputDirectory);
+    }
   WriteEcmpRouteEvents(m_routeEvents, m_outputDirectory);
   WriteTransferSummaries(m_transferSummaries, m_outputDirectory);
   if (m_taskCoordinator != nullptr)
@@ -176,6 +185,13 @@ MetricsRecorder::Record()
             << OutputPath(m_outputDirectory, "diagnostic-summary.json")
             << std::endl;
         }
+    }
+  if (writeFlowDropReasons)
+    {
+      std::cout
+        << "  FlowMonitor drops    : "
+        << OutputPath(m_outputDirectory, "flow-drop-reasons.csv")
+        << std::endl;
     }
 }
 

@@ -882,6 +882,7 @@ RemoveFailureDiagnosticOutputs(const std::string& outputDirectory)
     "udp-socket-drops.csv",
     "udp-socket-drop-summary.csv",
     "flow-link-concentration.csv",
+    "flow-drop-reasons.csv",
     "diagnostic-summary.json"
   };
   for (const auto& filename : filenames)

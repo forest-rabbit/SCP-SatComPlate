@@ -57,6 +57,9 @@ legacy CSV、NetworkTransfer 或 TaskTrace 提供。
 
 同一链路文件中不能重复声明同一条无向 ISL。仓库样例位于
 [`examples/xw-66sat/`](examples/xw-66sat/)。
+`tests/fqcodel-bottleneck/` 是四颗纯卫星组成的两入口单出口测试拓扑：
+入口各为 1 Gbit/s，出口为 10 Mbit/s，仅用于区分默认 FqCoDel QueueDisc
+与 PointToPointNetDevice DropTail 队列的丢弃原因。
 
 ## ComputeProfile 静态资源
 

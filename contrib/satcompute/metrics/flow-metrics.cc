@@ -20,6 +20,7 @@
 
 #include "ns3/abort.h"
 #include "ns3/ipv4-flow-classifier.h"
+#include "ns3/ipv4-flow-probe.h"
 
 #include <algorithm>
 #include <fstream>
@@ -54,7 +55,94 @@ OutputPath(const std::string& directory, const std::string& filename)
            : directory + "/" + filename;
 }
 
+std::map<Ipv4FlowClassifier::FiveTuple, TransferFlowMetadata>
+BuildTransferMetadataIndex(
+  const std::vector<TransferFlowMetadata>& transferFlows)
+{
+  std::map<Ipv4FlowClassifier::FiveTuple, TransferFlowMetadata> metadataByTuple;
+  for (const auto& metadata : transferFlows)
+    {
+      Ipv4FlowClassifier::FiveTuple tuple = {
+        metadata.sourceAddress,
+        metadata.destinationAddress,
+        metadata.protocol,
+        metadata.sourcePort,
+        metadata.destinationPort
+      };
+      NS_ABORT_MSG_IF(
+        !metadataByTuple.insert(std::make_pair(tuple, metadata)).second,
+        "NetworkTransfer metadata 包含重复 five-tuple，transfer_id="
+          << metadata.transferId);
+    }
+  return metadataByTuple;
+}
+
+void
+WriteFlowDropReasonRow(
+  std::ofstream& output,
+  FlowId flowId,
+  uint64_t transferId,
+  const Ipv4FlowClassifier::FiveTuple& tuple,
+  int32_t reasonCode,
+  const std::string& reasonName,
+  uint64_t droppedPackets,
+  uint64_t droppedBytes,
+  uint64_t lostPackets,
+  uint64_t reportedDropPackets,
+  uint64_t unattributedLostPackets)
+{
+  output << flowId << ","
+         << transferId << ","
+         << tuple.sourceAddress << ","
+         << tuple.destinationAddress << ","
+         << static_cast<uint32_t>(tuple.protocol) << ","
+         << tuple.sourcePort << ","
+         << tuple.destinationPort << ","
+         << reasonCode << ","
+         << reasonName << ","
+         << droppedPackets << ","
+         << droppedBytes << ","
+         << lostPackets << ","
+         << reportedDropPackets << ","
+         << unattributedLostPackets
+         << "\n";
+}
+
 } // namespace
+
+uint32_t
+GetIpv4DropReasonCount()
+{
+  return static_cast<uint32_t>(Ipv4FlowProbe::DROP_INVALID_REASON) + 1;
+}
+
+const char*
+GetIpv4DropReasonName(uint32_t reasonCode)
+{
+  switch (reasonCode)
+    {
+    case Ipv4FlowProbe::DROP_NO_ROUTE:
+      return "NO_ROUTE";
+    case Ipv4FlowProbe::DROP_TTL_EXPIRE:
+      return "TTL_EXPIRE";
+    case Ipv4FlowProbe::DROP_BAD_CHECKSUM:
+      return "BAD_CHECKSUM";
+    case Ipv4FlowProbe::DROP_QUEUE:
+      return "QUEUE";
+    case Ipv4FlowProbe::DROP_QUEUE_DISC:
+      return "QUEUE_DISC";
+    case Ipv4FlowProbe::DROP_INTERFACE_DOWN:
+      return "INTERFACE_DOWN";
+    case Ipv4FlowProbe::DROP_ROUTE_ERROR:
+      return "ROUTE_ERROR";
+    case Ipv4FlowProbe::DROP_FRAGMENT_TIMEOUT:
+      return "FRAGMENT_TIMEOUT";
+    case Ipv4FlowProbe::DROP_INVALID_REASON:
+      return "INVALID_REASON";
+    default:
+      return "UNKNOWN_REASON";
+    }
+}
 
 void
 FlowAggregate::Add(const FlowMonitor::FlowStats& flow)
@@ -67,6 +155,26 @@ FlowAggregate::Add(const FlowMonitor::FlowStats& flow)
   delaySumSeconds += flow.delaySum.GetSeconds();
   jitterSumSeconds += flow.jitterSum.GetSeconds();
   jitterSamples += flow.rxPackets > 0 ? flow.rxPackets - 1 : 0;
+
+  std::size_t reasonCount =
+    std::max(flow.packetsDropped.size(), flow.bytesDropped.size());
+  droppedPacketsByReason.resize(
+    std::max(droppedPacketsByReason.size(), reasonCount),
+    0);
+  droppedBytesByReason.resize(
+    std::max(droppedBytesByReason.size(), reasonCount),
+    0);
+  for (std::size_t reason = 0; reason < reasonCount; ++reason)
+    {
+      if (reason < flow.packetsDropped.size())
+        {
+          droppedPacketsByReason[reason] += flow.packetsDropped[reason];
+        }
+      if (reason < flow.bytesDropped.size())
+        {
+          droppedBytesByReason[reason] += flow.bytesDropped[reason];
+        }
+    }
 
   if (flow.txPackets == 0)
     {
@@ -94,6 +202,24 @@ FlowAggregate::MeasurementDurationSeconds() const
   return hasMeasurement
            ? std::max(0.0, measurementEndSeconds - measurementStartSeconds)
            : 0.0;
+}
+
+uint64_t
+FlowAggregate::ReportedDropPackets() const
+{
+  uint64_t packets = 0;
+  for (uint64_t count : droppedPacketsByReason)
+    {
+      packets += count;
+    }
+  return packets;
+}
+
+uint64_t
+FlowAggregate::UnattributedLostPackets() const
+{
+  uint64_t reported = ReportedDropPackets();
+  return lostPackets > reported ? lostPackets - reported : 0;
 }
 
 Ptr<FlowMonitor>
@@ -187,21 +313,8 @@ WriteNetworkFlowDetails(
        "time_first_tx_ns,time_last_rx_ns,mean_delay_ns,mean_jitter_ns,"
        "throughput_bps\n";
 
-  std::map<Ipv4FlowClassifier::FiveTuple, TransferFlowMetadata> metadataByTuple;
-  for (const auto& metadata : transferFlows)
-    {
-      Ipv4FlowClassifier::FiveTuple tuple = {
-        metadata.sourceAddress,
-        metadata.destinationAddress,
-        metadata.protocol,
-        metadata.sourcePort,
-        metadata.destinationPort
-      };
-      NS_ABORT_MSG_IF(
-        !metadataByTuple.insert(std::make_pair(tuple, metadata)).second,
-        "NetworkTransfer metadata 包含重复 five-tuple，transfer_id="
-          << metadata.transferId);
-    }
+  std::map<Ipv4FlowClassifier::FiveTuple, TransferFlowMetadata> metadataByTuple =
+    BuildTransferMetadataIndex(transferFlows);
 
   Ptr<Ipv4FlowClassifier> classifier =
     DynamicCast<Ipv4FlowClassifier>(g_flowMonitorHelper.GetClassifier());
@@ -295,6 +408,94 @@ WriteNetworkFlowDetails(
              << metadata.plannedApplicationPayloadBytes << ","
              << metadata.receivedApplicationPayloadBytes << ","
              << "0,0,0,0,0,0,0,0,0,0\n";
+    }
+}
+
+void
+WriteFlowDropReasons(
+  Ptr<FlowMonitor> monitor,
+  const std::vector<TransferFlowMetadata>& transferFlows,
+  const std::string& outputDirectory)
+{
+  NS_ABORT_MSG_IF(monitor == nullptr, "FlowMonitor 不可为空");
+  std::ofstream output(OutputPath(outputDirectory, "flow-drop-reasons.csv"),
+                       std::ios::out | std::ios::trunc);
+  NS_ABORT_MSG_IF(!output.is_open(), "无法写入 FlowMonitor DropReason CSV");
+  output
+    << "flow_monitor_id,transfer_id,source_address,destination_address,"
+       "protocol,source_port,destination_port,reason_code,reason_name,"
+       "dropped_packets,dropped_bytes,flow_lost_packets,"
+       "flow_reported_drop_packets,flow_unattributed_lost_packets\n";
+
+  std::map<Ipv4FlowClassifier::FiveTuple, TransferFlowMetadata> metadataByTuple =
+    BuildTransferMetadataIndex(transferFlows);
+  Ptr<Ipv4FlowClassifier> classifier =
+    DynamicCast<Ipv4FlowClassifier>(g_flowMonitorHelper.GetClassifier());
+  NS_ABORT_MSG_IF(classifier == nullptr, "FlowMonitor 缺少 IPv4 classifier");
+
+  for (const auto& item : monitor->GetFlowStats())
+    {
+      FlowId flowId = item.first;
+      const FlowMonitor::FlowStats& stats = item.second;
+      Ipv4FlowClassifier::FiveTuple tuple = classifier->FindFlow(flowId);
+      auto metadata = metadataByTuple.find(tuple);
+      uint64_t transferId =
+        metadata == metadataByTuple.end() ? 0 : metadata->second.transferId;
+
+      uint64_t reportedDropPackets = 0;
+      for (uint32_t packets : stats.packetsDropped)
+        {
+          reportedDropPackets += packets;
+        }
+      uint64_t unattributedLostPackets =
+        stats.lostPackets > reportedDropPackets
+          ? stats.lostPackets - reportedDropPackets
+          : 0;
+
+      std::size_t reasonCount =
+        std::max(stats.packetsDropped.size(), stats.bytesDropped.size());
+      for (std::size_t reason = 0; reason < reasonCount; ++reason)
+        {
+          uint64_t droppedPackets =
+            reason < stats.packetsDropped.size()
+              ? stats.packetsDropped[reason]
+              : 0;
+          uint64_t droppedBytes =
+            reason < stats.bytesDropped.size()
+              ? stats.bytesDropped[reason]
+              : 0;
+          if (droppedPackets == 0 && droppedBytes == 0)
+            {
+              continue;
+            }
+          WriteFlowDropReasonRow(
+            output,
+            flowId,
+            transferId,
+            tuple,
+            static_cast<int32_t>(reason),
+            GetIpv4DropReasonName(static_cast<uint32_t>(reason)),
+            droppedPackets,
+            droppedBytes,
+            stats.lostPackets,
+            reportedDropPackets,
+            unattributedLostPackets);
+        }
+
+      if (unattributedLostPackets > 0)
+        {
+          WriteFlowDropReasonRow(output,
+                                 flowId,
+                                 transferId,
+                                 tuple,
+                                 -1,
+                                 "UNATTRIBUTED_TIMEOUT",
+                                 unattributedLostPackets,
+                                 0,
+                                 stats.lostPackets,
+                                 reportedDropPackets,
+                                 unattributedLostPackets);
+        }
     }
 }
 
