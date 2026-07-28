@@ -16,6 +16,8 @@
   包；
 - `diamond-4-static-transfers.json`：验证静态 ECMP 双路径与重复确定性；
 - `diamond-4-dynamic-transfers.json`：验证链路变化后的 `2 → 1 → 2` 路由候选；
+- `diamond-4-hrw-dynamic-transfers.json`：四条 flow 跨越候选不变、删除和恢复
+  的四个 route epoch，验证 HRW 最小迁移语义；
 - `mixed-large-ci.json`：验证至少 10 条大流量以及全部 size-aware 分包档位；
 - `fqcodel-bottleneck-transfers.json`：两个高速入口汇入低速出口，确定性触发
   默认 FqCoDel `QUEUE_DISC` 丢弃。

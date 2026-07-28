@@ -1301,7 +1301,20 @@ def validate_scenario(output, topology_dir, profile_path, trace_path):
     }
 
 
-def validate_single(result):
+def validate_single(result, expected_routing_mode):
+    selection_reasons = {
+        "global-hash-per-flow": "HASH_PER_FLOW",
+        "global-hrw-per-flow": "HRW_PER_FLOW",
+    }
+    require(
+        expected_routing_mode in selection_reasons,
+        f"unsupported single-task routing mode {expected_routing_mode}",
+    )
+    require(
+        result["run"]["routing_mode"] == expected_routing_mode,
+        f"single scenario must use {expected_routing_mode}",
+    )
+    expected_reason = selection_reasons[expected_routing_mode]
     require(len(result["tasks"]) == 1, "single scenario must contain one task")
     for plan in result["plans"]:
         transfer_id = plan["transfer_id"]
@@ -1317,10 +1330,16 @@ def validate_single(result):
             )
             == plan["flow_key"]
             and int_field(event, "candidate_count_after_dedup") > 1
-            and event["selection_reason"] == "HASH_PER_FLOW"
+            and event["selection_reason"] == expected_reason
         ]
-        require(matching, f"single transfer {transfer_id} lacks ECMP hash evidence")
-    print("PASS: single task completes INPUT -> COMPUTE -> RESULT with ECMP evidence")
+        require(
+            matching,
+            f"single transfer {transfer_id} lacks {expected_reason} evidence",
+        )
+    print(
+        "PASS: single task completes INPUT -> COMPUTE -> RESULT with "
+        f"{expected_routing_mode} evidence"
+    )
 
 
 def validate_fcfs(result):
@@ -2595,6 +2614,7 @@ def main():
     )
     parser.add_argument("--topology-dir", required=True)
     parser.add_argument("--single-output", required=True)
+    parser.add_argument("--hrw-single-output")
     parser.add_argument("--single-profile", required=True)
     parser.add_argument("--single-trace", required=True)
     parser.add_argument("--fcfs-output", required=True)
@@ -2621,7 +2641,15 @@ def main():
         args.single_profile,
         args.single_trace,
     )
-    validate_single(single)
+    validate_single(single, "global-hash-per-flow")
+    if args.hrw_single_output:
+        hrw_single = validate_scenario(
+            args.hrw_single_output,
+            args.topology_dir,
+            args.single_profile,
+            args.single_trace,
+        )
+        validate_single(hrw_single, "global-hrw-per-flow")
     fcfs = validate_scenario(
         args.fcfs_output,
         args.topology_dir,

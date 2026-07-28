@@ -29,8 +29,10 @@ namespace ns3 {
 class SatComputeIpv4GlobalRoutingHelper : public Ipv4RoutingHelper
 {
 public:
-  SatComputeIpv4GlobalRoutingHelper(bool hashPerFlow = false,
-                                    uint64_t hashSeed = 1);
+  SatComputeIpv4GlobalRoutingHelper(
+    EcmpRouteSelectionMode selectionMode =
+      EcmpRouteSelectionMode::GLOBAL_FIRST,
+    uint64_t hashSeed = 1);
   SatComputeIpv4GlobalRoutingHelper(
     const SatComputeIpv4GlobalRoutingHelper& other);
 
@@ -41,7 +43,7 @@ public:
   static void AdvanceRouteEpoch(const NodeContainer& nodes);
 
 private:
-  bool m_hashPerFlow;
+  EcmpRouteSelectionMode m_selectionMode;
   uint64_t m_hashSeed;
 };
 

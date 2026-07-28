@@ -23,7 +23,8 @@ SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
   NS_ABORT_MSG_IF(config.simulationDurationSeconds <= 0.0,
                   "simulationDuration 必须大于 0");
   NS_ABORT_MSG_IF(config.routingMode != "global-first"
-                    && config.routingMode != "global-hash-per-flow",
+                    && config.routingMode != "global-hash-per-flow"
+                    && config.routingMode != "global-hrw-per-flow",
                   "未知 routingMode: " << config.routingMode);
   NS_ABORT_MSG_IF(config.islMtuBytes < 68,
                   "islMtuBytes 必须至少为 68");
@@ -42,8 +43,18 @@ SatelliteTopology::CreateSatelliteNodes(const std::vector<uint32_t>& satelliteId
     }
 
   Ipv4StaticRoutingHelper staticRouting;
+  EcmpRouteSelectionMode selectionMode =
+    EcmpRouteSelectionMode::GLOBAL_FIRST;
+  if (m_config.routingMode == "global-hash-per-flow")
+    {
+      selectionMode = EcmpRouteSelectionMode::HASH_PER_FLOW;
+    }
+  else if (m_config.routingMode == "global-hrw-per-flow")
+    {
+      selectionMode = EcmpRouteSelectionMode::HRW_PER_FLOW;
+    }
   SatComputeIpv4GlobalRoutingHelper globalRouting(
-    m_config.routingMode == "global-hash-per-flow",
+    selectionMode,
     m_config.ecmpHashSeed);
   Ipv4ListRoutingHelper listRouting;
   listRouting.Add(staticRouting, 0);

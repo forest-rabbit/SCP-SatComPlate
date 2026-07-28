@@ -100,7 +100,8 @@ main(int argc, char* argv[])
                        "Failure diagnostics: off or failure",
                        config.diagnosticMode);
   commandLine.AddValue("routingMode",
-                       "Routing mode: global-first or global-hash-per-flow",
+                       "Routing mode: global-first, global-hash-per-flow, "
+                       "or global-hrw-per-flow",
                        config.routingMode);
   commandLine.AddValue("ecmpHashSeed",
                        "FNV-1a-64 seed prefix for per-flow ECMP",
@@ -244,10 +245,11 @@ main(int argc, char* argv[])
       return EXIT_FAILURE;
     }
   if (config.routingMode != "global-first"
-      && config.routingMode != "global-hash-per-flow")
+      && config.routingMode != "global-hash-per-flow"
+      && config.routingMode != "global-hrw-per-flow")
     {
-      std::cerr << "[RUN:Error] routingMode must be global-first or "
-                   "global-hash-per-flow"
+      std::cerr << "[RUN:Error] routingMode must be global-first, "
+                   "global-hash-per-flow, or global-hrw-per-flow"
                 << std::endl;
       return EXIT_FAILURE;
     }
