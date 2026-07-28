@@ -68,7 +68,7 @@ SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests
 --islQueueBytes=<uint32>                所有 ISL DropTail 队列的字节容量
 --transferLogMode=<summary|verbose|silent>
 --taskLogMode=<summary|verbose|silent>
---routingMode=<global-first|global-hash-per-flow>
+--routingMode=<global-first|global-hash-per-flow|global-hrw-per-flow|global-size-aware-hrw>
 --ecmpHashSeed=<uint64>                 FNV-1a-64 seed 前缀
 --outputDir=<dir>                       指标输出目录，默认 /tmp/satcompute-output
 ```
@@ -138,13 +138,19 @@ ID 为 `2 × task_id`。输入完整到达后才进入计算节点的非抢占�
 
 ## 路由
 
-- `global-hash-per-flow`：默认模式，只对公开路由表中的目标 service `/32`
-  exact host candidates 做稳定排序、去重和五元组 FNV-1a-64 选择；
 - `global-first`：兼容模式，完整委托原生 `Ipv4GlobalRouting` 的首条路由行为。
+- `global-hash-per-flow`：默认的 N1 基线，对排序、去重后的目标 service `/32`
+  exact host candidates 做五元组 FNV-1a-64 取模选择。
+- `global-hrw-per-flow`：对每个候选计算 HRW/Rendezvous 分数，在候选变化时
+  保持稳定映射并实现最小流迁移。
+- `global-size-aware-hrw`：先取得 HRW 前两名，再按活动 transfer 的声明字节
+  预留选择物理下一跳；使用节点级 sticky 选择，并在发送完成后释放预留。
 
 自定义层不复制 SPF、Dijkstra、LSDB 或 `LookupGlobal()`，也不启用原生随机
 ECMP。每次完整快照调用原生 `RecomputeRoutingTables()` 后进入新的 route
-epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IPv4 包。
+epoch。大小感知模式不读取实时队列或链路利用率，也不执行中途主动迁移。当前
+ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IPv4 包；完整算法与边界见
+[`contrib/satcompute/README.md`](contrib/satcompute/README.md)。
 
 ## Diamond 验证
 
