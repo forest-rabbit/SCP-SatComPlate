@@ -167,6 +167,17 @@ epoch。当前 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IP
 
 ## 输出与范围
 
+程序默认写入 `/tmp/satcompute-output`。审查、CI 和本地测试应使用独立的
+`/tmp/satcompute-<case>` 目录；正式实验应通过 `--outputDir` 显式指定
+仓库外的持久目录，例如：
+
+```bash
+--outputDir=/home/emsky/experiments/SatCompute/n2/run-001
+```
+
+程序不会自动判断运行属于测试还是正式实验。任何生成的 `output/`、指标或
+诊断文件都不得提交到 Git。
+
 `--outputDir` 下生成：
 
 - `network-flow-metrics.csv`：所有 IPv4 流的聚合指标；
