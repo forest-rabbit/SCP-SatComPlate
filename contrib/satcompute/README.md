@@ -74,9 +74,10 @@ outputDir                = contrib/satcompute/output
   `report` 写出相同结果后正常退出。默认 `strict`。
 - `--diagnosticMode`：`off` 只保留基础指标；`failure` 在任务失败时额外
   采集并写出未完成对象、ISL 队列 Drop 和 ECMP 链路集中度。默认 `off`。
-- `--routingMode`：`global-first` 或 `global-hash-per-flow`，默认
-  `global-hash-per-flow`。
-- `--ecmpHashSeed`：确定性 FNV-1a-64 输入的 64-bit seed 前缀。
+- `--routingMode`：`global-first`、`global-hash-per-flow` 或
+  `global-hrw-per-flow`，默认保留 N1 基线 `global-hash-per-flow`。
+- `--ecmpHashSeed`：两种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
+  前缀。
 - `--outputDir`：结构化指标目录。
 
 指定 `transferTrace` 时必须保持 `offeredLoad=0`，且只支持 UDP；此模式不会读取
@@ -232,15 +233,33 @@ ECMP、FCFS、异构算力和两类 JSON 数组换序确定性。
 `172.16.0.0/12` 的 `/32`，ISL 来自 `10.0.0.0/8` 的 `/30`。JSON 中
 `links[]` 的排列以及 `node1_id/node2_id` 的端点方向都不影响地址分配。
 
-`global-first` 完整使用原生 `Ipv4GlobalRouting` 首条路由。
-`global-hash-per-flow` 只枚举公开可读的 exact service `/32` host routes，
-按 gateway、output interface、destination 和 mask 排序去重，再对以下 21
-bytes 做 FNV-1a-64：
+`global-first` 完整使用原生 `Ipv4GlobalRouting` 首条路由。两种逐流模式都只
+枚举公开可读的 exact service `/32` host routes，并按 gateway、output
+interface、destination 和 mask 排序去重。
+
+`global-hash-per-flow` 是 N1 基线，对以下 21 bytes 做 FNV-1a-64，再用
+`hash % candidateCount` 选择候选；其既有结果保持不变：
 
 ```text
 seed(8) + source IPv4(4) + destination IPv4(4) +
 protocol(1) + source port(2) + destination port(2)
 ```
+
+`global-hrw-per-flow` 对每个候选分别计算 Rendezvous/Highest Random Weight
+分数并选择最大值：
+
+```text
+score(candidate) = FNV-1a-64(
+  seed + five-tuple +
+  gateway(4) + output interface(4) + destination(4) + mask(4)
+)
+```
+
+分数相同时按上述候选身份的 canonical 顺序选择。分数不包含 route epoch 或
+候选数组位置，因此候选集合不变时跨 epoch 结果不变；删除未选候选不会影响
+该 flow，删除已选候选才会重选，新增候选也只迁移由新候选取得更高分的 flow。
+这是 hop-by-hop 的稳定逐流选择，不读取队列、FqCoDel backlog 或实时负载，
+也不实现逐包 ECMP、端到端 path pinning、pacing 或拥塞控制。
 
 没有 exact host route 或不能解析合法五元组时回退原生行为。项目不复制
 GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 ECMP。
@@ -302,6 +321,29 @@ python3 contrib/satcompute/tools/check-ecmp-output.py \
 
 检查器验证静态双支路覆盖、重复输出一致、每条 transfer 的精确 payload，以及
 动态 epoch 的 `2 → 1 → 2` candidates 和恢复后的确定性选择。
+
+HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序，`3s` 删除
+一条支路，`5s` 恢复。四条 flow 跨越全部 epoch：
+
+```bash
+./waf --run-no-build "satcompute \
+  --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-hrw-dynamic \
+  --simulationDuration=7 \
+  --offeredLoad=0 \
+  --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-hrw-dynamic-transfers.json \
+  --transferChunkMode=fixed \
+  --transferPayloadBytes=64000 \
+  --islMtuBytes=65535 \
+  --islQueueBytes=64000000 \
+  --transferLogMode=silent \
+  --routingMode=global-hrw-per-flow \
+  --ecmpHashSeed=1 \
+  --outputDir=/tmp/satcompute-hrw-seed1-a"
+```
+
+CI 对 seed 1 和 2 各重复两次，并由 `tools/check-ecmp-output.py` 独立重算
+HRW 分数，验证候选顺序、跨 epoch 稳定性、增删候选的最小迁移、seed
+可复现性，以及旧 `global-hash-per-flow` 的固定黄金结果。
 
 ## 变长规模输入
 
@@ -472,6 +514,7 @@ python3 contrib/satcompute/tools/check-flow-drop-reasons.py \
 - `flow-drop-reasons.csv`：诊断模式下按五元组和 IPv4 DropReason 输出显式
   丢弃，并单列未归因/超时 loss；
 - `ecmp-route-events.csv`：每个 epoch、外部卫星 ID 和五元组的首次选择；
+  `hash_value` 在旧模式中是 five-tuple hash，在 HRW 模式中是获胜候选分数；
 - `transfer-summary.csv`：每条逻辑 transfer 的声明大小、分包、收发和完成时间；
 - `task-events.csv`：每个完整任务恰好五条状态转换；
 - `task-summary.csv`：每个任务的输入、排队、计算、结果和端到端时间；
