@@ -8,7 +8,7 @@
 | 阶段 | 状态 | 冻结点 | 日期 |
 | --- | --- | --- | --- |
 | N0：初始网络平台 | 已完成 | `n0-complete` / `d67ca0a` | 2026-07-26 |
-| N1：最小任务计算闭环 | 待 PR2 审查合并 | `n1-pr2-review-final` | 2026-07-27 |
+| N1：最小任务计算闭环 | 已完成 | `n1-complete` | 2026-07-28 |
 
 ## N0：初始网络平台
 
@@ -68,10 +68,21 @@ PR1 已通过 CI、标记 `n1-pr1-final` 并合并为
 压力矩阵；三者均为 `RUN_VALID`，任务完成率分别为 100%、99.5333% 和
 99.6%，均达到冻结的 90% 门槛。
 
-当前 `n1-pr2-review-final` 是待审查候选，不代表 PR2 已合并。作者/GPT 审查
-并合并 PR2 后，才把本阶段状态改为“已完成”。大型输入和运行输出只保留在
-`/tmp`，仓库只保存小型 66 节点计算配置与
-`docs/n1-6-stress-validation-review.md` 中的哈希和结果。
+`n1-pr2-review-final` 冻结了 PR2 的最终审查候选。PR2 已于 2026-07-28
+合并为 `32d70374cf0f93396845e5f067fb9beb560fc6d9`，N1 随后以 annotated tag
+`n1-complete` 正式关闭。大型输入和运行输出只保留在 `/tmp`，仓库只保存
+小型 66 节点计算配置与 `docs/n1-6-stress-validation-review.md` 中的哈希
+和结果。
+
+### 验证与冻结
+
+- PR2：[#2 feat: close N1 with report-mode stress validation](https://github.com/forest-rabbit/SatCompute/pull/2)
+- PR2 合并提交：`32d70374cf0f93396845e5f067fb9beb560fc6d9`
+- Git 标记：`n1-complete`
+- GitHub Actions：
+  [SatCompute deterministic smoke #30275220956](https://github.com/forest-rabbit/SatCompute/actions/runs/30275220956)
+- CI 结论：`status=completed`，`conclusion=success`
+- 压力验收：三组正式场景均为 `RUN_VALID`，并达到 90% 继续门槛。
 
 N1 不包含可靠重传、拥塞控制、竞争感知 pacing、故障、checkpoint、backup
 或恢复；351/720 星及 Hypatia 动态拓扑属于后续独立阶段。

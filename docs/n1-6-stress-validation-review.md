@@ -2,15 +2,20 @@
 
 > 日期：2026-07-27
 >
-> 当前分支：`feature/n1-stress-closure`
+> N1 关闭日期：2026-07-28
 >
 > PR1 合并提交：`34d76b97ad2e0027c882452bcc2f641758a1522e`
 >
 > PR2 正式压力测试代码 HEAD：`f1b6f4eff3e9dccc828c3a6faa38806bf4036344`
 >
-> 当前状态：`PR2_READY_FOR_REVIEW`
+> PR2 最终审查 HEAD：`66f8d770fa24326282b3518e438355ac72e2471c`
 >
-> 已合并 PR：[#1 feat: add SatCompute task execution and N1.6 stress diagnostics](https://github.com/forest-rabbit/SatCompute/pull/1)
+> PR2 合并提交：`32d70374cf0f93396845e5f067fb9beb560fc6d9`
+>
+> 当前状态：`N1_CLOSED`
+>
+> 已合并 PR：[#1](https://github.com/forest-rabbit/SatCompute/pull/1)、
+> [#2](https://github.com/forest-rabbit/SatCompute/pull/2)
 
 本报告是 N1 压力验证的唯一审查报告，前半部分保留 PR1 的诊断过程和
 22/66 计算节点对照，后半部分记录 PR2 的正式 66 节点压力矩阵。大型
@@ -666,11 +671,12 @@ N1 的压力目标不是强制全部任务完成，而是让平台在高压力�
 ```text
 PR2 stress matrix: PASS
 N1 capability boundary: ESTABLISHED
-N1 status: READY_TO_CLOSE_PENDING_PR2_REVIEW_AND_MERGE
+N1 status: CLOSED
 ```
 
-PR2 必须保持未合并，等待作者/GPT 审查。审查通过并合并后，才将 N1
-里程碑从“待审查”改为“已完成”。
+PR2 已在作者/GPT 审查通过后合并；对应 smoke workflow
+[运行 #30275220956](https://github.com/forest-rabbit/SatCompute/actions/runs/30275220956)
+结论为 `success`。N1 里程碑由 annotated tag `n1-complete` 正式冻结。
 
 ## 15. 本轮没有实现
 
