@@ -3,15 +3,18 @@
 ## 1. 审计边界
 
 ```text
-Audit base: 35a6258de3ac9438551e3dba254a4129089cf5d0
+Functional audit base: 35a6258de3ac9438551e3dba254a4129089cf5d0
+PR #9 closeout main: f9732aa4d32f09174635554c3a310be31bec2271
 Date: 2026-07-28
 Remote: origin / forest-rabbit/SatCompute
 Rule: classify first, create and verify the final tag, then delete exact refs
 ```
 
 本审计只清理 Git 分支和阶段性标签，不删除任何源码、上游 ns-3 内容、PR、提交
-或 GitHub Actions 记录。远端分支必须同时满足“对应 PR 已合并”“相对
-`origin/main` 的独有提交数为 0”才可进入删除集合。
+或 GitHub Actions 记录。普通 merge/rebase 分支必须同时满足“对应 PR 已合并”
+“相对 `origin/main` 的独有提交数为 0”才可进入删除集合。squash-merged 分支的
+提交按定义不会成为 `main` 的祖先，必须改为验证“对应 PR 已 squash 合并”且
+“分支与合并后 `main` 的 Git tree 对象完全相同”。
 
 ## 2. 远端分支
 
@@ -25,11 +28,15 @@ Rule: classify first, create and verify the final tag, then delete exact refs
 | `feature/pre-n2-size-aware-hrw` | `72fe3d0cbe02f72cf7e357566c19fafd1d7a20b2` | [#6](https://github.com/forest-rabbit/SatCompute/pull/6) | 0 | `MERGED_REDUNDANT`，最终标签验证后删除 |
 | `feature/pre-n2-stable-ecmp` | `ec81c5ade5e263a2c97dd989720cd84a025aa717` | [#5](https://github.com/forest-rabbit/SatCompute/pull/5) | 0 | `MERGED_REDUNDANT`，最终标签验证后删除 |
 | `refactor/pre-n2-code-cleanup` | `f6668d52d655aa023a75d908819f1d934e17e1b6` | [#7](https://github.com/forest-rabbit/SatCompute/pull/7) | 0 | `MERGED_REDUNDANT`，最终标签验证后删除 |
-| `main` | `35a6258de3ac9438551e3dba254a4129089cf5d0` | — | — | `KEEP_CANONICAL` |
+| `docs/n1-ecmp-closeout` | `c272f0b0072b9538a832f68203f53d563f883fc0` | [#9](https://github.com/forest-rabbit/SatCompute/pull/9) | 4 | `SQUASH_MERGED_TREE_EQUIVALENT`，最终标签验证后删除 |
+| `main` | `f9732aa4d32f09174635554c3a310be31bec2271` | — | — | `KEEP_CANONICAL` |
 
-本收尾文档所在的 `docs/n1-ecmp-closeout` 只用于最终 PR；该 PR 合并并完成
-Full Regression 后，同样按精确名称删除。最终远端 heads 集合应只有
-`refs/heads/main`。
+PR #9 使用 squash merge，因此 `docs/n1-ecmp-closeout` 的四个临时提交不是
+`main` 的祖先。删除前实测两端 tree SHA 均为
+`35f75d016d8d48fc5b85de85426b92709e630583`，且 `git diff --quiet` 返回 0；
+其最终内容已完整进入 `main`。本审计修订分支
+`docs/n1-ecmp-ref-audit-fix` 必须使用普通 merge，并在删除前满足独有提交数为
+0。最终远端 heads 集合应只有 `refs/heads/main`。
 
 ## 3. 未合并的本地调查分支
 
@@ -92,10 +99,12 @@ n1-ecmp-complete
 3. 同一提交的独立 `workflow_dispatch` Full Regression 成功；
 4. 在该提交创建并推送 annotated tag `n1-ecmp-complete`；
 5. 从本地和远端读取标签，确认对象类型、目标提交及 `main` 祖先关系；
-6. 重新抓取远端 refs，逐项确认 head 未从本审计记录的提交发生意外变化；
+6. 重新抓取远端 refs：逐项确认旧 head 未意外变化，确认 squash 分支 tree
+   相同，并确认本审计修订分支的独有提交数为 0；
 7. 删除精确列出的旧远端分支、旧本地分支和中间标签；
 8. 再次读取远端 heads/tags，验证最终集合，不使用通配符或批量推断删除。
 
-PR 和 Actions URL 是 GitHub 对象，不随分支或标签删除而消失。所有已合并分支
-与旧标签的目标提交继续由 `main` 历史可达；只有明确归类为
-`ABANDONED_EXPERIMENT` 的本地实现不再保留 ref。
+PR 和 Actions URL 是 GitHub 对象，不随分支或标签删除而消失。普通合并分支与
+旧标签的目标提交继续由 `main` 历史可达；squash 分支的最终 tree 已进入
+`main`，但临时提交不作为长期 ref 保留。明确归类为 `ABANDONED_EXPERIMENT`
+的本地实现同样不再保留 ref。
