@@ -6,7 +6,7 @@
 2. 按外部卫星 ID 的稳定顺序创建节点和 `/32` service 地址；
 3. 按无向端点 ID 的 canonical 顺序创建 ISL 和 `/30` 网段；
 4. 由原生 `GlobalRouteManager` 填充路由表；
-5. 可选安装 legacy CSV 背景流量、NetworkTransfer JSON，或分离输入的任务闭环；
+5. 可选安装 NetworkTransfer JSON 或分离输入的任务闭环；无输入时只运行拓扑；
 6. 后续快照统一更新链路，再调用原生 `RecomputeRoutingTables()` 并推进 epoch；
 7. 输出网络、传输、任务和计算节点的结构化证据。
 
@@ -31,9 +31,6 @@ examples 或 tests。
 ```text
 topologyDir              = contrib/satcompute/input/topology/json/examples/xw-66sat
 simulationDuration       = 110
-offeredLoad              = 0
-transport                = udp
-trafficMatrix            = contrib/satcompute/input/traffic/csv/traffic_matrix(66).csv
 transferTrace            = empty
 computeProfile           = empty
 taskTrace                = empty
@@ -55,9 +52,6 @@ outputDir                = contrib/satcompute/output
 
 - `--topologyDir`：卫星 JSON 全量快照目录。
 - `--simulationDuration`：有限正秒数。
-- `--offeredLoad`：legacy 业务矩阵倍率；为 0 时不读取矩阵。
-- `--transport`：legacy 模式支持 `udp` 或 `tcp`。
-- `--trafficMatrix`：legacy 100×N 行、N 列 CSV，单位 Gbps。
 - `--transferTrace`：可选 NetworkTransfer JSON。
 - `--computeProfile`：`topology/json/resources` 下的静态计算能力 JSON。
 - `--taskTrace`：`traffic/json/task` 下的任务到达 JSON。
@@ -81,22 +75,10 @@ outputDir                = contrib/satcompute/output
   前缀。
 - `--outputDir`：结构化指标目录。
 
-指定 `transferTrace` 时必须保持 `offeredLoad=0`，且只支持 UDP；此模式不会读取
-`trafficMatrix`。`computeProfile` 与 `taskTrace` 必须同时指定；任务模式不能再
-指定 `transferTrace` 或正的 `offeredLoad`，同样只支持 UDP。
-
-## Legacy 背景流量
-
-业务文件必须恰好有 100×N 行、N 列。当前 UDP 兼容公式为：
-
-```text
-scaled_value = matrix_value × offeredLoad
-MaxPackets = max(1, floor(scaled_value × 2^30 / (1024 × 8 × 10000)))
-Interval = 100 s / MaxPackets
-```
-
-默认 66 星输入下，`offeredLoad=0.0001` 计划 4356 个包，
-`offeredLoad=0.001` 计划 17712 个包。TCP 仍使用连续 `OnOff`。
+`computeProfile` 与 `taskTrace` 必须同时指定，任务模式不能同时指定
+`transferTrace`。NetworkTransfer 与任务模式都使用 UDP；三项输入均为空时
+运行 `topology-only`，不安装 PacketSink、NetworkTransfer 或
+TaskCoordinator。
 
 ## NetworkTransfer
 
@@ -212,7 +194,6 @@ ceil(compute_work_units × 1,000,000,000
   --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
   --simulationDuration=10 \
-  --offeredLoad=0 \
   --taskLogMode=verbose \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
@@ -280,8 +261,8 @@ gateway 和 output interface，就进入同一个物理下一跳负载桶；dest
 mask 仍参与 HRW 分数及 sticky 身份，但不拆分链路负载。拓扑 epoch 更新后，
 完整 sticky candidate 仍存在就保持原选择；只有它消失时才释放并重选，恢复
 候选不会让已有 flow 自动迁回。sender 把最后一个 payload 成功交给 UDP socket
-后，释放该 flow 在全部节点的预留。已发送完的尾包、未登记 flow 和 legacy
-流量回退纯 HRW，且不会重新建立预留。
+后，释放该 flow 在全部节点的预留。已发送完的尾包和未登记 flow 回退纯 HRW，
+且不会重新建立预留。
 
 该模式不设置大流阈值；大 transfer 仅因声明字节更大而具有更高权重。它不读取
 FqCoDel、DropTail、实时利用率或时延，也不实现周期采样、中途主动迁移、速率
@@ -299,7 +280,6 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
-  --offeredLoad=0 \
   --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
@@ -312,7 +292,6 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=3 \
-  --offeredLoad=0 \
   --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
@@ -329,7 +308,6 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-dynamic \
   --simulationDuration=6 \
-  --offeredLoad=0 \
   --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
@@ -355,7 +333,6 @@ HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序�
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
-  --offeredLoad=0 \
   --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=64000 \
@@ -438,7 +415,6 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=45 \
-  --offeredLoad=0 \
   --transferTrace=contrib/satcompute/input/traffic/json/test/mixed-large-ci.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
@@ -459,7 +435,6 @@ python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=340 \
-  --offeredLoad=0 \
   --transferTrace=contrib/satcompute/input/traffic/json/workload/mixed-large-local.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
@@ -486,7 +461,6 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
   --simulationDuration=2 \
-  --offeredLoad=0 \
   --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
   --transferChunkMode=size-aware \
@@ -549,7 +523,6 @@ python3 contrib/satcompute/tools/validation/check-task-output.py stress \
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/input/topology/json/tests/fqcodel-bottleneck \
   --simulationDuration=3 \
-  --offeredLoad=0 \
   --transferTrace=contrib/satcompute/input/traffic/json/test/fqcodel-bottleneck-transfers.json \
   --diagnosticMode=failure \
   --transferChunkMode=fixed \
@@ -614,6 +587,6 @@ NetworkTransfer 模式保留例外，只在该目录生成 `flow-drop-reasons.cs
 九个已知诊断文件；不会递归删除未知用户文件，并且只在目录为空时移除
 `failure/` 和 `diagnostics/`。非 size-aware 运行也会清理两个旧的
 size-aware 文件，避免把历史结果误认为本次结果。
-未匹配 NetworkTransfer 的 legacy FlowMonitor 行使用 `transfer_id=0`。当前
+未匹配 NetworkTransfer 的 FlowMonitor 行使用 `transfer_id=0`。当前
 任务调度仅支持单服务台、非抢占 FCFS；尚未实现可靠重传、故障、
 checkpoint、备份或恢复语义。

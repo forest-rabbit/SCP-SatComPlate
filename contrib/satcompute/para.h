@@ -25,12 +25,10 @@ namespace ns3 {
 struct SatComputeConfig
 {
   std::string topologyDirectory;
-  std::string trafficMatrix;
   std::string transferTrace;
   std::string computeProfile;
   std::string taskTrace;
   std::string outputDirectory;
-  std::string transport;
   std::string routingMode;
   std::string transferLogMode;
   std::string taskLogMode;
@@ -43,7 +41,6 @@ struct SatComputeConfig
   uint32_t receiverRcvBufBytes;
   uint64_t ecmpHashSeed;
   double simulationDurationSeconds;
-  double offeredLoad;
 };
 
 SatComputeConfig GetDefaultSatComputeConfig();

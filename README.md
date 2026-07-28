@@ -19,7 +19,7 @@ contrib/satcompute/
 ├── topo.cc                # 卫星、ISL 和动态快照
 ├── jsontopo/              # JSON 拓扑解析与链路状态
 ├── routing/               # 原生全局路由之上的确定性逐流 ECMP 选择
-├── traffic/               # legacy 背景流量与 NetworkTransfer
+├── traffic/               # JSON NetworkTransfer UDP 运行时
 ├── task/                  # TaskTrace、FCFS 计算服务与任务协调
 ├── metrics/               # 聚合、逐流和 ECMP 路由证据
 ├── tools/                 # 最小确定性检查器
@@ -27,12 +27,10 @@ contrib/satcompute/
     ├── topology/json/examples/xw-66sat/
     ├── topology/json/tests/diamond-4-*/
     ├── topology/json/resources/ # 静态 ComputeProfile
-    └── traffic/
-        ├── csv/          # 临时保留的 legacy 业务矩阵
-        └── json/
-            ├── workload/ # 正式规模与本地压力输入
-            ├── test/     # NetworkTransfer CI 和回归输入
-            └── task/     # TaskTrace
+    └── traffic/json/
+        ├── workload/     # 正式规模与本地压力输入
+        ├── test/         # NetworkTransfer CI 和回归输入
+        └── task/         # TaskTrace
 ```
 
 ## 构建与基本运行
@@ -47,12 +45,8 @@ source .venv/bin/activate
 SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests。只有需要
 检查 ns-3 上游测试套件时，才单独重新配置 `--enable-tests`。
 
-默认运行 xw 66 星的 0–110 秒快照，不注入业务。legacy CSV 背景流量仍可通过
-`offeredLoad` 启用：
-
-```bash
-./waf --run-no-build "satcompute --offeredLoad=0.0001"
-```
+默认运行 xw 66 星的 0–110 秒快照，不注入业务；这是正式保留的
+`topology-only` 模式。
 
 `para.cc` 保存默认值；命令行只覆盖当前运行。查看全部参数：
 
@@ -65,9 +59,6 @@ SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests
 ```text
 --topologyDir=<dir>                    JSON 全量快照目录
 --simulationDuration=<s>               仿真时长
---offeredLoad=<double>                 legacy 业务矩阵倍率
---transport=<udp|tcp>                  legacy 传输协议
---trafficMatrix=<file>                 legacy 100×N 行、N 列业务输入
 --transferTrace=<file>                 NetworkTransfer JSON；默认关闭
 --computeProfile=<file>                topology/resources 下的静态计算能力
 --taskTrace=<file>                     traffic/json/task 下的任务到达
@@ -82,8 +73,9 @@ SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests
 --outputDir=<dir>                       指标输出目录
 ```
 
-`computeProfile` 与 `taskTrace` 必须同时提供。任务模式、`transferTrace` 模式和
-正的 `offeredLoad` 互斥；NetworkTransfer 与任务模式当前均只支持 UDP。
+`computeProfile` 与 `taskTrace` 必须同时提供，任务模式不能同时指定
+`transferTrace`。NetworkTransfer 与任务模式都使用 UDP；三项输入均为空时
+运行纯拓扑模式。
 
 ## NetworkTransfer
 
@@ -137,7 +129,6 @@ ID 为 `2 × task_id`。输入完整到达后才进入计算节点的非抢占�
   --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
   --simulationDuration=10 \
-  --offeredLoad=0 \
   --taskLogMode=verbose \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \

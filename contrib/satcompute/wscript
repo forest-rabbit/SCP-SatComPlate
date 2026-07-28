@@ -5,7 +5,6 @@ def build(bld):
         'csma',
         'point-to-point',
         'internet',
-        'applications',
         'flow-monitor',
     ]
     module = bld.create_ns3_module('satcompute', dependencies)
@@ -32,7 +31,6 @@ def build(bld):
         'task/compute-task.cc',
         'task/task-coordinator.cc',
         'task/task-trace.cc',
-        'traffic/background-traffic.cc',
         'traffic/network-transfer.cc',
         'traffic/network-transfer-application.cc',
         'traffic/network-transfer-config.cc',

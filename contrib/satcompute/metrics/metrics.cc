@@ -90,9 +90,12 @@ MetricsRecorder::Record()
     m_taskCoordinator != nullptr
     && m_runMetadata.diagnosticMode == "failure";
   bool writeDiagnostics = !taskRunComplete && diagnosticsEnabled;
+  bool transferOnlyRun =
+    m_runMetadata.mode == "network-transfer";
   bool writeFlowDropReasons =
     m_runMetadata.diagnosticMode == "failure"
-    && (m_taskCoordinator == nullptr || !taskRunComplete);
+    && (transferOnlyRun
+        || (m_taskCoordinator != nullptr && !taskRunComplete));
   RemoveFailureDiagnosticOutputs(m_outputDirectory);
   PrintNetworkMetrics(aggregate);
   WriteNetworkMetrics(aggregate, m_outputDirectory);

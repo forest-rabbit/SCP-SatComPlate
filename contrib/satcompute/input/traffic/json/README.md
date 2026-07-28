@@ -64,8 +64,8 @@ ID、字节数、计算量和到达时间都是整数；数据量与计算量必
 以及不进入每次 CI 的 60-task size-aware 中型碰撞输入及生成摘要。
 静态算力不是流量，单独位于
 [`../../topology/json/resources/`](../../topology/json/resources/)。
-`--computeProfile` 与 `--taskTrace` 必须同时指定，并与 `--transferTrace` 或正的
-`--offeredLoad` 互斥。
+`--computeProfile` 与 `--taskTrace` 必须同时指定，并与 `--transferTrace`
+互斥。
 
 进入 N1 后继续保留这些 N0 输入和
 `tools/validation/check-ecmp-output.py`，用于确认任务计算与调度没有破坏
