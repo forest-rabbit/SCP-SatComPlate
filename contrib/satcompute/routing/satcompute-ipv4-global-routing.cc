@@ -238,6 +238,74 @@ SatComputeIpv4GlobalRouting::BuildRoute(
   return route;
 }
 
+EcmpHrwSelection
+SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
+  const EcmpFlowKey& flowKey,
+  const std::vector<EcmpRouteCandidate>& candidates,
+  std::string& selectionReason)
+{
+  NS_ABORT_MSG_IF(candidates.empty()
+                    || m_sizeAwareRegistry == nullptr
+                    || !m_sizeAwareRegistry->IsSenderActive(flowKey),
+                  "size-aware HRW 选择要求活动的已登记 flow 和非空候选");
+
+  SizeAwareFlowAssignment sticky;
+  if (m_sizeAwareRegistry->FindAssignment(m_satelliteId,
+                                          flowKey,
+                                          sticky))
+    {
+      auto selected =
+        std::find(candidates.begin(), candidates.end(), sticky.candidate);
+      if (selected != candidates.end())
+        {
+          uint32_t selectedIndex =
+            static_cast<uint32_t>(selected - candidates.begin());
+          m_sizeAwareRegistry->ValidateAssignment(m_satelliteId,
+                                                  flowKey,
+                                                  m_routeEpoch);
+          selectionReason = "SIZE_AWARE_STICKY";
+          return {
+            selectedIndex,
+            Fnv1a64(EncodeEcmpHrwKey(m_hashSeed,
+                                    flowKey,
+                                    candidates[selectedIndex]))
+          };
+        }
+      m_sizeAwareRegistry->ReleaseAssignment(m_satelliteId, flowKey);
+    }
+
+  std::vector<EcmpHrwRank> ranking =
+    RankEcmpHrwRoutes(m_hashSeed, flowKey, candidates);
+  EcmpHrwRank selected = ranking[0];
+  selectionReason = "SIZE_AWARE_HRW_PRIMARY";
+  if (ranking.size() >= 2)
+    {
+      uint64_t primaryLoad =
+        m_sizeAwareRegistry->GetReservedBytes(
+          m_satelliteId,
+          candidates[ranking[0].candidateIndex]);
+      uint64_t secondaryLoad =
+        m_sizeAwareRegistry->GetReservedBytes(
+          m_satelliteId,
+          candidates[ranking[1].candidateIndex]);
+      if (secondaryLoad < primaryLoad)
+        {
+          selected = ranking[1];
+          selectionReason = "SIZE_AWARE_HRW_SECONDARY";
+        }
+    }
+
+  m_sizeAwareRegistry->RecordAssignment(
+    m_satelliteId,
+    flowKey,
+    candidates[selected.candidateIndex],
+    m_routeEpoch);
+  return {
+    selected.candidateIndex,
+    selected.score
+  };
+}
+
 Ptr<Ipv4Route>
 SatComputeIpv4GlobalRouting::LookupPerFlow(
   Ptr<const Packet> packet,
@@ -300,6 +368,20 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
 
   if (candidates.empty())
     {
+      if (m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+          && outputInterface == nullptr
+          && hasFiveTuple
+          && m_sizeAwareRegistry->IsSenderActive(flowKey))
+        {
+          SizeAwareFlowAssignment assignment;
+          if (m_sizeAwareRegistry->FindAssignment(m_satelliteId,
+                                                  flowKey,
+                                                  assignment))
+            {
+              m_sizeAwareRegistry->ReleaseAssignment(m_satelliteId,
+                                                     flowKey);
+            }
+        }
       event.selectionReason = "BASE_FALLBACK_NO_HOST_ROUTE";
       if (outputInterface == nullptr)
         {
@@ -322,13 +404,39 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
   uint32_t selectedIndex =
     static_cast<uint32_t>(hashValue % candidates.size());
   std::string selectionReason = "HASH_PER_FLOW";
-  if (m_selectionMode == EcmpRouteSelectionMode::HRW_PER_FLOW)
+  if (m_selectionMode == EcmpRouteSelectionMode::HRW_PER_FLOW
+      || m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW)
     {
-      EcmpHrwSelection selection =
-        SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
+      EcmpHrwSelection selection = {
+        0,
+        0
+      };
+      if (m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+          && outputInterface == nullptr
+          && m_sizeAwareRegistry->IsSenderActive(flowKey))
+        {
+          selection =
+            SelectSizeAwareRoute(flowKey, candidates, selectionReason);
+        }
+      else
+        {
+          selection =
+            SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
+          if (m_selectionMode == EcmpRouteSelectionMode::HRW_PER_FLOW)
+            {
+              selectionReason = "HRW_PER_FLOW";
+            }
+          else if (m_sizeAwareRegistry->IsRegistered(flowKey))
+            {
+              selectionReason = "HRW_FALLBACK_INACTIVE";
+            }
+          else
+            {
+              selectionReason = "HRW_FALLBACK_UNREGISTERED";
+            }
+        }
       selectedIndex = selection.candidateIndex;
       hashValue = selection.score;
-      selectionReason = "HRW_PER_FLOW";
     }
   const EcmpRouteCandidate& selected = candidates[selectedIndex];
 

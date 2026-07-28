@@ -100,6 +100,10 @@ private:
                                const Ipv4Header& header,
                                Ptr<NetDevice> outputInterface,
                                bool& handled);
+  EcmpHrwSelection SelectSizeAwareRoute(
+    const EcmpFlowKey& flowKey,
+    const std::vector<EcmpRouteCandidate>& candidates,
+    std::string& selectionReason);
   void RecordDecision(const EcmpRouteDecisionEvent& event);
 
   EcmpRouteSelectionMode m_selectionMode;

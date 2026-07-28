@@ -58,6 +58,8 @@ GetDefaultSatComputeConfig()
   // "global-first" 使用 ns-3 Ipv4GlobalRouting 的默认路由选择；
   // "global-hash-per-flow" 对等价最短路执行确定性的五元组逐流取模 hash；
   // "global-hrw-per-flow" 用 HRW/Rendezvous hash 在候选变化时减少无关流迁移。
+  // "global-size-aware-hrw" 在 HRW 前两名间按活动传输的声明字节预留选择，
+  // 并在当前下一跳仍有效时保持节点级粘性。
   config.routingMode = "global-hash-per-flow";
 
   // --transferLogMode：
