@@ -20,6 +20,7 @@
 #include "network-transfer-config.h"
 
 #include "ns3/application.h"
+#include "ns3/callback.h"
 #include "ns3/event-id.h"
 #include "ns3/nstime.h"
 #include "ns3/ptr.h"
@@ -38,10 +39,13 @@ public:
   ~NetworkTransferApplication() override;
 
   void Configure(const NetworkTransfer& transfer);
+  void SetSendCompleteCallback(
+    Callback<void, uint64_t, int64_t> sendCompleteCallback);
   void StartTransferNow();
 
   uint64_t GetTransferId() const;
   bool HasStarted() const;
+  bool HasFinishedSending() const;
   uint64_t GetSentPacketCount() const;
   uint64_t GetSentBytes() const;
   int64_t GetLastSendTimeNs() const;
@@ -62,6 +66,8 @@ private:
   int64_t m_lastSendTimeNs;
   bool m_isRunning;
   bool m_hasStarted;
+  bool m_hasFinishedSending;
+  Callback<void, uint64_t, int64_t> m_sendCompleteCallback;
 };
 
 } // namespace ns3

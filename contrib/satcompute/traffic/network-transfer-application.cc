@@ -55,7 +55,8 @@ NetworkTransferApplication::NetworkTransferApplication()
     m_sentBytes(0),
     m_lastSendTimeNs(-1),
     m_isRunning(false),
-    m_hasStarted(false)
+    m_hasStarted(false),
+    m_hasFinishedSending(false)
 {
 }
 
@@ -71,6 +72,17 @@ NetworkTransferApplication::Configure(const NetworkTransfer& transfer)
   NS_ABORT_MSG_IF(transfer.transferId == 0,
                   "NetworkTransferApplication 要求有效 transfer_id");
   m_transfer = transfer;
+}
+
+void
+NetworkTransferApplication::SetSendCompleteCallback(
+  Callback<void, uint64_t, int64_t> sendCompleteCallback)
+{
+  NS_ABORT_MSG_IF(sendCompleteCallback.IsNull(),
+                  "NetworkTransfer sender complete callback 不能为空");
+  NS_ABORT_MSG_IF(!m_sendCompleteCallback.IsNull() || m_hasStarted,
+                  "NetworkTransfer sender complete callback 只能设置一次");
+  m_sendCompleteCallback = sendCompleteCallback;
 }
 
 void
@@ -117,6 +129,12 @@ bool
 NetworkTransferApplication::HasStarted() const
 {
   return m_hasStarted;
+}
+
+bool
+NetworkTransferApplication::HasFinishedSending() const
+{
+  return m_hasFinishedSending;
 }
 
 uint64_t
@@ -166,6 +184,7 @@ NetworkTransferApplication::StopApplication()
 void
 NetworkTransferApplication::DoDispose()
 {
+  m_sendCompleteCallback = Callback<void, uint64_t, int64_t>();
   m_socket = nullptr;
   Application::DoDispose();
 }
@@ -256,6 +275,15 @@ NetworkTransferApplication::SendNextPacket()
                         || m_sentPacketCount != m_transfer.packetCount,
                       "NetworkTransfer packetization invariant 失败，transfer_id="
                         << m_transfer.transferId);
+      NS_ABORT_MSG_IF(m_hasFinishedSending,
+                      "NetworkTransfer sender completion 重复，transfer_id="
+                        << m_transfer.transferId);
+      m_hasFinishedSending = true;
+      if (!m_sendCompleteCallback.IsNull())
+        {
+          m_sendCompleteCallback(m_transfer.transferId,
+                                 m_lastSendTimeNs);
+        }
       return;
     }
 

@@ -72,8 +72,10 @@ private:
   };
 
   uint32_t GetPlanIndex(uint64_t transferId) const;
+  EcmpFlowKey GetFlowKey(uint32_t index) const;
   const char* GetTransferStateName(uint32_t index) const;
   void ActivateTransfer(uint64_t transferId);
+  void HandleSenderComplete(uint64_t transferId, int64_t sendTimeNs);
   void HandleTransferComplete(uint64_t transferId, int64_t completionTimeNs);
 
   const SatelliteTopology* m_topology;
@@ -85,6 +87,7 @@ private:
   int64_t m_simulationDurationNs;
   bool m_configured;
   bool m_registered;
+  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
   std::vector<NetworkTransfer> m_plans;
   std::vector<Ptr<NetworkTransferApplication>> m_senders;
   std::vector<Ptr<NetworkTransferReceiver>> m_receivers;
