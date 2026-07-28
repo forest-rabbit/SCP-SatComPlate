@@ -19,7 +19,7 @@
 #include "task-trace.h"
 
 #include "../third-party/nlohmann/json.hpp"
-#include "../topo.h"
+#include "../topology/satellite-topology.h"
 
 #include "ns3/abort.h"
 #include "ns3/fatal-error.h"

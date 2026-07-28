@@ -22,7 +22,7 @@
 #include "compute-task.h"
 #include "task-trace.h"
 
-#include "../topo.h"
+#include "../topology/satellite-topology.h"
 #include "../traffic/network-transfer-engine.h"
 
 #include "ns3/object.h"

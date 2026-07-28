@@ -18,7 +18,7 @@
 #define SATCOMPUTE_NETWORK_TRANSFER_H
 
 #include "../metrics/metrics.h"
-#include "../topo.h"
+#include "../topology/satellite-topology.h"
 #include "network-transfer-config.h"
 #include "network-transfer-engine.h"
 
