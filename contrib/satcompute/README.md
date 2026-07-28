@@ -398,6 +398,14 @@ python3 contrib/satcompute/tools/check-size-aware-output.py \
 `tools/check-size-aware-replay.py` 比较；占位流必须在 0 ns 完成释放，
 0.1 s 目标流开始前总预留必须为零。
 
+冻结 75% 压力输入不提交仓库。保留基线和大小感知输出时，可在主检查命令
+追加 `--full-baseline=<hash-output> --full-size=<size-aware-output>`。检查器
+固定核对 66 星、66 计算节点、2 Gbit/s ISL、1000 s、109,263,294,080
+应用字节等场景合同，并要求任务完成数不低于 1493、QueueDisc 丢包少于
+54、受害 transfer 不增加，以及 device queue、UDP socket 和未归因丢包
+保持为零。最终本地结果和输入哈希记录在
+`docs/pre-n2-size-aware-hrw-validation.md`。
+
 ## 变长规模输入
 
 `input/traffic/json/workload/workload-5000-varied.json` 由
