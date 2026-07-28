@@ -271,7 +271,9 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
                                     candidates[selectedIndex]))
           };
         }
-      m_sizeAwareRegistry->ReleaseAssignment(m_satelliteId, flowKey);
+      m_sizeAwareRegistry->ReleaseInvalidAssignment(m_satelliteId,
+                                                    flowKey,
+                                                    m_routeEpoch);
     }
 
   std::vector<EcmpHrwRank> ranking =
@@ -299,7 +301,8 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
     m_satelliteId,
     flowKey,
     candidates[selected.candidateIndex],
-    m_routeEpoch);
+    m_routeEpoch,
+    selectionReason);
   return {
     selected.candidateIndex,
     selected.score
@@ -378,8 +381,9 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
                                                   flowKey,
                                                   assignment))
             {
-              m_sizeAwareRegistry->ReleaseAssignment(m_satelliteId,
-                                                     flowKey);
+              m_sizeAwareRegistry->ReleaseInvalidAssignment(m_satelliteId,
+                                                            flowKey,
+                                                            m_routeEpoch);
             }
         }
       event.selectionReason = "BASE_FALLBACK_NO_HOST_ROUTE";

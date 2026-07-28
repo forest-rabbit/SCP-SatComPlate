@@ -23,6 +23,8 @@
 
 #include <cstdint>
 #include <map>
+#include <string>
+#include <vector>
 
 namespace ns3 {
 
@@ -38,6 +40,23 @@ struct SizeAwareFlowAssignment
   EcmpRouteCandidate candidate;
   uint64_t reservedBytes;
   uint64_t latestRouteEpoch;
+};
+
+struct SizeAwareReservationEvent
+{
+  int64_t simulationTimeNs;
+  std::string action;
+  std::string selectionReason;
+  uint64_t routeEpoch;
+  uint32_t nodeId;
+  EcmpFlowKey flowKey;
+  uint64_t transferId;
+  uint64_t declaredBytes;
+  EcmpRouteCandidate candidate;
+  uint64_t candidateReservedBefore;
+  uint64_t candidateReservedAfter;
+  uint64_t totalReservedBefore;
+  uint64_t totalReservedAfter;
 };
 
 class SizeAwareFlowRegistry : public Object
@@ -64,20 +83,25 @@ public:
   void RecordAssignment(uint32_t nodeId,
                         const EcmpFlowKey& flowKey,
                         const EcmpRouteCandidate& candidate,
-                        uint64_t routeEpoch);
+                        uint64_t routeEpoch,
+                        const std::string& selectionReason);
   void ValidateAssignment(uint32_t nodeId,
                           const EcmpFlowKey& flowKey,
                           uint64_t routeEpoch);
-  void ReleaseAssignment(uint32_t nodeId, const EcmpFlowKey& flowKey);
+  void ReleaseInvalidAssignment(uint32_t nodeId,
+                                const EcmpFlowKey& flowKey,
+                                uint64_t routeEpoch);
 
   uint64_t GetReservedBytes(
     uint32_t nodeId,
     const EcmpRouteCandidate& candidate) const;
   uint64_t GetTotalReservedBytes() const;
   uint64_t GetPeakReservedBytes() const;
+  uint64_t GetPeakCandidateReservedBytes() const;
   uint32_t GetRegisteredFlowCount() const;
   uint32_t GetActiveFlowCount() const;
   uint32_t GetAssignmentCount() const;
+  const std::vector<SizeAwareReservationEvent>& GetEvents() const;
   void Clear();
 
 private:
@@ -98,14 +122,28 @@ private:
   };
 
   void ReleaseAssignment(
-    std::map<NodeFlowKey, SizeAwareFlowAssignment>::iterator assignment);
+    std::map<NodeFlowKey, SizeAwareFlowAssignment>::iterator assignment,
+    const std::string& action,
+    uint64_t routeEpoch);
+  void RecordEvent(const std::string& action,
+                   const std::string& selectionReason,
+                   uint64_t routeEpoch,
+                   uint32_t nodeId,
+                   const EcmpFlowKey& flowKey,
+                   const EcmpRouteCandidate& candidate,
+                   uint64_t candidateReservedBefore,
+                   uint64_t candidateReservedAfter,
+                   uint64_t totalReservedBefore,
+                   uint64_t totalReservedAfter);
 
   std::map<EcmpFlowKey, SizeAwareFlowMetadata> m_flows;
   std::map<uint64_t, EcmpFlowKey> m_flowKeysByTransferId;
   std::map<NodeFlowKey, SizeAwareFlowAssignment> m_assignments;
   std::map<NodeCandidateKey, uint64_t> m_candidateReservedBytes;
+  std::vector<SizeAwareReservationEvent> m_events;
   uint64_t m_totalReservedBytes;
   uint64_t m_peakReservedBytes;
+  uint64_t m_peakCandidateReservedBytes;
   uint32_t m_activeFlowCount;
 };
 

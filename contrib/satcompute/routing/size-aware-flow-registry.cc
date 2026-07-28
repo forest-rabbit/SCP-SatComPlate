@@ -19,6 +19,7 @@
 #include "size-aware-flow-registry.h"
 
 #include "ns3/abort.h"
+#include "ns3/simulator.h"
 
 #include <limits>
 #include <tuple>
@@ -41,6 +42,7 @@ SizeAwareFlowRegistry::GetTypeId()
 SizeAwareFlowRegistry::SizeAwareFlowRegistry()
   : m_totalReservedBytes(0),
     m_peakReservedBytes(0),
+    m_peakCandidateReservedBytes(0),
     m_activeFlowCount(0)
 {
 }
@@ -133,7 +135,9 @@ SizeAwareFlowRegistry::FinishSending(const EcmpFlowKey& flowKey)
           continue;
         }
       auto released = assignment++;
-      ReleaseAssignment(released);
+      ReleaseAssignment(released,
+                        "RELEASE_SENDER_FINISHED",
+                        released->second.latestRouteEpoch);
     }
 
   flow->second.senderActive = false;
@@ -188,8 +192,12 @@ SizeAwareFlowRegistry::RecordAssignment(
   uint32_t nodeId,
   const EcmpFlowKey& flowKey,
   const EcmpRouteCandidate& candidate,
-  uint64_t routeEpoch)
+  uint64_t routeEpoch,
+  const std::string& selectionReason)
 {
+  NS_ABORT_MSG_IF(selectionReason != "SIZE_AWARE_HRW_PRIMARY"
+                    && selectionReason != "SIZE_AWARE_HRW_SECONDARY",
+                  "size-aware assignment selection reason 无效");
   auto flow = m_flows.find(flowKey);
   NS_ABORT_MSG_IF(flow == m_flows.end() || !flow->second.senderActive,
                   "size-aware registry 只允许活动的已登记 flow 建立预留");
@@ -213,6 +221,8 @@ SizeAwareFlowRegistry::RecordAssignment(
   };
   uint64_t& candidateReserved =
     m_candidateReservedBytes[candidateKey];
+  uint64_t candidateReservedBefore = candidateReserved;
+  uint64_t totalReservedBefore = m_totalReservedBytes;
   NS_ABORT_MSG_IF(
     candidateReserved
       > std::numeric_limits<uint64_t>::max() - assignment.reservedBytes,
@@ -227,6 +237,20 @@ SizeAwareFlowRegistry::RecordAssignment(
     {
       m_peakReservedBytes = m_totalReservedBytes;
     }
+  if (candidateReserved > m_peakCandidateReservedBytes)
+    {
+      m_peakCandidateReservedBytes = candidateReserved;
+    }
+  RecordEvent("ASSIGN",
+              selectionReason,
+              routeEpoch,
+              nodeId,
+              flowKey,
+              candidate,
+              candidateReservedBefore,
+              candidateReserved,
+              totalReservedBefore,
+              m_totalReservedBytes);
 }
 
 void
@@ -244,12 +268,25 @@ SizeAwareFlowRegistry::ValidateAssignment(uint32_t nodeId,
   NS_ABORT_MSG_IF(routeEpoch < assignment->second.latestRouteEpoch,
                   "size-aware assignment route epoch 倒退");
   assignment->second.latestRouteEpoch = routeEpoch;
+  uint64_t candidateReserved =
+    GetReservedBytes(nodeId, assignment->second.candidate);
+  RecordEvent("STICKY_REUSE",
+              "SIZE_AWARE_STICKY",
+              routeEpoch,
+              nodeId,
+              flowKey,
+              assignment->second.candidate,
+              candidateReserved,
+              candidateReserved,
+              m_totalReservedBytes,
+              m_totalReservedBytes);
 }
 
 void
-SizeAwareFlowRegistry::ReleaseAssignment(
+SizeAwareFlowRegistry::ReleaseInvalidAssignment(
   uint32_t nodeId,
-  const EcmpFlowKey& flowKey)
+  const EcmpFlowKey& flowKey,
+  uint64_t routeEpoch)
 {
   NodeFlowKey key = {
     nodeId,
@@ -258,13 +295,20 @@ SizeAwareFlowRegistry::ReleaseAssignment(
   auto assignment = m_assignments.find(key);
   NS_ABORT_MSG_IF(assignment == m_assignments.end(),
                   "size-aware registry 无法释放不存在的 assignment");
-  ReleaseAssignment(assignment);
+  ReleaseAssignment(assignment,
+                    "RELEASE_CANDIDATE_INVALID",
+                    routeEpoch);
 }
 
 void
 SizeAwareFlowRegistry::ReleaseAssignment(
-  std::map<NodeFlowKey, SizeAwareFlowAssignment>::iterator assignment)
+  std::map<NodeFlowKey, SizeAwareFlowAssignment>::iterator assignment,
+  const std::string& action,
+  uint64_t routeEpoch)
 {
+  NS_ABORT_MSG_IF(action != "RELEASE_CANDIDATE_INVALID"
+                    && action != "RELEASE_SENDER_FINISHED",
+                  "size-aware release action 无效");
   NodeCandidateKey candidateKey = {
     assignment->first.nodeId,
     assignment->second.candidate
@@ -277,8 +321,21 @@ SizeAwareFlowRegistry::ReleaseAssignment(
       || m_totalReservedBytes < assignment->second.reservedBytes,
     "size-aware reserved bytes 状态不一致");
 
+  uint64_t candidateReservedBefore = candidateReserved->second;
+  uint64_t totalReservedBefore = m_totalReservedBytes;
   candidateReserved->second -= assignment->second.reservedBytes;
   m_totalReservedBytes -= assignment->second.reservedBytes;
+  uint64_t candidateReservedAfter = candidateReserved->second;
+  RecordEvent(action,
+              "",
+              routeEpoch,
+              assignment->first.nodeId,
+              assignment->first.flowKey,
+              assignment->second.candidate,
+              candidateReservedBefore,
+              candidateReservedAfter,
+              totalReservedBefore,
+              m_totalReservedBytes);
   if (candidateReserved->second == 0)
     {
       m_candidateReservedBytes.erase(candidateReserved);
@@ -311,6 +368,12 @@ SizeAwareFlowRegistry::GetPeakReservedBytes() const
   return m_peakReservedBytes;
 }
 
+uint64_t
+SizeAwareFlowRegistry::GetPeakCandidateReservedBytes() const
+{
+  return m_peakCandidateReservedBytes;
+}
+
 uint32_t
 SizeAwareFlowRegistry::GetRegisteredFlowCount() const
 {
@@ -329,6 +392,44 @@ SizeAwareFlowRegistry::GetAssignmentCount() const
   return m_assignments.size();
 }
 
+const std::vector<SizeAwareReservationEvent>&
+SizeAwareFlowRegistry::GetEvents() const
+{
+  return m_events;
+}
+
+void
+SizeAwareFlowRegistry::RecordEvent(
+  const std::string& action,
+  const std::string& selectionReason,
+  uint64_t routeEpoch,
+  uint32_t nodeId,
+  const EcmpFlowKey& flowKey,
+  const EcmpRouteCandidate& candidate,
+  uint64_t candidateReservedBefore,
+  uint64_t candidateReservedAfter,
+  uint64_t totalReservedBefore,
+  uint64_t totalReservedAfter)
+{
+  SizeAwareFlowMetadata metadata = GetMetadata(flowKey);
+  SizeAwareReservationEvent event = {
+    Simulator::Now().GetNanoSeconds(),
+    action,
+    selectionReason,
+    routeEpoch,
+    nodeId,
+    flowKey,
+    metadata.transferId,
+    metadata.declaredBytes,
+    candidate,
+    candidateReservedBefore,
+    candidateReservedAfter,
+    totalReservedBefore,
+    totalReservedAfter
+  };
+  m_events.push_back(event);
+}
+
 void
 SizeAwareFlowRegistry::Clear()
 {
@@ -336,8 +437,10 @@ SizeAwareFlowRegistry::Clear()
   m_flowKeysByTransferId.clear();
   m_assignments.clear();
   m_candidateReservedBytes.clear();
+  m_events.clear();
   m_totalReservedBytes = 0;
   m_peakReservedBytes = 0;
+  m_peakCandidateReservedBytes = 0;
   m_activeFlowCount = 0;
 }
 

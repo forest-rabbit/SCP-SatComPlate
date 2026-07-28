@@ -506,6 +506,7 @@ main(int argc, char* argv[])
                           transferFlowMetadata,
                           transferSummaries,
                           routeRecorder.GetEvents(),
+                          topology.GetSizeAwareFlowRegistry(),
                           topology.GetIslDirectedLinks(),
                           topology.GetIslQueueDropEvents(),
                           udpSocketDropEvents,

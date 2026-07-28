@@ -21,6 +21,7 @@
 #include "failure-diagnostics.h"
 #include "flow-metrics.h"
 #include "run-summary.h"
+#include "size-aware-metrics.h"
 #include "task-metrics.h"
 #include "transfer-metrics.h"
 #include "../task/task-coordinator.h"
@@ -53,6 +54,7 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
                                  const std::vector<TransferFlowMetadata>& transferFlows,
                                  const std::vector<TransferSummaryRecord>& transferSummaries,
                                  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
+                                 Ptr<SizeAwareFlowRegistry> sizeAwareRegistry,
                                  const std::vector<IslDirectedLink>& directedLinks,
                                  const std::vector<IslQueueDropEvent>& queueDropEvents,
                                  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
@@ -66,6 +68,7 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
     m_transferFlows(transferFlows),
     m_transferSummaries(transferSummaries),
     m_routeEvents(routeEvents),
+    m_sizeAwareRegistry(sizeAwareRegistry),
     m_directedLinks(directedLinks),
     m_queueDropEvents(queueDropEvents),
     m_udpSocketDropEvents(udpSocketDropEvents),
@@ -105,6 +108,16 @@ MetricsRecorder::Record()
                            m_outputDirectory);
     }
   WriteEcmpRouteEvents(m_routeEvents, m_outputDirectory);
+  if (m_runMetadata.routingMode == "global-size-aware-hrw")
+    {
+      WriteSizeAwareMetrics(m_sizeAwareRegistry, m_outputDirectory);
+    }
+  else
+    {
+      NS_ABORT_MSG_IF(m_sizeAwareRegistry != nullptr,
+                      "非 size-aware 运行不应持有 flow registry");
+      RemoveSizeAwareMetrics(m_outputDirectory);
+    }
   WriteTransferSummaries(m_transferSummaries, m_outputDirectory);
   if (m_taskCoordinator != nullptr)
     {
@@ -147,6 +160,17 @@ MetricsRecorder::Record()
             << OutputPath(m_outputDirectory, "transfer-summary.csv") << std::endl
             << "  run     : "
             << OutputPath(m_outputDirectory, "run-summary.json") << std::endl;
+  if (m_sizeAwareRegistry != nullptr)
+    {
+      std::cout
+        << "  reserve : "
+        << OutputPath(m_outputDirectory,
+                      "size-aware-reservation-events.csv")
+        << std::endl
+        << "  size-aware summary: "
+        << OutputPath(m_outputDirectory, "size-aware-summary.json")
+        << std::endl;
+    }
   if (m_taskCoordinator != nullptr)
     {
       std::cout
