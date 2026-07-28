@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import ipaddress
 import json
 import re
 from pathlib import Path
@@ -19,6 +20,15 @@ TRANSFER_FIELDS = {
     "size_bytes",
     "arrival_time_ns",
 }
+LEGACY_STATIC_EXPECTED = {
+    10000: (689561907430475796, 0, "10.0.0.2", 2),
+    10001: (9897695115818735, 1, "10.0.0.6", 3),
+    10002: (1941789103400206030, 0, "10.0.0.2", 2),
+    10003: (1315710689787443665, 1, "10.0.0.6", 3),
+}
+FNV1A64_OFFSET_BASIS = 14695981039346656037
+FNV1A64_PRIME = 1099511628211
+UINT64_MASK = (1 << 64) - 1
 
 
 def fail(message):
@@ -129,7 +139,7 @@ def validate_no_fragmentation_fallback(directory):
     ]
     require(
         not invalid,
-        "global-hash-per-flow emitted BASE_FALLBACK_NO_FIVE_TUPLE",
+        "per-flow routing emitted BASE_FALLBACK_NO_FIVE_TUPLE",
     )
 
 
@@ -156,6 +166,19 @@ def validate_static(first, second):
         require(
             row["selection_reason"] == "HASH_PER_FLOW",
             "static source decision must use HASH_PER_FLOW",
+        )
+        source_port = int_field(row, "source_port")
+        expected = LEGACY_STATIC_EXPECTED.get(source_port)
+        require(expected is not None, f"unexpected legacy source port {source_port}")
+        require(
+            (
+                int_field(row, "hash_value"),
+                int_field(row, "selected_index"),
+                row["selected_gateway"],
+                int_field(row, "selected_output_interface"),
+            )
+            == expected,
+            f"legacy hash-per-flow selection changed for source port {source_port}",
         )
         selected_gateways.add(row["selected_gateway"])
         selected_interfaces.add(int_field(row, "selected_output_interface"))
@@ -235,6 +258,207 @@ def validate_dynamic(directory):
     )
     validate_no_fragmentation_fallback(directory)
     print("PASS: dynamic diamond epochs expose deterministic 2->1->2 candidates")
+
+
+def ipv4_bytes(value):
+    return int(ipaddress.IPv4Address(value)).to_bytes(4, "big")
+
+
+def candidate_identity(row):
+    return (
+        int(ipaddress.IPv4Address(row["selected_gateway"])),
+        int_field(row, "selected_output_interface"),
+        int(ipaddress.IPv4Address(row["destination_address"])),
+        0xFFFFFFFF,
+    )
+
+
+def encode_hrw_key(seed, key, candidate):
+    (
+        source_address,
+        destination_address,
+        protocol,
+        source_port,
+        destination_port,
+    ) = key
+    gateway, output_interface, route_destination, destination_mask = candidate
+    return b"".join(
+        (
+            seed.to_bytes(8, "big"),
+            ipv4_bytes(source_address),
+            ipv4_bytes(destination_address),
+            protocol.to_bytes(1, "big"),
+            source_port.to_bytes(2, "big"),
+            destination_port.to_bytes(2, "big"),
+            gateway.to_bytes(4, "big"),
+            output_interface.to_bytes(4, "big"),
+            route_destination.to_bytes(4, "big"),
+            destination_mask.to_bytes(4, "big"),
+        )
+    )
+
+
+def fnv1a64(data):
+    value = FNV1A64_OFFSET_BASIS
+    for byte in data:
+        value ^= byte
+        value = (value * FNV1A64_PRIME) & UINT64_MASK
+    return value
+
+
+def expected_hrw_selection(seed, key, candidates):
+    scored = [
+        (fnv1a64(encode_hrw_key(seed, key, candidate)), candidate)
+        for candidate in candidates
+    ]
+    maximum_score = max(score for score, _ in scored)
+    selected_candidate = min(
+        candidate for score, candidate in scored if score == maximum_score
+    )
+    return selected_candidate, maximum_score
+
+
+def validate_hrw_run(directory, expected_seed):
+    run = read_run_summary(directory)
+    require(
+        run["routing_mode"] == "global-hrw-per-flow",
+        "HRW fixture must report global-hrw-per-flow",
+    )
+    require(
+        run["ecmp_hash_seed"] == expected_seed,
+        f"HRW fixture must report seed {expected_seed}",
+    )
+    require(run["transfer_count"] == 4, "HRW fixture must contain four flows")
+
+    events = source_events(directory)
+    require(len(events) == 16, "HRW source must emit four flows in four epochs")
+    by_flow = {}
+    for row in events:
+        key = flow_key(row)
+        epoch = int_field(row, "route_epoch")
+        require(epoch in {0, 1, 2, 3}, f"unexpected HRW route epoch {epoch}")
+        require(epoch not in by_flow.setdefault(key, {}), f"duplicate HRW epoch {epoch}")
+        by_flow[key][epoch] = row
+    require(len(by_flow) == 4, "HRW fixture must expose four five-tuples")
+    require(
+        all(set(rows) == {0, 1, 2, 3} for rows in by_flow.values()),
+        "each HRW flow must span all four route epochs",
+    )
+
+    full_candidates = sorted(
+        {candidate_identity(rows[0]) for rows in by_flow.values()}
+    )
+    require(
+        len(full_candidates) == 2,
+        "initial HRW flows must cover both equal-cost candidates",
+    )
+    remaining_candidates = {
+        candidate_identity(rows[2]) for rows in by_flow.values()
+    }
+    require(
+        len(remaining_candidates) == 1,
+        "the reduced HRW epoch must expose one remaining candidate",
+    )
+    remaining = next(iter(remaining_candidates))
+    require(
+        remaining in full_candidates,
+        "the remaining HRW candidate must belong to the original set",
+    )
+
+    removed_flow_count = 0
+    unchanged_flow_count = 0
+    for key, rows in by_flow.items():
+        for epoch in (0, 1, 2, 3):
+            row = rows[epoch]
+            candidates = full_candidates if epoch in {0, 1, 3} else [remaining]
+            expected_candidate, expected_score = expected_hrw_selection(
+                expected_seed, key, candidates
+            )
+            require(
+                int_field(row, "candidate_count_before_dedup") == len(candidates)
+                and int_field(row, "candidate_count_after_dedup") == len(candidates),
+                f"HRW candidate count mismatch for {key} in epoch {epoch}",
+            )
+            expected_reason = (
+                "SINGLE_CANDIDATE" if len(candidates) == 1 else "HRW_PER_FLOW"
+            )
+            require(
+                row["selection_reason"] == expected_reason,
+                f"HRW selection reason mismatch for {key} in epoch {epoch}",
+            )
+            require(
+                candidate_identity(row) == expected_candidate,
+                f"HRW selected the wrong candidate for {key} in epoch {epoch}",
+            )
+            require(
+                int_field(row, "selected_index")
+                == candidates.index(expected_candidate),
+                f"HRW selected index mismatch for {key} in epoch {epoch}",
+            )
+            require(
+                int_field(row, "hash_value") == expected_score,
+                f"HRW score mismatch for {key} in epoch {epoch}",
+            )
+
+        initial = candidate_identity(rows[0])
+        require(
+            candidate_identity(rows[1]) == initial
+            and int_field(rows[1], "hash_value")
+            == int_field(rows[0], "hash_value"),
+            f"unchanged candidate set remapped flow {key}",
+        )
+        require(
+            candidate_identity(rows[2]) == remaining,
+            f"reduced candidate set did not use the remaining route for {key}",
+        )
+        require(
+            candidate_identity(rows[3]) == initial
+            and int_field(rows[3], "hash_value")
+            == int_field(rows[0], "hash_value"),
+            f"restored candidate set did not restore the HRW result for {key}",
+        )
+        if initial == remaining:
+            unchanged_flow_count += 1
+        else:
+            removed_flow_count += 1
+
+    require(
+        0 < unchanged_flow_count < len(by_flow),
+        "removing an unselected candidate must leave a non-empty flow subset stable",
+    )
+    require(
+        0 < removed_flow_count < len(by_flow),
+        "removing a selected candidate must remap only the affected flow subset",
+    )
+    validate_no_fragmentation_fallback(directory)
+    return {
+        key: candidate_identity(rows[0])
+        for key, rows in by_flow.items()
+    }
+
+
+def validate_hrw(first, second, seed_two_first, seed_two_second):
+    seed_one_mapping = validate_hrw_run(first, 1)
+    validate_hrw_run(second, 1)
+    seed_two_mapping = validate_hrw_run(seed_two_first, 2)
+    validate_hrw_run(seed_two_second, 2)
+    validate_repeat_outputs(first, second)
+    validate_repeat_outputs(seed_two_first, seed_two_second)
+    require(
+        set(seed_one_mapping) == set(seed_two_mapping),
+        "HRW seed runs must expose the same five-tuples",
+    )
+    require(
+        any(
+            seed_one_mapping[key] != seed_two_mapping[key]
+            for key in seed_one_mapping
+        ),
+        "changing the HRW seed must remap at least one fixture flow",
+    )
+    print(
+        "PASS: HRW scores, order independence, cross-epoch stability, "
+        "minimal add/remove remapping, seed variation, and repeat determinism"
+    )
 
 
 def read_transfer_input(path):
@@ -613,6 +837,16 @@ def main():
     parser.add_argument("--first", help="first static diamond output directory")
     parser.add_argument("--second", help="second static diamond output directory")
     parser.add_argument("--dynamic", help="dynamic diamond output directory")
+    parser.add_argument("--hrw-first", help="first seed-1 HRW output directory")
+    parser.add_argument("--hrw-second", help="second seed-1 HRW output directory")
+    parser.add_argument(
+        "--hrw-seed-two-first",
+        help="first seed-2 HRW output directory",
+    )
+    parser.add_argument(
+        "--hrw-seed-two-second",
+        help="second seed-2 HRW output directory",
+    )
     parser.add_argument("--canonical-first")
     parser.add_argument("--canonical-second")
     parser.add_argument("--remainder", help="remainder output directory")
@@ -633,6 +867,16 @@ def main():
     require(
         bool(args.canonical_first) == bool(args.canonical_second),
         "--canonical-first and --canonical-second must be provided together",
+    )
+    hrw_directories = (
+        args.hrw_first,
+        args.hrw_second,
+        args.hrw_seed_two_first,
+        args.hrw_seed_two_second,
+    )
+    require(
+        not any(hrw_directories) or all(hrw_directories),
+        "all four HRW output directories must be provided together",
     )
     require(
         not args.scale or (args.scale_input and args.scale_log),
@@ -655,6 +899,7 @@ def main():
             (
                 args.first,
                 args.dynamic,
+                args.hrw_first,
                 args.canonical_first,
                 args.remainder,
                 args.scale,
@@ -668,6 +913,13 @@ def main():
         validate_static(args.first, args.second)
     if args.dynamic:
         validate_dynamic(args.dynamic)
+    if args.hrw_first:
+        validate_hrw(
+            args.hrw_first,
+            args.hrw_second,
+            args.hrw_seed_two_first,
+            args.hrw_seed_two_second,
+        )
     if args.canonical_first:
         validate_canonical(args.canonical_first, args.canonical_second)
     if args.remainder:

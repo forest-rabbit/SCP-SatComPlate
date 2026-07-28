@@ -72,6 +72,66 @@ jobs:
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-dynamic"
 
+      - name: Stable HRW dynamic epochs
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-hrw-dynamic \
+            --simulationDuration=7 \
+            --offeredLoad=0 \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-hrw-dynamic-transfers.json \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=64000 \
+            --islMtuBytes=65535 \
+            --islQueueBytes=64000000 \
+            --transferLogMode=silent \
+            --routingMode=global-hrw-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-hrw-seed1-a"
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-hrw-dynamic \
+            --simulationDuration=7 \
+            --offeredLoad=0 \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-hrw-dynamic-transfers.json \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=64000 \
+            --islMtuBytes=65535 \
+            --islQueueBytes=64000000 \
+            --transferLogMode=silent \
+            --routingMode=global-hrw-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-hrw-seed1-b"
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-hrw-dynamic \
+            --simulationDuration=7 \
+            --offeredLoad=0 \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-hrw-dynamic-transfers.json \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=64000 \
+            --islMtuBytes=65535 \
+            --islQueueBytes=64000000 \
+            --transferLogMode=silent \
+            --routingMode=global-hrw-per-flow \
+            --ecmpHashSeed=2 \
+            --outputDir=/tmp/satcompute-ci-hrw-seed2-a"
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-hrw-dynamic \
+            --simulationDuration=7 \
+            --offeredLoad=0 \
+            --transferTrace=contrib/satcompute/input/traffic/json/test/diamond-4-hrw-dynamic-transfers.json \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=64000 \
+            --islMtuBytes=65535 \
+            --islQueueBytes=64000000 \
+            --transferLogMode=silent \
+            --routingMode=global-hrw-per-flow \
+            --ecmpHashSeed=2 \
+            --outputDir=/tmp/satcompute-ci-hrw-seed2-b"
+          python3 contrib/satcompute/tools/check-ecmp-output.py \
+            --hrw-first=/tmp/satcompute-ci-hrw-seed1-a \
+            --hrw-second=/tmp/satcompute-ci-hrw-seed1-b \
+            --hrw-seed-two-first=/tmp/satcompute-ci-hrw-seed2-a \
+            --hrw-seed-two-second=/tmp/satcompute-ci-hrw-seed2-b
+
       - name: Canonical endpoint and remainder
         run: |
           ./waf --run-no-build "satcompute \
