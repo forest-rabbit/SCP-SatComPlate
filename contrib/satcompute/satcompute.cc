@@ -101,7 +101,7 @@ main(int argc, char* argv[])
                        config.diagnosticMode);
   commandLine.AddValue("routingMode",
                        "Routing mode: global-first, global-hash-per-flow, "
-                       "or global-hrw-per-flow",
+                       "global-hrw-per-flow, or global-size-aware-hrw",
                        config.routingMode);
   commandLine.AddValue("ecmpHashSeed",
                        "FNV-1a-64 seed prefix for per-flow ECMP",
@@ -246,10 +246,12 @@ main(int argc, char* argv[])
     }
   if (config.routingMode != "global-first"
       && config.routingMode != "global-hash-per-flow"
-      && config.routingMode != "global-hrw-per-flow")
+      && config.routingMode != "global-hrw-per-flow"
+      && config.routingMode != "global-size-aware-hrw")
     {
       std::cerr << "[RUN:Error] routingMode must be global-first, "
-                   "global-hash-per-flow, or global-hrw-per-flow"
+                   "global-hash-per-flow, global-hrw-per-flow, or "
+                   "global-size-aware-hrw"
                 << std::endl;
       return EXIT_FAILURE;
     }
@@ -504,6 +506,7 @@ main(int argc, char* argv[])
                           transferFlowMetadata,
                           transferSummaries,
                           routeRecorder.GetEvents(),
+                          topology.GetSizeAwareFlowRegistry(),
                           topology.GetIslDirectedLinks(),
                           topology.GetIslQueueDropEvents(),
                           udpSocketDropEvents,

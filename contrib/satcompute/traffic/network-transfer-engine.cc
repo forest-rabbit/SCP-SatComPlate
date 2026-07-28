@@ -39,6 +39,18 @@ CheckedAdd(uint64_t left, uint64_t right, const std::string& field)
   return left + right;
 }
 
+EcmpFlowKey
+BuildFlowKey(const NetworkTransfer& transfer)
+{
+  EcmpFlowKey flowKey;
+  flowKey.sourceAddress = transfer.sourceAddress;
+  flowKey.destinationAddress = transfer.destinationAddress;
+  flowKey.protocol = 17;
+  flowKey.sourcePort = transfer.sourcePort;
+  flowKey.destinationPort = transfer.destinationPort;
+  return flowKey;
+}
+
 } // namespace
 
 TypeId
@@ -105,6 +117,7 @@ NetworkTransferEngine::Configure(const SatelliteTopology& topology,
   m_receiverRcvBufBytes = receiverRcvBufBytes;
   m_collectUdpSocketDrops = collectUdpSocketDrops;
   m_simulationDurationNs = durationNs;
+  m_sizeAwareRegistry = topology.GetSizeAwareFlowRegistry();
   m_configured = true;
 }
 
@@ -180,6 +193,13 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
           ? plan.payloadBytesPerPacket
           : static_cast<uint32_t>(
               plan.sizeBytes % plan.payloadBytesPerPacket);
+
+      if (m_sizeAwareRegistry != nullptr)
+        {
+          m_sizeAwareRegistry->RegisterTransfer(BuildFlowKey(plan),
+                                                plan.transferId,
+                                                plan.sizeBytes);
+        }
     }
 
   m_plans = plans;
@@ -218,6 +238,8 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
       Ptr<NetworkTransferApplication> sender =
         CreateObject<NetworkTransferApplication>();
       sender->Configure(plan);
+      sender->SetSendCompleteCallback(
+        MakeCallback(&NetworkTransferEngine::HandleSenderComplete, this));
       m_topology->GetNodeBySatelliteId(plan.sourceSatelliteId)
         ->AddApplication(sender);
       sender->SetStartTime(NanoSeconds(0));
@@ -234,6 +256,14 @@ NetworkTransferEngine::GetPlanIndex(uint64_t transferId) const
   NS_ABORT_MSG_IF(plan == m_planIndexes.end(),
                   "NetworkTransferEngine 不包含 transfer_id=" << transferId);
   return plan->second;
+}
+
+EcmpFlowKey
+NetworkTransferEngine::GetFlowKey(uint32_t index) const
+{
+  NS_ABORT_MSG_IF(index >= m_plans.size(),
+                  "NetworkTransfer flow key 下标越界");
+  return BuildFlowKey(m_plans[index]);
 }
 
 const char*
@@ -292,7 +322,31 @@ NetworkTransferEngine::ActivateTransfer(uint64_t transferId)
                     || m_senders[index]->HasStarted(),
                   "NetworkTransfer sender activation 状态无效，transfer_id="
                     << transferId);
+  if (m_sizeAwareRegistry != nullptr)
+    {
+      m_sizeAwareRegistry->BeginSending(GetFlowKey(index));
+    }
   m_senders[index]->StartTransferNow();
+}
+
+void
+NetworkTransferEngine::HandleSenderComplete(uint64_t transferId,
+                                            int64_t sendTimeNs)
+{
+  uint32_t index = GetPlanIndex(transferId);
+  NS_ABORT_MSG_IF(m_states[index] != TRANSFER_STARTED,
+                  "NetworkTransfer sender completion 状态无效，transfer_id="
+                    << transferId);
+  NS_ABORT_MSG_IF(sendTimeNs < m_plans[index].arrivalTimeNs
+                    || !m_senders[index]->HasFinishedSending()
+                    || m_senders[index]->GetSentBytes()
+                         != m_plans[index].sizeBytes,
+                  "NetworkTransfer sender completion payload 无效，transfer_id="
+                    << transferId);
+  if (m_sizeAwareRegistry != nullptr)
+    {
+      m_sizeAwareRegistry->FinishSending(GetFlowKey(index));
+    }
 }
 
 void

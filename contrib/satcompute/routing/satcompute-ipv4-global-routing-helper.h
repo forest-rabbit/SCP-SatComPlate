@@ -32,7 +32,8 @@ public:
   SatComputeIpv4GlobalRoutingHelper(
     EcmpRouteSelectionMode selectionMode =
       EcmpRouteSelectionMode::GLOBAL_FIRST,
-    uint64_t hashSeed = 1);
+    uint64_t hashSeed = 1,
+    Ptr<SizeAwareFlowRegistry> sizeAwareRegistry = nullptr);
   SatComputeIpv4GlobalRoutingHelper(
     const SatComputeIpv4GlobalRoutingHelper& other);
 
@@ -45,6 +46,7 @@ public:
 private:
   EcmpRouteSelectionMode m_selectionMode;
   uint64_t m_hashSeed;
+  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
 };
 
 } // namespace ns3

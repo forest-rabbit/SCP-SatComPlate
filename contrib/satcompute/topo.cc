@@ -24,12 +24,17 @@ SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
                   "simulationDuration 必须大于 0");
   NS_ABORT_MSG_IF(config.routingMode != "global-first"
                     && config.routingMode != "global-hash-per-flow"
-                    && config.routingMode != "global-hrw-per-flow",
+                    && config.routingMode != "global-hrw-per-flow"
+                    && config.routingMode != "global-size-aware-hrw",
                   "未知 routingMode: " << config.routingMode);
   NS_ABORT_MSG_IF(config.islMtuBytes < 68,
                   "islMtuBytes 必须至少为 68");
   NS_ABORT_MSG_IF(config.islQueueBytes == 0,
                   "islQueueBytes 必须大于 0");
+  if (config.routingMode == "global-size-aware-hrw")
+    {
+      m_sizeAwareFlowRegistry = CreateObject<SizeAwareFlowRegistry>();
+    }
 }
 
 void
@@ -53,9 +58,14 @@ SatelliteTopology::CreateSatelliteNodes(const std::vector<uint32_t>& satelliteId
     {
       selectionMode = EcmpRouteSelectionMode::HRW_PER_FLOW;
     }
+  else if (m_config.routingMode == "global-size-aware-hrw")
+    {
+      selectionMode = EcmpRouteSelectionMode::SIZE_AWARE_HRW;
+    }
   SatComputeIpv4GlobalRoutingHelper globalRouting(
     selectionMode,
-    m_config.ecmpHashSeed);
+    m_config.ecmpHashSeed,
+    m_sizeAwareFlowRegistry);
   Ipv4ListRoutingHelper listRouting;
   listRouting.Add(staticRouting, 0);
   listRouting.Add(globalRouting, -10);
@@ -252,6 +262,12 @@ SatelliteTopology::GetIslQueueDropEvents() const
 {
   NS_ABORT_MSG_IF(m_linkState == nullptr, "卫星拓扑尚未初始化");
   return m_linkState->GetQueueDropEvents();
+}
+
+Ptr<SizeAwareFlowRegistry>
+SatelliteTopology::GetSizeAwareFlowRegistry() const
+{
+  return m_sizeAwareFlowRegistry;
 }
 
 } // namespace ns3
