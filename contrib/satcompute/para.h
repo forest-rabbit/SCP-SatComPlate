@@ -34,6 +34,7 @@ struct SatComputeConfig
   std::string routingMode;
   std::string transferLogMode;
   std::string taskLogMode;
+  std::string taskCompletionPolicy;
   std::string diagnosticMode;
   std::string transferChunkMode;
   uint32_t transferPayloadBytes;

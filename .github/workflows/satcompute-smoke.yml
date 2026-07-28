@@ -184,6 +184,59 @@ jobs:
             --ecmpHashSeed=1 \
             --outputDir=/tmp/satcompute-ci-task-fcfs"
 
+      - name: Task completion policy
+        shell: bash
+        run: |
+          set +e
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+            --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+            --simulationDuration=2 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --taskCompletionPolicy=strict \
+            --diagnosticMode=failure \
+            --transferChunkMode=size-aware \
+            --islMtuBytes=65535 \
+            --islQueueBytes=1000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-task-strict"
+          strict_status=$?
+          set -e
+          test "$strict_status" -eq 1
+          python3 contrib/satcompute/tools/check-task-output.py failure \
+            --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --compute-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+            --task-trace=contrib/satcompute/input/traffic/json/task/test/task-single-ecmp.json \
+            --output-dir=/tmp/satcompute-ci-task-strict \
+            --require-queue-drop
+          ./waf --run-no-build "satcompute \
+            --topologyDir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --computeProfile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+            --taskTrace=contrib/satcompute/input/traffic/json/task/test/task-fcfs.json \
+            --simulationDuration=1 \
+            --offeredLoad=0 \
+            --taskLogMode=silent \
+            --taskCompletionPolicy=report \
+            --diagnosticMode=failure \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1024 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-ci-task-report"
+          python3 contrib/satcompute/tools/check-task-output.py stress \
+            --topology-dir=contrib/satcompute/input/topology/json/tests/diamond-4-static \
+            --compute-profile=contrib/satcompute/input/topology/json/resources/test/diamond-4-compute-profile.json \
+            --task-trace=contrib/satcompute/input/traffic/json/task/test/task-fcfs.json \
+            --output-dir=/tmp/satcompute-ci-task-report \
+            --minimum-completion-rate-percent=0
+
       - name: Task heterogeneous
         run: |
           ./waf --run-no-build "satcompute \
@@ -453,6 +506,7 @@ jobs:
           echo "PASS mixed large workload"
           echo "PASS task single ECMP"
           echo "PASS task FCFS"
+          echo "PASS task completion policy"
           echo "PASS task heterogeneous"
           echo "PASS task input ordering"
           echo "PASS compute profile ordering"

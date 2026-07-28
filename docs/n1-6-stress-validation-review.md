@@ -1,21 +1,22 @@
-# SatCompute N1.6 本地实施与压力验证审查报告
+# SatCompute N1 本地实施与压力收尾审查报告
 
 > 日期：2026-07-27
 >
-> 分支：`feature/n1-task-compute`
+> 当前分支：`feature/n1-stress-closure`
 >
-> 正式 review base：`71f23ef20bd0e342096e1c25c0a3e6e452d2abdc`
+> PR1 合并提交：`34d76b97ad2e0027c882452bcc2f641758a1522e`
 >
-> 本报告验证的代码 HEAD：`500c901a646702b30729e0967a894b94466a4648`
+> PR2 正式压力测试代码 HEAD：`f1b6f4eff3e9dccc828c3a6faa38806bf4036344`
 >
-> 当前状态：`PR1_FINALIZATION`
+> 当前状态：`PR2_READY_FOR_REVIEW`
 >
-> Draft PR：[#1 feat: add SatCompute task execution and N1.6 stress diagnostics](https://github.com/forest-rabbit/SatCompute/pull/1)
+> 已合并 PR：[#1 feat: add SatCompute task execution and N1.6 stress diagnostics](https://github.com/forest-rabbit/SatCompute/pull/1)
 
-本报告是 N1.6 压力验证的唯一审查报告。大型 TaskTrace、FlowMonitor
-输出、CSV 指标和性能日志全部保留在 `/tmp`，没有提交仓库。本轮没有运行
-75% 或 109 GB 正式压力场景，也没有实现可靠重传。PR1 当前 HEAD 的
-`SatCompute deterministic smoke` 已通过；后续综合压力矩阵留给 PR2。
+本报告是 N1 压力验证的唯一审查报告，前半部分保留 PR1 的诊断过程和
+22/66 计算节点对照，后半部分记录 PR2 的正式 66 节点压力矩阵。大型
+TaskTrace、FlowMonitor 输出、CSV 指标和性能日志全部保留在 `/tmp`，没有
+提交仓库。PR2 没有实现可靠重传或竞争感知 pacing，只增加结束判定策略、
+通用压力结果检查和最终能力边界。
 
 ## 1. 结论
 
@@ -474,67 +475,204 @@ generic checker: PASS
 完成仍然没有协议保证，但部分完成是合法的压力结果，不再要求通过调参使
 任意压力输入达到 100%。
 
-## 10. 当前能力边界
+## 10. PR1 冻结与 PR2 范围
+
+PR1 已完成审查、CI、标记和合并：
+
+```text
+PR: #1
+final head: fb4ccd2971b9043d157b1c095c1fa1e9a3d5d609
+annotated tag: n1-pr1-final
+merge commit: 34d76b97ad2e0027c882452bcc2f641758a1522e
+CI: https://github.com/forest-rabbit/SatCompute/actions/runs/30240546813
+CI conclusion: success
+```
+
+PR2 从该 merge commit 创建，只增加压力收尾所需的结束策略、检查合同、
+66 计算节点配置和审查证据：
+
+```text
+7e9085c feat: add report-only task completion policy
+f1b6f4e test: validate report-mode stress results
+```
+
+`taskCompletionPolicy=strict|report` 只控制任务指标落盘后的退出码。
+`strict` 对未全部完成的任务返回非零；`report` 对相同状态正常退出。
+两种策略写出相同的任务、传输、网络和诊断事实，均不改变 Simulator
+停止时间、TaskCoordinator 状态机、FCFS、计算服务、分包、pacing、
+ECMP 或收包完成条件。
+
+`run-summary.json` 使用 `run_status=COMPLETE|PARTIAL` 表示任务完成事实。
+外部检查器的 `stress` 入口同时验收两种状态，并将两个判断分开：
+
+```text
+RUN_VALID:
+  状态前缀、时间戳、静态字段、FCFS、字节、包、端口、FlowMonitor、
+  compute/run/diagnostic 聚合合同全部一致
+
+CONTINUE:
+  RUN_VALID 且 task completion rate >= 90%
+```
+
+因此 `PARTIAL` 不自动等于失败，`COMPLETE` 也不能绕过结构合同检查。
+
+## 11. 66 节点正式压力配置
+
+三组正式测试使用同一组平台参数：
+
+| 项目 | 冻结值 |
+|---|---|
+| topology | 66 satellites / 132 undirected ISLs / static snapshot |
+| JSON `link_bandwidth` | 2,000,000 Kbps，即每条 ISL 2 Gbit/s |
+| compute nodes | 0–65，共 66 个 |
+| compute rate | 每节点 1,500,000 work units/s |
+| arrivals | uniform，1–600 s |
+| simulation duration | 1000 s |
+| routing | `global-hash-per-flow`，seed 1 |
+| packetization | `size-aware` |
+| ISL MTU | 65,535 bytes |
+| ISL queue | 每个有向设备 64,000,000 bytes |
+| UDP receive buffer | 131,072 bytes |
+| completion policy | `report` |
+| diagnostics | `failure` |
+
+66 节点 ComputeProfile 已作为小型可复现配置提交：
+
+```text
+input/topology/json/resources/workload/
+  xw-66sat-static-2g-all-compute-profile.json
+SHA-256:
+96e46227ac94241c11f53ef899379f160280da5ee9bd4ddc3829d1008d28dcc0
+```
+
+64 MB 是每个有向 PointToPointNetDevice 的队列上限。264 个队列的理论
+总上限为 16,896,000,000 bytes，但 ns-3 不会在启动时预分配这 16.896 GB；
+本轮峰值 RSS 仅为 129,548 KB。
+
+TaskTrace 由 `generate-task-workload.py` v1.0.0 直接基于上述 66 节点
+ComputeProfile 生成，不再使用 PR1 的手工 compute remap。共同生成参数为：
+
+```text
+seed: 20260726
+rules version: n1.6-v1
+arrival mode: uniform
+arrival window: 1000000000..600000000000 ns
+maximum tail: 20 x 1,000,000,000 bytes
+maximum tail: 40 x 500,000,000 bytes
+non-tail range: 1,048,576..300,000,000 bytes
+scenario scale: 5000 / 7500 / 10000 basis points
+```
+
+大型 TaskTrace、summary、preflight 和仿真输出只保留在：
+
+```text
+/tmp/satcompute-n1-closure/<scenario>/
+  f1b6f4eff3e9dccc828c3a6faa38806bf4036344/
+```
+
+## 12. 正式输入与 preflight
+
+| 场景 | tasks | INPUT bytes | OUTPUT bytes | 1 GB / 500 MB tails |
+|---|---:|---:|---:|---:|
+| 50% | 1,000 | 54,500,000,000 | 17,735,650,347 | 10 / 20 |
+| 75% | 1,500 | 81,750,000,000 | 27,513,294,080 | 15 / 30 |
+| 109 GB | 2,000 | 109,000,000,000 | 35,877,906,094 | 20 / 40 |
+
+输入哈希：
+
+| 场景 | TaskTrace SHA-256 | workload-summary SHA-256 |
+|---|---|---|
+| 50% | `e3cfa407dba1066c6771df0a66c2490c91340777ba54e4694b5de0dcd7a89c99` | `1b3ebd587db8f944b3ded95217f5e484e319fa346e6a58cbb1c68445c743fa80` |
+| 75% | `b2fc74f11b2074c7f29772464cf53877b6946f9905677f8c43f21c5740708237` | `2a82521eec2f2ee2ac11666480df02344153da521cd7c2e5a8bed27bdcf43eb3` |
+| 109 GB | `6e795f0a841d4e2fffd522f97dc40d2662ad572af69855cde191d7b1060a5e84` | `c5f52efa028023e15e8e4f25cc62f47cf75a614cdc5fdf7e6dbe25e365826d6c` |
+
+Preflight 均通过：
+
+| 场景 | INPUT packets | RESULT packets | total packets | packet hops | duration lower bound |
+|---|---:|---:|---:|---:|---:|
+| 50% | 3,254,828 | 1,198,246 | 4,453,074 | 19,153,763 | 637.770 s |
+| 75% | 4,754,797 | 1,830,169 | 6,584,966 | 28,707,289 | 653.907 s |
+| 109 GB | 6,277,117 | 2,447,223 | 8,724,340 | 37,455,654 | 665.637 s |
+
+这里的 packet 数是 TaskTrace 中全部 INPUT 和 RESULT transfer 完成时的
+派生应用数据报数。PARTIAL 运行中尚未启动的 RESULT transfer 不会出现在
+实际 FlowMonitor Tx 中，所以预估总包数可以高于实际发送数。
+
+## 13. 50% / 75% / 109 GB 正式结果
+
+三个场景均正常仿真到 1000 s、进程退出码为 0、checker 合同通过：
+
+| 场景 | run status | completed tasks | transfers completed | FlowMonitor tx/rx/lost | checker |
+|---|---|---:|---:|---:|---|
+| 50% | COMPLETE | 1000/1000（100%） | 2000/2000 | 4,453,074 / 4,453,074 / 0 | RUN_VALID / CONTINUE |
+| 75% | PARTIAL | 1493/1500（99.5333%） | 2988/3000 | 6,578,160 / 6,578,106 / 54 | RUN_VALID / CONTINUE |
+| 109 GB | PARTIAL | 1992/2000（99.6%） | 3986/4000 | 8,708,834 / 8,708,405 / 429 | RUN_VALID / CONTINUE |
+
+完成任务的端到端延迟：
+
+| 场景 | mean | p95 | max |
+|---|---:|---:|---:|
+| 50% | 1.994960 s | 3.695895 s | 10.903344 s |
+| 75% | 2.029024 s | 3.746318 s | 11.485186 s |
+| 109 GB | 2.049453 s | 3.787960 s | 11.058328 s |
+
+计算侧和本机资源：
+
+| 场景 | max compute queue | max compute utilization | wall-clock | peak RSS |
+|---|---:|---:|---:|---:|
+| 50% | 1 | 3.0842% | 35:32.94 | 88,208 KB |
+| 75% | 3 | 4.6467% | 53:48.05 | 109,244 KB |
+| 109 GB | 2 | 5.8395% | 1:10:41 | 129,548 KB |
+
+75% 的 7 个未完成任务：
+
+```text
+INPUT_TRANSFERRING: 201, 644, 652, 733, 1246
+RESULT_TRANSFERRING: 99, 1253
+incomplete transfers: 12
+ISL directed-queue drops: 0
+UDP socket drops: 0
+```
+
+109 GB 的 8 个未完成任务：
+
+```text
+INPUT_TRANSFERRING: 469, 623, 1143, 1218, 1261, 1629
+RESULT_TRANSFERRING: 969, 1899
+incomplete transfers: 14
+ISL directed-queue drops: 0
+UDP socket drops: 0
+```
+
+两个 PARTIAL 场景都没有 `QUEUED` 或 `RUNNING` 任务，计算队列很浅、
+利用率低；未完成项停留在 INPUT/RESULT 传输阶段。该事实只说明本轮边界
+主要表现为少量传输尾部，不能据此把 FlowMonitor `lostPackets` 精确归因
+到某个未观测丢弃层。
+
+## 14. 当前能力边界与 N1 判定
 
 | 场景 | 状态 |
 |---|---|
-| 25% / 22 nodes / 32 MB | PASS，500/500，零丢包 |
-| 50% / 22 nodes / 64 MB | RUN_VALID / PARTIAL，999/1000，lost 25 |
-| 50% / 66 nodes / 64 MB | PASS，1000/1000，零丢包 |
-| 75% | NOT RUN |
-| 109 GB / 2000 tasks preflight | PASS |
-| 109 GB / 2000 tasks actual | NOT RUN |
+| 25% / 22 compute / 32 MB | PASS，500/500，零丢包 |
+| 50% / 22 compute / 64 MB | RUN_VALID / PARTIAL，999/1000，lost 25 |
+| 50% / 66 compute / 64 MB | RUN_VALID / COMPLETE，1000/1000，零丢包 |
+| 75% / 66 compute / 64 MB | RUN_VALID / PARTIAL，1493/1500，99.5333% |
+| 109 GB / 66 compute / 64 MB | RUN_VALID / PARTIAL，1992/2000，99.6% |
 
-109 GB preflight：
-
-```text
-INPUT bytes: 109000000000
-OUTPUT bytes: 35877906094
-tasks: 2000
-total packets: 8724340
-estimated packet hops: 37406704
-recommended duration lower bound: 767.840s
-```
-
-它只证明输入、端口、packetization、计算容量和时长下界合同通过，不代表
-109 GB 实际仿真通过。
-
-## 11. Draft PR 决策
-
-Draft PR #1 已创建，当前技术门槛如下：
+N1 的压力目标不是强制全部任务完成，而是让平台在高压力下稳定执行、如实
+保留未完成状态并输出相互一致的指标。三组正式场景全部满足核心合同，且
+完成率全部高于冻结的 90% 继续门槛。因此本报告判定：
 
 ```text
-[x] 失败运行先落盘后严格失败
-[x] 全部未完成 task/transfer 可枚举
-[x] partial sent/received bytes 和 packets 可读取
-[x] FlowMonitor loss 可在失败场景落盘
-[x] 有向 ISL queue Drop 采集和映射经最小 fixture 验证
-[x] UDP socket Drop 采集经 1000-byte fixture 验证
-[x] 正式 22 节点复测记录 UDP socket Drop 0
-[x] flow/link concentration 已分析
-[x] 冻结 50%/22 节点/64 MB 已重跑
-[x] 条件触发的 66 节点对照已完成
-[x] 既有 N1 成功检查和 25% 输出继续通过
-[x] metrics 输出职责已拆分且本地回归通过
-[x] 500c901 Draft PR CI 成功
-[x] 没有实现可靠重传或 checkpoint/failure
+PR2 stress matrix: PASS
+N1 capability boundary: ESTABLISHED
+N1 status: READY_TO_CLOSE_PENDING_PR2_REVIEW_AND_MERGE
 ```
 
-当前标记：
+PR2 必须保持未合并，等待作者/GPT 审查。审查通过并合并后，才将 N1
+里程碑从“待审查”改为“已完成”。
 
-```text
-Draft PR: OPEN
-PR number: 1
-PR head: 500c901a646702b30729e0967a894b94466a4648
-CI conclusion: SUCCESS
-Merge readiness: PENDING_FINAL_REPORT_HEAD
-```
-
-本次报告修正提交推送后，需要等待新 head CI。CI 绿色后，在合并前创建
-`n1-pr1-final` 标签并保留功能分支；作者已授权满足门槛后合并 PR1。
-75% 和 109 GB 不属于 PR1，留给从合并后 `main` 创建的 PR2。
-
-## 12. 本轮没有实现
+## 15. 本轮没有实现
 
 ```text
 UDP ACK/NACK
@@ -554,22 +692,3 @@ task_profile_id
 没有修改 `src/internet`、`src/point-to-point` 或 TaskTrace schema。可靠
 NetworkTransfer、竞争感知 pacing、checkpoint 和动态拓扑均不属于 N1
 压力收尾；351/720 星与 Hypatia 推迟到独立 N2 阶段。
-
-## 13. N1 压力收尾决定
-
-作者与 GPT 已冻结：
-
-```text
-精确丢包层: 不再作为N1阻塞项
-8 MiB receiver buffer对照: 不再运行
-竞争感知pacing、ACK/NACK、重传: 不实现
-PR2综合基准: 66 satellites / 66 compute nodes
-PR2压力矩阵: 50% / 75% / 109 GB
-部分完成: 合法压力结果
-继续阈值: RUN_VALID且completion rate >= 90%
-351/720星与Hypatia: 推迟到N2
-```
-
-PR1 合并后，PR2 将增加仅影响结束判定与退出码的
-`taskCompletionPolicy=strict|report`，在 report 模式下完整记录
-`PARTIAL` 结果。任何任务调度、计算、路由或传输完成语义都不得因此改变。

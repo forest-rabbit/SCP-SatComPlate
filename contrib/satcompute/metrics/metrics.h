@@ -34,6 +34,7 @@ struct RunMetadata
   uint32_t receiverRcvBufBytes;
   bool udpSocketDropCollectionEnabled;
   std::string diagnosticMode;
+  std::string taskCompletionPolicy;
   std::string pacingMode;
   std::string transferChunkMode;
   uint32_t fixedPayloadBytes;

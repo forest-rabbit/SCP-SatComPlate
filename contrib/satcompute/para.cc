@@ -69,6 +69,11 @@ GetDefaultSatComputeConfig()
   // "silent" 关闭任务输入日志；三种模式都不改变任务行为。
   config.taskLogMode = "summary";
 
+  // --taskCompletionPolicy：
+  // "strict" 在任务未全部完成时写出指标并以非零状态退出；
+  // "report" 保留相同仿真与指标语义，但将部分完成视为可报告结果并正常退出。
+  config.taskCompletionPolicy = "strict";
+
   // --diagnosticMode：
   // "off" 关闭失败诊断采集与诊断文件，只保留基础指标；
   // "failure" 在任务未全部完成时写出未完成对象、队列 Drop 和链路集中度。

@@ -7,7 +7,7 @@ import hashlib
 import json
 import math
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 
@@ -210,6 +210,24 @@ EXPECTED_TRANSITIONS = [
     ("QUEUED", "RUNNING", "COMPUTE_DISPATCH"),
     ("RUNNING", "RESULT_TRANSFERRING", "COMPUTE_COMPLETE"),
     ("RESULT_TRANSFERRING", "COMPLETED", "RESULT_TRANSFER_COMPLETE"),
+]
+TASK_STATES = [
+    "PENDING",
+    "INPUT_TRANSFERRING",
+    "QUEUED",
+    "RUNNING",
+    "RESULT_TRANSFERRING",
+    "COMPLETED",
+]
+FAILURE_DIAGNOSTIC_FILES = [
+    "incomplete-tasks.csv",
+    "incomplete-transfers.csv",
+    "isl-queue-drops.csv",
+    "isl-queue-drop-summary.csv",
+    "udp-socket-drops.csv",
+    "udp-socket-drop-summary.csv",
+    "flow-link-concentration.csv",
+    "diagnostic-summary.json",
 ]
 DETERMINISTIC_FILES = [
     "task-events.csv",
@@ -552,6 +570,331 @@ def validate_task_events(tasks, summaries, rows):
             )
 
 
+def validate_partial_task_contract(
+    tasks,
+    profile,
+    task_rows,
+    event_rows,
+    simulation_duration_ns,
+):
+    require(len(task_rows) == len(tasks), "partial task-summary row count mismatch")
+    require(
+        [int_field(row, "task_id") for row in task_rows]
+        == [task["task_id"] for task in tasks],
+        "partial task-summary must use canonical task_id order",
+    )
+    task_ids = {task["task_id"] for task in tasks}
+    events_by_task = defaultdict(list)
+    for event in event_rows:
+        task_id = int_field(event, "task_id")
+        require(
+            task_id in task_ids,
+            f"unknown task event ID {task_id}",
+        )
+        events_by_task[task_id].append(event)
+
+    rates = {
+        item["node_id"]: item["compute_rate_work_units_per_second"]
+        for item in profile
+    }
+    summaries = {}
+    state_ranks = {}
+    for task, row in zip(tasks, task_rows):
+        task_id = task["task_id"]
+        for field in (
+            "source_node_id",
+            "compute_node_id",
+            "result_node_id",
+            "input_bytes",
+            "output_bytes",
+            "compute_work_units",
+            "arrival_time_ns",
+        ):
+            require(
+                int_field(row, field) == task[field],
+                f"task {task_id} {field} mismatch",
+            )
+        rate = rates[task["compute_node_id"]]
+        require(
+            int_field(row, "compute_rate_work_units_per_second") == rate,
+            f"task {task_id} compute rate mismatch",
+        )
+        require(
+            int_field(row, "input_transfer_id") == 2 * task_id - 1
+            and int_field(row, "result_transfer_id") == 2 * task_id,
+            f"task {task_id} transfer ID mapping mismatch",
+        )
+        require(
+            row["final_state"] in TASK_STATES,
+            f"task {task_id} has invalid final state",
+        )
+        state_rank = TASK_STATES.index(row["final_state"])
+        events = events_by_task[task_id]
+        require(
+            len(events) == state_rank,
+            f"task {task_id} event count does not match final state",
+        )
+
+        times = {
+            field: int_field(row, field)
+            for field in (
+                "input_transfer_complete_time_ns",
+                "queue_enter_time_ns",
+                "compute_start_time_ns",
+                "compute_complete_time_ns",
+                "result_transfer_start_time_ns",
+                "result_transfer_complete_time_ns",
+            )
+        }
+        presence = {
+            "input_transfer_complete_time_ns": state_rank >= 2,
+            "queue_enter_time_ns": state_rank >= 2,
+            "compute_start_time_ns": state_rank >= 3,
+            "compute_complete_time_ns": state_rank >= 4,
+            "result_transfer_start_time_ns": state_rank >= 4,
+            "result_transfer_complete_time_ns": state_rank >= 5,
+        }
+        for field, present in presence.items():
+            if present:
+                require(
+                    task["arrival_time_ns"]
+                    <= times[field]
+                    <= simulation_duration_ns,
+                    f"task {task_id} {field} is outside the run",
+                )
+            else:
+                require(
+                    times[field] == -1,
+                    f"task {task_id} absent {field} must be -1",
+                )
+        if state_rank >= 2:
+            require(
+                times["input_transfer_complete_time_ns"]
+                == times["queue_enter_time_ns"],
+                f"task {task_id} input completion/queue time mismatch",
+            )
+        if state_rank >= 3:
+            require(
+                times["compute_start_time_ns"] >= times["queue_enter_time_ns"],
+                f"task {task_id} computed before input completion",
+            )
+        if state_rank >= 4:
+            require(
+                times["result_transfer_start_time_ns"]
+                == times["compute_complete_time_ns"],
+                f"task {task_id} result did not start at compute completion",
+            )
+
+        expected_delays = {
+            "input_transfer_delay_ns": (
+                times["input_transfer_complete_time_ns"]
+                - task["arrival_time_ns"]
+                if state_rank >= 2
+                else -1
+            ),
+            "queue_delay_ns": (
+                times["compute_start_time_ns"] - times["queue_enter_time_ns"]
+                if state_rank >= 3
+                else -1
+            ),
+            "compute_service_time_ns": (
+                times["compute_complete_time_ns"]
+                - times["compute_start_time_ns"]
+                if state_rank >= 4
+                else -1
+            ),
+            "result_transfer_delay_ns": (
+                times["result_transfer_complete_time_ns"]
+                - times["result_transfer_start_time_ns"]
+                if state_rank >= 5
+                else -1
+            ),
+            "end_to_end_completion_delay_ns": (
+                times["result_transfer_complete_time_ns"]
+                - task["arrival_time_ns"]
+                if state_rank >= 5
+                else -1
+            ),
+        }
+        for field, expected in expected_delays.items():
+            require(
+                int_field(row, field) == expected,
+                f"task {task_id} {field} mismatch",
+            )
+        if state_rank >= 4:
+            require(
+                expected_delays["compute_service_time_ns"]
+                == service_time_ns(task["compute_work_units"], rate),
+                f"task {task_id} exact compute duration mismatch",
+            )
+
+        expected_times = [
+            task["arrival_time_ns"],
+            times["input_transfer_complete_time_ns"],
+            times["compute_start_time_ns"],
+            times["compute_complete_time_ns"],
+            times["result_transfer_complete_time_ns"],
+        ]
+        expected_nodes = [
+            task["source_node_id"],
+            task["compute_node_id"],
+            task["compute_node_id"],
+            task["compute_node_id"],
+            task["result_node_id"],
+        ]
+        for index, event in enumerate(events):
+            from_state, to_state, cause = EXPECTED_TRANSITIONS[index]
+            require(
+                (event["from_state"], event["to_state"], event["cause"])
+                == (from_state, to_state, cause),
+                f"task {task_id} transition {index} mismatch",
+            )
+            require(
+                int_field(event, "simulation_time_ns") == expected_times[index]
+                and int_field(event, "node_id") == expected_nodes[index],
+                f"task {task_id} event {index} time/node mismatch",
+            )
+
+        summaries[task_id] = row
+        state_ranks[task_id] = state_rank
+    require(
+        len(event_rows) == sum(state_ranks.values()),
+        "partial task event aggregate mismatch",
+    )
+    return summaries, state_ranks, events_by_task
+
+
+def validate_partial_fcfs(tasks, task_summaries, state_ranks):
+    by_node = defaultdict(list)
+    for task in tasks:
+        if state_ranks[task["task_id"]] >= 2:
+            by_node[task["compute_node_id"]].append(task)
+    for node_id, enqueued_tasks in by_node.items():
+        expected_order = sorted(
+            enqueued_tasks,
+            key=lambda task: (
+                int_field(
+                    task_summaries[task["task_id"]],
+                    "queue_enter_time_ns",
+                ),
+                task["task_id"],
+            ),
+        )
+        started_tasks = [
+            task
+            for task in enqueued_tasks
+            if state_ranks[task["task_id"]] >= 3
+        ]
+        actual_order = sorted(
+            started_tasks,
+            key=lambda task: (
+                int_field(
+                    task_summaries[task["task_id"]],
+                    "compute_start_time_ns",
+                ),
+                task["task_id"],
+            ),
+        )
+        require(
+            [task["task_id"] for task in actual_order]
+            == [task["task_id"] for task in expected_order[: len(actual_order)]],
+            f"compute node {node_id} violates partial FCFS order",
+        )
+        previous_completion = None
+        for index, task in enumerate(actual_order):
+            task_id = task["task_id"]
+            summary = task_summaries[task_id]
+            queue_enter = int_field(summary, "queue_enter_time_ns")
+            compute_start = int_field(summary, "compute_start_time_ns")
+            expected_start = (
+                queue_enter
+                if previous_completion is None
+                else max(queue_enter, previous_completion)
+            )
+            require(
+                compute_start == expected_start,
+                f"compute node {node_id} has an FCFS gap or overlap",
+            )
+            if state_ranks[task_id] == 3:
+                require(
+                    index == len(actual_order) - 1,
+                    f"compute node {node_id} dispatched after a running task",
+                )
+                break
+            previous_completion = int_field(
+                summary,
+                "compute_complete_time_ns",
+            )
+
+
+def validate_partial_compute_summaries(
+    profile,
+    tasks,
+    task_summaries,
+    state_ranks,
+    output,
+    simulation_duration_ns,
+):
+    rows = read_csv_rows(output, "compute-node-summary.csv", COMPUTE_SUMMARY_FIELDS)
+    require(len(rows) == len(profile), "compute-node-summary row count mismatch")
+    require(
+        [int_field(row, "node_id") for row in rows]
+        == [node["node_id"] for node in profile],
+        "compute-node-summary must use canonical node_id order",
+    )
+    tasks_by_node = defaultdict(list)
+    for task in tasks:
+        tasks_by_node[task["compute_node_id"]].append(task)
+    for node, row in zip(profile, rows):
+        node_id = node["node_id"]
+        node_tasks = tasks_by_node[node_id]
+        enqueued = [
+            task for task in node_tasks if state_ranks[task["task_id"]] >= 2
+        ]
+        compute_completed = [
+            task for task in node_tasks if state_ranks[task["task_id"]] >= 4
+        ]
+        busy_time = sum(
+            int_field(
+                task_summaries[task["task_id"]],
+                "compute_service_time_ns",
+            )
+            for task in compute_completed
+        )
+        require(
+            int_field(row, "compute_rate_work_units_per_second")
+            == node["compute_rate_work_units_per_second"],
+            f"compute node {node_id} rate mismatch",
+        )
+        require(
+            int_field(row, "enqueued_tasks") == len(enqueued)
+            and int_field(row, "completed_tasks") == len(compute_completed)
+            and int_field(row, "busy_time_ns") == busy_time,
+            f"compute node {node_id} partial counters mismatch",
+        )
+        max_queue = int_field(row, "max_queue_length")
+        require(
+            0 <= max_queue <= len(enqueued),
+            f"compute node {node_id} queue metric invalid",
+        )
+        if enqueued:
+            require(
+                max_queue >= 1,
+                f"compute node {node_id} queue metric missing",
+            )
+        expected_utilization = busy_time * 100.0 / simulation_duration_ns
+        require(
+            math.isclose(
+                float_field(row, "utilization_percent"),
+                expected_utilization,
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            ),
+            f"compute node {node_id} utilization mismatch",
+        )
+    return rows
+
+
 def validate_transfer_evidence(tasks, summaries, output, run):
     transfer_rows = read_csv_rows(output, "transfer-summary.csv", TRANSFER_SUMMARY_FIELDS)
     detail_rows = read_csv_rows(output, "network-flow-details.csv", FLOW_DETAIL_FIELDS)
@@ -821,6 +1164,11 @@ def validate_run_summary(
     total_packets,
 ):
     require(run["mode"] == "task", "run mode must be task")
+    require(run.get("run_status") == "COMPLETE", "run must be COMPLETE")
+    require(
+        run.get("task_completion_policy") in {"strict", "report"},
+        "invalid task completion policy",
+    )
     require_integer(
         run["receiver_rcv_buf_bytes"],
         "receiver_rcv_buf_bytes",
@@ -1080,6 +1428,391 @@ def directed_link_key(row):
     )
 
 
+def validate_partial_transfer_and_run_contract(
+    tasks,
+    profile,
+    task_summaries,
+    state_ranks,
+    transfer_rows,
+    incomplete_transfer_rows,
+    flow_rows,
+    run,
+    profile_path,
+    trace_path,
+    simulation_duration_ns,
+):
+    plans = []
+    for task in tasks:
+        task_id = task["task_id"]
+        plans.extend(
+            [
+                {
+                    "transfer_id": 2 * task_id - 1,
+                    "task_id": task_id,
+                    "kind": "INPUT",
+                    "source_node_id": task["source_node_id"],
+                    "destination_node_id": task["compute_node_id"],
+                    "declared_size_bytes": task["input_bytes"],
+                },
+                {
+                    "transfer_id": 2 * task_id,
+                    "task_id": task_id,
+                    "kind": "RESULT",
+                    "source_node_id": task["compute_node_id"],
+                    "destination_node_id": task["result_node_id"],
+                    "declared_size_bytes": task["output_bytes"],
+                },
+            ]
+        )
+    plans.sort(key=lambda plan: plan["transfer_id"])
+    next_source_port = defaultdict(lambda: 10000)
+    for plan in plans:
+        plan["source_port"] = next_source_port[plan["source_node_id"]]
+        next_source_port[plan["source_node_id"]] += 1
+
+    expected_ids = [plan["transfer_id"] for plan in plans]
+    require(
+        [int_field(row, "transfer_id") for row in transfer_rows]
+        == expected_ids,
+        "partial transfer-summary must use canonical transfer_id order",
+    )
+    transfer_by_id = {
+        int_field(row, "transfer_id"): row for row in transfer_rows
+    }
+    incomplete_by_id = {
+        int_field(row, "transfer_id"): row
+        for row in incomplete_transfer_rows
+    }
+    flow_by_id = {int_field(row, "transfer_id"): row for row in flow_rows}
+    require(
+        len(transfer_by_id) == len(plans)
+        and len(flow_by_id) == len(plans)
+        and set(transfer_by_id) == set(expected_ids)
+        and set(flow_by_id) == set(expected_ids),
+        "partial transfer/flow coverage mismatch",
+    )
+
+    total_declared_bytes = 0
+    total_sent_bytes = 0
+    total_received_bytes = 0
+    total_derived_packets = 0
+    total_flow_tx_packets = 0
+    total_flow_rx_packets = 0
+    total_flow_lost_packets = 0
+    completed_transfer_count = 0
+    for plan in plans:
+        transfer_id = plan["transfer_id"]
+        task_id = plan["task_id"]
+        state_rank = state_ranks[task_id]
+        task_summary = task_summaries[task_id]
+        summary = transfer_by_id[transfer_id]
+        flow = flow_by_id[transfer_id]
+        payload = expected_payload(run, plan["declared_size_bytes"])
+        packets = (
+            plan["declared_size_bytes"] + payload - 1
+        ) // payload
+        final_payload = plan["declared_size_bytes"] % payload or payload
+
+        if plan["kind"] == "INPUT":
+            expected_arrival = int_field(task_summary, "arrival_time_ns")
+            expected_state = (
+                "COMPLETED"
+                if state_rank >= 2
+                else ("STARTED" if state_rank >= 1 else "REGISTERED")
+            )
+            expected_completion = (
+                int_field(
+                    task_summary,
+                    "input_transfer_complete_time_ns",
+                )
+                if state_rank >= 2
+                else -1
+            )
+        else:
+            expected_arrival = (
+                int_field(
+                    task_summary,
+                    "result_transfer_start_time_ns",
+                )
+                if state_rank >= 4
+                else -1
+            )
+            expected_state = (
+                "COMPLETED"
+                if state_rank >= 5
+                else ("STARTED" if state_rank >= 4 else "REGISTERED")
+            )
+            expected_completion = (
+                int_field(
+                    task_summary,
+                    "result_transfer_complete_time_ns",
+                )
+                if state_rank >= 5
+                else -1
+            )
+
+        require(
+            int_field(summary, "source_node_id")
+            == plan["source_node_id"]
+            and int_field(summary, "destination_node_id")
+            == plan["destination_node_id"]
+            and int_field(summary, "source_port") == plan["source_port"]
+            and int_field(summary, "destination_port") == 9000,
+            f"transfer {transfer_id} endpoint/port mismatch",
+        )
+        require(
+            int_field(summary, "declared_size_bytes")
+            == plan["declared_size_bytes"]
+            and int_field(summary, "effective_payload_bytes") == payload
+            and int_field(summary, "derived_packet_count") == packets
+            and int_field(summary, "final_packet_payload_bytes")
+            == final_payload,
+            f"transfer {transfer_id} packetization mismatch",
+        )
+        require(
+            summary["pacing_mode"] == "first-hop-serialization",
+            f"transfer {transfer_id} pacing mismatch",
+        )
+        require(
+            int_field(summary, "arrival_time_ns") == expected_arrival
+            and int_field(summary, "completion_time_ns")
+            == expected_completion,
+            f"transfer {transfer_id} lifecycle time mismatch",
+        )
+
+        incomplete = incomplete_by_id.get(transfer_id)
+        actual_state = (
+            "COMPLETED"
+            if incomplete is None
+            else incomplete["transfer_state"]
+        )
+        require(
+            actual_state == expected_state,
+            f"transfer {transfer_id} state/task mismatch",
+        )
+        if expected_state == "COMPLETED":
+            completed_transfer_count += 1
+            sent_packets = packets
+            require(
+                int_field(summary, "sent_application_bytes")
+                == plan["declared_size_bytes"]
+                and int_field(summary, "received_application_bytes")
+                == plan["declared_size_bytes"]
+                and int_field(summary, "received_packet_count") == packets,
+                f"transfer {transfer_id} completed payload mismatch",
+            )
+            require(
+                int_field(summary, "completion_delay_ns")
+                == expected_completion - expected_arrival,
+                f"transfer {transfer_id} completion delay mismatch",
+            )
+            require(
+                expected_arrival
+                <= int_field(summary, "last_send_time_ns")
+                <= expected_completion,
+                f"transfer {transfer_id} last-send time invalid",
+            )
+        else:
+            require(
+                incomplete is not None,
+                f"transfer {transfer_id} missing incomplete record",
+            )
+            sent_packets = int_field(incomplete, "sent_packet_count")
+            sent_bytes = int_field(summary, "sent_application_bytes")
+            received_bytes = int_field(
+                summary,
+                "received_application_bytes",
+            )
+            received_packets = int_field(summary, "received_packet_count")
+            require(
+                sent_bytes
+                == min(
+                    sent_packets * payload,
+                    plan["declared_size_bytes"],
+                ),
+                f"transfer {transfer_id} sent byte/packet mismatch",
+            )
+            require(
+                0 <= received_bytes <= sent_bytes
+                and 0 <= received_packets <= sent_packets <= packets,
+                f"transfer {transfer_id} partial counters invalid",
+            )
+            require(
+                int_field(summary, "completion_delay_ns") == -1,
+                f"transfer {transfer_id} partial completion delay must be -1",
+            )
+            last_send = int_field(summary, "last_send_time_ns")
+            if expected_state == "REGISTERED":
+                require(
+                    sent_packets == 0
+                    and sent_bytes == 0
+                    and received_bytes == 0
+                    and received_packets == 0
+                    and last_send == -1,
+                    f"registered transfer {transfer_id} has activity",
+                )
+            else:
+                require(
+                    sent_packets > 0
+                    and expected_arrival
+                    <= last_send
+                    <= simulation_duration_ns,
+                    f"started transfer {transfer_id} send time invalid",
+                )
+            for field in (
+                "source_node_id",
+                "destination_node_id",
+                "source_port",
+                "destination_port",
+                "declared_size_bytes",
+                "derived_packet_count",
+                "arrival_time_ns",
+                "last_send_time_ns",
+                "completion_time_ns",
+            ):
+                require(
+                    int_field(incomplete, field)
+                    == int_field(summary, field),
+                    f"transfer {transfer_id} incomplete {field} mismatch",
+                )
+            require(
+                int_field(incomplete, "payload_bytes_per_packet") == payload
+                and int_field(incomplete, "sent_application_bytes")
+                == sent_bytes
+                and int_field(incomplete, "received_application_bytes")
+                == received_bytes
+                and int_field(incomplete, "received_packet_count")
+                == received_packets
+                and int_field(incomplete, "missing_application_bytes")
+                == plan["declared_size_bytes"] - received_bytes
+                and int_field(
+                    incomplete,
+                    "missing_packet_count_lower_bound",
+                )
+                == packets - received_packets,
+                f"transfer {transfer_id} incomplete evidence mismatch",
+            )
+
+        flow_tx = int_field(flow, "tx_packets")
+        flow_rx = int_field(flow, "rx_packets")
+        flow_lost = int_field(flow, "lost_packets")
+        require(
+            flow["source_address"] == summary["source_address"]
+            and flow["destination_address"] == summary["destination_address"]
+            and int_field(flow, "protocol") == 17
+            and int_field(flow, "source_port") == plan["source_port"]
+            and int_field(flow, "destination_port") == 9000,
+            f"transfer {transfer_id} FlowMonitor five-tuple mismatch",
+        )
+        require(
+            int_field(flow, "planned_application_payload_bytes")
+            == plan["declared_size_bytes"]
+            and int_field(flow, "received_application_payload_bytes")
+            == int_field(summary, "received_application_bytes"),
+            f"transfer {transfer_id} FlowMonitor payload mismatch",
+        )
+        require(
+            flow_tx == sent_packets
+            and int_field(summary, "received_packet_count")
+            <= flow_rx
+            <= flow_tx
+            and 0 <= flow_lost <= flow_tx,
+            f"transfer {transfer_id} FlowMonitor packet counters invalid",
+        )
+        if expected_state == "COMPLETED":
+            require(
+                flow_rx == packets and flow_lost == 0,
+                f"transfer {transfer_id} completed FlowMonitor mismatch",
+            )
+
+        total_declared_bytes += plan["declared_size_bytes"]
+        total_sent_bytes += int_field(summary, "sent_application_bytes")
+        total_received_bytes += int_field(
+            summary,
+            "received_application_bytes",
+        )
+        total_derived_packets += packets
+        total_flow_tx_packets += flow_tx
+        total_flow_rx_packets += flow_rx
+        total_flow_lost_packets += flow_lost
+
+    completed_task_ids = [
+        task["task_id"]
+        for task in tasks
+        if state_ranks[task["task_id"]] == 5
+    ]
+    completion_delays = [
+        int_field(
+            task_summaries[task_id],
+            "end_to_end_completion_delay_ns",
+        )
+        for task_id in completed_task_ids
+    ]
+    require(run["mode"] == "task", "run mode must be task")
+    require(
+        run["compute_profile_path"] == str(profile_path)
+        and run["task_trace_path"] == str(trace_path),
+        "task input path mismatch",
+    )
+    require(
+        run["compute_node_count"] == len(profile)
+        and run["task_count"] == len(tasks)
+        and run["completed_task_count"] == len(completed_task_ids),
+        "task run counts mismatch",
+    )
+    require(
+        math.isclose(
+            run["task_completion_rate_percent"],
+            100.0 * len(completed_task_ids) / len(tasks),
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ),
+        "task completion rate mismatch",
+    )
+    require(
+        run["total_input_bytes"]
+        == sum(task["input_bytes"] for task in tasks)
+        and run["total_output_bytes"]
+        == sum(task["output_bytes"] for task in tasks)
+        and run["total_compute_work_units"]
+        == sum(task["compute_work_units"] for task in tasks),
+        "task aggregate totals mismatch",
+    )
+    require(
+        run["mean_task_completion_delay_ns"]
+        == (
+            sum(completion_delays) // len(completion_delays)
+            if completion_delays
+            else 0
+        )
+        and run["max_task_completion_delay_ns"]
+        == (max(completion_delays) if completion_delays else 0),
+        "partial task completion delay aggregate mismatch",
+    )
+    require(
+        run["transfer_count"] == len(plans)
+        and run["declared_application_bytes"] == total_declared_bytes
+        and run["sent_application_bytes"] == total_sent_bytes
+        and run["received_application_bytes"] == total_received_bytes
+        and run["derived_udp_packets"] == total_derived_packets,
+        "partial transfer run aggregate mismatch",
+    )
+    require(
+        run["flow_monitor_tx_packets"] == total_flow_tx_packets
+        and run["flow_monitor_rx_packets"] == total_flow_rx_packets
+        and run["flow_monitor_lost_packets"]
+        == total_flow_lost_packets,
+        "partial FlowMonitor run aggregate mismatch",
+    )
+    return {
+        "completed_task_count": len(completed_task_ids),
+        "completed_transfer_count": completed_transfer_count,
+        "flow_tx_packets": total_flow_tx_packets,
+        "flow_rx_packets": total_flow_rx_packets,
+        "flow_lost_packets": total_flow_lost_packets,
+    }
+
+
 def udp_receiver_key(row):
     return (
         int_field(row, "destination_node_id"),
@@ -1096,6 +1829,9 @@ def validate_failure_diagnostics(
     trace_path,
     require_queue_drop=False,
     require_udp_socket_drop=False,
+    expected_completion_policy="strict",
+    require_sender_complete_receiver_incomplete=True,
+    require_loss_evidence=True,
 ):
     topology_nodes = read_topology_nodes(topology_dir)
     topology_links = read_topology_links(topology_dir)
@@ -1118,6 +1854,18 @@ def validate_failure_diagnostics(
     output = Path(output)
     run = read_json(output / "run-summary.json")
     diagnostic = read_json(output / "diagnostic-summary.json")
+    simulation_duration_ns = round(
+        run["simulation_duration_s"] * 1_000_000_000
+    )
+    require(
+        all(task["arrival_time_ns"] < simulation_duration_ns for task in tasks),
+        "task arrival must precede simulation stop",
+    )
+    require(run.get("run_status") == "PARTIAL", "run must be PARTIAL")
+    require(
+        run.get("task_completion_policy") == expected_completion_policy,
+        "task completion policy mismatch",
+    )
     require(diagnostic.get("run_status") == "INCOMPLETE", "run must be INCOMPLETE")
     require(diagnostic.get("task_count") == len(tasks), "diagnostic task count mismatch")
     require(
@@ -1161,7 +1909,25 @@ def validate_failure_diagnostics(
     )
 
     task_rows = read_csv_rows(output, "task-summary.csv", TASK_SUMMARY_FIELDS)
-    require(len(task_rows) == len(tasks), "partial task-summary row count mismatch")
+    event_rows = read_csv_rows(output, "task-events.csv", TASK_EVENT_FIELDS)
+    task_summaries, state_ranks, events_by_task = (
+        validate_partial_task_contract(
+            tasks,
+            profile,
+            task_rows,
+            event_rows,
+            simulation_duration_ns,
+        )
+    )
+    validate_partial_fcfs(tasks, task_summaries, state_ranks)
+    validate_partial_compute_summaries(
+        profile,
+        tasks,
+        task_summaries,
+        state_ranks,
+        output,
+        simulation_duration_ns,
+    )
     task_rows_by_id = {int_field(row, "task_id"): row for row in task_rows}
     require(
         len(task_rows_by_id) == len(task_rows),
@@ -1188,9 +1954,37 @@ def validate_failure_diagnostics(
     )
     for row in incomplete_task_rows:
         task_id = int_field(row, "task_id")
+        summary = task_rows_by_id[task_id]
         require(
-            row["state"] == task_rows_by_id[task_id]["final_state"],
+            row["state"] == summary["final_state"],
             f"task {task_id} partial state mismatch",
+        )
+        for field in (
+            "source_node_id",
+            "compute_node_id",
+            "result_node_id",
+            "input_transfer_id",
+            "result_transfer_id",
+            "arrival_time_ns",
+            "input_transfer_complete_time_ns",
+            "queue_enter_time_ns",
+            "compute_start_time_ns",
+            "compute_complete_time_ns",
+            "result_transfer_complete_time_ns",
+        ):
+            require(
+                int_field(row, field) == int_field(summary, field),
+                f"task {task_id} incomplete {field} mismatch",
+            )
+        expected_last_transition = (
+            int_field(events_by_task[task_id][-1], "simulation_time_ns")
+            if events_by_task[task_id]
+            else -1
+        )
+        require(
+            int_field(row, "last_transition_time_ns")
+            == expected_last_transition,
+            f"task {task_id} last transition mismatch",
         )
 
     transfer_rows = read_csv_rows(output, "transfer-summary.csv", TRANSFER_SUMMARY_FIELDS)
@@ -1275,10 +2069,11 @@ def validate_failure_diagnostics(
             and int_field(summary, "received_packet_count") == received_packets,
             f"transfer {transfer_id} partial summary mismatch",
         )
-    require(
-        sender_complete_receiver_incomplete,
-        "fixture must expose a fully sent but incompletely received transfer",
-    )
+    if require_sender_complete_receiver_incomplete:
+        require(
+            sender_complete_receiver_incomplete,
+            "fixture must expose a fully sent but incompletely received transfer",
+        )
 
     flow_rows = read_csv_rows(output, "network-flow-details.csv", FLOW_DETAIL_FIELDS)
     require(
@@ -1296,13 +2091,42 @@ def validate_failure_diagnostics(
         and diagnostic["flowmonitor_lost_packets"] == flow_lost_packets,
         "FlowMonitor diagnostic aggregate mismatch",
     )
+    partial_aggregate = validate_partial_transfer_and_run_contract(
+        tasks,
+        profile,
+        task_summaries,
+        state_ranks,
+        transfer_rows,
+        incomplete_transfer_rows,
+        flow_rows,
+        run,
+        profile_path,
+        trace_path,
+        simulation_duration_ns,
+    )
+    require(
+        diagnostic["completed_task_count"]
+        == partial_aggregate["completed_task_count"]
+        and diagnostic["completed_transfer_count"]
+        == partial_aggregate["completed_transfer_count"],
+        "diagnostic completed object counts mismatch",
+    )
+    require(
+        diagnostic["tasks_by_state"]
+        == {
+            state: Counter(
+                row["final_state"] for row in task_rows
+            )[state]
+            for state in TASK_STATES
+        },
+        "diagnostic task state histogram mismatch",
+    )
 
     drop_rows = read_csv_rows(output, "isl-queue-drops.csv", QUEUE_DROP_FIELDS)
     if require_queue_drop:
         require(drop_rows, "small failure fixture must produce an ISL queue drop")
     drop_totals = {}
     previous_time = -1
-    simulation_duration_ns = round(run["simulation_duration_s"] * 1_000_000_000)
     for row in drop_rows:
         key = directed_link_key(row)
         event_time = int_field(row, "simulation_time_ns")
@@ -1567,18 +2391,115 @@ def validate_failure_diagnostics(
             "diagnostic top planned link mismatch",
         )
 
-    require(
-        flow_lost_packets > 0
-        or total_drop_packets > 0
-        or total_udp_drop_packets > 0,
-        "failure diagnostics contain no direct packet-loss evidence",
-    )
+    if require_loss_evidence:
+        require(
+            flow_lost_packets > 0
+            or total_drop_packets > 0
+            or total_udp_drop_packets > 0,
+            "failure diagnostics contain no direct packet-loss evidence",
+        )
     print(
-        "PASS: incomplete run preserved strict diagnostics "
+        "PASS: incomplete run preserved "
+        f"{expected_completion_policy} diagnostics "
         f"({len(incomplete_task_rows)} tasks, "
         f"{len(incomplete_transfer_rows)} transfers, "
         f"{total_drop_packets} directed-queue drops, "
         f"{total_udp_drop_packets} UDP socket drops)"
+    )
+    return {
+        "run": run,
+        "tasks": tasks,
+        "completed_task_count": partial_aggregate["completed_task_count"],
+    }
+
+
+def validate_stress_report(
+    output,
+    topology_dir,
+    profile_path,
+    trace_path,
+    workload_summary,
+    minimum_completion_rate_percent,
+):
+    require(
+        math.isfinite(minimum_completion_rate_percent)
+        and 0.0 <= minimum_completion_rate_percent <= 100.0,
+        "minimum completion rate must be in 0..100",
+    )
+    output = Path(output)
+    run = read_json(output / "run-summary.json")
+    require(
+        run.get("task_completion_policy") == "report",
+        "stress run must use taskCompletionPolicy=report",
+    )
+    require(
+        run.get("diagnostic_mode") == "failure",
+        "stress run must use diagnosticMode=failure",
+    )
+    run_status = run.get("run_status")
+    require(
+        run_status in {"COMPLETE", "PARTIAL"},
+        "stress run status must be COMPLETE or PARTIAL",
+    )
+    if run_status == "COMPLETE":
+        result = validate_scenario(
+            output,
+            topology_dir,
+            profile_path,
+            trace_path,
+        )
+        for filename in FAILURE_DIAGNOSTIC_FILES:
+            require(
+                not (output / filename).exists(),
+                f"complete stress run retained stale diagnostics: {filename}",
+            )
+        tasks = result["tasks"]
+        completed_task_count = len(tasks)
+    else:
+        result = validate_failure_diagnostics(
+            output,
+            topology_dir,
+            profile_path,
+            trace_path,
+            expected_completion_policy="report",
+            require_sender_complete_receiver_incomplete=False,
+            require_loss_evidence=False,
+        )
+        tasks = result["tasks"]
+        completed_task_count = result["completed_task_count"]
+
+    if workload_summary is not None:
+        validate_workload_summary(
+            workload_summary,
+            trace_path,
+            tasks,
+        )
+    completion_rate = 100.0 * completed_task_count / len(tasks)
+    require(
+        math.isclose(
+            completion_rate,
+            run["task_completion_rate_percent"],
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ),
+        "stress completion rate mismatch",
+    )
+    decision = (
+        "CONTINUE"
+        if completion_rate >= minimum_completion_rate_percent
+        else "STOP"
+    )
+    print(
+        "RUN_VALID: "
+        f"status={run_status} "
+        f"completed={completed_task_count}/{len(tasks)} "
+        f"completion_rate={completion_rate:.12g}% "
+        f"threshold={minimum_completion_rate_percent:.12g}% "
+        f"decision={decision}"
+    )
+    require(
+        decision == "CONTINUE",
+        "RUN_VALID but completion rate is below the continuation threshold",
     )
 
 
@@ -1610,6 +2531,33 @@ def main():
             args.task_trace,
             args.require_queue_drop,
             args.require_udp_socket_drop,
+        )
+        return
+
+    if argv[:1] == ["stress"]:
+        parser = argparse.ArgumentParser(
+            description=(
+                "Validate one COMPLETE or PARTIAL report-mode stress run."
+            )
+        )
+        parser.add_argument("--topology-dir", required=True)
+        parser.add_argument("--compute-profile", required=True)
+        parser.add_argument("--task-trace", required=True)
+        parser.add_argument("--workload-summary")
+        parser.add_argument("--output-dir", required=True)
+        parser.add_argument(
+            "--minimum-completion-rate-percent",
+            type=float,
+            default=90.0,
+        )
+        args = parser.parse_args(argv[1:])
+        validate_stress_report(
+            args.output_dir,
+            args.topology_dir,
+            args.compute_profile,
+            args.task_trace,
+            args.workload_summary,
+            args.minimum_completion_rate_percent,
         )
         return
 
