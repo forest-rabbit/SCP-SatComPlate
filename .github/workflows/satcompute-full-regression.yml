@@ -1,0 +1,47 @@
+name: SatCompute Full Regression
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: satcompute-full-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-regression:
+    name: full-regression
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure
+        run: ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
+
+      - name: Build
+        run: ./waf build
+
+      - name: Core routing contracts
+        run: contrib/satcompute/tools/ci/run-routing-smoke.sh
+
+      - name: Core task contracts
+        run: contrib/satcompute/tools/ci/run-task-smoke.sh
+
+      - name: Core diagnostics contracts
+        run: contrib/satcompute/tools/ci/run-diagnostics-smoke.sh
+
+      - name: Extended routing regression
+        run: contrib/satcompute/tools/ci/run-full-routing-regression.sh
+
+      - name: Extended workload regression
+        run: contrib/satcompute/tools/ci/run-full-workload-regression.sh
+
+      - name: Verify clean source tree
+        run: test -z "$(git status --short)"

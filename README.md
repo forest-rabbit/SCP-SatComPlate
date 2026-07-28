@@ -45,6 +45,11 @@ source .venv/bin/activate
 SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests。只有需要
 检查 ns-3 上游测试套件时，才单独重新配置 `--enable-tests`。
 
+CI 分为 pull request 的 `SatCompute Fast Smoke` 与 `main`/手动触发的
+`SatCompute Full Regression`。两级均调用可在本地直接运行的脚本，命令与
+完整覆盖范围见
+[`contrib/satcompute/README.md`](contrib/satcompute/README.md#ci-分级)。
+
 默认运行 xw 66 星的 0–110 秒快照，不注入业务；这是正式保留的
 `topology-only` 模式。
 
