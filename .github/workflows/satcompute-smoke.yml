@@ -27,6 +27,43 @@ jobs:
       - name: Build
         run: ./waf build
 
+      - name: Topology-only default output
+        run: |
+          ./waf --run-no-build "satcompute --simulationDuration=110" \
+            | tee /tmp/satcompute-ci-topology-only.log
+          grep -Fq "  discovered : 12" /tmp/satcompute-ci-topology-only.log
+          grep -Fq "  selected   : 12" /tmp/satcompute-ci-topology-only.log
+          grep -Fq "  updates    : 11" /tmp/satcompute-ci-topology-only.log
+          grep -Fq "[TOPO:Update] @ 110s" /tmp/satcompute-ci-topology-only.log
+          grep -Fq "  satellites : 66" /tmp/satcompute-ci-topology-only.log
+          grep -Fq "  ISLs       : 132" /tmp/satcompute-ci-topology-only.log
+          grep -Fq "  run status          : COMPLETE" \
+            /tmp/satcompute-ci-topology-only.log
+          grep -Fq "  output root         : /tmp/satcompute-output" \
+            /tmp/satcompute-ci-topology-only.log
+          if grep -Fq "network-flow-metrics.csv" \
+            /tmp/satcompute-ci-topology-only.log; then
+            echo "default console still lists individual metric files"
+            exit 1
+          fi
+          test -f /tmp/satcompute-output/run-summary.json
+          test ! -e /tmp/satcompute-output/diagnostics
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(
+              Path("/tmp/satcompute-output/run-summary.json").read_text()
+          )
+          assert summary["mode"] == "topology-only"
+          assert summary["run_status"] == "COMPLETE"
+          assert summary["task_count"] == 0
+          assert summary["transfer_count"] == 0
+          assert summary["flow_monitor_tx_packets"] == 0
+          assert summary["flow_monitor_rx_packets"] == 0
+          assert summary["flow_monitor_lost_packets"] == 0
+          PY
+
       - name: Static diamond repeat
         run: |
           ./waf --run-no-build "satcompute \
