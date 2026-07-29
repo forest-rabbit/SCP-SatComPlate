@@ -35,41 +35,54 @@ jobs:
       - name: Build
         run: ./waf build
 
-      - name: Generated topology contracts
+      - name: Generate and check unified scenario
         run: |
           uv run --locked python -m \
-            contrib.satcompute.tools.generation.topology.dynamic.generate_dynamic_isls \
-            --config contrib/satcompute/tools/generation/topology/config/synthetic-66.json \
-            --duration-s 120 \
-            --step-s 60 \
-            --output-dir /tmp/satcompute-fast-dynamic-isls
+            contrib.satcompute.tools.generation.scenario.generate_scenario \
+            --config contrib/satcompute/tools/generation/scenario/config/synthetic-66-compute-22.json \
+            --output-dir /tmp/satcompute-fast-scenario
           uv run --locked python -m \
-            contrib.satcompute.tools.generation.topology.dynamic.export_satcompute \
-            --source-dir /tmp/satcompute-fast-dynamic-isls \
-            --delay-mode distance \
-            --link-bandwidth-kbps 10000000 \
-            --output-dir /tmp/satcompute-fast-distance-topology
-          uv run --locked python -m \
-            contrib.satcompute.tools.generation.topology.check_export \
-            --input-dir /tmp/satcompute-fast-distance-topology \
-            --expected-node-count 66 \
-            --source-dynamic-dir /tmp/satcompute-fast-dynamic-isls
+            contrib.satcompute.tools.generation.scenario.check_scenario \
+            --input-dir /tmp/satcompute-fast-scenario
 
-      - name: Load generated topology in SatCompute
+      - name: Load generated scenario topology in SatCompute
         run: |
           ./waf --run-no-build "satcompute \
-            --topologyDir=/tmp/satcompute-fast-distance-topology \
-            --simulationDuration=120 \
+            --topologyDir=/tmp/satcompute-fast-scenario/topology \
+            --simulationDuration=2 \
             --outputDir=/tmp/satcompute-fast-topology-output" \
             | tee /tmp/satcompute-fast-topology.log
-          grep -Fq "  discovered : 3" /tmp/satcompute-fast-topology.log
+          grep -Fq "  discovered : 1001" /tmp/satcompute-fast-topology.log
           grep -Fq "  selected   : 3" /tmp/satcompute-fast-topology.log
           grep -Fq "  updates    : 2" /tmp/satcompute-fast-topology.log
-          grep -Fq "[TOPO:Update] @ 120s" /tmp/satcompute-fast-topology.log
+          grep -Fq "[TOPO:Update] @ 2s" /tmp/satcompute-fast-topology.log
           grep -Fq "  satellites : 66" /tmp/satcompute-fast-topology.log
           grep -Fq "  ISLs       : 121" /tmp/satcompute-fast-topology.log
           grep -Fq "  run status          : COMPLETE" \
             /tmp/satcompute-fast-topology.log
+
+      - name: Run task with generated compute profile
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=/tmp/satcompute-fast-scenario/topology \
+            --computeProfile=/tmp/satcompute-fast-scenario/resources/compute-profile.json \
+            --taskTrace=contrib/satcompute/tools/generation/scenario/tests/fixtures/task-single-selected.json \
+            --simulationDuration=3 \
+            --taskLogMode=silent \
+            --transferChunkMode=fixed \
+            --transferPayloadBytes=1024 \
+            --islMtuBytes=1500 \
+            --islQueueBytes=1500000 \
+            --transferLogMode=silent \
+            --routingMode=global-hash-per-flow \
+            --ecmpHashSeed=1 \
+            --outputDir=/tmp/satcompute-fast-scenario-task"
+          python3 contrib/satcompute/tools/validation/check-task-output.py run \
+            --topology-dir=/tmp/satcompute-fast-scenario/topology \
+            --compute-profile=/tmp/satcompute-fast-scenario/resources/compute-profile.json \
+            --task-trace=contrib/satcompute/tools/generation/scenario/tests/fixtures/task-single-selected.json \
+            --workload-summary=contrib/satcompute/tools/generation/scenario/tests/fixtures/task-single-selected-summary.json \
+            --output-dir=/tmp/satcompute-fast-scenario-task
 
       - name: Routing contracts
         run: contrib/satcompute/tools/ci/run-routing-smoke.sh
