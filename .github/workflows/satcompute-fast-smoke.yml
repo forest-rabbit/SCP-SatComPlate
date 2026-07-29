@@ -20,11 +20,56 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Install pinned uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: "0.11.25"
+          python-version: "3.10.12"
+
+      - name: Sync locked environment
+        run: uv sync --locked
+
       - name: Configure
         run: ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
 
       - name: Build
         run: ./waf build
+
+      - name: Generated topology contracts
+        run: |
+          uv run --locked python -m \
+            contrib.satcompute.tools.generation.topology.dynamic.generate_dynamic_isls \
+            --config contrib/satcompute/tools/generation/topology/config/synthetic-66.json \
+            --duration-s 120 \
+            --step-s 60 \
+            --output-dir /tmp/satcompute-fast-dynamic-isls
+          uv run --locked python -m \
+            contrib.satcompute.tools.generation.topology.dynamic.export_satcompute \
+            --source-dir /tmp/satcompute-fast-dynamic-isls \
+            --delay-mode distance \
+            --link-bandwidth-kbps 10000000 \
+            --output-dir /tmp/satcompute-fast-distance-topology
+          uv run --locked python -m \
+            contrib.satcompute.tools.generation.topology.check_export \
+            --input-dir /tmp/satcompute-fast-distance-topology \
+            --expected-node-count 66 \
+            --source-dynamic-dir /tmp/satcompute-fast-dynamic-isls
+
+      - name: Load generated topology in SatCompute
+        run: |
+          ./waf --run-no-build "satcompute \
+            --topologyDir=/tmp/satcompute-fast-distance-topology \
+            --simulationDuration=120 \
+            --outputDir=/tmp/satcompute-fast-topology-output" \
+            | tee /tmp/satcompute-fast-topology.log
+          grep -Fq "  discovered : 3" /tmp/satcompute-fast-topology.log
+          grep -Fq "  selected   : 3" /tmp/satcompute-fast-topology.log
+          grep -Fq "  updates    : 2" /tmp/satcompute-fast-topology.log
+          grep -Fq "[TOPO:Update] @ 120s" /tmp/satcompute-fast-topology.log
+          grep -Fq "  satellites : 66" /tmp/satcompute-fast-topology.log
+          grep -Fq "  ISLs       : 121" /tmp/satcompute-fast-topology.log
+          grep -Fq "  run status          : COMPLETE" \
+            /tmp/satcompute-fast-topology.log
 
       - name: Routing contracts
         run: contrib/satcompute/tools/ci/run-routing-smoke.sh
