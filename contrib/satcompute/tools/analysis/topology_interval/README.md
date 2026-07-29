@@ -70,6 +70,7 @@ SatCompute 在找不到 exact `/32` host route 时也会回退该原生路由。
 
 uv run --locked python -m \
   contrib.satcompute.tools.analysis.topology_interval.route_probe \
+  candidate-gate \
   --topology-dir=contrib/satcompute/input/topology/tests/diamond-4-static \
   --candidate-audit=/tmp/diamond-candidates.jsonl
 ```
@@ -77,5 +78,59 @@ uv run --locked python -m \
 门禁覆盖 static diamond、dynamic diamond 的全部快照，以及 synthetic-66
 的 0 秒快照。任一候选 ID、可达状态或有序节点对缺失都会失败，不能继续用
 Python ECMP 指标给出快照间隔结论。
+
+## 实际选中下一跳
+
+候选集合一致不自动等于实际选择一致。`route_probe.py generate-pairs` 从统一
+场景生成最多 64 个确定性有序节点对，分层覆盖同轨相邻/远距离、相邻/非相邻
+轨道面、边界到内部，以及计算/普通节点组合。每对节点使用固定且唯一的 UDP
+端口，`probe-pairs.json` 的 SHA-256 随报告保存。
+
+```bash
+uv run --locked python -m \
+  contrib.satcompute.tools.analysis.topology_interval.route_probe \
+  generate-pairs \
+  --scenario-dir=/tmp/satcompute-reference \
+  --output=/tmp/probe-pairs.json
+```
+
+`satcompute-route-selection-audit` 不发送业务数据，而是用这些真实五元组调用
+当前 C++ `RouteOutput`。对 hash 和 HRW，它同时捕获既有
+`EcmpRouteDecision` 事件；对 `global-first`，记录原生首条路由。审计覆盖：
+
+```text
+global-first
+global-hash-per-flow
+global-hrw-per-flow
+```
+
+不覆盖依赖活动流预留状态的 `global-size-aware-hrw`。每个快照在拓扑更新后
+1 ns 触发一次审计，输出有效候选、实际物理下一跳、route epoch、事件候选数、
+gateway、interface、hash 和 selection reason。审计调用不发送 packet，
+不改变链路、metric、路由表或选择算法。
+
+```bash
+./waf --run-no-build "satcompute-route-selection-audit \
+  --topologyDir=/tmp/satcompute-reference/topology \
+  --simulationDuration=20.1 \
+  --auditTimes=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20 \
+  --routingMode=global-hrw-per-flow \
+  --ecmpHashSeed=1 \
+  --probePairs=/tmp/probe-pairs.json \
+  --outputFile=/tmp/reference-hrw.jsonl"
+```
+
+`compare-selection` 将低频审计按 last-audited snapshot 展开到每个参考秒，比较
+实际下一跳、参考选择在 held 候选中的存活、有效候选数和原始事件候选数。
+route epoch 只作为证据记录，不用“epoch 次数”冒充下一跳变化：
+
+```bash
+uv run --locked python -m \
+  contrib.satcompute.tools.analysis.topology_interval.route_probe \
+  compare-selection \
+  --reference-audit=/tmp/reference-hrw.jsonl \
+  --held-audit=/tmp/held-hrw.jsonl \
+  --node-count=66
+```
 
 生成结果用于本地实验或审查，应放在 `/tmp` 或仓库外的实验目录，不得提交。

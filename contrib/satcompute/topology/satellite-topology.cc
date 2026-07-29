@@ -260,6 +260,28 @@ SatelliteTopology::GetEcmpCandidateSatelliteIds(
   return candidateSatelliteIds;
 }
 
+uint32_t
+SatelliteTopology::GetNextHopSatelliteId(
+  uint32_t sourceSatelliteId,
+  uint32_t outputInterface) const
+{
+  const std::vector<IslDirectedLink>& directedLinks =
+    m_linkState->GetDirectedLinks();
+  auto directed =
+    std::find_if(
+      directedLinks.begin(),
+      directedLinks.end(),
+      [sourceSatelliteId, outputInterface](const IslDirectedLink& link) {
+        return link.sourceNodeId == sourceSatelliteId
+               && link.outputInterface == outputInterface;
+      });
+  NS_ABORT_MSG_IF(
+    directed == directedLinks.end(),
+    "output interface 无法映射到物理下一跳: source="
+      << sourceSatelliteId << " interface=" << outputInterface);
+  return directed->destinationNodeId;
+}
+
 bool
 SatelliteTopology::HasSatelliteId(uint32_t satelliteId) const
 {

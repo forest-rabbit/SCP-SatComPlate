@@ -16,56 +16,23 @@
 
 // 只读导出 ns-3 全局路由的 ECMP 物理下一跳，用于 Python 一致性门禁。
 
+#include "route-audit-common.h"
+
 #include "../../../topology/satellite-topology.h"
 
 #include "ns3/abort.h"
 #include "ns3/core-module.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
-#include <limits>
-#include <sstream>
 #include <string>
 #include <vector>
 
 using namespace ns3;
 
 namespace {
-
-std::vector<uint32_t>
-ParseAuditTimes(const std::string& value, double simulationDurationSeconds)
-{
-  NS_ABORT_MSG_IF(value.empty(), "auditTimes 不能为空");
-  std::vector<uint32_t> times;
-  std::stringstream input(value);
-  std::string token;
-  while (std::getline(input, token, ','))
-    {
-      NS_ABORT_MSG_IF(token.empty(), "auditTimes 包含空字段");
-      std::stringstream parser(token);
-      uint64_t parsed = 0;
-      parser >> parsed;
-      NS_ABORT_MSG_IF(!parser || parser.peek() != std::char_traits<char>::eof(),
-                      "auditTimes 包含非整数: " << token);
-      NS_ABORT_MSG_IF(parsed > std::numeric_limits<uint32_t>::max(),
-        "auditTimes 超过 uint32_t");
-      uint32_t timeSeconds = static_cast<uint32_t>(parsed);
-      NS_ABORT_MSG_IF(timeSeconds > simulationDurationSeconds,
-                      "audit time 超过 simulationDuration: "
-                        << timeSeconds);
-      times.push_back(timeSeconds);
-    }
-  NS_ABORT_MSG_IF(times.empty(), "auditTimes 不能为空");
-  NS_ABORT_MSG_IF(!std::is_sorted(times.begin(), times.end()),
-                  "auditTimes 必须递增");
-  NS_ABORT_MSG_IF(
-    std::adjacent_find(times.begin(), times.end()) != times.end(),
-    "auditTimes 不能重复");
-  return times;
-}
 
 void
 WriteAuditSnapshot(SatelliteTopology* topology,
@@ -152,7 +119,7 @@ main(int argc, char* argv[])
       return EXIT_FAILURE;
     }
   std::vector<uint32_t> times =
-    ParseAuditTimes(auditTimes, simulationDurationSeconds);
+    ParseRouteAuditTimes(auditTimes, simulationDurationSeconds);
   std::ofstream output(outputFile.c_str(),
                        std::ios::out | std::ios::trunc);
   if (!output)
