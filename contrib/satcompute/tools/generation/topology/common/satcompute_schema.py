@@ -209,3 +209,37 @@ def distance_delay_us(distance_m: Any) -> int:
             "distance_m must be a finite non-negative number"
         )
     return int(round(float(distance_m) / SPEED_OF_LIGHT_M_PER_S * 1_000_000))
+
+
+def validate_delay_parameters(
+    delay_mode: str,
+    fixed_delay_us: int | None,
+) -> None:
+    """Validate the shared fixed/distance delay CLI contract."""
+    if delay_mode not in ("fixed", "distance"):
+        raise SatComputeSchemaError("delay_mode must be fixed or distance")
+    if delay_mode == "fixed":
+        if fixed_delay_us is None:
+            raise SatComputeSchemaError(
+                "fixed mode requires fixed_delay_us"
+            )
+        _require_integer(
+            fixed_delay_us,
+            "fixed_delay_us",
+            0,
+            MAX_DELAY_US,
+        )
+    elif fixed_delay_us is not None:
+        raise SatComputeSchemaError(
+            "distance mode does not accept fixed_delay_us"
+        )
+
+
+def validate_link_bandwidth_kbps(value: Any) -> int:
+    """Validate bandwidth against the C++ kbps-to-bps conversion range."""
+    return _require_integer(
+        value,
+        "link_bandwidth_kbps",
+        1,
+        MAX_BANDWIDTH_KBPS,
+    )

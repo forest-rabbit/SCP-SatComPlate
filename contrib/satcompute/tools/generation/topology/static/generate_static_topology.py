@@ -26,14 +26,15 @@ from ..common.hash_utils import (
 )
 from ..common.satcompute_schema import (
     DELAY_ROUNDING,
-    MAX_BANDWIDTH_KBPS,
-    MAX_DELAY_US,
     SPEED_OF_LIGHT_M_PER_S,
     SatComputeLink,
+    SatComputeSchemaError,
     distance_delay_us,
     nodes_payload,
     satcompute_json_bytes,
     topology_payload,
+    validate_delay_parameters,
+    validate_link_bandwidth_kbps,
 )
 from ..dynamic.dynamic_isls import (
     CandidateIsl,
@@ -74,31 +75,6 @@ def _require_integer(
             f"{name} must be an integer in [{minimum}, {maximum}]"
         )
     return value
-
-
-def validate_delay_parameters(
-    delay_mode: str,
-    fixed_delay_us: int | None,
-) -> None:
-    if delay_mode not in ("fixed", "distance"):
-        raise StaticTopologyGenerationError(
-            "delay_mode must be fixed or distance"
-        )
-    if delay_mode == "fixed":
-        if fixed_delay_us is None:
-            raise StaticTopologyGenerationError(
-                "fixed mode requires fixed_delay_us"
-            )
-        _require_integer(
-            fixed_delay_us,
-            "fixed_delay_us",
-            minimum=0,
-            maximum=MAX_DELAY_US,
-        )
-    elif fixed_delay_us is not None:
-        raise StaticTopologyGenerationError(
-            "distance mode does not accept fixed_delay_us"
-        )
 
 
 def _build_links(
@@ -192,13 +168,11 @@ def generate_static_topology(
         minimum=0,
         maximum=(1 << 63) - 1,
     )
-    bandwidth = _require_integer(
-        link_bandwidth_kbps,
-        "link_bandwidth_kbps",
-        minimum=1,
-        maximum=MAX_BANDWIDTH_KBPS,
-    )
-    validate_delay_parameters(delay_mode, fixed_delay_us)
+    try:
+        bandwidth = validate_link_bandwidth_kbps(link_bandwidth_kbps)
+        validate_delay_parameters(delay_mode, fixed_delay_us)
+    except SatComputeSchemaError as error:
+        raise StaticTopologyGenerationError(str(error)) from error
     config = load_config(config_path)
     validate_clearance_limit(config)
     candidates = build_candidate_isls(config)
