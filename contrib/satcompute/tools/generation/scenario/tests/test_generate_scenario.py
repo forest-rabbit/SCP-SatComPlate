@@ -172,6 +172,8 @@ class ScenarioGenerationTest(unittest.TestCase):
             manifest["aggregate_compute_rate_work_units_per_second"],
             33_000_000,
         )
+        self.assertIsNone(manifest["reference_scenario_sha256"])
+        self.assertIsNone(manifest["downsample_interval_s"])
 
     def test_static_modes_preserve_sampling_and_link_contracts(self) -> None:
         fixed_manifest = json.loads(

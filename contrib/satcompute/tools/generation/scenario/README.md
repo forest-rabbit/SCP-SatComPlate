@@ -199,6 +199,11 @@ scenario-output/
 checker 会重算所有哈希、部署结果、算力总和、节点归属、快照统计和 provenance，
 并拒绝多余文件、符号链接或非规范 JSON 合同。
 
+原始生成场景的 `reference_scenario_sha256` 与 `downsample_interval_s` 均为
+`null`。由快照间隔分析工具复制参考快照得到的场景会同时填写这两个字段：
+前者是参考场景的 `aggregate_scenario_sha256`，后者必须等于动态 schedule
+的 `step_s`。checker 拒绝只填写其中一个字段或与 schedule 不一致的结果。
+
 ## 原子输出与目录选择
 
 生成器先写 `<output-dir>.tmp`，所有后端生成和 checker 均成功后才原子发布。

@@ -118,7 +118,7 @@ def _generate_topology(
     )
 
 
-def _build_manifest(
+def build_scenario_manifest(
     config: ScenarioConfig,
     output_root: Path,
     topology_manifest: dict[str, Any],
@@ -126,6 +126,9 @@ def _build_manifest(
     compute_profile_sha256: str,
     placement_node_ids: tuple[int, ...],
     compute_nodes_per_orbit: tuple[int, ...],
+    *,
+    reference_scenario_sha256: str | None = None,
+    downsample_interval_s: int | None = None,
 ) -> dict[str, Any]:
     canonical_config = config.input_dict()
     config_sha256 = sha256_bytes(compact_json_bytes(canonical_config))
@@ -184,6 +187,8 @@ def _build_manifest(
         "python_version": platform.python_version(),
         "uv_version": uv_version(),
         "uv_lock_sha256": sha256_file(REPOSITORY_ROOT / "uv.lock"),
+        "reference_scenario_sha256": reference_scenario_sha256,
+        "downsample_interval_s": downsample_interval_s,
         "aggregate_scenario_sha256": aggregate_scenario,
     }
 
@@ -226,7 +231,7 @@ def generate_scenario(
                 temporary / TOPOLOGY_DIRECTORY,
                 expected_node_count=config.total_satellite_count,
             )
-            scenario_manifest = _build_manifest(
+            scenario_manifest = build_scenario_manifest(
                 config,
                 temporary,
                 topology_manifest,

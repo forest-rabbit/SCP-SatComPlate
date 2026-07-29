@@ -161,6 +161,19 @@ class ScenarioCheckerTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     check_scenario(output)
 
+    def test_downsample_provenance_fields_are_paired(self) -> None:
+        output = self.copy_valid_output()
+        self.mutate_manifest(
+            output,
+            "reference_scenario_sha256",
+            "0" * 64,
+        )
+        with self.assertRaisesRegex(
+            ScenarioCheckError,
+            "both be null or both be set",
+        ):
+            check_scenario(output)
+
     def test_manifest_counts_placement_and_types_are_recomputed(self) -> None:
         cases = (
             ("snapshot_count", 2),

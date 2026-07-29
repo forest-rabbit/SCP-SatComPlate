@@ -79,6 +79,8 @@ MANIFEST_FIELDS = frozenset(
         "python_version",
         "uv_version",
         "uv_lock_sha256",
+        "reference_scenario_sha256",
+        "downsample_interval_s",
         "aggregate_scenario_sha256",
     )
 )
@@ -456,6 +458,37 @@ def check_scenario(input_dir: Path) -> dict[str, Any]:
         "aggregate_scenario_sha256",
     ):
         _require_sha256(manifest[field], field)
+    reference_scenario_sha256 = manifest["reference_scenario_sha256"]
+    downsample_interval_s = manifest["downsample_interval_s"]
+    if (
+        reference_scenario_sha256 is None
+        and downsample_interval_s is None
+    ):
+        pass
+    elif (
+        reference_scenario_sha256 is None
+        or downsample_interval_s is None
+    ):
+        raise ScenarioCheckError(
+            "downsample provenance fields must both be null or both be set"
+        )
+    else:
+        _require_sha256(
+            reference_scenario_sha256,
+            "reference_scenario_sha256",
+        )
+        interval_s = _require_integer(
+            downsample_interval_s,
+            "downsample_interval_s",
+            1,
+        )
+        if (
+            not isinstance(schedule, DynamicSchedule)
+            or interval_s != schedule.step_s
+        ):
+            raise ScenarioCheckError(
+                "downsample_interval_s must equal the dynamic schedule step"
+            )
     expected_aggregate = scenario_aggregate_sha256(
         topology_manifest_sha256,
         topology_aggregate,
