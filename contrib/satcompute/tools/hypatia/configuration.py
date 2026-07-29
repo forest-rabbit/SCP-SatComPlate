@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,10 @@ WALKER_STAR = "walker-star"
 WALKER_DELTA = "walker-delta"
 CONSTELLATION_PATTERNS = frozenset((WALKER_STAR, WALKER_DELTA))
 MAX_TLE_SATELLITES = 99999
+CONSTELLATION_NAME_REGEX = r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
+CONSTELLATION_NAME_PATTERN = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._-]*"
+)
 CONFIG_FIELDS = frozenset(
     (
         "schema_version",
@@ -101,21 +106,40 @@ def _require_finite_number(
     field: str,
     minimum: float,
     maximum: float | None = None,
+    *,
+    minimum_inclusive: bool = True,
+    maximum_inclusive: bool = True,
 ) -> float:
+    left = "[" if minimum_inclusive else "("
+    if maximum is None:
+        range_text = f">= {minimum}" if minimum_inclusive else f"> {minimum}"
+    else:
+        right = "]" if maximum_inclusive else ")"
+        range_text = f"{left}{minimum}, {maximum}{right}"
     if (
         not isinstance(value, (int, float))
         or isinstance(value, bool)
         or not math.isfinite(value)
-        or value < minimum
-        or (maximum is not None and value > maximum)
     ):
-        range_text = (
-            f"[{minimum}, {maximum}]" if maximum is not None else f">= {minimum}"
-        )
         raise ConstellationConfigError(
             f"{field} must be a finite number in {range_text}"
         )
-    return float(value)
+    number = float(value)
+    lower_invalid = (
+        number < minimum
+        if minimum_inclusive
+        else number <= minimum
+    )
+    upper_invalid = maximum is not None and (
+        number > maximum
+        if maximum_inclusive
+        else number >= maximum
+    )
+    if lower_invalid or upper_invalid:
+        raise ConstellationConfigError(
+            f"{field} must be a finite number in {range_text}"
+        )
+    return number
 
 
 def parse_config(payload: Any) -> ConstellationConfig:
@@ -136,9 +160,12 @@ def parse_config(payload: Any) -> ConstellationConfig:
         )
 
     name = payload["constellation_name"]
-    if not isinstance(name, str) or not name.strip():
+    if (
+        not isinstance(name, str)
+        or CONSTELLATION_NAME_PATTERN.fullmatch(name) is None
+    ):
         raise ConstellationConfigError(
-            "constellation_name must be a non-empty string"
+            f"constellation_name must match {CONSTELLATION_NAME_REGEX}"
         )
     pattern = payload["constellation_pattern"]
     if not isinstance(pattern, str) or pattern not in CONSTELLATION_PATTERNS:
@@ -180,12 +207,14 @@ def parse_config(payload: Any) -> ConstellationConfig:
             payload["altitude_km"],
             "altitude_km",
             0.0,
+            minimum_inclusive=False,
         ),
         inclination_deg=_require_finite_number(
             payload["inclination_deg"],
             "inclination_deg",
             0.0,
             180.0,
+            maximum_inclusive=False,
         ),
         phase_diff=phase_diff,
         seam_enabled=seam_enabled,
