@@ -20,8 +20,8 @@
     "isl_candidate_strategy": "plus-grid",
     "seam_enabled": false,
     "max_isl_distance_m": 6174589,
-    "delay_mode": "distance",
-    "fixed_delay_us": null,
+    "delay_mode": "fixed",
+    "fixed_delay_us": 8000,
     "link_bandwidth_kbps": 2000000
   },
   "compute": {

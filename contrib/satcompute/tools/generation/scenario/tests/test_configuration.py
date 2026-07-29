@@ -40,8 +40,8 @@ class ScenarioConfigurationTest(unittest.TestCase):
             config.topology.schedule,
             DynamicSchedule(0, 1000, 1),
         )
-        self.assertEqual(config.topology.delay_mode, "distance")
-        self.assertIsNone(config.topology.fixed_delay_us)
+        self.assertEqual(config.topology.delay_mode, "fixed")
+        self.assertEqual(config.topology.fixed_delay_us, 8000)
         self.assertEqual(config.topology.link_bandwidth_kbps, 2_000_000)
         self.assertEqual(config.compute.compute_node_count, 22)
         self.assertEqual(

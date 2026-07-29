@@ -100,6 +100,11 @@ PyEphem 无法传播严格零偏心率。
 delay_us = round(distance_m / 299792458 × 1,000,000)
 ```
 
+已提交的默认场景使用 `fixed_delay_us=8000`，即所有活动 ISL 的单向传播
+时延固定为 8000 µs。这是当前 N2 主线采用的平台实验抽象，不表示按真实星间
+距离计算的传播时延。`distance` 能力、公式和四种 static/dynamic 组合测试
+继续保留，但 PR5 快照间隔主实验不使用 distance-delay error 作为推荐指标。
+
 默认的 `link_bandwidth_kbps=2000000` 表示
 `2,000,000 Kbps = 2,000,000,000 bps = 2 Gbps`，不是 2 Mbps，也不是
 2,000,000 bps。

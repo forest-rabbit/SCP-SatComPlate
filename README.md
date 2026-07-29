@@ -96,6 +96,10 @@ uv run --locked python -m \
   --output-dir /tmp/satcompute-scenario
 ```
 
+默认提交场景使用固定单向时延 `8000 µs` 和
+`2,000,000 Kbps = 2 Gbps` 的活动 ISL。固定时延是当前 N2 主线的实验抽象；
+按距离计算单向传播时延的 `distance` 模式仍作为可选能力和回归合同保留。
+
 输出中的 `topology/` 可直接传给 `--topologyDir`，
 `resources/compute-profile.json` 可直接传给 `--computeProfile`。生成器先在
 临时目录完成拓扑与资源检查，再原子发布；独立复查命令、完整字段含义、单位和

@@ -236,6 +236,30 @@ class ScenarioGenerationTest(unittest.TestCase):
                         "topology_60s.json",
                     ],
                 )
+                links = [
+                    link
+                    for filename in topology_files
+                    for link in json.loads(
+                        (output / "topology" / filename).read_text(
+                            encoding="utf-8"
+                        )
+                    )["links"]
+                ]
+                self.assertTrue(
+                    all(
+                        link["link_bandwidth"] == 2_000_000
+                        for link in links
+                    )
+                )
+                if delay_mode == "fixed":
+                    self.assertTrue(
+                        all(link["delay"] == 8000 for link in links)
+                    )
+                else:
+                    self.assertGreater(
+                        len({link["delay"] for link in links}),
+                        1,
+                    )
 
     def test_repeated_generation_is_byte_identical(self) -> None:
         self.assertEqual(
