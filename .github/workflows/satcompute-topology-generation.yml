@@ -8,6 +8,7 @@ on:
       - ".python-version"
       - "pyproject.toml"
       - "uv.lock"
+      - "contrib/satcompute/tools/generation/scenario/**"
       - "contrib/satcompute/tools/generation/topology/**"
   push:
     branches:
@@ -19,6 +20,7 @@ on:
       - ".python-version"
       - "pyproject.toml"
       - "uv.lock"
+      - "contrib/satcompute/tools/generation/scenario/**"
       - "contrib/satcompute/tools/generation/topology/**"
   workflow_dispatch:
 
@@ -55,6 +57,12 @@ jobs:
         run: >-
           uv run --locked python -m unittest discover
           -s contrib/satcompute/tools/generation/topology/tests
+          -p 'test_*.py' -v
+
+      - name: Scenario generation unit tests
+        run: >-
+          uv run --locked python -m unittest discover
+          -s contrib/satcompute/tools/generation/scenario/tests
           -p 'test_*.py' -v
 
       - name: Hypatia position smoke
@@ -110,6 +118,16 @@ jobs:
             --input-dir /tmp/satcompute-topology-distance \
             --expected-node-count 66 \
             --source-dynamic-dir /tmp/satcompute-dynamic-isls
+
+      - name: Generate and check unified scenario
+        run: |
+          uv run --locked python -m \
+            contrib.satcompute.tools.generation.scenario.generate_scenario \
+            --config contrib/satcompute/tools/generation/scenario/config/synthetic-66-compute-22.json \
+            --output-dir /tmp/satcompute-unified-scenario
+          uv run --locked python -m \
+            contrib.satcompute.tools.generation.scenario.check_scenario \
+            --input-dir /tmp/satcompute-unified-scenario
 
       - name: Verify clean source tree
         run: test -z "$(git status --short)"

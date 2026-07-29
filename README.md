@@ -85,6 +85,26 @@ CI 分为 pull request 的 `SatCompute Fast Smoke` 与 `main`/手动触发的
 `transferTrace`。NetworkTransfer 与任务模式都使用 UDP；三项输入均为空时
 运行纯拓扑模式。
 
+## 统一场景生成
+
+N2 使用统一场景配置一次生成 canonical 动态拓扑和静态计算能力：
+
+```bash
+uv run --locked python -m \
+  contrib.satcompute.tools.generation.scenario.generate_scenario \
+  --config contrib/satcompute/tools/generation/scenario/config/synthetic-66-compute-22.json \
+  --output-dir /tmp/satcompute-scenario
+```
+
+输出中的 `topology/` 可直接传给 `--topologyDir`，
+`resources/compute-profile.json` 可直接传给 `--computeProfile`。生成器先在
+临时目录完成拓扑与资源检查，再原子发布；独立复查命令、完整字段含义、单位和
+`topology/config` 的保留边界见
+[`scenario/README.md`](contrib/satcompute/tools/generation/scenario/README.md)。
+
+审查、CI 和临时验证写入 `/tmp`；正式实验应显式选择仓库外的持久目录。生成
+结果不提交到 Git。
+
 ## NetworkTransfer
 
 NetworkTransfer JSON 的 `schema_version` 必须为 `0.1`。每条记录只含：
