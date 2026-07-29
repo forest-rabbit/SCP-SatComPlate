@@ -17,12 +17,26 @@ sys.path.insert(0, str(TOOL_DIR))
 
 from configuration import WALKER_DELTA, load_config  # noqa: E402
 from hypatia_adapter import HypatiaAdapter  # noqa: E402
+from resolve_constellation import position_samples_sha256  # noqa: E402
+from vendor.hypatia_minimal.tle_generator import tle_checksum  # noqa: E402
 from walker_tles import generate_walker_tles, walker_slots  # noqa: E402
 
 
 PRESET = TOOL_DIR / "config" / "synthetic-66.json"
 EXPECTED_STAR_RAAN = (0.0, 30.0, 60.0, 90.0, 120.0, 150.0)
 EXPECTED_DELTA_RAAN = (0.0, 60.0, 120.0, 180.0, 240.0, 300.0)
+EXPECTED_STAR_TLE_SHA256 = (
+    "c3b0fd1118f00694274f4c3ce95d72f8e9942d67c6001199208fbb7a09e0d51f"
+)
+EXPECTED_STAR_POSITIONS_SHA256 = (
+    "01f0fb97feb26e63582649a65225c273cfa3357a474fc1511dc9eddc6b6f2ea9"
+)
+EXPECTED_DELTA_TLE_SHA256 = (
+    "3981469338b8eca57426ffb1b5f7a137d89374610c7b12445ab6b6304f710c0f"
+)
+EXPECTED_DELTA_POSITIONS_SHA256 = (
+    "7b6acc6e78476321eae0b9da8d344f6c1ec54daf3255bbc9e408ad2cd819a652"
+)
 
 
 class WalkerTleTest(unittest.TestCase):
@@ -95,12 +109,16 @@ class WalkerTleTest(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(
                 hashlib.sha256(first).hexdigest(),
-                hashlib.sha256(second).hexdigest(),
+                EXPECTED_STAR_TLE_SHA256,
             )
 
             constellation = self.adapter.read_tles(first_path)
             satellites = constellation["satellites"]
             self.assertEqual(len(satellites), 66)
+            self.assertEqual(
+                position_samples_sha256(self.adapter, constellation),
+                EXPECTED_STAR_POSITIONS_SHA256,
+            )
             self._assert_raan(satellites, EXPECTED_STAR_RAAN)
             for satellite in satellites:
                 start = self.adapter.satellite_position_at(
@@ -126,10 +144,33 @@ class WalkerTleTest(unittest.TestCase):
             generate_walker_tles(path, delta, self.adapter)
             constellation = self.adapter.read_tles(path)
             self.assertEqual(len(constellation["satellites"]), 66)
+            self.assertEqual(
+                hashlib.sha256(path.read_bytes()).hexdigest(),
+                EXPECTED_DELTA_TLE_SHA256,
+            )
+            self.assertEqual(
+                position_samples_sha256(self.adapter, constellation),
+                EXPECTED_DELTA_POSITIONS_SHA256,
+            )
             self._assert_raan(
                 constellation["satellites"],
                 EXPECTED_DELTA_RAAN,
             )
+
+    def test_names_node_ids_and_tle_checksums_are_valid(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="satcompute-tle-format-"
+        ) as temp:
+            path = Path(temp) / "star.tle"
+            generate_walker_tles(path, self.config, self.adapter)
+            lines = path.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(lines[0], "6 11")
+            for node_id in range(66):
+                name, line1, line2 = lines[1 + node_id * 3:4 + node_id * 3]
+                self.assertEqual(name, f"synthetic-66 {node_id}")
+                for line in (line1, line2):
+                    self.assertEqual(len(line), 69)
+                    self.assertEqual(tle_checksum(line[:68]), int(line[68]))
 
     def _assert_raan(
         self,

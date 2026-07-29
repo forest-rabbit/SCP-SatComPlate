@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/snkas/hypatia.git",
+  "commit": "0ac531c313eba2335f6344b46347140c3a0d4230",
+  "component": "satgenpy",
+  "license": "MIT",
+  "sources": [
+    {
+      "upstream_path": "satgenpy/satgen/tles/generate_tles_from_scratch.py",
+      "upstream_sha256": "8235b28ee903cf595be28b2cd8f5ca0b188d27c0104886d2bf3ed7b2d71c294b",
+      "vendored_path": "vendor/hypatia_minimal/tle_generator.py",
+      "status": "adapted"
+    },
+    {
+      "upstream_path": "satgenpy/satgen/tles/read_tles.py",
+      "upstream_sha256": "e39a1cca28817680650535995b6baca2372a2238f375baaae8a99d4d7ef72153",
+      "vendored_path": "vendor/hypatia_minimal/tle_reader.py",
+      "status": "adapted"
+    },
+    {
+      "upstream_path": "satgenpy/satgen/distance_tools/distance_tools.py",
+      "upstream_sha256": "7878ec051b118f0749c2dfec6306c609c60b9bacbb5b7d086060c3601f4b122f",
+      "vendored_path": "vendor/hypatia_minimal/coordinates.py",
+      "status": "partial"
+    }
+  ]
+}

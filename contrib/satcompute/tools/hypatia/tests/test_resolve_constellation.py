@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -28,7 +29,7 @@ EXPECTED_POSITIONS_SHA256 = (
     "01f0fb97feb26e63582649a65225c273cfa3357a474fc1511dc9eddc6b6f2ea9"
 )
 EXPECTED_UV_LOCK_SHA256 = (
-    "8024a94273972cd451dbfdc38c2542a7454b9d4c209ab05c1ecfe8e743c30b20"
+    "1e4fdeda462596bff581dd9fe60208407d4fd1b4396e9ece59a71ff911e725fc"
 )
 
 
@@ -76,8 +77,23 @@ class ResolveConstellationTest(unittest.TestCase):
     def test_provenance_and_hash_contract(self) -> None:
         manifest = self.first
         self.assertEqual(
+            manifest["hypatia_repository"],
+            "https://github.com/snkas/hypatia.git",
+        )
+        self.assertEqual(
             manifest["hypatia_commit"],
             "0ac531c313eba2335f6344b46347140c3a0d4230",
+        )
+        self.assertEqual(
+            manifest["hypatia_integration_mode"],
+            "vendored-minimal",
+        )
+        origin = (
+            TOOL_DIR / "vendor" / "hypatia_minimal" / "ORIGIN.json"
+        )
+        self.assertEqual(
+            manifest["hypatia_vendor_manifest_sha256"],
+            hashlib.sha256(origin.read_bytes()).hexdigest(),
         )
         self.assertEqual(manifest["python_version"], "3.10.12")
         self.assertEqual(manifest["uv_version"], "0.11.25")

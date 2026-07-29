@@ -6,7 +6,6 @@ requires-python = ">=3.10,<3.11"
 dependencies = [
     "astropy>=6.1.7",
     "ephem>=4.2.1",
-    "geopy>=2.5.0",
     "sgp4>=2.27",
 ]
 

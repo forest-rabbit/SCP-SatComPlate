@@ -12,7 +12,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from bootstrap import REPOSITORY_ROOT
 from configuration import ConstellationConfig, load_config
 from hypatia_adapter import HypatiaAdapter
 from mean_motion import (
@@ -31,6 +30,7 @@ from walker_tles import (
 
 
 TOOL_DIR = Path(__file__).resolve().parent
+REPOSITORY_ROOT = TOOL_DIR.parents[3]
 DEFAULT_CONFIG = TOOL_DIR / "config" / "synthetic-66.json"
 POSITION_SAMPLE_TIMES_S = (0.0, 60.0)
 TLE_FILENAME = "tles.txt"
@@ -124,6 +124,8 @@ def build_manifest(
         "orbital_period_minutes": orbital_period_minutes(mean_motion),
         "hypatia_repository": adapter.repository,
         "hypatia_commit": adapter.commit,
+        "hypatia_integration_mode": "vendored-minimal",
+        "hypatia_vendor_manifest_sha256": sha256_file(adapter.origin_path),
         "python_version": platform.python_version(),
         "uv_version": uv_version(),
         "uv_lock_sha256": sha256_file(REPOSITORY_ROOT / "uv.lock"),

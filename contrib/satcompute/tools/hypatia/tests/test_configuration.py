@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the N2A constellation configuration contract."""
+"""Tests for the N2 constellation configuration contract."""
 
 from __future__ import annotations
 

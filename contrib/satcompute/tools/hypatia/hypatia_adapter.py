@@ -1,106 +1,70 @@
 #!/usr/bin/env python3
-"""Narrow adapter for the frozen Hypatia orbit-generation source files."""
+"""Narrow adapter for the vendored Hypatia orbit-generation functions."""
 
 from __future__ import annotations
 
-import importlib.util
+import json
 import math
-import subprocess
 from pathlib import Path
-from types import ModuleType
 from typing import Any
 
 from astropy.time import TimeDelta
 
-from bootstrap import (
-    DEFAULT_CHECKOUT,
-    DEFAULT_UPSTREAM,
-    BootstrapError,
-    load_upstream,
-    require_clean_checkout,
+from vendor.hypatia_minimal.coordinates import geodetic2cartesian
+from vendor.hypatia_minimal.tle_generator import (
+    generate_tles_from_scratch_with_sgp,
 )
+from vendor.hypatia_minimal.tle_reader import read_tles
+
+
+TOOL_DIR = Path(__file__).resolve().parent
+VENDOR_DIR = TOOL_DIR / "vendor" / "hypatia_minimal"
+DEFAULT_ORIGIN = VENDOR_DIR / "ORIGIN.json"
 
 
 class HypatiaAdapterError(RuntimeError):
-    """Raised when the frozen Hypatia orbit interface cannot be used."""
+    """Raised when the vendored Hypatia orbit interface cannot be used."""
 
 
-def load_source_module(name: str, path: Path) -> ModuleType:
-    if not path.is_file():
-        raise HypatiaAdapterError(f"required Hypatia source file is missing: {path}")
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:
-        raise HypatiaAdapterError(f"cannot load Hypatia source module: {path}")
-    module = importlib.util.module_from_spec(spec)
+def load_origin(path: Path) -> tuple[str, str, str]:
+    """Load and validate the local third-party provenance contract."""
     try:
-        spec.loader.exec_module(module)
-    except Exception as error:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
         raise HypatiaAdapterError(
-            f"cannot import frozen Hypatia source module {path}: {error}"
+            f"cannot read vendored Hypatia origin {path}: {error}"
         ) from error
-    return module
-
-
-def checkout_head(checkout: Path) -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=checkout,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip()
+    repository = payload.get("repository")
+    commit = payload.get("commit")
+    component = payload.get("component")
+    if not isinstance(repository, str) or not repository:
         raise HypatiaAdapterError(
-            f"cannot read Hypatia checkout HEAD at {checkout}: {detail}"
+            "vendored Hypatia repository must be a non-empty string"
         )
-    return result.stdout.strip()
+    if (
+        not isinstance(commit, str)
+        or len(commit) != 40
+        or any(character not in "0123456789abcdef" for character in commit)
+    ):
+        raise HypatiaAdapterError(
+            "vendored Hypatia commit must be a full lowercase SHA"
+        )
+    if component != "satgenpy":
+        raise HypatiaAdapterError(
+            "vendored Hypatia component must be satgenpy"
+        )
+    return repository, commit, component
 
 
 class HypatiaAdapter:
     """Expose only TLE generation, TLE reading, and satellite positions."""
 
-    def __init__(
-        self,
-        checkout: Path = DEFAULT_CHECKOUT,
-        upstream_path: Path = DEFAULT_UPSTREAM,
-    ) -> None:
-        self.checkout = checkout.resolve()
-        try:
-            repository, commit, component = load_upstream(upstream_path.resolve())
-        except BootstrapError as error:
-            raise HypatiaAdapterError(str(error)) from error
-
-        if not (self.checkout / ".git").is_dir():
-            raise HypatiaAdapterError(
-                f"Hypatia is not bootstrapped at {self.checkout}; run bootstrap.py"
-            )
-        actual_head = checkout_head(self.checkout)
-        if actual_head != commit:
-            raise HypatiaAdapterError(
-                f"Hypatia HEAD mismatch: expected {commit}, found {actual_head}"
-            )
-        try:
-            require_clean_checkout(self.checkout)
-        except BootstrapError as error:
-            raise HypatiaAdapterError(str(error)) from error
-
-        source_root = self.checkout / component / "satgen"
+    def __init__(self, origin_path: Path = DEFAULT_ORIGIN) -> None:
+        repository, commit, component = load_origin(origin_path.resolve())
         self.repository = repository
         self.commit = commit
-        self._tle_generator = load_source_module(
-            "satcompute_hypatia_generate_tles",
-            source_root / "tles" / "generate_tles_from_scratch.py",
-        )
-        self._tle_reader = load_source_module(
-            "satcompute_hypatia_read_tles",
-            source_root / "tles" / "read_tles.py",
-        )
-        self._distance_tools = load_source_module(
-            "satcompute_hypatia_distance_tools",
-            source_root / "distance_tools" / "distance_tools.py",
-        )
+        self.component = component
+        self.origin_path = origin_path.resolve()
 
     def generate_tles(
         self,
@@ -114,9 +78,10 @@ class HypatiaAdapter:
         eccentricity: float,
         argument_of_perigee_deg: float,
         mean_motion_rev_per_day: float,
+        raan_span_deg: float = 360.0,
     ) -> None:
         output.parent.mkdir(parents=True, exist_ok=True)
-        self._tle_generator.generate_tles_from_scratch_with_sgp(
+        generate_tles_from_scratch_with_sgp(
             str(output),
             constellation_name,
             num_orbits,
@@ -126,10 +91,11 @@ class HypatiaAdapter:
             eccentricity,
             argument_of_perigee_deg,
             mean_motion_rev_per_day,
+            raan_span_degree=raan_span_deg,
         )
 
     def read_tles(self, path: Path) -> dict[str, Any]:
-        return self._tle_reader.read_tles(str(path))
+        return read_tles(str(path))
 
     def satellite_position_at(
         self,
@@ -146,11 +112,13 @@ class HypatiaAdapter:
         latitude_deg = math.degrees(float(satellite.sublat))
         longitude_deg = math.degrees(float(satellite.sublong))
         elevation_m = float(satellite.elevation)
-        position = self._distance_tools.geodetic2cartesian(
+        position = geodetic2cartesian(
             latitude_deg,
             longitude_deg,
             elevation_m,
         )
         if not all(math.isfinite(value) for value in position):
-            raise HypatiaAdapterError("Hypatia returned a non-finite satellite position")
+            raise HypatiaAdapterError(
+                "Hypatia returned a non-finite satellite position"
+            )
         return position
