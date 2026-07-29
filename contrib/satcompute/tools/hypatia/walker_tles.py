@@ -9,6 +9,10 @@ from pathlib import Path
 from configuration import ConstellationConfig, WALKER_DELTA, WALKER_STAR
 from hypatia_adapter import HypatiaAdapter
 from mean_motion import mean_motion_rev_per_day
+from vendor.hypatia_minimal.tle_generator import (
+    MEAN_MOTION_CANONICAL,
+    MEAN_MOTION_HYPATIA_LEGACY,
+)
 
 
 NEAR_CIRCULAR_ECCENTRICITY = 0.0000001
@@ -73,4 +77,9 @@ def generate_walker_tles(
         argument_of_perigee_deg=ARGUMENT_OF_PERIGEE_DEG,
         mean_motion_rev_per_day=mean_motion_rev_per_day(config.altitude_km),
         raan_span_deg=config.raan_span_deg,
+        mean_motion_compatibility=(
+            MEAN_MOTION_CANONICAL
+            if config.constellation_pattern == WALKER_STAR
+            else MEAN_MOTION_HYPATIA_LEGACY
+        ),
     )

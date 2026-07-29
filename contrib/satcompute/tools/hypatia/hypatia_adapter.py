@@ -12,6 +12,7 @@ from astropy.time import TimeDelta
 
 from vendor.hypatia_minimal.coordinates import geodetic2cartesian
 from vendor.hypatia_minimal.tle_generator import (
+    MEAN_MOTION_HYPATIA_LEGACY,
     generate_tles_from_scratch_with_sgp,
 )
 from vendor.hypatia_minimal.tle_reader import read_tles
@@ -79,6 +80,7 @@ class HypatiaAdapter:
         argument_of_perigee_deg: float,
         mean_motion_rev_per_day: float,
         raan_span_deg: float = 360.0,
+        mean_motion_compatibility: str = MEAN_MOTION_HYPATIA_LEGACY,
     ) -> None:
         output.parent.mkdir(parents=True, exist_ok=True)
         generate_tles_from_scratch_with_sgp(
@@ -92,6 +94,7 @@ class HypatiaAdapter:
             argument_of_perigee_deg,
             mean_motion_rev_per_day,
             raan_span_degree=raan_span_deg,
+            mean_motion_compatibility=mean_motion_compatibility,
         )
 
     def read_tles(self, path: Path) -> dict[str, Any]:

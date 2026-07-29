@@ -35,6 +35,41 @@ from sgp4.exporter import export_tle
 MINUTES_PER_DAY = 1440.0
 SGP4_EPOCH_OFFSET_DAYS = 2433281.5
 UPSTREAM_MEAN_MOTION_DIVISOR = 13750.9870831397
+MEAN_MOTION_CANONICAL = "canonical"
+MEAN_MOTION_HYPATIA_LEGACY = "hypatia-legacy"
+
+
+def _mean_motion_rad_per_min_canonical(
+    mean_motion_rev_per_day: float,
+) -> float:
+    """Convert rev/day using the direct canonical conversion."""
+    return mean_motion_rev_per_day * 2.0 * math.pi / MINUTES_PER_DAY
+
+
+def _mean_motion_rad_per_min_hypatia_legacy(
+    mean_motion_rev_per_day: float,
+) -> float:
+    """Preserve Hypatia's historical floating-point conversion path."""
+    return (
+        mean_motion_rev_per_day
+        * 60.0
+        / UPSTREAM_MEAN_MOTION_DIVISOR
+    )
+
+
+def _mean_motion_rad_per_min(
+    mean_motion_rev_per_day: float,
+    compatibility: str,
+) -> float:
+    if compatibility == MEAN_MOTION_CANONICAL:
+        return _mean_motion_rad_per_min_canonical(mean_motion_rev_per_day)
+    if compatibility == MEAN_MOTION_HYPATIA_LEGACY:
+        return _mean_motion_rad_per_min_hypatia_legacy(
+            mean_motion_rev_per_day
+        )
+    raise ValueError(
+        "mean_motion_compatibility must be canonical or hypatia-legacy"
+    )
 
 
 def generate_tles_from_scratch_with_sgp(
@@ -49,9 +84,14 @@ def generate_tles_from_scratch_with_sgp(
     mean_motion_rev_per_day: float,
     *,
     raan_span_degree: float = 360.0,
+    mean_motion_compatibility: str = MEAN_MOTION_HYPATIA_LEGACY,
 ) -> None:
     """Generate a deterministic Walker TLE set using a selected RAAN span."""
     epoch_jd, epoch_fraction = jday(2000, 1, 1, 0, 0, 0)
+    mean_motion_rad_per_min = _mean_motion_rad_per_min(
+        mean_motion_rev_per_day,
+        mean_motion_compatibility,
+    )
     with Path(filename_out).open("w", encoding="utf-8", newline="\n") as stream:
         stream.write(f"{num_orbits} {num_sats_per_orbit}\n")
         satellite_counter = 0
@@ -66,19 +106,6 @@ def generate_tles_from_scratch_with_sgp(
                     orbit_wise_shift + slot * 360 / num_sats_per_orbit
                 )
                 satellite = Satrec()
-                if raan_span_degree == 180.0:
-                    mean_motion_rad_per_min = (
-                        mean_motion_rev_per_day
-                        * 2.0
-                        * math.pi
-                        / MINUTES_PER_DAY
-                    )
-                else:
-                    mean_motion_rad_per_min = (
-                        mean_motion_rev_per_day
-                        * 60.0
-                        / UPSTREAM_MEAN_MOTION_DIVISOR
-                    )
                 satellite.sgp4init(
                     WGS72,
                     "i",

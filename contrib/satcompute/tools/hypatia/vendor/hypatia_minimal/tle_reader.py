@@ -38,13 +38,45 @@ def read_tles(filename_tles: str | Path) -> dict[str, Any]:
     satellites = []
     universal_epoch = None
     with Path(filename_tles).open("r", encoding="utf-8") as stream:
-        num_orbits, satellites_per_orbit = (
-            int(value) for value in stream.readline().split()
-        )
-        for expected_node_id, name_line in enumerate(stream):
+        header = stream.readline()
+        header_fields = header.split()
+        if len(header_fields) != 2:
+            raise ValueError(
+                "TLE header must contain exactly two positive integers"
+            )
+        try:
+            num_orbits, satellites_per_orbit = (
+                int(value) for value in header_fields
+            )
+        except ValueError as error:
+            raise ValueError(
+                "TLE header must contain exactly two positive integers"
+            ) from error
+        if num_orbits <= 0 or satellites_per_orbit <= 0:
+            raise ValueError(
+                "TLE header must contain exactly two positive integers"
+            )
+
+        expected_satellite_count = num_orbits * satellites_per_orbit
+        for expected_node_id in range(expected_satellite_count):
+            name_line = stream.readline()
             line1 = stream.readline()
             line2 = stream.readline()
-            node_id = int(name_line.split()[1])
+            if not name_line or not line1 or not line2:
+                raise ValueError(
+                    f"TLE file is truncated at satellite {expected_node_id}"
+                )
+            name_fields = name_line.split()
+            if len(name_fields) != 2:
+                raise ValueError(
+                    f"invalid TLE name line for satellite {expected_node_id}"
+                )
+            try:
+                node_id = int(name_fields[1])
+            except ValueError as error:
+                raise ValueError(
+                    f"invalid TLE node_id for satellite {expected_node_id}"
+                ) from error
             if node_id != expected_node_id:
                 raise ValueError(
                     "Satellite identifier is not increasing by one each line"
@@ -62,6 +94,10 @@ def read_tles(filename_tles: str | Path) -> dict[str, Any]:
                 raise ValueError("The epoch of all TLES must be the same")
             satellites.append(ephem.readtle(name_line, line1, line2))
 
+        if stream.readline():
+            raise ValueError(
+                "TLE file contains more satellite blocks than declared"
+            )
     if universal_epoch is None:
         raise ValueError("TLE file contains no satellites")
     return {
