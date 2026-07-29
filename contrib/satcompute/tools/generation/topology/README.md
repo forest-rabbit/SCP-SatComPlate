@@ -38,6 +38,28 @@ uv sync --locked
 `config/synthetic-66.json` 描述一个 6 个轨道面、每面 11 星的合成
 Walker Star 星座。它不是对真实 Iridium 星座的复刻。
 
+这个文件是可独立调用的拓扑后端输入和回归 fixture，仍由轨道解析、静态/动态
+生成器及其单元测试直接使用。上层 `generation/scenario/config/` 增加调度、
+链路容量和计算资源后形成完整场景，但不会替代这里的后端接口。两份样例中重复
+的星座值用于校验层间转换，不代表实现了两套拓扑算法。完整场景字段和单位见
+[`../scenario/README.md`](../scenario/README.md)。
+
+JSON 不支持注释；底层配置字段含义如下：
+
+| 字段 | 含义与约束 |
+| --- | --- |
+| `schema_version` | 必须为 `"0.1"` |
+| `constellation_name` | 星座安全 token |
+| `constellation_pattern` | `walker-star`（180° RAAN）或 `walker-delta`（360° RAAN） |
+| `num_orbits` | 正整数轨道面数 |
+| `satellites_per_orbit` | 每轨正整数 slot 数；与轨道面数乘积不超过 99999 |
+| `altitude_km` | km，有限正数 |
+| `inclination_deg` | 度，范围 `[0, 180)` |
+| `phase_diff` | 是否让相邻奇数轨道面偏移半个 slot |
+| `isl_candidate_strategy` | 当前只允许 `plus-grid` |
+| `seam_enabled` | 是否加入首尾轨道面间的 seam 候选边 |
+| `max_isl_distance_m` | m，候选 ISL 的最大活动距离 |
+
 当前候选策略只接受 `plus-grid`：
 
 - 每颗卫星连接同一轨道面内的前后相邻卫星；

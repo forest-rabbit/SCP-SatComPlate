@@ -46,6 +46,8 @@ def even_plane_slot_placement(
             "compute_node_count must not exceed the satellite count"
         )
 
+    # Differences between cumulative floors distribute K nodes across P
+    # planes deterministically, with every plane count differing by at most 1.
     counts = tuple(
         ((orbit + 1) * count) // planes
         - (orbit * count) // planes
@@ -54,6 +56,8 @@ def even_plane_slot_placement(
     selected = []
     for orbit, orbit_count in enumerate(counts):
         for index in range(orbit_count):
+            # Integer-only form of floor((index + 0.5) * S / k) avoids
+            # platform-dependent floating-point placement.
             slot = (
                 (2 * index + 1) * slots_per_plane
             ) // (2 * orbit_count)
