@@ -3,8 +3,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import sys
+import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
@@ -31,6 +34,14 @@ from dynamic_isls import (  # noqa: E402
     validate_clearance_limit,
 )
 from hypatia_adapter import HypatiaAdapter  # noqa: E402
+from generate_dynamic_isls import (  # noqa: E402
+    CANDIDATE_FILENAME,
+    MANIFEST_FILENAME,
+    SNAPSHOT_FILENAME,
+    DynamicIslGenerationError,
+    generate_dynamic_isl_output,
+    validate_schedule,
+)
 from orbit_positions import (  # noqa: E402
     SatellitePosition,
     load_orbit_constellation,
@@ -226,6 +237,144 @@ class DynamicIslCandidateTest(unittest.TestCase):
             self.assertEqual(
                 snapshot.candidate_count,
                 len(snapshot.active_edges) + len(snapshot.filtered_edges),
+            )
+
+
+class DynamicIslOutputTest(unittest.TestCase):
+    def test_schedule_contract_is_inclusive_and_strict(self) -> None:
+        self.assertEqual(validate_schedule(120, 60), (0, 60, 120))
+        self.assertEqual(validate_schedule(0, 1), (0,))
+        for duration_s, step_s in (
+            (-1, 1),
+            (1, 0),
+            (1, -1),
+            (100, 60),
+            (True, 1),
+            (1, True),
+        ):
+            with self.subTest(duration_s=duration_s, step_s=step_s):
+                with self.assertRaises(DynamicIslGenerationError):
+                    validate_schedule(duration_s, step_s)
+
+    def test_output_files_counts_and_hashes_are_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="satcompute-dynamic-output-"
+        ) as temp:
+            root = Path(temp)
+            first_dir = root / "first"
+            second_dir = root / "second"
+            first = generate_dynamic_isl_output(
+                PRESET,
+                120,
+                60,
+                first_dir,
+            )
+            second = generate_dynamic_isl_output(
+                PRESET,
+                120,
+                60,
+                second_dir,
+            )
+            self.assertEqual(first, second)
+            expected_names = [
+                CANDIDATE_FILENAME,
+                SNAPSHOT_FILENAME,
+                MANIFEST_FILENAME,
+            ]
+            self.assertEqual(
+                sorted(path.name for path in first_dir.iterdir()),
+                expected_names,
+            )
+            for filename in expected_names:
+                self.assertEqual(
+                    (first_dir / filename).read_bytes(),
+                    (second_dir / filename).read_bytes(),
+                )
+
+            candidate_bytes = (
+                first_dir / CANDIDATE_FILENAME
+            ).read_bytes()
+            snapshot_bytes = (
+                first_dir / SNAPSHOT_FILENAME
+            ).read_bytes()
+            candidate = json.loads(candidate_bytes)
+            snapshots = [
+                json.loads(line)
+                for line in snapshot_bytes.decode("utf-8").splitlines()
+            ]
+            manifest = json.loads(
+                (first_dir / MANIFEST_FILENAME).read_text(encoding="utf-8")
+            )
+            self.assertEqual(candidate["candidate_count"], 121)
+            self.assertEqual(len(candidate["candidate_isls"]), 121)
+            self.assertEqual(
+                [snapshot["time_s"] for snapshot in snapshots],
+                [0, 60, 120],
+            )
+            for snapshot in snapshots:
+                self.assertEqual(
+                    snapshot["candidate_count"],
+                    snapshot["active_count"] + snapshot["filtered_count"],
+                )
+            self.assertEqual(snapshots[0]["added_edges"], [])
+            self.assertEqual(snapshots[0]["removed_edges"], [])
+            self.assertEqual(manifest, first)
+            self.assertEqual(
+                manifest["candidate_file_sha256"],
+                hashlib.sha256(candidate_bytes).hexdigest(),
+            )
+            self.assertEqual(
+                manifest["snapshot_jsonl_sha256"],
+                hashlib.sha256(snapshot_bytes).hexdigest(),
+            )
+            self.assertEqual(
+                manifest["aggregate_sha256"],
+                hashlib.sha256(candidate_bytes + snapshot_bytes).hexdigest(),
+            )
+
+    def test_atomic_output_rejects_nonempty_and_cleans_stale_temp(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="satcompute-dynamic-atomic-"
+        ) as temp:
+            root = Path(temp)
+            blocked = root / "blocked"
+            blocked.mkdir()
+            marker = blocked / "keep.txt"
+            marker.write_text("keep\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                DynamicIslGenerationError,
+                "refusing to overwrite non-empty",
+            ):
+                generate_dynamic_isl_output(PRESET, 0, 1, blocked)
+            self.assertEqual(marker.read_text(encoding="utf-8"), "keep\n")
+            self.assertFalse((root / "blocked.tmp").exists())
+
+            output = root / "output"
+            stale = root / "output.tmp"
+            stale.mkdir()
+            (stale / "partial.txt").write_text(
+                "partial\n",
+                encoding="utf-8",
+            )
+            generate_dynamic_isl_output(PRESET, 0, 1, output)
+            self.assertTrue(output.is_dir())
+            self.assertFalse(stale.exists())
+            with self.assertRaisesRegex(
+                DynamicIslGenerationError,
+                "refusing to overwrite non-empty",
+            ):
+                generate_dynamic_isl_output(PRESET, 0, 1, output)
+
+            empty_output = root / "empty-output"
+            empty_output.mkdir()
+            generate_dynamic_isl_output(PRESET, 0, 1, empty_output)
+            self.assertEqual(
+                sorted(path.name for path in empty_output.iterdir()),
+                [
+                    CANDIDATE_FILENAME,
+                    SNAPSHOT_FILENAME,
+                    MANIFEST_FILENAME,
+                ],
             )
 
 
