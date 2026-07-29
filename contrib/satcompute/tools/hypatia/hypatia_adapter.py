@@ -17,6 +17,7 @@ from bootstrap import (
     DEFAULT_UPSTREAM,
     BootstrapError,
     load_upstream,
+    require_clean_checkout,
 )
 
 
@@ -80,6 +81,10 @@ class HypatiaAdapter:
             raise HypatiaAdapterError(
                 f"Hypatia HEAD mismatch: expected {commit}, found {actual_head}"
             )
+        try:
+            require_clean_checkout(self.checkout)
+        except BootstrapError as error:
+            raise HypatiaAdapterError(str(error)) from error
 
         source_root = self.checkout / component / "satgen"
         self.repository = repository

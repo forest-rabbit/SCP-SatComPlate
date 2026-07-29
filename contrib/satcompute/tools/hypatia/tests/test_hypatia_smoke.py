@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import math
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from pathlib import Path
 TOOL_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOL_DIR))
 
+from bootstrap import DEFAULT_CHECKOUT  # noqa: E402
 from hypatia_adapter import HypatiaAdapter, HypatiaAdapterError  # noqa: E402
 from smoke_positions import run_smoke  # noqa: E402
 
@@ -50,6 +53,53 @@ class HypatiaSmokeTest(unittest.TestCase):
             adapter.satellite_position_at(object(), object(), -1.0)
         with self.assertRaises(HypatiaAdapterError):
             adapter.satellite_position_at(object(), object(), math.inf)
+
+    def test_adapter_accepts_clean_frozen_checkout(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="satcompute-hypatia-clean-"
+        ) as temp:
+            checkout = self._clone_frozen_checkout(Path(temp))
+            adapter = HypatiaAdapter(checkout=checkout)
+            self.assertEqual(adapter.commit, EXPECTED_COMMIT)
+
+    def test_adapter_rejects_dirty_frozen_checkout(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="satcompute-hypatia-dirty-"
+        ) as temp:
+            checkout = self._clone_frozen_checkout(Path(temp))
+            tracked_source = (
+                checkout
+                / "satgenpy"
+                / "satgen"
+                / "tles"
+                / "read_tles.py"
+            )
+            tracked_source.write_text(
+                tracked_source.read_text(encoding="utf-8")
+                + "\n# dirty-checkout regression probe\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                HypatiaAdapterError,
+                "refusing to modify dirty Hypatia checkout",
+            ):
+                HypatiaAdapter(checkout=checkout)
+
+    @staticmethod
+    def _clone_frozen_checkout(parent: Path) -> Path:
+        checkout = parent / "hypatia"
+        subprocess.run(
+            [
+                "git",
+                "clone",
+                "--quiet",
+                "--no-hardlinks",
+                str(DEFAULT_CHECKOUT),
+                str(checkout),
+            ],
+            check=True,
+        )
+        return checkout
 
 
 if __name__ == "__main__":
