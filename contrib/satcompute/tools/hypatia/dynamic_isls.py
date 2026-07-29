@@ -9,6 +9,7 @@ from typing import Any
 
 from configuration import ConstellationConfig
 from mean_motion import WGS72_EARTH_RADIUS_KM
+from orbit_positions import OrbitConstellation, SatellitePosition
 
 
 STRATEGY = "plus-grid-range-gated"
@@ -74,6 +75,42 @@ class CandidateIsl:
             raise DynamicIslError(f"unknown candidate ISL kind: {self.kind}")
 
 
+@dataclass(frozen=True, order=True)
+class EvaluatedIsl:
+    """One candidate edge evaluated at a specific time."""
+
+    edge: IslEdge
+    distance_m: float = field(compare=False)
+    active: bool = field(compare=False)
+    reason: str = field(compare=False)
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.distance_m) or self.distance_m < 0.0:
+            raise DynamicIslError("ISL distance must be finite and non-negative")
+        if not isinstance(self.active, bool):
+            raise DynamicIslError("ISL active state must be boolean")
+        expected_reason = ACTIVE if self.active else OVER_MAX_DISTANCE
+        if self.reason != expected_reason:
+            raise DynamicIslError(
+                f"ISL reason must be {expected_reason} for active={self.active}"
+            )
+
+
+@dataclass(frozen=True)
+class IslSnapshot:
+    """Stable active/filtered ISLs and transitions for one time point."""
+
+    time_s: int
+    active_edges: tuple[EvaluatedIsl, ...]
+    filtered_edges: tuple[EvaluatedIsl, ...]
+    added_edges: tuple[IslEdge, ...]
+    removed_edges: tuple[IslEdge, ...]
+
+    @property
+    def candidate_count(self) -> int:
+        return len(self.active_edges) + len(self.filtered_edges)
+
+
 def build_candidate_isls(
     config: ConstellationConfig,
 ) -> tuple[CandidateIsl, ...]:
@@ -125,6 +162,124 @@ def build_candidate_isls(
             )
 
     return tuple(candidates[key] for key in sorted(candidates))
+
+
+def evaluate_candidate_isls(
+    candidates: tuple[CandidateIsl, ...],
+    positions: tuple[SatellitePosition, ...],
+    max_distance_m: Any,
+) -> tuple[EvaluatedIsl, ...]:
+    """Evaluate every candidate using straight Cartesian distance."""
+    maximum = _finite_non_negative(max_distance_m, "max_distance_m")
+    if maximum == 0.0:
+        raise DynamicIslError("max_distance_m must be positive")
+    for node_id, position in enumerate(positions):
+        if position.node_id != node_id:
+            raise DynamicIslError("positions must be ordered by node_id")
+
+    evaluated = []
+    seen_edges = set()
+    for candidate in candidates:
+        edge = candidate.edge
+        if edge in seen_edges:
+            raise DynamicIslError("candidate edges must be unique")
+        seen_edges.add(edge)
+        if edge.node_count != len(positions):
+            raise DynamicIslError(
+                "candidate node count differs from position node count"
+            )
+        distance = math.dist(
+            positions[edge.node1_id].xyz_m,
+            positions[edge.node2_id].xyz_m,
+        )
+        active = distance <= maximum
+        evaluated.append(
+            EvaluatedIsl(
+                edge=edge,
+                distance_m=round(distance, 3),
+                active=active,
+                reason=ACTIVE if active else OVER_MAX_DISTANCE,
+            )
+        )
+    return tuple(sorted(evaluated))
+
+
+def build_isl_snapshot(
+    time_s: int,
+    evaluated_isls: tuple[EvaluatedIsl, ...],
+    previous_active_edges: tuple[IslEdge, ...] | None,
+) -> IslSnapshot:
+    """Build one snapshot and exact set-difference transitions."""
+    if (
+        not isinstance(time_s, int)
+        or isinstance(time_s, bool)
+        or time_s < 0
+    ):
+        raise DynamicIslError("snapshot time_s must be a non-negative integer")
+    if time_s == 0 and previous_active_edges is not None:
+        raise DynamicIslError("t=0 must not have previous active edges")
+    if time_s > 0 and previous_active_edges is None:
+        raise DynamicIslError("t>0 requires previous active edges")
+
+    ordered = tuple(sorted(evaluated_isls))
+    if len({item.edge for item in ordered}) != len(ordered):
+        raise DynamicIslError("evaluated ISLs must have unique edges")
+    active = tuple(item for item in ordered if item.active)
+    filtered = tuple(item for item in ordered if not item.active)
+    current_edges = {item.edge for item in active}
+    if previous_active_edges is None:
+        added = ()
+        removed = ()
+    else:
+        previous_edges = set(previous_active_edges)
+        added = tuple(sorted(current_edges - previous_edges))
+        removed = tuple(sorted(previous_edges - current_edges))
+    return IslSnapshot(
+        time_s=time_s,
+        active_edges=active,
+        filtered_edges=filtered,
+        added_edges=added,
+        removed_edges=removed,
+    )
+
+
+def generate_isl_snapshots(
+    orbit: OrbitConstellation,
+    candidates: tuple[CandidateIsl, ...],
+    times_s: tuple[int, ...],
+    max_distance_m: Any,
+) -> tuple[IslSnapshot, ...]:
+    """Evaluate a strictly increasing sequence beginning at t=0."""
+    if (
+        not times_s
+        or times_s[0] != 0
+        or any(
+            not isinstance(time_s, int) or isinstance(time_s, bool)
+            for time_s in times_s
+        )
+        or any(first >= second for first, second in zip(times_s, times_s[1:]))
+    ):
+        raise DynamicIslError(
+            "snapshot times must be strictly increasing integers from 0"
+        )
+    snapshots = []
+    previous_active_edges = None
+    for time_s in times_s:
+        evaluated = evaluate_candidate_isls(
+            candidates,
+            orbit.positions_at(time_s),
+            max_distance_m,
+        )
+        snapshot = build_isl_snapshot(
+            time_s,
+            evaluated,
+            previous_active_edges,
+        )
+        snapshots.append(snapshot)
+        previous_active_edges = tuple(
+            item.edge for item in snapshot.active_edges
+        )
+    return tuple(snapshots)
 
 
 def clearance_limited_max_distance_m(
