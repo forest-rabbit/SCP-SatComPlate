@@ -60,6 +60,8 @@ public:
   void SetSatelliteId(uint32_t satelliteId);
   void AdvanceRouteEpoch();
   uint64_t GetRouteEpoch() const;
+  std::vector<EcmpRouteCandidate> GetEffectiveRouteCandidates(
+    Ipv4Address destination);
 
   Ptr<Ipv4Route> RouteOutput(Ptr<Packet> packet,
                              const Ipv4Header& header,

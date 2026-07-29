@@ -47,3 +47,10 @@ def build(bld):
         'satcompute',
         ['satcompute'])
     program.source = ['satcompute.cc']
+
+    route_audit = bld.create_ns3_program(
+        'satcompute-route-candidate-audit',
+        ['satcompute'])
+    route_audit.source = [
+        'tools/analysis/topology_interval/route-candidate-audit.cc',
+    ]

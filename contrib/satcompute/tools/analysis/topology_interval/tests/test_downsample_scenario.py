@@ -12,6 +12,9 @@ from contrib.satcompute.tools.analysis.topology_interval.downsample_scenario imp
     ScenarioDownsampleError,
     downsample_scenario,
 )
+from contrib.satcompute.tools.analysis.topology_interval.compare_intervals import (
+    compare_scenarios,
+)
 from contrib.satcompute.tools.generation.scenario.check_scenario import (
     check_scenario,
 )
@@ -106,6 +109,18 @@ class DownsampleScenarioTest(unittest.TestCase):
                 "duration_s": 20,
                 "step_s": 5,
             },
+        )
+        comparison = compare_scenarios(self.reference, output)
+        self.assertEqual(comparison["interval_s"], 5)
+        self.assertEqual(
+            comparison["edge_state"]["absolute_edge_state_errors"],
+            0,
+        )
+        self.assertEqual(
+            comparison["ecmp_candidates"][
+                "exact_candidate_match_ratio"
+            ],
+            1.0,
         )
 
     def test_invalid_reference_and_interval_are_rejected(self) -> None:

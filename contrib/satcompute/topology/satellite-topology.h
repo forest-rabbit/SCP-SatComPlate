@@ -43,6 +43,9 @@ public:
   uint32_t GetSatelliteIdByNodeIndex(uint32_t index) const;
   Ptr<Node> GetNodeBySatelliteId(uint32_t satelliteId) const;
   Ipv4Address GetServiceAddressBySatelliteId(uint32_t satelliteId) const;
+  std::vector<uint32_t> GetEcmpCandidateSatelliteIds(
+    uint32_t sourceSatelliteId,
+    uint32_t destinationSatelliteId) const;
   const std::vector<IslDirectedLink>& GetIslDirectedLinks() const;
   const std::vector<IslQueueDropEvent>& GetIslQueueDropEvents() const;
   Ptr<SizeAwareFlowRegistry> GetSizeAwareFlowRegistry() const;
