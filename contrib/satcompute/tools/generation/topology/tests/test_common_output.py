@@ -17,6 +17,7 @@ from contrib.satcompute.tools.generation.topology.common.hash_utils import (
     HashContractError,
     aggregate_data_sha256,
     compact_json_bytes,
+    git_repository_state,
     sha256_file,
 )
 
@@ -123,6 +124,11 @@ class HashUtilsTest(unittest.TestCase):
                 aggregate_data_sha256(root, ("../outside.json",))
             with self.assertRaises(HashContractError):
                 aggregate_data_sha256(root, ("same.json", "same.json"))
+
+    def test_git_repository_state_is_explicit(self) -> None:
+        head, clean = git_repository_state()
+        self.assertEqual(len(head), 40)
+        self.assertIsInstance(clean, bool)
 
 
 if __name__ == "__main__":

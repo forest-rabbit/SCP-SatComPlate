@@ -291,7 +291,7 @@ def _validate_manifest(
     if generation_mode == "static":
         if manifest["step_s"] is not None:
             raise ExportCheckError("static manifest step_s must be null")
-        if duration_s != times[-1] or len(times) != 1:
+        if times != (0,):
             raise ExportCheckError("static manifest schedule is inconsistent")
         if (
             manifest["source_dynamic_manifest_sha256"] is not None

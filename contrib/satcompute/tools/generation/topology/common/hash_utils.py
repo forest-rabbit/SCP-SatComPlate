@@ -73,3 +73,28 @@ def uv_version() -> str:
     if len(fields) < 2:
         raise RuntimeError(f"unexpected uv version output: {result.stdout!r}")
     return fields[1]
+
+
+def git_repository_state(
+    repository_root: Path = REPOSITORY_ROOT,
+) -> tuple[str, bool]:
+    """Return the current commit and whether tracked/untracked state is clean."""
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repository_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+    if len(head) != 40 or any(
+        character not in "0123456789abcdef" for character in head
+    ):
+        raise RuntimeError(f"unexpected git HEAD: {head!r}")
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=repository_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout
+    return head, not bool(status)
