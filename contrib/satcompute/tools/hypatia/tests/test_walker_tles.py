@@ -17,7 +17,10 @@ sys.path.insert(0, str(TOOL_DIR))
 
 from configuration import WALKER_DELTA, load_config  # noqa: E402
 from hypatia_adapter import HypatiaAdapter  # noqa: E402
-from resolve_constellation import position_samples_sha256  # noqa: E402
+from orbit_positions import (  # noqa: E402
+    load_tle_orbit_constellation,
+    position_samples_sha256,
+)
 from vendor.hypatia_minimal.tle_generator import tle_checksum  # noqa: E402
 from walker_tles import generate_walker_tles, walker_slots  # noqa: E402
 
@@ -112,23 +115,27 @@ class WalkerTleTest(unittest.TestCase):
                 EXPECTED_STAR_TLE_SHA256,
             )
 
-            constellation = self.adapter.read_tles(first_path)
-            satellites = constellation["satellites"]
+            orbit = load_tle_orbit_constellation(
+                first_path,
+                self.adapter,
+                66,
+            )
+            satellites = orbit.satellites
             self.assertEqual(len(satellites), 66)
             self.assertEqual(
-                position_samples_sha256(self.adapter, constellation),
+                position_samples_sha256(orbit, (0.0, 60.0)),
                 EXPECTED_STAR_POSITIONS_SHA256,
             )
             self._assert_raan(satellites, EXPECTED_STAR_RAAN)
             for satellite in satellites:
                 start = self.adapter.satellite_position_at(
                     satellite,
-                    constellation["epoch"],
+                    orbit.epoch,
                     0.0,
                 )
                 end = self.adapter.satellite_position_at(
                     satellite,
-                    constellation["epoch"],
+                    orbit.epoch,
                     60.0,
                 )
                 self.assertTrue(all(math.isfinite(value) for value in start))
@@ -142,18 +149,18 @@ class WalkerTleTest(unittest.TestCase):
         ) as temp:
             path = Path(temp) / "delta.tle"
             generate_walker_tles(path, delta, self.adapter)
-            constellation = self.adapter.read_tles(path)
-            self.assertEqual(len(constellation["satellites"]), 66)
+            orbit = load_tle_orbit_constellation(path, self.adapter, 66)
+            self.assertEqual(orbit.node_count, 66)
             self.assertEqual(
                 hashlib.sha256(path.read_bytes()).hexdigest(),
                 EXPECTED_DELTA_TLE_SHA256,
             )
             self.assertEqual(
-                position_samples_sha256(self.adapter, constellation),
+                position_samples_sha256(orbit, (0.0, 60.0)),
                 EXPECTED_DELTA_POSITIONS_SHA256,
             )
             self._assert_raan(
-                constellation["satellites"],
+                orbit.satellites,
                 EXPECTED_DELTA_RAAN,
             )
 

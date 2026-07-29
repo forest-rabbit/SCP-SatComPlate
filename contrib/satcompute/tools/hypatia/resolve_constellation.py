@@ -6,11 +6,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import platform
 import subprocess
 from pathlib import Path
-from typing import Any
 
 from configuration import ConstellationConfig, load_config
 from hypatia_adapter import HypatiaAdapter
@@ -19,6 +17,10 @@ from mean_motion import (
     WGS72_MU_KM3_S2,
     mean_motion_rev_per_day,
     orbital_period_minutes,
+)
+from orbit_positions import (
+    load_tle_orbit_constellation,
+    position_samples_sha256,
 )
 from walker_tles import (
     ARGUMENT_OF_PERIGEE_DEG,
@@ -52,35 +54,6 @@ def uv_version() -> str:
     if len(fields) < 2:
         raise RuntimeError(f"unexpected uv version output: {result.stdout!r}")
     return fields[1]
-
-
-def position_samples_sha256(
-    adapter: HypatiaAdapter,
-    constellation: dict[str, Any],
-) -> str:
-    satellites = constellation["satellites"]
-    positions: dict[str, list[list[float]]] = {}
-    for time_s in POSITION_SAMPLE_TIMES_S:
-        snapshot = []
-        for node_id, satellite in enumerate(satellites):
-            xyz = adapter.satellite_position_at(
-                satellite,
-                constellation["epoch"],
-                time_s,
-            )
-            snapshot.append([node_id, *(round(value, 3) for value in xyz)])
-        positions[str(int(time_s))] = snapshot
-
-    for node_id in range(len(satellites)):
-        if math.dist(
-            positions["0"][node_id][1:],
-            positions["60"][node_id][1:],
-        ) <= 1.0:
-            raise RuntimeError(
-                f"satellite {node_id} did not move between position samples"
-            )
-    canonical = json.dumps(positions, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def build_manifest(
@@ -144,19 +117,21 @@ def resolve_constellation(
     output_dir.mkdir(parents=True, exist_ok=True)
     tle_path = output_dir / TLE_FILENAME
     generate_walker_tles(tle_path, config, adapter)
-    constellation = adapter.read_tles(tle_path)
-    satellites = constellation["satellites"]
-    if len(satellites) != config.expected_satellite_count:
-        raise RuntimeError(
-            f"expected {config.expected_satellite_count} satellites, "
-            f"found {len(satellites)}"
-        )
+    orbit = load_tle_orbit_constellation(
+        tle_path,
+        adapter,
+        config.expected_satellite_count,
+    )
 
     manifest = build_manifest(
         config,
         adapter,
         tle_path,
-        position_samples_sha256(adapter, constellation),
+        position_samples_sha256(
+            orbit,
+            POSITION_SAMPLE_TIMES_S,
+            minimum_movement_m=1.0,
+        ),
     )
     manifest_path = output_dir / MANIFEST_FILENAME
     manifest_path.write_text(
