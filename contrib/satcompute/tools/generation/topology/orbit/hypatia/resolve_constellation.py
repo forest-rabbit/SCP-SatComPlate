@@ -9,20 +9,25 @@ import json
 import platform
 import subprocess
 from pathlib import Path
+from typing import Any
 
-from configuration import ConstellationConfig, load_config
-from hypatia_adapter import HypatiaAdapter
-from mean_motion import (
+from ...common.configuration import ConstellationConfig, load_config
+from ...dynamic.dynamic_isls import (
+    build_candidate_isls,
+    candidate_degree_profile,
+)
+from .adapter import HypatiaAdapter
+from .mean_motion import (
     WGS72_EARTH_RADIUS_KM,
     WGS72_MU_KM3_S2,
     mean_motion_rev_per_day,
     orbital_period_minutes,
 )
-from orbit_positions import (
+from .orbit_positions import (
     load_tle_orbit_constellation,
     position_samples_sha256,
 )
-from walker_tles import (
+from .walker_tles import (
     ARGUMENT_OF_PERIGEE_DEG,
     EPOCH_UTC,
     NEAR_CIRCULAR_ECCENTRICITY,
@@ -32,8 +37,9 @@ from walker_tles import (
 
 
 TOOL_DIR = Path(__file__).resolve().parent
-REPOSITORY_ROOT = TOOL_DIR.parents[3]
-DEFAULT_CONFIG = TOOL_DIR / "config" / "synthetic-66.json"
+TOPOLOGY_ROOT = TOOL_DIR.parents[1]
+REPOSITORY_ROOT = TOOL_DIR.parents[6]
+DEFAULT_CONFIG = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 POSITION_SAMPLE_TIMES_S = (0.0, 60.0)
 TLE_FILENAME = "tles.txt"
 MANIFEST_FILENAME = "resolved-manifest.json"
@@ -64,6 +70,7 @@ def build_manifest(
 ) -> dict[str, Any]:
     mean_motion = mean_motion_rev_per_day(config.altitude_km)
     slots = walker_slots(config)
+    candidates = build_candidate_isls(config)
     raan_sequence = [
         slots[orbit * config.satellites_per_orbit].raan_deg
         for orbit in range(config.num_orbits)
@@ -80,8 +87,14 @@ def build_manifest(
         "orbit_model": "near-circular",
         "phase_diff": config.phase_diff,
         "phase_scheme": config.phase_scheme,
+        "isl_candidate_strategy": config.isl_candidate_strategy,
         "seam_enabled": config.seam_enabled,
         "max_isl_distance_m": config.max_isl_distance_m,
+        "candidate_count": len(candidates),
+        "candidate_degree_profile": candidate_degree_profile(
+            config,
+            candidates,
+        ),
         "eccentricity": NEAR_CIRCULAR_ECCENTRICITY,
         "argument_of_perigee_deg": ARGUMENT_OF_PERIGEE_DEG,
         "epoch_utc": EPOCH_UTC,

@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from configuration import ConstellationConfig
-from hypatia_adapter import HypatiaAdapter
-from walker_tles import generate_walker_tles
+from ...common.configuration import ConstellationConfig
+from .adapter import HypatiaAdapter
+from .walker_tles import generate_walker_tles
 
 
 @dataclass(frozen=True)

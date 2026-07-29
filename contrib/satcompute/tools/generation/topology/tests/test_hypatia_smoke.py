@@ -10,18 +10,20 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
-TOOL_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(TOOL_DIR))
-
-from hypatia_adapter import (  # noqa: E402
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.adapter import (
     DEFAULT_ORIGIN,
     VENDOR_DIR,
     HypatiaAdapter,
     HypatiaAdapterError,
 )
-from smoke_positions import run_smoke  # noqa: E402
-from vendor.hypatia_minimal import coordinates, tle_generator, tle_reader  # noqa: E402
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.smoke_positions import (
+    run_smoke,
+)
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.vendor.hypatia_minimal import (
+    coordinates,
+    tle_generator,
+    tle_reader,
+)
 
 
 EXPECTED_REPOSITORY = "https://github.com/snkas/hypatia.git"
@@ -29,6 +31,9 @@ EXPECTED_COMMIT = "0ac531c313eba2335f6344b46347140c3a0d4230"
 EXPECTED_POSITIONS_SHA256 = (
     "01d0f2a672c32f88f780f691faef73d6f5d06c244be54d2ae21b25e1be5dba89"
 )
+TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[6]
+HYPATIA_ROOT = TOPOLOGY_ROOT / "orbit" / "hypatia"
 
 
 class HypatiaSmokeTest(unittest.TestCase):
@@ -86,6 +91,18 @@ class HypatiaSmokeTest(unittest.TestCase):
         self.assertNotIn("satgen", sys.modules)
         self.assertFalse(any(name.startswith("satgen.") for name in sys.modules))
 
+    def test_old_hypatia_tool_path_is_absent(self) -> None:
+        self.assertFalse(
+            (
+                REPOSITORY_ROOT
+                / "contrib"
+                / "satcompute"
+                / "tools"
+                / "hypatia"
+            ).exists()
+        )
+        self.assertTrue(HYPATIA_ROOT.is_dir())
+
     def test_vendor_provenance_and_license_are_complete(self) -> None:
         origin = json.loads(DEFAULT_ORIGIN.read_text(encoding="utf-8"))
         self.assertEqual(origin["repository"], EXPECTED_REPOSITORY)
@@ -95,11 +112,13 @@ class HypatiaSmokeTest(unittest.TestCase):
         self.assertEqual(len(origin["sources"]), 3)
         for source in origin["sources"]:
             with self.subTest(path=source["vendored_path"]):
-                self.assertTrue((TOOL_DIR / source["vendored_path"]).is_file())
+                self.assertTrue(
+                    (HYPATIA_ROOT / source["vendored_path"]).is_file()
+                )
                 self.assertEqual(len(source["upstream_sha256"]), 64)
 
         license_path = VENDOR_DIR / "LICENSE"
-        notice_path = TOOL_DIR / "THIRD_PARTY_NOTICES.md"
+        notice_path = HYPATIA_ROOT / "THIRD_PARTY_NOTICES.md"
         self.assertTrue(license_path.is_file())
         self.assertTrue(notice_path.is_file())
         self.assertIn(

@@ -7,9 +7,12 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-from configuration import ConstellationConfig
-from mean_motion import WGS72_EARTH_RADIUS_KM
-from orbit_positions import OrbitConstellation, SatellitePosition
+from ..common.configuration import ConstellationConfig, PLUS_GRID
+from ..orbit.hypatia.mean_motion import WGS72_EARTH_RADIUS_KM
+from ..orbit.hypatia.orbit_positions import (
+    OrbitConstellation,
+    SatellitePosition,
+)
 
 
 STRATEGY = "plus-grid-range-gated"
@@ -75,6 +78,18 @@ class CandidateIsl:
             raise DynamicIslError(f"unknown candidate ISL kind: {self.kind}")
 
 
+@dataclass(frozen=True)
+class CandidateDegree:
+    """Derived intra-plane, inter-plane, and total degree for one node."""
+
+    intra_plane: int
+    inter_plane: int
+
+    @property
+    def total(self) -> int:
+        return self.intra_plane + self.inter_plane
+
+
 @dataclass(frozen=True, order=True)
 class EvaluatedIsl:
     """One candidate edge evaluated at a specific time."""
@@ -115,6 +130,10 @@ def build_candidate_isls(
     config: ConstellationConfig,
 ) -> tuple[CandidateIsl, ...]:
     """Build the fixed canonical plus-grid candidate graph."""
+    if config.isl_candidate_strategy != PLUS_GRID:
+        raise DynamicIslError(
+            "dynamic ISL candidates require isl_candidate_strategy=plus-grid"
+        )
     node_count = config.expected_satellite_count
     candidates: dict[tuple[int, int], CandidateIsl] = {}
 
@@ -162,6 +181,79 @@ def build_candidate_isls(
             )
 
     return tuple(candidates[key] for key in sorted(candidates))
+
+
+def candidate_degrees(
+    candidates: tuple[CandidateIsl, ...],
+    node_count: int,
+) -> tuple[CandidateDegree, ...]:
+    """Derive per-node degrees from the canonical candidate graph."""
+    if (
+        not isinstance(node_count, int)
+        or isinstance(node_count, bool)
+        or node_count <= 0
+    ):
+        raise DynamicIslError("node_count must be a positive integer")
+    intra = [0] * node_count
+    inter = [0] * node_count
+    seen = set()
+    for candidate in candidates:
+        edge = candidate.edge
+        if edge.node_count != node_count:
+            raise DynamicIslError(
+                "candidate node count differs from requested node count"
+            )
+        if edge in seen:
+            raise DynamicIslError("candidate edges must be unique")
+        seen.add(edge)
+        target = intra if candidate.kind == INTRA_PLANE else inter
+        target[edge.node1_id] += 1
+        target[edge.node2_id] += 1
+    return tuple(
+        CandidateDegree(intra[node_id], inter[node_id])
+        for node_id in range(node_count)
+    )
+
+
+def candidate_degree_profile(
+    config: ConstellationConfig,
+    candidates: tuple[CandidateIsl, ...],
+) -> dict[str, int]:
+    """Summarize actual candidate degrees for boundary and internal planes."""
+    degrees = candidate_degrees(candidates, config.expected_satellite_count)
+    boundary_orbits = {0, config.num_orbits - 1}
+    boundary_node_ids = tuple(
+        node_id
+        for node_id in range(config.expected_satellite_count)
+        if node_id // config.satellites_per_orbit in boundary_orbits
+    )
+    internal_node_ids = tuple(
+        node_id
+        for node_id in range(config.expected_satellite_count)
+        if node_id // config.satellites_per_orbit not in boundary_orbits
+    )
+
+    def uniform_total(node_ids: tuple[int, ...], label: str) -> int:
+        values = {degrees[node_id].total for node_id in node_ids}
+        if len(values) != 1:
+            raise DynamicIslError(
+                f"{label} planes do not have a uniform candidate degree"
+            )
+        return next(iter(values))
+
+    boundary_degree = uniform_total(boundary_node_ids, "boundary")
+    internal_degree = (
+        uniform_total(internal_node_ids, "internal")
+        if internal_node_ids
+        else boundary_degree
+    )
+    totals = tuple(degree.total for degree in degrees)
+    return {
+        "minimum_total_degree": min(totals),
+        "maximum_total_degree": max(totals),
+        "boundary_plane_total_degree": boundary_degree,
+        "internal_plane_total_degree": internal_degree,
+    }
 
 
 def evaluate_candidate_isls(

@@ -4,15 +4,9 @@
 from __future__ import annotations
 
 import math
-import sys
 import unittest
-from pathlib import Path
 
-
-TOOL_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(TOOL_DIR))
-
-from mean_motion import (  # noqa: E402
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.mean_motion import (
     WGS72_EARTH_RADIUS_KM,
     WGS72_MU_KM3_S2,
     mean_motion_rev_per_day,

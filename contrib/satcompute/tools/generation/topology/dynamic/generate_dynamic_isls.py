@@ -12,25 +12,30 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from configuration import ConstellationConfig, load_config
-from dynamic_isls import (
+from ..common.configuration import ConstellationConfig, load_config
+from ..orbit.hypatia.adapter import HypatiaAdapter
+from ..orbit.hypatia.orbit_positions import load_orbit_constellation
+from ..orbit.hypatia.resolve_constellation import (
+    REPOSITORY_ROOT,
+    sha256_file,
+    uv_version,
+)
+from .dynamic_isls import (
     MINIMUM_ISL_RAY_ALTITUDE_M,
     STRATEGY,
     CandidateIsl,
     IslEdge,
     IslSnapshot,
     build_candidate_isls,
+    candidate_degree_profile,
     clearance_limited_max_distance_m,
     generate_isl_snapshots,
     validate_clearance_limit,
 )
-from hypatia_adapter import HypatiaAdapter
-from orbit_positions import load_orbit_constellation
-from resolve_constellation import REPOSITORY_ROOT, sha256_file, uv_version
 
 
 TOOL_DIR = Path(__file__).resolve().parent
-DEFAULT_CONFIG = TOOL_DIR / "config" / "synthetic-66.json"
+DEFAULT_CONFIG = TOOL_DIR.parent / "config" / "synthetic-66.json"
 CANDIDATE_FILENAME = "candidate-isls.json"
 SNAPSHOT_FILENAME = "isl-snapshots.jsonl"
 MANIFEST_FILENAME = "manifest.json"
@@ -56,6 +61,7 @@ def generate_dynamic_isl_output(
     config = load_config(config_path)
     clearance_floor_m = validate_clearance_limit(config)
     candidates = build_candidate_isls(config)
+    degree_profile = candidate_degree_profile(config, candidates)
     temporary_dir = _temporary_output_dir(output_dir)
     _require_output_target_is_safe(output_dir)
     _remove_temporary_path(temporary_dir)
@@ -98,6 +104,7 @@ def generate_dynamic_isl_output(
             step_s=step_s,
             snapshots=snapshots,
             candidate_count=len(candidates),
+            degree_profile=degree_profile,
             clearance_floor_m=clearance_floor_m,
             candidate_sha256=candidate_sha256,
             snapshot_sha256=snapshot_sha256,
@@ -149,6 +156,7 @@ def _candidate_payload(
     return {
         "schema_version": config.schema_version,
         "strategy": STRATEGY,
+        "isl_candidate_strategy": config.isl_candidate_strategy,
         "node_count": config.expected_satellite_count,
         "num_orbits": config.num_orbits,
         "satellites_per_orbit": config.satellites_per_orbit,
@@ -212,6 +220,7 @@ def _manifest_payload(
     step_s: int,
     snapshots: tuple[IslSnapshot, ...],
     candidate_count: int,
+    degree_profile: dict[str, int],
     clearance_floor_m: int,
     candidate_sha256: str,
     snapshot_sha256: str,
@@ -223,6 +232,7 @@ def _manifest_payload(
     return {
         "schema_version": config.schema_version,
         "strategy": STRATEGY,
+        "isl_candidate_strategy": config.isl_candidate_strategy,
         "constellation_name": config.constellation_name,
         "constellation_pattern": config.constellation_pattern,
         "physical_config": config.input_dict(),
@@ -245,6 +255,7 @@ def _manifest_payload(
         ),
         "clearance_limited_max_distance_floor_m": clearance_floor_m,
         "candidate_count": candidate_count,
+        "candidate_degree_profile": degree_profile,
         "min_active_count": min(active_counts),
         "max_active_count": max(active_counts),
         "average_active_count": sum(active_counts) / len(active_counts),

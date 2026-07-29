@@ -5,23 +5,20 @@ from __future__ import annotations
 
 import json
 import hashlib
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-
-TOOL_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(TOOL_DIR))
-
-from resolve_constellation import (  # noqa: E402
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.resolve_constellation import (
     MANIFEST_FILENAME,
     TLE_FILENAME,
     resolve_constellation,
 )
 
 
-PRESET = TOOL_DIR / "config" / "synthetic-66.json"
+TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+HYPATIA_ROOT = TOPOLOGY_ROOT / "orbit" / "hypatia"
+PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 EXPECTED_TLE_SHA256 = (
     "c3b0fd1118f00694274f4c3ce95d72f8e9942d67c6001199208fbb7a09e0d51f"
 )
@@ -60,12 +57,23 @@ class ResolveConstellationTest(unittest.TestCase):
             [0.0, 30.0, 60.0, 90.0, 120.0, 150.0],
         )
         self.assertEqual(manifest["phase_scheme"], "alternating-half-slot")
+        self.assertEqual(manifest["isl_candidate_strategy"], "plus-grid")
         self.assertAlmostEqual(
             manifest["phase_offset_deg"],
             180.0 / 11.0,
         )
         self.assertFalse(manifest["seam_enabled"])
         self.assertEqual(manifest["max_isl_distance_m"], 6174589)
+        self.assertEqual(manifest["candidate_count"], 121)
+        self.assertEqual(
+            manifest["candidate_degree_profile"],
+            {
+                "minimum_total_degree": 3,
+                "maximum_total_degree": 4,
+                "boundary_plane_total_degree": 3,
+                "internal_plane_total_degree": 4,
+            },
+        )
         self.assertEqual(manifest["eccentricity"], 0.0000001)
         self.assertEqual(manifest["epoch_utc"], "2000-01-01T00:00:00Z")
         self.assertAlmostEqual(
@@ -89,7 +97,7 @@ class ResolveConstellationTest(unittest.TestCase):
             "vendored-minimal",
         )
         origin = (
-            TOOL_DIR / "vendor" / "hypatia_minimal" / "ORIGIN.json"
+            HYPATIA_ROOT / "vendor" / "hypatia_minimal" / "ORIGIN.json"
         )
         self.assertEqual(
             manifest["hypatia_vendor_manifest_sha256"],

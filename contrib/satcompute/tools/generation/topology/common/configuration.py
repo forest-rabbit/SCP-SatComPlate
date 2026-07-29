@@ -15,6 +15,8 @@ SCHEMA_VERSION = "0.1"
 WALKER_STAR = "walker-star"
 WALKER_DELTA = "walker-delta"
 CONSTELLATION_PATTERNS = frozenset((WALKER_STAR, WALKER_DELTA))
+PLUS_GRID = "plus-grid"
+ISL_CANDIDATE_STRATEGIES = frozenset((PLUS_GRID,))
 MAX_TLE_SATELLITES = 99999
 CONSTELLATION_NAME_REGEX = r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
 CONSTELLATION_NAME_PATTERN = re.compile(
@@ -30,6 +32,7 @@ CONFIG_FIELDS = frozenset(
         "altitude_km",
         "inclination_deg",
         "phase_diff",
+        "isl_candidate_strategy",
         "seam_enabled",
         "max_isl_distance_m",
     )
@@ -52,6 +55,7 @@ class ConstellationConfig:
     altitude_km: float
     inclination_deg: float
     phase_diff: bool
+    isl_candidate_strategy: str
     seam_enabled: bool
     max_isl_distance_m: int
 
@@ -191,9 +195,17 @@ def parse_config(payload: Any) -> ConstellationConfig:
         )
 
     phase_diff = payload["phase_diff"]
+    isl_candidate_strategy = payload["isl_candidate_strategy"]
     seam_enabled = payload["seam_enabled"]
     if not isinstance(phase_diff, bool):
         raise ConstellationConfigError("phase_diff must be a boolean")
+    if (
+        not isinstance(isl_candidate_strategy, str)
+        or isl_candidate_strategy not in ISL_CANDIDATE_STRATEGIES
+    ):
+        raise ConstellationConfigError(
+            "isl_candidate_strategy must be plus-grid"
+        )
     if not isinstance(seam_enabled, bool):
         raise ConstellationConfigError("seam_enabled must be a boolean")
 
@@ -217,6 +229,7 @@ def parse_config(payload: Any) -> ConstellationConfig:
             maximum_inclusive=False,
         ),
         phase_diff=phase_diff,
+        isl_candidate_strategy=isl_candidate_strategy,
         seam_enabled=seam_enabled,
         max_isl_distance_m=_require_integer(
             payload["max_isl_distance_m"],

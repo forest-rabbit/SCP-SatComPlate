@@ -4,25 +4,28 @@
 from __future__ import annotations
 
 import math
-import sys
 import unittest
 from dataclasses import replace
 from pathlib import Path
 
-
-TOOL_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(TOOL_DIR))
-
-from configuration import WALKER_DELTA, load_config  # noqa: E402
-from hypatia_adapter import HypatiaAdapter  # noqa: E402
-from orbit_positions import (  # noqa: E402
+from contrib.satcompute.tools.generation.topology.common.configuration import (
+    WALKER_DELTA,
+    load_config,
+)
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.adapter import (
+    HypatiaAdapter,
+)
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.orbit_positions import (
     load_orbit_constellation,
     position_samples_sha256,
 )
-from smoke_positions import run_smoke  # noqa: E402
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.smoke_positions import (
+    run_smoke,
+)
 
 
-PRESET = TOOL_DIR / "config" / "synthetic-66.json"
+TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 EXPECTED_PR1_POSITIONS_SHA256 = (
     "01d0f2a672c32f88f780f691faef73d6f5d06c244be54d2ae21b25e1be5dba89"
 )

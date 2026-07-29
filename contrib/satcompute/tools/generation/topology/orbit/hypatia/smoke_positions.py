@@ -11,8 +11,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from hypatia_adapter import HypatiaAdapter
-from orbit_positions import (
+from .adapter import HypatiaAdapter
+from .orbit_positions import (
     load_tle_orbit_constellation,
     position_samples_sha256,
 )

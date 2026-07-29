@@ -5,27 +5,33 @@ from __future__ import annotations
 
 import hashlib
 import math
-import sys
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
 
-
-TOOL_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(TOOL_DIR))
-
-from configuration import WALKER_DELTA, load_config  # noqa: E402
-from hypatia_adapter import HypatiaAdapter  # noqa: E402
-from orbit_positions import (  # noqa: E402
+from contrib.satcompute.tools.generation.topology.common.configuration import (
+    WALKER_DELTA,
+    load_config,
+)
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.adapter import (
+    HypatiaAdapter,
+)
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.orbit_positions import (
     load_tle_orbit_constellation,
     position_samples_sha256,
 )
-from vendor.hypatia_minimal.tle_generator import tle_checksum  # noqa: E402
-from walker_tles import generate_walker_tles, walker_slots  # noqa: E402
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.vendor.hypatia_minimal.tle_generator import (
+    tle_checksum,
+)
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.walker_tles import (
+    generate_walker_tles,
+    walker_slots,
+)
 
 
-PRESET = TOOL_DIR / "config" / "synthetic-66.json"
+TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 EXPECTED_STAR_RAAN = (0.0, 30.0, 60.0, 90.0, 120.0, 150.0)
 EXPECTED_DELTA_RAAN = (0.0, 60.0, 120.0, 180.0, 240.0, 300.0)
 EXPECTED_STAR_TLE_SHA256 = (

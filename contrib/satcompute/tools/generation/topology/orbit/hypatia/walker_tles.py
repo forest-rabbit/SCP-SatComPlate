@@ -6,10 +6,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from configuration import ConstellationConfig, WALKER_DELTA, WALKER_STAR
-from hypatia_adapter import HypatiaAdapter
-from mean_motion import mean_motion_rev_per_day
-from vendor.hypatia_minimal.tle_generator import (
+from ...common.configuration import (
+    ConstellationConfig,
+    WALKER_DELTA,
+    WALKER_STAR,
+)
+from .adapter import HypatiaAdapter
+from .mean_motion import mean_motion_rev_per_day
+from .vendor.hypatia_minimal.tle_generator import (
     MEAN_MOTION_CANONICAL,
     MEAN_MOTION_HYPATIA_LEGACY,
 )

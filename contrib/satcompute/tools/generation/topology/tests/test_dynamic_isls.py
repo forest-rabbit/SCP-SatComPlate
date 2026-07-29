@@ -6,35 +6,34 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import sys
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
 
-
-TOOL_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(TOOL_DIR))
-
-from configuration import load_config  # noqa: E402
-from dynamic_isls import (  # noqa: E402
+from contrib.satcompute.tools.generation.topology.common.configuration import (
+    load_config,
+)
+from contrib.satcompute.tools.generation.topology.dynamic.dynamic_isls import (
     ACTIVE,
     INTER_PLANE,
     INTRA_PLANE,
     OVER_MAX_DISTANCE,
     CandidateIsl,
+    CandidateDegree,
     DynamicIslError,
     EvaluatedIsl,
     IslEdge,
     build_isl_snapshot,
     build_candidate_isls,
+    candidate_degree_profile,
+    candidate_degrees,
     clearance_limited_max_distance_m,
     evaluate_candidate_isls,
     generate_isl_snapshots,
     validate_clearance_limit,
 )
-from hypatia_adapter import HypatiaAdapter  # noqa: E402
-from generate_dynamic_isls import (  # noqa: E402
+from contrib.satcompute.tools.generation.topology.dynamic.generate_dynamic_isls import (
     CANDIDATE_FILENAME,
     MANIFEST_FILENAME,
     SNAPSHOT_FILENAME,
@@ -42,13 +41,17 @@ from generate_dynamic_isls import (  # noqa: E402
     generate_dynamic_isl_output,
     validate_schedule,
 )
-from orbit_positions import (  # noqa: E402
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.adapter import (
+    HypatiaAdapter,
+)
+from contrib.satcompute.tools.generation.topology.orbit.hypatia.orbit_positions import (
     SatellitePosition,
     load_orbit_constellation,
 )
 
 
-PRESET = TOOL_DIR / "config" / "synthetic-66.json"
+TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 
 
 class DynamicIslCandidateTest(unittest.TestCase):
@@ -79,6 +82,56 @@ class DynamicIslCandidateTest(unittest.TestCase):
             build_candidate_isls(self.config),
             without_seam,
         )
+        without_seam_degrees = candidate_degrees(without_seam, 66)
+        with_seam_degrees = candidate_degrees(with_seam, 66)
+        for node_id, degree in enumerate(without_seam_degrees):
+            orbit_index = node_id // self.config.satellites_per_orbit
+            self.assertEqual(degree.intra_plane, 2)
+            self.assertEqual(
+                degree.inter_plane,
+                1 if orbit_index in (0, 5) else 2,
+            )
+            self.assertEqual(
+                degree,
+                CandidateDegree(
+                    intra_plane=2,
+                    inter_plane=1 if orbit_index in (0, 5) else 2,
+                ),
+            )
+        self.assertTrue(all(degree.total == 4 for degree in with_seam_degrees))
+        self.assertEqual(
+            candidate_degree_profile(self.config, without_seam),
+            {
+                "minimum_total_degree": 3,
+                "maximum_total_degree": 4,
+                "boundary_plane_total_degree": 3,
+                "internal_plane_total_degree": 4,
+            },
+        )
+        self.assertEqual(
+            candidate_degree_profile(
+                replace(self.config, seam_enabled=True),
+                with_seam,
+            ),
+            {
+                "minimum_total_degree": 4,
+                "maximum_total_degree": 4,
+                "boundary_plane_total_degree": 4,
+                "internal_plane_total_degree": 4,
+            },
+        )
+
+    def test_candidate_builder_rejects_unknown_strategy(self) -> None:
+        with self.assertRaisesRegex(
+            DynamicIslError,
+            "isl_candidate_strategy=plus-grid",
+        ):
+            build_candidate_isls(
+                replace(
+                    self.config,
+                    isl_candidate_strategy="nearest-neighbor",
+                )
+            )
 
     def test_small_constellations_have_no_invalid_or_duplicate_edges(self) -> None:
         cases = (
@@ -306,6 +359,10 @@ class DynamicIslOutputTest(unittest.TestCase):
                 (first_dir / MANIFEST_FILENAME).read_text(encoding="utf-8")
             )
             self.assertEqual(candidate["candidate_count"], 121)
+            self.assertEqual(
+                candidate["isl_candidate_strategy"],
+                "plus-grid",
+            )
             self.assertEqual(len(candidate["candidate_isls"]), 121)
             self.assertEqual(
                 [snapshot["time_s"] for snapshot in snapshots],
@@ -319,6 +376,15 @@ class DynamicIslOutputTest(unittest.TestCase):
             self.assertEqual(snapshots[0]["added_edges"], [])
             self.assertEqual(snapshots[0]["removed_edges"], [])
             self.assertEqual(manifest, first)
+            self.assertEqual(
+                manifest["candidate_degree_profile"],
+                {
+                    "minimum_total_degree": 3,
+                    "maximum_total_degree": 4,
+                    "boundary_plane_total_degree": 3,
+                    "internal_plane_total_degree": 4,
+                },
+            )
             self.assertEqual(
                 manifest["candidate_file_sha256"],
                 hashlib.sha256(candidate_bytes).hexdigest(),

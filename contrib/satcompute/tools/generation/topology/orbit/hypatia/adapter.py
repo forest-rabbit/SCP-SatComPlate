@@ -10,12 +10,12 @@ from typing import Any
 
 from astropy.time import TimeDelta
 
-from vendor.hypatia_minimal.coordinates import geodetic2cartesian
-from vendor.hypatia_minimal.tle_generator import (
+from .vendor.hypatia_minimal.coordinates import geodetic2cartesian
+from .vendor.hypatia_minimal.tle_generator import (
     MEAN_MOTION_HYPATIA_LEGACY,
     generate_tles_from_scratch_with_sgp,
 )
-from vendor.hypatia_minimal.tle_reader import read_tles
+from .vendor.hypatia_minimal.tle_reader import read_tles
 
 
 TOOL_DIR = Path(__file__).resolve().parent

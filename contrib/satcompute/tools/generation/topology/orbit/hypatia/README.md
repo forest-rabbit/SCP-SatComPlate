@@ -37,24 +37,25 @@ vendor/hypatia_minimal/
 运行六星位置 smoke：
 
 ```bash
-uv run --locked python \
-  contrib/satcompute/tools/hypatia/smoke_positions.py --json
+uv run --locked python -m \
+  contrib.satcompute.tools.generation.topology.orbit.hypatia.smoke_positions \
+  --json
 ```
 
 运行全部 Hypatia/vendor 单元测试：
 
 ```bash
 uv run --locked python -m unittest discover \
-  -s contrib/satcompute/tools/hypatia/tests \
+  -s contrib/satcompute/tools/generation/topology/tests \
   -p 'test_*.py' -v
 ```
 
 运行小型动态 ISL smoke：
 
 ```bash
-uv run --locked python \
-  contrib/satcompute/tools/hypatia/generate_dynamic_isls.py \
-  --config contrib/satcompute/tools/hypatia/config/synthetic-66.json \
+uv run --locked python -m \
+  contrib.satcompute.tools.generation.topology.dynamic.generate_dynamic_isls \
+  --config contrib/satcompute/tools/generation/topology/config/synthetic-66.json \
   --duration-s 120 \
   --step-s 60 \
   --output-dir /tmp/satcompute-dynamic-isls
@@ -82,8 +83,8 @@ seam          : disabled
 解析该合同：
 
 ```bash
-uv run --locked python \
-  contrib/satcompute/tools/hypatia/resolve_constellation.py \
+uv run --locked python -m \
+  contrib.satcompute.tools.generation.topology.orbit.hypatia.resolve_constellation \
   --output-dir /tmp/satcompute-synthetic-66
 ```
 

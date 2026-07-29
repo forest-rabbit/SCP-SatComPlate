@@ -5,22 +5,19 @@ from __future__ import annotations
 
 import copy
 import math
-import sys
 import unittest
 from pathlib import Path
 
-
-TOOL_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(TOOL_DIR))
-
-from configuration import (  # noqa: E402
+from contrib.satcompute.tools.generation.topology.common.configuration import (
     ConstellationConfigError,
+    PLUS_GRID,
     load_config,
     parse_config,
 )
 
 
-PRESET = TOOL_DIR / "config" / "synthetic-66.json"
+TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 
 
 class ConstellationConfigurationTest(unittest.TestCase):
@@ -39,8 +36,20 @@ class ConstellationConfigurationTest(unittest.TestCase):
         self.assertAlmostEqual(config.slot_spacing_deg, 360.0 / 11.0)
         self.assertAlmostEqual(config.phase_offset_deg, 180.0 / 11.0)
         self.assertEqual(config.phase_scheme, "alternating-half-slot")
+        self.assertEqual(config.isl_candidate_strategy, PLUS_GRID)
         self.assertFalse(config.seam_enabled)
         self.assertEqual(config.max_isl_distance_m, 6174589)
+
+    def test_candidate_strategy_accepts_only_plus_grid(self) -> None:
+        for value in ("nearest-neighbor", "", 1, True):
+            with self.subTest(value=value):
+                invalid = copy.deepcopy(self.payload)
+                invalid["isl_candidate_strategy"] = value
+                with self.assertRaisesRegex(
+                    ConstellationConfigError,
+                    "isl_candidate_strategy must be plus-grid",
+                ):
+                    parse_config(invalid)
 
     def test_pattern_contract_accepts_only_star_and_delta(self) -> None:
         delta = copy.deepcopy(self.payload)
