@@ -10,7 +10,9 @@ on:
       - "uv.lock"
       - "contrib/satcompute/tools/hypatia/**"
   push:
-    branches: [main]
+    branches:
+      - main
+      - feature/n2a-integration
     paths:
       - ".github/workflows/satcompute-hypatia-smoke.yml"
       - ".gitignore"
@@ -61,6 +63,12 @@ jobs:
         run: >-
           uv run --locked python
           contrib/satcompute/tools/hypatia/smoke_positions.py --json
+
+      - name: Synthetic 66 constellation contract
+        run: >-
+          uv run --locked python
+          contrib/satcompute/tools/hypatia/resolve_constellation.py
+          --output-dir /tmp/satcompute-synthetic-66
 
       - name: Verify clean source tree
         run: test -z "$(git status --short)"

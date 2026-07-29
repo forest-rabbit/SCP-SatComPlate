@@ -50,4 +50,38 @@ The smoke generates and reads real Hypatia TLEs, then samples all satellites at
 `0.0000001`; a mathematically exact zero is not propagatable by PyEphem. The
 reported aggregate SHA-256 makes repeated output directly comparable.
 
+## Synthetic 66 constellation contract
+
+PR2 freezes an Iridium-scale synthetic Walker Star preset rather than claiming
+to reproduce the real Iridium constellation:
+
+```text
+pattern       : walker-star
+planes        : 6
+slots/plane   : 11
+altitude      : 780 km
+inclination   : 86.4 degrees
+RAAN          : 0, 30, 60, 90, 120, 150 degrees
+phase scheme  : alternating half-slot
+seam          : disabled
+```
+
+Generate its TLE set and resolved provenance manifest:
+
+```bash
+uv run --locked python \
+  contrib/satcompute/tools/hypatia/resolve_constellation.py \
+  --output-dir /tmp/satcompute-synthetic-66
+```
+
+The command writes only `tles.txt` and `resolved-manifest.json`. The manifest
+records the physical inputs, WGS72-derived mean motion, frozen Hypatia and tool
+versions, and deterministic TLE and position hashes. Walker Delta delegates to
+the frozen Hypatia 360-degree RAAN generator; Walker Star uses the local
+180-degree adaptation in `walker_tles.py` because frozen Hypatia does not
+provide that pattern.
+
+This stage does not generate candidate ISLs, apply the seam rule, export
+SatCompute `nodes_*.json` or `topology_*.json`, or run a 1000-second trajectory.
+
 Do not commit `.external/`, `.venv/`, generated TLEs, or smoke output.
