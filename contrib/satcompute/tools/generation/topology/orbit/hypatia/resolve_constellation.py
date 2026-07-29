@@ -4,14 +4,17 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import platform
-import subprocess
 from pathlib import Path
 from typing import Any
 
 from ...common.configuration import ConstellationConfig, load_config
+from ...common.hash_utils import (
+    REPOSITORY_ROOT,
+    sha256_file,
+    uv_version,
+)
 from ...dynamic.dynamic_isls import (
     build_candidate_isls,
     candidate_degree_profile,
@@ -38,29 +41,10 @@ from .walker_tles import (
 
 TOOL_DIR = Path(__file__).resolve().parent
 TOPOLOGY_ROOT = TOOL_DIR.parents[1]
-REPOSITORY_ROOT = TOOL_DIR.parents[6]
 DEFAULT_CONFIG = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 POSITION_SAMPLE_TIMES_S = (0.0, 60.0)
 TLE_FILENAME = "tles.txt"
 MANIFEST_FILENAME = "resolved-manifest.json"
-
-
-def sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def uv_version() -> str:
-    result = subprocess.run(
-        ["uv", "--version"],
-        check=True,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    fields = result.stdout.split()
-    if len(fields) < 2:
-        raise RuntimeError(f"unexpected uv version output: {result.stdout!r}")
-    return fields[1]
-
 
 def build_manifest(
     config: ConstellationConfig,

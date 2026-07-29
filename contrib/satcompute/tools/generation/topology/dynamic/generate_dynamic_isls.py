@@ -4,22 +4,27 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import platform
-import shutil
 import sys
 from pathlib import Path
 from typing import Any
 
 from ..common.configuration import ConstellationConfig, load_config
-from ..orbit.hypatia.adapter import HypatiaAdapter
-from ..orbit.hypatia.orbit_positions import load_orbit_constellation
-from ..orbit.hypatia.resolve_constellation import (
+from ..common.atomic_output import (
+    AtomicOutputError,
+    atomic_output_directory,
+)
+from ..common.hash_utils import (
     REPOSITORY_ROOT,
+    compact_json,
+    compact_json_bytes,
+    sha256_bytes,
     sha256_file,
     uv_version,
 )
+from ..orbit.hypatia.adapter import HypatiaAdapter
+from ..orbit.hypatia.orbit_positions import load_orbit_constellation
 from .dynamic_isls import (
     MINIMUM_ISL_RAY_ALTITUDE_M,
     STRATEGY,
@@ -62,68 +67,64 @@ def generate_dynamic_isl_output(
     clearance_floor_m = validate_clearance_limit(config)
     candidates = build_candidate_isls(config)
     degree_profile = candidate_degree_profile(config, candidates)
-    temporary_dir = _temporary_output_dir(output_dir)
-    _require_output_target_is_safe(output_dir)
-    _remove_temporary_path(temporary_dir)
-
-    adapter = HypatiaAdapter()
-    orbit = load_orbit_constellation(config, adapter)
-    snapshots = generate_isl_snapshots(
-        orbit,
-        candidates,
-        times_s,
-        config.max_isl_distance_m,
-    )
-    _validate_snapshot_sequence(candidates, snapshots, times_s)
-
     try:
-        temporary_dir.mkdir(parents=True)
-        candidate_payload = _candidate_payload(config, candidates)
-        candidate_bytes = _json_bytes(candidate_payload)
-        candidate_path = temporary_dir / CANDIDATE_FILENAME
-        candidate_path.write_bytes(candidate_bytes)
+        with atomic_output_directory(output_dir) as temporary_dir:
+            adapter = HypatiaAdapter()
+            orbit = load_orbit_constellation(config, adapter)
+            snapshots = generate_isl_snapshots(
+                orbit,
+                candidates,
+                times_s,
+                config.max_isl_distance_m,
+            )
+            _validate_snapshot_sequence(candidates, snapshots, times_s)
 
-        snapshot_payloads = [
-            _snapshot_payload(snapshot) for snapshot in snapshots
-        ]
-        snapshot_lines = [
-            _compact_json(payload).encode("utf-8")
-            for payload in snapshot_payloads
-        ]
-        snapshot_bytes = b"".join(line + b"\n" for line in snapshot_lines)
-        snapshot_path = temporary_dir / SNAPSHOT_FILENAME
-        snapshot_path.write_bytes(snapshot_bytes)
+            candidate_payload = _candidate_payload(config, candidates)
+            candidate_bytes = compact_json_bytes(candidate_payload)
+            (temporary_dir / CANDIDATE_FILENAME).write_bytes(candidate_bytes)
 
-        candidate_sha256 = _sha256_bytes(candidate_bytes)
-        snapshot_sha256 = _sha256_bytes(snapshot_bytes)
-        aggregate_sha256 = _sha256_bytes(candidate_bytes + snapshot_bytes)
-        manifest = _manifest_payload(
-            config=config,
-            adapter=adapter,
-            duration_s=duration_s,
-            step_s=step_s,
-            snapshots=snapshots,
-            candidate_count=len(candidates),
-            degree_profile=degree_profile,
-            clearance_floor_m=clearance_floor_m,
-            candidate_sha256=candidate_sha256,
-            snapshot_sha256=snapshot_sha256,
-            first_snapshot_sha256=_sha256_bytes(snapshot_lines[0]),
-            last_snapshot_sha256=_sha256_bytes(snapshot_lines[-1]),
-            aggregate_sha256=aggregate_sha256,
-        )
-        (temporary_dir / MANIFEST_FILENAME).write_bytes(
-            _json_bytes(manifest)
-        )
-        _validate_written_output(
-            temporary_dir,
-            expected_snapshot_count=len(snapshots),
-        )
-        temporary_dir.replace(output_dir)
+            snapshot_payloads = [
+                _snapshot_payload(snapshot) for snapshot in snapshots
+            ]
+            snapshot_lines = [
+                compact_json(payload).encode("utf-8")
+                for payload in snapshot_payloads
+            ]
+            snapshot_bytes = b"".join(
+                line + b"\n" for line in snapshot_lines
+            )
+            (temporary_dir / SNAPSHOT_FILENAME).write_bytes(snapshot_bytes)
+
+            candidate_sha256 = sha256_bytes(candidate_bytes)
+            snapshot_sha256 = sha256_bytes(snapshot_bytes)
+            aggregate_sha256 = sha256_bytes(
+                candidate_bytes + snapshot_bytes
+            )
+            manifest = _manifest_payload(
+                config=config,
+                adapter=adapter,
+                duration_s=duration_s,
+                step_s=step_s,
+                snapshots=snapshots,
+                candidate_count=len(candidates),
+                degree_profile=degree_profile,
+                clearance_floor_m=clearance_floor_m,
+                candidate_sha256=candidate_sha256,
+                snapshot_sha256=snapshot_sha256,
+                first_snapshot_sha256=sha256_bytes(snapshot_lines[0]),
+                last_snapshot_sha256=sha256_bytes(snapshot_lines[-1]),
+                aggregate_sha256=aggregate_sha256,
+            )
+            (temporary_dir / MANIFEST_FILENAME).write_bytes(
+                compact_json_bytes(manifest)
+            )
+            _validate_written_output(
+                temporary_dir,
+                expected_snapshot_count=len(snapshots),
+            )
         return manifest
-    except Exception:
-        _remove_temporary_path(temporary_dir)
-        raise
+    except AtomicOutputError as error:
+        raise DynamicIslGenerationError(str(error)) from error
 
 
 def validate_schedule(duration_s: int, step_s: int) -> tuple[int, ...]:
@@ -340,41 +341,6 @@ def _validate_written_output(
         json.loads(line)
 
 
-def _temporary_output_dir(output_dir: Path) -> Path:
-    return output_dir.with_name(f"{output_dir.name}.tmp")
-
-
-def _require_output_target_is_safe(output_dir: Path) -> None:
-    if output_dir.is_symlink() or (output_dir.exists() and not output_dir.is_dir()):
-        raise DynamicIslGenerationError(
-            f"output path must be a directory: {output_dir}"
-        )
-    if output_dir.exists() and any(output_dir.iterdir()):
-        raise DynamicIslGenerationError(
-            f"refusing to overwrite non-empty output directory: {output_dir}"
-        )
-    output_dir.parent.mkdir(parents=True, exist_ok=True)
-
-
-def _remove_temporary_path(path: Path) -> None:
-    if path.is_symlink() or path.is_file():
-        path.unlink()
-    elif path.is_dir():
-        shutil.rmtree(path)
-
-
-def _compact_json(payload: dict[str, Any]) -> str:
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-
-
-def _json_bytes(payload: dict[str, Any]) -> bytes:
-    return (_compact_json(payload) + "\n").encode("utf-8")
-
-
-def _sha256_bytes(payload: bytes) -> str:
-    return hashlib.sha256(payload).hexdigest()
-
-
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -391,12 +357,12 @@ def main() -> int:
             arguments.config.resolve(),
             arguments.duration_s,
             arguments.step_s,
-            arguments.output_dir.resolve(),
+            arguments.output_dir.absolute(),
         )
     except (OSError, ValueError, DynamicIslGenerationError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
-    print(_compact_json(manifest))
+    print(compact_json(manifest))
     return 0
 
 
