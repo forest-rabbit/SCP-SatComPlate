@@ -169,6 +169,19 @@ uv run --locked python -m \
 time 覆盖初始化、全部快照加载和路由重算；GNU time 单独记录进程 peak RSS。
 最终 route epoch 必须等于 `snapshot_count - 1`，否则该次成本证据失败。
 
+完整实验默认最多并行三个相互独立的 C++ 进程，并把它们固定到三个分离的
+allowed logical CPU；同一成本组合的三次 repeat 各占一个 CPU，route audit
+也采用相同上限。单次 ns-3 仿真仍是单线程，场景、seed、快照与统计口径均不
+改变。报告记录 waf build profile、CPU 列表、并行上限与成本协议版本。需要
+完全串行的机器可显式使用：
+
+```text
+--maximum-parallel-cpp-runs 1
+```
+
+已有成本证据只有在 build profile、CPU、并行上限和协议版本全部相同时才会
+复用，避免把不同测量条件混入同一组最小值/中位数/最大值。
+
 最终只提交：
 
 ```text

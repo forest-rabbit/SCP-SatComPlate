@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import shlex
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -42,6 +45,7 @@ from .route_probe import (
 
 SCHEMA_VERSION = "0.1"
 ANALYSIS_EVIDENCE_VERSION = 1
+COST_PROTOCOL_VERSION = 2
 DEFAULT_INTERVALS = (1, 2, 5, 10, 20)
 HASH_SEED = 1
 CONFIG_DIRECTORY = (
@@ -87,6 +91,37 @@ def orbital_window_offsets(altitude_km: float) -> tuple[int, int, int]:
         int(period_s / 3.0 + 0.5),
         int(2.0 * period_s / 3.0 + 0.5),
     )
+
+
+def available_cpp_cpu_cores(maximum_processes: int) -> tuple[int, ...]:
+    """Choose separated allowed logical CPUs for independent ns-3 runs."""
+    if maximum_processes <= 0:
+        raise IntervalStudyError(
+            "maximum parallel C++ processes must be positive"
+        )
+    allowed = tuple(sorted(os.sched_getaffinity(0)))
+    separated = allowed[::2]
+    candidates = separated if len(separated) >= maximum_processes else allowed
+    return candidates[:maximum_processes]
+
+
+def ns3_build_profile() -> str:
+    """Read the configured waf build profile used by experiment binaries."""
+    cache = REPOSITORY_ROOT / "build" / "c4che" / "_cache.py"
+    try:
+        content = cache.read_text(encoding="utf-8")
+    except OSError as error:
+        raise IntervalStudyError(
+            "ns-3 must be configured before running the study"
+        ) from error
+    match = re.search(
+        r"^BUILD_PROFILE = ['\"](?P<profile>[^'\"]+)['\"]$",
+        content,
+        flags=re.MULTILINE,
+    )
+    if match is None:
+        raise IntervalStudyError("cannot determine ns-3 build profile")
+    return match.group("profile")
 
 
 def load_study_preset(key: str) -> StudyPreset:
@@ -219,12 +254,20 @@ def _run_waf(
     log_path: Path,
     *,
     rss_path: Path | None = None,
+    cpu_core: int | None = None,
 ) -> int | None:
     invocation = [
         str(waf),
         "--run-no-build",
         _waf_command(program, options),
     ]
+    if cpu_core is not None:
+        invocation = [
+            "taskset",
+            "--cpu-list",
+            str(cpu_core),
+            *invocation,
+        ]
     if rss_path is not None:
         command = [
             "/usr/bin/time",
@@ -262,6 +305,38 @@ def _run_waf(
     return peak_rss_kib
 
 
+def _run_pinned_tasks(
+    tasks: tuple[tuple[Any, Any], ...],
+    cpu_cores: tuple[int, ...],
+    worker: Any,
+) -> dict[Any, Any]:
+    """Run at most one task on each selected logical CPU."""
+    if not tasks:
+        return {}
+    if not cpu_cores:
+        raise IntervalStudyError("at least one C++ CPU core is required")
+    executors = [
+        ThreadPoolExecutor(max_workers=1) for _ in cpu_cores
+    ]
+    futures = {}
+    try:
+        for index, (key, payload) in enumerate(tasks):
+            core_index = index % len(cpu_cores)
+            future = executors[core_index].submit(
+                worker,
+                payload,
+                cpu_cores[core_index],
+            )
+            futures[future] = key
+        results = {}
+        for future in as_completed(futures):
+            results[futures[future]] = future.result()
+        return results
+    finally:
+        for executor in executors:
+            executor.shutdown(wait=True, cancel_futures=True)
+
+
 def _selection_times(rows: tuple[Any, ...]) -> tuple[int, ...]:
     return tuple(sorted({row.time_s for row in rows}))
 
@@ -275,6 +350,8 @@ def ensure_selection_audit(
     step_s: int,
     output_path: Path,
     node_count: int,
+    *,
+    cpu_core: int | None = None,
 ) -> tuple[Any, ...]:
     expected_times = tuple(range(0, duration_s + 1, step_s))
     if output_path.exists():
@@ -308,6 +385,7 @@ def ensure_selection_audit(
             "outputFile": output_path,
         },
         output_path.with_suffix(".log"),
+        cpu_core=cpu_core,
     )
     rows = load_selection_audit(output_path, node_count)
     if (
@@ -357,14 +435,21 @@ def ensure_topology_cost_runs(
     snapshot_count: int,
     repeats: int,
     output_dir: Path,
+    cpu_cores: tuple[int, ...],
+    build_profile: str,
 ) -> dict[str, float | int | None]:
     output_dir.mkdir(parents=True, exist_ok=True)
     expected_epoch = snapshot_count - 1
-    wall_times = []
-    peak_rss_values = []
-    for repeat in range(1, repeats + 1):
+    parallel_limit = min(len(cpu_cores), repeats)
+
+    def measure(
+        repeat_payload: Any,
+        cpu_core: int,
+    ) -> tuple[float, int]:
+        repeat = int(repeat_payload)
         result_path = output_dir / f"run-{repeat}.json"
         rss_path = output_dir / f"run-{repeat}-rss-kib.txt"
+        metadata_path = output_dir / f"run-{repeat}-metadata.json"
         try:
             result = _read_cost_result(
                 result_path,
@@ -374,11 +459,21 @@ def ensure_topology_cost_runs(
             peak_rss = int(rss_path.read_text(encoding="utf-8").strip())
             if peak_rss <= 0:
                 raise ValueError("non-positive RSS")
+            metadata = read_json(metadata_path)
+            if metadata != {
+                "schema_version": SCHEMA_VERSION,
+                "cost_protocol_version": COST_PROTOCOL_VERSION,
+                "ns3_build_profile": build_profile,
+                "cpu_core": cpu_core,
+                "parallel_process_limit": parallel_limit,
+            }:
+                raise ValueError("cost metadata differs")
         except (OSError, ValueError, IntervalStudyError):
             result_path.unlink(missing_ok=True)
             rss_path.unlink(missing_ok=True)
+            metadata_path.unlink(missing_ok=True)
             print(
-                f"[study] topology cost repeat={repeat}: "
+                f"[study] topology cost repeat={repeat} cpu={cpu_core}: "
                 f"{scenario_dir.name}",
                 flush=True,
             )
@@ -393,14 +488,41 @@ def ensure_topology_cost_runs(
                 },
                 output_dir / f"run-{repeat}.log",
                 rss_path=rss_path,
+                cpu_core=cpu_core,
             )
             result = _read_cost_result(
                 result_path,
                 node_count,
                 expected_epoch,
             )
-        wall_times.append(float(result["wall_clock_s"]))
-        peak_rss_values.append(peak_rss)
+            metadata_path.write_bytes(
+                compact_json_bytes(
+                    {
+                        "schema_version": SCHEMA_VERSION,
+                        "cost_protocol_version":
+                            COST_PROTOCOL_VERSION,
+                        "ns3_build_profile": build_profile,
+                        "cpu_core": cpu_core,
+                        "parallel_process_limit": parallel_limit,
+                    }
+                )
+            )
+        return float(result["wall_clock_s"]), peak_rss
+
+    tasks = tuple(
+        (repeat, repeat) for repeat in range(1, repeats + 1)
+    )
+    results = _run_pinned_tasks(
+        tasks,
+        cpu_cores[:parallel_limit],
+        measure,
+    )
+    wall_times = [
+        results[repeat][0] for repeat in range(1, repeats + 1)
+    ]
+    peak_rss_values = [
+        results[repeat][1] for repeat in range(1, repeats + 1)
+    ]
     return summarize_cost_runs(wall_times, peak_rss_values)
 
 
@@ -579,6 +701,7 @@ def run_study(
     intervals: tuple[int, ...],
     topology_cost_repeats: int,
     waf: Path,
+    maximum_parallel_cpp_runs: int,
 ) -> dict[str, Any]:
     if (
         duration_s <= 0
@@ -595,6 +718,8 @@ def run_study(
         raise IntervalStudyError("topology cost repeats must be positive")
     if not waf.is_file():
         raise IntervalStudyError(f"waf does not exist: {waf}")
+    cpu_cores = available_cpp_cpu_cores(maximum_parallel_cpp_runs)
+    build_profile = ns3_build_profile()
 
     root = Path(work_dir)
     root.mkdir(parents=True, exist_ok=True)
@@ -700,11 +825,18 @@ def run_study(
                             / "cost"
                             / f"interval-{interval_s}"
                         ),
+                        cpu_cores,
+                        build_profile,
                     )
 
-            for mode in ROUTING_MODES:
-                audit_root = window_root / "route-audit"
-                reference_rows = ensure_selection_audit(
+            audit_root = window_root / "route-audit"
+
+            def reference_audit(
+                mode_payload: Any,
+                cpu_core: int,
+            ) -> tuple[Any, ...]:
+                mode = str(mode_payload)
+                return ensure_selection_audit(
                     waf,
                     reference_dir,
                     probe_pairs_path,
@@ -713,7 +845,53 @@ def run_study(
                     1,
                     audit_root / f"reference-{mode}.jsonl",
                     preset.node_count,
+                    cpu_core=cpu_core,
                 )
+
+            reference_rows_by_mode = _run_pinned_tasks(
+                tuple((mode, mode) for mode in ROUTING_MODES),
+                cpu_cores,
+                reference_audit,
+            )
+
+            def held_audit(
+                payload: Any,
+                cpu_core: int,
+            ) -> tuple[Any, ...]:
+                mode, interval_s = payload
+                item = held_data[interval_s]
+                return ensure_selection_audit(
+                    waf,
+                    item["directory"],
+                    probe_pairs_path,
+                    mode,
+                    duration_s,
+                    interval_s,
+                    (
+                        audit_root
+                        / f"interval-{interval_s}-{mode}.jsonl"
+                    ),
+                    preset.node_count,
+                    cpu_core=cpu_core,
+                )
+
+            held_tasks = tuple(
+                (
+                    (mode, interval_s),
+                    (mode, interval_s),
+                )
+                for mode in ROUTING_MODES
+                for interval_s in intervals
+                if interval_s != 1
+            )
+            held_rows_by_key = _run_pinned_tasks(
+                held_tasks,
+                cpu_cores,
+                held_audit,
+            )
+
+            for mode in ROUTING_MODES:
+                reference_rows = reference_rows_by_mode[mode]
                 reference_changes = count_selected_next_hop_changes(
                     reference_rows
                 )
@@ -722,19 +900,9 @@ def run_study(
                     if interval_s == 1:
                         held_rows = reference_rows
                     else:
-                        held_rows = ensure_selection_audit(
-                            waf,
-                            item["directory"],
-                            probe_pairs_path,
-                            mode,
-                            duration_s,
-                            interval_s,
-                            (
-                                audit_root
-                                / f"interval-{interval_s}-{mode}.jsonl"
-                            ),
-                            preset.node_count,
-                        )
+                        held_rows = held_rows_by_key[
+                            (mode, interval_s)
+                        ]
                     selection = compare_selection_audits(
                         reference_rows,
                         held_rows,
@@ -781,6 +949,10 @@ def run_study(
         "intervals_s": list(intervals),
         "window_count": 3,
         "topology_cost_repeats": topology_cost_repeats,
+        "cost_protocol_version": COST_PROTOCOL_VERSION,
+        "ns3_build_profile": build_profile,
+        "cpp_parallel_process_limit": len(cpu_cores),
+        "cpp_cpu_cores": list(cpu_cores),
         "fixed_delay_us": 8000,
         "link_bandwidth_kbps": 2_000_000,
         "isl_candidate_strategy": "plus-grid",
@@ -836,6 +1008,11 @@ def parse_arguments() -> argparse.Namespace:
         type=Path,
         default=REPOSITORY_ROOT / "waf",
     )
+    parser.add_argument(
+        "--maximum-parallel-cpp-runs",
+        type=int,
+        default=3,
+    )
     return parser.parse_args()
 
 
@@ -851,6 +1028,7 @@ def main() -> int:
             DEFAULT_INTERVALS,
             arguments.topology_cost_repeats,
             arguments.waf.absolute(),
+            arguments.maximum_parallel_cpp_runs,
         )
     except (OSError, ValueError, RuntimeError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
