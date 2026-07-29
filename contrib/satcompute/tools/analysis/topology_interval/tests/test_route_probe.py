@@ -20,6 +20,7 @@ from contrib.satcompute.tools.analysis.topology_interval.route_probe import (
     SelectionAuditRow,
     build_probe_pairs,
     compare_selection_audits,
+    count_selected_next_hop_changes,
     verify_cpp_candidate_audit,
 )
 
@@ -166,6 +167,10 @@ class RouteProbeTest(unittest.TestCase):
         self.assertEqual(
             metrics["candidate_count_trace_mismatch_count"],
             0,
+        )
+        self.assertEqual(
+            count_selected_next_hop_changes(reference),
+            1,
         )
 
 

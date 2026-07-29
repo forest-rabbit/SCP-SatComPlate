@@ -134,3 +134,57 @@ uv run --locked python -m \
 ```
 
 生成结果用于本地实验或审查，应放在 `/tmp` 或仓库外的实验目录，不得提交。
+
+## 三规模完整研究
+
+`run_interval_study.py` 编排 66、351、720 星三个配置。每个星座使用 WGS72
+近圆轨道周期的 `0`、`P/3`、`2P/3` 三个窗口；周期和 offset 均由配置高度
+确定，`P/3` 与 `2P/3` 取最近整数秒。当前冻结值为：
+
+| 星座 | 轨道周期（秒） | 三个 offset（秒） |
+| --- | ---: | --- |
+| 66 | 6027.130743814793 | 0, 2009, 4018 |
+| 351 | 6326.357647436802 | 0, 2109, 4218 |
+| 720 | 6565.2957073948755 | 0, 2188, 4377 |
+
+每个窗口先生成唯一的 1 秒 reference，再以逐字节复制方式得到
+1/2/5/10/20 秒 held 场景。实际下一跳覆盖 `global-first`、
+`global-hash-per-flow` 和 `global-hrw-per-flow`；纯拓扑成本只在每个星座
+主窗口重复三次。
+
+```bash
+uv run --locked python -m \
+  contrib.satcompute.tools.analysis.topology_interval.run_interval_study \
+  --work-dir /tmp/satcompute-n2-interval-study \
+  --report-dir docs/reviews/n2-snapshot-interval-study
+```
+
+工作目录保存完整快照、C++ JSONL、成本原始值和日志，不能提交。编排器会严格
+检查已有场景的配置与 provenance；有效的场景、route audit 和成本重复会被
+复用，因此中断后执行同一命令即可续跑。Python comparison 证据也带版本和
+场景哈希，重复续跑会生成相同报告字节。
+
+`satcompute-topology-cost-audit` 只创建卫星、加载 ISL 快照并执行原生全局
+路由重算，不安装 NetworkTransfer、任务、probe 或 FlowMonitor。内部 wall
+time 覆盖初始化、全部快照加载和路由重算；GNU time 单独记录进程 peak RSS。
+最终 route epoch 必须等于 `snapshot_count - 1`，否则该次成本证据失败。
+
+最终只提交：
+
+```text
+docs/reviews/n2-snapshot-interval-study/
+├── REPORT.md
+├── interval-results.csv
+├── interval-results.json
+├── recommendations.json
+└── probe-pairs.json
+```
+
+CSV 每个星座、窗口、间隔和 routing mode 各有一行。只有主窗口含三次
+topology-only wall time 与 peak RSS；其他窗口的这些字段为空，但仍记录
+快照数和由调度合同验证的路由重算次数。
+
+推荐严格选择同时满足边状态、连通性、全量 Python ECMP 候选以及三种 C++
+实际选路 gate 的最大已测试间隔。若所有候选都等价，返回 20 秒并写明
+`upper_bound_identified=false`；这只表示当前 fixed-delay、plus-grid、
+无权 hop-count 模型下的最大已测试成本最优值，不支持外推到 20 秒以上。

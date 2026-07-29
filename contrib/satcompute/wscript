@@ -61,3 +61,10 @@ def build(bld):
     route_selection_audit.source = [
         'tools/analysis/topology_interval/route-selection-audit.cc',
     ]
+
+    topology_cost_audit = bld.create_ns3_program(
+        'satcompute-topology-cost-audit',
+        ['satcompute'])
+    topology_cost_audit.source = [
+        'tools/analysis/topology_interval/topology-cost-audit.cc',
+    ]

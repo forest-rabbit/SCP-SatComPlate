@@ -1,0 +1,80 @@
+name: SatCompute Interval Analysis
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/satcompute-interval-analysis.yml"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "contrib/satcompute/routing/**"
+      - "contrib/satcompute/topology/**"
+      - "contrib/satcompute/tools/analysis/topology_interval/**"
+      - "contrib/satcompute/tools/generation/scenario/**"
+      - "contrib/satcompute/tools/generation/topology/**"
+      - "contrib/satcompute/wscript"
+  push:
+    branches:
+      - feature/n2-integration
+    paths:
+      - ".github/workflows/satcompute-interval-analysis.yml"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "contrib/satcompute/routing/**"
+      - "contrib/satcompute/topology/**"
+      - "contrib/satcompute/tools/analysis/topology_interval/**"
+      - "contrib/satcompute/tools/generation/scenario/**"
+      - "contrib/satcompute/tools/generation/topology/**"
+      - "contrib/satcompute/wscript"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: satcompute-interval-analysis-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  interval-analysis:
+    name: interval-analysis
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pinned uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: "0.11.25"
+          python-version: "3.10.12"
+
+      - name: Sync locked environment
+        run: uv sync --locked
+
+      - name: Configure
+        run: ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
+
+      - name: Build
+        run: ./waf build
+
+      - name: Interval analysis unit tests
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: >-
+          uv run --locked python -m unittest discover
+          -s contrib/satcompute/tools/analysis/topology_interval/tests
+          -p 'test_*.py' -v
+
+      - name: 66-satellite 120-second interval smoke
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: >-
+          uv run --locked python -m
+          contrib.satcompute.tools.analysis.topology_interval.ci_smoke
+
+      - name: Verify clean source tree
+        run: test -z "$(git status --short)"

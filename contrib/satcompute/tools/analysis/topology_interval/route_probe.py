@@ -651,6 +651,44 @@ def compare_selection_audits(
     }
 
 
+def count_selected_next_hop_changes(
+    rows: tuple[SelectionAuditRow, ...],
+) -> int:
+    """Count per-probe changes in the actual selected physical next hop."""
+    modes = {row.routing_mode for row in rows}
+    if len(modes) != 1:
+        raise RouteProbeError(
+            "selection change count requires one routing mode"
+        )
+    states_by_probe: dict[ProbePair, list[tuple[int, int | None]]] = {}
+    for row in rows:
+        states_by_probe.setdefault(row.probe, []).append(
+            (row.time_s, row.selected_next_hop_id)
+        )
+    expected_times = None
+    changes = 0
+    for probe, states in states_by_probe.items():
+        ordered = sorted(states)
+        times = tuple(time_s for time_s, _ in ordered)
+        if len(times) != len(set(times)):
+            raise RouteProbeError(
+                f"selection audit repeats times for probe {probe}"
+            )
+        if expected_times is None:
+            expected_times = times
+        elif times != expected_times:
+            raise RouteProbeError(
+                "selection audit probes use different time schedules"
+            )
+        changes += sum(
+            previous != current
+            for (_, previous), (_, current) in zip(ordered, ordered[1:])
+        )
+    if expected_times is None:
+        raise RouteProbeError("selection audit is empty")
+    return changes
+
+
 def load_candidate_audit(
     audit_path: Path,
     node_count: int,
