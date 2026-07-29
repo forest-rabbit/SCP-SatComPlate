@@ -126,14 +126,21 @@ C++ 静态输入仍发布为 `nodes_0s.json` 和 `topology_0s.json`；真实采�
 ```json
 {
   "start_time_s": 0,
+  "orbit_sample_offset_s": 0,
   "duration_s": 1000,
   "step_s": 1
 }
 ```
 
-第一版固定 `start_time_s=0`。`duration_s` 为非负整数，`step_s` 为正整数，
-且前者必须能被后者整除。采样区间两端都包含，因此快照数为
-`duration_s / step_s + 1`；默认配置会生成 1001 对完整快照。
+`start_time_s` 固定为 0，表示 C++ 仿真时间和输出文件名始终从 0 秒开始。
+`orbit_sample_offset_s` 是相对固定 epoch 的非负轨道传播偏移；文件时间
+`t` 对应的物理轨道时刻为 `orbit_sample_offset_s + t`。因此可以比较不同
+轨道阶段窗口，而不改变 `nodes_<time>s.json`、`topology_<time>s.json` 和
+C++ 调度语义。该偏移会写入 topology manifest 和 scenario manifest。
+
+`duration_s` 为非负整数，`step_s` 为正整数，且前者必须能被后者整除。
+采样区间两端都包含，因此快照数为 `duration_s / step_s + 1`；默认配置会
+生成 1001 对完整快照。偏移与持续时间之和不能超过 64 位有符号整数上限。
 
 ### `compute`
 

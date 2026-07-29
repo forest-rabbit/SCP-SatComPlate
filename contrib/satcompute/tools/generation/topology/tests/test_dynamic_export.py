@@ -182,6 +182,7 @@ class DynamicTopologyExportTest(unittest.TestCase):
         self.assertEqual(manifest["generation_mode"], "dynamic")
         self.assertEqual(manifest["duration_s"], 120)
         self.assertEqual(manifest["step_s"], 60)
+        self.assertEqual(manifest["orbit_sample_offset_s"], 0)
         self.assertEqual(manifest["snapshot_count"], 3)
         self.assertEqual(manifest["first_time_s"], 0)
         self.assertEqual(manifest["last_time_s"], 120)

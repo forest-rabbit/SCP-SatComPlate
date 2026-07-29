@@ -60,9 +60,15 @@ def generate_dynamic_isl_output(
     duration_s: int,
     step_s: int,
     output_dir: Path,
+    *,
+    orbit_sample_offset_s: int = 0,
 ) -> dict[str, Any]:
     """Generate all dynamic ISL files and atomically publish the directory."""
     times_s = validate_schedule(duration_s, step_s)
+    offset_s = validate_orbit_sample_offset(
+        orbit_sample_offset_s,
+        duration_s,
+    )
     config = load_config(config_path)
     clearance_floor_m = validate_clearance_limit(config)
     candidates = build_candidate_isls(config)
@@ -76,6 +82,7 @@ def generate_dynamic_isl_output(
                 candidates,
                 times_s,
                 config.max_isl_distance_m,
+                orbit_sample_offset_s=offset_s,
             )
             _validate_snapshot_sequence(candidates, snapshots, times_s)
 
@@ -105,6 +112,7 @@ def generate_dynamic_isl_output(
                 adapter=adapter,
                 duration_s=duration_s,
                 step_s=step_s,
+                orbit_sample_offset_s=offset_s,
                 snapshots=snapshots,
                 candidate_count=len(candidates),
                 degree_profile=degree_profile,
@@ -148,6 +156,26 @@ def validate_schedule(duration_s: int, step_s: int) -> tuple[int, ...]:
             "duration_s must be evenly divisible by step_s"
         )
     return tuple(range(0, duration_s + 1, step_s))
+
+
+def validate_orbit_sample_offset(
+    orbit_sample_offset_s: int,
+    duration_s: int,
+) -> int:
+    """Validate the physical-orbit offset for an already-validated schedule."""
+    if (
+        not isinstance(orbit_sample_offset_s, int)
+        or isinstance(orbit_sample_offset_s, bool)
+        or orbit_sample_offset_s < 0
+    ):
+        raise DynamicIslGenerationError(
+            "orbit_sample_offset_s must be a non-negative integer"
+        )
+    if orbit_sample_offset_s > (1 << 63) - 1 - duration_s:
+        raise DynamicIslGenerationError(
+            "orbit_sample_offset_s + duration_s must not exceed INT64_MAX"
+        )
+    return orbit_sample_offset_s
 
 
 def _candidate_payload(
@@ -219,6 +247,7 @@ def _manifest_payload(
     adapter: HypatiaAdapter,
     duration_s: int,
     step_s: int,
+    orbit_sample_offset_s: int,
     snapshots: tuple[IslSnapshot, ...],
     candidate_count: int,
     degree_profile: dict[str, int],
@@ -245,6 +274,7 @@ def _manifest_payload(
         "uv_lock_sha256": sha256_file(REPOSITORY_ROOT / "uv.lock"),
         "duration_s": duration_s,
         "step_s": step_s,
+        "orbit_sample_offset_s": orbit_sample_offset_s,
         "snapshot_count": len(snapshots),
         "first_time_s": snapshots[0].time_s,
         "last_time_s": snapshots[-1].time_s,
@@ -346,6 +376,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--duration-s", type=int, required=True)
     parser.add_argument("--step-s", type=int, required=True)
+    parser.add_argument("--orbit-sample-offset-s", type=int, default=0)
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser.parse_args()
 
@@ -358,6 +389,7 @@ def main() -> int:
             arguments.duration_s,
             arguments.step_s,
             arguments.output_dir.absolute(),
+            orbit_sample_offset_s=arguments.orbit_sample_offset_s,
         )
     except (OSError, ValueError, DynamicIslGenerationError) as error:
         print(f"ERROR: {error}", file=sys.stderr)

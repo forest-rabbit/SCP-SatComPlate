@@ -61,6 +61,7 @@ MANIFEST_FIELDS = frozenset(
         "snapshot_count",
         "first_time_s",
         "last_time_s",
+        "orbit_sample_offset_s",
         "delay_mode",
         "fixed_delay_us",
         "link_bandwidth_kbps",
@@ -333,13 +334,23 @@ def check_scenario(input_dir: Path) -> dict[str, Any]:
             config.topology.mode != STATIC_MODE
             or topology_manifest.get("duration_s")
             != schedule.snapshot_time_s
+            or topology_manifest.get("orbit_sample_offset_s") is not None
+            or manifest["orbit_sample_offset_s"] is not None
         ):
             raise ScenarioCheckError("static sample time is inconsistent")
     elif isinstance(schedule, DynamicSchedule):
+        _require_integer(
+            manifest["orbit_sample_offset_s"],
+            "orbit_sample_offset_s",
+        )
         if (
             config.topology.mode != DYNAMIC_MODE
             or topology_manifest.get("duration_s") != schedule.duration_s
             or topology_manifest.get("step_s") != schedule.step_s
+            or topology_manifest.get("orbit_sample_offset_s")
+            != schedule.orbit_sample_offset_s
+            or manifest["orbit_sample_offset_s"]
+            != schedule.orbit_sample_offset_s
         ):
             raise ScenarioCheckError("dynamic schedule is inconsistent")
     else:

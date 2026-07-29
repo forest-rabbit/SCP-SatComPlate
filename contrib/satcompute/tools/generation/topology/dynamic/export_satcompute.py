@@ -179,6 +179,14 @@ def _read_dynamic_source(source_dir: Path) -> DynamicSource:
         "source step_s",
         1,
     )
+    orbit_sample_offset_s = _require_integer(
+        manifest.get("orbit_sample_offset_s"),
+        "source orbit_sample_offset_s",
+    )
+    if orbit_sample_offset_s > (1 << 63) - 1 - duration_s:
+        raise DynamicTopologyExportError(
+            "source orbit_sample_offset_s + duration_s exceeds INT64_MAX"
+        )
     expected_times = tuple(range(0, duration_s + 1, step_s))
     if snapshot_count != len(expected_times):
         raise DynamicTopologyExportError(
@@ -323,6 +331,9 @@ def _build_manifest(
         ],
         "duration_s": source_manifest["duration_s"],
         "step_s": source_manifest["step_s"],
+        "orbit_sample_offset_s": source_manifest[
+            "orbit_sample_offset_s"
+        ],
         "snapshot_count": len(times),
         "first_time_s": times[0],
         "last_time_s": times[-1],

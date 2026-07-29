@@ -14,6 +14,7 @@
     "mode": "dynamic",
     "schedule": {
       "start_time_s": 0,
+      "orbit_sample_offset_s": 0,
       "duration_s": 1000,
       "step_s": 1
     },

@@ -38,7 +38,7 @@ class ScenarioConfigurationTest(unittest.TestCase):
         self.assertEqual(config.topology.mode, DYNAMIC_MODE)
         self.assertEqual(
             config.topology.schedule,
-            DynamicSchedule(0, 1000, 1),
+            DynamicSchedule(0, 0, 1000, 1),
         )
         self.assertEqual(config.topology.delay_mode, "fixed")
         self.assertEqual(config.topology.fixed_delay_us, 8000)
@@ -71,13 +71,19 @@ class ScenarioConfigurationTest(unittest.TestCase):
         cases = (
             (
                 "static",
-                {"start_time_s": 0, "duration_s": 10, "step_s": 1},
+                {
+                    "start_time_s": 0,
+                    "orbit_sample_offset_s": 0,
+                    "duration_s": 10,
+                    "step_s": 1,
+                },
             ),
             ("dynamic", {"snapshot_time_s": 0}),
             (
                 "dynamic",
                 {
                     "start_time_s": 0,
+                    "orbit_sample_offset_s": 0,
                     "duration_s": 10,
                     "step_s": 1,
                     "snapshot_time_s": 0,
@@ -97,11 +103,54 @@ class ScenarioConfigurationTest(unittest.TestCase):
 
     def test_dynamic_schedule_is_strict(self) -> None:
         invalid_schedules = (
-            {"start_time_s": 1, "duration_s": 10, "step_s": 1},
-            {"start_time_s": 0, "duration_s": -1, "step_s": 1},
-            {"start_time_s": 0, "duration_s": 10, "step_s": 0},
-            {"start_time_s": 0, "duration_s": 10, "step_s": 3},
-            {"start_time_s": False, "duration_s": 10, "step_s": 1},
+            {
+                "start_time_s": 1,
+                "orbit_sample_offset_s": 0,
+                "duration_s": 10,
+                "step_s": 1,
+            },
+            {
+                "start_time_s": 0,
+                "orbit_sample_offset_s": -1,
+                "duration_s": 10,
+                "step_s": 1,
+            },
+            {
+                "start_time_s": 0,
+                "orbit_sample_offset_s": True,
+                "duration_s": 10,
+                "step_s": 1,
+            },
+            {
+                "start_time_s": 0,
+                "orbit_sample_offset_s": 0,
+                "duration_s": -1,
+                "step_s": 1,
+            },
+            {
+                "start_time_s": 0,
+                "orbit_sample_offset_s": 0,
+                "duration_s": 10,
+                "step_s": 0,
+            },
+            {
+                "start_time_s": 0,
+                "orbit_sample_offset_s": 0,
+                "duration_s": 10,
+                "step_s": 3,
+            },
+            {
+                "start_time_s": False,
+                "orbit_sample_offset_s": 0,
+                "duration_s": 10,
+                "step_s": 1,
+            },
+            {
+                "start_time_s": 0,
+                "orbit_sample_offset_s": (1 << 63) - 5,
+                "duration_s": 10,
+                "step_s": 1,
+            },
         )
         for schedule in invalid_schedules:
             with self.subTest(schedule=schedule):
@@ -154,14 +203,18 @@ class ScenarioConfigurationTest(unittest.TestCase):
         paths = (
             ("constellation", "num_orbits"),
             ("topology", "max_isl_distance_m"),
+            ("topology", "schedule", "orbit_sample_offset_s"),
             ("topology", "link_bandwidth_kbps"),
             ("compute", "compute_node_count"),
             ("compute", "compute_rate_work_units_per_second"),
         )
-        for section, field in paths:
-            with self.subTest(section=section, field=field):
+        for path in paths:
+            with self.subTest(path=path):
                 payload = preset_payload()
-                payload[section][field] = True
+                target = payload
+                for field in path[:-1]:
+                    target = target[field]
+                target[path[-1]] = True
                 with self.assertRaises(ScenarioConfigError):
                     parse_config(payload)
 

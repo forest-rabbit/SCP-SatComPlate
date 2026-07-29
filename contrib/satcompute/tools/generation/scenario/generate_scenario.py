@@ -101,6 +101,7 @@ def _generate_topology(
             schedule.duration_s,
             schedule.step_s,
             source_dir,
+            orbit_sample_offset_s=schedule.orbit_sample_offset_s,
         )
         manifest = export_satcompute_topology(
             source_dir,
@@ -144,6 +145,12 @@ def _build_manifest(
     satcompute_commit, worktree_clean = git_repository_state()
     compute_rate = config.compute.compute_rate_work_units_per_second
     compute_count = len(placement_node_ids)
+    schedule = config.topology.schedule
+    orbit_sample_offset_s = (
+        schedule.orbit_sample_offset_s
+        if isinstance(schedule, DynamicSchedule)
+        else None
+    )
     return {
         "schema_version": config.schema_version,
         "scenario_name": config.scenario_name,
@@ -157,6 +164,7 @@ def _build_manifest(
         "snapshot_count": topology_summary["snapshot_count"],
         "first_time_s": topology_manifest["first_time_s"],
         "last_time_s": topology_manifest["last_time_s"],
+        "orbit_sample_offset_s": orbit_sample_offset_s,
         "delay_mode": config.topology.delay_mode,
         "fixed_delay_us": config.topology.fixed_delay_us,
         "link_bandwidth_kbps": config.topology.link_bandwidth_kbps,

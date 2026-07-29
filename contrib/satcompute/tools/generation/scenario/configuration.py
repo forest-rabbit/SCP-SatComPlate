@@ -59,7 +59,12 @@ TOPOLOGY_FIELDS = frozenset(
 )
 STATIC_SCHEDULE_FIELDS = frozenset(("snapshot_time_s",))
 DYNAMIC_SCHEDULE_FIELDS = frozenset(
-    ("start_time_s", "duration_s", "step_s")
+    (
+        "start_time_s",
+        "orbit_sample_offset_s",
+        "duration_s",
+        "step_s",
+    )
 )
 COMPUTE_FIELDS = frozenset(
     (
@@ -85,12 +90,14 @@ class StaticSchedule:
 @dataclass(frozen=True)
 class DynamicSchedule:
     start_time_s: int
+    orbit_sample_offset_s: int
     duration_s: int
     step_s: int
 
     def input_dict(self) -> dict[str, int]:
         return {
             "start_time_s": self.start_time_s,
+            "orbit_sample_offset_s": self.orbit_sample_offset_s,
             "duration_s": self.duration_s,
             "step_s": self.step_s,
         }
@@ -223,6 +230,12 @@ def _parse_schedule(mode: str, payload: Any) -> StaticSchedule | DynamicSchedule
         0,
         0,
     )
+    orbit_sample_offset_s = _require_integer(
+        schedule["orbit_sample_offset_s"],
+        "topology.schedule.orbit_sample_offset_s",
+        0,
+        INT64_MAX,
+    )
     duration_s = _require_integer(
         schedule["duration_s"],
         "topology.schedule.duration_s",
@@ -239,7 +252,17 @@ def _parse_schedule(mode: str, payload: Any) -> StaticSchedule | DynamicSchedule
         raise ScenarioConfigError(
             "topology.schedule.duration_s must be divisible by step_s"
         )
-    return DynamicSchedule(start_time_s, duration_s, step_s)
+    if orbit_sample_offset_s > INT64_MAX - duration_s:
+        raise ScenarioConfigError(
+            "topology.schedule orbit_sample_offset_s + duration_s "
+            "must not exceed INT64_MAX"
+        )
+    return DynamicSchedule(
+        start_time_s,
+        orbit_sample_offset_s,
+        duration_s,
+        step_s,
+    )
 
 
 def parse_config(payload: Any) -> ScenarioConfig:
