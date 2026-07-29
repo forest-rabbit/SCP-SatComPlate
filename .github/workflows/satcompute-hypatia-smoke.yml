@@ -65,5 +65,14 @@ jobs:
           contrib/satcompute/tools/hypatia/resolve_constellation.py
           --output-dir /tmp/satcompute-synthetic-66
 
+      - name: Dynamic ISL smoke
+        run: >-
+          uv run --locked python
+          contrib/satcompute/tools/hypatia/generate_dynamic_isls.py
+          --config contrib/satcompute/tools/hypatia/config/synthetic-66.json
+          --duration-s 120
+          --step-s 60
+          --output-dir /tmp/satcompute-dynamic-isls
+
       - name: Verify clean source tree
         run: test -z "$(git status --short)"
