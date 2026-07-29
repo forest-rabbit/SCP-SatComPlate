@@ -142,7 +142,7 @@ class WalkerTleTest(unittest.TestCase):
                 self.assertTrue(all(math.isfinite(value) for value in end))
                 self.assertGreater(math.dist(start, end), 1.0)
 
-    def test_delta_tles_use_frozen_hypatia_formula(self) -> None:
+    def test_delta_tles_use_hypatia_legacy_formula(self) -> None:
         delta = replace(self.config, constellation_pattern=WALKER_DELTA)
         with tempfile.TemporaryDirectory(
             prefix="satcompute-delta-tles-"

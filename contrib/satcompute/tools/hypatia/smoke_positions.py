@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise frozen Hypatia TLE generation and position propagation."""
+"""Exercise vendored Hypatia TLE generation and position propagation."""
 
 from __future__ import annotations
 
