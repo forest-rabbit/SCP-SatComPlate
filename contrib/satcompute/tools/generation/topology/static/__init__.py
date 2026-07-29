@@ -1,0 +1,1 @@
+"""Static SatCompute topology generation."""

@@ -7,7 +7,6 @@ compile_commands.json
 
 # Python caches and managed environments
 .venv/
-.external/
 __pycache__/
 **/__pycache__/
 *.py[cod]

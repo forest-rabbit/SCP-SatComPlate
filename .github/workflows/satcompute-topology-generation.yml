@@ -1,0 +1,115 @@
+name: SatCompute Topology Generation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/satcompute-topology-generation.yml"
+      - ".gitignore"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "contrib/satcompute/tools/generation/topology/**"
+  push:
+    branches:
+      - main
+      - feature/n2-integration
+    paths:
+      - ".github/workflows/satcompute-topology-generation.yml"
+      - ".gitignore"
+      - ".python-version"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "contrib/satcompute/tools/generation/topology/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: satcompute-topology-generation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  topology-generation:
+    name: topology-generation
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pinned uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          version: "0.11.25"
+          python-version: "3.10.12"
+
+      - name: Verify locked dependencies
+        run: uv lock --check
+
+      - name: Sync locked environment
+        run: uv sync --locked
+
+      - name: Topology generation unit tests
+        run: >-
+          uv run --locked python -m unittest discover
+          -s contrib/satcompute/tools/generation/topology/tests
+          -p 'test_*.py' -v
+
+      - name: Hypatia position smoke
+        run: >-
+          uv run --locked python -m
+          contrib.satcompute.tools.generation.topology.orbit.hypatia.smoke_positions
+          --json
+
+      - name: Synthetic 66 constellation contract
+        run: >-
+          uv run --locked python -m
+          contrib.satcompute.tools.generation.topology.orbit.hypatia.resolve_constellation
+          --config contrib/satcompute/tools/generation/topology/config/synthetic-66.json
+          --output-dir /tmp/satcompute-synthetic-66
+
+      - name: Dynamic ISL smoke
+        run: >-
+          uv run --locked python -m
+          contrib.satcompute.tools.generation.topology.dynamic.generate_dynamic_isls
+          --config contrib/satcompute/tools/generation/topology/config/synthetic-66.json
+          --duration-s 120
+          --step-s 60
+          --output-dir /tmp/satcompute-dynamic-isls
+
+      - name: Export fixed SatCompute snapshots
+        run: >-
+          uv run --locked python -m
+          contrib.satcompute.tools.generation.topology.dynamic.export_satcompute
+          --source-dir /tmp/satcompute-dynamic-isls
+          --delay-mode fixed
+          --fixed-delay-us 8000
+          --link-bandwidth-kbps 10000000
+          --output-dir /tmp/satcompute-topology-fixed
+
+      - name: Export distance SatCompute snapshots
+        run: >-
+          uv run --locked python -m
+          contrib.satcompute.tools.generation.topology.dynamic.export_satcompute
+          --source-dir /tmp/satcompute-dynamic-isls
+          --delay-mode distance
+          --link-bandwidth-kbps 10000000
+          --output-dir /tmp/satcompute-topology-distance
+
+      - name: Check exported snapshots
+        run: |
+          uv run --locked python -m \
+            contrib.satcompute.tools.generation.topology.check_export \
+            --input-dir /tmp/satcompute-topology-fixed \
+            --expected-node-count 66 \
+            --source-dynamic-dir /tmp/satcompute-dynamic-isls
+          uv run --locked python -m \
+            contrib.satcompute.tools.generation.topology.check_export \
+            --input-dir /tmp/satcompute-topology-distance \
+            --expected-node-count 66 \
+            --source-dynamic-dir /tmp/satcompute-dynamic-isls
+
+      - name: Verify clean source tree
+        run: test -z "$(git status --short)"

@@ -1,0 +1,1 @@
+"""Shared topology-generation contracts."""
