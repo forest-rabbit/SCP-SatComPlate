@@ -9,9 +9,11 @@ import unittest
 from pathlib import Path
 
 from contrib.satcompute.tools.analysis.topology_interval.run_interval_study import (
+    IntervalStudyError,
     load_study_preset,
     orbital_period_seconds,
     orbital_window_offsets,
+    resolve_git_commit,
     study_window_offsets,
     write_window_config,
 )
@@ -22,6 +24,11 @@ from contrib.satcompute.tools.generation.scenario.configuration import (
 
 
 class RunIntervalStudyTest(unittest.TestCase):
+    def test_evidence_commit_is_resolved_strictly(self) -> None:
+        self.assertRegex(resolve_git_commit("HEAD"), r"^[0-9a-f]{40}$")
+        with self.assertRaises(IntervalStudyError):
+            resolve_git_commit("not-a-satcompute-commit")
+
     def test_frozen_periods_and_window_offsets(self) -> None:
         expected = {
             "66": (6027.130743814793, (0, 2009, 4018)),

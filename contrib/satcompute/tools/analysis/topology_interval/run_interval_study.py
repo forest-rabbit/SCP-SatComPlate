@@ -129,6 +129,24 @@ def ns3_build_profile() -> str:
     return match.group("profile")
 
 
+def resolve_git_commit(reference: str) -> str:
+    """Resolve one local Git reference to a full commit SHA."""
+    completed = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{reference}^{{commit}}"],
+        cwd=REPOSITORY_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    commit = completed.stdout.strip()
+    if completed.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise IntervalStudyError(
+            f"cannot resolve evidence commit: {reference}"
+        )
+    return commit
+
+
 def load_study_preset(key: str) -> StudyPreset:
     if key not in PRESET_FILES:
         raise IntervalStudyError(f"unknown study preset: {key}")
@@ -714,6 +732,7 @@ def run_study(
     topology_cost_repeats: int,
     waf: Path,
     maximum_parallel_cpp_runs: int,
+    evidence_commit_reference: str | None,
 ) -> dict[str, Any]:
     if (
         duration_s <= 0
@@ -945,17 +964,14 @@ def run_study(
             flush=True,
         )
 
-    commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=REPOSITORY_ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=True,
-    ).stdout.strip()
+    report_generator_commit = resolve_git_commit("HEAD")
+    evidence_commit = resolve_git_commit(
+        evidence_commit_reference or "HEAD"
+    )
     metadata = {
         "schema_version": SCHEMA_VERSION,
-        "satcompute_commit": commit,
+        "satcompute_commit": evidence_commit,
+        "report_generator_commit": report_generator_commit,
         "duration_s": duration_s,
         "reference_step_s": 1,
         "intervals_s": list(intervals),
@@ -1022,6 +1038,13 @@ def parse_arguments() -> argparse.Namespace:
         type=int,
         default=3,
     )
+    parser.add_argument(
+        "--evidence-commit",
+        help=(
+            "commit used to generate reused raw evidence; "
+            "defaults to the current HEAD"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1038,6 +1061,7 @@ def main() -> int:
             arguments.topology_cost_repeats,
             arguments.waf.absolute(),
             arguments.maximum_parallel_cpp_runs,
+            arguments.evidence_commit,
         )
     except (OSError, ValueError, RuntimeError) as error:
         print(f"ERROR: {error}", file=sys.stderr)

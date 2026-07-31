@@ -172,6 +172,16 @@ uv run --locked python -m \
 复用，因此中断后执行同一命令即可续跑。Python comparison 证据也带版本和
 场景哈希，重复续跑会生成相同报告字节。
 
+如果复用的原始证据由较早提交生成，必须增加：
+
+```text
+--evidence-commit <full-or-resolvable-commit>
+```
+
+报告中的 `satcompute_commit` 记录原始实验证据提交，
+`report_generator_commit` 记录当前报告生成器提交。全新运行不传该参数时，
+二者都使用当前 `HEAD`。
+
 `satcompute-topology-cost-audit` 只创建卫星、加载 ISL 快照并执行原生全局
 路由重算，不安装 NetworkTransfer、任务、probe 或 FlowMonitor。内部 wall
 time 覆盖初始化、全部快照加载和路由重算；GNU time 单独记录进程 peak RSS。
