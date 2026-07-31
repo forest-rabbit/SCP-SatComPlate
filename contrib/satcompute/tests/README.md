@@ -1,24 +1,25 @@
-# SatCompute tests
+# SatCompute 测试
 
-This directory contains only SatCompute-owned tests.  The ns-3 upstream test
-layout remains unchanged.
+本目录只保存 SatCompute 自己的测试资产，不改变 ns-3 上游测试目录：
 
-- `unit/` contains the four Python unit-test domains.
-- `integration/smoke/` contains fast simulation and tool contracts.
-- `integration/regression/` contains the extended routing and workload
-  regressions.
-- `fixtures/` contains test-only JSON inputs.  Production examples and
-  workloads remain under `../input/`.
-- `support/` provides stable repository paths and shared fixture helpers.
+- `unit/`：Python 单元测试，覆盖拓扑生成、分析、可视化和验证工具；
+- `integration/smoke/`：快速仿真与工具合同；
+- `integration/regression/`：路由和 workload 的完整回归；
+- `fixtures/`：仅供测试使用的小型 JSON 输入；
+- `support/`：稳定的仓库路径和共享 fixture 构造辅助代码。
 
-From the repository root, run all Python unit tests with:
+正式示例和 workload 继续放在 `../input/`。不得把正式输入迁入
+`fixtures/`，也不得把 test-only fixture 放回生产输入目录。
+
+在仓库根目录统一发现并运行全部 Python 单元测试：
 
 ```bash
 uv run --locked python -m unittest discover \
   -s contrib/satcompute/tests/unit -p 'test_*.py' -v
 ```
 
-The integration scripts expect SatCompute to be configured and built first:
+integration runner 要求先配置并构建 SatCompute，执行顺序为三个 Fast runner，
+然后是两个 Full runner：
 
 ```bash
 ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
@@ -30,8 +31,7 @@ contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
 contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
 ```
 
-Tool-specific smoke drivers remain separate because they use different
-dependency groups:
+工具 smoke 使用不同的依赖组，因此保留独立入口：
 
 ```bash
 uv run --locked python -m \
@@ -41,6 +41,10 @@ MPLBACKEND=Agg uv run --locked --group visualization python -m \
   --work-dir /tmp/satcompute-orbit-smoke
 ```
 
-All CI, review, smoke, and regression outputs belong under `/tmp`.  Formal
-experiment output may use `../output/<experiment>/`, but generated output
-must never be committed.
+CI、审查、smoke、回归和仅用于审查的压力验证全部写入 `/tmp`。需要长期保留
+原始结果的正式实验必须显式选择仓库外目录；`../output/` 只是误写保护区，
+不是正式实验默认目录。任何生成输出都不得提交。
+
+迁移或整理 fixture 时必须保持文件内容的 SHA-256 多重集合不变，除非任务明确
+批准修改测试合同。测试模块通过 `support/` 复用公共构造器，禁止相互导入
+`test_*.py`，避免测试发现顺序影响结果。

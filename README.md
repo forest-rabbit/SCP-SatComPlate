@@ -26,14 +26,14 @@ contrib/satcompute/
 ├── metrics/               # 聚合、逐流和 ECMP 路由证据
 ├── third-party/nlohmann/  # 共享的 nlohmann JSON 3.11.3（MIT）
 ├── tools/                 # CI、生成器与确定性检查器
-└── input/
-    ├── topology/examples/xw-66sat/
-    ├── topology/tests/diamond-4-*/
-    ├── topology/resources/ # 静态 ComputeProfile
-    └── traffic/
-        ├── workload/     # 正式规模与本地压力输入
-        ├── test/         # NetworkTransfer CI 和回归输入
-        └── task/         # TaskTrace
+├── tests/
+│   ├── unit/              # SatCompute Python 单元测试
+│   ├── integration/       # Fast/Full runner 与工具 smoke
+│   └── fixtures/          # 仅供测试使用的小型 JSON 输入
+└── input/                 # 正式示例与 workload
+    ├── topology/examples/
+    ├── topology/resources/workload/
+    └── traffic/workload/
 ```
 
 ## 构建与基本运行
@@ -49,8 +49,11 @@ SatCompute 是默认构建的 contrib 模块，不依赖 ns-3 examples 或 tests
 检查 ns-3 上游测试套件时，才单独重新配置 `--enable-tests`。
 
 CI 分为 pull request 的 `SatCompute Fast Smoke` 与 `main`/手动触发的
-`SatCompute Full Regression`。两级均调用可在本地直接运行的脚本，命令与
-完整覆盖范围见
+`SatCompute Full Regression`。两级均调用
+`contrib/satcompute/tests/integration/` 中可在本地直接运行的脚本；Python
+测试统一位于 `contrib/satcompute/tests/unit/`，测试专用输入统一位于
+`contrib/satcompute/tests/fixtures/`。命令与完整覆盖范围见
+[`contrib/satcompute/tests/README.md`](contrib/satcompute/tests/README.md) 和
 [`contrib/satcompute/README.md`](contrib/satcompute/README.md#ci-分级)。
 
 默认运行 xw 66 星的 0–110 秒快照，不注入业务；这是正式保留的
@@ -165,9 +168,9 @@ ID 为 `2 × task_id`。输入完整到达后才进入计算节点的非抢占�
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
-  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+  --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --simulationDuration=10 \
   --taskLogMode=verbose \
   --transferChunkMode=fixed \
@@ -196,9 +199,9 @@ ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IPv4 包；完整
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -214,8 +217,9 @@ ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IPv4 包；完整
 ## 输出与范围
 
 程序默认写入 `/tmp/satcompute-output`。审查、CI 和本地测试应使用独立的
-`/tmp/satcompute-<case>` 目录；正式实验应通过 `--outputDir` 显式指定
-仓库外的持久目录，例如：
+`/tmp/satcompute-<case>` 目录；只用于审查的压力验证也属于临时验证，原始
+结果写入 `/tmp`，只将紧凑结论提交到 `docs/reviews/`。需要长期保留原始结果
+的正式实验才通过 `--outputDir` 显式指定仓库外的持久目录，例如：
 
 ```bash
 --outputDir=/home/emsky/experiments/SatCompute/n2/run-001

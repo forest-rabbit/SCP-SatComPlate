@@ -41,9 +41,9 @@ archive/local-output/
 *.log
 output/
 **/output/
-# SatCompute experiment output is intentionally visible to Git status so that
-# local results cannot be mistaken for committed fixtures.  The directory and
-# generated files must still never be committed.
+# SatCompute's local output guard is intentionally visible to Git status so
+# accidental writes cannot be mistaken for committed fixtures. This is not an
+# experiment destination, and generated files must never be committed.
 !contrib/satcompute/output/
 output.txt
 output1.txt

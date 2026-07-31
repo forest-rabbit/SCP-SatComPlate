@@ -113,7 +113,8 @@ generator seed/tail、preflight 成功/失败/warning 及全部扩展检查器�
 - `--ecmpHashSeed`：三种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
   前缀。
 - `--outputDir`：结构化指标目录，默认 `/tmp/satcompute-output`。正式实验应
-  显式填写仓库外的持久绝对路径。
+  显式填写仓库外的持久绝对路径；`contrib/satcompute/output/` 只用于暴露
+  误写结果，不是默认实验目录。
 
 `computeProfile` 与 `taskTrace` 必须同时指定，任务模式不能同时指定
 `transferTrace`。NetworkTransfer 与任务模式都使用 UDP；三项输入均为空时
