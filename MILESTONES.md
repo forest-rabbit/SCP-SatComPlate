@@ -10,6 +10,7 @@
 | N0：初始网络平台 | 已完成 | `n0-complete` / `d67ca0a` | 2026-07-26 |
 | N1：最小任务计算闭环 | 已完成 | `n1-complete` | 2026-07-28 |
 | N1 ECMP：路由与平台收尾 | 已完成 | `n1-ecmp-complete` | 2026-07-28 |
+| N2A：动态星座场景与快照间隔审计 | 已完成 | PR #16 / `cb0cd733` | 2026-07-31 |
 
 ## N0：初始网络平台
 
@@ -161,6 +162,53 @@ N1 ECMP 收尾在 N1 任务闭环之上完成了路由、输入、诊断和验�
 
 N1 ECMP 不引入可靠传输、动态流量工程、任务迁移、故障恢复或 Hypatia；这些能力
 必须作为后续阶段独立设计和验证。
+
+## N2A：动态星座场景与快照间隔审计
+
+N2A 在 `feature/n2-integration` 上完成动态星座生成工具链和快照间隔审计，
+冻结点为 [PR #16](https://github.com/forest-rabbit/SatCompute/pull/16) 的 merge
+commit `cb0cd7332cb48473ef1a388bee8d4b45b38c8da9`。这里的“已完成”不表示已经
+合并到 `main`，也没有创建 N2 标签。
+
+- [PR #14](https://github.com/forest-rabbit/SatCompute/pull/14) 引入窄化的
+  Hypatia 轨道后端、66 星 Walker Star、plus-grid ISL，以及 static/dynamic
+  canonical topology export。
+- [PR #15](https://github.com/forest-rabbit/SatCompute/pull/15) 统一 scenario
+  generator，支持 static/dynamic、fixed/distance delay、链路带宽配置、
+  even-plane-slot 计算节点放置和 `compute-profile.json` 生成。
+- [PR #16](https://github.com/forest-rabbit/SatCompute/pull/16) 增加 66/351/720
+  场景、1/2/5/10/20 秒降采样、边状态与连通性审计、全量 Python ECMP 候选
+  对照、三种模式的 C++ 实际下一跳 probe，以及 topology-only 成本测量。
+
+### 快照间隔结论
+
+- 66 星三个轨道窗口均为唯一边集合、0 次 transition 和唯一 ECMP 指纹；
+  351 星三个轨道窗口得到相同结论。
+- 720 星只完成 `offset=0` 主窗口，因此不能声称具备跨轨道相位稳健性。
+- 全部 105 行结果通过冻结 gate：Python 在每个已测参考秒比较所有有序源宿
+  节点对的可达性、最短跳数和 ECMP 候选下一跳集合；C++ 对每个星座 64 个
+  确定性分层 probe pair，在 `global-first`、`global-hash-per-flow` 和
+  `global-hrw-per-flow` 下比较实际选中下一跳。
+- `global-size-aware-hrw` 依赖活动流声明字节预留状态，不属于这次纯拓扑审计。
+
+当前模型统一建议 20 秒。20 秒只是 fixed-delay=8000 µs、2 Gbps、plus-grid、
+`seam=false`、无权 hop-count 模型下最大已测试且成本最低的通过值；
+`upper_bound_identified=false`，不能外推到 20 秒以上，也不能作为按距离、
+视距、极区或天线规则动态断链模型的普适建议。
+
+### 验证与边界
+
+- 完整报告：
+  [`docs/reviews/n2-snapshot-interval-study/REPORT.md`](docs/reviews/n2-snapshot-interval-study/REPORT.md)
+- PR #16 final-head Full Regression：
+  [run #30622204539](https://github.com/forest-rabbit/SatCompute/actions/runs/30622204539)，
+  checkout `4759e956f6ca82fba4ede42585ae5ac9a0f4d448`，`conclusion=success`
+- 合并后 Full Regression：
+  [run #30622570535](https://github.com/forest-rabbit/SatCompute/actions/runs/30622570535)，
+  checkout `cb0cd7332cb48473ef1a388bee8d4b45b38c8da9`，`conclusion=success`
+
+N2A 不包含任务压力间隔研究、动态链路断开模型、ground station/GSL、故障、
+checkpoint、backup、recovery、`main` 合并或 N2 标签。
 
 ## 更新约定
 
