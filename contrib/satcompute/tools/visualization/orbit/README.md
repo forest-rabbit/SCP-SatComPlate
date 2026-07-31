@@ -22,7 +22,8 @@ uv run --locked --group visualization python -m \
 ```
 
 窗口支持播放、暂停、时间 Slider、关闭、鼠标三维旋转和缩放，并同时显示当前
-simulation time 与 physical orbit time。动画直接覆盖 `0..duration_s`；不会按
+simulation time 与 physical orbit time。地球经纬网承担地理方向参照，因此不再
+显示外部 XYZ 坐标框、刻度和背景网格。动画直接覆盖 `0..duration_s`；不会按
 topology snapshot 拆成多个文件，也不会一次性构造所有帧的坐标和 artist。
 
 ## 配置

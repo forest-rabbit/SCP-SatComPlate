@@ -79,9 +79,7 @@ class OrbitRenderer:
         self.axes = self.figure.add_subplot(111, projection="3d")
         self.figure.subplots_adjust(bottom=0.16)
         self.axes.set_box_aspect((1.0, 1.0, 1.0))
-        self.axes.set_xlabel("X (km)")
-        self.axes.set_ylabel("Y (km)")
-        self.axes.set_zlabel("Z (km)")
+        self.axes.set_axis_off()
         self.axes.set_title("SatCompute orbit visualization")
         self.current_time_s = 0.0
         self.current_positions: tuple[PositionKm, ...] = ()

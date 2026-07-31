@@ -76,6 +76,10 @@ class OrbitRendererTest(unittest.TestCase):
                     renderer.earth_coordinate_labels,
                     coordinate_labels,
                 )
+                self.assertFalse(renderer.axes.axison)
+                self.assertEqual(renderer.axes.get_xlabel(), "")
+                self.assertEqual(renderer.axes.get_ylabel(), "")
+                self.assertEqual(renderer.axes.get_zlabel(), "")
                 self.assertEqual(summary["display_mode"], "detailed")
                 self.assertEqual(summary["node_count"], 4)
                 self.assertEqual(summary["compute_node_count"], 2)
