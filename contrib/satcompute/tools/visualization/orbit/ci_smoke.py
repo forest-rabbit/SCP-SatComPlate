@@ -91,6 +91,8 @@ def run_smoke(work_dir: Path, *, export_gif: bool) -> dict:
         "node_count": 66,
         "compute_node_count": 22,
         "relay_node_count": 44,
+        "earth_graticule_count": 17,
+        "earth_coordinate_label_count": 13,
         "orbit_artist_count": 6,
         "show_links": True,
         "active_link_count": 121,

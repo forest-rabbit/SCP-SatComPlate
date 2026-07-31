@@ -111,10 +111,10 @@ uv run --locked python -m \
 
 ## 可选轨道可视化
 
-统一场景可用独立、默认关闭的 Matplotlib 查看器展示三维卫星位置、轨道面、
-计算/普通卫星和可选活动 ISL，也可通过 Pillow 输出 GIF。该工具不参与仿真、
-scenario 哈希或默认依赖安装；使用时显式选择 `--group visualization`。入口、
-配置、Headless 与时间语义见
+统一场景可用独立、默认关闭的 Matplotlib 查看器展示带经纬网的 WGS72 地球、
+三维卫星位置、轨道面、计算/普通卫星和可选活动 ISL，也可通过 Pillow 输出
+GIF。该工具不参与仿真、scenario 哈希或默认依赖安装；使用时显式选择
+`--group visualization`。入口、配置、Headless 与时间语义见
 [`orbit/README.md`](contrib/satcompute/tools/visualization/orbit/README.md)。
 
 ## NetworkTransfer

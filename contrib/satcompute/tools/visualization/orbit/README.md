@@ -1,10 +1,10 @@
 # 可选轨道可视化
 
 本目录提供纯展示、默认关闭的 SatCompute 三维轨道查看器。它读取已经通过
-checker 的 unified scenario，展示 WGS72 地球、Hypatia 传播得到的当前卫星
-位置、瞬时轨道面参考环、计算/普通卫星分类和可选活动 ISL。它不改变 scenario、
-topology、路由或任务语义，也不实现故障、主备、迁移、checkpoint、恢复路径、
-路由高亮、MP4 或论文逻辑图。
+checker 的 unified scenario，展示带经纬网和经纬度标记的 WGS72 地球、
+Hypatia 传播得到的当前卫星位置、瞬时轨道面参考环、计算/普通卫星分类和可选
+活动 ISL。它不改变 scenario、topology、路由或任务语义，也不实现故障、主备、
+迁移、checkpoint、恢复路径、路由高亮、MP4 或论文逻辑图。
 
 ## 依赖与直接入口
 
@@ -37,7 +37,7 @@ aggregate SHA。
 | `display_mode` | `auto`、`detailed` 或 `simplified` |
 | `render_step_s` | 交互/Headless 的视觉采样间隔，必须大于 0 |
 | `playback_interval_ms` | 相邻显示帧的墙钟间隔，必须为正整数 |
-| `show_earth` | 是否显示无外部纹理的半透明 WGS72 地球 |
+| `show_earth` | 是否显示带经纬网和稀疏数值标记的半透明 WGS72 地球 |
 | `show_orbits` | 是否显示每帧从真实位置拟合的轨道面参考环 |
 | `show_links` | 是否按当前 topology snapshot 显示活动 ISL |
 | `show_node_labels` | detailed 模式下是否显示 node ID；simplified 强制关闭 |
@@ -56,6 +56,9 @@ detailed 使用较大的节点、较清晰的轨道环和可选标签；simplifi
 
 - 卫星位置来自现有 `OrbitConstellation.positions_at()` 和 `HypatiaAdapter`，不从
   绘图圆环反推或伪造。
+- 地球经纬网固定为 30° 间隔，并在不遮满画面的前提下标记主要纬度和经度。
+  它与卫星使用同一 Earth-fixed 坐标系：0° 经线指向 +X，90°E 指向 +Y，
+  北极指向 +Z。`show_earth=false` 时地球、经纬网和标记一起关闭。
 - dynamic scenario 使用
   `physical_time_s = orbit_sample_offset_s + simulation_time_s`；static scenario
   在唯一显示帧使用 `snapshot_time_s`。
