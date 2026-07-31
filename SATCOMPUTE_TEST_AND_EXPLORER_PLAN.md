@@ -1,6 +1,6 @@
 # SatCompute 测试集中化与输出目录整理计划
 
-> 状态：实施中。
+> 状态：已完成（2026-07-31）。
 >
 > 本计划只重组 SatCompute 自有测试资产及其路径引用，不修改生产算法、
 > 路由合同、仿真行为或 ns-3 上游测试。
@@ -126,17 +126,17 @@ contrib/satcompute/tests/
 
 ## 7. 最终验收
 
-- [ ] 29 个测试模块、166 个测试用例均保留并通过。
-- [ ] 49 个 fixture 均迁入 `tests/fixtures/`，内容哈希不变。
-- [ ] 5 个 Shell runner 和 2 个 Python smoke driver 均迁入
+- [x] 29 个测试模块、166 个测试用例均保留并通过。
+- [x] 49 个 fixture 均迁入 `tests/fixtures/`，内容哈希不变。
+- [x] 5 个 Shell runner 和 2 个 Python smoke driver 均迁入
       `tests/integration/`。
-- [ ] SatCompute 自有测试资产不再散落于 `tools/**/tests`、`tools/ci` 或
+- [x] SatCompute 自有测试资产不再散落于 `tools/**/tests`、`tools/ci` 或
       `input/**/test*`。
-- [ ] workflow、README、runner 和 checker 不再引用旧路径。
-- [ ] 正式 example/workload 输入仍保留在 `contrib/satcompute/input/`。
-- [ ] ns-3 上游内容和生产 C++ 代码未改动。
-- [ ] 标准 SatCompute 构建和 66 星、110 秒 smoke 通过。
-- [ ] Fast Smoke、Full Regression、interval smoke 和 visualization smoke
+- [x] workflow、README、runner 和 checker 不再引用旧路径。
+- [x] 正式 example/workload 输入仍保留在 `contrib/satcompute/input/`。
+- [x] ns-3 上游内容和生产 C++ 代码未改动。
+- [x] 标准 SatCompute 构建和 66 星、110 秒 smoke 通过。
+- [x] Fast Smoke、Full Regression、interval smoke 和 visualization smoke
       全部通过。
-- [ ] `git diff --check` 和旧路径全文审计通过。
-- [ ] `contrib/satcompute/output/` 内没有提交任何生成文件。
+- [x] `git diff --check` 和旧路径全文审计通过。
+- [x] `contrib/satcompute/output/` 内没有提交任何生成文件。
