@@ -51,7 +51,7 @@ PY
 
 announce "static Hash repeat"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
@@ -63,7 +63,7 @@ announce "static Hash repeat"
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ci-static-a"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
@@ -77,7 +77,7 @@ announce "static Hash repeat"
 
 announce "dynamic Hash route epochs"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-dynamic \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic \
   --simulationDuration=6 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
@@ -91,7 +91,7 @@ announce "dynamic Hash route epochs"
 
 announce "stable HRW dynamic epochs"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-hrw-dynamic \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
@@ -103,7 +103,7 @@ announce "stable HRW dynamic epochs"
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ci-hrw-seed1-a"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-hrw-dynamic \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
@@ -115,7 +115,7 @@ announce "stable HRW dynamic epochs"
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ci-hrw-seed1-b"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-hrw-dynamic \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
@@ -127,7 +127,7 @@ announce "stable HRW dynamic epochs"
   --ecmpHashSeed=2 \
   --outputDir=/tmp/satcompute-ci-hrw-seed2-a"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-hrw-dynamic \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
@@ -146,7 +146,7 @@ python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
 
 announce "size-aware HRW lifecycle"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=2 \
   --transferTrace=contrib/satcompute/input/traffic/test/size-aware-static-transfers.json \
   --transferChunkMode=fixed \
@@ -159,7 +159,7 @@ announce "size-aware HRW lifecycle"
   --outputDir=/tmp/satcompute-ci-size-static-hrw"
 for suffix in a b; do
   ./waf --run-no-build "satcompute \
-    --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+    --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
     --simulationDuration=2 \
     --transferTrace=contrib/satcompute/input/traffic/test/size-aware-static-transfers.json \
     --transferChunkMode=fixed \
@@ -171,7 +171,7 @@ for suffix in a b; do
     --ecmpHashSeed=1 \
     --outputDir=/tmp/satcompute-ci-size-static-$suffix"
   ./waf --run-no-build "satcompute \
-    --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-hrw-dynamic \
+    --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
     --simulationDuration=7 \
     --transferTrace=contrib/satcompute/input/traffic/test/size-aware-dynamic-transfers.json \
     --transferChunkMode=fixed \

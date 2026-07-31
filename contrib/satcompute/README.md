@@ -34,7 +34,7 @@ source .venv/bin/activate
 ./waf --run-no-build satcompute
 ```
 
-`input/topology/tests/`、`input/topology/resources/test/`、
+`tests/fixtures/topology/snapshots/`、`input/topology/resources/test/`、
 `input/traffic/test/`、`input/traffic/task/test/` 和 `tools/`
 中的检查器是外部端到端验证资产，不进入 `ns3-satcompute` 模块编译。需要运行
 ns-3 上游单元测试时再显式启用 `--enable-tests`；日常平台构建不启用
@@ -230,7 +230,7 @@ ceil(compute_work_units × 1,000,000,000
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --simulationDuration=10 \
@@ -318,7 +318,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
@@ -330,7 +330,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --outputDir=/tmp/satcompute-ecmp-static-a"
 
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
@@ -346,7 +346,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-dynamic \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic \
   --simulationDuration=6 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
@@ -371,7 +371,7 @@ HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序�
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-hrw-dynamic \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
   --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
@@ -453,7 +453,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=45 \
   --transferTrace=contrib/satcompute/input/traffic/test/mixed-large-ci.json \
   --transferChunkMode=size-aware \
@@ -473,7 +473,7 @@ python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=340 \
   --transferTrace=contrib/satcompute/input/traffic/workload/mixed-large-local.json \
   --transferChunkMode=size-aware \
@@ -499,7 +499,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=2 \
   --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
@@ -516,7 +516,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 
 # 上一条命令的预期退出码为 1。
 python3 contrib/satcompute/tools/validation/check-task-output.py failure \
-  --topology-dir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --compute-profile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
   --task-trace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --output-dir=/tmp/satcompute-task-failure \
@@ -561,7 +561,7 @@ python3 contrib/satcompute/tools/validation/check-task-output.py stress \
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/fqcodel-bottleneck \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/fqcodel-bottleneck \
   --simulationDuration=3 \
   --transferTrace=contrib/satcompute/input/traffic/test/fqcodel-bottleneck-transfers.json \
   --diagnosticMode=failure \

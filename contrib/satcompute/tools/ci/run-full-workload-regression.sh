@@ -28,7 +28,7 @@ done
 
 announce "heterogeneous compute"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/input/topology/resources/test/heterogeneous-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-heterogeneous.json \
   --simulationDuration=4 \
@@ -44,7 +44,7 @@ announce "heterogeneous compute"
 
 announce "TaskTrace ordering determinism"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/input/topology/resources/test/compute-profile-order-a.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-order-a.json \
   --simulationDuration=3 \
@@ -58,7 +58,7 @@ announce "TaskTrace ordering determinism"
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ci-task-order-a"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/input/topology/resources/test/compute-profile-order-a.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-order-b.json \
   --simulationDuration=3 \
@@ -74,7 +74,7 @@ announce "TaskTrace ordering determinism"
 
 announce "ComputeProfile ordering determinism"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/input/topology/resources/test/compute-profile-order-a.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-order-a.json \
   --simulationDuration=3 \
@@ -88,7 +88,7 @@ announce "ComputeProfile ordering determinism"
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ci-profile-order-a"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/input/topology/resources/test/compute-profile-order-b.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-order-a.json \
   --simulationDuration=3 \
@@ -104,7 +104,7 @@ announce "ComputeProfile ordering determinism"
 
 announce "extended deterministic task checks"
 python3 contrib/satcompute/tools/validation/check-task-output.py \
-  --topology-dir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --single-output=/tmp/satcompute-ci-task-single \
   --hrw-single-output=/tmp/satcompute-ci-task-single-hrw \
   --single-profile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \

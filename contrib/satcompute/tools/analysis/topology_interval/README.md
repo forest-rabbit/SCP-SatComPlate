@@ -63,7 +63,7 @@ SatCompute 在找不到 exact `/32` host route 时也会回退该原生路由。
 
 ```bash
 ./waf --run-no-build "satcompute-route-candidate-audit \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=1 \
   --auditTimes=0 \
   --outputFile=/tmp/diamond-candidates.jsonl"
@@ -71,7 +71,7 @@ SatCompute 在找不到 exact `/32` host route 时也会回退该原生路由。
 uv run --locked python -m \
   contrib.satcompute.tools.analysis.topology_interval.route_probe \
   candidate-gate \
-  --topology-dir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --candidate-audit=/tmp/diamond-candidates.jsonl
 ```
 

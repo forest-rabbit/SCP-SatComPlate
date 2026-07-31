@@ -28,7 +28,7 @@ done
 
 announce "canonical endpoint ordering and remainder"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/canonical-order-a \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/canonical-order-a \
   --simulationDuration=1 \
   --transferTrace=contrib/satcompute/input/traffic/test/canonical-order-a.json \
   --transferChunkMode=fixed \
@@ -40,7 +40,7 @@ announce "canonical endpoint ordering and remainder"
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ci-canonical-a"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/canonical-order-b \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/canonical-order-b \
   --simulationDuration=1 \
   --transferTrace=contrib/satcompute/input/traffic/test/canonical-order-b.json \
   --transferChunkMode=fixed \
@@ -52,7 +52,7 @@ announce "canonical endpoint ordering and remainder"
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ci-canonical-order-b"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/canonical-endpoint-reversed \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/canonical-endpoint-reversed \
   --simulationDuration=1 \
   --transferTrace=contrib/satcompute/input/traffic/test/canonical-order-a.json \
   --transferChunkMode=fixed \
@@ -81,7 +81,7 @@ announce "varied 5000-transfer workload"
 
 announce "mixed large workload"
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=45 \
   --transferTrace=contrib/satcompute/input/traffic/test/mixed-large-ci.json \
   --transferChunkMode=size-aware \
