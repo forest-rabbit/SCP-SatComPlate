@@ -303,9 +303,88 @@ def _csv_text(records: list[dict[str, Any]]) -> str:
     return output.getvalue()
 
 
+def _main_window_cost_rows(
+    records: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return one deterministic 1-second versus 20-second cost row per constellation."""
+    cost_fields = (
+        "node_count",
+        "snapshot_count",
+        "route_recomputation_count",
+        "topology_wall_time_median_s",
+        "output_bytes",
+    )
+    grouped: dict[tuple[str, int], list[dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        if record["window_index"] != 0 or record["interval_s"] not in {1, 20}:
+            continue
+        grouped[(record["constellation"], record["interval_s"])].append(record)
+
+    constellations = sorted(
+        {key[0] for key in grouped},
+        key=lambda constellation: (
+            grouped[(constellation, 1)][0]["node_count"],
+            constellation,
+        ),
+    )
+    rows = []
+    for constellation in constellations:
+        interval_costs = {}
+        for interval_s in (1, 20):
+            key = (constellation, interval_s)
+            group = grouped.get(key, [])
+            modes = tuple(
+                sorted(
+                    (record["routing_mode"] for record in group),
+                    key=ROUTING_MODES.index,
+                )
+            )
+            if modes != ROUTING_MODES:
+                raise IntervalReportError(
+                    f"main-window cost group {key} does not contain all routing modes"
+                )
+            values = {}
+            for field in cost_fields:
+                unique = {record.get(field) for record in group}
+                if len(unique) != 1:
+                    raise IntervalReportError(
+                        f"main-window cost group {key} disagrees on {field}"
+                    )
+                values[field] = unique.pop()
+            if values["topology_wall_time_median_s"] is None:
+                raise IntervalReportError(
+                    f"main-window cost group {key} has no median wall time"
+                )
+            interval_costs[interval_s] = values
+
+        one_second = interval_costs[1]
+        twenty_seconds = interval_costs[20]
+        twenty_second_wall_time = float(
+            twenty_seconds["topology_wall_time_median_s"]
+        )
+        if twenty_second_wall_time <= 0.0:
+            raise IntervalReportError(
+                f"{constellation} has a non-positive 20-second median wall time"
+            )
+        rows.append(
+            {
+                "constellation": constellation,
+                "node_count": one_second["node_count"],
+                "one_second": one_second,
+                "twenty_seconds": twenty_seconds,
+                "wall_time_speedup": (
+                    float(one_second["topology_wall_time_median_s"])
+                    / twenty_second_wall_time
+                ),
+            }
+        )
+    return rows
+
+
 def _markdown(
     metadata: dict[str, Any],
     recommendations: dict[str, Any],
+    records: list[dict[str, Any]],
     record_count: int,
 ) -> str:
     lines = [
@@ -319,7 +398,7 @@ def _markdown(
         "## 结论",
         "",
         "| 星座 | 已测窗口 | 主窗口推荐 | 已测窗口稳健推荐 | 已找到上界 | "
-        "全部候选等价 |",
+        "全量 Python 候选等价 |",
         "| --- | ---: | ---: | ---: | --- | --- |",
     ]
     for item in recommendations["constellations"]:
@@ -343,10 +422,46 @@ def _markdown(
     lines.extend(
         [
             "",
-            "若“已找到上界”为否，推荐值只表示当前模型下最大已测试且成本最优的"
-            "间隔，不表示真实星座的普适最优值，也不支持外推到 20 秒以上。",
+            "20 秒是当前固定时延、固定 plus-grid、无权 hop-count 模型下，"
+            "最大已测试且成本最低的通过间隔。`upper_bound_identified=false`，"
+            "不表示真实星座或动态断链模型的普适最优值，也不支持外推到 20 秒以上。",
             "“已测窗口稳健推荐”只聚合表中实际完成的窗口；单窗口结果不构成"
             "跨轨道相位稳健性证明。",
+            "",
+            "## 主窗口成本",
+            "",
+            "下表只取 `window_index=0`，并将同一组合的三种 routing mode "
+            "重复记录去重。",
+            "",
+            "| 星座 | snapshot count（1s → 20s） | route recomputation count "
+            "（1s → 20s） | topology-only median wall time（1s → 20s） | "
+            "output bytes（1s → 20s） | wall-time speedup |",
+            "| --- | ---: | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    for row in _main_window_cost_rows(records):
+        one_second = row["one_second"]
+        twenty_seconds = row["twenty_seconds"]
+        lines.append(
+            "| {constellation}（{node_count} 星） | {one_snapshots} → "
+            "{twenty_snapshots} | {one_routes} → {twenty_routes} | "
+            "{one_wall}s → {twenty_wall}s | {one_bytes:,} → "
+            "{twenty_bytes:,} | {speedup:.2f}× |".format(
+                constellation=row["constellation"],
+                node_count=row["node_count"],
+                one_snapshots=one_second["snapshot_count"],
+                twenty_snapshots=twenty_seconds["snapshot_count"],
+                one_routes=one_second["route_recomputation_count"],
+                twenty_routes=twenty_seconds["route_recomputation_count"],
+                one_wall=one_second["topology_wall_time_median_s"],
+                twenty_wall=twenty_seconds["topology_wall_time_median_s"],
+                one_bytes=one_second["output_bytes"],
+                twenty_bytes=twenty_seconds["output_bytes"],
+                speedup=row["wall_time_speedup"],
+            )
+        )
+    lines.extend(
+        [
             "",
             "## 证据范围",
             "",
@@ -359,6 +474,12 @@ def _markdown(
             )
             + "。",
             f"- topology-only 重复次数：{metadata['topology_cost_repeats']}。",
+            "- Python：对每个已测参考秒，比较全部有序源宿节点对的可达性、"
+            "最短跳数和 ECMP 候选下一跳集合；所有已测组合结果一致。",
+            "- C++：每个星座使用 64 个确定性分层 probe pair，在 "
+            "`global-first`、`global-hash-per-flow`、"
+            "`global-hrw-per-flow` 三种模式下比较实际选中下一跳；"
+            "所有已测组合结果一致。",
             "- `global-size-aware-hrw` 依赖活动流预留状态，不属于本次纯拓扑"
             "间隔审计。",
             "- 完整快照、原始路由 JSONL 和运行日志位于实验工作目录，未提交。",
@@ -408,7 +529,7 @@ def write_report_bundle(
         newline="",
     )
     (root / "REPORT.md").write_text(
-        _markdown(metadata, recommendations, len(finalized)),
+        _markdown(metadata, recommendations, finalized, len(finalized)),
         encoding="utf-8",
         newline="\n",
     )

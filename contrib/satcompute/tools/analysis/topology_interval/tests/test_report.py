@@ -184,6 +184,45 @@ class IntervalReportTest(unittest.TestCase):
                 ],
             )
 
+    def test_main_window_cost_table_deduplicates_modes(self) -> None:
+        records = records_with_failures(set())
+        for record in records:
+            if record["window_index"] != 0:
+                record["topology_wall_time_median_s"] = 999.0
+                record["output_bytes"] = 999999
+            elif record["interval_s"] == 1:
+                record["snapshot_count"] = 1001
+                record["route_recomputation_count"] = 1000
+                record["topology_wall_time_median_s"] = 20.0
+                record["output_bytes"] = 2000000
+            elif record["interval_s"] == 20:
+                record["snapshot_count"] = 51
+                record["route_recomputation_count"] = 50
+                record["topology_wall_time_median_s"] = 2.0
+                record["output_bytes"] = 100000
+
+        with tempfile.TemporaryDirectory(
+            prefix="satcompute-interval-cost-table-"
+        ) as temp:
+            root = Path(temp)
+            write_report_bundle(
+                root,
+                {"topology_cost_repeats": 3},
+                records,
+                {"schema_version": "0.1", "constellations": []},
+            )
+            markdown = (root / "REPORT.md").read_text(encoding="utf-8")
+
+        self.assertIn("## 主窗口成本", markdown)
+        self.assertEqual(markdown.count("| fixture（4 星） |"), 1)
+        self.assertIn("1001 → 51", markdown)
+        self.assertIn("1000 → 50", markdown)
+        self.assertIn("20.0s → 2.0s", markdown)
+        self.assertIn("2,000,000 → 100,000", markdown)
+        self.assertIn("10.00×", markdown)
+        self.assertNotIn("999.0", markdown)
+        self.assertNotIn("999,999", markdown)
+
 
 if __name__ == "__main__":
     unittest.main()
