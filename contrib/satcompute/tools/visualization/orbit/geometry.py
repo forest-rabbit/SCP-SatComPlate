@@ -100,11 +100,11 @@ def earth_graticule_segments_km() -> tuple[tuple[Vector3, ...], ...]:
         segments.append(
             tuple(
                 _scaled_sphere_point_km(
-                    -90.0 + 2.5 * index,
+                    -90.0 + 1.25 * index,
                     longitude_deg,
                     EARTH_GRATICULE_RADIUS_SCALE,
                 )
-                for index in range(73)
+                for index in range(145)
             )
         )
     return tuple(segments)

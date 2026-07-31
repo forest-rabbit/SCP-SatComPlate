@@ -33,6 +33,7 @@ class OrbitRendererTest(unittest.TestCase):
         root: Path,
         *,
         show_links: bool,
+        show_earth: bool = True,
         threshold: int = 100,
     ) -> OrbitRenderer:
         write_fixture(root, "dynamic")
@@ -43,6 +44,7 @@ class OrbitRendererTest(unittest.TestCase):
         )
         payload = valid_payload()
         payload["enabled"] = True
+        payload["show_earth"] = show_earth
         payload["show_links"] = show_links
         payload["show_node_labels"] = True
         payload["detail_node_threshold"] = threshold
@@ -57,6 +59,8 @@ class OrbitRendererTest(unittest.TestCase):
                 relay_artist = renderer.relay_scatter
                 compute_artist = renderer.compute_scatter
                 ring_artists = renderer.orbit_artists
+                graticule_artist = renderer.earth_graticule_artist
+                coordinate_labels = renderer.earth_coordinate_labels
                 for time_s in (0.0, 10.0, 20.0):
                     renderer.update(time_s)
                     renderer.figure.canvas.draw()
@@ -64,14 +68,49 @@ class OrbitRendererTest(unittest.TestCase):
                 self.assertIs(renderer.relay_scatter, relay_artist)
                 self.assertIs(renderer.compute_scatter, compute_artist)
                 self.assertEqual(renderer.orbit_artists, ring_artists)
+                self.assertIs(
+                    renderer.earth_graticule_artist,
+                    graticule_artist,
+                )
+                self.assertEqual(
+                    renderer.earth_coordinate_labels,
+                    coordinate_labels,
+                )
                 self.assertEqual(summary["display_mode"], "detailed")
                 self.assertEqual(summary["node_count"], 4)
                 self.assertEqual(summary["compute_node_count"], 2)
                 self.assertEqual(summary["relay_node_count"], 2)
+                self.assertEqual(summary["earth_graticule_count"], 17)
+                self.assertEqual(
+                    summary["earth_coordinate_label_count"],
+                    13,
+                )
                 self.assertEqual(summary["orbit_artist_count"], 2)
                 self.assertEqual(summary["node_label_count"], 4)
                 self.assertFalse(summary["show_links"])
                 self.assertEqual(summary["current_time_s"], 20.0)
+            finally:
+                renderer.close()
+
+    def test_hiding_earth_also_hides_its_coordinates(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="satcompute-orbit-no-earth-"
+        ) as temp:
+            renderer = self._renderer(
+                Path(temp),
+                show_links=False,
+                show_earth=False,
+            )
+            try:
+                self.assertIsNone(renderer.earth_artist)
+                self.assertIsNone(renderer.earth_graticule_artist)
+                self.assertEqual(renderer.earth_coordinate_labels, ())
+                summary = renderer.summary()
+                self.assertEqual(summary["earth_graticule_count"], 0)
+                self.assertEqual(
+                    summary["earth_coordinate_label_count"],
+                    0,
+                )
             finally:
                 renderer.close()
 

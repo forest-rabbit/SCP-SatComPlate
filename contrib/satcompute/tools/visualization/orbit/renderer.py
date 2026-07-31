@@ -15,7 +15,12 @@ from .configuration import (
     DETAILED,
     OrbitVisualizationConfig,
 )
-from .geometry import EARTH_RADIUS_KM, fit_orbit_ring
+from .geometry import (
+    EARTH_RADIUS_KM,
+    earth_coordinate_labels_km,
+    earth_graticule_segments_km,
+    fit_orbit_ring,
+)
 from .scenario_reader import OrbitScenario, PositionKm
 
 
@@ -81,11 +86,16 @@ class OrbitRenderer:
         self.current_time_s = 0.0
         self.current_positions: tuple[PositionKm, ...] = ()
         self.link_count = 0
+        self.earth_graticule_count = 0
 
         if config.show_earth:
             self.earth_artist = self._create_earth()
+            self.earth_graticule_artist = self._create_earth_graticule()
+            self.earth_coordinate_labels = self._create_earth_labels()
         else:
             self.earth_artist = None
+            self.earth_graticule_artist = None
+            self.earth_coordinate_labels = ()
 
         positions = scenario.positions_at(0.0)
         self._set_equal_limits(positions)
@@ -132,6 +142,31 @@ class OrbitRenderer:
             linewidth=0.0,
             antialiased=True,
             shade=True,
+        )
+
+    def _create_earth_graticule(self) -> Line3DCollection:
+        segments = earth_graticule_segments_km()
+        artist = Line3DCollection(
+            segments,
+            colors="#d9edf7",
+            linewidths=0.45,
+            alpha=0.55,
+        )
+        self.axes.add_collection3d(artist)
+        self.earth_graticule_count = len(segments)
+        return artist
+
+    def _create_earth_labels(self) -> tuple[Any, ...]:
+        return tuple(
+            self.axes.text(
+                *position,
+                text,
+                color="#17365d",
+                fontsize=7,
+                ha="center",
+                va="center",
+            )
+            for text, position in earth_coordinate_labels_km()
         )
 
     def _set_equal_limits(self, positions: tuple[PositionKm, ...]) -> None:
@@ -297,6 +332,10 @@ class OrbitRenderer:
             "node_count": self.scenario.node_count,
             "compute_node_count": len(self.scenario.compute_node_ids),
             "relay_node_count": len(self.scenario.relay_node_ids),
+            "earth_graticule_count": self.earth_graticule_count,
+            "earth_coordinate_label_count": len(
+                self.earth_coordinate_labels
+            ),
             "orbit_artist_count": len(self.orbit_artists),
             "node_label_count": len(self.node_labels),
             "show_links": self.link_artist is not None,
