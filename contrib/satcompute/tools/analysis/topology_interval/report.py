@@ -226,9 +226,12 @@ def finalize_records_and_recommendations(
             constellation_groups[constellation],
             key=lambda item: item["window_index"],
         )
-        if tuple(item["window_index"] for item in windows) != (0, 1, 2):
+        window_indices = tuple(
+            item["window_index"] for item in windows
+        )
+        if window_indices != tuple(range(len(windows))):
             raise IntervalReportError(
-                f"{constellation} must contain windows 0, 1, and 2"
+                f"{constellation} windows must be contiguous from 0"
             )
         all_equivalent = all(
             item["all_tested_intervals_fidelity_equivalent"]
@@ -245,6 +248,10 @@ def finalize_records_and_recommendations(
                 "upper_bound_identified": not all_equivalent,
                 "all_tested_intervals_fidelity_equivalent":
                     all_equivalent,
+                "tested_window_count": len(windows),
+                "tested_window_offsets_s": [
+                    item["window_offset_s"] for item in windows
+                ],
                 "windows": windows,
             }
         )
@@ -311,15 +318,16 @@ def _markdown(
         "",
         "## 结论",
         "",
-        "| 星座 | 主窗口推荐 | 三窗口稳健推荐 | 已找到上界 | "
+        "| 星座 | 已测窗口 | 主窗口推荐 | 已测窗口稳健推荐 | 已找到上界 | "
         "全部候选等价 |",
-        "| --- | ---: | ---: | --- | --- |",
+        "| --- | ---: | ---: | ---: | --- | --- |",
     ]
     for item in recommendations["constellations"]:
         lines.append(
-            "| {constellation} | {main}s | {robust}s | {upper} | "
+            "| {constellation} | {windows} | {main}s | {robust}s | {upper} | "
             "{equivalent} |".format(
                 constellation=item["constellation"],
+                windows=item["tested_window_count"],
                 main=item["main_window_recommended_interval_s"],
                 robust=item["robust_recommended_interval_s"],
                 upper="是" if item["upper_bound_identified"] else "否",
@@ -337,11 +345,19 @@ def _markdown(
             "",
             "若“已找到上界”为否，推荐值只表示当前模型下最大已测试且成本最优的"
             "间隔，不表示真实星座的普适最优值，也不支持外推到 20 秒以上。",
+            "“已测窗口稳健推荐”只聚合表中实际完成的窗口；单窗口结果不构成"
+            "跨轨道相位稳健性证明。",
             "",
             "## 证据范围",
             "",
             f"- 结果行数：{record_count}（每个组合分别记录三种路由模式）。",
-            f"- 轨道窗口：{metadata['window_count']} 个。",
+            "- 窗口覆盖："
+            + "；".join(
+                f"{item['constellation']}="
+                f"{item['tested_window_count']} 个"
+                for item in recommendations["constellations"]
+            )
+            + "。",
             f"- topology-only 重复次数：{metadata['topology_cost_repeats']}。",
             "- `global-size-aware-hrw` 依赖活动流预留状态，不属于本次纯拓扑"
             "间隔审计。",

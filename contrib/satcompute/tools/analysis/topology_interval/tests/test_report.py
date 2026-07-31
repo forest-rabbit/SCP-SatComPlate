@@ -103,6 +103,24 @@ class IntervalReportTest(unittest.TestCase):
             )
         )
 
+    def test_single_main_window_is_reported_without_extra_windows(self) -> None:
+        main_window = [
+            record
+            for record in records_with_failures(set())
+            if record["window_index"] == 0
+        ]
+        _, recommendations = finalize_records_and_recommendations(
+            main_window
+        )
+        decision = recommendations["constellations"][0]
+        self.assertEqual(decision["tested_window_count"], 1)
+        self.assertEqual(decision["tested_window_offsets_s"], [0])
+        self.assertEqual(
+            decision["main_window_recommended_interval_s"],
+            20,
+        )
+        self.assertEqual(decision["robust_recommended_interval_s"], 20)
+
     def test_no_passing_interval_falls_back_to_one(self) -> None:
         failures = {
             (window_index, interval_s)
@@ -126,7 +144,6 @@ class IntervalReportTest(unittest.TestCase):
             },
         )
         metadata = {
-            "window_count": 3,
             "topology_cost_repeats": 3,
         }
         probes = {
