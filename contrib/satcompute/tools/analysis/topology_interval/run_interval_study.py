@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the fixed-delay three-scale, three-window interval study."""
+"""Run the fixed-delay three-scale interval study."""
 
 from __future__ import annotations
 
@@ -61,6 +61,11 @@ PRESET_FILES = {
     "66": "synthetic-66-compute-22.json",
     "351": "synthetic-351-telesat-t1-compute-117.json",
     "720": "synthetic-720-oneweb-compute-240.json",
+}
+STUDY_WINDOW_COUNTS = {
+    "66": 3,
+    "351": 3,
+    "720": 1,
 }
 
 
@@ -143,6 +148,13 @@ def load_study_preset(key: str) -> StudyPreset:
         candidate_count,
         constellation.altitude_km,
     )
+
+
+def study_window_offsets(preset: StudyPreset) -> tuple[int, ...]:
+    """Return the orbital offsets included in the frozen study scope."""
+    return orbital_window_offsets(preset.altitude_km)[
+        :STUDY_WINDOW_COUNTS[preset.key]
+    ]
 
 
 def _pretty_json_bytes(payload: Any) -> bytes:
@@ -730,7 +742,7 @@ def run_study(
     }
     for preset_key in preset_keys:
         preset = load_study_preset(preset_key)
-        offsets = orbital_window_offsets(preset.altitude_km)
+        offsets = study_window_offsets(preset)
         preset_root = root / preset.scenario_name
         probe_pairs_path = preset_root / "probe-pairs.json"
         probe_catalog_entry = None
@@ -947,7 +959,6 @@ def run_study(
         "duration_s": duration_s,
         "reference_step_s": 1,
         "intervals_s": list(intervals),
-        "window_count": 3,
         "topology_cost_repeats": topology_cost_repeats,
         "cost_protocol_version": COST_PROTOCOL_VERSION,
         "ns3_build_profile": build_profile,
@@ -968,9 +979,7 @@ def run_study(
                         load_study_preset(key).altitude_km
                     ),
                 "window_offsets_s": list(
-                    orbital_window_offsets(
-                        load_study_preset(key).altitude_km
-                    )
+                    study_window_offsets(load_study_preset(key))
                 ),
             }
             for key in preset_keys

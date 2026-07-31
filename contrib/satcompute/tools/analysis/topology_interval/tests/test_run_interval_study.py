@@ -12,6 +12,7 @@ from contrib.satcompute.tools.analysis.topology_interval.run_interval_study impo
     load_study_preset,
     orbital_period_seconds,
     orbital_window_offsets,
+    study_window_offsets,
     write_window_config,
 )
 from contrib.satcompute.tools.generation.scenario.configuration import (
@@ -36,6 +37,19 @@ class RunIntervalStudyTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     orbital_window_offsets(preset.altitude_km),
+                    offsets,
+                )
+
+    def test_frozen_study_window_scope(self) -> None:
+        expected = {
+            "66": (0, 2009, 4018),
+            "351": (0, 2109, 4218),
+            "720": (0,),
+        }
+        for key, offsets in expected.items():
+            with self.subTest(key=key):
+                self.assertEqual(
+                    study_window_offsets(load_study_preset(key)),
                     offsets,
                 )
 
