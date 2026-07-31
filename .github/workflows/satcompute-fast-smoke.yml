@@ -66,7 +66,7 @@ jobs:
           ./waf --run-no-build "satcompute \
             --topologyDir=/tmp/satcompute-fast-scenario/topology \
             --computeProfile=/tmp/satcompute-fast-scenario/resources/compute-profile.json \
-            --taskTrace=contrib/satcompute/tools/generation/scenario/tests/fixtures/task-single-selected.json \
+            --taskTrace=contrib/satcompute/tests/fixtures/scenario-generation/task-single-selected.json \
             --simulationDuration=3 \
             --taskLogMode=silent \
             --transferChunkMode=fixed \
@@ -80,8 +80,8 @@ jobs:
           python3 contrib/satcompute/tools/validation/check-task-output.py run \
             --topology-dir=/tmp/satcompute-fast-scenario/topology \
             --compute-profile=/tmp/satcompute-fast-scenario/resources/compute-profile.json \
-            --task-trace=contrib/satcompute/tools/generation/scenario/tests/fixtures/task-single-selected.json \
-            --workload-summary=contrib/satcompute/tools/generation/scenario/tests/fixtures/task-single-selected-summary.json \
+            --task-trace=contrib/satcompute/tests/fixtures/scenario-generation/task-single-selected.json \
+            --workload-summary=contrib/satcompute/tests/fixtures/scenario-generation/task-single-selected-summary.json \
             --output-dir=/tmp/satcompute-fast-scenario-task
 
       - name: Routing contracts
