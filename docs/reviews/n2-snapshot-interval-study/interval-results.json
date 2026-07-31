@@ -48,7 +48,7 @@
     "link_bandwidth_kbps": 2000000,
     "ns3_build_profile": "optimized",
     "reference_step_s": 1,
-    "report_generator_commit": "6fc74e8bebbc935af7c2bd524ef52ad218bd07af",
+    "report_generator_commit": "bdc4ad24a9fbb56ff2fff92e87c76f14ba9070ae",
     "routing_metric": "unweighted-hop-count",
     "routing_modes": [
       "global-first",
