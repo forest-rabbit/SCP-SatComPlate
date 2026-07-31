@@ -25,9 +25,7 @@ EXPECTED_TLE_SHA256 = (
 EXPECTED_POSITIONS_SHA256 = (
     "01f0fb97feb26e63582649a65225c273cfa3357a474fc1511dc9eddc6b6f2ea9"
 )
-EXPECTED_UV_LOCK_SHA256 = (
-    "1e4fdeda462596bff581dd9fe60208407d4fd1b4396e9ece59a71ff911e725fc"
-)
+UV_LOCK = TOPOLOGY_ROOT.parents[4] / "uv.lock"
 
 
 class ResolveConstellationTest(unittest.TestCase):
@@ -113,7 +111,7 @@ class ResolveConstellationTest(unittest.TestCase):
         )
         self.assertEqual(
             manifest["uv_lock_sha256"],
-            EXPECTED_UV_LOCK_SHA256,
+            hashlib.sha256(UV_LOCK.read_bytes()).hexdigest(),
         )
 
     def test_repeated_outputs_are_identical(self) -> None:
