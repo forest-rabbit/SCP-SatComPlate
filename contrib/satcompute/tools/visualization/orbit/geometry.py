@@ -9,6 +9,10 @@ from typing import Iterable
 
 
 EARTH_RADIUS_KM = 6378.135
+EARTH_GRATICULE_RADIUS_SCALE = 1.002
+EARTH_LABEL_RADIUS_SCALE = 1.025
+EARTH_GRATICULE_LATITUDES_DEG = (-60, -30, 0, 30, 60)
+EARTH_GRATICULE_LONGITUDES_DEG = tuple(range(-150, 181, 30))
 Vector3 = tuple[float, float, float]
 
 
@@ -64,6 +68,90 @@ def sphere_point_km(latitude_rad: float, longitude_rad: float) -> Vector3:
         EARTH_RADIUS_KM * cos_latitude * math.sin(longitude_rad),
         EARTH_RADIUS_KM * math.sin(latitude_rad),
     )
+
+
+def _scaled_sphere_point_km(
+    latitude_deg: float,
+    longitude_deg: float,
+    radius_scale: float,
+) -> Vector3:
+    point = sphere_point_km(
+        math.radians(latitude_deg),
+        math.radians(longitude_deg),
+    )
+    return _scale(point, radius_scale)
+
+
+def earth_graticule_segments_km() -> tuple[tuple[Vector3, ...], ...]:
+    """Return fixed 30-degree latitude and longitude reference lines."""
+    segments = []
+    for latitude_deg in EARTH_GRATICULE_LATITUDES_DEG:
+        segments.append(
+            tuple(
+                _scaled_sphere_point_km(
+                    latitude_deg,
+                    -180.0 + 2.5 * index,
+                    EARTH_GRATICULE_RADIUS_SCALE,
+                )
+                for index in range(145)
+            )
+        )
+    for longitude_deg in EARTH_GRATICULE_LONGITUDES_DEG:
+        segments.append(
+            tuple(
+                _scaled_sphere_point_km(
+                    -90.0 + 2.5 * index,
+                    longitude_deg,
+                    EARTH_GRATICULE_RADIUS_SCALE,
+                )
+                for index in range(73)
+            )
+        )
+    return tuple(segments)
+
+
+def earth_coordinate_labels_km() -> tuple[tuple[str, Vector3], ...]:
+    """Return sparse readable labels anchored just above the Earth surface."""
+    latitude_labels = (
+        (-90, "90°S"),
+        (-60, "60°S"),
+        (-30, "30°S"),
+        (0, "0° latitude"),
+        (30, "30°N"),
+        (60, "60°N"),
+        (90, "90°N"),
+    )
+    longitude_labels = (
+        (-120, "120°W"),
+        (-60, "60°W"),
+        (0, "0° longitude"),
+        (60, "60°E"),
+        (120, "120°E"),
+        (180, "180°"),
+    )
+    labels = [
+        (
+            text,
+            _scaled_sphere_point_km(
+                latitude_deg,
+                4.0 if abs(latitude_deg) < 90 else 0.0,
+                EARTH_LABEL_RADIUS_SCALE,
+            ),
+        )
+        for latitude_deg, text in latitude_labels
+    ]
+    labels.extend(
+        (
+            text,
+            _scaled_sphere_point_km(
+                -4.0,
+                longitude_deg,
+                EARTH_LABEL_RADIUS_SCALE,
+            ),
+        )
+        for longitude_deg, text in longitude_labels
+    )
+    return tuple(labels)
 
 
 def fit_orbit_ring(

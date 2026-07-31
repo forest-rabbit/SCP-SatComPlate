@@ -7,8 +7,14 @@ import math
 import unittest
 
 from contrib.satcompute.tools.visualization.orbit.geometry import (
+    EARTH_GRATICULE_LATITUDES_DEG,
+    EARTH_GRATICULE_LONGITUDES_DEG,
+    EARTH_GRATICULE_RADIUS_SCALE,
+    EARTH_LABEL_RADIUS_SCALE,
     EARTH_RADIUS_KM,
     OrbitGeometryError,
+    earth_coordinate_labels_km,
+    earth_graticule_segments_km,
     fit_orbit_ring,
     sphere_point_km,
 )
@@ -34,6 +40,39 @@ class OrbitGeometryTest(unittest.TestCase):
                     EARTH_RADIUS_KM,
                     places=9,
                 )
+
+    def test_earth_graticule_uses_fixed_earth_coordinates(self) -> None:
+        segments = earth_graticule_segments_km()
+        self.assertEqual(
+            len(segments),
+            len(EARTH_GRATICULE_LATITUDES_DEG)
+            + len(EARTH_GRATICULE_LONGITUDES_DEG),
+        )
+        for segment in segments:
+            self.assertGreaterEqual(len(segment), 3)
+            for point in segment:
+                self.assertAlmostEqual(
+                    norm(point),
+                    EARTH_RADIUS_KM * EARTH_GRATICULE_RADIUS_SCALE,
+                    places=9,
+                )
+
+    def test_earth_coordinate_labels_cover_latitude_and_longitude(self) -> None:
+        labels = earth_coordinate_labels_km()
+        texts = tuple(text for text, _position in labels)
+        self.assertEqual(len(labels), 13)
+        self.assertIn("90°S", texts)
+        self.assertIn("0° latitude", texts)
+        self.assertIn("90°N", texts)
+        self.assertIn("120°W", texts)
+        self.assertIn("0° longitude", texts)
+        self.assertIn("120°E", texts)
+        for _text, position in labels:
+            self.assertAlmostEqual(
+                norm(position),
+                EARTH_RADIUS_KM * EARTH_LABEL_RADIUS_SCALE,
+                places=9,
+            )
 
     def test_ring_uses_one_earth_fixed_plane_and_average_radius(self) -> None:
         radius = 7000.0
