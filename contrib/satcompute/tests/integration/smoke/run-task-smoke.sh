@@ -4,7 +4,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly script_dir
-repository_root="$(cd "${script_dir}/../../../.." && pwd)"
+repository_root="$(cd "${script_dir}/../../../../.." && pwd)"
 readonly repository_root
 
 cd "${repository_root}"

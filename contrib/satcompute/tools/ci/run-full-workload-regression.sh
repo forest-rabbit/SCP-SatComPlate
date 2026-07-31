@@ -21,7 +21,7 @@ for required_output in \
   /tmp/satcompute-ci-task-fcfs; do
   if [[ ! -f "${required_output}/run-summary.json" ]]; then
     echo "missing task-smoke prerequisite: ${required_output}" >&2
-    echo "run contrib/satcompute/tools/ci/run-task-smoke.sh first" >&2
+    echo "run contrib/satcompute/tests/integration/smoke/run-task-smoke.sh first" >&2
     exit 1
   fi
 done

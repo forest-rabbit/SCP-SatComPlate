@@ -21,7 +21,7 @@ for required_output in \
   /tmp/satcompute-ci-dynamic; do
   if [[ ! -f "${required_output}/run-summary.json" ]]; then
     echo "missing routing-smoke prerequisite: ${required_output}" >&2
-    echo "run contrib/satcompute/tools/ci/run-routing-smoke.sh first" >&2
+    echo "run contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh first" >&2
     exit 1
   fi
 done

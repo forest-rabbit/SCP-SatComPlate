@@ -69,9 +69,9 @@ Pull request 只运行 `SatCompute Fast Smoke`，覆盖核心路由、任务和�
 完成上述 configure/build 后，可在本地直接运行 Fast：
 
 ```bash
-contrib/satcompute/tools/ci/run-routing-smoke.sh
-contrib/satcompute/tools/ci/run-task-smoke.sh
-contrib/satcompute/tools/ci/run-diagnostics-smoke.sh
+contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
+contrib/satcompute/tests/integration/smoke/run-task-smoke.sh
+contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
 ```
 
 完整回归必须在同一工作区按顺序继续运行：

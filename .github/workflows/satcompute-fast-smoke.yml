@@ -85,13 +85,13 @@ jobs:
             --output-dir=/tmp/satcompute-fast-scenario-task
 
       - name: Routing contracts
-        run: contrib/satcompute/tools/ci/run-routing-smoke.sh
+        run: contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
 
       - name: Task contracts
-        run: contrib/satcompute/tools/ci/run-task-smoke.sh
+        run: contrib/satcompute/tests/integration/smoke/run-task-smoke.sh
 
       - name: Diagnostics contracts
-        run: contrib/satcompute/tools/ci/run-diagnostics-smoke.sh
+        run: contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
 
       - name: Verify clean source tree
         run: test -z "$(git status --short)"
