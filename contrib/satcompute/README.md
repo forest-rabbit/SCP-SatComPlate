@@ -34,7 +34,7 @@ source .venv/bin/activate
 ./waf --run-no-build satcompute
 ```
 
-`tests/fixtures/topology/snapshots/`、`input/topology/resources/test/`、
+`tests/fixtures/topology/snapshots/`、`tests/fixtures/topology/compute-profiles/`、
 `input/traffic/test/`、`input/traffic/task/test/` 和 `tools/`
 中的检查器是外部端到端验证资产，不进入 `ns3-satcompute` 模块编译。需要运行
 ns-3 上游单元测试时再显式启用 `--enable-tests`；日常平台构建不启用
@@ -231,7 +231,7 @@ ceil(compute_work_units × 1,000,000,000
 ```bash
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
-  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --simulationDuration=10 \
   --taskLogMode=verbose \
@@ -501,7 +501,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=2 \
-  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
@@ -517,7 +517,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 # 上一条命令的预期退出码为 1。
 python3 contrib/satcompute/tools/validation/check-task-output.py failure \
   --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
-  --compute-profile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --compute-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --task-trace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --output-dir=/tmp/satcompute-task-failure \
   --require-queue-drop

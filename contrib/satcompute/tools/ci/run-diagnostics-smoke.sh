@@ -42,7 +42,7 @@ announce "strict device-queue failure"
 set +e
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
-  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --simulationDuration=2 \
   --taskLogMode=silent \
@@ -60,7 +60,7 @@ set -e
 test "${strict_status}" -eq 1
 python3 contrib/satcompute/tools/validation/check-task-output.py failure \
   --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
-  --compute-profile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --compute-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --task-trace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --output-dir=/tmp/satcompute-ci-task-strict \
   --require-queue-drop
@@ -75,7 +75,7 @@ announce "strict UDP socket-buffer failure"
 set +e
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
-  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --simulationDuration=2 \
   --taskLogMode=silent \
@@ -94,7 +94,7 @@ set -e
 test "${udp_status}" -eq 1
 python3 contrib/satcompute/tools/validation/check-task-output.py failure \
   --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
-  --compute-profile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --compute-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --task-trace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
   --output-dir=/tmp/satcompute-ci-task-udp-drop \
   --require-udp-socket-drop
@@ -130,7 +130,7 @@ test ! -e /tmp/satcompute-ci-task-strict/diagnostics
 announce "report-mode partial task contract"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
-  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/input/traffic/task/test/task-fcfs.json \
   --simulationDuration=1 \
   --taskLogMode=silent \
@@ -146,7 +146,7 @@ announce "report-mode partial task contract"
   --outputDir=/tmp/satcompute-ci-task-report"
 python3 contrib/satcompute/tools/validation/check-task-output.py stress \
   --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
-  --compute-profile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
+  --compute-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --task-trace=contrib/satcompute/input/traffic/task/test/task-fcfs.json \
   --output-dir=/tmp/satcompute-ci-task-report \
   --minimum-completion-rate-percent=0

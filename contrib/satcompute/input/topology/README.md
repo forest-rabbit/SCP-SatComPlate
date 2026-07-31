@@ -90,7 +90,9 @@ NetworkTransfer 或 TaskTrace JSON 提供。
 不能重复，速率是正整数，单位为 work units/s。数组按 `node_id` canonical
 sort，因此 JSON 中的排列不影响运行与结构化输出。
 
-测试资源位于 [`resources/test/`](resources/test/)。正式 2 Gbit/s 静态
+测试资源集中位于
+[`tests/fixtures/topology/compute-profiles/`](../../tests/fixtures/topology/compute-profiles/)。
+正式 2 Gbit/s 静态
 66 星压力配置位于 [`resources/workload/`](resources/workload/)：不带
 `all` 的文件保留 22 个计算节点对照，带 `all` 的文件覆盖节点 0–65。
 与之配对的任务到达属于 traffic side，位于
