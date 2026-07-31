@@ -10,6 +10,8 @@ on:
       - "contrib/satcompute/tools/generation/scenario/**"
       - "contrib/satcompute/tools/generation/topology/**"
       - "contrib/satcompute/tools/visualization/**"
+      - "contrib/satcompute/tests/support/**"
+      - "contrib/satcompute/tests/unit/visualization/orbit/**"
   push:
     branches:
       - feature/n2-integration
@@ -21,6 +23,8 @@ on:
       - "contrib/satcompute/tools/generation/scenario/**"
       - "contrib/satcompute/tools/generation/topology/**"
       - "contrib/satcompute/tools/visualization/**"
+      - "contrib/satcompute/tests/support/**"
+      - "contrib/satcompute/tests/unit/visualization/orbit/**"
   workflow_dispatch:
 
 permissions:
@@ -58,7 +62,7 @@ jobs:
       - name: Visualization unit tests
         run: >-
           uv run --locked --group visualization python -m unittest discover
-          -s contrib/satcompute/tools/visualization/orbit/tests
+          -s contrib/satcompute/tests/unit/visualization/orbit
           -p 'test_*.py' -v
 
       - name: Agg headless 66-satellite smoke

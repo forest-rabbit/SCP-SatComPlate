@@ -11,7 +11,7 @@ from unittest.mock import patch
 from contrib.satcompute.tools.visualization.orbit.configuration import (
     parse_config,
 )
-from contrib.satcompute.tools.visualization.orbit.tests.test_configuration import (
+from contrib.satcompute.tests.unit.visualization.orbit._helpers import (
     valid_payload,
 )
 from contrib.satcompute.tools.visualization.orbit.viewer import (

@@ -13,24 +13,9 @@ from contrib.satcompute.tools.visualization.orbit.configuration import (
     OrbitVisualizationConfigError,
     parse_config,
 )
-
-
-def valid_payload() -> dict:
-    return {
-        "schema_version": "0.1",
-        "enabled": False,
-        "display_mode": "auto",
-        "render_step_s": 1,
-        "playback_interval_ms": 50,
-        "show_earth": True,
-        "show_orbits": True,
-        "show_links": False,
-        "show_node_labels": False,
-        "detail_node_threshold": 100,
-        "export_gif": False,
-        "gif_path": None,
-        "gif_frame_step_s": 5,
-    }
+from contrib.satcompute.tests.unit.visualization.orbit._helpers import (
+    valid_payload,
+)
 
 
 class OrbitVisualizationConfigurationTest(unittest.TestCase):

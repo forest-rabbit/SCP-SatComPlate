@@ -21,11 +21,9 @@ from contrib.satcompute.tools.visualization.orbit.renderer import OrbitRenderer
 from contrib.satcompute.tools.visualization.orbit.scenario_reader import (
     load_scenario,
 )
-from contrib.satcompute.tools.visualization.orbit.tests.test_configuration import (
-    valid_payload,
-)
-from contrib.satcompute.tools.visualization.orbit.tests.test_scenario_reader import (
+from contrib.satcompute.tests.unit.visualization.orbit._helpers import (
     FakeOrbit,
+    valid_payload,
     write_fixture,
 )
 

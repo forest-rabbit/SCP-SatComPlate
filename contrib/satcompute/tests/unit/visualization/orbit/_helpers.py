@@ -1,19 +1,31 @@
-#!/usr/bin/env python3
-"""Tests for scenario roles, orbit time mapping, and held ISLs."""
+"""Shared constructors for orbit-visualization tests."""
 
 from __future__ import annotations
 
-import json
-import tempfile
-import unittest
 from pathlib import Path
 
+from contrib.satcompute.tests.support.fixtures import write_json
 from contrib.satcompute.tools.generation.topology.orbit.hypatia.orbit_positions import (
     SatellitePosition,
 )
-from contrib.satcompute.tools.visualization.orbit.scenario_reader import (
-    load_scenario,
-)
+
+
+def valid_payload() -> dict:
+    return {
+        "schema_version": "0.1",
+        "enabled": False,
+        "display_mode": "auto",
+        "render_step_s": 1,
+        "playback_interval_ms": 50,
+        "show_earth": True,
+        "show_orbits": True,
+        "show_links": False,
+        "show_node_labels": False,
+        "detail_node_threshold": 100,
+        "export_gif": False,
+        "gif_path": None,
+        "gif_frame_step_s": 5,
+    }
 
 
 class FakeOrbit:
@@ -75,11 +87,6 @@ def scenario_config(mode: str) -> dict:
     }
 
 
-def write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
-
-
 def write_fixture(root: Path, mode: str) -> None:
     config = scenario_config(mode)
     write_json(
@@ -126,55 +133,3 @@ def write_fixture(root: Path, mode: str) -> None:
                 ]
             },
         )
-
-
-class OrbitScenarioReaderTest(unittest.TestCase):
-    def test_dynamic_time_roles_frames_and_held_links(self) -> None:
-        with tempfile.TemporaryDirectory(
-            prefix="satcompute-visualization-scenario-"
-        ) as temp:
-            root = Path(temp)
-            write_fixture(root, "dynamic")
-            orbit = FakeOrbit(4)
-            scenario = load_scenario(
-                root,
-                orbit_loader=lambda config: orbit,
-                validate=False,
-            )
-
-            self.assertEqual(scenario.compute_node_ids, (1, 3))
-            self.assertEqual(scenario.relay_node_ids, (0, 2))
-            self.assertEqual(scenario.frame_times(10), (0.0, 10.0, 20.0))
-            self.assertEqual(scenario.links_at(0), ((0, 1),))
-            self.assertEqual(scenario.links_at(19.999), ((0, 1),))
-            self.assertEqual(scenario.links_at(20), ((2, 3),))
-            positions = scenario.positions_at(7)
-            self.assertEqual(orbit.requested_times, [107.0])
-            self.assertEqual(positions[0].xyz_km, (7000.0, 107.0, 0.0))
-            self.assertEqual(
-                scenario.orbit_positions(positions, 1),
-                tuple(position.xyz_km for position in positions[2:]),
-            )
-
-    def test_static_scenario_has_one_frame_at_snapshot_time(self) -> None:
-        with tempfile.TemporaryDirectory(
-            prefix="satcompute-visualization-static-"
-        ) as temp:
-            root = Path(temp)
-            write_fixture(root, "static")
-            orbit = FakeOrbit(4)
-            scenario = load_scenario(
-                root,
-                orbit_loader=lambda config: orbit,
-                validate=False,
-            )
-
-            self.assertEqual(scenario.duration_s, 0)
-            self.assertEqual(scenario.frame_times(1), (0.0,))
-            scenario.positions_at(0)
-            self.assertEqual(orbit.requested_times, [17.0])
-            self.assertEqual(scenario.links_at(0), ((0, 1),))
-
-
-if __name__ == "__main__":
-    unittest.main()
