@@ -18,7 +18,7 @@ from contrib.satcompute.tools.generation.scenario.check_scenario import (
 from contrib.satcompute.tools.generation.scenario.generate_scenario import (
     generate_scenario,
 )
-from contrib.satcompute.tools.generation.scenario.tests.test_generate_scenario import (
+from contrib.satcompute.tests.unit.generation.scenario._helpers import (
     write_config,
 )
 from contrib.satcompute.tools.generation.topology.common.hash_utils import (

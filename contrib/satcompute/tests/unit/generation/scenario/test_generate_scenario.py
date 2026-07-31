@@ -19,56 +19,17 @@ from contrib.satcompute.tools.generation.scenario.generate_scenario import (
     _run_optional_visualization,
     generate_scenario,
 )
+from contrib.satcompute.tests.support.fixtures import directory_bytes
+from contrib.satcompute.tests.unit.generation.scenario._helpers import (
+    preset_payload,
+    write_config,
+)
 
 
-SCENARIO_ROOT = Path(__file__).resolve().parents[1]
-PRESET = SCENARIO_ROOT / "config" / "synthetic-66-compute-22.json"
 EXPECTED_COMPUTE_NODE_IDS = [
     1, 5, 9, 12, 15, 17, 20, 23, 26, 28, 31, 34, 38, 42, 45, 48, 50,
     53, 56, 59, 61, 64,
 ]
-
-
-def preset_payload() -> dict:
-    return json.loads(PRESET.read_text(encoding="utf-8"))
-
-
-def write_config(
-    path: Path,
-    *,
-    mode: str,
-    delay_mode: str,
-) -> Path:
-    payload = preset_payload()
-    if mode == "static":
-        payload["topology"]["schedule"] = {"snapshot_time_s": 17}
-    else:
-        payload["topology"]["schedule"] = {
-            "start_time_s": 0,
-            "orbit_sample_offset_s": 0,
-            "duration_s": 120,
-            "step_s": 60,
-        }
-    payload["topology"]["mode"] = mode
-    payload["topology"]["delay_mode"] = delay_mode
-    payload["topology"]["fixed_delay_us"] = (
-        8000 if delay_mode == "fixed" else None
-    )
-    path.write_text(
-        json.dumps(payload, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    return path
-
-
-def directory_bytes(root: Path) -> dict[str, bytes]:
-    return {
-        path.relative_to(root).as_posix(): path.read_bytes()
-        for path in root.rglob("*")
-        if path.is_file()
-    }
-
-
 def visualization_payload(*, enabled: bool) -> dict:
     return {
         "schema_version": "0.1",

@@ -235,7 +235,7 @@ checker 会重算所有哈希、部署结果、算力总和、节点归属、快
 
 ```bash
 uv run --locked python -m unittest discover \
-  -s contrib/satcompute/tools/generation/scenario/tests \
+  -s contrib/satcompute/tests/unit/generation/scenario \
   -p 'test_*.py' -v
 ```
 
