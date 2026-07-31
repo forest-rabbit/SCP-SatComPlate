@@ -30,7 +30,7 @@ announce "heterogeneous compute"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/heterogeneous-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/traffic/task/test/task-heterogeneous.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-heterogeneous.json \
   --simulationDuration=4 \
   --taskLogMode=silent \
   --transferChunkMode=fixed \
@@ -46,7 +46,7 @@ announce "TaskTrace ordering determinism"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/compute-profile-order-a.json \
-  --taskTrace=contrib/satcompute/input/traffic/task/test/task-order-a.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-order-a.json \
   --simulationDuration=3 \
   --taskLogMode=silent \
   --transferChunkMode=fixed \
@@ -60,7 +60,7 @@ announce "TaskTrace ordering determinism"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/compute-profile-order-a.json \
-  --taskTrace=contrib/satcompute/input/traffic/task/test/task-order-b.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-order-b.json \
   --simulationDuration=3 \
   --taskLogMode=silent \
   --transferChunkMode=fixed \
@@ -76,7 +76,7 @@ announce "ComputeProfile ordering determinism"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/compute-profile-order-a.json \
-  --taskTrace=contrib/satcompute/input/traffic/task/test/task-order-a.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-order-a.json \
   --simulationDuration=3 \
   --taskLogMode=silent \
   --transferChunkMode=fixed \
@@ -90,7 +90,7 @@ announce "ComputeProfile ordering determinism"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/compute-profile-order-b.json \
-  --taskTrace=contrib/satcompute/input/traffic/task/test/task-order-a.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-order-a.json \
   --simulationDuration=3 \
   --taskLogMode=silent \
   --transferChunkMode=fixed \
@@ -108,23 +108,23 @@ python3 contrib/satcompute/tools/validation/check-task-output.py \
   --single-output=/tmp/satcompute-ci-task-single \
   --hrw-single-output=/tmp/satcompute-ci-task-single-hrw \
   --single-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
-  --single-trace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
+  --single-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --fcfs-output=/tmp/satcompute-ci-task-fcfs \
   --fcfs-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
-  --fcfs-trace=contrib/satcompute/input/traffic/task/test/task-fcfs.json \
+  --fcfs-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-fcfs.json \
   --heterogeneous-output=/tmp/satcompute-ci-task-heterogeneous \
   --heterogeneous-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/heterogeneous-compute-profile.json \
-  --heterogeneous-trace=contrib/satcompute/input/traffic/task/test/task-heterogeneous.json \
+  --heterogeneous-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-heterogeneous.json \
   --task-order-first-output=/tmp/satcompute-ci-task-order-a \
   --task-order-second-output=/tmp/satcompute-ci-task-order-b \
   --task-order-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/compute-profile-order-a.json \
-  --task-order-first-trace=contrib/satcompute/input/traffic/task/test/task-order-a.json \
-  --task-order-second-trace=contrib/satcompute/input/traffic/task/test/task-order-b.json \
+  --task-order-first-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-order-a.json \
+  --task-order-second-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-order-b.json \
   --profile-order-first-output=/tmp/satcompute-ci-profile-order-a \
   --profile-order-second-output=/tmp/satcompute-ci-profile-order-b \
   --profile-order-first-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/compute-profile-order-a.json \
   --profile-order-second-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/compute-profile-order-b.json \
-  --profile-order-trace=contrib/satcompute/input/traffic/task/test/task-order-a.json
+  --profile-order-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-order-a.json
 
 announce "deterministic generator and seed variation"
 python3 contrib/satcompute/tools/generation/generate-task-workload.py \
@@ -144,9 +144,9 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --non-tail-max-input-bytes=500000 \
   --output-task-trace=/tmp/satcompute-ci-generated-a.json \
   --output-workload-summary=/tmp/satcompute-ci-generated-a-summary.json
-cmp contrib/satcompute/input/traffic/task/test/stress-generated-40.json \
+cmp contrib/satcompute/tests/fixtures/traffic/tasks/stress-generated-40.json \
   /tmp/satcompute-ci-generated-a.json
-cmp contrib/satcompute/input/traffic/task/test/stress-generated-40-summary.json \
+cmp contrib/satcompute/tests/fixtures/traffic/tasks/stress-generated-40-summary.json \
   /tmp/satcompute-ci-generated-a-summary.json
 python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --nodes-file=contrib/satcompute/input/topology/examples/xw-66sat-static-2g/nodes_0s.json \

@@ -35,7 +35,7 @@ source .venv/bin/activate
 ```
 
 `tests/fixtures/topology/snapshots/`、`tests/fixtures/topology/compute-profiles/`、
-`tests/fixtures/traffic/transfers/`、`input/traffic/task/test/` 和 `tools/`
+`tests/fixtures/traffic/transfers/`、`tests/fixtures/traffic/tasks/` 和 `tools/`
 中的检查器是外部端到端验证资产，不进入 `ns3-satcompute` 模块编译。需要运行
 ns-3 上游单元测试时再显式启用 `--enable-tests`；日常平台构建不启用
 examples 或 tests。
@@ -232,7 +232,7 @@ ceil(compute_work_units × 1,000,000,000
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --simulationDuration=10 \
   --taskLogMode=verbose \
   --transferChunkMode=fixed \
@@ -408,7 +408,8 @@ python3 contrib/satcompute/tools/validation/check-size-aware-output.py \
 
 检查器独立重算 HRW 排名，逐事件重放物理下一跳预留账本，并检查最终
 `active=0`、`assignments=0`、`reserved=0`。66 星中型本地场景使用
-`task/test/size-aware-medium-60.json`：60 个集中到达任务、3 GB 输入，其中
+`tests/fixtures/traffic/tasks/size-aware-medium-60.json`：60 个集中到达任务、
+3 GB 输入，其中
 17 个输入大于 64 MiB；预估 243,028 个 UDP 包，不进入每次 CI。可在上述命令
 追加 `--medium-hrw=<dir> --medium-size=<dir>` 验证冻结的对照结果。
 
@@ -502,7 +503,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=2 \
   --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1000 \
@@ -518,7 +519,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 python3 contrib/satcompute/tools/validation/check-task-output.py failure \
   --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --compute-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
-  --task-trace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
+  --task-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --output-dir=/tmp/satcompute-task-failure \
   --require-queue-drop
 ```
