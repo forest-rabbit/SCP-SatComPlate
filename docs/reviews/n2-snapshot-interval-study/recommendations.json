@@ -1,0 +1,147 @@
+{
+  "constellations": [
+    {
+      "all_tested_intervals_fidelity_equivalent": true,
+      "constellation": "synthetic-351-telesat-t1-compute-117",
+      "main_window_recommended_interval_s": 20,
+      "robust_recommended_interval_s": 20,
+      "tested_window_count": 3,
+      "tested_window_offsets_s": [
+        0,
+        2109,
+        4218
+      ],
+      "upper_bound_identified": false,
+      "windows": [
+        {
+          "all_tested_intervals_fidelity_equivalent": true,
+          "constellation": "synthetic-351-telesat-t1-compute-117",
+          "passing_intervals_s": [
+            1,
+            2,
+            5,
+            10,
+            20
+          ],
+          "recommended_interval_s": 20,
+          "window_index": 0,
+          "window_offset_s": 0
+        },
+        {
+          "all_tested_intervals_fidelity_equivalent": true,
+          "constellation": "synthetic-351-telesat-t1-compute-117",
+          "passing_intervals_s": [
+            1,
+            2,
+            5,
+            10,
+            20
+          ],
+          "recommended_interval_s": 20,
+          "window_index": 1,
+          "window_offset_s": 2109
+        },
+        {
+          "all_tested_intervals_fidelity_equivalent": true,
+          "constellation": "synthetic-351-telesat-t1-compute-117",
+          "passing_intervals_s": [
+            1,
+            2,
+            5,
+            10,
+            20
+          ],
+          "recommended_interval_s": 20,
+          "window_index": 2,
+          "window_offset_s": 4218
+        }
+      ]
+    },
+    {
+      "all_tested_intervals_fidelity_equivalent": true,
+      "constellation": "synthetic-66-compute-22",
+      "main_window_recommended_interval_s": 20,
+      "robust_recommended_interval_s": 20,
+      "tested_window_count": 3,
+      "tested_window_offsets_s": [
+        0,
+        2009,
+        4018
+      ],
+      "upper_bound_identified": false,
+      "windows": [
+        {
+          "all_tested_intervals_fidelity_equivalent": true,
+          "constellation": "synthetic-66-compute-22",
+          "passing_intervals_s": [
+            1,
+            2,
+            5,
+            10,
+            20
+          ],
+          "recommended_interval_s": 20,
+          "window_index": 0,
+          "window_offset_s": 0
+        },
+        {
+          "all_tested_intervals_fidelity_equivalent": true,
+          "constellation": "synthetic-66-compute-22",
+          "passing_intervals_s": [
+            1,
+            2,
+            5,
+            10,
+            20
+          ],
+          "recommended_interval_s": 20,
+          "window_index": 1,
+          "window_offset_s": 2009
+        },
+        {
+          "all_tested_intervals_fidelity_equivalent": true,
+          "constellation": "synthetic-66-compute-22",
+          "passing_intervals_s": [
+            1,
+            2,
+            5,
+            10,
+            20
+          ],
+          "recommended_interval_s": 20,
+          "window_index": 2,
+          "window_offset_s": 4018
+        }
+      ]
+    },
+    {
+      "all_tested_intervals_fidelity_equivalent": true,
+      "constellation": "synthetic-720-oneweb-compute-240",
+      "main_window_recommended_interval_s": 20,
+      "robust_recommended_interval_s": 20,
+      "tested_window_count": 1,
+      "tested_window_offsets_s": [
+        0
+      ],
+      "upper_bound_identified": false,
+      "windows": [
+        {
+          "all_tested_intervals_fidelity_equivalent": true,
+          "constellation": "synthetic-720-oneweb-compute-240",
+          "passing_intervals_s": [
+            1,
+            2,
+            5,
+            10,
+            20
+          ],
+          "recommended_interval_s": 20,
+          "window_index": 0,
+          "window_offset_s": 0
+        }
+      ]
+    }
+  ],
+  "decision_rule": "largest tested interval passing every frozen fidelity gate",
+  "schema_version": "0.1"
+}
