@@ -68,6 +68,26 @@ class ScenarioGenerationError(RuntimeError):
     """Raised when a unified scenario cannot be generated safely."""
 
 
+class ScenarioVisualizationError(ScenarioGenerationError):
+    """Raised after scenario publication when optional display fails."""
+
+
+def _run_optional_visualization(
+    output_dir: Path,
+    visualization_config_path: Path,
+) -> bool:
+    """Load graphics code only when a separate config explicitly enables it."""
+    from ...visualization.orbit.configuration import load_config
+
+    visualization_config = load_config(visualization_config_path)
+    if not visualization_config.enabled:
+        return False
+    from ...visualization.orbit.viewer import run_viewer
+
+    run_viewer(output_dir, visualization_config_path)
+    return True
+
+
 def _generate_topology(
     config: ScenarioConfig,
     topology_config_path: Path,
@@ -196,6 +216,7 @@ def build_scenario_manifest(
 def generate_scenario(
     config_path: Path,
     output_dir: Path,
+    visualization_config_path: Path | None = None,
 ) -> dict[str, Any]:
     """Generate, validate, and atomically publish one complete scenario."""
     config = load_config(Path(config_path))
@@ -244,15 +265,34 @@ def generate_scenario(
                 compact_json_bytes(scenario_manifest)
             )
             check_scenario(temporary)
-        return scenario_manifest
     except AtomicOutputError as error:
         raise ScenarioGenerationError(str(error)) from error
+    if visualization_config_path is not None:
+        try:
+            _run_optional_visualization(
+                Path(output_dir).resolve(),
+                Path(visualization_config_path).resolve(),
+            )
+        except (OSError, ValueError, RuntimeError) as error:
+            raise ScenarioVisualizationError(
+                "scenario was published successfully, but optional "
+                f"visualization failed: {error}"
+            ) from error
+    return scenario_manifest
 
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--visualization-config",
+        type=Path,
+        help=(
+            "after atomic scenario publication, optionally launch the "
+            "separate orbit viewer"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -262,6 +302,11 @@ def main() -> int:
         manifest = generate_scenario(
             arguments.config.resolve(),
             arguments.output_dir.absolute(),
+            (
+                None
+                if arguments.visualization_config is None
+                else arguments.visualization_config.resolve()
+            ),
         )
     except (OSError, ValueError, RuntimeError) as error:
         print(f"ERROR: {error}", file=sys.stderr)

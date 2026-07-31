@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import builtins
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,6 +15,8 @@ from contrib.satcompute.tools.generation.scenario.check_scenario import (
 )
 from contrib.satcompute.tools.generation.scenario.generate_scenario import (
     ScenarioGenerationError,
+    ScenarioVisualizationError,
+    _run_optional_visualization,
     generate_scenario,
 )
 
@@ -63,6 +66,24 @@ def directory_bytes(root: Path) -> dict[str, bytes]:
         path.relative_to(root).as_posix(): path.read_bytes()
         for path in root.rglob("*")
         if path.is_file()
+    }
+
+
+def visualization_payload(*, enabled: bool) -> dict:
+    return {
+        "schema_version": "0.1",
+        "enabled": enabled,
+        "display_mode": "auto",
+        "render_step_s": 1,
+        "playback_interval_ms": 50,
+        "show_earth": True,
+        "show_orbits": True,
+        "show_links": False,
+        "show_node_labels": False,
+        "detail_node_threshold": 100,
+        "export_gif": False,
+        "gif_path": None,
+        "gif_frame_step_s": 5,
     }
 
 
@@ -330,6 +351,86 @@ class ScenarioGenerationTest(unittest.TestCase):
         self.assertFalse(
             (self.root / "checker-failed-output.tmp").exists()
         )
+
+    def test_disabled_visualization_has_no_graphics_import_or_output(self) -> None:
+        config_path = self.root / "visualization-disabled.json"
+        config_path.write_text(
+            json.dumps(visualization_payload(enabled=False)) + "\n",
+            encoding="utf-8",
+        )
+        original_import = builtins.__import__
+
+        def guarded_import(name, *args, **kwargs):
+            if name == "PIL" or name.startswith(("PIL.", "matplotlib")):
+                raise AssertionError(f"disabled visualization imported {name}")
+            return original_import(name, *args, **kwargs)
+
+        output = self.root / "visualization-disabled-output"
+        with patch("builtins.__import__", side_effect=guarded_import):
+            launched = _run_optional_visualization(
+                self.static_fixed_first,
+                config_path,
+            )
+            generate_scenario(
+                self.static_fixed_config,
+                output,
+                config_path,
+            )
+        self.assertFalse(launched)
+        self.assertEqual(
+            sorted(path.name for path in output.iterdir()),
+            ["resources", "scenario-manifest.json", "topology"],
+        )
+        self.assertEqual(
+            directory_bytes(output),
+            directory_bytes(self.static_fixed_first),
+        )
+
+    def test_visualization_runs_only_after_atomic_publication(self) -> None:
+        config_path = self.root / "visualization-enabled.json"
+        config_path.write_text(
+            json.dumps(visualization_payload(enabled=True)) + "\n",
+            encoding="utf-8",
+        )
+        output = self.root / "visualization-enabled-output"
+
+        def verify_published(output_dir, supplied_config):
+            self.assertEqual(output_dir, output.resolve())
+            self.assertEqual(supplied_config, config_path.resolve())
+            self.assertTrue((output / "scenario-manifest.json").is_file())
+            check_scenario(output)
+            return True
+
+        with patch(
+            "contrib.satcompute.tools.generation.scenario."
+            "generate_scenario._run_optional_visualization",
+            side_effect=verify_published,
+        ) as launch:
+            generate_scenario(
+                self.static_fixed_config,
+                output,
+                config_path,
+            )
+        launch.assert_called_once()
+
+    def test_visualization_failure_does_not_rollback_scenario(self) -> None:
+        output = self.root / "visualization-failed-output"
+        with patch(
+            "contrib.satcompute.tools.generation.scenario."
+            "generate_scenario._run_optional_visualization",
+            side_effect=RuntimeError("display unavailable"),
+        ):
+            with self.assertRaisesRegex(
+                ScenarioVisualizationError,
+                "scenario was published successfully",
+            ):
+                generate_scenario(
+                    self.static_fixed_config,
+                    output,
+                    self.root / "unused-visualization.json",
+                )
+        self.assertTrue((output / "scenario-manifest.json").is_file())
+        check_scenario(output)
 
 
 if __name__ == "__main__":
