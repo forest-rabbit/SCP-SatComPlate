@@ -117,22 +117,6 @@ GIF。该工具不参与仿真、scenario 哈希或默认依赖安装；使用�
 `--group visualization`。入口、配置、Headless 与时间语义见
 [`orbit/README.md`](contrib/satcompute/tools/visualization/orbit/README.md)。
 
-以下截图均来自已提交的原始 1000 秒场景配置，取 `t=500 s`，未修改星座或
-计算节点配置。
-
-### 66 星 / 22 计算星（显示活动 ISL）
-
-![66 星轨道可视化，包含活动星间链路](contrib/satcompute/tools/visualization/orbit/docs/orbit-66-isl.png)
-
-查看器自动使用 `detailed` 模式；图中保留该时刻的 121 条活动 ISL。
-
-### 351 星 / 117 计算星（隐藏 ISL）
-
-![351 星轨道可视化](contrib/satcompute/tools/visualization/orbit/docs/orbit-351.png)
-
-查看器自动使用 `simplified` 模式；为避免大规模链路遮挡卫星和经纬网，截图
-关闭 ISL，但场景本身仍包含完整动态拓扑。
-
 ## NetworkTransfer
 
 NetworkTransfer JSON 的 `schema_version` 必须为 `0.1`。每条记录只含：

@@ -6,6 +6,16 @@ Hypatia 传播得到的当前卫星位置、瞬时轨道面参考环、计算/�
 活动 ISL。它不改变 scenario、topology、路由或任务语义，也不实现故障、主备、
 迁移、checkpoint、恢复路径、路由高亮、MP4 或论文逻辑图。
 
+## 示例画面
+
+两张截图均来自已提交的原始 1000 秒场景配置，取 `t=500 s`，未修改星座或
+计算节点配置。点击图片可查看原始尺寸。
+
+| 66 星 / 22 计算星 | 351 星 / 117 计算星 |
+| :---: | :---: |
+| [![66 星轨道可视化，包含活动星间链路](docs/orbit-66-isl.png)](docs/orbit-66-isl.png) | [![351 星轨道可视化](docs/orbit-351.png)](docs/orbit-351.png) |
+| `detailed`；显示 121 条活动 ISL | `simplified`；为避免遮挡而隐藏 ISL |
+
 ## 依赖与直接入口
 
 Matplotlib 和 Pillow 位于独立的 `visualization` dependency group。普通
