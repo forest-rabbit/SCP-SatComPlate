@@ -24,6 +24,10 @@ from .geometry import (
 from .scenario_reader import OrbitScenario, PositionKm
 
 
+ORBIT_COLOR = "#666666"
+ISL_COLOR = "#009e73"
+
+
 @dataclass(frozen=True)
 class RenderStyle:
     """Centralized scale-specific visual weights."""
@@ -41,16 +45,16 @@ DETAILED_STYLE = RenderStyle(
     relay_size=18.0,
     orbit_line_width=0.9,
     orbit_alpha=0.5,
-    link_line_width=0.7,
-    link_alpha=0.35,
+    link_line_width=0.85,
+    link_alpha=0.55,
 )
 SIMPLIFIED_STYLE = RenderStyle(
     compute_size=13.0,
     relay_size=5.0,
     orbit_line_width=0.4,
     orbit_alpha=0.2,
-    link_line_width=0.25,
-    link_alpha=0.12,
+    link_line_width=0.3,
+    link_alpha=0.22,
 )
 
 
@@ -225,7 +229,7 @@ class OrbitRenderer:
                 x,
                 y,
                 z,
-                color="#666666",
+                color=ORBIT_COLOR,
                 linewidth=self.style.orbit_line_width,
                 alpha=self.style.orbit_alpha,
             )
@@ -254,7 +258,7 @@ class OrbitRenderer:
         segments = self._link_segments(positions, 0.0)
         artist = Line3DCollection(
             segments,
-            colors="#4d4d4d",
+            colors=ISL_COLOR,
             linewidths=self.style.link_line_width,
             alpha=self.style.link_alpha,
         )

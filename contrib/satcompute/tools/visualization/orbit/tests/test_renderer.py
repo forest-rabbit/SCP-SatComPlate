@@ -11,10 +11,16 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+from matplotlib.colors import to_rgba
+
 from contrib.satcompute.tools.visualization.orbit.configuration import (
     parse_config,
 )
-from contrib.satcompute.tools.visualization.orbit.renderer import OrbitRenderer
+from contrib.satcompute.tools.visualization.orbit.renderer import (
+    ISL_COLOR,
+    ORBIT_COLOR,
+    OrbitRenderer,
+)
 from contrib.satcompute.tools.visualization.orbit.scenario_reader import (
     load_scenario,
 )
@@ -133,6 +139,15 @@ class OrbitRendererTest(unittest.TestCase):
                 self.assertIsNotNone(renderer.link_artist)
                 renderer.update(19.0)
                 self.assertEqual(renderer.link_count, 1)
+                self.assertEqual(
+                    renderer.orbit_artists[0].get_color(),
+                    ORBIT_COLOR,
+                )
+                self.assertEqual(
+                    tuple(renderer.link_artist.get_colors()[0]),
+                    to_rgba(ISL_COLOR, renderer.style.link_alpha),
+                )
+                self.assertNotEqual(ORBIT_COLOR, ISL_COLOR)
                 before = tuple(renderer.link_artist._segments3d)
                 renderer.update(20.0)
                 after = tuple(renderer.link_artist._segments3d)
