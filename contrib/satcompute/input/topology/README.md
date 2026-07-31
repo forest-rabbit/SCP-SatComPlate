@@ -58,10 +58,12 @@ NetworkTransfer 或 TaskTrace JSON 提供。
 
 同一链路文件中不能重复声明同一条无向 ISL。仓库样例位于
 [`examples/xw-66sat/`](examples/xw-66sat/)。
-`tests/fqcodel-bottleneck/` 是四颗纯卫星组成的两入口单出口测试拓扑：
+测试拓扑集中位于
+[`tests/fixtures/topology/snapshots/`](../../tests/fixtures/topology/snapshots/)。
+其中 `fqcodel-bottleneck/` 是四颗纯卫星组成的两入口单出口测试拓扑：
 入口各为 1 Gbit/s，出口为 10 Mbit/s，仅用于区分默认 FqCoDel QueueDisc
 与 PointToPointNetDevice DropTail 队列的丢弃原因。
-`tests/diamond-4-hrw-dynamic/` 是 HRW 路由回归拓扑：完整快照依次保持候选
+`diamond-4-hrw-dynamic/` 是 HRW 路由回归拓扑：完整快照依次保持候选
 但改变记录顺序、删除一条等价支路、再恢复该支路，用于验证跨 route epoch
 稳定性和候选增删时的最小 flow 迁移。
 
@@ -88,7 +90,9 @@ NetworkTransfer 或 TaskTrace JSON 提供。
 不能重复，速率是正整数，单位为 work units/s。数组按 `node_id` canonical
 sort，因此 JSON 中的排列不影响运行与结构化输出。
 
-测试资源位于 [`resources/test/`](resources/test/)。正式 2 Gbit/s 静态
+测试资源集中位于
+[`tests/fixtures/topology/compute-profiles/`](../../tests/fixtures/topology/compute-profiles/)。
+正式 2 Gbit/s 静态
 66 星压力配置位于 [`resources/workload/`](resources/workload/)：不带
 `all` 的文件保留 22 个计算节点对照，带 `all` 的文件覆盖节点 0–65。
 与之配对的任务到达属于 traffic side，位于

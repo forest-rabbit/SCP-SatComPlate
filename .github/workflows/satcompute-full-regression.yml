@@ -30,19 +30,19 @@ jobs:
         run: ./waf build
 
       - name: Core routing contracts
-        run: contrib/satcompute/tools/ci/run-routing-smoke.sh
+        run: contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
 
       - name: Core task contracts
-        run: contrib/satcompute/tools/ci/run-task-smoke.sh
+        run: contrib/satcompute/tests/integration/smoke/run-task-smoke.sh
 
       - name: Core diagnostics contracts
-        run: contrib/satcompute/tools/ci/run-diagnostics-smoke.sh
+        run: contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
 
       - name: Extended routing regression
-        run: contrib/satcompute/tools/ci/run-full-routing-regression.sh
+        run: contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
 
       - name: Extended workload regression
-        run: contrib/satcompute/tools/ci/run-full-workload-regression.sh
+        run: contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
 
       - name: Verify clean source tree
         run: test -z "$(git status --short)"

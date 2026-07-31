@@ -1,11 +1,11 @@
 # NetworkTransfer 与 TaskTrace JSON 输入
 
-本目录只保存 SatCompute 当前支持的 JSON 业务输入：
+SatCompute 当前支持的 JSON 业务输入和测试夹具按用途分开：
 
 ```text
 workload/  NetworkTransfer 正式和本地压力输入
-test/      NetworkTransfer 小型回归输入
-task/      TaskTrace 任务到达输入
+../../tests/fixtures/traffic/transfers/  NetworkTransfer 小型回归输入
+../../tests/fixtures/traffic/tasks/      TaskTrace 小型回归输入
 ```
 
 程序只读取命令行显式指定的输入，不会自动加载本目录下的其他 JSON。JSON
@@ -24,7 +24,10 @@ task/      TaskTrace 任务到达输入
 - `mixed-large-local.json`：10 条 128 MiB–1 GiB 的本地完整压力输入，不在每次
   CI 中运行。
 
-## NetworkTransfer test
+## NetworkTransfer test fixtures
+
+以下文件集中位于
+[`tests/fixtures/traffic/transfers/`](../../tests/fixtures/traffic/transfers/)：
 
 - `canonical-order-a.json`、`canonical-order-b.json`：验证记录顺序规范化和余数
   包；
@@ -48,7 +51,7 @@ closed-world 字段为 `transfer_id`、`source_node_id`、
 
 ## TaskTrace
 
-任务到达属于 traffic side，统一放在 `task/`，通过 `--taskTrace=<file>` 读取：
+任务到达属于 traffic side，通过 `--taskTrace=<file>` 显式读取：
 
 ```json
 {
@@ -74,8 +77,9 @@ ID、字节数、计算量和到达时间都是整数；数据量与计算量必
 其中 `compute_node_id` 还必须引用本次 `--computeProfile` 中的节点。任务按
 `task_id` canonical sort，所以数组排列不影响执行和结构化输出。
 
-`task/test/` 包含单任务 ECMP、三任务 FCFS、异构算力、TaskTrace 换序输入，
-以及不进入每次 CI 的 60-task size-aware 中型碰撞输入及生成摘要。
+[`tests/fixtures/traffic/tasks/`](../../tests/fixtures/traffic/tasks/) 包含单任务
+ECMP、三任务 FCFS、异构算力、TaskTrace 换序输入，以及不进入每次 CI 的
+60-task size-aware 中型碰撞输入及生成摘要。
 静态算力不是流量，单独位于
 [`../topology/resources/`](../topology/resources/)。
 `--computeProfile` 与 `--taskTrace` 必须同时指定，并与 `--transferTrace`
