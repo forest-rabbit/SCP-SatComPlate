@@ -102,6 +102,43 @@ SatComputeIpv4GlobalRouting::GetRouteEpoch() const
   return m_routeEpoch;
 }
 
+std::vector<EcmpRouteCandidate>
+SatComputeIpv4GlobalRouting::GetEffectiveRouteCandidates(
+  Ipv4Address destination)
+{
+  uint32_t countBeforeDedup = 0;
+  std::vector<EcmpRouteCandidate> candidates =
+    FindHostCandidates(destination, nullptr, countBeforeDedup);
+  if (!candidates.empty())
+    {
+      return candidates;
+    }
+
+  // ns-3 short-circuits SPF for a degree-one router and installs a default
+  // network route.  Per-flow routing then falls back to the stock lookup.
+  // Expose that one effective physical next hop to the read-only audit.
+  for (uint32_t index = 0; index < GetNRoutes(); ++index)
+    {
+      Ipv4RoutingTableEntry* route = GetRoute(index);
+      if (route->IsHost()
+          || !route->GetDestNetworkMask().IsMatch(
+               destination,
+               route->GetDestNetwork()))
+        {
+          continue;
+        }
+      candidates.push_back(
+        {
+          route->GetGateway(),
+          route->GetInterface(),
+          route->GetDestNetwork(),
+          route->GetDestNetworkMask()
+        });
+      break;
+    }
+  return candidates;
+}
+
 void
 SatComputeIpv4GlobalRouting::SetIpv4(Ptr<Ipv4> ipv4)
 {

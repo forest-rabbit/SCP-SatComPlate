@@ -94,6 +94,7 @@ def _write_valid_export(
         "source_dynamic_aggregate_sha256": "4" * 64 if dynamic else None,
         "duration_s": times[-1],
         "step_s": times[1] - times[0] if dynamic else None,
+        "orbit_sample_offset_s": 0 if dynamic else None,
         "snapshot_count": len(times),
         "first_time_s": times[0],
         "last_time_s": times[-1],

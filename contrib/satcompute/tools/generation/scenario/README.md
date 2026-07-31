@@ -24,6 +24,18 @@ checkpoint、备份或恢复事件。
 JSON 标准不支持注释。为保证配置仍可被严格解析，字段说明集中记录在本文，
 不要在 JSON 文件中加入 `//` 或 `/* ... */`。
 
+快照间隔研究只提交每个星座的一份 `orbit_sample_offset_s=0` 基准配置：
+
+| 配置 | 轨道面 × 每面卫星 | 高度 / 倾角 | 计算节点 | 候选 ISL |
+| --- | ---: | ---: | ---: | ---: |
+| `synthetic-66-compute-22.json` | 6 × 11 | 780 km / 86.4° | 22 | 121 |
+| `synthetic-351-telesat-t1-compute-117.json` | 27 × 13 | 1015 km / 98.98° | 117 | 689 |
+| `synthetic-720-oneweb-compute-240.json` | 18 × 40 | 1200 km / 87.9° | 240 | 1400 |
+
+三者都是确定性的研究模型。名称只表示对公开星座规模或壳层参数的参考，不
+声称完整复刻真实在轨网络。其余轨道阶段窗口由分析编排器从基准配置派生到
+临时实验目录，不提交多份仅 offset 不同的重复 JSON。
+
 ## 快速使用
 
 从仓库根目录生成默认的 66 星、22 个计算节点、0–1000 秒动态场景：
@@ -126,14 +138,21 @@ C++ 静态输入仍发布为 `nodes_0s.json` 和 `topology_0s.json`；真实采�
 ```json
 {
   "start_time_s": 0,
+  "orbit_sample_offset_s": 0,
   "duration_s": 1000,
   "step_s": 1
 }
 ```
 
-第一版固定 `start_time_s=0`。`duration_s` 为非负整数，`step_s` 为正整数，
-且前者必须能被后者整除。采样区间两端都包含，因此快照数为
-`duration_s / step_s + 1`；默认配置会生成 1001 对完整快照。
+`start_time_s` 固定为 0，表示 C++ 仿真时间和输出文件名始终从 0 秒开始。
+`orbit_sample_offset_s` 是相对固定 epoch 的非负轨道传播偏移；文件时间
+`t` 对应的物理轨道时刻为 `orbit_sample_offset_s + t`。因此可以比较不同
+轨道阶段窗口，而不改变 `nodes_<time>s.json`、`topology_<time>s.json` 和
+C++ 调度语义。该偏移会写入 topology manifest 和 scenario manifest。
+
+`duration_s` 为非负整数，`step_s` 为正整数，且前者必须能被后者整除。
+采样区间两端都包含，因此快照数为 `duration_s / step_s + 1`；默认配置会
+生成 1001 对完整快照。偏移与持续时间之和不能超过 64 位有符号整数上限。
 
 ### `compute`
 
@@ -191,6 +210,11 @@ scenario-output/
 
 checker 会重算所有哈希、部署结果、算力总和、节点归属、快照统计和 provenance，
 并拒绝多余文件、符号链接或非规范 JSON 合同。
+
+原始生成场景的 `reference_scenario_sha256` 与 `downsample_interval_s` 均为
+`null`。由快照间隔分析工具复制参考快照得到的场景会同时填写这两个字段：
+前者是参考场景的 `aggregate_scenario_sha256`，后者必须等于动态 schedule
+的 `step_s`。checker 拒绝只填写其中一个字段或与 schedule 不一致的结果。
 
 ## 原子输出与目录选择
 

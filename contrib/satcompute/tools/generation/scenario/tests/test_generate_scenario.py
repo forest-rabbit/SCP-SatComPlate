@@ -42,6 +42,7 @@ def write_config(
     else:
         payload["topology"]["schedule"] = {
             "start_time_s": 0,
+            "orbit_sample_offset_s": 0,
             "duration_s": 120,
             "step_s": 60,
         }
@@ -171,6 +172,8 @@ class ScenarioGenerationTest(unittest.TestCase):
             manifest["aggregate_compute_rate_work_units_per_second"],
             33_000_000,
         )
+        self.assertIsNone(manifest["reference_scenario_sha256"])
+        self.assertIsNone(manifest["downsample_interval_s"])
 
     def test_static_modes_preserve_sampling_and_link_contracts(self) -> None:
         fixed_manifest = json.loads(
@@ -182,6 +185,7 @@ class ScenarioGenerationTest(unittest.TestCase):
         )
         self.assertEqual(fixed_manifest["generation_mode"], "static")
         self.assertEqual(fixed_manifest["duration_s"], 17)
+        self.assertIsNone(fixed_manifest["orbit_sample_offset_s"])
         self.assertEqual(fixed_manifest["snapshot_count"], 1)
         fixed_topology = json.loads(
             (
@@ -222,6 +226,14 @@ class ScenarioGenerationTest(unittest.TestCase):
                 summary = check_scenario(output)
                 self.assertEqual(summary["topology_mode"], "dynamic")
                 self.assertEqual(summary["snapshot_count"], 3)
+                manifest = json.loads(
+                    (
+                        output
+                        / "topology"
+                        / "manifest.json"
+                    ).read_text(encoding="utf-8")
+                )
+                self.assertEqual(manifest["orbit_sample_offset_s"], 0)
                 topology_files = sorted(
                     path.name
                     for path in (output / "topology").glob(

@@ -340,8 +340,10 @@ def generate_isl_snapshots(
     candidates: tuple[CandidateIsl, ...],
     times_s: tuple[int, ...],
     max_distance_m: Any,
+    *,
+    orbit_sample_offset_s: int = 0,
 ) -> tuple[IslSnapshot, ...]:
-    """Evaluate a strictly increasing sequence beginning at t=0."""
+    """Evaluate simulation times against one physical-orbit time window."""
     if (
         not times_s
         or times_s[0] != 0
@@ -354,12 +356,24 @@ def generate_isl_snapshots(
         raise DynamicIslError(
             "snapshot times must be strictly increasing integers from 0"
         )
+    if (
+        not isinstance(orbit_sample_offset_s, int)
+        or isinstance(orbit_sample_offset_s, bool)
+        or orbit_sample_offset_s < 0
+    ):
+        raise DynamicIslError(
+            "orbit_sample_offset_s must be a non-negative integer"
+        )
+    if orbit_sample_offset_s > (1 << 63) - 1 - times_s[-1]:
+        raise DynamicIslError(
+            "orbit_sample_offset_s + final time must not exceed INT64_MAX"
+        )
     snapshots = []
     previous_active_edges = None
     for time_s in times_s:
         evaluated = evaluate_candidate_isls(
             candidates,
-            orbit.positions_at(time_s),
+            orbit.positions_at(orbit_sample_offset_s + time_s),
             max_distance_m,
         )
         snapshot = build_isl_snapshot(

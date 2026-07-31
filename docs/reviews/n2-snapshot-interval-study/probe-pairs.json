@@ -1,0 +1,1370 @@
+{
+  "constellations": [
+    {
+      "constellation": "synthetic-66-compute-22",
+      "node_count": 66,
+      "probe_pairs": [
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 1,
+          "destination_port": 30000,
+          "source_id": 0,
+          "source_port": 20000
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 5,
+          "destination_port": 30001,
+          "source_id": 0,
+          "source_port": 20001
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 11,
+          "destination_port": 30002,
+          "source_id": 0,
+          "source_port": 20002
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 33,
+          "destination_port": 30003,
+          "source_id": 0,
+          "source_port": 20003
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 33,
+          "destination_port": 30004,
+          "source_id": 55,
+          "source_port": 20004
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 5,
+          "destination_port": 30005,
+          "source_id": 1,
+          "source_port": 20005
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 0,
+          "destination_port": 30006,
+          "source_id": 1,
+          "source_port": 20006
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 5,
+          "destination_port": 30007,
+          "source_id": 2,
+          "source_port": 20007
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 4,
+          "destination_port": 30008,
+          "source_id": 3,
+          "source_port": 20008
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 8,
+          "destination_port": 30009,
+          "source_id": 3,
+          "source_port": 20009
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 0,
+          "destination_port": 30010,
+          "source_id": 11,
+          "source_port": 20010
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 0,
+          "destination_port": 30011,
+          "source_id": 33,
+          "source_port": 20011
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 36,
+          "destination_port": 30012,
+          "source_id": 3,
+          "source_port": 20012
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 9,
+          "destination_port": 30013,
+          "source_id": 5,
+          "source_port": 20013
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 2,
+          "destination_port": 30014,
+          "source_id": 5,
+          "source_port": 20014
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 9,
+          "destination_port": 30015,
+          "source_id": 3,
+          "source_port": 20015
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 3,
+          "destination_port": 30016,
+          "source_id": 4,
+          "source_port": 20016
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 1,
+          "destination_port": 30017,
+          "source_id": 7,
+          "source_port": 20017
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 14,
+          "destination_port": 30018,
+          "source_id": 3,
+          "source_port": 20018
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 3,
+          "destination_port": 30019,
+          "source_id": 36,
+          "source_port": 20019
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 36,
+          "destination_port": 30020,
+          "source_id": 58,
+          "source_port": 20020
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 12,
+          "destination_port": 30021,
+          "source_id": 9,
+          "source_port": 20021
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 3,
+          "destination_port": 30022,
+          "source_id": 9,
+          "source_port": 20022
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 12,
+          "destination_port": 30023,
+          "source_id": 4,
+          "source_port": 20023
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 8,
+          "destination_port": 30024,
+          "source_id": 7,
+          "source_port": 20024
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 16,
+          "destination_port": 30025,
+          "source_id": 11,
+          "source_port": 20025
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 3,
+          "destination_port": 30026,
+          "source_id": 14,
+          "source_port": 20026
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 40,
+          "destination_port": 30027,
+          "source_id": 7,
+          "source_port": 20027
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 40,
+          "destination_port": 30028,
+          "source_id": 62,
+          "source_port": 20028
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 15,
+          "destination_port": 30029,
+          "source_id": 12,
+          "source_port": 20029
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 4,
+          "destination_port": 30030,
+          "source_id": 12,
+          "source_port": 20030
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 15,
+          "destination_port": 30031,
+          "source_id": 6,
+          "source_port": 20031
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 7,
+          "destination_port": 30032,
+          "source_id": 8,
+          "source_port": 20032
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 19,
+          "destination_port": 30033,
+          "source_id": 14,
+          "source_port": 20033
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 18,
+          "destination_port": 30034,
+          "source_id": 7,
+          "source_port": 20034
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 7,
+          "destination_port": 30035,
+          "source_id": 40,
+          "source_port": 20035
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 17,
+          "destination_port": 30036,
+          "source_id": 15,
+          "source_port": 20036
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 6,
+          "destination_port": 30037,
+          "source_id": 15,
+          "source_port": 20037
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 17,
+          "destination_port": 30038,
+          "source_id": 7,
+          "source_port": 20038
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 12,
+          "destination_port": 30039,
+          "source_id": 11,
+          "source_port": 20039
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 12,
+          "destination_port": 30040,
+          "source_id": 18,
+          "source_port": 20040
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 7,
+          "destination_port": 30041,
+          "source_id": 18,
+          "source_port": 20041
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 20,
+          "destination_port": 30042,
+          "source_id": 17,
+          "source_port": 20042
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 7,
+          "destination_port": 30043,
+          "source_id": 17,
+          "source_port": 20043
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 20,
+          "destination_port": 30044,
+          "source_id": 8,
+          "source_port": 20044
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 11,
+          "destination_port": 30045,
+          "source_id": 12,
+          "source_port": 20045
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 27,
+          "destination_port": 30046,
+          "source_id": 22,
+          "source_port": 20046
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 22,
+          "destination_port": 30047,
+          "source_id": 11,
+          "source_port": 20047
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 23,
+          "destination_port": 30048,
+          "source_id": 20,
+          "source_port": 20048
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 8,
+          "destination_port": 30049,
+          "source_id": 20,
+          "source_port": 20049
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 23,
+          "destination_port": 30050,
+          "source_id": 10,
+          "source_port": 20050
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 15,
+          "destination_port": 30051,
+          "source_id": 14,
+          "source_port": 20051
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 30,
+          "destination_port": 30052,
+          "source_id": 25,
+          "source_port": 20052
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 11,
+          "destination_port": 30053,
+          "source_id": 22,
+          "source_port": 20053
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 26,
+          "destination_port": 30054,
+          "source_id": 23,
+          "source_port": 20054
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 10,
+          "destination_port": 30055,
+          "source_id": 23,
+          "source_port": 20055
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 26,
+          "destination_port": 30056,
+          "source_id": 11,
+          "source_port": 20056
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 14,
+          "destination_port": 30057,
+          "source_id": 15,
+          "source_port": 20057
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 23,
+          "destination_port": 30058,
+          "source_id": 29,
+          "source_port": 20058
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 25,
+          "destination_port": 30059,
+          "source_id": 14,
+          "source_port": 20059
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 28,
+          "destination_port": 30060,
+          "source_id": 26,
+          "source_port": 20060
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 11,
+          "destination_port": 30061,
+          "source_id": 26,
+          "source_port": 20061
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 28,
+          "destination_port": 30062,
+          "source_id": 13,
+          "source_port": 20062
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 19,
+          "destination_port": 30063,
+          "source_id": 18,
+          "source_port": 20063
+        }
+      ],
+      "probe_pairs_sha256": "f77d1ed6e36c1dd4a33146aac24edb0c034c2bd29df32da82c43473157bdd174"
+    },
+    {
+      "constellation": "synthetic-351-telesat-t1-compute-117",
+      "node_count": 351,
+      "probe_pairs": [
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 1,
+          "destination_port": 30000,
+          "source_id": 0,
+          "source_port": 20000
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 6,
+          "destination_port": 30001,
+          "source_id": 0,
+          "source_port": 20001
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 13,
+          "destination_port": 30002,
+          "source_id": 0,
+          "source_port": 20002
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 169,
+          "destination_port": 30003,
+          "source_id": 0,
+          "source_port": 20003
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 169,
+          "destination_port": 30004,
+          "source_id": 338,
+          "source_port": 20004
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 4,
+          "destination_port": 30005,
+          "source_id": 1,
+          "source_port": 20005
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 0,
+          "destination_port": 30006,
+          "source_id": 1,
+          "source_port": 20006
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 4,
+          "destination_port": 30007,
+          "source_id": 2,
+          "source_port": 20007
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 5,
+          "destination_port": 30008,
+          "source_id": 4,
+          "source_port": 20008
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 10,
+          "destination_port": 30009,
+          "source_id": 4,
+          "source_port": 20009
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 0,
+          "destination_port": 30010,
+          "source_id": 13,
+          "source_port": 20010
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 0,
+          "destination_port": 30011,
+          "source_id": 169,
+          "source_port": 20011
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 173,
+          "destination_port": 30012,
+          "source_id": 4,
+          "source_port": 20012
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 8,
+          "destination_port": 30013,
+          "source_id": 4,
+          "source_port": 20013
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 2,
+          "destination_port": 30014,
+          "source_id": 4,
+          "source_port": 20014
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 8,
+          "destination_port": 30015,
+          "source_id": 3,
+          "source_port": 20015
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 4,
+          "destination_port": 30016,
+          "source_id": 5,
+          "source_port": 20016
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 1,
+          "destination_port": 30017,
+          "source_id": 8,
+          "source_port": 20017
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 17,
+          "destination_port": 30018,
+          "source_id": 4,
+          "source_port": 20018
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 4,
+          "destination_port": 30019,
+          "source_id": 173,
+          "source_port": 20019
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 173,
+          "destination_port": 30020,
+          "source_id": 342,
+          "source_port": 20020
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 11,
+          "destination_port": 30021,
+          "source_id": 8,
+          "source_port": 20021
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 3,
+          "destination_port": 30022,
+          "source_id": 8,
+          "source_port": 20022
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 11,
+          "destination_port": 30023,
+          "source_id": 5,
+          "source_port": 20023
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 9,
+          "destination_port": 30024,
+          "source_id": 8,
+          "source_port": 20024
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 19,
+          "destination_port": 30025,
+          "source_id": 13,
+          "source_port": 20025
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 4,
+          "destination_port": 30026,
+          "source_id": 17,
+          "source_port": 20026
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 177,
+          "destination_port": 30027,
+          "source_id": 8,
+          "source_port": 20027
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 177,
+          "destination_port": 30028,
+          "source_id": 346,
+          "source_port": 20028
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 14,
+          "destination_port": 30029,
+          "source_id": 11,
+          "source_port": 20029
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 5,
+          "destination_port": 30030,
+          "source_id": 11,
+          "source_port": 20030
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 14,
+          "destination_port": 30031,
+          "source_id": 6,
+          "source_port": 20031
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 8,
+          "destination_port": 30032,
+          "source_id": 9,
+          "source_port": 20032
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 23,
+          "destination_port": 30033,
+          "source_id": 17,
+          "source_port": 20033
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 21,
+          "destination_port": 30034,
+          "source_id": 8,
+          "source_port": 20034
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 8,
+          "destination_port": 30035,
+          "source_id": 177,
+          "source_port": 20035
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 17,
+          "destination_port": 30036,
+          "source_id": 14,
+          "source_port": 20036
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 6,
+          "destination_port": 30037,
+          "source_id": 14,
+          "source_port": 20037
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 17,
+          "destination_port": 30038,
+          "source_id": 7,
+          "source_port": 20038
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 14,
+          "destination_port": 30039,
+          "source_id": 13,
+          "source_port": 20039
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 14,
+          "destination_port": 30040,
+          "source_id": 21,
+          "source_port": 20040
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 8,
+          "destination_port": 30041,
+          "source_id": 21,
+          "source_port": 20041
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 21,
+          "destination_port": 30042,
+          "source_id": 17,
+          "source_port": 20042
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 7,
+          "destination_port": 30043,
+          "source_id": 17,
+          "source_port": 20043
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 21,
+          "destination_port": 30044,
+          "source_id": 9,
+          "source_port": 20044
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 13,
+          "destination_port": 30045,
+          "source_id": 14,
+          "source_port": 20045
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 32,
+          "destination_port": 30046,
+          "source_id": 26,
+          "source_port": 20046
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 26,
+          "destination_port": 30047,
+          "source_id": 13,
+          "source_port": 20047
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 24,
+          "destination_port": 30048,
+          "source_id": 21,
+          "source_port": 20048
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 9,
+          "destination_port": 30049,
+          "source_id": 21,
+          "source_port": 20049
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 24,
+          "destination_port": 30050,
+          "source_id": 10,
+          "source_port": 20050
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 18,
+          "destination_port": 30051,
+          "source_id": 17,
+          "source_port": 20051
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 36,
+          "destination_port": 30052,
+          "source_id": 30,
+          "source_port": 20052
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 13,
+          "destination_port": 30053,
+          "source_id": 26,
+          "source_port": 20053
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 27,
+          "destination_port": 30054,
+          "source_id": 24,
+          "source_port": 20054
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 10,
+          "destination_port": 30055,
+          "source_id": 24,
+          "source_port": 20055
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 27,
+          "destination_port": 30056,
+          "source_id": 12,
+          "source_port": 20056
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 17,
+          "destination_port": 30057,
+          "source_id": 18,
+          "source_port": 20057
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 27,
+          "destination_port": 30058,
+          "source_id": 34,
+          "source_port": 20058
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 30,
+          "destination_port": 30059,
+          "source_id": 17,
+          "source_port": 20059
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 29,
+          "destination_port": 30060,
+          "source_id": 27,
+          "source_port": 20060
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 12,
+          "destination_port": 30061,
+          "source_id": 27,
+          "source_port": 20061
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 29,
+          "destination_port": 30062,
+          "source_id": 13,
+          "source_port": 20062
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 22,
+          "destination_port": 30063,
+          "source_id": 21,
+          "source_port": 20063
+        }
+      ],
+      "probe_pairs_sha256": "a37f26f52e48d19cd159398a44c223b38312b22cf9be47b021259c61e2efa94b"
+    },
+    {
+      "constellation": "synthetic-720-oneweb-compute-240",
+      "node_count": 720,
+      "probe_pairs": [
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 1,
+          "destination_port": 30000,
+          "source_id": 0,
+          "source_port": 20000
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 20,
+          "destination_port": 30001,
+          "source_id": 0,
+          "source_port": 20001
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 40,
+          "destination_port": 30002,
+          "source_id": 0,
+          "source_port": 20002
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 360,
+          "destination_port": 30003,
+          "source_id": 0,
+          "source_port": 20003
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 360,
+          "destination_port": 30004,
+          "source_id": 680,
+          "source_port": 20004
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 4,
+          "destination_port": 30005,
+          "source_id": 1,
+          "source_port": 20005
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 0,
+          "destination_port": 30006,
+          "source_id": 1,
+          "source_port": 20006
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 4,
+          "destination_port": 30007,
+          "source_id": 2,
+          "source_port": 20007
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 14,
+          "destination_port": 30008,
+          "source_id": 13,
+          "source_port": 20008
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 33,
+          "destination_port": 30009,
+          "source_id": 13,
+          "source_port": 20009
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 0,
+          "destination_port": 30010,
+          "source_id": 40,
+          "source_port": 20010
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 0,
+          "destination_port": 30011,
+          "source_id": 360,
+          "source_port": 20011
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 373,
+          "destination_port": 30012,
+          "source_id": 13,
+          "source_port": 20012
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 7,
+          "destination_port": 30013,
+          "source_id": 4,
+          "source_port": 20013
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 2,
+          "destination_port": 30014,
+          "source_id": 4,
+          "source_port": 20014
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 7,
+          "destination_port": 30015,
+          "source_id": 3,
+          "source_port": 20015
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 13,
+          "destination_port": 30016,
+          "source_id": 14,
+          "source_port": 20016
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 6,
+          "destination_port": 30017,
+          "source_id": 26,
+          "source_port": 20017
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 53,
+          "destination_port": 30018,
+          "source_id": 13,
+          "source_port": 20018
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 13,
+          "destination_port": 30019,
+          "source_id": 373,
+          "source_port": 20019
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 373,
+          "destination_port": 30020,
+          "source_id": 693,
+          "source_port": 20020
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 10,
+          "destination_port": 30021,
+          "source_id": 7,
+          "source_port": 20021
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 3,
+          "destination_port": 30022,
+          "source_id": 7,
+          "source_port": 20022
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 10,
+          "destination_port": 30023,
+          "source_id": 5,
+          "source_port": 20023
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 27,
+          "destination_port": 30024,
+          "source_id": 26,
+          "source_port": 20024
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 60,
+          "destination_port": 30025,
+          "source_id": 40,
+          "source_port": 20025
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 13,
+          "destination_port": 30026,
+          "source_id": 53,
+          "source_port": 20026
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 386,
+          "destination_port": 30027,
+          "source_id": 26,
+          "source_port": 20027
+        },
+        {
+          "category": "boundary-to-internal",
+          "destination_id": 386,
+          "destination_port": 30028,
+          "source_id": 706,
+          "source_port": 20028
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 13,
+          "destination_port": 30029,
+          "source_id": 10,
+          "source_port": 20029
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 5,
+          "destination_port": 30030,
+          "source_id": 10,
+          "source_port": 20030
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 13,
+          "destination_port": 30031,
+          "source_id": 6,
+          "source_port": 20031
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 26,
+          "destination_port": 30032,
+          "source_id": 27,
+          "source_port": 20032
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 73,
+          "destination_port": 30033,
+          "source_id": 53,
+          "source_port": 20033
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 66,
+          "destination_port": 30034,
+          "source_id": 26,
+          "source_port": 20034
+        },
+        {
+          "category": "non-adjacent-orbit",
+          "destination_id": 26,
+          "destination_port": 30035,
+          "source_id": 386,
+          "source_port": 20035
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 16,
+          "destination_port": 30036,
+          "source_id": 13,
+          "source_port": 20036
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 6,
+          "destination_port": 30037,
+          "source_id": 13,
+          "source_port": 20037
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 16,
+          "destination_port": 30038,
+          "source_id": 8,
+          "source_port": 20038
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 41,
+          "destination_port": 30039,
+          "source_id": 40,
+          "source_port": 20039
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 46,
+          "destination_port": 30040,
+          "source_id": 66,
+          "source_port": 20040
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 26,
+          "destination_port": 30041,
+          "source_id": 66,
+          "source_port": 20041
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 20,
+          "destination_port": 30042,
+          "source_id": 16,
+          "source_port": 20042
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 8,
+          "destination_port": 30043,
+          "source_id": 16,
+          "source_port": 20043
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 20,
+          "destination_port": 30044,
+          "source_id": 9,
+          "source_port": 20044
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 40,
+          "destination_port": 30045,
+          "source_id": 41,
+          "source_port": 20045
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 100,
+          "destination_port": 30046,
+          "source_id": 80,
+          "source_port": 20046
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 80,
+          "destination_port": 30047,
+          "source_id": 40,
+          "source_port": 20047
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 23,
+          "destination_port": 30048,
+          "source_id": 20,
+          "source_port": 20048
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 9,
+          "destination_port": 30049,
+          "source_id": 20,
+          "source_port": 20049
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 23,
+          "destination_port": 30050,
+          "source_id": 11,
+          "source_port": 20050
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 54,
+          "destination_port": 30051,
+          "source_id": 53,
+          "source_port": 20051
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 113,
+          "destination_port": 30052,
+          "source_id": 93,
+          "source_port": 20052
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 40,
+          "destination_port": 30053,
+          "source_id": 80,
+          "source_port": 20053
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 26,
+          "destination_port": 30054,
+          "source_id": 23,
+          "source_port": 20054
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 11,
+          "destination_port": 30055,
+          "source_id": 23,
+          "source_port": 20055
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 26,
+          "destination_port": 30056,
+          "source_id": 12,
+          "source_port": 20056
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 53,
+          "destination_port": 30057,
+          "source_id": 54,
+          "source_port": 20057
+        },
+        {
+          "category": "same-orbit-far",
+          "destination_id": 86,
+          "destination_port": 30058,
+          "source_id": 106,
+          "source_port": 20058
+        },
+        {
+          "category": "adjacent-orbit",
+          "destination_id": 93,
+          "destination_port": 30059,
+          "source_id": 53,
+          "source_port": 20059
+        },
+        {
+          "category": "compute-to-compute",
+          "destination_id": 29,
+          "destination_port": 30060,
+          "source_id": 26,
+          "source_port": 20060
+        },
+        {
+          "category": "compute-to-normal",
+          "destination_id": 12,
+          "destination_port": 30061,
+          "source_id": 26,
+          "source_port": 20061
+        },
+        {
+          "category": "normal-to-compute",
+          "destination_id": 29,
+          "destination_port": 30062,
+          "source_id": 14,
+          "source_port": 20062
+        },
+        {
+          "category": "same-orbit-adjacent",
+          "destination_id": 67,
+          "destination_port": 30063,
+          "source_id": 66,
+          "source_port": 20063
+        }
+      ],
+      "probe_pairs_sha256": "1aa5ca288a69399b10ec04c563cfffe3660a9c89bea2d30f1883ddc15abf3ff2"
+    }
+  ],
+  "schema_version": "0.1"
+}

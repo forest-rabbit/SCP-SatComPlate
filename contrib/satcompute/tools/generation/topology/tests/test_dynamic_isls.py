@@ -39,6 +39,7 @@ from contrib.satcompute.tools.generation.topology.dynamic.generate_dynamic_isls 
     SNAPSHOT_FILENAME,
     DynamicIslGenerationError,
     generate_dynamic_isl_output,
+    validate_orbit_sample_offset,
     validate_schedule,
 )
 from contrib.satcompute.tools.generation.topology.orbit.hypatia.adapter import (
@@ -292,6 +293,30 @@ class DynamicIslCandidateTest(unittest.TestCase):
                 len(snapshot.active_edges) + len(snapshot.filtered_edges),
             )
 
+    def test_orbit_offset_changes_physical_time_not_snapshot_time(self) -> None:
+        candidates = build_candidate_isls(self.config)
+        reference = generate_isl_snapshots(
+            load_orbit_constellation(self.config, HypatiaAdapter()),
+            candidates,
+            (0, 60),
+            self.config.max_isl_distance_m,
+        )
+        shifted = generate_isl_snapshots(
+            load_orbit_constellation(self.config, HypatiaAdapter()),
+            candidates,
+            (0,),
+            self.config.max_isl_distance_m,
+            orbit_sample_offset_s=60,
+        )
+        self.assertEqual(shifted[0].time_s, 0)
+        self.assertEqual(shifted[0].active_edges, reference[1].active_edges)
+        self.assertEqual(
+            shifted[0].filtered_edges,
+            reference[1].filtered_edges,
+        )
+        self.assertEqual(shifted[0].added_edges, ())
+        self.assertEqual(shifted[0].removed_edges, ())
+
 
 class DynamicIslOutputTest(unittest.TestCase):
     def test_schedule_contract_is_inclusive_and_strict(self) -> None:
@@ -308,6 +333,13 @@ class DynamicIslOutputTest(unittest.TestCase):
             with self.subTest(duration_s=duration_s, step_s=step_s):
                 with self.assertRaises(DynamicIslGenerationError):
                     validate_schedule(duration_s, step_s)
+
+    def test_orbit_sample_offset_contract_is_strict(self) -> None:
+        self.assertEqual(validate_orbit_sample_offset(60, 120), 60)
+        for offset_s in (-1, True, 1 << 63):
+            with self.subTest(offset_s=offset_s):
+                with self.assertRaises(DynamicIslGenerationError):
+                    validate_orbit_sample_offset(offset_s, 120)
 
     def test_output_files_counts_and_hashes_are_deterministic(self) -> None:
         with tempfile.TemporaryDirectory(
@@ -376,6 +408,7 @@ class DynamicIslOutputTest(unittest.TestCase):
             self.assertEqual(snapshots[0]["added_edges"], [])
             self.assertEqual(snapshots[0]["removed_edges"], [])
             self.assertEqual(manifest, first)
+            self.assertEqual(manifest["orbit_sample_offset_s"], 0)
             self.assertEqual(
                 manifest["candidate_degree_profile"],
                 {
@@ -397,6 +430,26 @@ class DynamicIslOutputTest(unittest.TestCase):
                 manifest["aggregate_sha256"],
                 hashlib.sha256(candidate_bytes + snapshot_bytes).hexdigest(),
             )
+
+    def test_output_manifest_records_nonzero_orbit_offset(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="satcompute-dynamic-offset-"
+        ) as temp:
+            output = Path(temp) / "output"
+            manifest = generate_dynamic_isl_output(
+                PRESET,
+                0,
+                1,
+                output,
+                orbit_sample_offset_s=60,
+            )
+            snapshot = json.loads(
+                (output / SNAPSHOT_FILENAME).read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(manifest["orbit_sample_offset_s"], 60)
+            self.assertEqual(snapshot["time_s"], 0)
 
     def test_atomic_output_rejects_nonempty_and_cleans_stale_temp(self) -> None:
         with tempfile.TemporaryDirectory(

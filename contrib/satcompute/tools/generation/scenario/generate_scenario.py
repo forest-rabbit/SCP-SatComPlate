@@ -101,6 +101,7 @@ def _generate_topology(
             schedule.duration_s,
             schedule.step_s,
             source_dir,
+            orbit_sample_offset_s=schedule.orbit_sample_offset_s,
         )
         manifest = export_satcompute_topology(
             source_dir,
@@ -117,7 +118,7 @@ def _generate_topology(
     )
 
 
-def _build_manifest(
+def build_scenario_manifest(
     config: ScenarioConfig,
     output_root: Path,
     topology_manifest: dict[str, Any],
@@ -125,6 +126,9 @@ def _build_manifest(
     compute_profile_sha256: str,
     placement_node_ids: tuple[int, ...],
     compute_nodes_per_orbit: tuple[int, ...],
+    *,
+    reference_scenario_sha256: str | None = None,
+    downsample_interval_s: int | None = None,
 ) -> dict[str, Any]:
     canonical_config = config.input_dict()
     config_sha256 = sha256_bytes(compact_json_bytes(canonical_config))
@@ -144,6 +148,12 @@ def _build_manifest(
     satcompute_commit, worktree_clean = git_repository_state()
     compute_rate = config.compute.compute_rate_work_units_per_second
     compute_count = len(placement_node_ids)
+    schedule = config.topology.schedule
+    orbit_sample_offset_s = (
+        schedule.orbit_sample_offset_s
+        if isinstance(schedule, DynamicSchedule)
+        else None
+    )
     return {
         "schema_version": config.schema_version,
         "scenario_name": config.scenario_name,
@@ -157,6 +167,7 @@ def _build_manifest(
         "snapshot_count": topology_summary["snapshot_count"],
         "first_time_s": topology_manifest["first_time_s"],
         "last_time_s": topology_manifest["last_time_s"],
+        "orbit_sample_offset_s": orbit_sample_offset_s,
         "delay_mode": config.topology.delay_mode,
         "fixed_delay_us": config.topology.fixed_delay_us,
         "link_bandwidth_kbps": config.topology.link_bandwidth_kbps,
@@ -176,6 +187,8 @@ def _build_manifest(
         "python_version": platform.python_version(),
         "uv_version": uv_version(),
         "uv_lock_sha256": sha256_file(REPOSITORY_ROOT / "uv.lock"),
+        "reference_scenario_sha256": reference_scenario_sha256,
+        "downsample_interval_s": downsample_interval_s,
         "aggregate_scenario_sha256": aggregate_scenario,
     }
 
@@ -218,7 +231,7 @@ def generate_scenario(
                 temporary / TOPOLOGY_DIRECTORY,
                 expected_node_count=config.total_satellite_count,
             )
-            scenario_manifest = _build_manifest(
+            scenario_manifest = build_scenario_manifest(
                 config,
                 temporary,
                 topology_manifest,

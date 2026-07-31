@@ -137,6 +137,7 @@ def _build_manifest(
         "source_dynamic_aggregate_sha256": None,
         "duration_s": time_s,
         "step_s": None,
+        "orbit_sample_offset_s": None,
         "snapshot_count": 1,
         "first_time_s": 0,
         "last_time_s": 0,

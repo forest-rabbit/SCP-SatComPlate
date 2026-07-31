@@ -83,7 +83,8 @@ uv run --locked python -m \
 
 ## PR3：动态 ISL 中间结果
 
-动态生成器在 `0..duration_s` 的闭区间内按 `step_s` 传播卫星位置，并用
+动态生成器在 `0..duration_s` 的闭区间内按 `step_s` 发布仿真时间，并用
+`orbit_sample_offset_s + simulation_time_s` 传播卫星位置，再由
 `max_isl_distance_m` 对固定 plus-grid 候选边做距离门控：
 
 ```text
@@ -102,8 +103,13 @@ uv run --locked python -m \
   --config contrib/satcompute/tools/generation/topology/config/synthetic-66.json \
   --duration-s 120 \
   --step-s 60 \
+  --orbit-sample-offset-s 0 \
   --output-dir /tmp/satcompute-dynamic-isls
 ```
+
+`--orbit-sample-offset-s` 默认为 0，必须为非负整数。非零偏移只改变实际
+轨道采样窗口；JSONL 中的 `time_s` 以及后续导出的快照文件名仍从 0 开始。
+动态中间 manifest 与最终 topology manifest 都记录该偏移。
 
 PR3 目录严格包含：
 

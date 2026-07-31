@@ -55,6 +55,7 @@ REQUIRED_MANIFEST_FIELDS = frozenset(
         "source_dynamic_aggregate_sha256",
         "duration_s",
         "step_s",
+        "orbit_sample_offset_s",
         "snapshot_count",
         "first_time_s",
         "last_time_s",
@@ -291,6 +292,10 @@ def _validate_manifest(
     if generation_mode == "static":
         if manifest["step_s"] is not None:
             raise ExportCheckError("static manifest step_s must be null")
+        if manifest["orbit_sample_offset_s"] is not None:
+            raise ExportCheckError(
+                "static manifest orbit_sample_offset_s must be null"
+            )
         if times != (0,):
             raise ExportCheckError("static manifest schedule is inconsistent")
         if (
@@ -306,6 +311,14 @@ def _validate_manifest(
             "step_s",
             minimum=1,
         )
+        orbit_sample_offset_s = _require_integer(
+            manifest["orbit_sample_offset_s"],
+            "orbit_sample_offset_s",
+        )
+        if orbit_sample_offset_s > (1 << 63) - 1 - duration_s:
+            raise ExportCheckError(
+                "orbit_sample_offset_s + duration_s exceeds INT64_MAX"
+            )
         if (
             duration_s != times[-1]
             or tuple(range(0, duration_s + 1, step_s)) != times
@@ -427,6 +440,7 @@ def _validate_source_dynamic(
         "hypatia_repository",
         "hypatia_commit",
         "hypatia_integration_mode",
+        "orbit_sample_offset_s",
     ):
         if export_manifest[field] != source_manifest.get(field):
             raise ExportCheckError(

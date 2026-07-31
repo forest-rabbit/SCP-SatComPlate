@@ -13,6 +13,7 @@
 #include "ns3/mac48-address.h"
 #include "ns3/simulator.h"
 
+#include <algorithm>
 #include <iostream>
 
 namespace ns3 {
@@ -216,6 +217,69 @@ SatelliteTopology::GetServiceAddress(uint32_t index) const
 {
   NS_ABORT_MSG_IF(index >= m_serviceAddresses.size(), "卫星业务地址下标越界: " << index);
   return m_serviceAddresses[index];
+}
+
+std::vector<uint32_t>
+SatelliteTopology::GetEcmpCandidateSatelliteIds(
+  uint32_t sourceSatelliteId,
+  uint32_t destinationSatelliteId) const
+{
+  NS_ABORT_MSG_IF(sourceSatelliteId == destinationSatelliteId,
+                  "ECMP candidate audit 不接受相同源和目的卫星");
+  Ptr<Node> source = GetNodeBySatelliteId(sourceSatelliteId);
+  Ptr<SatComputeIpv4GlobalRouting> routing =
+    SatComputeIpv4GlobalRoutingHelper::GetRouting(source);
+  std::vector<EcmpRouteCandidate> routes =
+    routing->GetEffectiveRouteCandidates(
+      GetServiceAddressBySatelliteId(destinationSatelliteId));
+  std::vector<uint32_t> candidateSatelliteIds;
+  const std::vector<IslDirectedLink>& directedLinks =
+    m_linkState->GetDirectedLinks();
+  for (const auto& route : routes)
+    {
+      auto directed =
+        std::find_if(
+          directedLinks.begin(),
+          directedLinks.end(),
+          [sourceSatelliteId, &route](const IslDirectedLink& link) {
+            return link.sourceNodeId == sourceSatelliteId
+                   && link.outputInterface == route.outputInterface;
+          });
+      NS_ABORT_MSG_IF(
+        directed == directedLinks.end(),
+        "ECMP host route 无法映射到物理下一跳: source="
+          << sourceSatelliteId
+          << " interface=" << route.outputInterface);
+      candidateSatelliteIds.push_back(directed->destinationNodeId);
+    }
+  std::sort(candidateSatelliteIds.begin(), candidateSatelliteIds.end());
+  candidateSatelliteIds.erase(
+    std::unique(candidateSatelliteIds.begin(),
+                candidateSatelliteIds.end()),
+    candidateSatelliteIds.end());
+  return candidateSatelliteIds;
+}
+
+uint32_t
+SatelliteTopology::GetNextHopSatelliteId(
+  uint32_t sourceSatelliteId,
+  uint32_t outputInterface) const
+{
+  const std::vector<IslDirectedLink>& directedLinks =
+    m_linkState->GetDirectedLinks();
+  auto directed =
+    std::find_if(
+      directedLinks.begin(),
+      directedLinks.end(),
+      [sourceSatelliteId, outputInterface](const IslDirectedLink& link) {
+        return link.sourceNodeId == sourceSatelliteId
+               && link.outputInterface == outputInterface;
+      });
+  NS_ABORT_MSG_IF(
+    directed == directedLinks.end(),
+    "output interface 无法映射到物理下一跳: source="
+      << sourceSatelliteId << " interface=" << outputInterface);
+  return directed->destinationNodeId;
 }
 
 bool
