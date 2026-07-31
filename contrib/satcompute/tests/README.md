@@ -30,6 +30,17 @@ contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
 contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
 ```
 
+Tool-specific smoke drivers remain separate because they use different
+dependency groups:
+
+```bash
+uv run --locked python -m \
+  contrib.satcompute.tests.integration.smoke.interval_analysis
+MPLBACKEND=Agg uv run --locked --group visualization python -m \
+  contrib.satcompute.tests.integration.smoke.orbit_visualization \
+  --work-dir /tmp/satcompute-orbit-smoke
+```
+
 All CI, review, smoke, and regression outputs belong under `/tmp`.  Formal
 experiment output may use `../output/<experiment>/`, but generated output
 must never be committed.

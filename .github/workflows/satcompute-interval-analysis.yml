@@ -13,6 +13,7 @@ on:
       - "contrib/satcompute/tools/generation/scenario/**"
       - "contrib/satcompute/tools/generation/topology/**"
       - "contrib/satcompute/tests/support/**"
+      - "contrib/satcompute/tests/integration/smoke/interval_analysis.py"
       - "contrib/satcompute/tests/unit/analysis/topology_interval/**"
       - "contrib/satcompute/wscript"
   push:
@@ -29,6 +30,7 @@ on:
       - "contrib/satcompute/tools/generation/scenario/**"
       - "contrib/satcompute/tools/generation/topology/**"
       - "contrib/satcompute/tests/support/**"
+      - "contrib/satcompute/tests/integration/smoke/interval_analysis.py"
       - "contrib/satcompute/tests/unit/analysis/topology_interval/**"
       - "contrib/satcompute/wscript"
   workflow_dispatch:
@@ -78,7 +80,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: >-
           uv run --locked python -m
-          contrib.satcompute.tools.analysis.topology_interval.ci_smoke
+          contrib.satcompute.tests.integration.smoke.interval_analysis
 
       - name: Verify clean source tree
         run: test -z "$(git status --short)"

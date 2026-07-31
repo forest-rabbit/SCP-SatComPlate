@@ -11,6 +11,7 @@ on:
       - "contrib/satcompute/tools/generation/topology/**"
       - "contrib/satcompute/tools/visualization/**"
       - "contrib/satcompute/tests/support/**"
+      - "contrib/satcompute/tests/integration/smoke/orbit_visualization.py"
       - "contrib/satcompute/tests/unit/visualization/orbit/**"
   push:
     branches:
@@ -24,6 +25,7 @@ on:
       - "contrib/satcompute/tools/generation/topology/**"
       - "contrib/satcompute/tools/visualization/**"
       - "contrib/satcompute/tests/support/**"
+      - "contrib/satcompute/tests/integration/smoke/orbit_visualization.py"
       - "contrib/satcompute/tests/unit/visualization/orbit/**"
   workflow_dispatch:
 
@@ -68,13 +70,13 @@ jobs:
       - name: Agg headless 66-satellite smoke
         run: >-
           uv run --locked --group visualization python -m
-          contrib.satcompute.tools.visualization.orbit.ci_smoke
+          contrib.satcompute.tests.integration.smoke.orbit_visualization
           --work-dir /tmp/satcompute-orbit-headless
 
       - name: Tiny Pillow GIF smoke
         run: >-
           uv run --locked --group visualization python -m
-          contrib.satcompute.tools.visualization.orbit.ci_smoke
+          contrib.satcompute.tests.integration.smoke.orbit_visualization
           --work-dir /tmp/satcompute-orbit-gif
           --export-gif
 

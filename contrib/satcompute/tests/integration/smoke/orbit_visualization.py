@@ -10,19 +10,15 @@ from pathlib import Path
 
 from PIL import Image
 
-from ...generation.scenario.generate_scenario import generate_scenario
-from .viewer import run_viewer
+from contrib.satcompute.tests.support.paths import SCENARIO_GENERATION_ROOT
+from contrib.satcompute.tools.generation.scenario.generate_scenario import (
+    generate_scenario,
+)
+from contrib.satcompute.tools.visualization.orbit.viewer import run_viewer
 
 
-TOOL_ROOT = Path(__file__).resolve().parent
-REPOSITORY_ROOT = TOOL_ROOT.parents[4]
 SCENARIO_PRESET = (
-    REPOSITORY_ROOT
-    / "contrib"
-    / "satcompute"
-    / "tools"
-    / "generation"
-    / "scenario"
+    SCENARIO_GENERATION_ROOT
     / "config"
     / "synthetic-66-compute-22.json"
 )

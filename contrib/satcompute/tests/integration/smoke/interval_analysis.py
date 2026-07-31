@@ -6,25 +6,36 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from ...generation.scenario.generate_scenario import generate_scenario
-from ...generation.topology.common.hash_utils import (
+from contrib.satcompute.tests.support.paths import (
     REPOSITORY_ROOT,
-    compact_json,
+    TOPOLOGY_SNAPSHOT_FIXTURES,
 )
-from .compare_intervals import compare_scenarios
-from .downsample_scenario import downsample_scenario
-from .edge_state import load_topology_edge_trace
-from .route_probe import (
+from contrib.satcompute.tools.analysis.topology_interval.compare_intervals import (
+    compare_scenarios,
+)
+from contrib.satcompute.tools.analysis.topology_interval.downsample_scenario import (
+    downsample_scenario,
+)
+from contrib.satcompute.tools.analysis.topology_interval.edge_state import (
+    load_topology_edge_trace,
+)
+from contrib.satcompute.tools.analysis.topology_interval.route_probe import (
     compare_selection_audits,
     verify_cpp_candidate_audit,
     write_probe_pairs,
 )
-from .run_interval_study import (
+from contrib.satcompute.tools.analysis.topology_interval.run_interval_study import (
     DEFAULT_INTERVALS,
     _run_waf,
     ensure_selection_audit,
     load_study_preset,
     write_window_config,
+)
+from contrib.satcompute.tools.generation.scenario.generate_scenario import (
+    generate_scenario,
+)
+from contrib.satcompute.tools.generation.topology.common.hash_utils import (
+    compact_json,
 )
 
 
@@ -99,14 +110,7 @@ def main() -> int:
         }:
             raise RuntimeError("120-second downsample counts differ")
 
-        fixture_root = (
-            REPOSITORY_ROOT
-            / "contrib"
-            / "satcompute"
-            / "input"
-            / "topology"
-            / "tests"
-        )
+        fixture_root = TOPOLOGY_SNAPSHOT_FIXTURES
         candidate_gates = {
             "diamond_static": _candidate_gate(
                 waf,
