@@ -21,9 +21,10 @@ from contrib.satcompute.tools.generation.scenario.check_scenario import (
 from contrib.satcompute.tools.generation.scenario.generate_scenario import (
     generate_scenario,
 )
+from contrib.satcompute.tests.support.paths import SCENARIO_GENERATION_ROOT
 
 
-SCENARIO_ROOT = Path(__file__).resolve().parents[3] / "generation" / "scenario"
+SCENARIO_ROOT = SCENARIO_GENERATION_ROOT
 PRESET = SCENARIO_ROOT / "config" / "synthetic-66-compute-22.json"
 
 

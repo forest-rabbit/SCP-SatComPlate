@@ -12,6 +12,8 @@ on:
       - "contrib/satcompute/tools/analysis/topology_interval/**"
       - "contrib/satcompute/tools/generation/scenario/**"
       - "contrib/satcompute/tools/generation/topology/**"
+      - "contrib/satcompute/tests/support/**"
+      - "contrib/satcompute/tests/unit/analysis/topology_interval/**"
       - "contrib/satcompute/wscript"
   push:
     branches:
@@ -26,6 +28,8 @@ on:
       - "contrib/satcompute/tools/analysis/topology_interval/**"
       - "contrib/satcompute/tools/generation/scenario/**"
       - "contrib/satcompute/tools/generation/topology/**"
+      - "contrib/satcompute/tests/support/**"
+      - "contrib/satcompute/tests/unit/analysis/topology_interval/**"
       - "contrib/satcompute/wscript"
   workflow_dispatch:
 
@@ -66,7 +70,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: >-
           uv run --locked python -m unittest discover
-          -s contrib/satcompute/tools/analysis/topology_interval/tests
+          -s contrib/satcompute/tests/unit/analysis/topology_interval
           -p 'test_*.py' -v
 
       - name: 66-satellite 120-second interval smoke
