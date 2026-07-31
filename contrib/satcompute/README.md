@@ -35,7 +35,7 @@ source .venv/bin/activate
 ```
 
 `tests/fixtures/topology/snapshots/`、`tests/fixtures/topology/compute-profiles/`、
-`input/traffic/test/`、`input/traffic/task/test/` 和 `tools/`
+`tests/fixtures/traffic/transfers/`、`input/traffic/task/test/` 和 `tools/`
 中的检查器是外部端到端验证资产，不进入 `ns3-satcompute` 模块编译。需要运行
 ns-3 上游单元测试时再显式启用 `--enable-tests`；日常平台构建不启用
 examples 或 tests。
@@ -320,7 +320,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -332,7 +332,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -348,7 +348,7 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic \
   --simulationDuration=6 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -373,7 +373,7 @@ HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序�
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=64000 \
   --islMtuBytes=65535 \
@@ -455,7 +455,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=45 \
-  --transferTrace=contrib/satcompute/input/traffic/test/mixed-large-ci.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/mixed-large-ci.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1500000 \
@@ -465,7 +465,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 
 python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --large=/tmp/satcompute-mixed-large-ci \
-  --large-input=contrib/satcompute/input/traffic/test/mixed-large-ci.json
+  --large-input=contrib/satcompute/tests/fixtures/traffic/transfers/mixed-large-ci.json
 ```
 
 `mixed-large-local.json` 是不放入 CI 的完整压力输入，含 10 条不同大流量，
@@ -563,7 +563,7 @@ python3 contrib/satcompute/tools/validation/check-task-output.py stress \
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/fqcodel-bottleneck \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/test/fqcodel-bottleneck-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/fqcodel-bottleneck-transfers.json \
   --diagnosticMode=failure \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1400 \

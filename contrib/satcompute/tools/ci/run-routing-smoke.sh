@@ -53,7 +53,7 @@ announce "static Hash repeat"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -65,7 +65,7 @@ announce "static Hash repeat"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -79,7 +79,7 @@ announce "dynamic Hash route epochs"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic \
   --simulationDuration=6 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -93,7 +93,7 @@ announce "stable HRW dynamic epochs"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=64000 \
   --islMtuBytes=65535 \
@@ -105,7 +105,7 @@ announce "stable HRW dynamic epochs"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=64000 \
   --islMtuBytes=65535 \
@@ -117,7 +117,7 @@ announce "stable HRW dynamic epochs"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=64000 \
   --islMtuBytes=65535 \
@@ -129,7 +129,7 @@ announce "stable HRW dynamic epochs"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=64000 \
   --islMtuBytes=65535 \
@@ -148,7 +148,7 @@ announce "size-aware HRW lifecycle"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=2 \
-  --transferTrace=contrib/satcompute/input/traffic/test/size-aware-static-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/size-aware-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=64000 \
   --islMtuBytes=65535 \
@@ -161,7 +161,7 @@ for suffix in a b; do
   ./waf --run-no-build "satcompute \
     --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
     --simulationDuration=2 \
-    --transferTrace=contrib/satcompute/input/traffic/test/size-aware-static-transfers.json \
+    --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/size-aware-static-transfers.json \
     --transferChunkMode=fixed \
     --transferPayloadBytes=64000 \
     --islMtuBytes=65535 \
@@ -173,7 +173,7 @@ for suffix in a b; do
   ./waf --run-no-build "satcompute \
     --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
     --simulationDuration=7 \
-    --transferTrace=contrib/satcompute/input/traffic/test/size-aware-dynamic-transfers.json \
+    --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/size-aware-dynamic-transfers.json \
     --transferChunkMode=fixed \
     --transferPayloadBytes=64000 \
     --islMtuBytes=65535 \

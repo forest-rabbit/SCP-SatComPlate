@@ -30,7 +30,7 @@ announce "canonical endpoint ordering and remainder"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/canonical-order-a \
   --simulationDuration=1 \
-  --transferTrace=contrib/satcompute/input/traffic/test/canonical-order-a.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/canonical-order-a.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -42,7 +42,7 @@ announce "canonical endpoint ordering and remainder"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/canonical-order-b \
   --simulationDuration=1 \
-  --transferTrace=contrib/satcompute/input/traffic/test/canonical-order-b.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/canonical-order-b.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -54,7 +54,7 @@ announce "canonical endpoint ordering and remainder"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/canonical-endpoint-reversed \
   --simulationDuration=1 \
-  --transferTrace=contrib/satcompute/input/traffic/test/canonical-order-a.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/canonical-order-a.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -83,7 +83,7 @@ announce "mixed large workload"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=45 \
-  --transferTrace=contrib/satcompute/input/traffic/test/mixed-large-ci.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/mixed-large-ci.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1500000 \
@@ -104,7 +104,7 @@ python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --scale-input=contrib/satcompute/input/traffic/workload/workload-5000-varied.json \
   --scale-log=/tmp/satcompute-ci-scale.log \
   --large=/tmp/satcompute-ci-mixed-large \
-  --large-input=contrib/satcompute/input/traffic/test/mixed-large-ci.json
+  --large-input=contrib/satcompute/tests/fixtures/traffic/transfers/mixed-large-ci.json
 python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --canonical-first=/tmp/satcompute-ci-canonical-a \
   --canonical-second=/tmp/satcompute-ci-canonical-order-b

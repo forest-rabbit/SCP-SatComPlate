@@ -19,7 +19,7 @@ announce "transfer-only FqCoDel DropReason"
 ./waf --run-no-build "satcompute \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/fqcodel-bottleneck \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/test/fqcodel-bottleneck-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/fqcodel-bottleneck-transfers.json \
   --diagnosticMode=failure \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1400 \
