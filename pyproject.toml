@@ -9,6 +9,12 @@ dependencies = [
     "sgp4>=2.27",
 ]
 
+[dependency-groups]
+visualization = [
+    "matplotlib>=3.9,<4",
+    "pillow>=10,<13",
+]
+
 [tool.uv]
 package = false
 required-version = "==0.11.25"

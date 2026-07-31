@@ -109,6 +109,14 @@ uv run --locked python -m \
 审查、CI 和临时验证写入 `/tmp`；正式实验应显式选择仓库外的持久目录。生成
 结果不提交到 Git。
 
+## 可选轨道可视化
+
+统一场景可用独立、默认关闭的 Matplotlib 查看器展示带经纬网的 WGS72 地球、
+三维卫星位置、轨道面、计算/普通卫星和可选活动 ISL，也可通过 Pillow 输出
+GIF。该工具不参与仿真、scenario 哈希或默认依赖安装；使用时显式选择
+`--group visualization`。入口、配置、Headless 与时间语义见
+[`orbit/README.md`](contrib/satcompute/tools/visualization/orbit/README.md)。
+
 ## NetworkTransfer
 
 NetworkTransfer JSON 的 `schema_version` 必须为 `0.1`。每条记录只含：
