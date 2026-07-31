@@ -39,10 +39,10 @@ jobs:
         run: contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
 
       - name: Extended routing regression
-        run: contrib/satcompute/tools/ci/run-full-routing-regression.sh
+        run: contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
 
       - name: Extended workload regression
-        run: contrib/satcompute/tools/ci/run-full-workload-regression.sh
+        run: contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
 
       - name: Verify clean source tree
         run: test -z "$(git status --short)"

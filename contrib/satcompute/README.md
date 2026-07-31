@@ -77,8 +77,8 @@ contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
 完整回归必须在同一工作区按顺序继续运行：
 
 ```bash
-contrib/satcompute/tools/ci/run-full-routing-regression.sh
-contrib/satcompute/tools/ci/run-full-workload-regression.sh
+contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
+contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
 ```
 
 前三级脚本保留 topology-only、Hash/HRW/size-aware、单任务、FCFS、
