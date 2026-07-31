@@ -14,9 +14,13 @@ from contrib.satcompute.tools.generation.topology.orbit.hypatia.resolve_constell
     TLE_FILENAME,
     resolve_constellation,
 )
+from contrib.satcompute.tests.support.paths import (
+    REPOSITORY_ROOT,
+    TOPOLOGY_GENERATION_ROOT,
+)
 
 
-TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+TOPOLOGY_ROOT = TOPOLOGY_GENERATION_ROOT
 HYPATIA_ROOT = TOPOLOGY_ROOT / "orbit" / "hypatia"
 PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 EXPECTED_TLE_SHA256 = (
@@ -25,7 +29,7 @@ EXPECTED_TLE_SHA256 = (
 EXPECTED_POSITIONS_SHA256 = (
     "01f0fb97feb26e63582649a65225c273cfa3357a474fc1511dc9eddc6b6f2ea9"
 )
-UV_LOCK = TOPOLOGY_ROOT.parents[4] / "uv.lock"
+UV_LOCK = REPOSITORY_ROOT / "uv.lock"
 
 
 class ResolveConstellationTest(unittest.TestCase):

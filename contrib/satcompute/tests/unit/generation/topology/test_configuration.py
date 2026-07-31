@@ -6,7 +6,6 @@ from __future__ import annotations
 import copy
 import math
 import unittest
-from pathlib import Path
 
 from contrib.satcompute.tools.generation.topology.common.configuration import (
     ConstellationConfigError,
@@ -14,9 +13,10 @@ from contrib.satcompute.tools.generation.topology.common.configuration import (
     load_config,
     parse_config,
 )
+from contrib.satcompute.tests.support.paths import TOPOLOGY_GENERATION_ROOT
 
 
-TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+TOPOLOGY_ROOT = TOPOLOGY_GENERATION_ROOT
 PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 
 

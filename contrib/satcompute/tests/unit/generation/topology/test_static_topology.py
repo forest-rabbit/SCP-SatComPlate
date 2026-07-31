@@ -19,9 +19,10 @@ from contrib.satcompute.tools.generation.topology.static.generate_static_topolog
     StaticTopologyGenerationError,
     generate_static_topology,
 )
+from contrib.satcompute.tests.support.paths import TOPOLOGY_GENERATION_ROOT
 
 
-TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+TOPOLOGY_ROOT = TOPOLOGY_GENERATION_ROOT
 PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 
 

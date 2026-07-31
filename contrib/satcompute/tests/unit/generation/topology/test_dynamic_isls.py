@@ -49,9 +49,10 @@ from contrib.satcompute.tools.generation.topology.orbit.hypatia.orbit_positions 
     SatellitePosition,
     load_orbit_constellation,
 )
+from contrib.satcompute.tests.support.paths import TOPOLOGY_GENERATION_ROOT
 
 
-TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+TOPOLOGY_ROOT = TOPOLOGY_GENERATION_ROOT
 PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 
 

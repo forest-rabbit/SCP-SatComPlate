@@ -243,6 +243,6 @@ uv run --locked python -m unittest discover \
 
 ```bash
 uv run --locked python -m unittest discover \
-  -s contrib/satcompute/tools/generation/topology/tests \
+  -s contrib/satcompute/tests/unit/generation/topology \
   -p 'test_*.py' -v
 ```

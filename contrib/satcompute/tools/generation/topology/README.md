@@ -220,7 +220,7 @@ manifest 统计、聚合 SHA-256，以及可选的 PR3 来源哈希、端点和 
 
 ```bash
 uv run --locked python -m unittest discover \
-  -s contrib/satcompute/tools/generation/topology/tests \
+  -s contrib/satcompute/tests/unit/generation/topology \
   -p 'test_*.py' -v
 ```
 

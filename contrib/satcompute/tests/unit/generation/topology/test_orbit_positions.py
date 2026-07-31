@@ -6,7 +6,6 @@ from __future__ import annotations
 import math
 import unittest
 from dataclasses import replace
-from pathlib import Path
 
 from contrib.satcompute.tools.generation.topology.common.configuration import (
     WALKER_DELTA,
@@ -22,9 +21,10 @@ from contrib.satcompute.tools.generation.topology.orbit.hypatia.orbit_positions 
 from contrib.satcompute.tools.generation.topology.orbit.hypatia.smoke_positions import (
     run_smoke,
 )
+from contrib.satcompute.tests.support.paths import TOPOLOGY_GENERATION_ROOT
 
 
-TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+TOPOLOGY_ROOT = TOPOLOGY_GENERATION_ROOT
 PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 EXPECTED_PR1_POSITIONS_SHA256 = (
     "01d0f2a672c32f88f780f691faef73d6f5d06c244be54d2ae21b25e1be5dba89"

@@ -24,6 +24,10 @@ from contrib.satcompute.tools.generation.topology.orbit.hypatia.vendor.hypatia_m
     tle_generator,
     tle_reader,
 )
+from contrib.satcompute.tests.support.paths import (
+    REPOSITORY_ROOT,
+    TOPOLOGY_GENERATION_ROOT,
+)
 
 
 EXPECTED_REPOSITORY = "https://github.com/snkas/hypatia.git"
@@ -31,8 +35,7 @@ EXPECTED_COMMIT = "0ac531c313eba2335f6344b46347140c3a0d4230"
 EXPECTED_POSITIONS_SHA256 = (
     "01d0f2a672c32f88f780f691faef73d6f5d06c244be54d2ae21b25e1be5dba89"
 )
-TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
-REPOSITORY_ROOT = Path(__file__).resolve().parents[6]
+TOPOLOGY_ROOT = TOPOLOGY_GENERATION_ROOT
 HYPATIA_ROOT = TOPOLOGY_ROOT / "orbit" / "hypatia"
 
 

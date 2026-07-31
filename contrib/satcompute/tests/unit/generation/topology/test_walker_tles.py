@@ -28,9 +28,10 @@ from contrib.satcompute.tools.generation.topology.orbit.hypatia.walker_tles impo
     generate_walker_tles,
     walker_slots,
 )
+from contrib.satcompute.tests.support.paths import TOPOLOGY_GENERATION_ROOT
 
 
-TOPOLOGY_ROOT = Path(__file__).resolve().parents[1]
+TOPOLOGY_ROOT = TOPOLOGY_GENERATION_ROOT
 PRESET = TOPOLOGY_ROOT / "config" / "synthetic-66.json"
 EXPECTED_STAR_RAAN = (0.0, 30.0, 60.0, 90.0, 120.0, 150.0)
 EXPECTED_DELTA_RAAN = (0.0, 60.0, 120.0, 180.0, 240.0, 300.0)
