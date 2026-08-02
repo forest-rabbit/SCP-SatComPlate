@@ -57,7 +57,8 @@ NetworkTransferApplication::NetworkTransferApplication()
     m_lastSendTimeNs(-1),
     m_isRunning(false),
     m_hasStarted(false),
-    m_hasFinishedSending(false)
+    m_hasFinishedSending(false),
+    m_isPausedForRouteUpdate(false)
 {
 }
 
@@ -130,6 +131,35 @@ NetworkTransferApplication::StartTransferNow()
   SendNextPacket();
 }
 
+void
+NetworkTransferApplication::PauseForRouteUpdate()
+{
+  NS_ABORT_MSG_IF(!m_isRunning || !m_hasStarted || m_hasFinishedSending
+                    || m_isPausedForRouteUpdate,
+                  "NetworkTransfer 无法暂停等待路由更新，transfer_id="
+                    << m_transfer.transferId);
+  if (m_sendEvent.IsRunning())
+    {
+      Simulator::Cancel(m_sendEvent);
+    }
+  m_isPausedForRouteUpdate = true;
+}
+
+void
+NetworkTransferApplication::ResumeAfterRouteUpdate(uint64_t pacingRateBps)
+{
+  NS_ABORT_MSG_IF(!m_isRunning || !m_hasStarted || m_hasFinishedSending
+                    || !m_isPausedForRouteUpdate || m_remainingBytes == 0
+                    || pacingRateBps == 0,
+                  "NetworkTransfer 无法在路由更新后恢复，transfer_id="
+                    << m_transfer.transferId);
+  m_pacingRateBps = pacingRateBps;
+  m_isPausedForRouteUpdate = false;
+  m_sendEvent = Simulator::ScheduleNow(
+    &NetworkTransferApplication::SendNextPacket,
+    this);
+}
+
 uint64_t
 NetworkTransferApplication::GetTransferId() const
 {
@@ -146,6 +176,12 @@ bool
 NetworkTransferApplication::HasFinishedSending() const
 {
   return m_hasFinishedSending;
+}
+
+bool
+NetworkTransferApplication::IsPausedForRouteUpdate() const
+{
+  return m_isPausedForRouteUpdate;
 }
 
 uint64_t
@@ -269,6 +305,9 @@ NetworkTransferApplication::SendNextPacket()
 {
   NS_ABORT_MSG_IF(m_socket == nullptr,
                   "NetworkTransfer sender socket 不可用，transfer_id="
+                    << m_transfer.transferId);
+  NS_ABORT_MSG_IF(m_isPausedForRouteUpdate,
+                  "NetworkTransfer 暂停期间不应执行发送事件，transfer_id="
                     << m_transfer.transferId);
   NS_ABORT_MSG_IF(m_remainingBytes == 0,
                   "NetworkTransfer sender 出现额外发送事件，transfer_id="
