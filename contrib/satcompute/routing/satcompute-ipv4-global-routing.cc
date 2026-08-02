@@ -315,18 +315,29 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
                                     candidates[selectedIndex]))
           };
         }
-      m_sizeAwareRegistry->ReleaseInvalidAssignment(m_satelliteId,
-                                                    flowKey,
-                                                    m_routeEpoch);
+      if (m_selectionMode != EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
+        {
+          m_sizeAwareRegistry->ReleaseInvalidAssignment(m_satelliteId,
+                                                        flowKey,
+                                                        m_routeEpoch);
+        }
     }
-
-  NS_ABORT_MSG_IF(
-    m_selectionMode == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW,
-    "capacity-aware 活动 flow 的预留路径在 route epoch 中无效");
 
   std::vector<EcmpHrwRank> ranking =
     RankEcmpHrwRoutes(m_hashSeed, flowKey, candidates);
   EcmpHrwRank selected = ranking[0];
+  if (m_selectionMode == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
+    {
+      // The admission controller rebuilds complete paths after each route
+      // update.  A packet already in flight may still reach a node that was
+      // on the old path; forward that packet deterministically without
+      // creating a partial-path reservation.
+      selectionReason = "CAPACITY_AWARE_TRANSITION_FALLBACK";
+      return {
+        selected.candidateIndex,
+        selected.score
+      };
+    }
   selectionReason = "SIZE_AWARE_HRW_PRIMARY";
   if (ranking.size() >= 2)
     {
@@ -419,9 +430,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
 
   if (candidates.empty())
     {
-      if ((m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
-           || m_selectionMode
-                == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
+      if (m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
           && outputInterface == nullptr
           && hasFiveTuple
           && m_sizeAwareRegistry->IsSenderActive(flowKey))

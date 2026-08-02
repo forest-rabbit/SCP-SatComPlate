@@ -477,6 +477,10 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
 
   if (invalidTransfers.empty())
     {
+      if (!m_pendingCapacityTransfers.empty())
+        {
+          TryActivatePendingCapacityAwareTransfers();
+        }
       return;
     }
   std::vector<uint64_t> pending = invalidTransfers;
