@@ -213,7 +213,7 @@ InstallNetworkTransfers(const std::string& filename,
                         bool collectUdpSocketDrops,
                         const std::string& logMode,
                         double simulationDurationSeconds,
-                        const SatelliteTopology& topology)
+                        SatelliteTopology& topology)
 {
   NS_ABORT_MSG_IF(logMode != "summary"
                     && logMode != "verbose"

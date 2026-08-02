@@ -44,7 +44,7 @@ public:
   NetworkTransferEngine();
   ~NetworkTransferEngine() override;
 
-  void Configure(const SatelliteTopology& topology,
+  void Configure(SatelliteTopology& topology,
                  const std::string& chunkMode,
                  uint32_t fixedPayloadBytes,
                  uint16_t islMtuBytes,
@@ -79,6 +79,7 @@ private:
   void ActivateTransfer(uint64_t transferId);
   bool TryActivateCapacityAwareTransfer(uint64_t transferId);
   void TryActivatePendingCapacityAwareTransfers();
+  void HandleTopologyRouteUpdate();
   void HandleSenderComplete(uint64_t transferId, int64_t sendTimeNs);
   void HandleTransferComplete(uint64_t transferId, int64_t completionTimeNs);
 
