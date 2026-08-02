@@ -32,6 +32,10 @@ contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
 contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
 ```
 
+其中 `run-capacity-aware-smoke.sh` 同时覆盖严格整路径准入模式，以及
+capacity-weighted 模式在异构带宽、动态下游断链和路径恢复下的确定性重选；
+后者是 50 包的小型合同测试，不是压力实验。
+
 工具 smoke 使用不同的依赖组，因此保留独立入口：
 
 ```bash

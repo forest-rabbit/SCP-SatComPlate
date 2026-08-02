@@ -466,6 +466,28 @@ python3 contrib/satcompute/tools/validation/check-size-aware-output.py \
 完成释放，
 0.1 s 目标流开始前总预留必须为零。
 
+## Capacity-weighted 动态验证
+
+`capacity-weighted-path-failure` 使用 5 颗卫星和三条等跳路径。初始源端有
+1 Mbps、500 Kbps、500 Kbps 三个候选；1 秒时断开第一条路径的下游 ISL，
+但保留中间卫星到另一条路径的绕行 ISL，源端候选变为两个；4 秒时恢复链路，
+候选回到三个。四条竞争 flow 共发送 3.2 MB、50 个 UDP 包，并跨越两个
+route epoch。
+
+该 fixture 特意保留失效路径入口，使已经进入 0→1 ISL 的包到达卫星 1 后也能
+使用 ns-3 重算路由绕行，从而把“路由重选合同”与“物理链路上在途 UDP 包不可
+恢复”分开。检查器验证：capacity-normalized 选择与 raw-byte size-aware
+基线产生预期差异；源节点和中间节点都释放失效 assignment 并重选；恢复后
+已有 flow 保持 sticky，新 flow 可以使用恢复路径；重复运行均 4/4 transfer、
+50/50 包且零丢包。入口 ISL 也同时失效的整星故障仍可能丢失在途 UDP 包，当前
+模式没有重传，因此不承诺硬故障零丢包。
+
+```bash
+contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
+```
+
+完整 66/351/720 星压力实验不属于该快速合同，留待单独实验执行。
+
 冻结 75% 压力输入不提交仓库。保留基线和大小感知输出时，可在主检查命令
 追加 `--full-baseline=<hash-output> --full-size=<size-aware-output>`。检查器
 固定核对 66 星、66 计算节点、2 Gbit/s ISL、1000 s、109,263,294,080
