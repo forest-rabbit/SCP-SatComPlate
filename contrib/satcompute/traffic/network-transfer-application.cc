@@ -14,7 +14,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-// 将逻辑传输分包，并按照当前首跳链路的序列化时间发送 UDP 数据。
+// 将逻辑传输分包，并按首跳或准入路径的瓶颈速率发送 UDP 数据。
 
 #include "network-transfer-application.h"
 
@@ -53,6 +53,7 @@ NetworkTransferApplication::NetworkTransferApplication()
   : m_remainingBytes(0),
     m_sentPacketCount(0),
     m_sentBytes(0),
+    m_pacingRateBps(0),
     m_lastSendTimeNs(-1),
     m_isRunning(false),
     m_hasStarted(false),
@@ -83,6 +84,16 @@ NetworkTransferApplication::SetSendCompleteCallback(
   NS_ABORT_MSG_IF(!m_sendCompleteCallback.IsNull() || m_hasStarted,
                   "NetworkTransfer sender complete callback 只能设置一次");
   m_sendCompleteCallback = sendCompleteCallback;
+}
+
+void
+NetworkTransferApplication::SetPacingRateBps(uint64_t pacingRateBps)
+{
+  NS_ABORT_MSG_IF(pacingRateBps == 0,
+                  "NetworkTransfer pacing rate 必须大于零");
+  NS_ABORT_MSG_IF(m_hasStarted || m_pacingRateBps != 0,
+                  "NetworkTransfer pacing rate 只能在发送前设置一次");
+  m_pacingRateBps = pacingRateBps;
 }
 
 void
@@ -239,8 +250,14 @@ NetworkTransferApplication::GetFirstHopSerializationTime(
     routeProbe->GetSize()
     + ipv4Header.GetSerializedSize()
     + pppHeader.GetSerializedSize();
+  uint64_t serializationRateBps = dataRate.Get().GetBitRate();
+  if (m_pacingRateBps != 0)
+    {
+      serializationRateBps =
+        std::min(serializationRateBps, m_pacingRateBps);
+    }
   Time serializationTime =
-    dataRate.Get().CalculateBytesTxTime(wireBytes);
+    DataRate(serializationRateBps).CalculateBytesTxTime(wireBytes);
   NS_ABORT_MSG_IF(serializationTime.IsZero(),
                   "NetworkTransfer 首跳序列化时间为零，transfer_id="
                     << m_transfer.transferId);

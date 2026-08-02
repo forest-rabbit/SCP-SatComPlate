@@ -18,6 +18,7 @@
 #define SATCOMPUTE_NETWORK_TRANSFER_ENGINE_H
 
 #include "../metrics/metrics.h"
+#include "../routing/capacity-aware-route-admission.h"
 #include "../topology/satellite-topology.h"
 #include "network-transfer-application.h"
 #include "network-transfer-config.h"
@@ -29,6 +30,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -75,6 +77,8 @@ private:
   EcmpFlowKey GetFlowKey(uint32_t index) const;
   const char* GetTransferStateName(uint32_t index) const;
   void ActivateTransfer(uint64_t transferId);
+  bool TryActivateCapacityAwareTransfer(uint64_t transferId);
+  void TryActivatePendingCapacityAwareTransfers();
   void HandleSenderComplete(uint64_t transferId, int64_t sendTimeNs);
   void HandleTransferComplete(uint64_t transferId, int64_t completionTimeNs);
 
@@ -87,13 +91,16 @@ private:
   int64_t m_simulationDurationNs;
   bool m_configured;
   bool m_registered;
+  bool m_capacityAwareRouting;
   Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  std::unique_ptr<CapacityAwareRouteAdmission> m_capacityAdmission;
   std::vector<NetworkTransfer> m_plans;
   std::vector<Ptr<NetworkTransferApplication>> m_senders;
   std::vector<Ptr<NetworkTransferReceiver>> m_receivers;
   std::vector<Ptr<NetworkTransferReceiver>> m_transferReceivers;
   std::vector<TransferState> m_states;
   std::vector<Callback<void, uint64_t, int64_t>> m_completionCallbacks;
+  std::vector<uint64_t> m_pendingCapacityTransfers;
   std::map<uint64_t, uint32_t> m_planIndexes;
 };
 

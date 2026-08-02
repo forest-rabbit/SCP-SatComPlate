@@ -41,6 +41,7 @@ public:
   void Configure(const NetworkTransfer& transfer);
   void SetSendCompleteCallback(
     Callback<void, uint64_t, int64_t> sendCompleteCallback);
+  void SetPacingRateBps(uint64_t pacingRateBps);
   void StartTransferNow();
 
   uint64_t GetTransferId() const;
@@ -63,6 +64,7 @@ private:
   uint64_t m_remainingBytes;
   uint64_t m_sentPacketCount;
   uint64_t m_sentBytes;
+  uint64_t m_pacingRateBps;
   int64_t m_lastSendTimeNs;
   bool m_isRunning;
   bool m_hasStarted;

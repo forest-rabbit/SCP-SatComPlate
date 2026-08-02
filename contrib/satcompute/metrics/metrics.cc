@@ -76,10 +76,16 @@ PrintRuntimeSummary(
   bool taskMode = taskCoordinator != nullptr;
   bool taskRunComplete =
     !taskMode || tasks.completedTaskCount == tasks.taskCount;
+  bool capacityTransferRunComplete =
+    runMetadata.routingMode != "global-capacity-aware-hrw"
+    || taskMode
+    || transferSummaries.empty()
+    || completedTransfers == transferSummaries.size();
+  bool runComplete = taskRunComplete && capacityTransferRunComplete;
 
   std::cout << "[SUMMARY]" << std::endl
             << "  run status          : "
-            << (taskRunComplete ? "COMPLETE" : "PARTIAL") << std::endl
+            << (runComplete ? "COMPLETE" : "PARTIAL") << std::endl
             << "  tasks completed     : ";
   if (taskMode)
     {
@@ -180,6 +186,12 @@ MetricsRecorder::Record()
 
   bool taskRunComplete =
     m_taskCoordinator == nullptr || m_taskCoordinator->IsComplete();
+  bool capacityTransferRunComplete =
+    m_runMetadata.routingMode != "global-capacity-aware-hrw"
+    || m_taskCoordinator != nullptr
+    || m_transferSummaries.empty()
+    || GetCompletedTransferCount(m_transferSummaries)
+         == m_transferSummaries.size();
   bool diagnosticsEnabled =
     m_taskCoordinator != nullptr
     && m_runMetadata.diagnosticMode == "failure";
@@ -195,7 +207,7 @@ MetricsRecorder::Record()
   WriteNetworkFlowDetails(m_monitor,
                           m_transferFlows,
                           m_outputDirectory,
-                          taskRunComplete);
+                          taskRunComplete && capacityTransferRunComplete);
   if (writeFlowDropReasons)
     {
       WriteFlowDropReasons(m_monitor,
@@ -203,7 +215,8 @@ MetricsRecorder::Record()
                            m_outputDirectory);
     }
   WriteEcmpRouteEvents(m_routeEvents, m_outputDirectory);
-  if (m_runMetadata.routingMode == "global-size-aware-hrw")
+  if (m_runMetadata.routingMode == "global-size-aware-hrw"
+      || m_runMetadata.routingMode == "global-capacity-aware-hrw")
     {
       WriteSizeAwareMetrics(m_sizeAwareRegistry, m_outputDirectory);
     }

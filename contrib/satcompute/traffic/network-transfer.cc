@@ -56,7 +56,8 @@ void
 PrintTransferSummary(const std::string& filename,
                      const std::vector<NetworkTransfer>& transfers,
                      const std::string& chunkMode,
-                     uint32_t fixedPayloadBytes)
+                     uint32_t fixedPayloadBytes,
+                     const std::string& pacingMode)
 {
   std::set<uint32_t> sources;
   std::set<uint32_t> destinations;
@@ -117,7 +118,7 @@ PrintTransferSummary(const std::string& filename,
                 << fixedPayloadBytes << std::endl;
     }
   std::cout
-            << "  pacing mode                 : first-hop-serialization"
+            << "  pacing mode                 : " << pacingMode
             << std::endl
             << "  total derived packets       : " << totalPackets << std::endl
             << "  final-packet count          : " << transfers.size() << std::endl
@@ -149,7 +150,8 @@ PrintTransferVerbose(const std::string& filename,
                      const std::vector<NetworkTransfer>& transfers,
                      const std::string& chunkMode,
                      uint32_t fixedPayloadBytes,
-                     uint16_t islMtuBytes)
+                     uint16_t islMtuBytes,
+                     const std::string& pacingMode)
 {
   std::cout << "[TRANSFER]" << std::endl
             << "  trace              : " << filename << std::endl
@@ -160,7 +162,7 @@ PrintTransferVerbose(const std::string& filename,
                 << fixedPayloadBytes << " bytes" << std::endl;
     }
   std::cout
-            << "  pacing mode        : first-hop-serialization" << std::endl
+            << "  pacing mode        : " << pacingMode << std::endl
             << "  ISL MTU            : " << islMtuBytes << " bytes" << std::endl
             << "  transfers          : " << transfers.size()
             << std::endl << std::endl;
@@ -233,6 +235,10 @@ InstallNetworkTransfers(const std::string& filename,
   state.engine->RegisterPlans(plans);
   const std::vector<NetworkTransfer>& preparedPlans =
     state.engine->GetPlans();
+  std::string pacingMode =
+    topology.IsCapacityAwareRouting()
+      ? "path-bottleneck-serialization"
+      : "first-hop-serialization";
   for (const auto& plan : preparedPlans)
     {
       NS_ABORT_MSG_IF(plan.arrivalTimeNs < 0,
@@ -249,7 +255,8 @@ InstallNetworkTransfers(const std::string& filename,
       PrintTransferSummary(filename,
                            preparedPlans,
                            chunkMode,
-                           payloadBytes);
+                           payloadBytes,
+                           pacingMode);
     }
   else if (logMode == "verbose")
     {
@@ -257,7 +264,8 @@ InstallNetworkTransfers(const std::string& filename,
                            preparedPlans,
                            chunkMode,
                            payloadBytes,
-                           islMtuBytes);
+                           islMtuBytes,
+                           pacingMode);
     }
   return state;
 }

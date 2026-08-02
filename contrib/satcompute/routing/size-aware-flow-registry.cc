@@ -115,6 +115,22 @@ SizeAwareFlowRegistry::BeginSending(const EcmpFlowKey& flowKey)
 void
 SizeAwareFlowRegistry::FinishSending(const EcmpFlowKey& flowKey)
 {
+  FinishFlow(flowKey, "RELEASE_SENDER_FINISHED");
+}
+
+void
+SizeAwareFlowRegistry::FinishReceiving(const EcmpFlowKey& flowKey)
+{
+  FinishFlow(flowKey, "RELEASE_TRANSFER_COMPLETED");
+}
+
+void
+SizeAwareFlowRegistry::FinishFlow(const EcmpFlowKey& flowKey,
+                                  const std::string& releaseAction)
+{
+  NS_ABORT_MSG_IF(releaseAction != "RELEASE_SENDER_FINISHED"
+                    && releaseAction != "RELEASE_TRANSFER_COMPLETED",
+                  "size-aware flow release action 无效");
   auto flow = m_flows.find(flowKey);
   NS_ABORT_MSG_IF(flow == m_flows.end(),
                   "size-aware registry 无法结束未登记 flow");
@@ -135,7 +151,7 @@ SizeAwareFlowRegistry::FinishSending(const EcmpFlowKey& flowKey)
         }
       auto released = assignment++;
       ReleaseAssignment(released,
-                        "RELEASE_SENDER_FINISHED",
+                        releaseAction,
                         released->second.latestRouteEpoch);
     }
 
@@ -195,7 +211,8 @@ SizeAwareFlowRegistry::RecordAssignment(
   const std::string& selectionReason)
 {
   NS_ABORT_MSG_IF(selectionReason != "SIZE_AWARE_HRW_PRIMARY"
-                    && selectionReason != "SIZE_AWARE_HRW_SECONDARY",
+                    && selectionReason != "SIZE_AWARE_HRW_SECONDARY"
+                    && selectionReason != "CAPACITY_AWARE_PATH",
                   "size-aware assignment selection reason 无效");
   auto flow = m_flows.find(flowKey);
   NS_ABORT_MSG_IF(flow == m_flows.end() || !flow->second.senderActive,
@@ -256,8 +273,12 @@ SizeAwareFlowRegistry::RecordAssignment(
 void
 SizeAwareFlowRegistry::ValidateAssignment(uint32_t nodeId,
                                           const EcmpFlowKey& flowKey,
-                                          uint64_t routeEpoch)
+                                          uint64_t routeEpoch,
+                                          const std::string& selectionReason)
 {
+  NS_ABORT_MSG_IF(selectionReason != "SIZE_AWARE_STICKY"
+                    && selectionReason != "CAPACITY_AWARE_STICKY",
+                  "size-aware sticky selection reason 无效");
   NodeFlowKey key = {
     nodeId,
     flowKey
@@ -271,7 +292,7 @@ SizeAwareFlowRegistry::ValidateAssignment(uint32_t nodeId,
   uint64_t candidateReserved =
     GetReservedBytes(nodeId, assignment->second.candidate);
   RecordEvent("STICKY_REUSE",
-              "SIZE_AWARE_STICKY",
+              selectionReason,
               routeEpoch,
               nodeId,
               flowKey,
@@ -307,7 +328,8 @@ SizeAwareFlowRegistry::ReleaseAssignment(
   uint64_t routeEpoch)
 {
   NS_ABORT_MSG_IF(action != "RELEASE_CANDIDATE_INVALID"
-                    && action != "RELEASE_SENDER_FINISHED",
+                    && action != "RELEASE_SENDER_FINISHED"
+                    && action != "RELEASE_TRANSFER_COMPLETED",
                   "size-aware release action 无效");
   NodeNextHopKey nextHopKey = {
     assignment->first.nodeId,

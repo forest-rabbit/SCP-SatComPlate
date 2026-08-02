@@ -68,9 +68,11 @@ SatComputeIpv4GlobalRouting::Configure(
   uint64_t hashSeed,
   Ptr<SizeAwareFlowRegistry> sizeAwareRegistry)
 {
-  NS_ABORT_MSG_IF(selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+  NS_ABORT_MSG_IF((selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+                   || selectionMode
+                        == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
                     && sizeAwareRegistry == nullptr,
-                  "size-aware HRW routing 缺少 flow registry");
+                  "reservation-aware HRW routing 缺少 flow registry");
   m_selectionMode = selectionMode;
   m_hashSeed = hashSeed;
   m_sizeAwareRegistry = sizeAwareRegistry;
@@ -297,10 +299,15 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
         {
           uint32_t selectedIndex =
             static_cast<uint32_t>(selected - candidates.begin());
+          std::string stickyReason =
+            m_selectionMode == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW
+              ? "CAPACITY_AWARE_STICKY"
+              : "SIZE_AWARE_STICKY";
           m_sizeAwareRegistry->ValidateAssignment(m_satelliteId,
                                                   flowKey,
-                                                  m_routeEpoch);
-          selectionReason = "SIZE_AWARE_STICKY";
+                                                  m_routeEpoch,
+                                                  stickyReason);
+          selectionReason = stickyReason;
           return {
             selectedIndex,
             Fnv1a64(EncodeEcmpHrwKey(m_hashSeed,
@@ -312,6 +319,10 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
                                                     flowKey,
                                                     m_routeEpoch);
     }
+
+  NS_ABORT_MSG_IF(
+    m_selectionMode == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW,
+    "capacity-aware 活动 flow 的预留路径在 route epoch 中无效");
 
   std::vector<EcmpHrwRank> ranking =
     RankEcmpHrwRoutes(m_hashSeed, flowKey, candidates);
@@ -408,7 +419,9 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
 
   if (candidates.empty())
     {
-      if (m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+      if ((m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+           || m_selectionMode
+                == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
           && outputInterface == nullptr
           && hasFiveTuple
           && m_sizeAwareRegistry->IsSenderActive(flowKey))
@@ -446,13 +459,16 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
     static_cast<uint32_t>(hashValue % candidates.size());
   std::string selectionReason = "HASH_PER_FLOW";
   if (m_selectionMode == EcmpRouteSelectionMode::HRW_PER_FLOW
-      || m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW)
+      || m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+      || m_selectionMode == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
     {
       EcmpHrwSelection selection = {
         0,
         0
       };
-      if (m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+      if ((m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+           || m_selectionMode
+                == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
           && outputInterface == nullptr
           && m_sizeAwareRegistry->IsSenderActive(flowKey))
         {

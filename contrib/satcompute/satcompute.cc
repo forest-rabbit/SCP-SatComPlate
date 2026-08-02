@@ -92,7 +92,8 @@ main(int argc, char* argv[])
                        config.diagnosticMode);
   commandLine.AddValue("routingMode",
                        "Routing mode: global-first, global-hash-per-flow, "
-                       "global-hrw-per-flow, or global-size-aware-hrw",
+                       "global-hrw-per-flow, global-size-aware-hrw, or "
+                       "global-capacity-aware-hrw",
                        config.routingMode);
   commandLine.AddValue("ecmpHashSeed",
                        "FNV-1a-64 seed prefix for per-flow ECMP",
@@ -194,6 +195,10 @@ main(int argc, char* argv[])
       return EXIT_FAILURE;
     }
   bool taskMode = hasComputeProfile && hasTaskTrace;
+  std::string pacingMode =
+    config.routingMode == "global-capacity-aware-hrw"
+      ? "path-bottleneck-serialization"
+      : "first-hop-serialization";
   if (taskMode && transferMode)
     {
       std::cerr << "[RUN:Error] task mode cannot be combined with transferTrace"
@@ -203,11 +208,12 @@ main(int argc, char* argv[])
   if (config.routingMode != "global-first"
       && config.routingMode != "global-hash-per-flow"
       && config.routingMode != "global-hrw-per-flow"
-      && config.routingMode != "global-size-aware-hrw")
+      && config.routingMode != "global-size-aware-hrw"
+      && config.routingMode != "global-capacity-aware-hrw")
     {
       std::cerr << "[RUN:Error] routingMode must be global-first, "
-                   "global-hash-per-flow, global-hrw-per-flow, or "
-                   "global-size-aware-hrw"
+                   "global-hash-per-flow, global-hrw-per-flow, "
+                   "global-size-aware-hrw, or global-capacity-aware-hrw"
                 << std::endl;
       return EXIT_FAILURE;
     }
@@ -277,7 +283,7 @@ main(int argc, char* argv[])
               std::cout << "  transferPayload    : "
                         << config.transferPayloadBytes << " bytes" << std::endl;
             }
-          std::cout << "  pacingMode         : first-hop-serialization"
+          std::cout << "  pacingMode         : " << pacingMode
                     << std::endl
                     << "  transferLogMode    : "
                     << config.transferLogMode << std::endl;
@@ -293,7 +299,7 @@ main(int argc, char* argv[])
                         << config.transferPayloadBytes << " bytes" << std::endl;
             }
           std::cout
-                    << "  pacingMode         : first-hop-serialization"
+                    << "  pacingMode         : " << pacingMode
                     << std::endl
                     << "  transferLogMode    : "
                     << config.transferLogMode << std::endl;
@@ -428,7 +434,7 @@ main(int argc, char* argv[])
     (taskMode || transferMode) && config.diagnosticMode == "failure",
     config.diagnosticMode,
     config.taskCompletionPolicy,
-    transferMode || taskMode ? "first-hop-serialization" : "none",
+    transferMode || taskMode ? pacingMode : "none",
     transferMode || taskMode ? config.transferChunkMode : "none",
     (transferMode || taskMode) && config.transferChunkMode == "fixed"
       ? config.transferPayloadBytes

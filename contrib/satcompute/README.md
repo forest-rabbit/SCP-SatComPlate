@@ -62,14 +62,16 @@ outputDir                = /tmp/satcompute-output
 
 ## CI 分级
 
-Pull request 只运行 `SatCompute Fast Smoke`，覆盖核心路由、任务和失败诊断
-合同。`main` push 与手动触发运行 `SatCompute Full Regression`；Full 先执行
-全部 Fast 脚本，再补充规模、顺序、generator 和 preflight 边界。
+Pull request 只运行 `SatCompute Fast Smoke`，覆盖核心路由、容量感知瓶颈、
+任务和失败诊断合同。`main` push 与手动触发运行
+`SatCompute Full Regression`；Full 先执行全部 Fast 脚本，再补充规模、顺序、
+generator 和 preflight 边界。
 
 完成上述 configure/build 后，可在本地直接运行 Fast：
 
 ```bash
 contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
+contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
 contrib/satcompute/tests/integration/smoke/run-task-smoke.sh
 contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
 ```
@@ -81,8 +83,9 @@ contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
 contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
 ```
 
-前三级脚本保留 topology-only、Hash/HRW/size-aware、单任务、FCFS、
-strict/report、FqCoDel、设备队列和 UDP socket 合同。后两级保留 canonical
+前四级脚本保留 topology-only、Hash/HRW/size-aware、capacity-aware 瓶颈、
+单任务、FCFS、strict/report、FqCoDel、设备队列和 UDP socket 合同。后两级
+保留 canonical
 ordering、5000-transfer、mixed-large、TaskTrace/ComputeProfile 换序、
 generator seed/tail、preflight 成功/失败/warning 及全部扩展检查器。测试仅按
 频率分级，没有从回归集合中删除。
@@ -108,9 +111,9 @@ generator seed/tail、preflight 成功/失败/warning 及全部扩展检查器�
 - `--diagnosticMode`：`off` 只保留基础指标；`failure` 在任务失败时额外
   采集并写出未完成对象、ISL 队列 Drop 和 ECMP 链路集中度。默认 `off`。
 - `--routingMode`：`global-first`、`global-hash-per-flow`、
-  `global-hrw-per-flow` 或 `global-size-aware-hrw`，默认保留 N1 基线
-  `global-hash-per-flow`。
-- `--ecmpHashSeed`：三种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
+  `global-hrw-per-flow`、`global-size-aware-hrw` 或
+  `global-capacity-aware-hrw`，默认保留 N1 基线 `global-hash-per-flow`。
+- `--ecmpHashSeed`：四种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
   前缀。
 - `--outputDir`：结构化指标目录，默认 `/tmp/satcompute-output`。正式实验应
   显式填写仓库外的持久绝对路径；`contrib/satcompute/output/` 只用于暴露
@@ -257,7 +260,7 @@ ECMP、FCFS、异构算力和两类 JSON 数组换序确定性。
 `172.16.0.0/12` 的 `/32`，ISL 来自 `10.0.0.0/8` 的 `/30`。JSON 中
 `links[]` 的排列以及 `node1_id/node2_id` 的端点方向都不影响地址分配。
 
-`global-first` 完整使用原生 `Ipv4GlobalRouting` 首条路由。三种逐流模式都只
+`global-first` 完整使用原生 `Ipv4GlobalRouting` 首条路由。四种逐流模式都只
 枚举公开可读的 exact service `/32` host routes，并按 gateway、output
 interface、destination 和 mask 排序去重。
 
@@ -308,6 +311,28 @@ mask 仍参与 HRW 分数及 sticky 身份，但不拆分链路负载。拓扑 e
 该模式不设置大流阈值；大 transfer 仅因声明字节更大而具有更高权重。它不读取
 FqCoDel、DropTail、实时利用率或时延，也不实现周期采样、中途主动迁移、速率
 控制、重传或全局流量工程。
+
+`global-capacity-aware-hrw` 是独立 opt-in 模式，不改变上述 N1 模式。它仍然
+使用 ns-3 全局路由给出的等价最短路径，不生成更长路径，也不是 KSP：
+
+```text
+residual(link) = configured_data_rate(link) - active_admitted_rate(link)
+path_rate      = min(residual(link) for link in path)
+```
+
+每条 flow 到达时，在当前 ECMP 有向图中选择 `path_rate` 最大的完整路径；相同
+剩余瓶颈带宽时按逐节点 HRW 顺序确定结果。选中的逐跳 candidate 会在 flow
+期间固定，发送端按 `path_rate` 计算包含 UDP/IP/PPP 头的逐包间隔。如果所有
+等价最短路径的剩余带宽均为零，该 flow 保留原始 arrival time，但延后首包
+注入；活动 flow 完整到达目的节点并释放路径容量后，按到达顺序重试等待流。
+因此互不共享有向 ISL 的 flow 仍可并行，共享低速瓶颈的 flow 不会继续各自按
+首跳线速叠加注入。
+
+首版合同面向 flow 活动期间 ISL 边集合和带宽不变的场景，正好覆盖当前固定
+plus-grid 压力输入；相同边集合上的 route epoch 更新可以继续复用固定路径。
+若活动路径的候选在 epoch 中失效，程序明确中止，而不是静默迁移并留下错误
+容量预留。动态断链重映射、非最短绕行、可靠重传和任意负载下的零丢包保证均
+不属于首版范围。
 
 没有 exact host route 或不能解析合法五元组时回退原生行为。项目不复制
 GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 ECMP。
@@ -594,11 +619,11 @@ python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
 - `network-flow-details.csv`：五元组、transfer ID、应用 payload 与逐流 IP 指标；
 - `ecmp-route-events.csv`：每个 epoch、外部卫星 ID 和五元组的首次选择；
   `hash_value` 在旧模式中是 five-tuple hash，在 HRW 模式中是获胜候选分数；
-- `size-aware-reservation-events.csv`：仅在 `global-size-aware-hrw` 中写出
-  assignment、sticky reuse、候选失效释放和 sender-finish 释放，以及物理
-  下一跳和全局预留的前后值；
-- `size-aware-summary.json`：仅在 `global-size-aware-hrw` 中汇总登记/活动
-  flow、结束时 assignment、最终/峰值总预留及峰值物理下一跳预留；
+- `size-aware-reservation-events.csv`：在 `global-size-aware-hrw` 和
+  `global-capacity-aware-hrw` 中写出 assignment、sticky reuse、候选失效及
+  sender-finish/receiver-complete 释放，以及物理下一跳和全局声明字节预留；
+- `size-aware-summary.json`：在上述两种模式中汇总登记/活动 flow、结束时
+  assignment、最终/峰值总预留及不同释放原因；
 - `transfer-summary.csv`：每条逻辑 transfer 的声明大小、分包、收发和完成时间；
 - `task-events.csv`：每个完整任务恰好五条状态转换；
 - `task-summary.csv`：每个任务的输入、排队、计算、结果和端到端时间；

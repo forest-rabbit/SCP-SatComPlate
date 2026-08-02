@@ -72,6 +72,7 @@ public:
                         uint64_t declaredBytes);
   void BeginSending(const EcmpFlowKey& flowKey);
   void FinishSending(const EcmpFlowKey& flowKey);
+  void FinishReceiving(const EcmpFlowKey& flowKey);
 
   bool IsRegistered(const EcmpFlowKey& flowKey) const;
   bool IsSenderActive(const EcmpFlowKey& flowKey) const;
@@ -87,7 +88,8 @@ public:
                         const std::string& selectionReason);
   void ValidateAssignment(uint32_t nodeId,
                           const EcmpFlowKey& flowKey,
-                          uint64_t routeEpoch);
+                          uint64_t routeEpoch,
+                          const std::string& selectionReason);
   void ReleaseInvalidAssignment(uint32_t nodeId,
                                 const EcmpFlowKey& flowKey,
                                 uint64_t routeEpoch);
@@ -128,6 +130,8 @@ private:
     std::map<NodeFlowKey, SizeAwareFlowAssignment>::iterator assignment,
     const std::string& action,
     uint64_t routeEpoch);
+  void FinishFlow(const EcmpFlowKey& flowKey,
+                  const std::string& releaseAction);
   void RecordEvent(const std::string& action,
                    const std::string& selectionReason,
                    uint64_t routeEpoch,

@@ -46,9 +46,17 @@ public:
   std::vector<uint32_t> GetEcmpCandidateSatelliteIds(
     uint32_t sourceSatelliteId,
     uint32_t destinationSatelliteId) const;
+  std::vector<EcmpRouteCandidate> GetEcmpRouteCandidates(
+    uint32_t sourceSatelliteId,
+    uint32_t destinationSatelliteId) const;
   uint32_t GetNextHopSatelliteId(
     uint32_t sourceSatelliteId,
     uint32_t outputInterface) const;
+  uint64_t GetIslDataRateBps(uint32_t sourceSatelliteId,
+                             uint32_t outputInterface) const;
+  uint64_t GetRouteEpoch(uint32_t satelliteId) const;
+  uint64_t GetEcmpHashSeed() const;
+  bool IsCapacityAwareRouting() const;
   const std::vector<IslDirectedLink>& GetIslDirectedLinks() const;
   const std::vector<IslQueueDropEvent>& GetIslQueueDropEvents() const;
   Ptr<SizeAwareFlowRegistry> GetSizeAwareFlowRegistry() const;

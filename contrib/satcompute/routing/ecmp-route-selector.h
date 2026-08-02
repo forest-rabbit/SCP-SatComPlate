@@ -34,7 +34,8 @@ enum class EcmpRouteSelectionMode
   GLOBAL_FIRST,
   HASH_PER_FLOW,
   HRW_PER_FLOW,
-  SIZE_AWARE_HRW
+  SIZE_AWARE_HRW,
+  CAPACITY_AWARE_HRW
 };
 
 struct EcmpRouteCandidate

@@ -72,7 +72,8 @@ NetworkTransferEngine::NetworkTransferEngine()
     m_collectUdpSocketDrops(false),
     m_simulationDurationNs(0),
     m_configured(false),
-    m_registered(false)
+    m_registered(false),
+    m_capacityAwareRouting(false)
 {
 }
 
@@ -118,6 +119,14 @@ NetworkTransferEngine::Configure(const SatelliteTopology& topology,
   m_collectUdpSocketDrops = collectUdpSocketDrops;
   m_simulationDurationNs = durationNs;
   m_sizeAwareRegistry = topology.GetSizeAwareFlowRegistry();
+  m_capacityAwareRouting = topology.IsCapacityAwareRouting();
+  if (m_capacityAwareRouting)
+    {
+      NS_ABORT_MSG_IF(m_sizeAwareRegistry == nullptr,
+                      "capacity-aware routing 缺少 flow registry");
+      m_capacityAdmission.reset(
+        new CapacityAwareRouteAdmission(topology));
+    }
   m_configured = true;
 }
 
@@ -309,9 +318,17 @@ NetworkTransferEngine::StartTransferNow(
   m_completionCallbacks[index] = completionCallback;
   m_transferReceivers[index]->MarkTransferStarted(transferId, startTimeNs);
   m_states[index] = TRANSFER_STARTED;
-  Simulator::ScheduleNow(&NetworkTransferEngine::ActivateTransfer,
-                         this,
-                         transferId);
+  if (m_capacityAwareRouting)
+    {
+      m_pendingCapacityTransfers.push_back(transferId);
+      TryActivatePendingCapacityAwareTransfers();
+    }
+  else
+    {
+      Simulator::ScheduleNow(&NetworkTransferEngine::ActivateTransfer,
+                             this,
+                             transferId);
+    }
 }
 
 void
@@ -329,6 +346,71 @@ NetworkTransferEngine::ActivateTransfer(uint64_t transferId)
   m_senders[index]->StartTransferNow();
 }
 
+bool
+NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
+{
+  NS_ABORT_MSG_IF(!m_capacityAwareRouting
+                    || m_capacityAdmission == nullptr
+                    || m_sizeAwareRegistry == nullptr,
+                  "capacity-aware activation 未配置");
+  uint32_t index = GetPlanIndex(transferId);
+  NS_ABORT_MSG_IF(m_states[index] != TRANSFER_STARTED
+                    || m_senders[index]->HasStarted(),
+                  "capacity-aware sender activation 状态无效，transfer_id="
+                    << transferId);
+
+  EcmpFlowKey flowKey = GetFlowKey(index);
+  CapacityAwarePath path;
+  if (!m_capacityAdmission->FindAvailablePath(
+        flowKey,
+        m_plans[index].sourceSatelliteId,
+        m_plans[index].destinationSatelliteId,
+        path))
+    {
+      return false;
+    }
+
+  m_sizeAwareRegistry->BeginSending(flowKey);
+  for (const auto& hop : path.hops)
+    {
+      // Degree-one ns-3 routers may expose only a default route.  That
+      // physical hop is unambiguous and cannot be pinned through the host
+      // candidate selector, so only host-route candidates need assignments.
+      if (hop.candidate.destinationMask
+          != Ipv4Mask("255.255.255.255"))
+        {
+          continue;
+        }
+      m_sizeAwareRegistry->RecordAssignment(
+        hop.sourceSatelliteId,
+        flowKey,
+        hop.candidate,
+        m_topology->GetRouteEpoch(hop.sourceSatelliteId),
+        "CAPACITY_AWARE_PATH");
+    }
+  m_capacityAdmission->Reserve(transferId, path);
+  m_senders[index]->SetPacingRateBps(path.admittedRateBps);
+  m_senders[index]->StartTransferNow();
+  return true;
+}
+
+void
+NetworkTransferEngine::TryActivatePendingCapacityAwareTransfers()
+{
+  NS_ABORT_MSG_IF(!m_capacityAwareRouting,
+                  "非 capacity-aware 运行不应存在待准入 flow");
+  std::vector<uint64_t> stillPending;
+  stillPending.reserve(m_pendingCapacityTransfers.size());
+  for (uint64_t transferId : m_pendingCapacityTransfers)
+    {
+      if (!TryActivateCapacityAwareTransfer(transferId))
+        {
+          stillPending.push_back(transferId);
+        }
+    }
+  m_pendingCapacityTransfers.swap(stillPending);
+}
+
 void
 NetworkTransferEngine::HandleSenderComplete(uint64_t transferId,
                                             int64_t sendTimeNs)
@@ -343,7 +425,7 @@ NetworkTransferEngine::HandleSenderComplete(uint64_t transferId,
                          != m_plans[index].sizeBytes,
                   "NetworkTransfer sender completion payload 无效，transfer_id="
                     << transferId);
-  if (m_sizeAwareRegistry != nullptr)
+  if (m_sizeAwareRegistry != nullptr && !m_capacityAwareRouting)
     {
       m_sizeAwareRegistry->FinishSending(GetFlowKey(index));
     }
@@ -365,7 +447,16 @@ NetworkTransferEngine::HandleTransferComplete(uint64_t transferId,
       != m_plans[index].sizeBytes,
     "NetworkTransfer completion payload 不完整，transfer_id=" << transferId);
 
+  if (m_capacityAwareRouting)
+    {
+      m_sizeAwareRegistry->FinishReceiving(GetFlowKey(index));
+      m_capacityAdmission->Release(transferId);
+    }
   m_states[index] = TRANSFER_COMPLETED;
+  if (m_capacityAwareRouting)
+    {
+      TryActivatePendingCapacityAwareTransfers();
+    }
   Callback<void, uint64_t, int64_t> callback = m_completionCallbacks[index];
   m_completionCallbacks[index] = Callback<void, uint64_t, int64_t>();
   if (!callback.IsNull())
@@ -504,7 +595,9 @@ NetworkTransferEngine::CollectSummaries() const
         plan.destinationPort,
         plan.sizeBytes,
         plan.payloadBytesPerPacket,
-        "first-hop-serialization",
+        m_capacityAwareRouting
+          ? "path-bottleneck-serialization"
+          : "first-hop-serialization",
         plan.packetCount,
         plan.finalPacketPayloadBytes,
         plan.arrivalTimeNs,
