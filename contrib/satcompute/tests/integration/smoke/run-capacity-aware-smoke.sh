@@ -29,26 +29,6 @@ run_case()
     --outputDir=${output_dir}"
 }
 
-run_capacity_weighted_case()
-{
-  local routing_mode="$1"
-  local output_dir="$2"
-  ./waf --run-no-build "satcompute \
-    --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/capacity-weighted-path-failure \
-    --simulationDuration=45 \
-    --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/capacity-weighted-path-failure-transfers.json \
-    --diagnosticMode=failure \
-    --transferChunkMode=fixed \
-    --transferPayloadBytes=64000 \
-    --islMtuBytes=65535 \
-    --islQueueBytes=4000000 \
-    --receiverRcvBufBytes=4000000 \
-    --transferLogMode=silent \
-    --routingMode=${routing_mode} \
-    --ecmpHashSeed=1 \
-    --outputDir=${output_dir}"
-}
-
 printf '\n[CI:capacity-aware] congested size-aware baseline\n'
 run_case global-size-aware-hrw /tmp/satcompute-ci-capacity-baseline
 
@@ -102,17 +82,6 @@ printf '\n[CI:capacity-aware] same-edge route epoch\n'
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ci-capacity-epoch"
 
-printf '\n[CI:capacity-aware] dynamic capacity-weighted path recovery\n'
-run_capacity_weighted_case \
-  global-size-aware-hrw \
-  /tmp/satcompute-ci-capacity-weighted-baseline
-run_capacity_weighted_case \
-  global-capacity-weighted-hrw \
-  /tmp/satcompute-ci-capacity-weighted-a
-run_capacity_weighted_case \
-  global-capacity-weighted-hrw \
-  /tmp/satcompute-ci-capacity-weighted-b
-
 python3 contrib/satcompute/tools/validation/check-capacity-aware-output.py \
   --baseline=/tmp/satcompute-ci-capacity-baseline \
   --capacity-first=/tmp/satcompute-ci-capacity-a \
@@ -127,8 +96,3 @@ python3 contrib/satcompute/tools/validation/check-task-output.py stress \
   --task-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --output-dir=/tmp/satcompute-ci-capacity-task \
   --minimum-completion-rate-percent=100
-
-python3 contrib/satcompute/tools/validation/check-capacity-weighted-output.py \
-  --size-baseline=/tmp/satcompute-ci-capacity-weighted-baseline \
-  --weighted-first=/tmp/satcompute-ci-capacity-weighted-a \
-  --weighted-second=/tmp/satcompute-ci-capacity-weighted-b

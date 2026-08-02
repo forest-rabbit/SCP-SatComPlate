@@ -19,10 +19,8 @@
 #include "satcompute-ipv4-global-routing.h"
 
 #include "ns3/abort.h"
-#include "ns3/data-rate.h"
 #include "ns3/ipv4-route.h"
 #include "ns3/ipv4-routing-table-entry.h"
-#include "ns3/point-to-point-net-device.h"
 #include "ns3/simulator.h"
 #include "ns3/udp-header.h"
 
@@ -30,47 +28,6 @@
 #include <limits>
 
 namespace ns3 {
-
-namespace {
-
-int
-CompareNonNegativeFractions(uint64_t leftNumerator,
-                            uint64_t leftDenominator,
-                            uint64_t rightNumerator,
-                            uint64_t rightDenominator)
-{
-  NS_ABORT_MSG_IF(leftDenominator == 0 || rightDenominator == 0,
-                  "capacity-weighted load denominator must be positive");
-  bool reverse = false;
-  while (true)
-    {
-      uint64_t leftQuotient = leftNumerator / leftDenominator;
-      uint64_t rightQuotient = rightNumerator / rightDenominator;
-      if (leftQuotient != rightQuotient)
-        {
-          int result = leftQuotient < rightQuotient ? -1 : 1;
-          return reverse ? -result : result;
-        }
-
-      uint64_t leftRemainder = leftNumerator % leftDenominator;
-      uint64_t rightRemainder = rightNumerator % rightDenominator;
-      if (leftRemainder == 0 || rightRemainder == 0)
-        {
-          int result = leftRemainder == rightRemainder
-                         ? 0
-                         : (leftRemainder == 0 ? -1 : 1);
-          return reverse ? -result : result;
-        }
-
-      leftNumerator = leftDenominator;
-      leftDenominator = leftRemainder;
-      rightNumerator = rightDenominator;
-      rightDenominator = rightRemainder;
-      reverse = !reverse;
-    }
-}
-
-} // namespace
 
 NS_OBJECT_ENSURE_REGISTERED(SatComputeIpv4GlobalRouting);
 
@@ -112,8 +69,6 @@ SatComputeIpv4GlobalRouting::Configure(
   Ptr<SizeAwareFlowRegistry> sizeAwareRegistry)
 {
   NS_ABORT_MSG_IF((selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
-                   || selectionMode
-                        == EcmpRouteSelectionMode::CAPACITY_WEIGHTED_HRW
                    || selectionMode
                         == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
                     && sizeAwareRegistry == nullptr,
@@ -322,25 +277,6 @@ SatComputeIpv4GlobalRouting::BuildRoute(
   return route;
 }
 
-uint64_t
-SatComputeIpv4GlobalRouting::GetCandidateDataRateBps(
-  const EcmpRouteCandidate& candidate) const
-{
-  NS_ABORT_MSG_IF(m_ipv4 == nullptr
-                    || candidate.outputInterface >= m_ipv4->GetNInterfaces(),
-                  "capacity-weighted candidate output interface 无效");
-  Ptr<PointToPointNetDevice> device = DynamicCast<PointToPointNetDevice>(
-    m_ipv4->GetNetDevice(candidate.outputInterface));
-  NS_ABORT_MSG_IF(device == nullptr,
-                  "capacity-weighted candidate 不是 point-to-point ISL");
-  DataRateValue dataRate;
-  device->GetAttribute("DataRate", dataRate);
-  uint64_t dataRateBps = dataRate.Get().GetBitRate();
-  NS_ABORT_MSG_IF(dataRateBps == 0,
-                  "capacity-weighted candidate 的 DataRate 必须大于 0");
-  return dataRateBps;
-}
-
 EcmpHrwSelection
 SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
   const EcmpFlowKey& flowKey,
@@ -363,17 +299,10 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
         {
           uint32_t selectedIndex =
             static_cast<uint32_t>(selected - candidates.begin());
-          std::string stickyReason = "SIZE_AWARE_STICKY";
-          if (m_selectionMode
-              == EcmpRouteSelectionMode::CAPACITY_WEIGHTED_HRW)
-            {
-              stickyReason = "CAPACITY_WEIGHTED_STICKY";
-            }
-          else if (m_selectionMode
-                   == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
-            {
-              stickyReason = "CAPACITY_AWARE_STICKY";
-            }
+          std::string stickyReason =
+            m_selectionMode == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW
+              ? "CAPACITY_AWARE_STICKY"
+              : "SIZE_AWARE_STICKY";
           m_sizeAwareRegistry->ValidateAssignment(m_satelliteId,
                                                   flowKey,
                                                   m_routeEpoch,
@@ -398,11 +327,7 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
   std::vector<EcmpHrwRank> ranking =
     RankEcmpHrwRoutes(m_hashSeed, flowKey, candidates);
   EcmpHrwRank selected = ranking[0];
-  bool capacityWeighted =
-    m_selectionMode == EcmpRouteSelectionMode::CAPACITY_WEIGHTED_HRW;
-  selectionReason = capacityWeighted
-                      ? "CAPACITY_WEIGHTED_HRW_PRIMARY"
-                      : "SIZE_AWARE_HRW_PRIMARY";
+  selectionReason = "SIZE_AWARE_HRW_PRIMARY";
   if (ranking.size() >= 2)
     {
       uint64_t primaryLoad =
@@ -413,33 +338,10 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
         m_sizeAwareRegistry->GetReservedBytes(
           m_satelliteId,
           candidates[ranking[1].candidateIndex]);
-      bool selectSecondary = secondaryLoad < primaryLoad;
-      if (capacityWeighted)
-        {
-          uint64_t declaredBytes =
-            m_sizeAwareRegistry->GetMetadata(flowKey).declaredBytes;
-          NS_ABORT_MSG_IF(
-            primaryLoad > std::numeric_limits<uint64_t>::max() - declaredBytes
-              || secondaryLoad
-                   > std::numeric_limits<uint64_t>::max() - declaredBytes,
-            "capacity-weighted predicted reserved bytes 溢出");
-          uint64_t primaryRate = GetCandidateDataRateBps(
-            candidates[ranking[0].candidateIndex]);
-          uint64_t secondaryRate = GetCandidateDataRateBps(
-            candidates[ranking[1].candidateIndex]);
-          selectSecondary =
-            CompareNonNegativeFractions(secondaryLoad + declaredBytes,
-                                        secondaryRate,
-                                        primaryLoad + declaredBytes,
-                                        primaryRate)
-            < 0;
-        }
-      if (selectSecondary)
+      if (secondaryLoad < primaryLoad)
         {
           selected = ranking[1];
-          selectionReason = capacityWeighted
-                              ? "CAPACITY_WEIGHTED_HRW_SECONDARY"
-                              : "SIZE_AWARE_HRW_SECONDARY";
+          selectionReason = "SIZE_AWARE_HRW_SECONDARY";
         }
     }
 
@@ -519,8 +421,6 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
     {
       if ((m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
            || m_selectionMode
-                == EcmpRouteSelectionMode::CAPACITY_WEIGHTED_HRW
-           || m_selectionMode
                 == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
           && outputInterface == nullptr
           && hasFiveTuple
@@ -560,7 +460,6 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
   std::string selectionReason = "HASH_PER_FLOW";
   if (m_selectionMode == EcmpRouteSelectionMode::HRW_PER_FLOW
       || m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
-      || m_selectionMode == EcmpRouteSelectionMode::CAPACITY_WEIGHTED_HRW
       || m_selectionMode == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
     {
       EcmpHrwSelection selection = {
@@ -568,8 +467,6 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
         0
       };
       if ((m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
-           || m_selectionMode
-                == EcmpRouteSelectionMode::CAPACITY_WEIGHTED_HRW
            || m_selectionMode
                 == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
           && outputInterface == nullptr

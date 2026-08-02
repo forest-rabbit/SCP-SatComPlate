@@ -216,7 +216,6 @@ MetricsRecorder::Record()
     }
   WriteEcmpRouteEvents(m_routeEvents, m_outputDirectory);
   if (m_runMetadata.routingMode == "global-size-aware-hrw"
-      || m_runMetadata.routingMode == "global-capacity-weighted-hrw"
       || m_runMetadata.routingMode == "global-capacity-aware-hrw")
     {
       WriteSizeAwareMetrics(m_sizeAwareRegistry, m_outputDirectory);

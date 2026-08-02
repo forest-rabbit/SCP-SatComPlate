@@ -104,8 +104,7 @@ global-hash-per-flow
 global-hrw-per-flow
 ```
 
-不覆盖依赖活动流预留或准入状态的 `global-size-aware-hrw`、
-`global-capacity-weighted-hrw` 和 `global-capacity-aware-hrw`。每个快照在拓扑更新后
+不覆盖依赖活动流预留状态的 `global-size-aware-hrw`。每个快照在拓扑更新后
 1 ns 触发一次审计，输出有效候选、实际物理下一跳、route epoch、事件候选数、
 gateway、interface、hash 和 selection reason。审计调用不发送 packet，
 不改变链路、metric、路由表或选择算法。
@@ -221,7 +220,7 @@ topology-only wall time 与 peak RSS；其他窗口的这些字段为空，但�
 
 推荐严格选择同时满足边状态、连通性、全量 Python ECMP 候选，以及每个星座
 64 个确定性 probe pair 的三种 C++ 实际选路 gate 的最大已测试间隔。
-三种 reservation-aware 模式依赖活动流状态，不纳入本次纯拓扑审计。
+`global-size-aware-hrw` 依赖活动流声明字节预留状态，不纳入本次纯拓扑审计。
 若所有已测间隔都通过，返回 20 秒并写明 `upper_bound_identified=false`；20 秒
 只是当前 fixed-delay、plus-grid、无权 hop-count 模型下最大已测试且成本最低
 的通过值，不支持外推到 20 秒以上，也不是动态断链模型的普适建议。

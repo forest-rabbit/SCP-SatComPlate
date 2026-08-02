@@ -29,7 +29,6 @@ SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
                     && config.routingMode != "global-hash-per-flow"
                     && config.routingMode != "global-hrw-per-flow"
                     && config.routingMode != "global-size-aware-hrw"
-                    && config.routingMode != "global-capacity-weighted-hrw"
                     && config.routingMode != "global-capacity-aware-hrw",
                   "未知 routingMode: " << config.routingMode);
   NS_ABORT_MSG_IF(config.islMtuBytes < 68,
@@ -37,7 +36,6 @@ SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
   NS_ABORT_MSG_IF(config.islQueueBytes == 0,
                   "islQueueBytes 必须大于 0");
   if (config.routingMode == "global-size-aware-hrw"
-      || config.routingMode == "global-capacity-weighted-hrw"
       || config.routingMode == "global-capacity-aware-hrw")
     {
       m_sizeAwareFlowRegistry = CreateObject<SizeAwareFlowRegistry>();
@@ -68,10 +66,6 @@ SatelliteTopology::CreateSatelliteNodes(const std::vector<uint32_t>& satelliteId
   else if (m_config.routingMode == "global-size-aware-hrw")
     {
       selectionMode = EcmpRouteSelectionMode::SIZE_AWARE_HRW;
-    }
-  else if (m_config.routingMode == "global-capacity-weighted-hrw")
-    {
-      selectionMode = EcmpRouteSelectionMode::CAPACITY_WEIGHTED_HRW;
     }
   else if (m_config.routingMode == "global-capacity-aware-hrw")
     {
