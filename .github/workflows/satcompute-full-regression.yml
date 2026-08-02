@@ -32,6 +32,9 @@ jobs:
       - name: Core routing contracts
         run: contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
 
+      - name: Capacity-aware bottleneck contract
+        run: contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
+
       - name: Core task contracts
         run: contrib/satcompute/tests/integration/smoke/run-task-smoke.sh
 

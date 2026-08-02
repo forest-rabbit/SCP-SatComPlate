@@ -18,13 +18,14 @@ uv run --locked python -m unittest discover \
   -s contrib/satcompute/tests/unit -p 'test_*.py' -v
 ```
 
-integration runner 要求先配置并构建 SatCompute，执行顺序为三个 Fast runner，
+integration runner 要求先配置并构建 SatCompute，执行顺序为四个 Fast runner，
 然后是两个 Full runner：
 
 ```bash
 ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
 ./waf build
 contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
+contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
 contrib/satcompute/tests/integration/smoke/run-task-smoke.sh
 contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
 contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
