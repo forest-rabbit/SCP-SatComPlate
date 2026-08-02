@@ -93,6 +93,8 @@ public:
   void ReleaseInvalidAssignment(uint32_t nodeId,
                                 const EcmpFlowKey& flowKey,
                                 uint64_t routeEpoch);
+  void ReleaseAssignmentsForRouteUpdate(const EcmpFlowKey& flowKey,
+                                        uint64_t routeEpoch);
 
   // Sticky identity uses the full route candidate, while load is aggregated
   // by its physical next hop (gateway and output interface).

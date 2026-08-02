@@ -167,6 +167,55 @@ CapacityAwareRouteAdmission::FindAvailablePath(
   return true;
 }
 
+bool
+CapacityAwareRouteAdmission::HasActivePath(uint64_t transferId) const
+{
+  return m_activePaths.find(transferId) != m_activePaths.end();
+}
+
+bool
+CapacityAwareRouteAdmission::IsActivePathValid(
+  uint64_t transferId,
+  uint32_t destinationSatelliteId) const
+{
+  auto active = m_activePaths.find(transferId);
+  NS_ABORT_MSG_IF(active == m_activePaths.end(),
+                  "capacity-aware 无法检查不存在的活动路径: "
+                    << transferId);
+
+  uint32_t expectedSource = active->second.hops.front().sourceSatelliteId;
+  for (const auto& hop : active->second.hops)
+    {
+      if (hop.sourceSatelliteId != expectedSource)
+        {
+          return false;
+        }
+      std::vector<EcmpRouteCandidate> candidates =
+        m_topology->GetEcmpRouteCandidates(hop.sourceSatelliteId,
+                                           destinationSatelliteId);
+      if (std::find(candidates.begin(), candidates.end(), hop.candidate)
+          == candidates.end())
+        {
+          return false;
+        }
+
+      uint64_t currentRateBps =
+        m_topology->GetIslDataRateBps(hop.sourceSatelliteId,
+                                      hop.candidate.outputInterface);
+      DirectedLinkKey key =
+        std::make_pair(hop.sourceSatelliteId,
+                       hop.candidate.outputInterface);
+      auto reserved = m_reservedRateBps.find(key);
+      if (reserved == m_reservedRateBps.end()
+          || reserved->second > currentRateBps)
+        {
+          return false;
+        }
+      expectedSource = hop.destinationSatelliteId;
+    }
+  return expectedSource == destinationSatelliteId;
+}
+
 void
 CapacityAwareRouteAdmission::Reserve(uint64_t transferId,
                                      const CapacityAwarePath& path)

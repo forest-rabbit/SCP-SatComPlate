@@ -57,6 +57,9 @@ public:
                          uint32_t sourceSatelliteId,
                          uint32_t destinationSatelliteId,
                          CapacityAwarePath& path) const;
+  bool HasActivePath(uint64_t transferId) const;
+  bool IsActivePathValid(uint64_t transferId,
+                         uint32_t destinationSatelliteId) const;
   void Reserve(uint64_t transferId, const CapacityAwarePath& path);
   void Release(uint64_t transferId);
 

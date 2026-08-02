@@ -322,6 +322,32 @@ SizeAwareFlowRegistry::ReleaseInvalidAssignment(
 }
 
 void
+SizeAwareFlowRegistry::ReleaseAssignmentsForRouteUpdate(
+  const EcmpFlowKey& flowKey,
+  uint64_t routeEpoch)
+{
+  auto flow = m_flows.find(flowKey);
+  NS_ABORT_MSG_IF(flow == m_flows.end() || !flow->second.senderActive,
+                  "size-aware registry 只能为活动 flow 释放旧路径");
+  for (auto assignment = m_assignments.begin();
+       assignment != m_assignments.end();)
+    {
+      bool sameFlow =
+        !(assignment->first.flowKey < flowKey)
+        && !(flowKey < assignment->first.flowKey);
+      if (!sameFlow)
+        {
+          ++assignment;
+          continue;
+        }
+      auto released = assignment++;
+      ReleaseAssignment(released,
+                        "RELEASE_ROUTE_INVALIDATED",
+                        routeEpoch);
+    }
+}
+
+void
 SizeAwareFlowRegistry::ReleaseAssignment(
   std::map<NodeFlowKey, SizeAwareFlowAssignment>::iterator assignment,
   const std::string& action,
@@ -329,7 +355,8 @@ SizeAwareFlowRegistry::ReleaseAssignment(
 {
   NS_ABORT_MSG_IF(action != "RELEASE_CANDIDATE_INVALID"
                     && action != "RELEASE_SENDER_FINISHED"
-                    && action != "RELEASE_TRANSFER_COMPLETED",
+                    && action != "RELEASE_TRANSFER_COMPLETED"
+                    && action != "RELEASE_ROUTE_INVALIDATED",
                   "size-aware release action 无效");
   NodeNextHopKey nextHopKey = {
     assignment->first.nodeId,
