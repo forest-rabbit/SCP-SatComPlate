@@ -212,6 +212,10 @@ SizeAwareFlowRegistry::RecordAssignment(
 {
   NS_ABORT_MSG_IF(selectionReason != "SIZE_AWARE_HRW_PRIMARY"
                     && selectionReason != "SIZE_AWARE_HRW_SECONDARY"
+                    && selectionReason
+                         != "CAPACITY_WEIGHTED_HRW_PRIMARY"
+                    && selectionReason
+                         != "CAPACITY_WEIGHTED_HRW_SECONDARY"
                     && selectionReason != "CAPACITY_AWARE_PATH",
                   "size-aware assignment selection reason 无效");
   auto flow = m_flows.find(flowKey);
@@ -277,6 +281,7 @@ SizeAwareFlowRegistry::ValidateAssignment(uint32_t nodeId,
                                           const std::string& selectionReason)
 {
   NS_ABORT_MSG_IF(selectionReason != "SIZE_AWARE_STICKY"
+                    && selectionReason != "CAPACITY_WEIGHTED_STICKY"
                     && selectionReason != "CAPACITY_AWARE_STICKY",
                   "size-aware sticky selection reason 无效");
   NodeFlowKey key = {

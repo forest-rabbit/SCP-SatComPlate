@@ -53,6 +53,9 @@ GetDefaultSatComputeConfig()
   // "global-size-aware-hrw" 在 HRW 前两名间按活动传输的声明字节预留选择，
   // 按 gateway+output interface 汇总同一物理下一跳的负载，并在完整候选仍
   // 有效时保持节点级粘性；未登记或已发送完的 flow 回退纯 HRW。
+  // "global-capacity-weighted-hrw" 在同样的 HRW 前两名间比较
+  // (当前预留字节+本流声明字节)/出口带宽；候选失效时释放旧预留并按新
+  // ECMP 候选重选。它继续使用首跳序列化，不做整路径准入或容量锁定。
   // "global-capacity-aware-hrw" 在等价最短路径中选择剩余带宽最大的完整路径，
   // 固定逐跳选择，并按路径瓶颈带宽 pacing；容量不足的 flow 延迟注入。首版
   // 面向运行期间 ISL 边集合和带宽不变的场景。

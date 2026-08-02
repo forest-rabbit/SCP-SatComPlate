@@ -35,6 +35,7 @@ enum class EcmpRouteSelectionMode
   HASH_PER_FLOW,
   HRW_PER_FLOW,
   SIZE_AWARE_HRW,
+  CAPACITY_WEIGHTED_HRW,
   CAPACITY_AWARE_HRW
 };
 

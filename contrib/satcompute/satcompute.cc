@@ -92,7 +92,8 @@ main(int argc, char* argv[])
                        config.diagnosticMode);
   commandLine.AddValue("routingMode",
                        "Routing mode: global-first, global-hash-per-flow, "
-                       "global-hrw-per-flow, global-size-aware-hrw, or "
+                       "global-hrw-per-flow, global-size-aware-hrw, "
+                       "global-capacity-weighted-hrw, or "
                        "global-capacity-aware-hrw",
                        config.routingMode);
   commandLine.AddValue("ecmpHashSeed",
@@ -209,11 +210,13 @@ main(int argc, char* argv[])
       && config.routingMode != "global-hash-per-flow"
       && config.routingMode != "global-hrw-per-flow"
       && config.routingMode != "global-size-aware-hrw"
+      && config.routingMode != "global-capacity-weighted-hrw"
       && config.routingMode != "global-capacity-aware-hrw")
     {
       std::cerr << "[RUN:Error] routingMode must be global-first, "
                    "global-hash-per-flow, global-hrw-per-flow, "
-                   "global-size-aware-hrw, or global-capacity-aware-hrw"
+                   "global-size-aware-hrw, global-capacity-weighted-hrw, or "
+                   "global-capacity-aware-hrw"
                 << std::endl;
       return EXIT_FAILURE;
     }

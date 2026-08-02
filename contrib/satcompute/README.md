@@ -111,9 +111,10 @@ generator seed/tail、preflight 成功/失败/warning 及全部扩展检查器�
 - `--diagnosticMode`：`off` 只保留基础指标；`failure` 在任务失败时额外
   采集并写出未完成对象、ISL 队列 Drop 和 ECMP 链路集中度。默认 `off`。
 - `--routingMode`：`global-first`、`global-hash-per-flow`、
-  `global-hrw-per-flow`、`global-size-aware-hrw` 或
-  `global-capacity-aware-hrw`，默认保留 N1 基线 `global-hash-per-flow`。
-- `--ecmpHashSeed`：四种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
+  `global-hrw-per-flow`、`global-size-aware-hrw`、
+  `global-capacity-weighted-hrw` 或 `global-capacity-aware-hrw`，默认保留
+  N1 基线 `global-hash-per-flow`。
+- `--ecmpHashSeed`：五种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
   前缀。
 - `--outputDir`：结构化指标目录，默认 `/tmp/satcompute-output`。正式实验应
   显式填写仓库外的持久绝对路径；`contrib/satcompute/output/` 只用于暴露
@@ -311,6 +312,26 @@ mask 仍参与 HRW 分数及 sticky 身份，但不拆分链路负载。拓扑 e
 该模式不设置大流阈值；大 transfer 仅因声明字节更大而具有更高权重。它不读取
 FqCoDel、DropTail、实时利用率或时延，也不实现周期采样、中途主动迁移、速率
 控制、重传或全局流量工程。
+
+`global-capacity-weighted-hrw` 保留上述 size-aware 的 HRW 前两名、节点级
+sticky assignment 和声明字节预留，但把比较量改为当前候选出口的预测占用：
+
+```text
+predicted_load(candidate) =
+  (reserved_bytes(candidate) + current_flow_declared_bytes)
+  / configured_data_rate_bps(candidate)
+```
+
+因此同等预留下会优先使用带宽较高的等价下一跳；带宽相同则保持 size-aware
+的选择结果。比较使用当前快照已经写入 PointToPointNetDevice 的 DataRate，
+不依赖浮点近似。完整 sticky candidate 在新 epoch 中仍存在时不会因瞬时负载
+变化而迁移；候选消失时会先产生 `RELEASE_CANDIDATE_INVALID`，再在 ns-3
+重算出的新 ECMP 候选中重新选择。恢复的候选只供新 flow 使用，不强制迁回
+已有 flow。
+
+该模式仍是逐跳、逻辑预留的启发式策略：发送 pacing 保持首跳序列化，不锁定
+完整路径，不进行准入排队，也不读取真实队列 backlog。因此它适合动态拓扑，
+但不承诺任意负载下零丢包。
 
 `global-capacity-aware-hrw` 是独立 opt-in 模式，不改变上述 N1 模式。它仍然
 使用 ns-3 全局路由给出的等价最短路径，不生成更长路径，也不是 KSP：
@@ -619,10 +640,11 @@ python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
 - `network-flow-details.csv`：五元组、transfer ID、应用 payload 与逐流 IP 指标；
 - `ecmp-route-events.csv`：每个 epoch、外部卫星 ID 和五元组的首次选择；
   `hash_value` 在旧模式中是 five-tuple hash，在 HRW 模式中是获胜候选分数；
-- `size-aware-reservation-events.csv`：在 `global-size-aware-hrw` 和
-  `global-capacity-aware-hrw` 中写出 assignment、sticky reuse、候选失效及
+- `size-aware-reservation-events.csv`：在 `global-size-aware-hrw`、
+  `global-capacity-weighted-hrw` 和 `global-capacity-aware-hrw` 中写出
+  assignment、sticky reuse、候选失效及
   sender-finish/receiver-complete 释放，以及物理下一跳和全局声明字节预留；
-- `size-aware-summary.json`：在上述两种模式中汇总登记/活动 flow、结束时
+- `size-aware-summary.json`：在上述三种模式中汇总登记/活动 flow、结束时
   assignment、最终/峰值总预留及不同释放原因；
 - `transfer-summary.csv`：每条逻辑 transfer 的声明大小、分包、收发和完成时间；
 - `task-events.csv`：每个完整任务恰好五条状态转换；

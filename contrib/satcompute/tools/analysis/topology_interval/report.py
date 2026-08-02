@@ -480,7 +480,8 @@ def _markdown(
             "`global-first`、`global-hash-per-flow`、"
             "`global-hrw-per-flow` 三种模式下比较实际选中下一跳；"
             "所有已测组合结果一致。",
-            "- `global-size-aware-hrw` 依赖活动流预留状态，不属于本次纯拓扑"
+            "- `global-size-aware-hrw`、`global-capacity-weighted-hrw` 和 "
+            "`global-capacity-aware-hrw` 依赖活动流状态，不属于本次纯拓扑"
             "间隔审计。",
             "- 完整快照、原始路由 JSONL 和运行日志位于实验工作目录，未提交。",
             "",

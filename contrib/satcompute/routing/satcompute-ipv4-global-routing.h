@@ -98,6 +98,8 @@ private:
     Ptr<NetDevice> outputInterface,
     uint32_t& countBeforeDedup);
   Ptr<Ipv4Route> BuildRoute(const EcmpRouteCandidate& candidate) const;
+  uint64_t GetCandidateDataRateBps(
+    const EcmpRouteCandidate& candidate) const;
   Ptr<Ipv4Route> LookupPerFlow(Ptr<const Packet> packet,
                                const Ipv4Header& header,
                                Ptr<NetDevice> outputInterface,

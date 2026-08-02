@@ -79,7 +79,7 @@ CI 分为 pull request 的 `SatCompute Fast Smoke` 与 `main`/手动触发的
 --islQueueBytes=<uint32>                所有 ISL DropTail 队列的字节容量
 --transferLogMode=<summary|verbose|silent>
 --taskLogMode=<summary|verbose|silent>
---routingMode=<global-first|global-hash-per-flow|global-hrw-per-flow|global-size-aware-hrw>
+--routingMode=<global-first|global-hash-per-flow|global-hrw-per-flow|global-size-aware-hrw|global-capacity-weighted-hrw|global-capacity-aware-hrw>
 --ecmpHashSeed=<uint64>                 FNV-1a-64 seed 前缀
 --outputDir=<dir>                       指标输出目录，默认 /tmp/satcompute-output
 ```
@@ -188,10 +188,15 @@ ID 为 `2 × task_id`。输入完整到达后才进入计算节点的非抢占�
   保持稳定映射并实现最小流迁移。
 - `global-size-aware-hrw`：先取得 HRW 前两名，再按活动 transfer 的声明字节
   预留选择物理下一跳；使用节点级 sticky 选择，并在发送完成后释放预留。
+- `global-capacity-weighted-hrw`：保留 size-aware 的 HRW 前两名和 sticky，
+  按 `(已有预留+当前流大小)/出口带宽` 选择；候选因动态拓扑失效时释放并重选。
+- `global-capacity-aware-hrw`：静态比较模式，执行整条等价最短路径的容量准入、
+  固定逐跳路径和瓶颈 pacing；活动路径失效时明确中止。
 
 自定义层不复制 SPF、Dijkstra、LSDB 或 `LookupGlobal()`，也不启用原生随机
 ECMP。每次完整快照调用原生 `RecomputeRoutingTables()` 后进入新的 route
-epoch。大小感知模式不读取实时队列或链路利用率，也不执行中途主动迁移。当前
+epoch。预留感知模式不读取实时队列或链路利用率，也不执行候选仍有效时的主动
+迁移。当前
 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IPv4 包；完整算法与边界见
 [`contrib/satcompute/README.md`](contrib/satcompute/README.md)。
 
