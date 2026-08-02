@@ -11,6 +11,9 @@
 正式示例和 workload 继续放在 `../input/`。不得把正式输入迁入
 `fixtures/`，也不得把 test-only fixture 放回生产输入目录。
 
+capacity-aware smoke 同时验证静态瓶颈准入、并行 ECMP、相同链路集合的
+route epoch，以及动态断路后的整路径释放、等待和重准入。
+
 在仓库根目录统一发现并运行全部 Python 单元测试：
 
 ```bash

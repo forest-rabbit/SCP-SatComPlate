@@ -114,6 +114,8 @@ WriteSizeAwareMetrics(Ptr<SizeAwareFlowRegistry> registry,
     << actionCounts["STICKY_REUSE"] << ",\n"
     << "  \"candidate_invalid_release_event_count\": "
     << actionCounts["RELEASE_CANDIDATE_INVALID"] << ",\n"
+    << "  \"route_invalidated_release_event_count\": "
+    << actionCounts["RELEASE_ROUTE_INVALIDATED"] << ",\n"
     << "  \"sender_finished_release_event_count\": "
     << actionCounts["RELEASE_SENDER_FINISHED"] << ",\n"
     << "  \"transfer_completed_release_event_count\": "

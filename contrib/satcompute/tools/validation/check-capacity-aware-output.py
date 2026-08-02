@@ -266,6 +266,127 @@ def validate_same_edge_epoch(directory):
     require(summary["assignment_count_at_end"] == 4, "epoch assignment count mismatch")
 
 
+def validate_dynamic_route(directory):
+    run = read_json(directory, "run-summary.json")
+    require(run["routing_mode"] == "global-capacity-aware-hrw", "dynamic mode mismatch")
+    require(run["run_status"] == "COMPLETE", "dynamic run did not complete")
+    require(run["transfer_count"] == 4, "dynamic transfer count mismatch")
+    require(
+        run["declared_application_bytes"] == 3_200_000,
+        "dynamic declared bytes changed",
+    )
+    require(run["sent_application_bytes"] == 3_200_000, "dynamic sent bytes mismatch")
+    require(
+        run["received_application_bytes"] == 3_200_000,
+        "dynamic received bytes mismatch",
+    )
+    require(run["flow_monitor_tx_packets"] == 50, "dynamic tx packets changed")
+    require(run["flow_monitor_rx_packets"] == 50, "dynamic rx packets changed")
+    require(run["flow_monitor_lost_packets"] == 0, "dynamic run lost packets")
+    require(
+        run["flow_monitor_reported_drop_packets"] == 0,
+        "dynamic run reports drops",
+    )
+    require(run["udp_socket_drop_packets"] == 0, "dynamic run has UDP socket drops")
+
+    transfers = rows_by_transfer(directory, "transfer-summary.csv")
+    flows = rows_by_transfer(directory, "network-flow-details.csv")
+    require(
+        set(transfers) == {1, 2, 3, 4} == set(flows),
+        "dynamic transfer IDs changed",
+    )
+    require(
+        all(int_field(row, "completion_time_ns") > 0 for row in transfers.values()),
+        "dynamic transfer did not complete",
+    )
+    require(
+        all(
+            int_field(row, "tx_packets") == int_field(row, "rx_packets")
+            for row in flows.values()
+        ),
+        "dynamic flow packet mismatch",
+    )
+    require(
+        int_field(flows[4], "time_first_tx_ns")
+        == int_field(transfers[2], "completion_time_ns")
+        > 4_100_000_000,
+        "new competing flow did not wait for released path capacity",
+    )
+
+    events = read_rows(directory, "size-aware-reservation-events.csv")
+    invalidated = [
+        row for row in events if row["action"] == "RELEASE_ROUTE_INVALIDATED"
+    ]
+    require(len(invalidated) == 2, "dynamic path was not released as one two-hop path")
+    require(
+        {int_field(row, "transfer_id") for row in invalidated} == {1}
+        and {int_field(row, "node_id") for row in invalidated} == {0, 1}
+        and {int_field(row, "route_epoch") for row in invalidated} == {1}
+        and {
+            int_field(row, "simulation_time_ns") for row in invalidated
+        }
+        == {1_000_000_000},
+        "dynamic invalidation identity changed",
+    )
+    require(
+        not any(row["action"] == "RELEASE_CANDIDATE_INVALID" for row in events),
+        "dynamic capacity path used a partial candidate release",
+    )
+    restored = [
+        row
+        for row in events
+        if row["action"] == "ASSIGN"
+        and int_field(row, "transfer_id") == 1
+        and int_field(row, "route_epoch") == 2
+    ]
+    require(
+        len(restored) == 2
+        and {int_field(row, "node_id") for row in restored} == {0, 1}
+        and {int_field(row, "simulation_time_ns") for row in restored}
+        == {4_000_000_000},
+        "invalidated transfer was not fully re-admitted when the path recovered",
+    )
+    require(
+        not any(
+            row["action"] == "ASSIGN"
+            and int_field(row, "transfer_id") == 1
+            and int_field(row, "route_epoch") == 1
+            for row in events
+        ),
+        "invalidated transfer bypassed capacity waiting",
+    )
+
+    route_events = read_rows(directory, "ecmp-route-events.csv")
+    transition = [
+        row
+        for row in route_events
+        if row["selection_reason"] == "CAPACITY_AWARE_TRANSITION_FALLBACK"
+    ]
+    require(
+        len(transition) == 1
+        and int_field(transition[0], "node_id") == 1
+        and int_field(transition[0], "route_epoch") == 1
+        and int_field(transition[0], "source_port") == 10_000,
+        "in-flight packet did not use the bounded transition fallback",
+    )
+
+    summary = read_json(directory, "size-aware-summary.json")
+    require(
+        summary["route_invalidated_release_event_count"] == 2,
+        "dynamic invalidation summary mismatch",
+    )
+    require(summary["active_flow_count_at_end"] == 0, "dynamic active flow remains")
+    require(summary["assignment_count_at_end"] == 0, "dynamic assignment remains")
+    require(
+        summary["final_total_reserved_bytes"] == 0,
+        "dynamic reserved bytes remain",
+    )
+    require(
+        not read_rows(directory, "diagnostics/failure/flow-drop-reasons.csv"),
+        "dynamic run produced failure drop rows",
+    )
+
+
 def validate_replay(first, second):
     deterministic_files = (
         "network-flow-details.csv",
@@ -295,6 +416,8 @@ def main():
     parser.add_argument("--parallel-ecmp", required=True)
     parser.add_argument("--task-mode", required=True)
     parser.add_argument("--same-edge-epoch", required=True)
+    parser.add_argument("--dynamic-route-first", required=True)
+    parser.add_argument("--dynamic-route-second", required=True)
     arguments = parser.parse_args()
 
     validate_baseline(arguments.baseline)
@@ -303,12 +426,16 @@ def main():
     validate_parallel_ecmp(arguments.parallel_ecmp)
     validate_task_mode(arguments.task_mode)
     validate_same_edge_epoch(arguments.same_edge_epoch)
+    validate_dynamic_route(arguments.dynamic_route_first)
+    validate_dynamic_route(arguments.dynamic_route_second)
     validate_replay(arguments.capacity_first, arguments.capacity_second)
+    validate_replay(arguments.dynamic_route_first, arguments.dynamic_route_second)
     print(
         "PASS: baseline loses QueueDisc packets; capacity-aware path admission "
         "completes 2/2 transfers with 17144/17144 packets and deterministic zero loss; "
         "two free ECMP paths remain concurrent; task input/result lifecycle completes; "
-        "same-edge route epochs preserve active paths and waiting-flow metrics"
+        "same-edge route epochs preserve active paths; invalid paths pause, "
+        "fully release, deterministically recover, and preserve in-flight packets"
     )
 
 

@@ -29,6 +29,25 @@ run_case()
     --outputDir=${output_dir}"
 }
 
+run_dynamic_route_case()
+{
+  local output_dir="$1"
+  ./waf --run-no-build "satcompute \
+    --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/capacity-aware-route-recovery \
+    --simulationDuration=45 \
+    --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/capacity-aware-route-recovery-transfers.json \
+    --diagnosticMode=failure \
+    --transferChunkMode=fixed \
+    --transferPayloadBytes=64000 \
+    --islMtuBytes=65535 \
+    --islQueueBytes=4000000 \
+    --receiverRcvBufBytes=4000000 \
+    --transferLogMode=silent \
+    --routingMode=global-capacity-aware-hrw \
+    --ecmpHashSeed=1 \
+    --outputDir=${output_dir}"
+}
+
 printf '\n[CI:capacity-aware] congested size-aware baseline\n'
 run_case global-size-aware-hrw /tmp/satcompute-ci-capacity-baseline
 
@@ -82,13 +101,19 @@ printf '\n[CI:capacity-aware] same-edge route epoch\n'
   --ecmpHashSeed=1 \
   --outputDir=/tmp/satcompute-ci-capacity-epoch"
 
+printf '\n[CI:capacity-aware] dynamic route invalidation and recovery\n'
+run_dynamic_route_case /tmp/satcompute-ci-capacity-dynamic-a
+run_dynamic_route_case /tmp/satcompute-ci-capacity-dynamic-b
+
 python3 contrib/satcompute/tools/validation/check-capacity-aware-output.py \
   --baseline=/tmp/satcompute-ci-capacity-baseline \
   --capacity-first=/tmp/satcompute-ci-capacity-a \
   --capacity-second=/tmp/satcompute-ci-capacity-b \
   --parallel-ecmp=/tmp/satcompute-ci-capacity-parallel \
   --task-mode=/tmp/satcompute-ci-capacity-task \
-  --same-edge-epoch=/tmp/satcompute-ci-capacity-epoch
+  --same-edge-epoch=/tmp/satcompute-ci-capacity-epoch \
+  --dynamic-route-first=/tmp/satcompute-ci-capacity-dynamic-a \
+  --dynamic-route-second=/tmp/satcompute-ci-capacity-dynamic-b
 
 python3 contrib/satcompute/tools/validation/check-task-output.py stress \
   --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
