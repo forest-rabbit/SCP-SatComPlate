@@ -159,7 +159,19 @@ SatelliteTopology::ApplyScheduledSnapshot(std::string nodesFilename,
   // has been applied, so each time slice triggers exactly one recomputation.
   Ipv4GlobalRoutingHelper::RecomputeRoutingTables();
   SatComputeIpv4GlobalRoutingHelper::AdvanceRouteEpoch(m_nodes);
+  for (const auto& callback : m_routeUpdateCallbacks)
+    {
+      callback();
+    }
   LogSnapshot("Update", snapshot, summary);
+}
+
+void
+SatelliteTopology::RegisterRouteUpdateCallback(Callback<void> callback)
+{
+  NS_ABORT_MSG_IF(callback.IsNull(),
+                  "route update callback 不能为空");
+  m_routeUpdateCallbacks.push_back(callback);
 }
 
 void

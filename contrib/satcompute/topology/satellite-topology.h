@@ -5,6 +5,7 @@
 #include "link/satellite-link-state.h"
 #include "snapshot/snapshot-types.h"
 
+#include "ns3/callback.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/node-container.h"
 
@@ -34,6 +35,7 @@ public:
   explicit SatelliteTopology(const TopologyConfig& config);
 
   void Initialize();
+  void RegisterRouteUpdateCallback(Callback<void> callback);
 
   uint32_t GetNodeCount() const;
   Ptr<Node> GetNode(uint32_t index) const;
@@ -79,6 +81,7 @@ private:
   std::map<uint32_t, uint32_t> m_nodeIndexes;
   std::unique_ptr<SatelliteLinkState> m_linkState;
   Ptr<SizeAwareFlowRegistry> m_sizeAwareFlowRegistry;
+  std::vector<Callback<void>> m_routeUpdateCallbacks;
 };
 
 } // namespace ns3
