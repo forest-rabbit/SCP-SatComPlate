@@ -423,6 +423,12 @@ def expected_payload(run, size_bytes):
     return 64000
 
 
+def expected_pacing_mode(run):
+    if run.get("routing_mode") == "global-capacity-aware-hrw":
+        return "path-bottleneck-serialization"
+    return "first-hop-serialization"
+
+
 def validate_udp_socket_drop_aggregate(run):
     enabled = run.get("udp_socket_drop_collection_enabled")
     require(isinstance(enabled, bool), "invalid UDP socket Drop collection flag")
@@ -1024,7 +1030,10 @@ def validate_transfer_evidence(tasks, summaries, output, run):
             and int_field(row, "received_packet_count") == packets,
             f"transfer {transfer_id} payload completeness mismatch",
         )
-        require(row["pacing_mode"] == "first-hop-serialization", "pacing mismatch")
+        require(
+            row["pacing_mode"] == expected_pacing_mode(run),
+            "pacing mismatch",
+        )
         require(
             detail["source_address"] == row["source_address"]
             and detail["destination_address"] == row["destination_address"]
@@ -1590,7 +1599,7 @@ def validate_partial_transfer_and_run_contract(
             f"transfer {transfer_id} packetization mismatch",
         )
         require(
-            summary["pacing_mode"] == "first-hop-serialization",
+            summary["pacing_mode"] == expected_pacing_mode(run),
             f"transfer {transfer_id} pacing mismatch",
         )
         require(

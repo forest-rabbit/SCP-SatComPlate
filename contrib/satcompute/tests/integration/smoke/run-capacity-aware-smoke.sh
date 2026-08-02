@@ -57,6 +57,7 @@ printf '\n[CI:capacity-aware] task input/result lifecycle\n'
   --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --simulationDuration=3 \
   --taskLogMode=silent \
+  --taskCompletionPolicy=report \
   --diagnosticMode=failure \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
@@ -88,3 +89,10 @@ python3 contrib/satcompute/tools/validation/check-capacity-aware-output.py \
   --parallel-ecmp=/tmp/satcompute-ci-capacity-parallel \
   --task-mode=/tmp/satcompute-ci-capacity-task \
   --same-edge-epoch=/tmp/satcompute-ci-capacity-epoch
+
+python3 contrib/satcompute/tools/validation/check-task-output.py stress \
+  --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+  --compute-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
+  --task-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
+  --output-dir=/tmp/satcompute-ci-capacity-task \
+  --minimum-completion-rate-percent=100
