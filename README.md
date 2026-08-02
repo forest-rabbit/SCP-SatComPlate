@@ -188,10 +188,14 @@ ID 为 `2 × task_id`。输入完整到达后才进入计算节点的非抢占�
   保持稳定映射并实现最小流迁移。
 - `global-size-aware-hrw`：先取得 HRW 前两名，再按活动 transfer 的声明字节
   预留选择物理下一跳；使用节点级 sticky 选择，并在发送完成后释放预留。
+- `global-capacity-aware-hrw`：在 ECMP 最短路图上执行完整路径容量准入和
+  瓶颈速率 pacing；动态路径失效时暂停、整路径释放并重新准入。
 
 自定义层不复制 SPF、Dijkstra、LSDB 或 `LookupGlobal()`，也不启用原生随机
 ECMP。每次完整快照调用原生 `RecomputeRoutingTables()` 后进入新的 route
 epoch。大小感知模式不读取实时队列或链路利用率，也不执行中途主动迁移。当前
+capacity-aware 迭代会在完整路径失效时暂停未发数据、释放旧预留并按新
+ECMP 图重新准入；暂时无路或无容量时保持等待，不中断仿真。当前
 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IPv4 包；完整算法与边界见
 [`contrib/satcompute/README.md`](contrib/satcompute/README.md)。
 

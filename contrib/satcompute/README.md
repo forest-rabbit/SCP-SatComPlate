@@ -83,7 +83,7 @@ contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
 contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
 ```
 
-前四级脚本保留 topology-only、Hash/HRW/size-aware、capacity-aware 瓶颈、
+前四级脚本保留 topology-only、Hash/HRW/size-aware、capacity-aware 瓶颈与动态重准入、
 单任务、FCFS、strict/report、FqCoDel、设备队列和 UDP socket 合同。后两级
 保留 canonical
 ordering、5000-transfer、mixed-large、TaskTrace/ComputeProfile 换序、
@@ -312,8 +312,9 @@ mask 仍参与 HRW 分数及 sticky 身份，但不拆分链路负载。拓扑 e
 FqCoDel、DropTail、实时利用率或时延，也不实现周期采样、中途主动迁移、速率
 控制、重传或全局流量工程。
 
-`global-capacity-aware-hrw` 是独立 opt-in 模式，不改变上述 N1 模式。它仍然
-使用 ns-3 全局路由给出的等价最短路径，不生成更长路径，也不是 KSP：
+`global-capacity-aware-hrw` 是 size-aware 之后的当前迭代：它从节点级负载
+选择进一步扩展到完整路径准入和发送速率控制。它仍然只使用 ns-3
+全局路由给出的等价最短路径，不生成更长路径，也不是 KSP：
 
 ```text
 residual(link) = configured_data_rate(link) - active_admitted_rate(link)
@@ -328,15 +329,41 @@ path_rate      = min(residual(link) for link in path)
 因此互不共享有向 ISL 的 flow 仍可并行，共享低速瓶颈的 flow 不会继续各自按
 首跳线速叠加注入。
 
-首版合同面向 flow 活动期间 ISL 边集合和带宽不变的场景，正好覆盖当前固定
-plus-grid 压力输入；相同边集合上的 route epoch 更新可以继续复用固定路径。
-若活动路径的候选在 epoch 中失效，程序明确中止，而不是静默迁移并留下错误
-容量预留。动态断链重映射、非最短绕行、可靠重传和任意负载下的零丢包保证均
-不属于首版范围。
+每次完整快照应用并重算 ns-3 全局路由后，传输控制器检查全部活动路径。
+路径仍有效且方向总预留不超过新带宽时保持 sticky，不因其他路径更空闲而
+主动迁移。路径失效时执行：
+
+```text
+ACTIVE(old path)
+  -> pause unsent packets
+  -> release every old-path assignment and rate reservation
+  -> re-admit on the current ECMP graph
+  -> ACTIVE(new path), or WAITING_ADMISSION when unavailable
+```
+
+失效活动 flow 优先于新到达 flow，并按原 arrival time 和 transfer ID 确定性
+重试。无路或无剩余容量时等待下一次路由更新或其他 flow 释放容量，不会
+触发 `candidate-invalid` 中止。已经离开源端、后续到达旧路径节点的在途包可以
+使用确定性 `CAPACITY_AWARE_TRANSITION_FALLBACK` 继续转发，但不为它创建局部
+路径预留。
+
+当前迭代不执行非最短绕行，也没有 ACK/NACK 或重传。因此它保证动态路由
+状态和容量账本一致、未发数据可暂停和恢复，不承诺物理链路关闭时已在途
+UDP 包在任意时序下都不丢失。可靠恢复和节点故障属于后续阶段。
 
 没有 exact host route 或不能解析合法五元组时回退原生行为。项目不复制
 GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 ECMP。
 当前验证范围是未发生 IPv4 分片的 UDP NetworkTransfer。
+
+动态竞争定向回归使用 5 颗卫星和三条并行最短路径：1 秒时关闭当前
+最快路径的下游 ISL，4 秒时恢复，并让一个包在切换时保持在途。
+
+```bash
+bash contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
+```
+
+检查器要求整两跳旧路径在 epoch 1 同时释放，epoch 2 恢复后重新准入，新竞争
+flow 继续等待容量，且两次重放均完成 4/4 transfers、50/50 包、零丢包。
 
 ## Diamond 验证
 
@@ -620,8 +647,9 @@ python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
 - `ecmp-route-events.csv`：每个 epoch、外部卫星 ID 和五元组的首次选择；
   `hash_value` 在旧模式中是 five-tuple hash，在 HRW 模式中是获胜候选分数；
 - `size-aware-reservation-events.csv`：在 `global-size-aware-hrw` 和
-  `global-capacity-aware-hrw` 中写出 assignment、sticky reuse、候选失效及
-  sender-finish/receiver-complete 释放，以及物理下一跳和全局声明字节预留；
+  `global-capacity-aware-hrw` 中写出 assignment、sticky reuse、候选或整路径
+  失效释放、sender-finish/receiver-complete 释放，以及物理下一跳和全局声明字节
+  预留；
 - `size-aware-summary.json`：在上述两种模式中汇总登记/活动 flow、结束时
   assignment、最终/峰值总预留及不同释放原因；
 - `transfer-summary.csv`：每条逻辑 transfer 的声明大小、分包、收发和完成时间；
