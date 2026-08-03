@@ -11,6 +11,9 @@
 正式示例和 workload 继续放在 `../input/`。不得把正式输入迁入
 `fixtures/`，也不得把 test-only fixture 放回生产输入目录。
 
+capacity-aware smoke 同时验证静态瓶颈准入、并行 ECMP、相同链路集合的
+route epoch，以及动态断路后的整路径释放、等待和重准入。
+
 在仓库根目录统一发现并运行全部 Python 单元测试：
 
 ```bash
@@ -18,13 +21,14 @@ uv run --locked python -m unittest discover \
   -s contrib/satcompute/tests/unit -p 'test_*.py' -v
 ```
 
-integration runner 要求先配置并构建 SatCompute，执行顺序为三个 Fast runner，
+integration runner 要求先配置并构建 SatCompute，执行顺序为四个 Fast runner，
 然后是两个 Full runner：
 
 ```bash
 ./waf configure --disable-examples --disable-tests --enable-modules=satcompute
 ./waf build
 contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
+contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
 contrib/satcompute/tests/integration/smoke/run-task-smoke.sh
 contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
 contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh

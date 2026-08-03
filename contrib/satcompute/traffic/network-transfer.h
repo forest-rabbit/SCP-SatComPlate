@@ -44,7 +44,7 @@ NetworkTransferState InstallNetworkTransfers(
   bool collectUdpSocketDrops,
   const std::string& logMode,
   double simulationDurationSeconds,
-  const SatelliteTopology& topology);
+  SatelliteTopology& topology);
 
 ApplicationMetrics CollectNetworkTransferMetrics(
   const NetworkTransferState& state);

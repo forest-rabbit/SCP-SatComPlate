@@ -14,10 +14,13 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_SIZE_AWARE_FLOW_REGISTRY_H
-#define SATCOMPUTE_SIZE_AWARE_FLOW_REGISTRY_H
+#ifndef SATCOMPUTE_FLOW_ROUTE_REGISTRY_H
+#define SATCOMPUTE_FLOW_ROUTE_REGISTRY_H
 
-#include "ecmp-route-selector.h"
+#include "../common/ecmp-flow-key.h"
+#include "../common/ecmp-route-candidate.h"
+#include "flow-route-state.h"
+#include "size-aware-load-state.h"
 
 #include "ns3/object.h"
 
@@ -28,21 +31,14 @@
 
 namespace ns3 {
 
-struct SizeAwareFlowMetadata
+struct FlowRouteMetadata
 {
   uint64_t transferId;
   uint64_t declaredBytes;
   bool senderActive;
 };
 
-struct SizeAwareFlowAssignment
-{
-  EcmpRouteCandidate candidate;
-  uint64_t reservedBytes;
-  uint64_t latestRouteEpoch;
-};
-
-struct SizeAwareReservationEvent
+struct FlowRouteReservationEvent
 {
   int64_t simulationTimeNs;
   std::string action;
@@ -59,41 +55,45 @@ struct SizeAwareReservationEvent
   uint64_t totalReservedAfter;
 };
 
-class SizeAwareFlowRegistry : public Object
+class FlowRouteRegistry : public Object,
+                          public FlowRouteState
 {
 public:
   static TypeId GetTypeId();
 
-  SizeAwareFlowRegistry();
-  ~SizeAwareFlowRegistry() override;
+  FlowRouteRegistry();
+  ~FlowRouteRegistry() override;
 
   void RegisterTransfer(const EcmpFlowKey& flowKey,
                         uint64_t transferId,
                         uint64_t declaredBytes);
   void BeginSending(const EcmpFlowKey& flowKey);
   void FinishSending(const EcmpFlowKey& flowKey);
+  void FinishReceiving(const EcmpFlowKey& flowKey);
 
   bool IsRegistered(const EcmpFlowKey& flowKey) const;
-  bool IsSenderActive(const EcmpFlowKey& flowKey) const;
-  SizeAwareFlowMetadata GetMetadata(const EcmpFlowKey& flowKey) const;
+  bool IsSenderActive(const EcmpFlowKey& flowKey) const override;
+  FlowRouteMetadata GetMetadata(const EcmpFlowKey& flowKey) const;
 
   bool FindAssignment(uint32_t nodeId,
                       const EcmpFlowKey& flowKey,
-                      SizeAwareFlowAssignment& assignment) const;
+                      FlowRouteAssignment& assignment) const override;
   void RecordAssignment(uint32_t nodeId,
                         const EcmpFlowKey& flowKey,
                         const EcmpRouteCandidate& candidate,
                         uint64_t routeEpoch,
-                        const std::string& selectionReason);
+                        const std::string& selectionReason) override;
   void ValidateAssignment(uint32_t nodeId,
                           const EcmpFlowKey& flowKey,
-                          uint64_t routeEpoch);
+                          uint64_t routeEpoch,
+                          const std::string& selectionReason) override;
   void ReleaseInvalidAssignment(uint32_t nodeId,
                                 const EcmpFlowKey& flowKey,
-                                uint64_t routeEpoch);
+                                uint64_t routeEpoch) override;
+  void ReleaseAssignmentsForRouteUpdate(const EcmpFlowKey& flowKey,
+                                        uint64_t routeEpoch);
 
-  // Sticky identity uses the full route candidate, while load is aggregated
-  // by its physical next hop (gateway and output interface).
+  const SizeAwareLoadState& GetSizeAwareLoadState() const;
   uint64_t GetReservedBytes(
     uint32_t nodeId,
     const EcmpRouteCandidate& candidate) const;
@@ -103,7 +103,7 @@ public:
   uint32_t GetRegisteredFlowCount() const;
   uint32_t GetActiveFlowCount() const;
   uint32_t GetAssignmentCount() const;
-  const std::vector<SizeAwareReservationEvent>& GetEvents() const;
+  const std::vector<FlowRouteReservationEvent>& GetEvents() const;
   void Clear();
 
 private:
@@ -115,19 +115,12 @@ private:
     bool operator<(const NodeFlowKey& other) const;
   };
 
-  struct NodeNextHopKey
-  {
-    uint32_t nodeId;
-    Ipv4Address gateway;
-    uint32_t outputInterface;
-
-    bool operator<(const NodeNextHopKey& other) const;
-  };
-
   void ReleaseAssignment(
-    std::map<NodeFlowKey, SizeAwareFlowAssignment>::iterator assignment,
+    std::map<NodeFlowKey, FlowRouteAssignment>::iterator assignment,
     const std::string& action,
     uint64_t routeEpoch);
+  void FinishFlow(const EcmpFlowKey& flowKey,
+                  const std::string& releaseAction);
   void RecordEvent(const std::string& action,
                    const std::string& selectionReason,
                    uint64_t routeEpoch,
@@ -139,14 +132,11 @@ private:
                    uint64_t totalReservedBefore,
                    uint64_t totalReservedAfter);
 
-  std::map<EcmpFlowKey, SizeAwareFlowMetadata> m_flows;
+  std::map<EcmpFlowKey, FlowRouteMetadata> m_flows;
   std::map<uint64_t, EcmpFlowKey> m_flowKeysByTransferId;
-  std::map<NodeFlowKey, SizeAwareFlowAssignment> m_assignments;
-  std::map<NodeNextHopKey, uint64_t> m_nextHopReservedBytes;
-  std::vector<SizeAwareReservationEvent> m_events;
-  uint64_t m_totalReservedBytes;
-  uint64_t m_peakReservedBytes;
-  uint64_t m_peakCandidateReservedBytes;
+  std::map<NodeFlowKey, FlowRouteAssignment> m_assignments;
+  SizeAwareLoadState m_sizeAwareLoadState;
+  std::vector<FlowRouteReservationEvent> m_events;
   uint32_t m_activeFlowCount;
 };
 

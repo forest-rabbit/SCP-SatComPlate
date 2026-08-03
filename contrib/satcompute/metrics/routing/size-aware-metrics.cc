@@ -44,12 +44,12 @@ OutputPath(const std::string& directory, const std::string& filename)
 } // namespace
 
 void
-WriteSizeAwareMetrics(Ptr<SizeAwareFlowRegistry> registry,
+WriteSizeAwareMetrics(Ptr<FlowRouteRegistry> registry,
                       const std::string& outputDirectory)
 {
   NS_ABORT_MSG_IF(registry == nullptr,
                   "size-aware metrics 缺少 flow registry");
-  const std::vector<SizeAwareReservationEvent>& events =
+  const std::vector<FlowRouteReservationEvent>& events =
     registry->GetEvents();
   std::ofstream eventOutput(
     OutputPath(outputDirectory, "size-aware-reservation-events.csv"),
@@ -114,8 +114,12 @@ WriteSizeAwareMetrics(Ptr<SizeAwareFlowRegistry> registry,
     << actionCounts["STICKY_REUSE"] << ",\n"
     << "  \"candidate_invalid_release_event_count\": "
     << actionCounts["RELEASE_CANDIDATE_INVALID"] << ",\n"
+    << "  \"route_invalidated_release_event_count\": "
+    << actionCounts["RELEASE_ROUTE_INVALIDATED"] << ",\n"
     << "  \"sender_finished_release_event_count\": "
-    << actionCounts["RELEASE_SENDER_FINISHED"] << "\n"
+    << actionCounts["RELEASE_SENDER_FINISHED"] << ",\n"
+    << "  \"transfer_completed_release_event_count\": "
+    << actionCounts["RELEASE_TRANSFER_COMPLETED"] << "\n"
     << "}\n";
 }
 

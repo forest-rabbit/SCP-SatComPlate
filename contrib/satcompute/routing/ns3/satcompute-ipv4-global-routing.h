@@ -17,14 +17,20 @@
 #ifndef SATCOMPUTE_IPV4_GLOBAL_ROUTING_H
 #define SATCOMPUTE_IPV4_GLOBAL_ROUTING_H
 
-#include "ecmp-route-selector.h"
-#include "size-aware-flow-registry.h"
+#include "../algorithm/hrw-per-flow-policy.h"
+#include "../common/ecmp-flow-key.h"
+#include "../common/ecmp-route-candidate.h"
+#include "../common/routing-mode.h"
+#include "../routing-policy-factory.h"
+#include "../state/flow-route-registry.h"
 
 #include "ns3/ipv4-global-routing.h"
 #include "ns3/traced-callback.h"
 
 #include <cstdint>
 #include <map>
+#include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -54,11 +60,12 @@ public:
   SatComputeIpv4GlobalRouting();
   ~SatComputeIpv4GlobalRouting() override;
 
-  void Configure(EcmpRouteSelectionMode selectionMode,
+  void Configure(RoutingMode selectionMode,
                  uint64_t hashSeed,
-                 Ptr<SizeAwareFlowRegistry> sizeAwareRegistry);
+                 Ptr<FlowRouteRegistry> flowRouteRegistry);
   void SetSatelliteId(uint32_t satelliteId);
   void AdvanceRouteEpoch();
+  void InvalidateDecisionCache(const EcmpFlowKey& flowKey);
   uint64_t GetRouteEpoch() const;
   std::vector<EcmpRouteCandidate> GetEffectiveRouteCandidates(
     Ipv4Address destination);
@@ -102,15 +109,16 @@ private:
                                const Ipv4Header& header,
                                Ptr<NetDevice> outputInterface,
                                bool& handled);
-  EcmpHrwSelection SelectSizeAwareRoute(
+  EcmpHrwSelection SelectCapacityAwareForwardingRoute(
     const EcmpFlowKey& flowKey,
     const std::vector<EcmpRouteCandidate>& candidates,
     std::string& selectionReason);
   void RecordDecision(const EcmpRouteDecisionEvent& event);
 
-  EcmpRouteSelectionMode m_selectionMode;
+  RoutingMode m_selectionMode;
   uint64_t m_hashSeed;
-  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  Ptr<FlowRouteRegistry> m_flowRouteRegistry;
+  std::unique_ptr<NextHopPolicy> m_nextHopPolicy;
   bool m_hasSatelliteId;
   uint32_t m_satelliteId;
   uint64_t m_routeEpoch;
@@ -118,6 +126,7 @@ private:
   bool m_hostRouteIndexValid;
   std::map<uint32_t, std::vector<EcmpRouteCandidate>> m_hostRouteIndex;
   std::map<DecisionCacheKey, EcmpRouteDecisionEvent> m_decisionCache;
+  std::set<DecisionCacheKey> m_recordedDecisionKeys;
   TracedCallback<const EcmpRouteDecisionEvent&> m_routeDecisionTrace;
 };
 

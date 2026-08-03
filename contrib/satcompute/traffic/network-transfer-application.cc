@@ -14,7 +14,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-// 将逻辑传输分包，并按照当前首跳链路的序列化时间发送 UDP 数据。
+// 将逻辑传输分包，并按首跳或准入路径的瓶颈速率发送 UDP 数据。
 
 #include "network-transfer-application.h"
 
@@ -53,10 +53,12 @@ NetworkTransferApplication::NetworkTransferApplication()
   : m_remainingBytes(0),
     m_sentPacketCount(0),
     m_sentBytes(0),
+    m_pacingRateBps(0),
     m_lastSendTimeNs(-1),
     m_isRunning(false),
     m_hasStarted(false),
-    m_hasFinishedSending(false)
+    m_hasFinishedSending(false),
+    m_isPausedForRouteUpdate(false)
 {
 }
 
@@ -83,6 +85,16 @@ NetworkTransferApplication::SetSendCompleteCallback(
   NS_ABORT_MSG_IF(!m_sendCompleteCallback.IsNull() || m_hasStarted,
                   "NetworkTransfer sender complete callback 只能设置一次");
   m_sendCompleteCallback = sendCompleteCallback;
+}
+
+void
+NetworkTransferApplication::SetPacingRateBps(uint64_t pacingRateBps)
+{
+  NS_ABORT_MSG_IF(pacingRateBps == 0,
+                  "NetworkTransfer pacing rate 必须大于零");
+  NS_ABORT_MSG_IF(m_hasStarted || m_pacingRateBps != 0,
+                  "NetworkTransfer pacing rate 只能在发送前设置一次");
+  m_pacingRateBps = pacingRateBps;
 }
 
 void
@@ -119,6 +131,35 @@ NetworkTransferApplication::StartTransferNow()
   SendNextPacket();
 }
 
+void
+NetworkTransferApplication::PauseForRouteUpdate()
+{
+  NS_ABORT_MSG_IF(!m_isRunning || !m_hasStarted || m_hasFinishedSending
+                    || m_isPausedForRouteUpdate,
+                  "NetworkTransfer 无法暂停等待路由更新，transfer_id="
+                    << m_transfer.transferId);
+  if (m_sendEvent.IsRunning())
+    {
+      Simulator::Cancel(m_sendEvent);
+    }
+  m_isPausedForRouteUpdate = true;
+}
+
+void
+NetworkTransferApplication::ResumeAfterRouteUpdate(uint64_t pacingRateBps)
+{
+  NS_ABORT_MSG_IF(!m_isRunning || !m_hasStarted || m_hasFinishedSending
+                    || !m_isPausedForRouteUpdate || m_remainingBytes == 0
+                    || pacingRateBps == 0,
+                  "NetworkTransfer 无法在路由更新后恢复，transfer_id="
+                    << m_transfer.transferId);
+  m_pacingRateBps = pacingRateBps;
+  m_isPausedForRouteUpdate = false;
+  m_sendEvent = Simulator::ScheduleNow(
+    &NetworkTransferApplication::SendNextPacket,
+    this);
+}
+
 uint64_t
 NetworkTransferApplication::GetTransferId() const
 {
@@ -135,6 +176,12 @@ bool
 NetworkTransferApplication::HasFinishedSending() const
 {
   return m_hasFinishedSending;
+}
+
+bool
+NetworkTransferApplication::IsPausedForRouteUpdate() const
+{
+  return m_isPausedForRouteUpdate;
 }
 
 uint64_t
@@ -239,8 +286,14 @@ NetworkTransferApplication::GetFirstHopSerializationTime(
     routeProbe->GetSize()
     + ipv4Header.GetSerializedSize()
     + pppHeader.GetSerializedSize();
+  uint64_t serializationRateBps = dataRate.Get().GetBitRate();
+  if (m_pacingRateBps != 0)
+    {
+      serializationRateBps =
+        std::min(serializationRateBps, m_pacingRateBps);
+    }
   Time serializationTime =
-    dataRate.Get().CalculateBytesTxTime(wireBytes);
+    DataRate(serializationRateBps).CalculateBytesTxTime(wireBytes);
   NS_ABORT_MSG_IF(serializationTime.IsZero(),
                   "NetworkTransfer 首跳序列化时间为零，transfer_id="
                     << m_transfer.transferId);
@@ -252,6 +305,9 @@ NetworkTransferApplication::SendNextPacket()
 {
   NS_ABORT_MSG_IF(m_socket == nullptr,
                   "NetworkTransfer sender socket 不可用，transfer_id="
+                    << m_transfer.transferId);
+  NS_ABORT_MSG_IF(m_isPausedForRouteUpdate,
+                  "NetworkTransfer 暂停期间不应执行发送事件，transfer_id="
                     << m_transfer.transferId);
   NS_ABORT_MSG_IF(m_remainingBytes == 0,
                   "NetworkTransfer sender 出现额外发送事件，transfer_id="

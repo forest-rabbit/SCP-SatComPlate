@@ -2,7 +2,7 @@
 
 #include "satellite-topology.h"
 
-#include "../routing/satcompute-ipv4-global-routing-helper.h"
+#include "../routing/ns3/satcompute-ipv4-global-routing-helper.h"
 #include "snapshot/snapshot-reader.h"
 #include "snapshot/snapshot-schedule.h"
 
@@ -11,6 +11,7 @@
 #include "ns3/drop-tail-queue.h"
 #include "ns3/internet-module.h"
 #include "ns3/mac48-address.h"
+#include "ns3/point-to-point-net-device.h"
 #include "ns3/simulator.h"
 
 #include <algorithm>
@@ -19,23 +20,21 @@
 namespace ns3 {
 
 SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
-  : m_config(config)
+  : m_config(config),
+    m_routingMode(RoutingMode::GLOBAL_FIRST)
 {
   NS_ABORT_MSG_IF(config.snapshotDirectory.empty(), "topologyDir 不能为空");
   NS_ABORT_MSG_IF(config.simulationDurationSeconds <= 0.0,
                   "simulationDuration 必须大于 0");
-  NS_ABORT_MSG_IF(config.routingMode != "global-first"
-                    && config.routingMode != "global-hash-per-flow"
-                    && config.routingMode != "global-hrw-per-flow"
-                    && config.routingMode != "global-size-aware-hrw",
+  NS_ABORT_MSG_IF(!TryParseRoutingMode(config.routingMode, m_routingMode),
                   "未知 routingMode: " << config.routingMode);
   NS_ABORT_MSG_IF(config.islMtuBytes < 68,
                   "islMtuBytes 必须至少为 68");
   NS_ABORT_MSG_IF(config.islQueueBytes == 0,
                   "islQueueBytes 必须大于 0");
-  if (config.routingMode == "global-size-aware-hrw")
+  if (IsReservationAwareRoutingMode(m_routingMode))
     {
-      m_sizeAwareFlowRegistry = CreateObject<SizeAwareFlowRegistry>();
+      m_flowRouteRegistry = CreateObject<FlowRouteRegistry>();
     }
 }
 
@@ -50,24 +49,10 @@ SatelliteTopology::CreateSatelliteNodes(const std::vector<uint32_t>& satelliteId
     }
 
   Ipv4StaticRoutingHelper staticRouting;
-  EcmpRouteSelectionMode selectionMode =
-    EcmpRouteSelectionMode::GLOBAL_FIRST;
-  if (m_config.routingMode == "global-hash-per-flow")
-    {
-      selectionMode = EcmpRouteSelectionMode::HASH_PER_FLOW;
-    }
-  else if (m_config.routingMode == "global-hrw-per-flow")
-    {
-      selectionMode = EcmpRouteSelectionMode::HRW_PER_FLOW;
-    }
-  else if (m_config.routingMode == "global-size-aware-hrw")
-    {
-      selectionMode = EcmpRouteSelectionMode::SIZE_AWARE_HRW;
-    }
   SatComputeIpv4GlobalRoutingHelper globalRouting(
-    selectionMode,
+    m_routingMode,
     m_config.ecmpHashSeed,
-    m_sizeAwareFlowRegistry);
+    m_flowRouteRegistry);
   Ipv4ListRoutingHelper listRouting;
   listRouting.Add(staticRouting, 0);
   listRouting.Add(globalRouting, -10);
@@ -152,7 +137,27 @@ SatelliteTopology::ApplyScheduledSnapshot(std::string nodesFilename,
   // has been applied, so each time slice triggers exactly one recomputation.
   Ipv4GlobalRoutingHelper::RecomputeRoutingTables();
   SatComputeIpv4GlobalRoutingHelper::AdvanceRouteEpoch(m_nodes);
+  for (const auto& callback : m_routeUpdateCallbacks)
+    {
+      callback();
+    }
   LogSnapshot("Update", snapshot, summary);
+}
+
+void
+SatelliteTopology::RegisterRouteUpdateCallback(Callback<void> callback)
+{
+  NS_ABORT_MSG_IF(callback.IsNull(),
+                  "route update callback 不能为空");
+  m_routeUpdateCallbacks.push_back(callback);
+}
+
+void
+SatelliteTopology::InvalidateFlowRouteDecisionCache(
+  const EcmpFlowKey& flowKey) const
+{
+  SatComputeIpv4GlobalRoutingHelper::InvalidateDecisionCache(m_nodes,
+                                                             flowKey);
 }
 
 void
@@ -226,12 +231,8 @@ SatelliteTopology::GetEcmpCandidateSatelliteIds(
 {
   NS_ABORT_MSG_IF(sourceSatelliteId == destinationSatelliteId,
                   "ECMP candidate audit 不接受相同源和目的卫星");
-  Ptr<Node> source = GetNodeBySatelliteId(sourceSatelliteId);
-  Ptr<SatComputeIpv4GlobalRouting> routing =
-    SatComputeIpv4GlobalRoutingHelper::GetRouting(source);
   std::vector<EcmpRouteCandidate> routes =
-    routing->GetEffectiveRouteCandidates(
-      GetServiceAddressBySatelliteId(destinationSatelliteId));
+    GetEcmpRouteCandidates(sourceSatelliteId, destinationSatelliteId);
   std::vector<uint32_t> candidateSatelliteIds;
   const std::vector<IslDirectedLink>& directedLinks =
     m_linkState->GetDirectedLinks();
@@ -260,6 +261,20 @@ SatelliteTopology::GetEcmpCandidateSatelliteIds(
   return candidateSatelliteIds;
 }
 
+std::vector<EcmpRouteCandidate>
+SatelliteTopology::GetEcmpRouteCandidates(
+  uint32_t sourceSatelliteId,
+  uint32_t destinationSatelliteId) const
+{
+  NS_ABORT_MSG_IF(sourceSatelliteId == destinationSatelliteId,
+                  "ECMP candidate 查询不接受相同源和目的卫星");
+  Ptr<SatComputeIpv4GlobalRouting> routing =
+    SatComputeIpv4GlobalRoutingHelper::GetRouting(
+      GetNodeBySatelliteId(sourceSatelliteId));
+  return routing->GetEffectiveRouteCandidates(
+    GetServiceAddressBySatelliteId(destinationSatelliteId));
+}
+
 uint32_t
 SatelliteTopology::GetNextHopSatelliteId(
   uint32_t sourceSatelliteId,
@@ -280,6 +295,49 @@ SatelliteTopology::GetNextHopSatelliteId(
     "output interface 无法映射到物理下一跳: source="
       << sourceSatelliteId << " interface=" << outputInterface);
   return directed->destinationNodeId;
+}
+
+uint64_t
+SatelliteTopology::GetIslDataRateBps(uint32_t sourceSatelliteId,
+                                     uint32_t outputInterface) const
+{
+  Ptr<Node> source = GetNodeBySatelliteId(sourceSatelliteId);
+  Ptr<Ipv4> ipv4 = source->GetObject<Ipv4>();
+  NS_ABORT_MSG_IF(ipv4 == nullptr
+                    || outputInterface >= ipv4->GetNInterfaces(),
+                  "ISL data-rate 查询的接口无效: source="
+                    << sourceSatelliteId
+                    << " interface=" << outputInterface);
+  Ptr<PointToPointNetDevice> device =
+    DynamicCast<PointToPointNetDevice>(
+      ipv4->GetNetDevice(outputInterface));
+  NS_ABORT_MSG_IF(device == nullptr,
+                  "ISL data-rate 查询目标不是 PointToPointNetDevice");
+  DataRateValue dataRate;
+  NS_ABORT_MSG_IF(!device->GetAttributeFailSafe("DataRate", dataRate)
+                    || dataRate.Get().GetBitRate() == 0,
+                  "ISL data-rate 查询得到零带宽");
+  return dataRate.Get().GetBitRate();
+}
+
+uint64_t
+SatelliteTopology::GetRouteEpoch(uint32_t satelliteId) const
+{
+  return SatComputeIpv4GlobalRoutingHelper::GetRouting(
+           GetNodeBySatelliteId(satelliteId))
+    ->GetRouteEpoch();
+}
+
+uint64_t
+SatelliteTopology::GetEcmpHashSeed() const
+{
+  return m_config.ecmpHashSeed;
+}
+
+bool
+SatelliteTopology::IsCapacityAwareRouting() const
+{
+  return m_routingMode == RoutingMode::CAPACITY_AWARE_HRW;
 }
 
 bool
@@ -329,10 +387,10 @@ SatelliteTopology::GetIslQueueDropEvents() const
   return m_linkState->GetQueueDropEvents();
 }
 
-Ptr<SizeAwareFlowRegistry>
-SatelliteTopology::GetSizeAwareFlowRegistry() const
+Ptr<FlowRouteRegistry>
+SatelliteTopology::GetFlowRouteRegistry() const
 {
-  return m_sizeAwareFlowRegistry;
+  return m_flowRouteRegistry;
 }
 
 } // namespace ns3

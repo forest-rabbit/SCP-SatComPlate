@@ -14,70 +14,20 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
-#define SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
+// 实现稳定逐流 HRW 评分、选择和排名，供多个策略复用。
 
-#include "ecmp-flow-key.h"
-#include "fnv1a64.h"
+#include "hrw-per-flow-policy.h"
+
+#include "../common/fnv1a64.h"
+
+#include "ns3/abort.h"
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
-#include <cstdint>
-#include <tuple>
-#include <vector>
 
 namespace ns3 {
 
-enum class EcmpRouteSelectionMode
-{
-  GLOBAL_FIRST,
-  HASH_PER_FLOW,
-  HRW_PER_FLOW,
-  SIZE_AWARE_HRW
-};
-
-struct EcmpRouteCandidate
-{
-  Ipv4Address gateway;
-  uint32_t outputInterface;
-  Ipv4Address destination;
-  Ipv4Mask destinationMask;
-
-  bool operator<(const EcmpRouteCandidate& other) const
-  {
-    return std::make_tuple(gateway.Get(),
-                           outputInterface,
-                           destination.Get(),
-                           destinationMask.Get())
-           < std::make_tuple(other.gateway.Get(),
-                             other.outputInterface,
-                             other.destination.Get(),
-                             other.destinationMask.Get());
-  }
-
-  bool operator==(const EcmpRouteCandidate& other) const
-  {
-    return gateway == other.gateway
-           && outputInterface == other.outputInterface
-           && destination == other.destination
-           && destinationMask == other.destinationMask;
-  }
-};
-
-struct EcmpHrwSelection
-{
-  uint32_t candidateIndex;
-  uint64_t score;
-};
-
-struct EcmpHrwRank
-{
-  uint32_t candidateIndex;
-  uint64_t score;
-};
-
-inline std::array<uint8_t, 37>
+std::array<uint8_t, 37>
 EncodeEcmpHrwKey(uint64_t hashSeed,
                  const EcmpFlowKey& flowKey,
                  const EcmpRouteCandidate& candidate)
@@ -101,19 +51,29 @@ EncodeEcmpHrwKey(uint64_t hashSeed,
   return bytes;
 }
 
-inline EcmpHrwSelection
-SelectEcmpHrwRoute(uint64_t hashSeed,
-                   const EcmpFlowKey& flowKey,
-                   const std::vector<EcmpRouteCandidate>& candidates)
+uint64_t
+ScoreEcmpHrwRoute(uint64_t hashSeed,
+                  const EcmpFlowKey& flowKey,
+                  const EcmpRouteCandidate& candidate)
 {
+  return Fnv1a64(EncodeEcmpHrwKey(hashSeed, flowKey, candidate));
+}
+
+EcmpHrwSelection
+SelectEcmpHrwRoute(
+  uint64_t hashSeed,
+  const EcmpFlowKey& flowKey,
+  const std::vector<EcmpRouteCandidate>& candidates)
+{
+  NS_ABORT_MSG_IF(candidates.empty(), "HRW 要求非空候选集合");
   EcmpHrwSelection selected = {
     0,
-    Fnv1a64(EncodeEcmpHrwKey(hashSeed, flowKey, candidates[0]))
+    ScoreEcmpHrwRoute(hashSeed, flowKey, candidates[0])
   };
   for (uint32_t index = 1; index < candidates.size(); ++index)
     {
       uint64_t score =
-        Fnv1a64(EncodeEcmpHrwKey(hashSeed, flowKey, candidates[index]));
+        ScoreEcmpHrwRoute(hashSeed, flowKey, candidates[index]);
       if (score > selected.score
           || (score == selected.score
               && candidates[index] < candidates[selected.candidateIndex]))
@@ -125,10 +85,11 @@ SelectEcmpHrwRoute(uint64_t hashSeed,
   return selected;
 }
 
-inline std::vector<EcmpHrwRank>
-RankEcmpHrwRoutes(uint64_t hashSeed,
-                  const EcmpFlowKey& flowKey,
-                  const std::vector<EcmpRouteCandidate>& candidates)
+std::vector<EcmpHrwRank>
+RankEcmpHrwRoutes(
+  uint64_t hashSeed,
+  const EcmpFlowKey& flowKey,
+  const std::vector<EcmpRouteCandidate>& candidates)
 {
   std::vector<EcmpHrwRank> ranking;
   ranking.reserve(candidates.size());
@@ -136,7 +97,7 @@ RankEcmpHrwRoutes(uint64_t hashSeed,
     {
       EcmpHrwRank rank = {
         index,
-        Fnv1a64(EncodeEcmpHrwKey(hashSeed, flowKey, candidates[index]))
+        ScoreEcmpHrwRoute(hashSeed, flowKey, candidates[index])
       };
       ranking.push_back(rank);
     }
@@ -152,6 +113,19 @@ RankEcmpHrwRoutes(uint64_t hashSeed,
   return ranking;
 }
 
-} // namespace ns3
+NextHopDecision
+HrwPerFlowPolicy::Select(
+  const NextHopSelectionContext& context,
+  const std::vector<EcmpRouteCandidate>& candidates)
+{
+  EcmpHrwSelection selected =
+    SelectEcmpHrwRoute(context.hashSeed, context.flowKey, candidates);
+  return {
+    false,
+    selected.candidateIndex,
+    selected.score,
+    "HRW_PER_FLOW"
+  };
+}
 
-#endif
+} // namespace ns3

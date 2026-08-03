@@ -53,6 +53,10 @@ GetDefaultSatComputeConfig()
   // "global-size-aware-hrw" 在 HRW 前两名间按活动传输的声明字节预留选择，
   // 按 gateway+output interface 汇总同一物理下一跳的负载，并在完整候选仍
   // 有效时保持节点级粘性；未登记或已发送完的 flow 回退纯 HRW。
+  // "global-capacity-aware-hrw" 在等价最短路径中选择剩余带宽最大的完整路径，
+  // 固定逐跳选择，并按路径瓶颈带宽 pacing；容量不足的 flow 延迟注入。
+  // 动态快照使活动路径失效时，暂停未发数据、整路径释放并在新 ECMP
+  // 图上重新准入；暂时无路或无剩余容量时继续等待，不中断仿真。
   config.routingMode = "global-hash-per-flow";
 
   // --transferLogMode：

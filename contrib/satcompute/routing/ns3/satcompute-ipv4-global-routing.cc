@@ -49,7 +49,7 @@ SatComputeIpv4GlobalRouting::GetTypeId()
 }
 
 SatComputeIpv4GlobalRouting::SatComputeIpv4GlobalRouting()
-  : m_selectionMode(EcmpRouteSelectionMode::GLOBAL_FIRST),
+  : m_selectionMode(RoutingMode::GLOBAL_FIRST),
     m_hashSeed(1),
     m_hasSatelliteId(false),
     m_satelliteId(0),
@@ -64,16 +64,24 @@ SatComputeIpv4GlobalRouting::~SatComputeIpv4GlobalRouting()
 
 void
 SatComputeIpv4GlobalRouting::Configure(
-  EcmpRouteSelectionMode selectionMode,
+  RoutingMode selectionMode,
   uint64_t hashSeed,
-  Ptr<SizeAwareFlowRegistry> sizeAwareRegistry)
+  Ptr<FlowRouteRegistry> flowRouteRegistry)
 {
-  NS_ABORT_MSG_IF(selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
-                    && sizeAwareRegistry == nullptr,
-                  "size-aware HRW routing 缺少 flow registry");
+  NS_ABORT_MSG_IF((selectionMode == RoutingMode::SIZE_AWARE_HRW
+                   || selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
+                    && flowRouteRegistry == nullptr,
+                  "reservation-aware HRW routing 缺少 flow registry");
   m_selectionMode = selectionMode;
   m_hashSeed = hashSeed;
-  m_sizeAwareRegistry = sizeAwareRegistry;
+  m_flowRouteRegistry = flowRouteRegistry;
+  m_nextHopPolicy =
+    RoutingPolicyFactory::CreateNextHopPolicy(
+      selectionMode,
+      PeekPointer(flowRouteRegistry),
+      flowRouteRegistry == nullptr
+        ? nullptr
+        : &flowRouteRegistry->GetSizeAwareLoadState());
 }
 
 void
@@ -94,6 +102,29 @@ SatComputeIpv4GlobalRouting::AdvanceRouteEpoch()
   m_hostRouteIndex.clear();
   m_hostRouteIndexValid = false;
   m_decisionCache.clear();
+  m_recordedDecisionKeys.clear();
+}
+
+void
+SatComputeIpv4GlobalRouting::InvalidateDecisionCache(
+  const EcmpFlowKey& flowKey)
+{
+  for (auto decision = m_decisionCache.begin();
+       decision != m_decisionCache.end();)
+    {
+      bool sameFlow =
+        decision->first.hasFiveTuple
+        && !(decision->first.flowKey < flowKey)
+        && !(flowKey < decision->first.flowKey);
+      if (sameFlow)
+        {
+          decision = m_decisionCache.erase(decision);
+        }
+      else
+        {
+          ++decision;
+        }
+    }
 }
 
 uint64_t
@@ -151,7 +182,9 @@ SatComputeIpv4GlobalRouting::DoDispose()
 {
   m_hostRouteIndex.clear();
   m_decisionCache.clear();
-  m_sizeAwareRegistry = nullptr;
+  m_recordedDecisionKeys.clear();
+  m_nextHopPolicy.reset();
+  m_flowRouteRegistry = nullptr;
   m_ipv4 = nullptr;
   Ipv4GlobalRouting::DoDispose();
 }
@@ -276,18 +309,20 @@ SatComputeIpv4GlobalRouting::BuildRoute(
 }
 
 EcmpHrwSelection
-SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
+SatComputeIpv4GlobalRouting::SelectCapacityAwareForwardingRoute(
   const EcmpFlowKey& flowKey,
   const std::vector<EcmpRouteCandidate>& candidates,
   std::string& selectionReason)
 {
   NS_ABORT_MSG_IF(candidates.empty()
-                    || m_sizeAwareRegistry == nullptr
-                    || !m_sizeAwareRegistry->IsSenderActive(flowKey),
-                  "size-aware HRW 选择要求活动的已登记 flow 和非空候选");
+                    || m_flowRouteRegistry == nullptr
+                    || !m_flowRouteRegistry->IsSenderActive(flowKey),
+                  "capacity-aware 转发要求活动的已登记 flow 和非空候选");
+  NS_ABORT_MSG_IF(m_selectionMode != RoutingMode::CAPACITY_AWARE_HRW,
+                  "capacity-aware 转发选择用于错误 routing mode");
 
-  SizeAwareFlowAssignment sticky;
-  if (m_sizeAwareRegistry->FindAssignment(m_satelliteId,
+  FlowRouteAssignment sticky;
+  if (m_flowRouteRegistry->FindAssignment(m_satelliteId,
                                           flowKey,
                                           sticky))
     {
@@ -297,49 +332,26 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
         {
           uint32_t selectedIndex =
             static_cast<uint32_t>(selected - candidates.begin());
-          m_sizeAwareRegistry->ValidateAssignment(m_satelliteId,
+          m_flowRouteRegistry->ValidateAssignment(m_satelliteId,
                                                   flowKey,
-                                                  m_routeEpoch);
-          selectionReason = "SIZE_AWARE_STICKY";
+                                                  m_routeEpoch,
+                                                  "CAPACITY_AWARE_STICKY");
+          selectionReason = "CAPACITY_AWARE_STICKY";
           return {
             selectedIndex,
-            Fnv1a64(EncodeEcmpHrwKey(m_hashSeed,
-                                    flowKey,
-                                    candidates[selectedIndex]))
+            ScoreEcmpHrwRoute(m_hashSeed,
+                              flowKey,
+                              candidates[selectedIndex])
           };
         }
-      m_sizeAwareRegistry->ReleaseInvalidAssignment(m_satelliteId,
-                                                    flowKey,
-                                                    m_routeEpoch);
     }
 
-  std::vector<EcmpHrwRank> ranking =
-    RankEcmpHrwRoutes(m_hashSeed, flowKey, candidates);
-  EcmpHrwRank selected = ranking[0];
-  selectionReason = "SIZE_AWARE_HRW_PRIMARY";
-  if (ranking.size() >= 2)
-    {
-      uint64_t primaryLoad =
-        m_sizeAwareRegistry->GetReservedBytes(
-          m_satelliteId,
-          candidates[ranking[0].candidateIndex]);
-      uint64_t secondaryLoad =
-        m_sizeAwareRegistry->GetReservedBytes(
-          m_satelliteId,
-          candidates[ranking[1].candidateIndex]);
-      if (secondaryLoad < primaryLoad)
-        {
-          selected = ranking[1];
-          selectionReason = "SIZE_AWARE_HRW_SECONDARY";
-        }
-    }
-
-  m_sizeAwareRegistry->RecordAssignment(
-    m_satelliteId,
-    flowKey,
-    candidates[selected.candidateIndex],
-    m_routeEpoch,
-    selectionReason);
+  // A packet already in flight may reach a node that was on the released
+  // path.  Forward it deterministically without creating a partial path
+  // reservation; the transfer engine owns complete-path re-admission.
+  EcmpHrwSelection selected =
+    SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
+  selectionReason = "CAPACITY_AWARE_TRANSITION_FALLBACK";
   return {
     selected.candidateIndex,
     selected.score
@@ -408,17 +420,17 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
 
   if (candidates.empty())
     {
-      if (m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+      if (m_selectionMode == RoutingMode::SIZE_AWARE_HRW
           && outputInterface == nullptr
           && hasFiveTuple
-          && m_sizeAwareRegistry->IsSenderActive(flowKey))
+          && m_flowRouteRegistry->IsSenderActive(flowKey))
         {
-          SizeAwareFlowAssignment assignment;
-          if (m_sizeAwareRegistry->FindAssignment(m_satelliteId,
+          FlowRouteAssignment assignment;
+          if (m_flowRouteRegistry->FindAssignment(m_satelliteId,
                                                   flowKey,
                                                   assignment))
             {
-              m_sizeAwareRegistry->ReleaseInvalidAssignment(m_satelliteId,
+              m_flowRouteRegistry->ReleaseInvalidAssignment(m_satelliteId,
                                                             flowKey,
                                                             m_routeEpoch);
             }
@@ -440,34 +452,55 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
       return nullptr;
     }
 
-  uint64_t hashValue =
-    Fnv1a64(EncodeEcmpFlowKey(m_hashSeed, flowKey));
-  uint32_t selectedIndex =
-    static_cast<uint32_t>(hashValue % candidates.size());
-  std::string selectionReason = "HASH_PER_FLOW";
-  if (m_selectionMode == EcmpRouteSelectionMode::HRW_PER_FLOW
-      || m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW)
+  uint64_t hashValue = 0;
+  uint32_t selectedIndex = 0;
+  std::string selectionReason;
+  bool useNextHopPolicy =
+    m_selectionMode == RoutingMode::HASH_PER_FLOW
+    || m_selectionMode == RoutingMode::HRW_PER_FLOW
+    || (m_selectionMode == RoutingMode::SIZE_AWARE_HRW
+        && outputInterface == nullptr
+        && m_flowRouteRegistry->IsSenderActive(flowKey));
+  if (useNextHopPolicy)
+    {
+      NS_ABORT_MSG_IF(m_nextHopPolicy == nullptr,
+                      "下一跳路由模式缺少 policy");
+      NextHopSelectionContext context = {
+        m_satelliteId,
+        m_routeEpoch,
+        m_hashSeed,
+        flowKey
+      };
+      NextHopDecision decision =
+        m_nextHopPolicy->Select(context, candidates);
+      NS_ABORT_MSG_IF(decision.useNativeGlobalRouting
+                        || decision.candidateIndex >= candidates.size(),
+                      "下一跳 policy 返回无效选择");
+      selectedIndex = decision.candidateIndex;
+      hashValue = decision.score;
+      selectionReason = decision.selectionReason;
+    }
+  else if (m_selectionMode == RoutingMode::SIZE_AWARE_HRW
+           || m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
     {
       EcmpHrwSelection selection = {
         0,
         0
       };
-      if (m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+      if (m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW
           && outputInterface == nullptr
-          && m_sizeAwareRegistry->IsSenderActive(flowKey))
+          && m_flowRouteRegistry->IsSenderActive(flowKey))
         {
           selection =
-            SelectSizeAwareRoute(flowKey, candidates, selectionReason);
+            SelectCapacityAwareForwardingRoute(flowKey,
+                                               candidates,
+                                               selectionReason);
         }
       else
         {
           selection =
             SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
-          if (m_selectionMode == EcmpRouteSelectionMode::HRW_PER_FLOW)
-            {
-              selectionReason = "HRW_PER_FLOW";
-            }
-          else if (m_sizeAwareRegistry->IsRegistered(flowKey))
+          if (m_flowRouteRegistry->IsRegistered(flowKey))
             {
               selectionReason = "HRW_FALLBACK_INACTIVE";
             }
@@ -478,6 +511,10 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
         }
       selectedIndex = selection.candidateIndex;
       hashValue = selection.score;
+    }
+  else
+    {
+      NS_ABORT_MSG("global-first 不应进入逐流候选选择");
     }
   const EcmpRouteCandidate& selected = candidates[selectedIndex];
 
@@ -522,7 +559,10 @@ SatComputeIpv4GlobalRouting::RecordDecision(
         "同一 epoch、node 和 five-tuple 的路由选择发生漂移");
       return;
     }
-  m_routeDecisionTrace(event);
+  if (m_recordedDecisionKeys.insert(key).second)
+    {
+      m_routeDecisionTrace(event);
+    }
 }
 
 Ptr<Ipv4Route>
@@ -532,7 +572,7 @@ SatComputeIpv4GlobalRouting::RouteOutput(
   Ptr<NetDevice> outputInterface,
   Socket::SocketErrno& socketError)
 {
-  if (m_selectionMode == EcmpRouteSelectionMode::GLOBAL_FIRST
+  if (m_selectionMode == RoutingMode::GLOBAL_FIRST
       || header.GetDestination().IsMulticast())
     {
       return Ipv4GlobalRouting::RouteOutput(packet,
@@ -565,7 +605,7 @@ SatComputeIpv4GlobalRouting::RouteInput(
   LocalDeliverCallback localDeliverCallback,
   ErrorCallback errorCallback)
 {
-  if (m_selectionMode == EcmpRouteSelectionMode::GLOBAL_FIRST
+  if (m_selectionMode == RoutingMode::GLOBAL_FIRST
       || header.GetDestination().IsMulticast())
     {
       return Ipv4GlobalRouting::RouteInput(packet,

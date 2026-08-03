@@ -72,7 +72,8 @@ NetworkTransferEngine::NetworkTransferEngine()
     m_collectUdpSocketDrops(false),
     m_simulationDurationNs(0),
     m_configured(false),
-    m_registered(false)
+    m_registered(false),
+    m_capacityAwareRouting(false)
 {
 }
 
@@ -81,7 +82,7 @@ NetworkTransferEngine::~NetworkTransferEngine()
 }
 
 void
-NetworkTransferEngine::Configure(const SatelliteTopology& topology,
+NetworkTransferEngine::Configure(SatelliteTopology& topology,
                                  const std::string& chunkMode,
                                  uint32_t fixedPayloadBytes,
                                  uint16_t islMtuBytes,
@@ -117,7 +118,20 @@ NetworkTransferEngine::Configure(const SatelliteTopology& topology,
   m_receiverRcvBufBytes = receiverRcvBufBytes;
   m_collectUdpSocketDrops = collectUdpSocketDrops;
   m_simulationDurationNs = durationNs;
-  m_sizeAwareRegistry = topology.GetSizeAwareFlowRegistry();
+  m_flowRouteRegistry = topology.GetFlowRouteRegistry();
+  m_capacityAwareRouting = topology.IsCapacityAwareRouting();
+  if (m_capacityAwareRouting)
+    {
+      NS_ABORT_MSG_IF(m_flowRouteRegistry == nullptr,
+                      "capacity-aware routing 缺少 flow registry");
+      m_capacityReservationState.reset(new CapacityReservationState());
+      m_capacityPathPolicy.reset(
+        new CapacityAwareHrwPolicy(topology,
+                                   *m_capacityReservationState));
+      topology.RegisterRouteUpdateCallback(
+        MakeCallback(&NetworkTransferEngine::HandleTopologyRouteUpdate,
+                     this));
+    }
   m_configured = true;
 }
 
@@ -194,9 +208,9 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
           : static_cast<uint32_t>(
               plan.sizeBytes % plan.payloadBytesPerPacket);
 
-      if (m_sizeAwareRegistry != nullptr)
+      if (m_flowRouteRegistry != nullptr)
         {
-          m_sizeAwareRegistry->RegisterTransfer(BuildFlowKey(plan),
+          m_flowRouteRegistry->RegisterTransfer(BuildFlowKey(plan),
                                                 plan.transferId,
                                                 plan.sizeBytes);
         }
@@ -309,9 +323,17 @@ NetworkTransferEngine::StartTransferNow(
   m_completionCallbacks[index] = completionCallback;
   m_transferReceivers[index]->MarkTransferStarted(transferId, startTimeNs);
   m_states[index] = TRANSFER_STARTED;
-  Simulator::ScheduleNow(&NetworkTransferEngine::ActivateTransfer,
-                         this,
-                         transferId);
+  if (m_capacityAwareRouting)
+    {
+      m_pendingCapacityTransfers.push_back(transferId);
+      TryActivatePendingCapacityAwareTransfers();
+    }
+  else
+    {
+      Simulator::ScheduleNow(&NetworkTransferEngine::ActivateTransfer,
+                             this,
+                             transferId);
+    }
 }
 
 void
@@ -322,11 +344,166 @@ NetworkTransferEngine::ActivateTransfer(uint64_t transferId)
                     || m_senders[index]->HasStarted(),
                   "NetworkTransfer sender activation 状态无效，transfer_id="
                     << transferId);
-  if (m_sizeAwareRegistry != nullptr)
+  if (m_flowRouteRegistry != nullptr)
     {
-      m_sizeAwareRegistry->BeginSending(GetFlowKey(index));
+      m_flowRouteRegistry->BeginSending(GetFlowKey(index));
     }
   m_senders[index]->StartTransferNow();
+}
+
+bool
+NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
+{
+  NS_ABORT_MSG_IF(!m_capacityAwareRouting
+                    || m_capacityPathPolicy == nullptr
+                    || m_capacityReservationState == nullptr
+                    || m_flowRouteRegistry == nullptr,
+                  "capacity-aware activation 未配置");
+  uint32_t index = GetPlanIndex(transferId);
+  NS_ABORT_MSG_IF(m_states[index] != TRANSFER_STARTED
+                    || m_capacityReservationState->HasActivePath(transferId),
+                  "capacity-aware sender activation 状态无效，transfer_id="
+                    << transferId);
+  Ptr<NetworkTransferApplication> sender = m_senders[index];
+  bool firstAdmission = !sender->HasStarted();
+  NS_ABORT_MSG_IF(!firstAdmission && !sender->HasFinishedSending()
+                    && !sender->IsPausedForRouteUpdate(),
+                  "capacity-aware 重新准入要求 sender 已暂停，transfer_id="
+                    << transferId);
+
+  EcmpFlowKey flowKey = GetFlowKey(index);
+  CapacityAwarePath path;
+  PathSelectionContext pathContext = {
+    flowKey,
+    m_plans[index].sourceSatelliteId,
+    m_plans[index].destinationSatelliteId,
+    m_topology->GetEcmpHashSeed()
+  };
+  if (!m_capacityPathPolicy->FindPath(pathContext, path))
+    {
+      return false;
+    }
+
+  if (firstAdmission)
+    {
+      m_flowRouteRegistry->BeginSending(flowKey);
+    }
+  for (const auto& hop : path.hops)
+    {
+      // Degree-one ns-3 routers may expose only a default route.  That
+      // physical hop is unambiguous and cannot be pinned through the host
+      // candidate selector, so only host-route candidates need assignments.
+      if (hop.candidate.destinationMask
+          != Ipv4Mask("255.255.255.255"))
+        {
+          continue;
+        }
+      m_flowRouteRegistry->RecordAssignment(
+        hop.sourceSatelliteId,
+        flowKey,
+        hop.candidate,
+        m_topology->GetRouteEpoch(hop.sourceSatelliteId),
+        "CAPACITY_AWARE_PATH");
+    }
+  m_capacityReservationState->Reserve(transferId, path);
+  if (firstAdmission)
+    {
+      sender->SetPacingRateBps(path.admittedRateBps);
+      sender->StartTransferNow();
+    }
+  else if (!sender->HasFinishedSending())
+    {
+      m_topology->InvalidateFlowRouteDecisionCache(flowKey);
+      sender->ResumeAfterRouteUpdate(path.admittedRateBps);
+    }
+  return true;
+}
+
+void
+NetworkTransferEngine::TryActivatePendingCapacityAwareTransfers()
+{
+  NS_ABORT_MSG_IF(!m_capacityAwareRouting,
+                  "非 capacity-aware 运行不应存在待准入 flow");
+  std::vector<uint64_t> stillPending;
+  stillPending.reserve(m_pendingCapacityTransfers.size());
+  for (uint64_t transferId : m_pendingCapacityTransfers)
+    {
+      if (!TryActivateCapacityAwareTransfer(transferId))
+        {
+          stillPending.push_back(transferId);
+        }
+    }
+  m_pendingCapacityTransfers.swap(stillPending);
+}
+
+void
+NetworkTransferEngine::HandleTopologyRouteUpdate()
+{
+  NS_ABORT_MSG_IF(!m_capacityAwareRouting || !m_registered,
+                  "capacity-aware route update 状态无效");
+  std::vector<uint64_t> invalidTransfers;
+  for (uint32_t index = 0; index < m_plans.size(); ++index)
+    {
+      uint64_t transferId = m_plans[index].transferId;
+      if (m_states[index] != TRANSFER_STARTED
+          || !m_capacityReservationState->HasActivePath(transferId)
+          || m_capacityReservationState->IsActivePathValid(
+               transferId,
+               m_plans[index].destinationSatelliteId,
+               *m_topology))
+        {
+          continue;
+        }
+      invalidTransfers.push_back(transferId);
+    }
+
+  std::sort(
+    invalidTransfers.begin(),
+    invalidTransfers.end(),
+    [this](uint64_t leftId, uint64_t rightId) {
+      const NetworkTransfer& left = m_plans[GetPlanIndex(leftId)];
+      const NetworkTransfer& right = m_plans[GetPlanIndex(rightId)];
+      return std::make_pair(left.arrivalTimeNs, left.transferId)
+             < std::make_pair(right.arrivalTimeNs, right.transferId);
+    });
+
+  std::vector<uint64_t> readmissionTransfers;
+  for (uint64_t transferId : invalidTransfers)
+    {
+      uint32_t index = GetPlanIndex(transferId);
+      Ptr<NetworkTransferApplication> sender = m_senders[index];
+      if (!sender->HasFinishedSending())
+        {
+          sender->PauseForRouteUpdate();
+          readmissionTransfers.push_back(transferId);
+        }
+      EcmpFlowKey flowKey = GetFlowKey(index);
+      m_flowRouteRegistry->ReleaseAssignmentsForRouteUpdate(
+        flowKey,
+        m_topology->GetRouteEpoch(m_plans[index].sourceSatelliteId));
+      m_capacityReservationState->Release(transferId);
+    }
+
+  if (invalidTransfers.empty())
+    {
+      if (!m_pendingCapacityTransfers.empty())
+        {
+          TryActivatePendingCapacityAwareTransfers();
+        }
+      return;
+    }
+  std::vector<uint64_t> pending = readmissionTransfers;
+  for (uint64_t transferId : m_pendingCapacityTransfers)
+    {
+      if (std::find(invalidTransfers.begin(),
+                    invalidTransfers.end(),
+                    transferId) == invalidTransfers.end())
+        {
+          pending.push_back(transferId);
+        }
+    }
+  m_pendingCapacityTransfers.swap(pending);
+  TryActivatePendingCapacityAwareTransfers();
 }
 
 void
@@ -343,9 +520,9 @@ NetworkTransferEngine::HandleSenderComplete(uint64_t transferId,
                          != m_plans[index].sizeBytes,
                   "NetworkTransfer sender completion payload 无效，transfer_id="
                     << transferId);
-  if (m_sizeAwareRegistry != nullptr)
+  if (m_flowRouteRegistry != nullptr && !m_capacityAwareRouting)
     {
-      m_sizeAwareRegistry->FinishSending(GetFlowKey(index));
+      m_flowRouteRegistry->FinishSending(GetFlowKey(index));
     }
 }
 
@@ -365,7 +542,24 @@ NetworkTransferEngine::HandleTransferComplete(uint64_t transferId,
       != m_plans[index].sizeBytes,
     "NetworkTransfer completion payload 不完整，transfer_id=" << transferId);
 
+  if (m_capacityAwareRouting)
+    {
+      m_flowRouteRegistry->FinishReceiving(GetFlowKey(index));
+      if (m_capacityReservationState->HasActivePath(transferId))
+        {
+          m_capacityReservationState->Release(transferId);
+        }
+      m_pendingCapacityTransfers.erase(
+        std::remove(m_pendingCapacityTransfers.begin(),
+                    m_pendingCapacityTransfers.end(),
+                    transferId),
+        m_pendingCapacityTransfers.end());
+    }
   m_states[index] = TRANSFER_COMPLETED;
+  if (m_capacityAwareRouting)
+    {
+      TryActivatePendingCapacityAwareTransfers();
+    }
   Callback<void, uint64_t, int64_t> callback = m_completionCallbacks[index];
   m_completionCallbacks[index] = Callback<void, uint64_t, int64_t>();
   if (!callback.IsNull())
@@ -504,7 +698,9 @@ NetworkTransferEngine::CollectSummaries() const
         plan.destinationPort,
         plan.sizeBytes,
         plan.payloadBytesPerPacket,
-        "first-hop-serialization",
+        m_capacityAwareRouting
+          ? "path-bottleneck-serialization"
+          : "first-hop-serialization",
         plan.packetCount,
         plan.finalPacketPayloadBytes,
         plan.arrivalTimeNs,
@@ -551,6 +747,19 @@ NetworkTransferEngine::CollectUdpSocketDropEvents() const
                                right.cumulativeDropPackets);
     });
   return events;
+}
+
+CapacityAwareRuntimeSummary
+NetworkTransferEngine::CollectCapacityAwareSummary() const
+{
+  NS_ABORT_MSG_IF(!m_configured
+                    || !m_capacityAwareRouting
+                    || m_capacityReservationState == nullptr,
+                  "capacity-aware summary 未配置");
+  CapacityAwareRuntimeSummary summary =
+    m_capacityReservationState->CollectSummary();
+  summary.pendingTransferCountAtEnd = m_pendingCapacityTransfers.size();
+  return summary;
 }
 
 } // namespace ns3

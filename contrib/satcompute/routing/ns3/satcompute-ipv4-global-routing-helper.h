@@ -30,10 +30,9 @@ class SatComputeIpv4GlobalRoutingHelper : public Ipv4RoutingHelper
 {
 public:
   SatComputeIpv4GlobalRoutingHelper(
-    EcmpRouteSelectionMode selectionMode =
-      EcmpRouteSelectionMode::GLOBAL_FIRST,
+    RoutingMode selectionMode = RoutingMode::GLOBAL_FIRST,
     uint64_t hashSeed = 1,
-    Ptr<SizeAwareFlowRegistry> sizeAwareRegistry = nullptr);
+    Ptr<FlowRouteRegistry> flowRouteRegistry = nullptr);
   SatComputeIpv4GlobalRoutingHelper(
     const SatComputeIpv4GlobalRoutingHelper& other);
 
@@ -42,11 +41,13 @@ public:
 
   static Ptr<SatComputeIpv4GlobalRouting> GetRouting(Ptr<Node> node);
   static void AdvanceRouteEpoch(const NodeContainer& nodes);
+  static void InvalidateDecisionCache(const NodeContainer& nodes,
+                                      const EcmpFlowKey& flowKey);
 
 private:
-  EcmpRouteSelectionMode m_selectionMode;
+  RoutingMode m_selectionMode;
   uint64_t m_hashSeed;
-  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  Ptr<FlowRouteRegistry> m_flowRouteRegistry;
 };
 
 } // namespace ns3

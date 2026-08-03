@@ -20,7 +20,11 @@ contrib/satcompute/
 │   ├── satellite-topology.cc/.h # 卫星与 ISL 拓扑编排
 │   ├── snapshot/          # 全量快照类型、读取与时间调度
 │   └── link/              # 运行期 ISL 状态与设备队列事件
-├── routing/               # 原生全局路由之上的确定性逐流 ECMP 选择
+├── routing/
+│   ├── common/            # 路由模式、五元组、候选和哈希值类型
+│   ├── algorithm/         # 五种互相独立的下一跳/完整路径策略
+│   ├── state/             # flow、size-aware 和 capacity-aware 运行时账本
+│   └── ns3/               # ns-3 路由表读取、协议适配和 Ipv4Route 构造
 ├── traffic/               # JSON NetworkTransfer UDP 运行时
 ├── task/                  # TaskTrace、FCFS 计算服务与任务协调
 ├── metrics/               # 聚合、逐流和 ECMP 路由证据
@@ -79,7 +83,7 @@ CI 分为 pull request 的 `SatCompute Fast Smoke` 与 `main`/手动触发的
 --islQueueBytes=<uint32>                所有 ISL DropTail 队列的字节容量
 --transferLogMode=<summary|verbose|silent>
 --taskLogMode=<summary|verbose|silent>
---routingMode=<global-first|global-hash-per-flow|global-hrw-per-flow|global-size-aware-hrw>
+--routingMode=<global-first|global-hash-per-flow|global-hrw-per-flow|global-size-aware-hrw|global-capacity-aware-hrw>
 --ecmpHashSeed=<uint64>                 FNV-1a-64 seed 前缀
 --outputDir=<dir>                       指标输出目录，默认 /tmp/satcompute-output
 ```
@@ -188,10 +192,14 @@ ID 为 `2 × task_id`。输入完整到达后才进入计算节点的非抢占�
   保持稳定映射并实现最小流迁移。
 - `global-size-aware-hrw`：先取得 HRW 前两名，再按活动 transfer 的声明字节
   预留选择物理下一跳；使用节点级 sticky 选择，并在发送完成后释放预留。
+- `global-capacity-aware-hrw`：在 ECMP 最短路图上执行完整路径容量准入和
+  瓶颈速率 pacing；动态路径失效时暂停、整路径释放并重新准入。
 
 自定义层不复制 SPF、Dijkstra、LSDB 或 `LookupGlobal()`，也不启用原生随机
 ECMP。每次完整快照调用原生 `RecomputeRoutingTables()` 后进入新的 route
 epoch。大小感知模式不读取实时队列或链路利用率，也不执行中途主动迁移。当前
+capacity-aware 迭代会在完整路径失效时暂停未发数据、释放旧预留并按新
+ECMP 图重新准入；暂时无路或无容量时保持等待，不中断仿真。当前
 ECMP 验证只覆盖能够直接读取 UDP header 的未分片 IPv4 包；完整算法与边界见
 [`contrib/satcompute/README.md`](contrib/satcompute/README.md)。
 
