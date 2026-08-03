@@ -14,9 +14,21 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
-#define SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
+#ifndef SATCOMPUTE_GLOBAL_FIRST_POLICY_H
+#define SATCOMPUTE_GLOBAL_FIRST_POLICY_H
 
-#include "algorithm/hrw-per-flow-policy.h"
+#include "next-hop-policy.h"
+
+namespace ns3 {
+
+class GlobalFirstPolicy : public NextHopPolicy
+{
+public:
+  NextHopDecision Select(
+    const NextHopSelectionContext& context,
+    const std::vector<EcmpRouteCandidate>& candidates) override;
+};
+
+} // namespace ns3
 
 #endif

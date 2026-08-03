@@ -14,9 +14,31 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
-#define SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
+// 使用既有 FNV-1a-64 五元组编码执行确定性的逐流取模选择。
 
-#include "algorithm/hrw-per-flow-policy.h"
+#include "hash-per-flow-policy.h"
 
-#endif
+#include "../common/fnv1a64.h"
+
+#include "ns3/abort.h"
+
+namespace ns3 {
+
+NextHopDecision
+HashPerFlowPolicy::Select(
+  const NextHopSelectionContext& context,
+  const std::vector<EcmpRouteCandidate>& candidates)
+{
+  NS_ABORT_MSG_IF(candidates.empty(),
+                  "hash-per-flow 要求非空候选集合");
+  uint64_t hashValue =
+    Fnv1a64(EncodeEcmpFlowKey(context.hashSeed, context.flowKey));
+  return {
+    false,
+    static_cast<uint32_t>(hashValue % candidates.size()),
+    hashValue,
+    "HASH_PER_FLOW"
+  };
+}
+
+} // namespace ns3

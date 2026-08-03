@@ -14,9 +14,23 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
-#define SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
+#ifndef SATCOMPUTE_ROUTING_POLICY_FACTORY_H
+#define SATCOMPUTE_ROUTING_POLICY_FACTORY_H
 
-#include "algorithm/hrw-per-flow-policy.h"
+#include "algorithm/next-hop-policy.h"
+#include "common/routing-mode.h"
+
+#include <memory>
+
+namespace ns3 {
+
+class RoutingPolicyFactory
+{
+public:
+  static std::unique_ptr<NextHopPolicy> CreateNextHopPolicy(
+    RoutingMode mode);
+};
+
+} // namespace ns3
 
 #endif

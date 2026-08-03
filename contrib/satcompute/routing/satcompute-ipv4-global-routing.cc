@@ -18,6 +18,8 @@
 
 #include "satcompute-ipv4-global-routing.h"
 
+#include "common/fnv1a64.h"
+
 #include "ns3/abort.h"
 #include "ns3/ipv4-route.h"
 #include "ns3/ipv4-routing-table-entry.h"
@@ -75,6 +77,8 @@ SatComputeIpv4GlobalRouting::Configure(
   m_selectionMode = selectionMode;
   m_hashSeed = hashSeed;
   m_sizeAwareRegistry = sizeAwareRegistry;
+  m_nextHopPolicy =
+    RoutingPolicyFactory::CreateNextHopPolicy(selectionMode);
 }
 
 void
@@ -176,6 +180,7 @@ SatComputeIpv4GlobalRouting::DoDispose()
   m_hostRouteIndex.clear();
   m_decisionCache.clear();
   m_recordedDecisionKeys.clear();
+  m_nextHopPolicy.reset();
   m_sizeAwareRegistry = nullptr;
   m_ipv4 = nullptr;
   Ipv4GlobalRouting::DoDispose();
@@ -485,13 +490,30 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
       return nullptr;
     }
 
-  uint64_t hashValue =
-    Fnv1a64(EncodeEcmpFlowKey(m_hashSeed, flowKey));
-  uint32_t selectedIndex =
-    static_cast<uint32_t>(hashValue % candidates.size());
-  std::string selectionReason = "HASH_PER_FLOW";
-  if (m_selectionMode == RoutingMode::HRW_PER_FLOW
-      || m_selectionMode == RoutingMode::SIZE_AWARE_HRW
+  uint64_t hashValue = 0;
+  uint32_t selectedIndex = 0;
+  std::string selectionReason;
+  if (m_selectionMode == RoutingMode::HASH_PER_FLOW
+      || m_selectionMode == RoutingMode::HRW_PER_FLOW)
+    {
+      NS_ABORT_MSG_IF(m_nextHopPolicy == nullptr,
+                      "下一跳路由模式缺少 policy");
+      NextHopSelectionContext context = {
+        m_satelliteId,
+        m_routeEpoch,
+        m_hashSeed,
+        flowKey
+      };
+      NextHopDecision decision =
+        m_nextHopPolicy->Select(context, candidates);
+      NS_ABORT_MSG_IF(decision.useNativeGlobalRouting
+                        || decision.candidateIndex >= candidates.size(),
+                      "下一跳 policy 返回无效选择");
+      selectedIndex = decision.candidateIndex;
+      hashValue = decision.score;
+      selectionReason = decision.selectionReason;
+    }
+  else if (m_selectionMode == RoutingMode::SIZE_AWARE_HRW
       || m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
     {
       EcmpHrwSelection selection = {
@@ -510,11 +532,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
         {
           selection =
             SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
-          if (m_selectionMode == RoutingMode::HRW_PER_FLOW)
-            {
-              selectionReason = "HRW_PER_FLOW";
-            }
-          else if (m_sizeAwareRegistry->IsRegistered(flowKey))
+          if (m_sizeAwareRegistry->IsRegistered(flowKey))
             {
               selectionReason = "HRW_FALLBACK_INACTIVE";
             }
@@ -525,6 +543,10 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
         }
       selectedIndex = selection.candidateIndex;
       hashValue = selection.score;
+    }
+  else
+    {
+      NS_ABORT_MSG("global-first 不应进入逐流候选选择");
     }
   const EcmpRouteCandidate& selected = candidates[selectedIndex];
 

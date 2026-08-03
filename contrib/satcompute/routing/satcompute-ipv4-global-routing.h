@@ -19,6 +19,7 @@
 
 #include "ecmp-route-selector.h"
 #include "common/routing-mode.h"
+#include "routing-policy-factory.h"
 #include "size-aware-flow-registry.h"
 
 #include "ns3/ipv4-global-routing.h"
@@ -26,6 +27,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -114,6 +116,7 @@ private:
   RoutingMode m_selectionMode;
   uint64_t m_hashSeed;
   Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  std::unique_ptr<NextHopPolicy> m_nextHopPolicy;
   bool m_hasSatelliteId;
   uint32_t m_satelliteId;
   uint64_t m_routeEpoch;

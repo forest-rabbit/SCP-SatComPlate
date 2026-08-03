@@ -14,9 +14,23 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
-#define SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
+// 表示完全委托给 ns-3 Ipv4GlobalRouting 的原生首条路由行为。
 
-#include "algorithm/hrw-per-flow-policy.h"
+#include "global-first-policy.h"
 
-#endif
+namespace ns3 {
+
+NextHopDecision
+GlobalFirstPolicy::Select(
+  const NextHopSelectionContext&,
+  const std::vector<EcmpRouteCandidate>&)
+{
+  return {
+    true,
+    0,
+    0,
+    "GLOBAL_FIRST_NATIVE"
+  };
+}
+
+} // namespace ns3
