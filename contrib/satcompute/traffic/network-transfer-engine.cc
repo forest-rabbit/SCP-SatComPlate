@@ -124,8 +124,10 @@ NetworkTransferEngine::Configure(SatelliteTopology& topology,
     {
       NS_ABORT_MSG_IF(m_sizeAwareRegistry == nullptr,
                       "capacity-aware routing 缺少 flow registry");
-      m_capacityAdmission.reset(
-        new CapacityAwareRouteAdmission(topology));
+      m_capacityReservationState.reset(new CapacityReservationState());
+      m_capacityPathPolicy.reset(
+        new CapacityAwareHrwPolicy(topology,
+                                   *m_capacityReservationState));
       topology.RegisterRouteUpdateCallback(
         MakeCallback(&NetworkTransferEngine::HandleTopologyRouteUpdate,
                      this));
@@ -353,12 +355,13 @@ bool
 NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
 {
   NS_ABORT_MSG_IF(!m_capacityAwareRouting
-                    || m_capacityAdmission == nullptr
+                    || m_capacityPathPolicy == nullptr
+                    || m_capacityReservationState == nullptr
                     || m_sizeAwareRegistry == nullptr,
                   "capacity-aware activation 未配置");
   uint32_t index = GetPlanIndex(transferId);
   NS_ABORT_MSG_IF(m_states[index] != TRANSFER_STARTED
-                    || m_capacityAdmission->HasActivePath(transferId),
+                    || m_capacityReservationState->HasActivePath(transferId),
                   "capacity-aware sender activation 状态无效，transfer_id="
                     << transferId);
   Ptr<NetworkTransferApplication> sender = m_senders[index];
@@ -370,11 +373,13 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
 
   EcmpFlowKey flowKey = GetFlowKey(index);
   CapacityAwarePath path;
-  if (!m_capacityAdmission->FindAvailablePath(
-        flowKey,
-        m_plans[index].sourceSatelliteId,
-        m_plans[index].destinationSatelliteId,
-        path))
+  PathSelectionContext pathContext = {
+    flowKey,
+    m_plans[index].sourceSatelliteId,
+    m_plans[index].destinationSatelliteId,
+    m_topology->GetEcmpHashSeed()
+  };
+  if (!m_capacityPathPolicy->FindPath(pathContext, path))
     {
       return false;
     }
@@ -400,7 +405,7 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
         m_topology->GetRouteEpoch(hop.sourceSatelliteId),
         "CAPACITY_AWARE_PATH");
     }
-  m_capacityAdmission->Reserve(transferId, path);
+  m_capacityReservationState->Reserve(transferId, path);
   if (firstAdmission)
     {
       sender->SetPacingRateBps(path.admittedRateBps);
@@ -441,10 +446,11 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
     {
       uint64_t transferId = m_plans[index].transferId;
       if (m_states[index] != TRANSFER_STARTED
-          || !m_capacityAdmission->HasActivePath(transferId)
-          || m_capacityAdmission->IsActivePathValid(
+          || !m_capacityReservationState->HasActivePath(transferId)
+          || m_capacityReservationState->IsActivePathValid(
                transferId,
-               m_plans[index].destinationSatelliteId))
+               m_plans[index].destinationSatelliteId,
+               *m_topology))
         {
           continue;
         }
@@ -475,7 +481,7 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
       m_sizeAwareRegistry->ReleaseAssignmentsForRouteUpdate(
         flowKey,
         m_topology->GetRouteEpoch(m_plans[index].sourceSatelliteId));
-      m_capacityAdmission->Release(transferId);
+      m_capacityReservationState->Release(transferId);
     }
 
   if (invalidTransfers.empty())
@@ -539,9 +545,9 @@ NetworkTransferEngine::HandleTransferComplete(uint64_t transferId,
   if (m_capacityAwareRouting)
     {
       m_sizeAwareRegistry->FinishReceiving(GetFlowKey(index));
-      if (m_capacityAdmission->HasActivePath(transferId))
+      if (m_capacityReservationState->HasActivePath(transferId))
         {
-          m_capacityAdmission->Release(transferId);
+          m_capacityReservationState->Release(transferId);
         }
       m_pendingCapacityTransfers.erase(
         std::remove(m_pendingCapacityTransfers.begin(),
@@ -748,10 +754,10 @@ NetworkTransferEngine::CollectCapacityAwareSummary() const
 {
   NS_ABORT_MSG_IF(!m_configured
                     || !m_capacityAwareRouting
-                    || m_capacityAdmission == nullptr,
+                    || m_capacityReservationState == nullptr,
                   "capacity-aware summary 未配置");
   CapacityAwareRuntimeSummary summary =
-    m_capacityAdmission->CollectSummary();
+    m_capacityReservationState->CollectSummary();
   summary.pendingTransferCountAtEnd = m_pendingCapacityTransfers.size();
   return summary;
 }

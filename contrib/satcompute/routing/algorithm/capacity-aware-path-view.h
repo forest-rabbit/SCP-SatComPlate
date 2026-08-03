@@ -14,19 +14,33 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_CAPACITY_AWARE_METRICS_H
-#define SATCOMPUTE_CAPACITY_AWARE_METRICS_H
+#ifndef SATCOMPUTE_CAPACITY_AWARE_PATH_VIEW_H
+#define SATCOMPUTE_CAPACITY_AWARE_PATH_VIEW_H
 
-#include "../../routing/state/capacity-reservation-state.h"
+#include "../common/ecmp-route-candidate.h"
 
-#include <string>
+#include <cstdint>
+#include <vector>
 
 namespace ns3 {
 
-void WriteCapacityAwareMetrics(
-  const CapacityAwareRuntimeSummary& summary,
-  const std::string& outputDirectory);
-void RemoveCapacityAwareMetrics(const std::string& outputDirectory);
+class CapacityAwarePathView
+{
+public:
+  virtual ~CapacityAwarePathView()
+  {
+  }
+
+  virtual std::vector<EcmpRouteCandidate> GetEcmpRouteCandidates(
+    uint32_t sourceSatelliteId,
+    uint32_t destinationSatelliteId) const = 0;
+  virtual uint32_t GetNextHopSatelliteId(
+    uint32_t sourceSatelliteId,
+    uint32_t outputInterface) const = 0;
+  virtual uint64_t GetIslDataRateBps(
+    uint32_t sourceSatelliteId,
+    uint32_t outputInterface) const = 0;
+};
 
 } // namespace ns3
 

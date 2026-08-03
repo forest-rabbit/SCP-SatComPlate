@@ -2,6 +2,7 @@
 #define SATCOMPUTE_SATELLITE_TOPOLOGY_H
 
 #include "../routing/size-aware-flow-registry.h"
+#include "../routing/algorithm/capacity-aware-path-view.h"
 #include "../routing/common/routing-mode.h"
 #include "link/satellite-link-state.h"
 #include "snapshot/snapshot-types.h"
@@ -30,7 +31,7 @@ struct TopologyConfig
   bool logEnabled;
 };
 
-class SatelliteTopology
+class SatelliteTopology : public CapacityAwarePathView
 {
 public:
   explicit SatelliteTopology(const TopologyConfig& config);
@@ -53,12 +54,12 @@ public:
     uint32_t destinationSatelliteId) const;
   std::vector<EcmpRouteCandidate> GetEcmpRouteCandidates(
     uint32_t sourceSatelliteId,
-    uint32_t destinationSatelliteId) const;
+    uint32_t destinationSatelliteId) const override;
   uint32_t GetNextHopSatelliteId(
     uint32_t sourceSatelliteId,
-    uint32_t outputInterface) const;
+    uint32_t outputInterface) const override;
   uint64_t GetIslDataRateBps(uint32_t sourceSatelliteId,
-                             uint32_t outputInterface) const;
+                             uint32_t outputInterface) const override;
   uint64_t GetRouteEpoch(uint32_t satelliteId) const;
   uint64_t GetEcmpHashSeed() const;
   bool IsCapacityAwareRouting() const;

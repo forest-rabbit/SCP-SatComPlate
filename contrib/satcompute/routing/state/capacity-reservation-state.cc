@@ -14,11 +14,9 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-// 在等价最短路径图中选择剩余带宽最大的路径并维护活动流速率预留。
+// 维护 capacity-aware 活动完整路径和有向链路速率预留账本。
 
-#include "capacity-aware-route-admission.h"
-
-#include "../topology/satellite-topology.h"
+#include "capacity-reservation-state.h"
 
 #include "ns3/abort.h"
 
@@ -27,16 +25,8 @@
 
 namespace ns3 {
 
-CapacityAwareRouteAdmission::CapacityAwareRouteAdmission(
-  const SatelliteTopology& topology)
-  : m_topology(&topology)
-{
-  NS_ABORT_MSG_IF(!topology.IsCapacityAwareRouting(),
-                  "capacity-aware admission 要求对应 routingMode");
-}
-
 uint64_t
-CapacityAwareRouteAdmission::GetResidualRateBps(
+CapacityReservationState::GetResidualRateBps(
   const CapacityAwarePathHop& hop) const
 {
   DirectedLinkKey key =
@@ -49,134 +39,17 @@ CapacityAwareRouteAdmission::GetResidualRateBps(
   return hop.linkRateBps - reservedRate;
 }
 
-CapacityAwareRouteAdmission::PathSearchResult
-CapacityAwareRouteAdmission::FindBestSuffix(
-  const EcmpFlowKey& flowKey,
-  uint32_t currentSatelliteId,
-  uint32_t destinationSatelliteId,
-  std::map<uint32_t, PathSearchResult>& memo,
-  std::set<uint32_t>& visiting) const
-{
-  if (currentSatelliteId == destinationSatelliteId)
-    {
-      PathSearchResult destination;
-      destination.found = true;
-      destination.bottleneckRateBps =
-        std::numeric_limits<uint64_t>::max();
-      return destination;
-    }
-
-  auto cached = memo.find(currentSatelliteId);
-  if (cached != memo.end())
-    {
-      return cached->second;
-    }
-  if (!visiting.insert(currentSatelliteId).second)
-    {
-      return PathSearchResult();
-    }
-
-  std::vector<EcmpRouteCandidate> candidates =
-    m_topology->GetEcmpRouteCandidates(currentSatelliteId,
-                                       destinationSatelliteId);
-  PathSearchResult best;
-  if (!candidates.empty())
-    {
-      std::vector<EcmpHrwRank> ranking =
-        RankEcmpHrwRoutes(m_topology->GetEcmpHashSeed(),
-                          flowKey,
-                          candidates);
-      for (const auto& rank : ranking)
-        {
-          const EcmpRouteCandidate& candidate =
-            candidates[rank.candidateIndex];
-          uint32_t nextSatelliteId =
-            m_topology->GetNextHopSatelliteId(
-              currentSatelliteId,
-              candidate.outputInterface);
-          CapacityAwarePathHop hop = {
-            currentSatelliteId,
-            nextSatelliteId,
-            candidate,
-            m_topology->GetIslDataRateBps(
-              currentSatelliteId,
-              candidate.outputInterface)
-          };
-          uint64_t residualRate = GetResidualRateBps(hop);
-          if (residualRate == 0)
-            {
-              continue;
-            }
-
-          PathSearchResult suffix =
-            FindBestSuffix(flowKey,
-                           nextSatelliteId,
-                           destinationSatelliteId,
-                           memo,
-                           visiting);
-          if (!suffix.found)
-            {
-              continue;
-            }
-          uint64_t pathRate =
-            std::min(residualRate, suffix.bottleneckRateBps);
-          if (!best.found || pathRate > best.bottleneckRateBps)
-            {
-              best = suffix;
-              best.found = true;
-              best.bottleneckRateBps = pathRate;
-              best.hops.insert(best.hops.begin(), hop);
-            }
-        }
-    }
-
-  visiting.erase(currentSatelliteId);
-  memo.insert(std::make_pair(currentSatelliteId, best));
-  return best;
-}
-
 bool
-CapacityAwareRouteAdmission::FindAvailablePath(
-  const EcmpFlowKey& flowKey,
-  uint32_t sourceSatelliteId,
-  uint32_t destinationSatelliteId,
-  CapacityAwarePath& path) const
-{
-  NS_ABORT_MSG_IF(sourceSatelliteId == destinationSatelliteId,
-                  "capacity-aware path 要求不同源和目的卫星");
-  std::map<uint32_t, PathSearchResult> memo;
-  std::set<uint32_t> visiting;
-  PathSearchResult result =
-    FindBestSuffix(flowKey,
-                   sourceSatelliteId,
-                   destinationSatelliteId,
-                   memo,
-                   visiting);
-  if (!result.found)
-    {
-      path = CapacityAwarePath();
-      return false;
-    }
-  NS_ABORT_MSG_IF(result.hops.empty()
-                    || result.bottleneckRateBps == 0
-                    || result.bottleneckRateBps
-                         == std::numeric_limits<uint64_t>::max(),
-                  "capacity-aware path 结果无效");
-  path.hops = result.hops;
-  path.admittedRateBps = result.bottleneckRateBps;
-  return true;
-}
-
-bool
-CapacityAwareRouteAdmission::HasActivePath(uint64_t transferId) const
+CapacityReservationState::HasActivePath(uint64_t transferId) const
 {
   return m_activePaths.find(transferId) != m_activePaths.end();
 }
 
 bool
-CapacityAwareRouteAdmission::IsActivePathValid(
+CapacityReservationState::IsActivePathValid(
   uint64_t transferId,
-  uint32_t destinationSatelliteId) const
+  uint32_t destinationSatelliteId,
+  const CapacityAwarePathView& pathView) const
 {
   auto active = m_activePaths.find(transferId);
   NS_ABORT_MSG_IF(active == m_activePaths.end(),
@@ -191,8 +64,8 @@ CapacityAwareRouteAdmission::IsActivePathValid(
           return false;
         }
       std::vector<EcmpRouteCandidate> candidates =
-        m_topology->GetEcmpRouteCandidates(hop.sourceSatelliteId,
-                                           destinationSatelliteId);
+        pathView.GetEcmpRouteCandidates(hop.sourceSatelliteId,
+                                        destinationSatelliteId);
       if (std::find(candidates.begin(), candidates.end(), hop.candidate)
           == candidates.end())
         {
@@ -200,8 +73,8 @@ CapacityAwareRouteAdmission::IsActivePathValid(
         }
 
       uint64_t currentRateBps =
-        m_topology->GetIslDataRateBps(hop.sourceSatelliteId,
-                                      hop.candidate.outputInterface);
+        pathView.GetIslDataRateBps(hop.sourceSatelliteId,
+                                   hop.candidate.outputInterface);
       DirectedLinkKey key =
         std::make_pair(hop.sourceSatelliteId,
                        hop.candidate.outputInterface);
@@ -217,7 +90,7 @@ CapacityAwareRouteAdmission::IsActivePathValid(
 }
 
 CapacityAwareRuntimeSummary
-CapacityAwareRouteAdmission::CollectSummary() const
+CapacityReservationState::CollectSummary() const
 {
   CapacityAwareRuntimeSummary summary;
   summary.activePathCountAtEnd = m_activePaths.size();
@@ -234,8 +107,8 @@ CapacityAwareRouteAdmission::CollectSummary() const
 }
 
 void
-CapacityAwareRouteAdmission::Reserve(uint64_t transferId,
-                                     const CapacityAwarePath& path)
+CapacityReservationState::Reserve(uint64_t transferId,
+                                  const CapacityAwarePath& path)
 {
   NS_ABORT_MSG_IF(transferId == 0
                     || path.hops.empty()
@@ -264,7 +137,7 @@ CapacityAwareRouteAdmission::Reserve(uint64_t transferId,
 }
 
 void
-CapacityAwareRouteAdmission::Release(uint64_t transferId)
+CapacityReservationState::Release(uint64_t transferId)
 {
   auto active = m_activePaths.find(transferId);
   NS_ABORT_MSG_IF(active == m_activePaths.end(),

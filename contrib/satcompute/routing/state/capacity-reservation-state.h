@@ -14,41 +14,17 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_CAPACITY_AWARE_ROUTE_ADMISSION_H
-#define SATCOMPUTE_CAPACITY_AWARE_ROUTE_ADMISSION_H
+#ifndef SATCOMPUTE_CAPACITY_RESERVATION_STATE_H
+#define SATCOMPUTE_CAPACITY_RESERVATION_STATE_H
 
-#include "algorithm/hrw-per-flow-policy.h"
-#include "common/ecmp-flow-key.h"
-#include "common/ecmp-route-candidate.h"
+#include "../algorithm/capacity-aware-path-types.h"
+#include "../algorithm/capacity-aware-path-view.h"
 
 #include <cstdint>
 #include <map>
-#include <set>
 #include <utility>
-#include <vector>
 
 namespace ns3 {
-
-class SatelliteTopology;
-
-struct CapacityAwarePathHop
-{
-  uint32_t sourceSatelliteId;
-  uint32_t destinationSatelliteId;
-  EcmpRouteCandidate candidate;
-  uint64_t linkRateBps;
-};
-
-struct CapacityAwarePath
-{
-  std::vector<CapacityAwarePathHop> hops;
-  uint64_t admittedRateBps;
-
-  CapacityAwarePath()
-    : admittedRateBps(0)
-  {
-  }
-};
 
 struct CapacityAwareRuntimeSummary
 {
@@ -66,18 +42,15 @@ struct CapacityAwareRuntimeSummary
   }
 };
 
-class CapacityAwareRouteAdmission
+class CapacityReservationState
 {
 public:
-  explicit CapacityAwareRouteAdmission(const SatelliteTopology& topology);
-
-  bool FindAvailablePath(const EcmpFlowKey& flowKey,
-                         uint32_t sourceSatelliteId,
-                         uint32_t destinationSatelliteId,
-                         CapacityAwarePath& path) const;
+  uint64_t GetResidualRateBps(const CapacityAwarePathHop& hop) const;
   bool HasActivePath(uint64_t transferId) const;
-  bool IsActivePathValid(uint64_t transferId,
-                         uint32_t destinationSatelliteId) const;
+  bool IsActivePathValid(
+    uint64_t transferId,
+    uint32_t destinationSatelliteId,
+    const CapacityAwarePathView& pathView) const;
   CapacityAwareRuntimeSummary CollectSummary() const;
   void Reserve(uint64_t transferId, const CapacityAwarePath& path);
   void Release(uint64_t transferId);
@@ -85,28 +58,6 @@ public:
 private:
   typedef std::pair<uint32_t, uint32_t> DirectedLinkKey;
 
-  struct PathSearchResult
-  {
-    bool found;
-    uint64_t bottleneckRateBps;
-    std::vector<CapacityAwarePathHop> hops;
-
-    PathSearchResult()
-      : found(false),
-        bottleneckRateBps(0)
-    {
-    }
-  };
-
-  PathSearchResult FindBestSuffix(
-    const EcmpFlowKey& flowKey,
-    uint32_t currentSatelliteId,
-    uint32_t destinationSatelliteId,
-    std::map<uint32_t, PathSearchResult>& memo,
-    std::set<uint32_t>& visiting) const;
-  uint64_t GetResidualRateBps(const CapacityAwarePathHop& hop) const;
-
-  const SatelliteTopology* m_topology;
   std::map<DirectedLinkKey, uint64_t> m_reservedRateBps;
   std::map<uint64_t, CapacityAwarePath> m_activePaths;
 };

@@ -2,7 +2,7 @@
 #define SATCOMPUTE_METRICS_H
 
 #include "../topology/link/satellite-link-state.h"
-#include "../routing/capacity-aware-route-admission.h"
+#include "../routing/state/capacity-reservation-state.h"
 #include "../routing/satcompute-ipv4-global-routing.h"
 #include "../traffic/network-transfer-receiver.h"
 

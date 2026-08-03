@@ -14,19 +14,34 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_CAPACITY_AWARE_METRICS_H
-#define SATCOMPUTE_CAPACITY_AWARE_METRICS_H
+#ifndef SATCOMPUTE_PATH_POLICY_H
+#define SATCOMPUTE_PATH_POLICY_H
 
-#include "../../routing/state/capacity-reservation-state.h"
+#include "capacity-aware-path-types.h"
+#include "../common/ecmp-flow-key.h"
 
-#include <string>
+#include <cstdint>
 
 namespace ns3 {
 
-void WriteCapacityAwareMetrics(
-  const CapacityAwareRuntimeSummary& summary,
-  const std::string& outputDirectory);
-void RemoveCapacityAwareMetrics(const std::string& outputDirectory);
+struct PathSelectionContext
+{
+  EcmpFlowKey flowKey;
+  uint32_t sourceSatelliteId;
+  uint32_t destinationSatelliteId;
+  uint64_t hashSeed;
+};
+
+class PathPolicy
+{
+public:
+  virtual ~PathPolicy()
+  {
+  }
+
+  virtual bool FindPath(const PathSelectionContext& context,
+                        CapacityAwarePath& path) const = 0;
+};
 
 } // namespace ns3
 
