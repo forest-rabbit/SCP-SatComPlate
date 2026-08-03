@@ -39,6 +39,10 @@ std::array<uint8_t, 37> EncodeEcmpHrwKey(
   uint64_t hashSeed,
   const EcmpFlowKey& flowKey,
   const EcmpRouteCandidate& candidate);
+uint64_t ScoreEcmpHrwRoute(
+  uint64_t hashSeed,
+  const EcmpFlowKey& flowKey,
+  const EcmpRouteCandidate& candidate);
 EcmpHrwSelection SelectEcmpHrwRoute(
   uint64_t hashSeed,
   const EcmpFlowKey& flowKey,

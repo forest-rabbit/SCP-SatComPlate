@@ -17,7 +17,9 @@
 #ifndef SATCOMPUTE_SIZE_AWARE_FLOW_REGISTRY_H
 #define SATCOMPUTE_SIZE_AWARE_FLOW_REGISTRY_H
 
-#include "ecmp-route-selector.h"
+#include "common/ecmp-flow-key.h"
+#include "common/ecmp-route-candidate.h"
+#include "state/size-aware-routing-state.h"
 
 #include "ns3/object.h"
 
@@ -33,13 +35,6 @@ struct SizeAwareFlowMetadata
   uint64_t transferId;
   uint64_t declaredBytes;
   bool senderActive;
-};
-
-struct SizeAwareFlowAssignment
-{
-  EcmpRouteCandidate candidate;
-  uint64_t reservedBytes;
-  uint64_t latestRouteEpoch;
 };
 
 struct SizeAwareReservationEvent
@@ -59,7 +54,8 @@ struct SizeAwareReservationEvent
   uint64_t totalReservedAfter;
 };
 
-class SizeAwareFlowRegistry : public Object
+class SizeAwareFlowRegistry : public Object,
+                              public SizeAwareRoutingState
 {
 public:
   static TypeId GetTypeId();
@@ -75,24 +71,24 @@ public:
   void FinishReceiving(const EcmpFlowKey& flowKey);
 
   bool IsRegistered(const EcmpFlowKey& flowKey) const;
-  bool IsSenderActive(const EcmpFlowKey& flowKey) const;
+  bool IsSenderActive(const EcmpFlowKey& flowKey) const override;
   SizeAwareFlowMetadata GetMetadata(const EcmpFlowKey& flowKey) const;
 
   bool FindAssignment(uint32_t nodeId,
                       const EcmpFlowKey& flowKey,
-                      SizeAwareFlowAssignment& assignment) const;
+                      SizeAwareFlowAssignment& assignment) const override;
   void RecordAssignment(uint32_t nodeId,
                         const EcmpFlowKey& flowKey,
                         const EcmpRouteCandidate& candidate,
                         uint64_t routeEpoch,
-                        const std::string& selectionReason);
+                        const std::string& selectionReason) override;
   void ValidateAssignment(uint32_t nodeId,
                           const EcmpFlowKey& flowKey,
                           uint64_t routeEpoch,
-                          const std::string& selectionReason);
+                          const std::string& selectionReason) override;
   void ReleaseInvalidAssignment(uint32_t nodeId,
                                 const EcmpFlowKey& flowKey,
-                                uint64_t routeEpoch);
+                                uint64_t routeEpoch) override;
   void ReleaseAssignmentsForRouteUpdate(const EcmpFlowKey& flowKey,
                                         uint64_t routeEpoch);
 
@@ -100,7 +96,7 @@ public:
   // by its physical next hop (gateway and output interface).
   uint64_t GetReservedBytes(
     uint32_t nodeId,
-    const EcmpRouteCandidate& candidate) const;
+    const EcmpRouteCandidate& candidate) const override;
   uint64_t GetTotalReservedBytes() const;
   uint64_t GetPeakReservedBytes() const;
   uint64_t GetPeakCandidateReservedBytes() const;

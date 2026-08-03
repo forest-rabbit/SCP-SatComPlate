@@ -21,11 +21,16 @@
 #include "algorithm/global-first-policy.h"
 #include "algorithm/hash-per-flow-policy.h"
 #include "algorithm/hrw-per-flow-policy.h"
+#include "algorithm/size-aware-hrw-policy.h"
+
+#include "ns3/abort.h"
 
 namespace ns3 {
 
 std::unique_ptr<NextHopPolicy>
-RoutingPolicyFactory::CreateNextHopPolicy(RoutingMode mode)
+RoutingPolicyFactory::CreateNextHopPolicy(
+  RoutingMode mode,
+  SizeAwareRoutingState* sizeAwareState)
 {
   switch (mode)
     {
@@ -36,6 +41,10 @@ RoutingPolicyFactory::CreateNextHopPolicy(RoutingMode mode)
     case RoutingMode::HRW_PER_FLOW:
       return std::unique_ptr<NextHopPolicy>(new HrwPerFlowPolicy());
     case RoutingMode::SIZE_AWARE_HRW:
+      NS_ABORT_MSG_IF(sizeAwareState == nullptr,
+                      "size-aware policy 缺少 routing state");
+      return std::unique_ptr<NextHopPolicy>(
+        new SizeAwareHrwPolicy(*sizeAwareState));
     case RoutingMode::CAPACITY_AWARE_HRW:
       return std::unique_ptr<NextHopPolicy>();
     }

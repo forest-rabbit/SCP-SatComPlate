@@ -14,9 +14,27 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
-#define SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
+#ifndef SATCOMPUTE_SIZE_AWARE_HRW_POLICY_H
+#define SATCOMPUTE_SIZE_AWARE_HRW_POLICY_H
 
-#include "algorithm/hrw-per-flow-policy.h"
+#include "next-hop-policy.h"
+#include "../state/size-aware-routing-state.h"
+
+namespace ns3 {
+
+class SizeAwareHrwPolicy : public NextHopPolicy
+{
+public:
+  explicit SizeAwareHrwPolicy(SizeAwareRoutingState& state);
+
+  NextHopDecision Select(
+    const NextHopSelectionContext& context,
+    const std::vector<EcmpRouteCandidate>& candidates) override;
+
+private:
+  SizeAwareRoutingState* m_state;
+};
+
+} // namespace ns3
 
 #endif

@@ -19,6 +19,7 @@
 
 #include "algorithm/next-hop-policy.h"
 #include "common/routing-mode.h"
+#include "state/size-aware-routing-state.h"
 
 #include <memory>
 
@@ -28,7 +29,8 @@ class RoutingPolicyFactory
 {
 public:
   static std::unique_ptr<NextHopPolicy> CreateNextHopPolicy(
-    RoutingMode mode);
+    RoutingMode mode,
+    SizeAwareRoutingState* sizeAwareState);
 };
 
 } // namespace ns3

@@ -51,6 +51,14 @@ EncodeEcmpHrwKey(uint64_t hashSeed,
   return bytes;
 }
 
+uint64_t
+ScoreEcmpHrwRoute(uint64_t hashSeed,
+                  const EcmpFlowKey& flowKey,
+                  const EcmpRouteCandidate& candidate)
+{
+  return Fnv1a64(EncodeEcmpHrwKey(hashSeed, flowKey, candidate));
+}
+
 EcmpHrwSelection
 SelectEcmpHrwRoute(
   uint64_t hashSeed,
@@ -60,12 +68,12 @@ SelectEcmpHrwRoute(
   NS_ABORT_MSG_IF(candidates.empty(), "HRW 要求非空候选集合");
   EcmpHrwSelection selected = {
     0,
-    Fnv1a64(EncodeEcmpHrwKey(hashSeed, flowKey, candidates[0]))
+    ScoreEcmpHrwRoute(hashSeed, flowKey, candidates[0])
   };
   for (uint32_t index = 1; index < candidates.size(); ++index)
     {
       uint64_t score =
-        Fnv1a64(EncodeEcmpHrwKey(hashSeed, flowKey, candidates[index]));
+        ScoreEcmpHrwRoute(hashSeed, flowKey, candidates[index]);
       if (score > selected.score
           || (score == selected.score
               && candidates[index] < candidates[selected.candidateIndex]))
@@ -89,7 +97,7 @@ RankEcmpHrwRoutes(
     {
       EcmpHrwRank rank = {
         index,
-        Fnv1a64(EncodeEcmpHrwKey(hashSeed, flowKey, candidates[index]))
+        ScoreEcmpHrwRoute(hashSeed, flowKey, candidates[index])
       };
       ranking.push_back(rank);
     }

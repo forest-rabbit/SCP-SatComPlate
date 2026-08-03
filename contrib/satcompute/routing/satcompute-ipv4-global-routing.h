@@ -17,7 +17,9 @@
 #ifndef SATCOMPUTE_IPV4_GLOBAL_ROUTING_H
 #define SATCOMPUTE_IPV4_GLOBAL_ROUTING_H
 
-#include "ecmp-route-selector.h"
+#include "algorithm/hrw-per-flow-policy.h"
+#include "common/ecmp-flow-key.h"
+#include "common/ecmp-route-candidate.h"
 #include "common/routing-mode.h"
 #include "routing-policy-factory.h"
 #include "size-aware-flow-registry.h"
@@ -107,7 +109,7 @@ private:
                                const Ipv4Header& header,
                                Ptr<NetDevice> outputInterface,
                                bool& handled);
-  EcmpHrwSelection SelectSizeAwareRoute(
+  EcmpHrwSelection SelectCapacityAwareForwardingRoute(
     const EcmpFlowKey& flowKey,
     const std::vector<EcmpRouteCandidate>& candidates,
     std::string& selectionReason);

@@ -29,6 +29,7 @@ def build(bld):
         'routing/algorithm/global-first-policy.cc',
         'routing/algorithm/hash-per-flow-policy.cc',
         'routing/algorithm/hrw-per-flow-policy.cc',
+        'routing/algorithm/size-aware-hrw-policy.cc',
         'routing/common/routing-mode.cc',
         'routing/routing-policy-factory.cc',
         'routing/satcompute-ipv4-global-routing.cc',

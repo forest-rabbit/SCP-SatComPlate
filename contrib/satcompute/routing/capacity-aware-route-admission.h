@@ -17,7 +17,9 @@
 #ifndef SATCOMPUTE_CAPACITY_AWARE_ROUTE_ADMISSION_H
 #define SATCOMPUTE_CAPACITY_AWARE_ROUTE_ADMISSION_H
 
-#include "ecmp-route-selector.h"
+#include "algorithm/hrw-per-flow-policy.h"
+#include "common/ecmp-flow-key.h"
+#include "common/ecmp-route-candidate.h"
 
 #include <cstdint>
 #include <map>

@@ -18,8 +18,6 @@
 
 #include "satcompute-ipv4-global-routing.h"
 
-#include "common/fnv1a64.h"
-
 #include "ns3/abort.h"
 #include "ns3/ipv4-route.h"
 #include "ns3/ipv4-routing-table-entry.h"
@@ -78,7 +76,9 @@ SatComputeIpv4GlobalRouting::Configure(
   m_hashSeed = hashSeed;
   m_sizeAwareRegistry = sizeAwareRegistry;
   m_nextHopPolicy =
-    RoutingPolicyFactory::CreateNextHopPolicy(selectionMode);
+    RoutingPolicyFactory::CreateNextHopPolicy(
+      selectionMode,
+      PeekPointer(sizeAwareRegistry));
 }
 
 void
@@ -306,7 +306,7 @@ SatComputeIpv4GlobalRouting::BuildRoute(
 }
 
 EcmpHrwSelection
-SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
+SatComputeIpv4GlobalRouting::SelectCapacityAwareForwardingRoute(
   const EcmpFlowKey& flowKey,
   const std::vector<EcmpRouteCandidate>& candidates,
   std::string& selectionReason)
@@ -314,7 +314,9 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
   NS_ABORT_MSG_IF(candidates.empty()
                     || m_sizeAwareRegistry == nullptr
                     || !m_sizeAwareRegistry->IsSenderActive(flowKey),
-                  "size-aware HRW 选择要求活动的已登记 flow 和非空候选");
+                  "capacity-aware 转发要求活动的已登记 flow 和非空候选");
+  NS_ABORT_MSG_IF(m_selectionMode != RoutingMode::CAPACITY_AWARE_HRW,
+                  "capacity-aware 转发选择用于错误 routing mode");
 
   SizeAwareFlowAssignment sticky;
   if (m_sizeAwareRegistry->FindAssignment(m_satelliteId,
@@ -327,69 +329,26 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
         {
           uint32_t selectedIndex =
             static_cast<uint32_t>(selected - candidates.begin());
-          std::string stickyReason =
-            m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW
-              ? "CAPACITY_AWARE_STICKY"
-              : "SIZE_AWARE_STICKY";
           m_sizeAwareRegistry->ValidateAssignment(m_satelliteId,
                                                   flowKey,
                                                   m_routeEpoch,
-                                                  stickyReason);
-          selectionReason = stickyReason;
+                                                  "CAPACITY_AWARE_STICKY");
+          selectionReason = "CAPACITY_AWARE_STICKY";
           return {
             selectedIndex,
-            Fnv1a64(EncodeEcmpHrwKey(m_hashSeed,
-                                    flowKey,
-                                    candidates[selectedIndex]))
+            ScoreEcmpHrwRoute(m_hashSeed,
+                              flowKey,
+                              candidates[selectedIndex])
           };
         }
-      if (m_selectionMode != RoutingMode::CAPACITY_AWARE_HRW)
-        {
-          m_sizeAwareRegistry->ReleaseInvalidAssignment(m_satelliteId,
-                                                        flowKey,
-                                                        m_routeEpoch);
-        }
     }
 
-  std::vector<EcmpHrwRank> ranking =
-    RankEcmpHrwRoutes(m_hashSeed, flowKey, candidates);
-  EcmpHrwRank selected = ranking[0];
-  if (m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
-    {
-      // The admission controller rebuilds complete paths after each route
-      // update.  A packet already in flight may still reach a node that was
-      // on the old path; forward that packet deterministically without
-      // creating a partial-path reservation.
-      selectionReason = "CAPACITY_AWARE_TRANSITION_FALLBACK";
-      return {
-        selected.candidateIndex,
-        selected.score
-      };
-    }
-  selectionReason = "SIZE_AWARE_HRW_PRIMARY";
-  if (ranking.size() >= 2)
-    {
-      uint64_t primaryLoad =
-        m_sizeAwareRegistry->GetReservedBytes(
-          m_satelliteId,
-          candidates[ranking[0].candidateIndex]);
-      uint64_t secondaryLoad =
-        m_sizeAwareRegistry->GetReservedBytes(
-          m_satelliteId,
-          candidates[ranking[1].candidateIndex]);
-      if (secondaryLoad < primaryLoad)
-        {
-          selected = ranking[1];
-          selectionReason = "SIZE_AWARE_HRW_SECONDARY";
-        }
-    }
-
-  m_sizeAwareRegistry->RecordAssignment(
-    m_satelliteId,
-    flowKey,
-    candidates[selected.candidateIndex],
-    m_routeEpoch,
-    selectionReason);
+  // A packet already in flight may reach a node that was on the released
+  // path.  Forward it deterministically without creating a partial path
+  // reservation; the transfer engine owns complete-path re-admission.
+  EcmpHrwSelection selected =
+    SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
+  selectionReason = "CAPACITY_AWARE_TRANSITION_FALLBACK";
   return {
     selected.candidateIndex,
     selected.score
@@ -493,8 +452,13 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
   uint64_t hashValue = 0;
   uint32_t selectedIndex = 0;
   std::string selectionReason;
-  if (m_selectionMode == RoutingMode::HASH_PER_FLOW
-      || m_selectionMode == RoutingMode::HRW_PER_FLOW)
+  bool useNextHopPolicy =
+    m_selectionMode == RoutingMode::HASH_PER_FLOW
+    || m_selectionMode == RoutingMode::HRW_PER_FLOW
+    || (m_selectionMode == RoutingMode::SIZE_AWARE_HRW
+        && outputInterface == nullptr
+        && m_sizeAwareRegistry->IsSenderActive(flowKey));
+  if (useNextHopPolicy)
     {
       NS_ABORT_MSG_IF(m_nextHopPolicy == nullptr,
                       "下一跳路由模式缺少 policy");
@@ -514,19 +478,20 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
       selectionReason = decision.selectionReason;
     }
   else if (m_selectionMode == RoutingMode::SIZE_AWARE_HRW
-      || m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
+           || m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
     {
       EcmpHrwSelection selection = {
         0,
         0
       };
-      if ((m_selectionMode == RoutingMode::SIZE_AWARE_HRW
-           || m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
+      if (m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW
           && outputInterface == nullptr
           && m_sizeAwareRegistry->IsSenderActive(flowKey))
         {
           selection =
-            SelectSizeAwareRoute(flowKey, candidates, selectionReason);
+            SelectCapacityAwareForwardingRoute(flowKey,
+                                               candidates,
+                                               selectionReason);
         }
       else
         {
