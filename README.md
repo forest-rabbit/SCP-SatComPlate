@@ -20,7 +20,11 @@ contrib/satcompute/
 │   ├── satellite-topology.cc/.h # 卫星与 ISL 拓扑编排
 │   ├── snapshot/          # 全量快照类型、读取与时间调度
 │   └── link/              # 运行期 ISL 状态与设备队列事件
-├── routing/               # 原生全局路由之上的确定性逐流 ECMP 选择
+├── routing/
+│   ├── common/            # 路由模式、五元组、候选和哈希值类型
+│   ├── algorithm/         # 五种互相独立的下一跳/完整路径策略
+│   ├── state/             # flow、size-aware 和 capacity-aware 运行时账本
+│   └── ns3/               # ns-3 路由表读取、协议适配和 Ipv4Route 构造
 ├── traffic/               # JSON NetworkTransfer UDP 运行时
 ├── task/                  # TaskTrace、FCFS 计算服务与任务协调
 ├── metrics/               # 聚合、逐流和 ECMP 路由证据
@@ -79,7 +83,7 @@ CI 分为 pull request 的 `SatCompute Fast Smoke` 与 `main`/手动触发的
 --islQueueBytes=<uint32>                所有 ISL DropTail 队列的字节容量
 --transferLogMode=<summary|verbose|silent>
 --taskLogMode=<summary|verbose|silent>
---routingMode=<global-first|global-hash-per-flow|global-hrw-per-flow|global-size-aware-hrw>
+--routingMode=<global-first|global-hash-per-flow|global-hrw-per-flow|global-size-aware-hrw|global-capacity-aware-hrw>
 --ecmpHashSeed=<uint64>                 FNV-1a-64 seed 前缀
 --outputDir=<dir>                       指标输出目录，默认 /tmp/satcompute-output
 ```

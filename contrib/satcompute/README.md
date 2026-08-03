@@ -20,6 +20,14 @@
 类型、单对 JSON 文件读取器和快照目录调度器；`topology/link/` 保存运行期 ISL
 设备、带宽、时延、MTU、队列、启停状态和设备队列丢包事件。
 
+`routing/common/` 保存路由模式、五元组、候选和 FNV 值类型；
+`routing/algorithm/` 分别实现 global-first、Hash、HRW、size-aware HRW 与
+capacity-aware HRW，算法层不操作 sender、socket、Simulator 或可变拓扑对象；
+`routing/state/` 分别维护通用 flow assignment、size-aware 声明字节账本和
+capacity-aware 有向链路速率账本；`routing/ns3/` 只负责读取 ns-3 路由候选、
+解析五元组、构造 `Ipv4Route`、维护 route epoch/cache 及在途包 transition
+fallback。发送暂停、恢复、pacing 和 pending admission 仍由 `traffic/` 编排。
+
 任务、流量和拓扑 JSON 共用
 `third-party/nlohmann/json.hpp` 中未经修改的 nlohmann JSON 3.11.3 单头文件
 （MIT）。它是运行时依赖，不属于 `tools/`；`tools/` 只保存外部 CI、输入生成器、
@@ -652,6 +660,9 @@ python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
   预留；
 - `size-aware-summary.json`：在上述两种模式中汇总登记/活动 flow、结束时
   assignment、最终/峰值总预留及不同释放原因；
+- `capacity-aware-summary.json`：只在 `global-capacity-aware-hrw` 中汇总
+  结束时活动完整路径数、仍有预留的有向链路数、总预留速率及等待准入数；
+  完整结束场景的四项均应为零；
 - `transfer-summary.csv`：每条逻辑 transfer 的声明大小、分包、收发和完成时间；
 - `task-events.csv`：每个完整任务恰好五条状态转换；
 - `task-summary.csv`：每个任务的输入、排队、计算、结果和端到端时间；
