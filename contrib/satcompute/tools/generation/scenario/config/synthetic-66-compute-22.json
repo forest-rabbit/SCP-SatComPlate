@@ -1,0 +1,33 @@
+{
+  "schema_version": "0.1",
+  "scenario_name": "synthetic-66-compute-22",
+  "constellation": {
+    "constellation_name": "synthetic-66",
+    "constellation_pattern": "walker-star",
+    "num_orbits": 6,
+    "satellites_per_orbit": 11,
+    "altitude_km": 780.0,
+    "inclination_deg": 86.4,
+    "phase_diff": true
+  },
+  "topology": {
+    "mode": "dynamic",
+    "schedule": {
+      "start_time_s": 0,
+      "orbit_sample_offset_s": 0,
+      "duration_s": 1000,
+      "step_s": 1
+    },
+    "isl_candidate_strategy": "plus-grid",
+    "seam_enabled": false,
+    "max_isl_distance_m": 6174589,
+    "delay_mode": "fixed",
+    "fixed_delay_us": 8000,
+    "link_bandwidth_kbps": 2000000
+  },
+  "compute": {
+    "compute_node_count": 22,
+    "placement_strategy": "even-plane-slot",
+    "compute_rate_work_units_per_second": 1500000
+  }
+}

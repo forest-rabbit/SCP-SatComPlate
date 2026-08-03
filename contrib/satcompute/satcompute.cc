@@ -21,6 +21,7 @@
 #include "metrics/metrics.h"
 #include "metrics/routing/ecmp-route-recorder.h"
 #include "para.h"
+#include "routing/common/routing-mode.h"
 #include "task/compute-profile.h"
 #include "task/task-coordinator.h"
 #include "task/task-trace.h"
@@ -92,7 +93,8 @@ main(int argc, char* argv[])
                        config.diagnosticMode);
   commandLine.AddValue("routingMode",
                        "Routing mode: global-first, global-hash-per-flow, "
-                       "global-hrw-per-flow, or global-size-aware-hrw",
+                       "global-hrw-per-flow, global-size-aware-hrw, or "
+                       "global-capacity-aware-hrw",
                        config.routingMode);
   commandLine.AddValue("ecmpHashSeed",
                        "FNV-1a-64 seed prefix for per-flow ECMP",
@@ -194,20 +196,22 @@ main(int argc, char* argv[])
       return EXIT_FAILURE;
     }
   bool taskMode = hasComputeProfile && hasTaskTrace;
-  if (taskMode && transferMode)
+  RoutingMode routingMode = RoutingMode::GLOBAL_FIRST;
+  if (!TryParseRoutingMode(config.routingMode, routingMode))
     {
-      std::cerr << "[RUN:Error] task mode cannot be combined with transferTrace"
+      std::cerr << "[RUN:Error] routingMode must be global-first, "
+                   "global-hash-per-flow, global-hrw-per-flow, "
+                   "global-size-aware-hrw, or global-capacity-aware-hrw"
                 << std::endl;
       return EXIT_FAILURE;
     }
-  if (config.routingMode != "global-first"
-      && config.routingMode != "global-hash-per-flow"
-      && config.routingMode != "global-hrw-per-flow"
-      && config.routingMode != "global-size-aware-hrw")
+  std::string pacingMode =
+    routingMode == RoutingMode::CAPACITY_AWARE_HRW
+      ? "path-bottleneck-serialization"
+      : "first-hop-serialization";
+  if (taskMode && transferMode)
     {
-      std::cerr << "[RUN:Error] routingMode must be global-first, "
-                   "global-hash-per-flow, global-hrw-per-flow, or "
-                   "global-size-aware-hrw"
+      std::cerr << "[RUN:Error] task mode cannot be combined with transferTrace"
                 << std::endl;
       return EXIT_FAILURE;
     }
@@ -277,7 +281,7 @@ main(int argc, char* argv[])
               std::cout << "  transferPayload    : "
                         << config.transferPayloadBytes << " bytes" << std::endl;
             }
-          std::cout << "  pacingMode         : first-hop-serialization"
+          std::cout << "  pacingMode         : " << pacingMode
                     << std::endl
                     << "  transferLogMode    : "
                     << config.transferLogMode << std::endl;
@@ -293,7 +297,7 @@ main(int argc, char* argv[])
                         << config.transferPayloadBytes << " bytes" << std::endl;
             }
           std::cout
-                    << "  pacingMode         : first-hop-serialization"
+                    << "  pacingMode         : " << pacingMode
                     << std::endl
                     << "  transferLogMode    : "
                     << config.transferLogMode << std::endl;
@@ -418,6 +422,21 @@ main(int argc, char* argv[])
       udpSocketDropEvents =
         taskCoordinator->GetTransferEngine()->CollectUdpSocketDropEvents();
     }
+  CapacityAwareRuntimeSummary capacityAwareSummary;
+  if (routingMode == RoutingMode::CAPACITY_AWARE_HRW)
+    {
+      if (transferMode)
+        {
+          capacityAwareSummary =
+            networkTransfers.engine->CollectCapacityAwareSummary();
+        }
+      else if (taskMode)
+        {
+          capacityAwareSummary =
+            taskCoordinator->GetTransferEngine()
+              ->CollectCapacityAwareSummary();
+        }
+    }
   RunMetadata runMetadata = {
     runMode,
     config.routingMode,
@@ -428,7 +447,7 @@ main(int argc, char* argv[])
     (taskMode || transferMode) && config.diagnosticMode == "failure",
     config.diagnosticMode,
     config.taskCompletionPolicy,
-    transferMode || taskMode ? "first-hop-serialization" : "none",
+    transferMode || taskMode ? pacingMode : "none",
     transferMode || taskMode ? config.transferChunkMode : "none",
     (transferMode || taskMode) && config.transferChunkMode == "fixed"
       ? config.transferPayloadBytes
@@ -444,7 +463,8 @@ main(int argc, char* argv[])
                           transferFlowMetadata,
                           transferSummaries,
                           routeRecorder.GetEvents(),
-                          topology.GetSizeAwareFlowRegistry(),
+                          topology.GetFlowRouteRegistry(),
+                          capacityAwareSummary,
                           topology.GetIslDirectedLinks(),
                           topology.GetIslQueueDropEvents(),
                           udpSocketDropEvents,

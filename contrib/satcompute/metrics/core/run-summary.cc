@@ -117,6 +117,18 @@ WriteRunSummary(
   bool taskRunComplete =
     taskCoordinator == nullptr
     || taskAggregate.completedTaskCount == taskAggregate.taskCount;
+  bool capacityTransferRunComplete =
+    runMetadata.routingMode != "global-capacity-aware-hrw"
+    || taskCoordinator != nullptr
+    || transferSummaries.empty()
+    || std::all_of(
+         transferSummaries.begin(),
+         transferSummaries.end(),
+         [](const TransferSummaryRecord& transfer)
+         {
+           return transfer.transferState == "COMPLETED";
+         });
+  bool runComplete = taskRunComplete && capacityTransferRunComplete;
   NS_ABORT_MSG_IF(
     taskCoordinator != nullptr
       && (runMetadata.computeProfilePath.empty()
@@ -145,7 +157,7 @@ WriteRunSummary(
          << "  \"wall_clock_s\": " << wallClockSeconds << ",\n"
          << "  \"mode\": \"" << runMetadata.mode << "\",\n"
          << "  \"run_status\": \""
-         << (taskRunComplete ? "COMPLETE" : "PARTIAL") << "\",\n"
+         << (runComplete ? "COMPLETE" : "PARTIAL") << "\",\n"
          << "  \"task_completion_policy\": \""
          << runMetadata.taskCompletionPolicy << "\",\n"
          << "  \"routing_mode\": \"" << runMetadata.routingMode << "\",\n"

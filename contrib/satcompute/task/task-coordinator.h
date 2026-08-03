@@ -55,7 +55,7 @@ public:
 
   void Initialize(const ComputeProfile& computeProfile,
                   const TaskTrace& taskTrace,
-                  const SatelliteTopology& topology,
+                  SatelliteTopology& topology,
                   const std::string& transferChunkMode,
                   uint32_t transferPayloadBytes,
                   uint16_t islMtuBytes,

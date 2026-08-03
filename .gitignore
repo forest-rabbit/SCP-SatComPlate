@@ -5,7 +5,7 @@
 .clangd/
 compile_commands.json
 
-# Python caches
+# Python caches and managed environments
 .venv/
 __pycache__/
 **/__pycache__/
@@ -41,6 +41,10 @@ archive/local-output/
 *.log
 output/
 **/output/
+# SatCompute's local output guard is intentionally visible to Git status so
+# accidental writes cannot be mistaken for committed fixtures. This is not an
+# experiment destination, and generated files must never be committed.
+!contrib/satcompute/output/
 output.txt
 output1.txt
 RlinkUtilization.csv

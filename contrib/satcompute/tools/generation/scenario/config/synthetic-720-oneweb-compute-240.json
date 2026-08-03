@@ -1,0 +1,33 @@
+{
+  "schema_version": "0.1",
+  "scenario_name": "synthetic-720-oneweb-compute-240",
+  "constellation": {
+    "constellation_name": "synthetic-720-oneweb",
+    "constellation_pattern": "walker-star",
+    "num_orbits": 18,
+    "satellites_per_orbit": 40,
+    "altitude_km": 1200.0,
+    "inclination_deg": 87.9,
+    "phase_diff": true
+  },
+  "topology": {
+    "mode": "dynamic",
+    "schedule": {
+      "start_time_s": 0,
+      "orbit_sample_offset_s": 0,
+      "duration_s": 1000,
+      "step_s": 1
+    },
+    "isl_candidate_strategy": "plus-grid",
+    "seam_enabled": false,
+    "max_isl_distance_m": 7929848,
+    "delay_mode": "fixed",
+    "fixed_delay_us": 8000,
+    "link_bandwidth_kbps": 2000000
+  },
+  "compute": {
+    "compute_node_count": 240,
+    "placement_strategy": "even-plane-slot",
+    "compute_rate_work_units_per_second": 1500000
+  }
+}

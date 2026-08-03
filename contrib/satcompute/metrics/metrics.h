@@ -2,7 +2,8 @@
 #define SATCOMPUTE_METRICS_H
 
 #include "../topology/link/satellite-link-state.h"
-#include "../routing/satcompute-ipv4-global-routing.h"
+#include "../routing/state/capacity-reservation-state.h"
+#include "../routing/ns3/satcompute-ipv4-global-routing.h"
 #include "../traffic/network-transfer-receiver.h"
 
 #include "ns3/flow-monitor-module.h"
@@ -90,7 +91,8 @@ public:
                   const std::vector<TransferFlowMetadata>& transferFlows,
                   const std::vector<TransferSummaryRecord>& transferSummaries,
                   const std::vector<EcmpRouteDecisionEvent>& routeEvents,
-                  Ptr<SizeAwareFlowRegistry> sizeAwareRegistry,
+                  Ptr<FlowRouteRegistry> flowRouteRegistry,
+                  const CapacityAwareRuntimeSummary& capacityAwareSummary,
                   const std::vector<IslDirectedLink>& directedLinks,
                   const std::vector<IslQueueDropEvent>& queueDropEvents,
                   const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
@@ -108,7 +110,8 @@ private:
   std::vector<TransferFlowMetadata> m_transferFlows;
   std::vector<TransferSummaryRecord> m_transferSummaries;
   std::vector<EcmpRouteDecisionEvent> m_routeEvents;
-  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  Ptr<FlowRouteRegistry> m_flowRouteRegistry;
+  CapacityAwareRuntimeSummary m_capacityAwareSummary;
   const std::vector<IslDirectedLink>& m_directedLinks;
   const std::vector<IslQueueDropEvent>& m_queueDropEvents;
   const std::vector<UdpSocketDropEvent>& m_udpSocketDropEvents;

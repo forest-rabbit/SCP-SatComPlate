@@ -17,7 +17,7 @@
 #ifndef SATCOMPUTE_ECMP_ROUTE_RECORDER_H
 #define SATCOMPUTE_ECMP_ROUTE_RECORDER_H
 
-#include "../../routing/satcompute-ipv4-global-routing.h"
+#include "../../routing/ns3/satcompute-ipv4-global-routing.h"
 #include "../../topology/satellite-topology.h"
 
 #include <vector>

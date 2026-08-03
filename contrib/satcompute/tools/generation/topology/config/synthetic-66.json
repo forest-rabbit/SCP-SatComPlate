@@ -1,0 +1,13 @@
+{
+  "schema_version": "0.1",
+  "constellation_name": "synthetic-66",
+  "constellation_pattern": "walker-star",
+  "num_orbits": 6,
+  "satellites_per_orbit": 11,
+  "altitude_km": 780.0,
+  "inclination_deg": 86.4,
+  "phase_diff": true,
+  "isl_candidate_strategy": "plus-grid",
+  "seam_enabled": false,
+  "max_isl_distance_m": 6174589
+}

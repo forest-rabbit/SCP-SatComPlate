@@ -1,10 +1,13 @@
 #ifndef SATCOMPUTE_SATELLITE_TOPOLOGY_H
 #define SATCOMPUTE_SATELLITE_TOPOLOGY_H
 
-#include "../routing/size-aware-flow-registry.h"
+#include "../routing/state/flow-route-registry.h"
+#include "../routing/algorithm/capacity-aware-path-view.h"
+#include "../routing/common/routing-mode.h"
 #include "link/satellite-link-state.h"
 #include "snapshot/snapshot-types.h"
 
+#include "ns3/callback.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/node-container.h"
 
@@ -28,12 +31,15 @@ struct TopologyConfig
   bool logEnabled;
 };
 
-class SatelliteTopology
+class SatelliteTopology : public CapacityAwarePathView
 {
 public:
   explicit SatelliteTopology(const TopologyConfig& config);
 
   void Initialize();
+  void RegisterRouteUpdateCallback(Callback<void> callback);
+  void InvalidateFlowRouteDecisionCache(
+    const EcmpFlowKey& flowKey) const;
 
   uint32_t GetNodeCount() const;
   Ptr<Node> GetNode(uint32_t index) const;
@@ -43,9 +49,23 @@ public:
   uint32_t GetSatelliteIdByNodeIndex(uint32_t index) const;
   Ptr<Node> GetNodeBySatelliteId(uint32_t satelliteId) const;
   Ipv4Address GetServiceAddressBySatelliteId(uint32_t satelliteId) const;
+  std::vector<uint32_t> GetEcmpCandidateSatelliteIds(
+    uint32_t sourceSatelliteId,
+    uint32_t destinationSatelliteId) const;
+  std::vector<EcmpRouteCandidate> GetEcmpRouteCandidates(
+    uint32_t sourceSatelliteId,
+    uint32_t destinationSatelliteId) const override;
+  uint32_t GetNextHopSatelliteId(
+    uint32_t sourceSatelliteId,
+    uint32_t outputInterface) const override;
+  uint64_t GetIslDataRateBps(uint32_t sourceSatelliteId,
+                             uint32_t outputInterface) const override;
+  uint64_t GetRouteEpoch(uint32_t satelliteId) const;
+  uint64_t GetEcmpHashSeed() const;
+  bool IsCapacityAwareRouting() const;
   const std::vector<IslDirectedLink>& GetIslDirectedLinks() const;
   const std::vector<IslQueueDropEvent>& GetIslQueueDropEvents() const;
-  Ptr<SizeAwareFlowRegistry> GetSizeAwareFlowRegistry() const;
+  Ptr<FlowRouteRegistry> GetFlowRouteRegistry() const;
 
 private:
   void CreateSatelliteNodes(const std::vector<uint32_t>& satelliteIds);
@@ -59,12 +79,14 @@ private:
                    const TopologyLinkUpdateSummary& summary) const;
 
   TopologyConfig m_config;
+  RoutingMode m_routingMode;
   NodeContainer m_nodes;
   std::vector<uint32_t> m_satelliteIds;
   std::vector<Ipv4Address> m_serviceAddresses;
   std::map<uint32_t, uint32_t> m_nodeIndexes;
   std::unique_ptr<SatelliteLinkState> m_linkState;
-  Ptr<SizeAwareFlowRegistry> m_sizeAwareFlowRegistry;
+  Ptr<FlowRouteRegistry> m_flowRouteRegistry;
+  std::vector<Callback<void>> m_routeUpdateCallbacks;
 };
 
 } // namespace ns3

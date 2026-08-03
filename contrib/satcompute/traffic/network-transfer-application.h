@@ -41,11 +41,15 @@ public:
   void Configure(const NetworkTransfer& transfer);
   void SetSendCompleteCallback(
     Callback<void, uint64_t, int64_t> sendCompleteCallback);
+  void SetPacingRateBps(uint64_t pacingRateBps);
   void StartTransferNow();
+  void PauseForRouteUpdate();
+  void ResumeAfterRouteUpdate(uint64_t pacingRateBps);
 
   uint64_t GetTransferId() const;
   bool HasStarted() const;
   bool HasFinishedSending() const;
+  bool IsPausedForRouteUpdate() const;
   uint64_t GetSentPacketCount() const;
   uint64_t GetSentBytes() const;
   int64_t GetLastSendTimeNs() const;
@@ -63,10 +67,12 @@ private:
   uint64_t m_remainingBytes;
   uint64_t m_sentPacketCount;
   uint64_t m_sentBytes;
+  uint64_t m_pacingRateBps;
   int64_t m_lastSendTimeNs;
   bool m_isRunning;
   bool m_hasStarted;
   bool m_hasFinishedSending;
+  bool m_isPausedForRouteUpdate;
   Callback<void, uint64_t, int64_t> m_sendCompleteCallback;
 };
 

@@ -1,0 +1,7 @@
+{
+  "task_count": 1,
+  "total_input_bytes": 4096,
+  "total_output_bytes": 2050,
+  "total_compute_work_units": 1000000,
+  "task_trace_sha256": "a7397cc52eaa0c2442cb429025bfe85fb1730d92eeffc14a3deaedf914f381f1"
+}

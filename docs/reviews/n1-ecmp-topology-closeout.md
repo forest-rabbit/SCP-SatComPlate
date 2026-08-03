@@ -29,9 +29,9 @@ Date: 2026-07-28
 和 `global-hash-per-flow` ECMP：
 
 ```text
-topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static
+topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static
 simulationDuration=3
-transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json
+transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-static-transfers.json
 transferChunkMode=fixed
 transferPayloadBytes=1024
 islMtuBytes=1500

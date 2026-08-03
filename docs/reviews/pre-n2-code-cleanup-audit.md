@@ -166,7 +166,7 @@ core flow metrics；只移动写出 `flow-drop-reasons.csv` 的函数。
 | `tools/check-size-aware-replay.py` | N1 replay checker | `MIGRATE` | `tools/validation/check-size-aware-replay.py` |
 | `tools/check-flow-drop-reasons.py` | FqCoDel/FlowMonitor checker，CI 使用 | `MIGRATE` | `tools/validation/check-flow-drop-reasons.py` |
 | `tools/preflight-task-workload.py` | 输入与派生包/packet-hop 预检，CI 使用 | `MIGRATE` | `tools/validation/preflight-task-workload.py` |
-| `tools/generate-stress-topology.py` | 生成 JSON 压力 topology | `MIGRATE` | `tools/generation/generate-stress-topology.py` |
+| 旧压力 topology 包装器（已删除） | 旧 JSON 压力 topology 包装器 | `DELETE` | 已由统一 scenario generator 的 fixed bandwidth 配置取代 |
 | `tools/generate-task-workload.py` | 生成确定性 TaskTrace JSON | `MIGRATE` | `tools/generation/generate-task-workload.py` |
 | `tools/generate-transfer-workload.py` | 生成确定性 transfer JSON | `MIGRATE` | `tools/generation/generate-transfer-workload.py` |
 

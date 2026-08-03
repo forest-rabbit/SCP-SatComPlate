@@ -1,0 +1,1 @@
+"""Fast SatCompute smoke drivers."""

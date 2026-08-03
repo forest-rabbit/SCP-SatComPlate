@@ -24,6 +24,7 @@
 #include "core/transfer-metrics.h"
 #include "diagnostics/failure-diagnostics.h"
 #include "diagnostics/flow-drop-reason-diagnostics.h"
+#include "routing/capacity-aware-metrics.h"
 #include "routing/ecmp-metrics.h"
 #include "routing/size-aware-metrics.h"
 #include "../task/task-coordinator.h"
@@ -76,10 +77,16 @@ PrintRuntimeSummary(
   bool taskMode = taskCoordinator != nullptr;
   bool taskRunComplete =
     !taskMode || tasks.completedTaskCount == tasks.taskCount;
+  bool capacityTransferRunComplete =
+    runMetadata.routingMode != "global-capacity-aware-hrw"
+    || taskMode
+    || transferSummaries.empty()
+    || completedTransfers == transferSummaries.size();
+  bool runComplete = taskRunComplete && capacityTransferRunComplete;
 
   std::cout << "[SUMMARY]" << std::endl
             << "  run status          : "
-            << (taskRunComplete ? "COMPLETE" : "PARTIAL") << std::endl
+            << (runComplete ? "COMPLETE" : "PARTIAL") << std::endl
             << "  tasks completed     : ";
   if (taskMode)
     {
@@ -150,7 +157,8 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
                                  const std::vector<TransferFlowMetadata>& transferFlows,
                                  const std::vector<TransferSummaryRecord>& transferSummaries,
                                  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
-                                 Ptr<SizeAwareFlowRegistry> sizeAwareRegistry,
+                                 Ptr<FlowRouteRegistry> flowRouteRegistry,
+                                 const CapacityAwareRuntimeSummary& capacityAwareSummary,
                                  const std::vector<IslDirectedLink>& directedLinks,
                                  const std::vector<IslQueueDropEvent>& queueDropEvents,
                                  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
@@ -164,7 +172,8 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
     m_transferFlows(transferFlows),
     m_transferSummaries(transferSummaries),
     m_routeEvents(routeEvents),
-    m_sizeAwareRegistry(sizeAwareRegistry),
+    m_flowRouteRegistry(flowRouteRegistry),
+    m_capacityAwareSummary(capacityAwareSummary),
     m_directedLinks(directedLinks),
     m_queueDropEvents(queueDropEvents),
     m_udpSocketDropEvents(udpSocketDropEvents),
@@ -180,6 +189,12 @@ MetricsRecorder::Record()
 
   bool taskRunComplete =
     m_taskCoordinator == nullptr || m_taskCoordinator->IsComplete();
+  bool capacityTransferRunComplete =
+    m_runMetadata.routingMode != "global-capacity-aware-hrw"
+    || m_taskCoordinator != nullptr
+    || m_transferSummaries.empty()
+    || GetCompletedTransferCount(m_transferSummaries)
+         == m_transferSummaries.size();
   bool diagnosticsEnabled =
     m_taskCoordinator != nullptr
     && m_runMetadata.diagnosticMode == "failure";
@@ -195,7 +210,7 @@ MetricsRecorder::Record()
   WriteNetworkFlowDetails(m_monitor,
                           m_transferFlows,
                           m_outputDirectory,
-                          taskRunComplete);
+                          taskRunComplete && capacityTransferRunComplete);
   if (writeFlowDropReasons)
     {
       WriteFlowDropReasons(m_monitor,
@@ -203,15 +218,25 @@ MetricsRecorder::Record()
                            m_outputDirectory);
     }
   WriteEcmpRouteEvents(m_routeEvents, m_outputDirectory);
-  if (m_runMetadata.routingMode == "global-size-aware-hrw")
+  if (m_runMetadata.routingMode == "global-size-aware-hrw"
+      || m_runMetadata.routingMode == "global-capacity-aware-hrw")
     {
-      WriteSizeAwareMetrics(m_sizeAwareRegistry, m_outputDirectory);
+      WriteSizeAwareMetrics(m_flowRouteRegistry, m_outputDirectory);
     }
   else
     {
-      NS_ABORT_MSG_IF(m_sizeAwareRegistry != nullptr,
+      NS_ABORT_MSG_IF(m_flowRouteRegistry != nullptr,
                       "非 size-aware 运行不应持有 flow registry");
       RemoveSizeAwareMetrics(m_outputDirectory);
+    }
+  if (m_runMetadata.routingMode == "global-capacity-aware-hrw")
+    {
+      WriteCapacityAwareMetrics(m_capacityAwareSummary,
+                                m_outputDirectory);
+    }
+  else
+    {
+      RemoveCapacityAwareMetrics(m_outputDirectory);
     }
   WriteTransferSummaries(m_transferSummaries, m_outputDirectory);
   if (m_taskCoordinator != nullptr)

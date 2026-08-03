@@ -20,6 +20,14 @@
 类型、单对 JSON 文件读取器和快照目录调度器；`topology/link/` 保存运行期 ISL
 设备、带宽、时延、MTU、队列、启停状态和设备队列丢包事件。
 
+`routing/common/` 保存路由模式、五元组、候选和 FNV 值类型；
+`routing/algorithm/` 分别实现 global-first、Hash、HRW、size-aware HRW 与
+capacity-aware HRW，算法层不操作 sender、socket、Simulator 或可变拓扑对象；
+`routing/state/` 分别维护通用 flow assignment、size-aware 声明字节账本和
+capacity-aware 有向链路速率账本；`routing/ns3/` 只负责读取 ns-3 路由候选、
+解析五元组、构造 `Ipv4Route`、维护 route epoch/cache 及在途包 transition
+fallback。发送暂停、恢复、pacing 和 pending admission 仍由 `traffic/` 编排。
+
 任务、流量和拓扑 JSON 共用
 `third-party/nlohmann/json.hpp` 中未经修改的 nlohmann JSON 3.11.3 单头文件
 （MIT）。它是运行时依赖，不属于 `tools/`；`tools/` 只保存外部 CI、输入生成器、
@@ -34,8 +42,8 @@ source .venv/bin/activate
 ./waf --run-no-build satcompute
 ```
 
-`input/topology/tests/`、`input/topology/resources/test/`、
-`input/traffic/test/`、`input/traffic/task/test/` 和 `tools/`
+`tests/fixtures/topology/snapshots/`、`tests/fixtures/topology/compute-profiles/`、
+`tests/fixtures/traffic/transfers/`、`tests/fixtures/traffic/tasks/` 和 `tools/`
 中的检查器是外部端到端验证资产，不进入 `ns3-satcompute` 模块编译。需要运行
 ns-3 上游单元测试时再显式启用 `--enable-tests`；日常平台构建不启用
 examples 或 tests。
@@ -55,34 +63,37 @@ transferLogMode          = summary
 taskLogMode              = summary
 taskCompletionPolicy     = strict
 diagnosticMode           = off
-routingMode              = global-hash-per-flow
+routingMode              = global-capacity-aware-hrw
 ecmpHashSeed             = 1
 outputDir                = /tmp/satcompute-output
 ```
 
 ## CI 分级
 
-Pull request 只运行 `SatCompute Fast Smoke`，覆盖核心路由、任务和失败诊断
-合同。`main` push 与手动触发运行 `SatCompute Full Regression`；Full 先执行
-全部 Fast 脚本，再补充规模、顺序、generator 和 preflight 边界。
+Pull request 只运行 `SatCompute Fast Smoke`，覆盖核心路由、容量感知瓶颈、
+任务和失败诊断合同。`main` push 与手动触发运行
+`SatCompute Full Regression`；Full 先执行全部 Fast 脚本，再补充规模、顺序、
+generator 和 preflight 边界。
 
 完成上述 configure/build 后，可在本地直接运行 Fast：
 
 ```bash
-contrib/satcompute/tools/ci/run-routing-smoke.sh
-contrib/satcompute/tools/ci/run-task-smoke.sh
-contrib/satcompute/tools/ci/run-diagnostics-smoke.sh
+contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
+contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
+contrib/satcompute/tests/integration/smoke/run-task-smoke.sh
+contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
 ```
 
 完整回归必须在同一工作区按顺序继续运行：
 
 ```bash
-contrib/satcompute/tools/ci/run-full-routing-regression.sh
-contrib/satcompute/tools/ci/run-full-workload-regression.sh
+contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
+contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
 ```
 
-前三级脚本保留 topology-only、Hash/HRW/size-aware、单任务、FCFS、
-strict/report、FqCoDel、设备队列和 UDP socket 合同。后两级保留 canonical
+前四级脚本保留 topology-only、Hash/HRW/size-aware、capacity-aware 瓶颈与动态重准入、
+单任务、FCFS、strict/report、FqCoDel、设备队列和 UDP socket 合同。后两级
+保留 canonical
 ordering、5000-transfer、mixed-large、TaskTrace/ComputeProfile 换序、
 generator seed/tail、preflight 成功/失败/warning 及全部扩展检查器。测试仅按
 频率分级，没有从回归集合中删除。
@@ -108,12 +119,14 @@ generator seed/tail、preflight 成功/失败/warning 及全部扩展检查器�
 - `--diagnosticMode`：`off` 只保留基础指标；`failure` 在任务失败时额外
   采集并写出未完成对象、ISL 队列 Drop 和 ECMP 链路集中度。默认 `off`。
 - `--routingMode`：`global-first`、`global-hash-per-flow`、
-  `global-hrw-per-flow` 或 `global-size-aware-hrw`，默认保留 N1 基线
-  `global-hash-per-flow`。
-- `--ecmpHashSeed`：三种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
+  `global-hrw-per-flow`、`global-size-aware-hrw` 或
+  `global-capacity-aware-hrw`，默认使用当前 N2 基线
+  `global-capacity-aware-hrw`。
+- `--ecmpHashSeed`：四种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
   前缀。
 - `--outputDir`：结构化指标目录，默认 `/tmp/satcompute-output`。正式实验应
-  显式填写仓库外的持久绝对路径。
+  显式填写仓库外的持久绝对路径；`contrib/satcompute/output/` 只用于暴露
+  误写结果，不是默认实验目录。
 
 `computeProfile` 与 `taskTrace` 必须同时指定，任务模式不能同时指定
 `transferTrace`。NetworkTransfer 与任务模式都使用 UDP；三项输入均为空时
@@ -230,9 +243,9 @@ ceil(compute_work_units × 1,000,000,000
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
-  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+  --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --simulationDuration=10 \
   --taskLogMode=verbose \
   --transferChunkMode=fixed \
@@ -256,7 +269,7 @@ ECMP、FCFS、异构算力和两类 JSON 数组换序确定性。
 `172.16.0.0/12` 的 `/32`，ISL 来自 `10.0.0.0/8` 的 `/30`。JSON 中
 `links[]` 的排列以及 `node1_id/node2_id` 的端点方向都不影响地址分配。
 
-`global-first` 完整使用原生 `Ipv4GlobalRouting` 首条路由。三种逐流模式都只
+`global-first` 完整使用原生 `Ipv4GlobalRouting` 首条路由。四种逐流模式都只
 枚举公开可读的 exact service `/32` host routes，并按 gateway、output
 interface、destination 和 mask 排序去重。
 
@@ -308,9 +321,58 @@ mask 仍参与 HRW 分数及 sticky 身份，但不拆分链路负载。拓扑 e
 FqCoDel、DropTail、实时利用率或时延，也不实现周期采样、中途主动迁移、速率
 控制、重传或全局流量工程。
 
+`global-capacity-aware-hrw` 是当前默认模式，也是 size-aware 之后的当前迭代：
+它从节点级负载选择进一步扩展到完整路径准入和发送速率控制。它仍然只使用 ns-3
+全局路由给出的等价最短路径，不生成更长路径，也不是 KSP：
+
+```text
+residual(link) = configured_data_rate(link) - active_admitted_rate(link)
+path_rate      = min(residual(link) for link in path)
+```
+
+每条 flow 到达时，在当前 ECMP 有向图中选择 `path_rate` 最大的完整路径；相同
+剩余瓶颈带宽时按逐节点 HRW 顺序确定结果。选中的逐跳 candidate 会在 flow
+期间固定，发送端按 `path_rate` 计算包含 UDP/IP/PPP 头的逐包间隔。如果所有
+等价最短路径的剩余带宽均为零，该 flow 保留原始 arrival time，但延后首包
+注入；活动 flow 完整到达目的节点并释放路径容量后，按到达顺序重试等待流。
+因此互不共享有向 ISL 的 flow 仍可并行，共享低速瓶颈的 flow 不会继续各自按
+首跳线速叠加注入。
+
+每次完整快照应用并重算 ns-3 全局路由后，传输控制器检查全部活动路径。
+路径仍有效且方向总预留不超过新带宽时保持 sticky，不因其他路径更空闲而
+主动迁移。路径失效时执行：
+
+```text
+ACTIVE(old path)
+  -> pause unsent packets
+  -> release every old-path assignment and rate reservation
+  -> re-admit on the current ECMP graph
+  -> ACTIVE(new path), or WAITING_ADMISSION when unavailable
+```
+
+失效活动 flow 优先于新到达 flow，并按原 arrival time 和 transfer ID 确定性
+重试。无路或无剩余容量时等待下一次路由更新或其他 flow 释放容量，不会
+触发 `candidate-invalid` 中止。已经离开源端、后续到达旧路径节点的在途包可以
+使用确定性 `CAPACITY_AWARE_TRANSITION_FALLBACK` 继续转发，但不为它创建局部
+路径预留。
+
+当前迭代不执行非最短绕行，也没有 ACK/NACK 或重传。因此它保证动态路由
+状态和容量账本一致、未发数据可暂停和恢复，不承诺物理链路关闭时已在途
+UDP 包在任意时序下都不丢失。可靠恢复和节点故障属于后续阶段。
+
 没有 exact host route 或不能解析合法五元组时回退原生行为。项目不复制
 GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 ECMP。
 当前验证范围是未发生 IPv4 分片的 UDP NetworkTransfer。
+
+动态竞争定向回归使用 5 颗卫星和三条并行最短路径：1 秒时关闭当前
+最快路径的下游 ISL，4 秒时恢复，并让一个包在切换时保持在途。
+
+```bash
+bash contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
+```
+
+检查器要求整两跳旧路径在 epoch 1 同时释放，epoch 2 恢复后重新准入，新竞争
+flow 继续等待容量，且两次重放均完成 4/4 transfers、50/50 包、零丢包。
 
 ## Diamond 验证
 
@@ -318,9 +380,9 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -330,9 +392,9 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
   --outputDir=/tmp/satcompute-ecmp-static-a"
 
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-static-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -346,9 +408,9 @@ GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 E
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-dynamic \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic \
   --simulationDuration=6 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1024 \
   --islMtuBytes=1500 \
@@ -371,9 +433,9 @@ HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序�
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-hrw-dynamic \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
   --simulationDuration=7 \
-  --transferTrace=contrib/satcompute/input/traffic/test/diamond-4-hrw-dynamic-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-hrw-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=64000 \
   --islMtuBytes=65535 \
@@ -408,7 +470,8 @@ python3 contrib/satcompute/tools/validation/check-size-aware-output.py \
 
 检查器独立重算 HRW 排名，逐事件重放物理下一跳预留账本，并检查最终
 `active=0`、`assignments=0`、`reserved=0`。66 星中型本地场景使用
-`task/test/size-aware-medium-60.json`：60 个集中到达任务、3 GB 输入，其中
+`tests/fixtures/traffic/tasks/size-aware-medium-60.json`：60 个集中到达任务、
+3 GB 输入，其中
 17 个输入大于 64 MiB；预估 243,028 个 UDP 包，不进入每次 CI。可在上述命令
 追加 `--medium-hrw=<dir> --medium-size=<dir>` 验证冻结的对照结果。
 
@@ -453,9 +516,9 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=45 \
-  --transferTrace=contrib/satcompute/input/traffic/test/mixed-large-ci.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/mixed-large-ci.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1500000 \
@@ -465,7 +528,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 
 python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --large=/tmp/satcompute-mixed-large-ci \
-  --large-input=contrib/satcompute/input/traffic/test/mixed-large-ci.json
+  --large-input=contrib/satcompute/tests/fixtures/traffic/transfers/mixed-large-ci.json
 ```
 
 `mixed-large-local.json` 是不放入 CI 的完整压力输入，含 10 条不同大流量，
@@ -473,7 +536,7 @@ python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=340 \
   --transferTrace=contrib/satcompute/input/traffic/workload/mixed-large-local.json \
   --transferChunkMode=size-aware \
@@ -499,10 +562,10 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/diamond-4-static \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --simulationDuration=2 \
-  --computeProfile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
+  --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --transferChunkMode=size-aware \
   --islMtuBytes=65535 \
   --islQueueBytes=1000 \
@@ -516,9 +579,9 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 
 # 上一条命令的预期退出码为 1。
 python3 contrib/satcompute/tools/validation/check-task-output.py failure \
-  --topology-dir=contrib/satcompute/input/topology/tests/diamond-4-static \
-  --compute-profile=contrib/satcompute/input/topology/resources/test/diamond-4-compute-profile.json \
-  --task-trace=contrib/satcompute/input/traffic/task/test/task-single-ecmp.json \
+  --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+  --compute-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
+  --task-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --output-dir=/tmp/satcompute-task-failure \
   --require-queue-drop
 ```
@@ -561,9 +624,9 @@ python3 contrib/satcompute/tools/validation/check-task-output.py stress \
 
 ```bash
 ./waf --run-no-build "satcompute \
-  --topologyDir=contrib/satcompute/input/topology/tests/fqcodel-bottleneck \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/fqcodel-bottleneck \
   --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/input/traffic/test/fqcodel-bottleneck-transfers.json \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/fqcodel-bottleneck-transfers.json \
   --diagnosticMode=failure \
   --transferChunkMode=fixed \
   --transferPayloadBytes=1400 \
@@ -592,11 +655,15 @@ python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
 - `network-flow-details.csv`：五元组、transfer ID、应用 payload 与逐流 IP 指标；
 - `ecmp-route-events.csv`：每个 epoch、外部卫星 ID 和五元组的首次选择；
   `hash_value` 在旧模式中是 five-tuple hash，在 HRW 模式中是获胜候选分数；
-- `size-aware-reservation-events.csv`：仅在 `global-size-aware-hrw` 中写出
-  assignment、sticky reuse、候选失效释放和 sender-finish 释放，以及物理
-  下一跳和全局预留的前后值；
-- `size-aware-summary.json`：仅在 `global-size-aware-hrw` 中汇总登记/活动
-  flow、结束时 assignment、最终/峰值总预留及峰值物理下一跳预留；
+- `size-aware-reservation-events.csv`：在 `global-size-aware-hrw` 和
+  `global-capacity-aware-hrw` 中写出 assignment、sticky reuse、候选或整路径
+  失效释放、sender-finish/receiver-complete 释放，以及物理下一跳和全局声明字节
+  预留；
+- `size-aware-summary.json`：在上述两种模式中汇总登记/活动 flow、结束时
+  assignment、最终/峰值总预留及不同释放原因；
+- `capacity-aware-summary.json`：只在 `global-capacity-aware-hrw` 中汇总
+  结束时活动完整路径数、仍有预留的有向链路数、总预留速率及等待准入数；
+  完整结束场景的四项均应为零；
 - `transfer-summary.csv`：每条逻辑 transfer 的声明大小、分包、收发和完成时间；
 - `task-events.csv`：每个完整任务恰好五条状态转换；
 - `task-summary.csv`：每个任务的输入、排队、计算、结果和端到端时间；

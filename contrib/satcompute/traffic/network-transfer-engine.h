@@ -18,6 +18,9 @@
 #define SATCOMPUTE_NETWORK_TRANSFER_ENGINE_H
 
 #include "../metrics/metrics.h"
+#include "../routing/algorithm/capacity-aware-hrw-policy.h"
+#include "../routing/algorithm/path-policy.h"
+#include "../routing/state/capacity-reservation-state.h"
 #include "../topology/satellite-topology.h"
 #include "network-transfer-application.h"
 #include "network-transfer-config.h"
@@ -29,6 +32,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -42,7 +46,7 @@ public:
   NetworkTransferEngine();
   ~NetworkTransferEngine() override;
 
-  void Configure(const SatelliteTopology& topology,
+  void Configure(SatelliteTopology& topology,
                  const std::string& chunkMode,
                  uint32_t fixedPayloadBytes,
                  uint16_t islMtuBytes,
@@ -62,6 +66,7 @@ public:
   std::vector<TransferFlowMetadata> CollectFlowMetadata() const;
   std::vector<TransferSummaryRecord> CollectSummaries() const;
   std::vector<UdpSocketDropEvent> CollectUdpSocketDropEvents() const;
+  CapacityAwareRuntimeSummary CollectCapacityAwareSummary() const;
 
 private:
   enum TransferState
@@ -75,6 +80,9 @@ private:
   EcmpFlowKey GetFlowKey(uint32_t index) const;
   const char* GetTransferStateName(uint32_t index) const;
   void ActivateTransfer(uint64_t transferId);
+  bool TryActivateCapacityAwareTransfer(uint64_t transferId);
+  void TryActivatePendingCapacityAwareTransfers();
+  void HandleTopologyRouteUpdate();
   void HandleSenderComplete(uint64_t transferId, int64_t sendTimeNs);
   void HandleTransferComplete(uint64_t transferId, int64_t completionTimeNs);
 
@@ -87,13 +95,17 @@ private:
   int64_t m_simulationDurationNs;
   bool m_configured;
   bool m_registered;
-  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  bool m_capacityAwareRouting;
+  Ptr<FlowRouteRegistry> m_flowRouteRegistry;
+  std::unique_ptr<PathPolicy> m_capacityPathPolicy;
+  std::unique_ptr<CapacityReservationState> m_capacityReservationState;
   std::vector<NetworkTransfer> m_plans;
   std::vector<Ptr<NetworkTransferApplication>> m_senders;
   std::vector<Ptr<NetworkTransferReceiver>> m_receivers;
   std::vector<Ptr<NetworkTransferReceiver>> m_transferReceivers;
   std::vector<TransferState> m_states;
   std::vector<Callback<void, uint64_t, int64_t>> m_completionCallbacks;
+  std::vector<uint64_t> m_pendingCapacityTransfers;
   std::map<uint64_t, uint32_t> m_planIndexes;
 };
 
