@@ -44,12 +44,12 @@ OutputPath(const std::string& directory, const std::string& filename)
 } // namespace
 
 void
-WriteSizeAwareMetrics(Ptr<SizeAwareFlowRegistry> registry,
+WriteSizeAwareMetrics(Ptr<FlowRouteRegistry> registry,
                       const std::string& outputDirectory)
 {
   NS_ABORT_MSG_IF(registry == nullptr,
                   "size-aware metrics 缺少 flow registry");
-  const std::vector<SizeAwareReservationEvent>& events =
+  const std::vector<FlowRouteReservationEvent>& events =
     registry->GetEvents();
   std::ofstream eventOutput(
     OutputPath(outputDirectory, "size-aware-reservation-events.csv"),

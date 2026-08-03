@@ -22,7 +22,7 @@
 #include "common/ecmp-route-candidate.h"
 #include "common/routing-mode.h"
 #include "routing-policy-factory.h"
-#include "size-aware-flow-registry.h"
+#include "state/flow-route-registry.h"
 
 #include "ns3/ipv4-global-routing.h"
 #include "ns3/traced-callback.h"
@@ -62,7 +62,7 @@ public:
 
   void Configure(RoutingMode selectionMode,
                  uint64_t hashSeed,
-                 Ptr<SizeAwareFlowRegistry> sizeAwareRegistry);
+                 Ptr<FlowRouteRegistry> flowRouteRegistry);
   void SetSatelliteId(uint32_t satelliteId);
   void AdvanceRouteEpoch();
   void InvalidateDecisionCache(const EcmpFlowKey& flowKey);
@@ -117,7 +117,7 @@ private:
 
   RoutingMode m_selectionMode;
   uint64_t m_hashSeed;
-  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  Ptr<FlowRouteRegistry> m_flowRouteRegistry;
   std::unique_ptr<NextHopPolicy> m_nextHopPolicy;
   bool m_hasSatelliteId;
   uint32_t m_satelliteId;

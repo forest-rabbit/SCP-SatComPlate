@@ -66,19 +66,22 @@ void
 SatComputeIpv4GlobalRouting::Configure(
   RoutingMode selectionMode,
   uint64_t hashSeed,
-  Ptr<SizeAwareFlowRegistry> sizeAwareRegistry)
+  Ptr<FlowRouteRegistry> flowRouteRegistry)
 {
   NS_ABORT_MSG_IF((selectionMode == RoutingMode::SIZE_AWARE_HRW
                    || selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
-                    && sizeAwareRegistry == nullptr,
+                    && flowRouteRegistry == nullptr,
                   "reservation-aware HRW routing 缺少 flow registry");
   m_selectionMode = selectionMode;
   m_hashSeed = hashSeed;
-  m_sizeAwareRegistry = sizeAwareRegistry;
+  m_flowRouteRegistry = flowRouteRegistry;
   m_nextHopPolicy =
     RoutingPolicyFactory::CreateNextHopPolicy(
       selectionMode,
-      PeekPointer(sizeAwareRegistry));
+      PeekPointer(flowRouteRegistry),
+      flowRouteRegistry == nullptr
+        ? nullptr
+        : &flowRouteRegistry->GetSizeAwareLoadState());
 }
 
 void
@@ -181,7 +184,7 @@ SatComputeIpv4GlobalRouting::DoDispose()
   m_decisionCache.clear();
   m_recordedDecisionKeys.clear();
   m_nextHopPolicy.reset();
-  m_sizeAwareRegistry = nullptr;
+  m_flowRouteRegistry = nullptr;
   m_ipv4 = nullptr;
   Ipv4GlobalRouting::DoDispose();
 }
@@ -312,14 +315,14 @@ SatComputeIpv4GlobalRouting::SelectCapacityAwareForwardingRoute(
   std::string& selectionReason)
 {
   NS_ABORT_MSG_IF(candidates.empty()
-                    || m_sizeAwareRegistry == nullptr
-                    || !m_sizeAwareRegistry->IsSenderActive(flowKey),
+                    || m_flowRouteRegistry == nullptr
+                    || !m_flowRouteRegistry->IsSenderActive(flowKey),
                   "capacity-aware 转发要求活动的已登记 flow 和非空候选");
   NS_ABORT_MSG_IF(m_selectionMode != RoutingMode::CAPACITY_AWARE_HRW,
                   "capacity-aware 转发选择用于错误 routing mode");
 
-  SizeAwareFlowAssignment sticky;
-  if (m_sizeAwareRegistry->FindAssignment(m_satelliteId,
+  FlowRouteAssignment sticky;
+  if (m_flowRouteRegistry->FindAssignment(m_satelliteId,
                                           flowKey,
                                           sticky))
     {
@@ -329,7 +332,7 @@ SatComputeIpv4GlobalRouting::SelectCapacityAwareForwardingRoute(
         {
           uint32_t selectedIndex =
             static_cast<uint32_t>(selected - candidates.begin());
-          m_sizeAwareRegistry->ValidateAssignment(m_satelliteId,
+          m_flowRouteRegistry->ValidateAssignment(m_satelliteId,
                                                   flowKey,
                                                   m_routeEpoch,
                                                   "CAPACITY_AWARE_STICKY");
@@ -420,14 +423,14 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
       if (m_selectionMode == RoutingMode::SIZE_AWARE_HRW
           && outputInterface == nullptr
           && hasFiveTuple
-          && m_sizeAwareRegistry->IsSenderActive(flowKey))
+          && m_flowRouteRegistry->IsSenderActive(flowKey))
         {
-          SizeAwareFlowAssignment assignment;
-          if (m_sizeAwareRegistry->FindAssignment(m_satelliteId,
+          FlowRouteAssignment assignment;
+          if (m_flowRouteRegistry->FindAssignment(m_satelliteId,
                                                   flowKey,
                                                   assignment))
             {
-              m_sizeAwareRegistry->ReleaseInvalidAssignment(m_satelliteId,
+              m_flowRouteRegistry->ReleaseInvalidAssignment(m_satelliteId,
                                                             flowKey,
                                                             m_routeEpoch);
             }
@@ -457,7 +460,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
     || m_selectionMode == RoutingMode::HRW_PER_FLOW
     || (m_selectionMode == RoutingMode::SIZE_AWARE_HRW
         && outputInterface == nullptr
-        && m_sizeAwareRegistry->IsSenderActive(flowKey));
+        && m_flowRouteRegistry->IsSenderActive(flowKey));
   if (useNextHopPolicy)
     {
       NS_ABORT_MSG_IF(m_nextHopPolicy == nullptr,
@@ -486,7 +489,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
       };
       if (m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW
           && outputInterface == nullptr
-          && m_sizeAwareRegistry->IsSenderActive(flowKey))
+          && m_flowRouteRegistry->IsSenderActive(flowKey))
         {
           selection =
             SelectCapacityAwareForwardingRoute(flowKey,
@@ -497,7 +500,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
         {
           selection =
             SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
-          if (m_sizeAwareRegistry->IsRegistered(flowKey))
+          if (m_flowRouteRegistry->IsRegistered(flowKey))
             {
               selectionReason = "HRW_FALLBACK_INACTIVE";
             }

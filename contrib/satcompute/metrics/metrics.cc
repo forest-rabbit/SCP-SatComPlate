@@ -157,7 +157,7 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
                                  const std::vector<TransferFlowMetadata>& transferFlows,
                                  const std::vector<TransferSummaryRecord>& transferSummaries,
                                  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
-                                 Ptr<SizeAwareFlowRegistry> sizeAwareRegistry,
+                                 Ptr<FlowRouteRegistry> flowRouteRegistry,
                                  const CapacityAwareRuntimeSummary& capacityAwareSummary,
                                  const std::vector<IslDirectedLink>& directedLinks,
                                  const std::vector<IslQueueDropEvent>& queueDropEvents,
@@ -172,7 +172,7 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
     m_transferFlows(transferFlows),
     m_transferSummaries(transferSummaries),
     m_routeEvents(routeEvents),
-    m_sizeAwareRegistry(sizeAwareRegistry),
+    m_flowRouteRegistry(flowRouteRegistry),
     m_capacityAwareSummary(capacityAwareSummary),
     m_directedLinks(directedLinks),
     m_queueDropEvents(queueDropEvents),
@@ -221,11 +221,11 @@ MetricsRecorder::Record()
   if (m_runMetadata.routingMode == "global-size-aware-hrw"
       || m_runMetadata.routingMode == "global-capacity-aware-hrw")
     {
-      WriteSizeAwareMetrics(m_sizeAwareRegistry, m_outputDirectory);
+      WriteSizeAwareMetrics(m_flowRouteRegistry, m_outputDirectory);
     }
   else
     {
-      NS_ABORT_MSG_IF(m_sizeAwareRegistry != nullptr,
+      NS_ABORT_MSG_IF(m_flowRouteRegistry != nullptr,
                       "非 size-aware 运行不应持有 flow registry");
       RemoveSizeAwareMetrics(m_outputDirectory);
     }

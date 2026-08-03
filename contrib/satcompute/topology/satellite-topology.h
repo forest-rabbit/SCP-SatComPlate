@@ -1,7 +1,7 @@
 #ifndef SATCOMPUTE_SATELLITE_TOPOLOGY_H
 #define SATCOMPUTE_SATELLITE_TOPOLOGY_H
 
-#include "../routing/size-aware-flow-registry.h"
+#include "../routing/state/flow-route-registry.h"
 #include "../routing/algorithm/capacity-aware-path-view.h"
 #include "../routing/common/routing-mode.h"
 #include "link/satellite-link-state.h"
@@ -65,7 +65,7 @@ public:
   bool IsCapacityAwareRouting() const;
   const std::vector<IslDirectedLink>& GetIslDirectedLinks() const;
   const std::vector<IslQueueDropEvent>& GetIslQueueDropEvents() const;
-  Ptr<SizeAwareFlowRegistry> GetSizeAwareFlowRegistry() const;
+  Ptr<FlowRouteRegistry> GetFlowRouteRegistry() const;
 
 private:
   void CreateSatelliteNodes(const std::vector<uint32_t>& satelliteIds);
@@ -85,7 +85,7 @@ private:
   std::vector<Ipv4Address> m_serviceAddresses;
   std::map<uint32_t, uint32_t> m_nodeIndexes;
   std::unique_ptr<SatelliteLinkState> m_linkState;
-  Ptr<SizeAwareFlowRegistry> m_sizeAwareFlowRegistry;
+  Ptr<FlowRouteRegistry> m_flowRouteRegistry;
   std::vector<Callback<void>> m_routeUpdateCallbacks;
 };
 

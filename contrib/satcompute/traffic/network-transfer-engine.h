@@ -96,7 +96,7 @@ private:
   bool m_configured;
   bool m_registered;
   bool m_capacityAwareRouting;
-  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  Ptr<FlowRouteRegistry> m_flowRouteRegistry;
   std::unique_ptr<PathPolicy> m_capacityPathPolicy;
   std::unique_ptr<CapacityReservationState> m_capacityReservationState;
   std::vector<NetworkTransfer> m_plans;

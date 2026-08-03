@@ -32,7 +32,7 @@ public:
   SatComputeIpv4GlobalRoutingHelper(
     RoutingMode selectionMode = RoutingMode::GLOBAL_FIRST,
     uint64_t hashSeed = 1,
-    Ptr<SizeAwareFlowRegistry> sizeAwareRegistry = nullptr);
+    Ptr<FlowRouteRegistry> flowRouteRegistry = nullptr);
   SatComputeIpv4GlobalRoutingHelper(
     const SatComputeIpv4GlobalRoutingHelper& other);
 
@@ -47,7 +47,7 @@ public:
 private:
   RoutingMode m_selectionMode;
   uint64_t m_hashSeed;
-  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  Ptr<FlowRouteRegistry> m_flowRouteRegistry;
 };
 
 } // namespace ns3

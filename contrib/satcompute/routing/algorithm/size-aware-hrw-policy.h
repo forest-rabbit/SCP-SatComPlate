@@ -18,21 +18,24 @@
 #define SATCOMPUTE_SIZE_AWARE_HRW_POLICY_H
 
 #include "next-hop-policy.h"
-#include "../state/size-aware-routing-state.h"
+#include "../state/flow-route-state.h"
+#include "../state/size-aware-load-view.h"
 
 namespace ns3 {
 
 class SizeAwareHrwPolicy : public NextHopPolicy
 {
 public:
-  explicit SizeAwareHrwPolicy(SizeAwareRoutingState& state);
+  SizeAwareHrwPolicy(FlowRouteState& flowState,
+                     const SizeAwareLoadView& loadView);
 
   NextHopDecision Select(
     const NextHopSelectionContext& context,
     const std::vector<EcmpRouteCandidate>& candidates) override;
 
 private:
-  SizeAwareRoutingState* m_state;
+  FlowRouteState* m_flowState;
+  const SizeAwareLoadView* m_loadView;
 };
 
 } // namespace ns3

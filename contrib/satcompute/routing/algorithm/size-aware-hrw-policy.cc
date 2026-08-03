@@ -26,8 +26,10 @@
 
 namespace ns3 {
 
-SizeAwareHrwPolicy::SizeAwareHrwPolicy(SizeAwareRoutingState& state)
-  : m_state(&state)
+SizeAwareHrwPolicy::SizeAwareHrwPolicy(FlowRouteState& flowState,
+                                       const SizeAwareLoadView& loadView)
+  : m_flowState(&flowState),
+    m_loadView(&loadView)
 {
 }
 
@@ -37,14 +39,15 @@ SizeAwareHrwPolicy::Select(
   const std::vector<EcmpRouteCandidate>& candidates)
 {
   NS_ABORT_MSG_IF(candidates.empty()
-                    || m_state == nullptr
-                    || !m_state->IsSenderActive(context.flowKey),
+                    || m_flowState == nullptr
+                    || m_loadView == nullptr
+                    || !m_flowState->IsSenderActive(context.flowKey),
                   "size-aware HRW 要求活动 flow 和非空候选");
 
-  SizeAwareFlowAssignment sticky;
-  if (m_state->FindAssignment(context.nodeId,
-                              context.flowKey,
-                              sticky))
+  FlowRouteAssignment sticky;
+  if (m_flowState->FindAssignment(context.nodeId,
+                                  context.flowKey,
+                                  sticky))
     {
       auto selected =
         std::find(candidates.begin(), candidates.end(), sticky.candidate);
@@ -52,10 +55,10 @@ SizeAwareHrwPolicy::Select(
         {
           uint32_t selectedIndex =
             static_cast<uint32_t>(selected - candidates.begin());
-          m_state->ValidateAssignment(context.nodeId,
-                                      context.flowKey,
-                                      context.routeEpoch,
-                                      "SIZE_AWARE_STICKY");
+          m_flowState->ValidateAssignment(context.nodeId,
+                                          context.flowKey,
+                                          context.routeEpoch,
+                                          "SIZE_AWARE_STICKY");
           return {
             false,
             selectedIndex,
@@ -65,9 +68,9 @@ SizeAwareHrwPolicy::Select(
             "SIZE_AWARE_STICKY"
           };
         }
-      m_state->ReleaseInvalidAssignment(context.nodeId,
-                                        context.flowKey,
-                                        context.routeEpoch);
+      m_flowState->ReleaseInvalidAssignment(context.nodeId,
+                                            context.flowKey,
+                                            context.routeEpoch);
     }
 
   std::vector<EcmpHrwRank> ranking =
@@ -77,11 +80,11 @@ SizeAwareHrwPolicy::Select(
   if (ranking.size() >= 2)
     {
       uint64_t primaryLoad =
-        m_state->GetReservedBytes(
+        m_loadView->GetReservedBytes(
           context.nodeId,
           candidates[ranking[0].candidateIndex]);
       uint64_t secondaryLoad =
-        m_state->GetReservedBytes(
+        m_loadView->GetReservedBytes(
           context.nodeId,
           candidates[ranking[1].candidateIndex]);
       if (secondaryLoad < primaryLoad)
@@ -91,11 +94,11 @@ SizeAwareHrwPolicy::Select(
         }
     }
 
-  m_state->RecordAssignment(context.nodeId,
-                            context.flowKey,
-                            candidates[selected.candidateIndex],
-                            context.routeEpoch,
-                            selectionReason);
+  m_flowState->RecordAssignment(context.nodeId,
+                                context.flowKey,
+                                candidates[selected.candidateIndex],
+                                context.routeEpoch,
+                                selectionReason);
   return {
     false,
     selected.candidateIndex,

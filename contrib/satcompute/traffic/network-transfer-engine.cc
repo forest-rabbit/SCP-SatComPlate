@@ -118,11 +118,11 @@ NetworkTransferEngine::Configure(SatelliteTopology& topology,
   m_receiverRcvBufBytes = receiverRcvBufBytes;
   m_collectUdpSocketDrops = collectUdpSocketDrops;
   m_simulationDurationNs = durationNs;
-  m_sizeAwareRegistry = topology.GetSizeAwareFlowRegistry();
+  m_flowRouteRegistry = topology.GetFlowRouteRegistry();
   m_capacityAwareRouting = topology.IsCapacityAwareRouting();
   if (m_capacityAwareRouting)
     {
-      NS_ABORT_MSG_IF(m_sizeAwareRegistry == nullptr,
+      NS_ABORT_MSG_IF(m_flowRouteRegistry == nullptr,
                       "capacity-aware routing 缺少 flow registry");
       m_capacityReservationState.reset(new CapacityReservationState());
       m_capacityPathPolicy.reset(
@@ -208,9 +208,9 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
           : static_cast<uint32_t>(
               plan.sizeBytes % plan.payloadBytesPerPacket);
 
-      if (m_sizeAwareRegistry != nullptr)
+      if (m_flowRouteRegistry != nullptr)
         {
-          m_sizeAwareRegistry->RegisterTransfer(BuildFlowKey(plan),
+          m_flowRouteRegistry->RegisterTransfer(BuildFlowKey(plan),
                                                 plan.transferId,
                                                 plan.sizeBytes);
         }
@@ -344,9 +344,9 @@ NetworkTransferEngine::ActivateTransfer(uint64_t transferId)
                     || m_senders[index]->HasStarted(),
                   "NetworkTransfer sender activation 状态无效，transfer_id="
                     << transferId);
-  if (m_sizeAwareRegistry != nullptr)
+  if (m_flowRouteRegistry != nullptr)
     {
-      m_sizeAwareRegistry->BeginSending(GetFlowKey(index));
+      m_flowRouteRegistry->BeginSending(GetFlowKey(index));
     }
   m_senders[index]->StartTransferNow();
 }
@@ -357,7 +357,7 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
   NS_ABORT_MSG_IF(!m_capacityAwareRouting
                     || m_capacityPathPolicy == nullptr
                     || m_capacityReservationState == nullptr
-                    || m_sizeAwareRegistry == nullptr,
+                    || m_flowRouteRegistry == nullptr,
                   "capacity-aware activation 未配置");
   uint32_t index = GetPlanIndex(transferId);
   NS_ABORT_MSG_IF(m_states[index] != TRANSFER_STARTED
@@ -386,7 +386,7 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
 
   if (firstAdmission)
     {
-      m_sizeAwareRegistry->BeginSending(flowKey);
+      m_flowRouteRegistry->BeginSending(flowKey);
     }
   for (const auto& hop : path.hops)
     {
@@ -398,7 +398,7 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
         {
           continue;
         }
-      m_sizeAwareRegistry->RecordAssignment(
+      m_flowRouteRegistry->RecordAssignment(
         hop.sourceSatelliteId,
         flowKey,
         hop.candidate,
@@ -478,7 +478,7 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
           readmissionTransfers.push_back(transferId);
         }
       EcmpFlowKey flowKey = GetFlowKey(index);
-      m_sizeAwareRegistry->ReleaseAssignmentsForRouteUpdate(
+      m_flowRouteRegistry->ReleaseAssignmentsForRouteUpdate(
         flowKey,
         m_topology->GetRouteEpoch(m_plans[index].sourceSatelliteId));
       m_capacityReservationState->Release(transferId);
@@ -520,9 +520,9 @@ NetworkTransferEngine::HandleSenderComplete(uint64_t transferId,
                          != m_plans[index].sizeBytes,
                   "NetworkTransfer sender completion payload 无效，transfer_id="
                     << transferId);
-  if (m_sizeAwareRegistry != nullptr && !m_capacityAwareRouting)
+  if (m_flowRouteRegistry != nullptr && !m_capacityAwareRouting)
     {
-      m_sizeAwareRegistry->FinishSending(GetFlowKey(index));
+      m_flowRouteRegistry->FinishSending(GetFlowKey(index));
     }
 }
 
@@ -544,7 +544,7 @@ NetworkTransferEngine::HandleTransferComplete(uint64_t transferId,
 
   if (m_capacityAwareRouting)
     {
-      m_sizeAwareRegistry->FinishReceiving(GetFlowKey(index));
+      m_flowRouteRegistry->FinishReceiving(GetFlowKey(index));
       if (m_capacityReservationState->HasActivePath(transferId))
         {
           m_capacityReservationState->Release(transferId);

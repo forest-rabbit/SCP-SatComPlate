@@ -30,7 +30,8 @@ namespace ns3 {
 std::unique_ptr<NextHopPolicy>
 RoutingPolicyFactory::CreateNextHopPolicy(
   RoutingMode mode,
-  SizeAwareRoutingState* sizeAwareState)
+  FlowRouteState* flowState,
+  const SizeAwareLoadView* sizeAwareLoadView)
 {
   switch (mode)
     {
@@ -41,10 +42,10 @@ RoutingPolicyFactory::CreateNextHopPolicy(
     case RoutingMode::HRW_PER_FLOW:
       return std::unique_ptr<NextHopPolicy>(new HrwPerFlowPolicy());
     case RoutingMode::SIZE_AWARE_HRW:
-      NS_ABORT_MSG_IF(sizeAwareState == nullptr,
+      NS_ABORT_MSG_IF(flowState == nullptr || sizeAwareLoadView == nullptr,
                       "size-aware policy 缺少 routing state");
       return std::unique_ptr<NextHopPolicy>(
-        new SizeAwareHrwPolicy(*sizeAwareState));
+        new SizeAwareHrwPolicy(*flowState, *sizeAwareLoadView));
     case RoutingMode::CAPACITY_AWARE_HRW:
       return std::unique_ptr<NextHopPolicy>();
     }

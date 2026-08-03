@@ -34,7 +34,7 @@ SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
                   "islQueueBytes 必须大于 0");
   if (IsReservationAwareRoutingMode(m_routingMode))
     {
-      m_sizeAwareFlowRegistry = CreateObject<SizeAwareFlowRegistry>();
+      m_flowRouteRegistry = CreateObject<FlowRouteRegistry>();
     }
 }
 
@@ -52,7 +52,7 @@ SatelliteTopology::CreateSatelliteNodes(const std::vector<uint32_t>& satelliteId
   SatComputeIpv4GlobalRoutingHelper globalRouting(
     m_routingMode,
     m_config.ecmpHashSeed,
-    m_sizeAwareFlowRegistry);
+    m_flowRouteRegistry);
   Ipv4ListRoutingHelper listRouting;
   listRouting.Add(staticRouting, 0);
   listRouting.Add(globalRouting, -10);
@@ -387,10 +387,10 @@ SatelliteTopology::GetIslQueueDropEvents() const
   return m_linkState->GetQueueDropEvents();
 }
 
-Ptr<SizeAwareFlowRegistry>
-SatelliteTopology::GetSizeAwareFlowRegistry() const
+Ptr<FlowRouteRegistry>
+SatelliteTopology::GetFlowRouteRegistry() const
 {
-  return m_sizeAwareFlowRegistry;
+  return m_flowRouteRegistry;
 }
 
 } // namespace ns3

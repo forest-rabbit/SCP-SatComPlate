@@ -17,7 +17,7 @@
 #ifndef SATCOMPUTE_SIZE_AWARE_METRICS_H
 #define SATCOMPUTE_SIZE_AWARE_METRICS_H
 
-#include "../../routing/size-aware-flow-registry.h"
+#include "../../routing/state/flow-route-registry.h"
 
 #include "ns3/ptr.h"
 
@@ -25,7 +25,7 @@
 
 namespace ns3 {
 
-void WriteSizeAwareMetrics(Ptr<SizeAwareFlowRegistry> registry,
+void WriteSizeAwareMetrics(Ptr<FlowRouteRegistry> registry,
                            const std::string& outputDirectory);
 void RemoveSizeAwareMetrics(const std::string& outputDirectory);
 

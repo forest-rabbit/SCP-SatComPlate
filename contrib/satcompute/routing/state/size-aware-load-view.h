@@ -14,25 +14,25 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_ROUTING_POLICY_FACTORY_H
-#define SATCOMPUTE_ROUTING_POLICY_FACTORY_H
+#ifndef SATCOMPUTE_SIZE_AWARE_LOAD_VIEW_H
+#define SATCOMPUTE_SIZE_AWARE_LOAD_VIEW_H
 
-#include "algorithm/next-hop-policy.h"
-#include "common/routing-mode.h"
-#include "state/flow-route-state.h"
-#include "state/size-aware-load-view.h"
+#include "../common/ecmp-route-candidate.h"
 
-#include <memory>
+#include <cstdint>
 
 namespace ns3 {
 
-class RoutingPolicyFactory
+class SizeAwareLoadView
 {
 public:
-  static std::unique_ptr<NextHopPolicy> CreateNextHopPolicy(
-    RoutingMode mode,
-    FlowRouteState* flowState,
-    const SizeAwareLoadView* sizeAwareLoadView);
+  virtual ~SizeAwareLoadView()
+  {
+  }
+
+  virtual uint64_t GetReservedBytes(
+    uint32_t nodeId,
+    const EcmpRouteCandidate& candidate) const = 0;
 };
 
 } // namespace ns3

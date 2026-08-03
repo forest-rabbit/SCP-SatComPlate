@@ -91,7 +91,7 @@ public:
                   const std::vector<TransferFlowMetadata>& transferFlows,
                   const std::vector<TransferSummaryRecord>& transferSummaries,
                   const std::vector<EcmpRouteDecisionEvent>& routeEvents,
-                  Ptr<SizeAwareFlowRegistry> sizeAwareRegistry,
+                  Ptr<FlowRouteRegistry> flowRouteRegistry,
                   const CapacityAwareRuntimeSummary& capacityAwareSummary,
                   const std::vector<IslDirectedLink>& directedLinks,
                   const std::vector<IslQueueDropEvent>& queueDropEvents,
@@ -110,7 +110,7 @@ private:
   std::vector<TransferFlowMetadata> m_transferFlows;
   std::vector<TransferSummaryRecord> m_transferSummaries;
   std::vector<EcmpRouteDecisionEvent> m_routeEvents;
-  Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  Ptr<FlowRouteRegistry> m_flowRouteRegistry;
   CapacityAwareRuntimeSummary m_capacityAwareSummary;
   const std::vector<IslDirectedLink>& m_directedLinks;
   const std::vector<IslQueueDropEvent>& m_queueDropEvents;

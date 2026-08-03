@@ -14,8 +14,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef SATCOMPUTE_SIZE_AWARE_ROUTING_STATE_H
-#define SATCOMPUTE_SIZE_AWARE_ROUTING_STATE_H
+#ifndef SATCOMPUTE_FLOW_ROUTE_STATE_H
+#define SATCOMPUTE_FLOW_ROUTE_STATE_H
 
 #include "../common/ecmp-flow-key.h"
 #include "../common/ecmp-route-candidate.h"
@@ -25,17 +25,17 @@
 
 namespace ns3 {
 
-struct SizeAwareFlowAssignment
+struct FlowRouteAssignment
 {
   EcmpRouteCandidate candidate;
   uint64_t reservedBytes;
   uint64_t latestRouteEpoch;
 };
 
-class SizeAwareRoutingState
+class FlowRouteState
 {
 public:
-  virtual ~SizeAwareRoutingState()
+  virtual ~FlowRouteState()
   {
   }
 
@@ -43,7 +43,7 @@ public:
   virtual bool FindAssignment(
     uint32_t nodeId,
     const EcmpFlowKey& flowKey,
-    SizeAwareFlowAssignment& assignment) const = 0;
+    FlowRouteAssignment& assignment) const = 0;
   virtual void RecordAssignment(
     uint32_t nodeId,
     const EcmpFlowKey& flowKey,
@@ -59,9 +59,6 @@ public:
     uint32_t nodeId,
     const EcmpFlowKey& flowKey,
     uint64_t routeEpoch) = 0;
-  virtual uint64_t GetReservedBytes(
-    uint32_t nodeId,
-    const EcmpRouteCandidate& candidate) const = 0;
 };
 
 } // namespace ns3

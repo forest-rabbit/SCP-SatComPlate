@@ -463,7 +463,7 @@ main(int argc, char* argv[])
                           transferFlowMetadata,
                           transferSummaries,
                           routeRecorder.GetEvents(),
-                          topology.GetSizeAwareFlowRegistry(),
+                          topology.GetFlowRouteRegistry(),
                           capacityAwareSummary,
                           topology.GetIslDirectedLinks(),
                           topology.GetIslQueueDropEvents(),
