@@ -48,6 +48,27 @@ run_dynamic_route_case()
     --outputDir=${output_dir}"
 }
 
+run_phase_zero_case()
+{
+  local transfer_trace="$1"
+  local simulation_duration="$2"
+  local output_dir="$3"
+  ./waf --run-no-build "satcompute \
+    --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/capacity-aware-same-epoch \
+    --simulationDuration=${simulation_duration} \
+    --transferTrace=${transfer_trace} \
+    --diagnosticMode=failure \
+    --transferChunkMode=fixed \
+    --transferPayloadBytes=64000 \
+    --islMtuBytes=65535 \
+    --islQueueBytes=130000 \
+    --receiverRcvBufBytes=4000000 \
+    --transferLogMode=silent \
+    --routingMode=global-capacity-aware-hrw \
+    --ecmpHashSeed=1 \
+    --outputDir=${output_dir}"
+}
+
 printf '\n[CI:capacity-aware] congested size-aware baseline\n'
 run_case global-size-aware-hrw /tmp/satcompute-ci-capacity-baseline
 
@@ -105,6 +126,18 @@ printf '\n[CI:capacity-aware] dynamic route invalidation and recovery\n'
 run_dynamic_route_case /tmp/satcompute-ci-capacity-dynamic-a
 run_dynamic_route_case /tmp/satcompute-ci-capacity-dynamic-b
 
+printf '\n[CI:capacity-aware] sender-finished in-flight invalidation\n'
+run_phase_zero_case \
+  contrib/satcompute/tests/fixtures/traffic/transfers/capacity-aware-sender-finished-transfers.json \
+  10 \
+  /tmp/satcompute-ci-capacity-sender-finished
+
+printf '\n[CI:capacity-aware] same-epoch capacity re-admission\n'
+run_phase_zero_case \
+  contrib/satcompute/tests/fixtures/traffic/transfers/capacity-aware-same-epoch-transfers.json \
+  45 \
+  /tmp/satcompute-ci-capacity-same-epoch
+
 python3 contrib/satcompute/tools/validation/check-capacity-aware-output.py \
   --baseline=/tmp/satcompute-ci-capacity-baseline \
   --capacity-first=/tmp/satcompute-ci-capacity-a \
@@ -113,7 +146,9 @@ python3 contrib/satcompute/tools/validation/check-capacity-aware-output.py \
   --task-mode=/tmp/satcompute-ci-capacity-task \
   --same-edge-epoch=/tmp/satcompute-ci-capacity-epoch \
   --dynamic-route-first=/tmp/satcompute-ci-capacity-dynamic-a \
-  --dynamic-route-second=/tmp/satcompute-ci-capacity-dynamic-b
+  --dynamic-route-second=/tmp/satcompute-ci-capacity-dynamic-b \
+  --sender-finished=/tmp/satcompute-ci-capacity-sender-finished \
+  --same-epoch-readmission=/tmp/satcompute-ci-capacity-same-epoch
 
 python3 contrib/satcompute/tools/validation/check-task-output.py stress \
   --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \

@@ -36,6 +36,8 @@ public:
 
   void Initialize();
   void RegisterRouteUpdateCallback(Callback<void> callback);
+  void InvalidateFlowRouteDecisionCache(
+    const EcmpFlowKey& flowKey) const;
 
   uint32_t GetNodeCount() const;
   Ptr<Node> GetNode(uint32_t index) const;

@@ -25,6 +25,7 @@
 
 #include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -59,6 +60,7 @@ public:
                  Ptr<SizeAwareFlowRegistry> sizeAwareRegistry);
   void SetSatelliteId(uint32_t satelliteId);
   void AdvanceRouteEpoch();
+  void InvalidateDecisionCache(const EcmpFlowKey& flowKey);
   uint64_t GetRouteEpoch() const;
   std::vector<EcmpRouteCandidate> GetEffectiveRouteCandidates(
     Ipv4Address destination);
@@ -118,6 +120,7 @@ private:
   bool m_hostRouteIndexValid;
   std::map<uint32_t, std::vector<EcmpRouteCandidate>> m_hostRouteIndex;
   std::map<DecisionCacheKey, EcmpRouteDecisionEvent> m_decisionCache;
+  std::set<DecisionCacheKey> m_recordedDecisionKeys;
   TracedCallback<const EcmpRouteDecisionEvent&> m_routeDecisionTrace;
 };
 

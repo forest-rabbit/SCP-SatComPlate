@@ -408,6 +408,7 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
     }
   else if (!sender->HasFinishedSending())
     {
+      m_topology->InvalidateFlowRouteDecisionCache(flowKey);
       sender->ResumeAfterRouteUpdate(path.admittedRateBps);
     }
   return true;
@@ -460,6 +461,7 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
              < std::make_pair(right.arrivalTimeNs, right.transferId);
     });
 
+  std::vector<uint64_t> readmissionTransfers;
   for (uint64_t transferId : invalidTransfers)
     {
       uint32_t index = GetPlanIndex(transferId);
@@ -467,6 +469,7 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
       if (!sender->HasFinishedSending())
         {
           sender->PauseForRouteUpdate();
+          readmissionTransfers.push_back(transferId);
         }
       EcmpFlowKey flowKey = GetFlowKey(index);
       m_sizeAwareRegistry->ReleaseAssignmentsForRouteUpdate(
@@ -483,7 +486,7 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
         }
       return;
     }
-  std::vector<uint64_t> pending = invalidTransfers;
+  std::vector<uint64_t> pending = readmissionTransfers;
   for (uint64_t transferId : m_pendingCapacityTransfers)
     {
       if (std::find(invalidTransfers.begin(),

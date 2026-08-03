@@ -175,6 +175,14 @@ SatelliteTopology::RegisterRouteUpdateCallback(Callback<void> callback)
 }
 
 void
+SatelliteTopology::InvalidateFlowRouteDecisionCache(
+  const EcmpFlowKey& flowKey) const
+{
+  SatComputeIpv4GlobalRoutingHelper::InvalidateDecisionCache(m_nodes,
+                                                             flowKey);
+}
+
+void
 SatelliteTopology::Initialize()
 {
   SnapshotSchedule schedule =

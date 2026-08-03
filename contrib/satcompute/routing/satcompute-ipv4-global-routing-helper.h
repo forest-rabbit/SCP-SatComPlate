@@ -42,6 +42,8 @@ public:
 
   static Ptr<SatComputeIpv4GlobalRouting> GetRouting(Ptr<Node> node);
   static void AdvanceRouteEpoch(const NodeContainer& nodes);
+  static void InvalidateDecisionCache(const NodeContainer& nodes,
+                                      const EcmpFlowKey& flowKey);
 
 private:
   EcmpRouteSelectionMode m_selectionMode;

@@ -96,6 +96,29 @@ SatComputeIpv4GlobalRouting::AdvanceRouteEpoch()
   m_hostRouteIndex.clear();
   m_hostRouteIndexValid = false;
   m_decisionCache.clear();
+  m_recordedDecisionKeys.clear();
+}
+
+void
+SatComputeIpv4GlobalRouting::InvalidateDecisionCache(
+  const EcmpFlowKey& flowKey)
+{
+  for (auto decision = m_decisionCache.begin();
+       decision != m_decisionCache.end();)
+    {
+      bool sameFlow =
+        decision->first.hasFiveTuple
+        && !(decision->first.flowKey < flowKey)
+        && !(flowKey < decision->first.flowKey);
+      if (sameFlow)
+        {
+          decision = m_decisionCache.erase(decision);
+        }
+      else
+        {
+          ++decision;
+        }
+    }
 }
 
 uint64_t
@@ -153,6 +176,7 @@ SatComputeIpv4GlobalRouting::DoDispose()
 {
   m_hostRouteIndex.clear();
   m_decisionCache.clear();
+  m_recordedDecisionKeys.clear();
   m_sizeAwareRegistry = nullptr;
   m_ipv4 = nullptr;
   Ipv4GlobalRouting::DoDispose();
@@ -547,7 +571,10 @@ SatComputeIpv4GlobalRouting::RecordDecision(
         "同一 epoch、node 和 five-tuple 的路由选择发生漂移");
       return;
     }
-  m_routeDecisionTrace(event);
+  if (m_recordedDecisionKeys.insert(key).second)
+    {
+      m_routeDecisionTrace(event);
+    }
 }
 
 Ptr<Ipv4Route>

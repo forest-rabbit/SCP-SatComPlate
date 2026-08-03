@@ -387,6 +387,102 @@ def validate_dynamic_route(directory):
     )
 
 
+def validate_sender_finished(directory):
+    run = read_json(directory, "run-summary.json")
+    require(run["run_status"] == "COMPLETE", "sender-finished run did not complete")
+    require(run["transfer_count"] == 1, "sender-finished transfer count mismatch")
+    require(run["flow_monitor_tx_packets"] == 1, "sender-finished tx count changed")
+    require(run["flow_monitor_rx_packets"] == 1, "sender-finished packet was lost")
+    require(run["flow_monitor_lost_packets"] == 0, "sender-finished run reports loss")
+
+    events = read_rows(directory, "size-aware-reservation-events.csv")
+    invalidated = [row for row in events if row["action"] == "RELEASE_ROUTE_INVALIDATED"]
+    require(len(invalidated) == 2, "sender-finished path was not fully released")
+    require(
+        not any(
+            row["action"] == "ASSIGN"
+            and int_field(row, "transfer_id") == 1
+            and int_field(row, "route_epoch") == 1
+            for row in events
+        ),
+        "sender-finished transfer reserved an unused replacement path",
+    )
+    transitions = [
+        row
+        for row in read_rows(directory, "ecmp-route-events.csv")
+        if row["selection_reason"] == "CAPACITY_AWARE_TRANSITION_FALLBACK"
+    ]
+    require(
+        len(transitions) == 1
+        and int_field(transitions[0], "node_id") == 1
+        and int_field(transitions[0], "route_epoch") == 1,
+        "sender-finished in-flight packet did not use transition fallback",
+    )
+
+
+def validate_same_epoch_readmission(directory):
+    run = read_json(directory, "run-summary.json")
+    require(run["run_status"] == "COMPLETE", "same-epoch run did not complete")
+    require(run["transfer_count"] == 3, "same-epoch transfer count mismatch")
+    require(run["declared_application_bytes"] == 2_176_000, "same-epoch bytes changed")
+    require(run["flow_monitor_tx_packets"] == 34, "same-epoch tx count changed")
+    require(run["flow_monitor_rx_packets"] == 34, "same-epoch packet was lost")
+    require(run["flow_monitor_lost_packets"] == 0, "same-epoch run reports loss")
+    require(run["flow_monitor_reported_drop_packets"] == 0, "same-epoch run reports drops")
+
+    transfers = rows_by_transfer(directory, "transfer-summary.csv")
+    flows = rows_by_transfer(directory, "network-flow-details.csv")
+    require(set(transfers) == {1, 2, 3} == set(flows), "same-epoch transfer IDs changed")
+    require(
+        all(int_field(row, "completion_time_ns") > 0 for row in transfers.values()),
+        "same-epoch transfer did not complete",
+    )
+    require(
+        all(int_field(row, "tx_packets") == int_field(row, "rx_packets") for row in flows.values()),
+        "same-epoch flow packet mismatch",
+    )
+
+    route_events = read_rows(directory, "ecmp-route-events.csv")
+    transitions = [
+        row
+        for row in route_events
+        if row["selection_reason"] == "CAPACITY_AWARE_TRANSITION_FALLBACK"
+        and row["source_address"] == "172.16.0.1"
+        and int_field(row, "source_port") == 10_000
+    ]
+    require(
+        len(transitions) == 1
+        and int_field(transitions[0], "node_id") == 1
+        and int_field(transitions[0], "route_epoch") == 1,
+        "same-epoch target lacks the expected transition fallback",
+    )
+
+    events = read_rows(directory, "size-aware-reservation-events.csv")
+    reassigned = [
+        row
+        for row in events
+        if row["action"] == "ASSIGN"
+        and int_field(row, "transfer_id") == 1
+        and int_field(row, "route_epoch") == 1
+    ]
+    require(len(reassigned) == 2, "same-epoch target was not fully re-admitted")
+    node_one = [row for row in reassigned if int_field(row, "node_id") == 1]
+    require(len(node_one) == 1, "same-epoch source-side assignment mismatch")
+    require(
+        node_one[0]["candidate_gateway"] != transitions[0]["selected_gateway"],
+        "same-epoch fixture no longer exercises stale transition fallback",
+    )
+
+    summary = read_json(directory, "size-aware-summary.json")
+    require(summary["active_flow_count_at_end"] == 0, "same-epoch active flow remains")
+    require(summary["assignment_count_at_end"] == 0, "same-epoch assignment remains")
+    require(summary["final_total_reserved_bytes"] == 0, "same-epoch bytes remain reserved")
+    require(
+        not read_rows(directory, "diagnostics/failure/flow-drop-reasons.csv"),
+        "same-epoch run produced failure drop rows",
+    )
+
+
 def validate_replay(first, second):
     deterministic_files = (
         "network-flow-details.csv",
@@ -418,6 +514,8 @@ def main():
     parser.add_argument("--same-edge-epoch", required=True)
     parser.add_argument("--dynamic-route-first", required=True)
     parser.add_argument("--dynamic-route-second", required=True)
+    parser.add_argument("--sender-finished", required=True)
+    parser.add_argument("--same-epoch-readmission", required=True)
     arguments = parser.parse_args()
 
     validate_baseline(arguments.baseline)
@@ -428,6 +526,8 @@ def main():
     validate_same_edge_epoch(arguments.same_edge_epoch)
     validate_dynamic_route(arguments.dynamic_route_first)
     validate_dynamic_route(arguments.dynamic_route_second)
+    validate_sender_finished(arguments.sender_finished)
+    validate_same_epoch_readmission(arguments.same_epoch_readmission)
     validate_replay(arguments.capacity_first, arguments.capacity_second)
     validate_replay(arguments.dynamic_route_first, arguments.dynamic_route_second)
     print(
@@ -435,7 +535,8 @@ def main():
         "completes 2/2 transfers with 17144/17144 packets and deterministic zero loss; "
         "two free ECMP paths remain concurrent; task input/result lifecycle completes; "
         "same-edge route epochs preserve active paths; invalid paths pause, "
-        "fully release, deterministically recover, and preserve in-flight packets"
+        "fully release, deterministically recover, preserve in-flight packets, "
+        "and safely re-admit within one route epoch"
     )
 
 

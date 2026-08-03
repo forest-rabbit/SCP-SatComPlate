@@ -89,4 +89,15 @@ SatComputeIpv4GlobalRoutingHelper::AdvanceRouteEpoch(
     }
 }
 
+void
+SatComputeIpv4GlobalRoutingHelper::InvalidateDecisionCache(
+  const NodeContainer& nodes,
+  const EcmpFlowKey& flowKey)
+{
+  for (uint32_t index = 0; index < nodes.GetN(); ++index)
+    {
+      GetRouting(nodes.Get(index))->InvalidateDecisionCache(flowKey);
+    }
+}
+
 } // namespace ns3
