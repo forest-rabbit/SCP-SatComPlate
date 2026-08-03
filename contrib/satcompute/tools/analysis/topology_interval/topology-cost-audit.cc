@@ -16,7 +16,7 @@
 
 // 测量纯拓扑快照加载与全局路由重算成本，不安装业务、probe 或 FlowMonitor。
 
-#include "../../../routing/satcompute-ipv4-global-routing-helper.h"
+#include "../../../routing/ns3/satcompute-ipv4-global-routing-helper.h"
 #include "../../../third-party/nlohmann/json.hpp"
 #include "../../../topology/satellite-topology.h"
 

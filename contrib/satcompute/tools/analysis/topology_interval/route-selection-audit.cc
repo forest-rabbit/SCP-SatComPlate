@@ -19,7 +19,7 @@
 #include "route-audit-common.h"
 
 #include "../../../metrics/routing/ecmp-route-recorder.h"
-#include "../../../routing/satcompute-ipv4-global-routing-helper.h"
+#include "../../../routing/ns3/satcompute-ipv4-global-routing-helper.h"
 #include "../../../third-party/nlohmann/json.hpp"
 #include "../../../topology/satellite-topology.h"
 

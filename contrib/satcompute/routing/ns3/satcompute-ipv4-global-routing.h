@@ -17,12 +17,12 @@
 #ifndef SATCOMPUTE_IPV4_GLOBAL_ROUTING_H
 #define SATCOMPUTE_IPV4_GLOBAL_ROUTING_H
 
-#include "algorithm/hrw-per-flow-policy.h"
-#include "common/ecmp-flow-key.h"
-#include "common/ecmp-route-candidate.h"
-#include "common/routing-mode.h"
-#include "routing-policy-factory.h"
-#include "state/flow-route-registry.h"
+#include "../algorithm/hrw-per-flow-policy.h"
+#include "../common/ecmp-flow-key.h"
+#include "../common/ecmp-route-candidate.h"
+#include "../common/routing-mode.h"
+#include "../routing-policy-factory.h"
+#include "../state/flow-route-registry.h"
 
 #include "ns3/ipv4-global-routing.h"
 #include "ns3/traced-callback.h"

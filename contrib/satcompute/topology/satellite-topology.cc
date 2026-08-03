@@ -2,7 +2,7 @@
 
 #include "satellite-topology.h"
 
-#include "../routing/satcompute-ipv4-global-routing-helper.h"
+#include "../routing/ns3/satcompute-ipv4-global-routing-helper.h"
 #include "snapshot/snapshot-reader.h"
 #include "snapshot/snapshot-schedule.h"
 

@@ -3,7 +3,7 @@
 
 #include "../topology/link/satellite-link-state.h"
 #include "../routing/state/capacity-reservation-state.h"
-#include "../routing/satcompute-ipv4-global-routing.h"
+#include "../routing/ns3/satcompute-ipv4-global-routing.h"
 #include "../traffic/network-transfer-receiver.h"
 
 #include "ns3/flow-monitor-module.h"
