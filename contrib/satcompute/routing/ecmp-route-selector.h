@@ -17,54 +17,17 @@
 #ifndef SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
 #define SATCOMPUTE_ECMP_ROUTE_SELECTOR_H
 
-#include "ecmp-flow-key.h"
-#include "fnv1a64.h"
+#include "common/ecmp-flow-key.h"
+#include "common/ecmp-route-candidate.h"
+#include "common/fnv1a64.h"
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <tuple>
 #include <vector>
 
 namespace ns3 {
-
-enum class EcmpRouteSelectionMode
-{
-  GLOBAL_FIRST,
-  HASH_PER_FLOW,
-  HRW_PER_FLOW,
-  SIZE_AWARE_HRW,
-  CAPACITY_AWARE_HRW
-};
-
-struct EcmpRouteCandidate
-{
-  Ipv4Address gateway;
-  uint32_t outputInterface;
-  Ipv4Address destination;
-  Ipv4Mask destinationMask;
-
-  bool operator<(const EcmpRouteCandidate& other) const
-  {
-    return std::make_tuple(gateway.Get(),
-                           outputInterface,
-                           destination.Get(),
-                           destinationMask.Get())
-           < std::make_tuple(other.gateway.Get(),
-                             other.outputInterface,
-                             other.destination.Get(),
-                             other.destinationMask.Get());
-  }
-
-  bool operator==(const EcmpRouteCandidate& other) const
-  {
-    return gateway == other.gateway
-           && outputInterface == other.outputInterface
-           && destination == other.destination
-           && destinationMask == other.destinationMask;
-  }
-};
 
 struct EcmpHrwSelection
 {

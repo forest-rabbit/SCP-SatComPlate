@@ -26,7 +26,7 @@
 namespace ns3 {
 
 SatComputeIpv4GlobalRoutingHelper::SatComputeIpv4GlobalRoutingHelper(
-  EcmpRouteSelectionMode selectionMode,
+  RoutingMode selectionMode,
   uint64_t hashSeed,
   Ptr<SizeAwareFlowRegistry> sizeAwareRegistry)
   : m_selectionMode(selectionMode),

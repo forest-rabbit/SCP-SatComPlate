@@ -30,8 +30,7 @@ class SatComputeIpv4GlobalRoutingHelper : public Ipv4RoutingHelper
 {
 public:
   SatComputeIpv4GlobalRoutingHelper(
-    EcmpRouteSelectionMode selectionMode =
-      EcmpRouteSelectionMode::GLOBAL_FIRST,
+    RoutingMode selectionMode = RoutingMode::GLOBAL_FIRST,
     uint64_t hashSeed = 1,
     Ptr<SizeAwareFlowRegistry> sizeAwareRegistry = nullptr);
   SatComputeIpv4GlobalRoutingHelper(
@@ -46,7 +45,7 @@ public:
                                       const EcmpFlowKey& flowKey);
 
 private:
-  EcmpRouteSelectionMode m_selectionMode;
+  RoutingMode m_selectionMode;
   uint64_t m_hashSeed;
   Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
 };

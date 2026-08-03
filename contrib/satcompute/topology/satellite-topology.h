@@ -2,6 +2,7 @@
 #define SATCOMPUTE_SATELLITE_TOPOLOGY_H
 
 #include "../routing/size-aware-flow-registry.h"
+#include "../routing/common/routing-mode.h"
 #include "link/satellite-link-state.h"
 #include "snapshot/snapshot-types.h"
 
@@ -77,6 +78,7 @@ private:
                    const TopologyLinkUpdateSummary& summary) const;
 
   TopologyConfig m_config;
+  RoutingMode m_routingMode;
   NodeContainer m_nodes;
   std::vector<uint32_t> m_satelliteIds;
   std::vector<Ipv4Address> m_serviceAddresses;

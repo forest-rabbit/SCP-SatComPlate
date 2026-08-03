@@ -26,6 +26,7 @@ def build(bld):
         'metrics/routing/ecmp-route-recorder.cc',
         'metrics/routing/size-aware-metrics.cc',
         'routing/capacity-aware-route-admission.cc',
+        'routing/common/routing-mode.cc',
         'routing/satcompute-ipv4-global-routing.cc',
         'routing/satcompute-ipv4-global-routing-helper.cc',
         'routing/size-aware-flow-registry.cc',

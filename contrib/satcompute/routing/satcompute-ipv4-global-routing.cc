@@ -49,7 +49,7 @@ SatComputeIpv4GlobalRouting::GetTypeId()
 }
 
 SatComputeIpv4GlobalRouting::SatComputeIpv4GlobalRouting()
-  : m_selectionMode(EcmpRouteSelectionMode::GLOBAL_FIRST),
+  : m_selectionMode(RoutingMode::GLOBAL_FIRST),
     m_hashSeed(1),
     m_hasSatelliteId(false),
     m_satelliteId(0),
@@ -64,13 +64,12 @@ SatComputeIpv4GlobalRouting::~SatComputeIpv4GlobalRouting()
 
 void
 SatComputeIpv4GlobalRouting::Configure(
-  EcmpRouteSelectionMode selectionMode,
+  RoutingMode selectionMode,
   uint64_t hashSeed,
   Ptr<SizeAwareFlowRegistry> sizeAwareRegistry)
 {
-  NS_ABORT_MSG_IF((selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
-                   || selectionMode
-                        == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
+  NS_ABORT_MSG_IF((selectionMode == RoutingMode::SIZE_AWARE_HRW
+                   || selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
                     && sizeAwareRegistry == nullptr,
                   "reservation-aware HRW routing 缺少 flow registry");
   m_selectionMode = selectionMode;
@@ -324,7 +323,7 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
           uint32_t selectedIndex =
             static_cast<uint32_t>(selected - candidates.begin());
           std::string stickyReason =
-            m_selectionMode == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW
+            m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW
               ? "CAPACITY_AWARE_STICKY"
               : "SIZE_AWARE_STICKY";
           m_sizeAwareRegistry->ValidateAssignment(m_satelliteId,
@@ -339,7 +338,7 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
                                     candidates[selectedIndex]))
           };
         }
-      if (m_selectionMode != EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
+      if (m_selectionMode != RoutingMode::CAPACITY_AWARE_HRW)
         {
           m_sizeAwareRegistry->ReleaseInvalidAssignment(m_satelliteId,
                                                         flowKey,
@@ -350,7 +349,7 @@ SatComputeIpv4GlobalRouting::SelectSizeAwareRoute(
   std::vector<EcmpHrwRank> ranking =
     RankEcmpHrwRoutes(m_hashSeed, flowKey, candidates);
   EcmpHrwRank selected = ranking[0];
-  if (m_selectionMode == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
+  if (m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
     {
       // The admission controller rebuilds complete paths after each route
       // update.  A packet already in flight may still reach a node that was
@@ -454,7 +453,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
 
   if (candidates.empty())
     {
-      if (m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
+      if (m_selectionMode == RoutingMode::SIZE_AWARE_HRW
           && outputInterface == nullptr
           && hasFiveTuple
           && m_sizeAwareRegistry->IsSenderActive(flowKey))
@@ -491,17 +490,16 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
   uint32_t selectedIndex =
     static_cast<uint32_t>(hashValue % candidates.size());
   std::string selectionReason = "HASH_PER_FLOW";
-  if (m_selectionMode == EcmpRouteSelectionMode::HRW_PER_FLOW
-      || m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
-      || m_selectionMode == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
+  if (m_selectionMode == RoutingMode::HRW_PER_FLOW
+      || m_selectionMode == RoutingMode::SIZE_AWARE_HRW
+      || m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
     {
       EcmpHrwSelection selection = {
         0,
         0
       };
-      if ((m_selectionMode == EcmpRouteSelectionMode::SIZE_AWARE_HRW
-           || m_selectionMode
-                == EcmpRouteSelectionMode::CAPACITY_AWARE_HRW)
+      if ((m_selectionMode == RoutingMode::SIZE_AWARE_HRW
+           || m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
           && outputInterface == nullptr
           && m_sizeAwareRegistry->IsSenderActive(flowKey))
         {
@@ -512,7 +510,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(
         {
           selection =
             SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
-          if (m_selectionMode == EcmpRouteSelectionMode::HRW_PER_FLOW)
+          if (m_selectionMode == RoutingMode::HRW_PER_FLOW)
             {
               selectionReason = "HRW_PER_FLOW";
             }
@@ -584,7 +582,7 @@ SatComputeIpv4GlobalRouting::RouteOutput(
   Ptr<NetDevice> outputInterface,
   Socket::SocketErrno& socketError)
 {
-  if (m_selectionMode == EcmpRouteSelectionMode::GLOBAL_FIRST
+  if (m_selectionMode == RoutingMode::GLOBAL_FIRST
       || header.GetDestination().IsMulticast())
     {
       return Ipv4GlobalRouting::RouteOutput(packet,
@@ -617,7 +615,7 @@ SatComputeIpv4GlobalRouting::RouteInput(
   LocalDeliverCallback localDeliverCallback,
   ErrorCallback errorCallback)
 {
-  if (m_selectionMode == EcmpRouteSelectionMode::GLOBAL_FIRST
+  if (m_selectionMode == RoutingMode::GLOBAL_FIRST
       || header.GetDestination().IsMulticast())
     {
       return Ipv4GlobalRouting::RouteInput(packet,

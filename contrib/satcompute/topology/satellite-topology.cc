@@ -20,23 +20,19 @@
 namespace ns3 {
 
 SatelliteTopology::SatelliteTopology(const TopologyConfig& config)
-  : m_config(config)
+  : m_config(config),
+    m_routingMode(RoutingMode::GLOBAL_FIRST)
 {
   NS_ABORT_MSG_IF(config.snapshotDirectory.empty(), "topologyDir 不能为空");
   NS_ABORT_MSG_IF(config.simulationDurationSeconds <= 0.0,
                   "simulationDuration 必须大于 0");
-  NS_ABORT_MSG_IF(config.routingMode != "global-first"
-                    && config.routingMode != "global-hash-per-flow"
-                    && config.routingMode != "global-hrw-per-flow"
-                    && config.routingMode != "global-size-aware-hrw"
-                    && config.routingMode != "global-capacity-aware-hrw",
+  NS_ABORT_MSG_IF(!TryParseRoutingMode(config.routingMode, m_routingMode),
                   "未知 routingMode: " << config.routingMode);
   NS_ABORT_MSG_IF(config.islMtuBytes < 68,
                   "islMtuBytes 必须至少为 68");
   NS_ABORT_MSG_IF(config.islQueueBytes == 0,
                   "islQueueBytes 必须大于 0");
-  if (config.routingMode == "global-size-aware-hrw"
-      || config.routingMode == "global-capacity-aware-hrw")
+  if (IsReservationAwareRoutingMode(m_routingMode))
     {
       m_sizeAwareFlowRegistry = CreateObject<SizeAwareFlowRegistry>();
     }
@@ -53,26 +49,8 @@ SatelliteTopology::CreateSatelliteNodes(const std::vector<uint32_t>& satelliteId
     }
 
   Ipv4StaticRoutingHelper staticRouting;
-  EcmpRouteSelectionMode selectionMode =
-    EcmpRouteSelectionMode::GLOBAL_FIRST;
-  if (m_config.routingMode == "global-hash-per-flow")
-    {
-      selectionMode = EcmpRouteSelectionMode::HASH_PER_FLOW;
-    }
-  else if (m_config.routingMode == "global-hrw-per-flow")
-    {
-      selectionMode = EcmpRouteSelectionMode::HRW_PER_FLOW;
-    }
-  else if (m_config.routingMode == "global-size-aware-hrw")
-    {
-      selectionMode = EcmpRouteSelectionMode::SIZE_AWARE_HRW;
-    }
-  else if (m_config.routingMode == "global-capacity-aware-hrw")
-    {
-      selectionMode = EcmpRouteSelectionMode::CAPACITY_AWARE_HRW;
-    }
   SatComputeIpv4GlobalRoutingHelper globalRouting(
-    selectionMode,
+    m_routingMode,
     m_config.ecmpHashSeed,
     m_sizeAwareFlowRegistry);
   Ipv4ListRoutingHelper listRouting;
@@ -359,7 +337,7 @@ SatelliteTopology::GetEcmpHashSeed() const
 bool
 SatelliteTopology::IsCapacityAwareRouting() const
 {
-  return m_config.routingMode == "global-capacity-aware-hrw";
+  return m_routingMode == RoutingMode::CAPACITY_AWARE_HRW;
 }
 
 bool
