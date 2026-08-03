@@ -63,7 +63,7 @@ transferLogMode          = summary
 taskLogMode              = summary
 taskCompletionPolicy     = strict
 diagnosticMode           = off
-routingMode              = global-hash-per-flow
+routingMode              = global-capacity-aware-hrw
 ecmpHashSeed             = 1
 outputDir                = /tmp/satcompute-output
 ```
@@ -120,7 +120,8 @@ generator seed/tail、preflight 成功/失败/warning 及全部扩展检查器�
   采集并写出未完成对象、ISL 队列 Drop 和 ECMP 链路集中度。默认 `off`。
 - `--routingMode`：`global-first`、`global-hash-per-flow`、
   `global-hrw-per-flow`、`global-size-aware-hrw` 或
-  `global-capacity-aware-hrw`，默认保留 N1 基线 `global-hash-per-flow`。
+  `global-capacity-aware-hrw`，默认使用当前 N2 基线
+  `global-capacity-aware-hrw`。
 - `--ecmpHashSeed`：四种逐流 ECMP 使用的确定性 FNV-1a-64 64-bit seed
   前缀。
 - `--outputDir`：结构化指标目录，默认 `/tmp/satcompute-output`。正式实验应
@@ -320,8 +321,8 @@ mask 仍参与 HRW 分数及 sticky 身份，但不拆分链路负载。拓扑 e
 FqCoDel、DropTail、实时利用率或时延，也不实现周期采样、中途主动迁移、速率
 控制、重传或全局流量工程。
 
-`global-capacity-aware-hrw` 是 size-aware 之后的当前迭代：它从节点级负载
-选择进一步扩展到完整路径准入和发送速率控制。它仍然只使用 ns-3
+`global-capacity-aware-hrw` 是当前默认模式，也是 size-aware 之后的当前迭代：
+它从节点级负载选择进一步扩展到完整路径准入和发送速率控制。它仍然只使用 ns-3
 全局路由给出的等价最短路径，不生成更长路径，也不是 KSP：
 
 ```text

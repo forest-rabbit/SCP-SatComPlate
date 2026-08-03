@@ -57,7 +57,7 @@ GetDefaultSatComputeConfig()
   // 固定逐跳选择，并按路径瓶颈带宽 pacing；容量不足的 flow 延迟注入。
   // 动态快照使活动路径失效时，暂停未发数据、整路径释放并在新 ECMP
   // 图上重新准入；暂时无路或无剩余容量时继续等待，不中断仿真。
-  config.routingMode = "global-hash-per-flow";
+  config.routingMode = "global-capacity-aware-hrw";
 
   // --transferLogMode：
   // "summary" 输出聚合信息与少量样本，"verbose" 输出每条 transfer，

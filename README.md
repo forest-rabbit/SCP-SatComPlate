@@ -186,14 +186,14 @@ ID 为 `2 × task_id`。输入完整到达后才进入计算节点的非抢占�
 ## 路由
 
 - `global-first`：兼容模式，完整委托原生 `Ipv4GlobalRouting` 的首条路由行为。
-- `global-hash-per-flow`：默认的 N1 基线，对排序、去重后的目标 service `/32`
+- `global-hash-per-flow`：N1 历史基线，对排序、去重后的目标 service `/32`
   exact host candidates 做五元组 FNV-1a-64 取模选择。
 - `global-hrw-per-flow`：对每个候选计算 HRW/Rendezvous 分数，在候选变化时
   保持稳定映射并实现最小流迁移。
 - `global-size-aware-hrw`：先取得 HRW 前两名，再按活动 transfer 的声明字节
   预留选择物理下一跳；使用节点级 sticky 选择，并在发送完成后释放预留。
-- `global-capacity-aware-hrw`：在 ECMP 最短路图上执行完整路径容量准入和
-  瓶颈速率 pacing；动态路径失效时暂停、整路径释放并重新准入。
+- `global-capacity-aware-hrw`：当前默认模式，在 ECMP 最短路图上执行完整路径
+  容量准入和瓶颈速率 pacing；动态路径失效时暂停、整路径释放并重新准入。
 
 自定义层不复制 SPF、Dijkstra、LSDB 或 `LookupGlobal()`，也不启用原生随机
 ECMP。每次完整快照调用原生 `RecomputeRoutingTables()` 后进入新的 route
