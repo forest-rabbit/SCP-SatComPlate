@@ -48,6 +48,22 @@ struct CapacityAwarePath
   }
 };
 
+struct CapacityAwareRuntimeSummary
+{
+  uint64_t activePathCountAtEnd;
+  uint64_t reservedDirectedLinkCountAtEnd;
+  uint64_t totalReservedRateBpsAtEnd;
+  uint64_t pendingTransferCountAtEnd;
+
+  CapacityAwareRuntimeSummary()
+    : activePathCountAtEnd(0),
+      reservedDirectedLinkCountAtEnd(0),
+      totalReservedRateBpsAtEnd(0),
+      pendingTransferCountAtEnd(0)
+  {
+  }
+};
+
 class CapacityAwareRouteAdmission
 {
 public:
@@ -60,6 +76,7 @@ public:
   bool HasActivePath(uint64_t transferId) const;
   bool IsActivePathValid(uint64_t transferId,
                          uint32_t destinationSatelliteId) const;
+  CapacityAwareRuntimeSummary CollectSummary() const;
   void Reserve(uint64_t transferId, const CapacityAwarePath& path);
   void Release(uint64_t transferId);
 

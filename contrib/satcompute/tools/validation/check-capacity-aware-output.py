@@ -44,6 +44,32 @@ def rows_by_transfer(directory, filename):
     return result
 
 
+def validate_capacity_summary(directory, complete):
+    summary = read_json(directory, "capacity-aware-summary.json")
+    fields = (
+        "active_path_count_at_end",
+        "reserved_directed_link_count_at_end",
+        "total_reserved_rate_bps_at_end",
+        "pending_transfer_count_at_end",
+    )
+    require(set(summary) == set(fields), "capacity summary fields changed")
+    values = {name: int(summary[name]) for name in fields}
+    require(all(value >= 0 for value in values.values()), "negative capacity summary value")
+    if complete:
+        require(
+            all(value == 0 for value in values.values()),
+            f"completed run retained capacity state: {values}",
+        )
+    else:
+        require(values["active_path_count_at_end"] == 2, "epoch active path count mismatch")
+        require(values["pending_transfer_count_at_end"] == 2, "epoch pending count mismatch")
+        require(
+            values["reserved_directed_link_count_at_end"] == 4
+            and values["total_reserved_rate_bps_at_end"] == 40_000_000,
+            "epoch capacity ledger mismatch",
+        )
+
+
 def validate_baseline(directory):
     run = read_json(directory, "run-summary.json")
     require(run["routing_mode"] == "global-size-aware-hrw", "baseline mode mismatch")
@@ -62,6 +88,10 @@ def validate_baseline(directory):
     }
     require(reasons["QUEUE_DISC"] > 0, "baseline lacks QueueDisc drops")
     require(run["received_application_bytes"] < 24_000_000, "baseline unexpectedly completed")
+    require(
+        not (Path(directory) / "capacity-aware-summary.json").exists(),
+        "size-aware baseline retained capacity summary",
+    )
 
     transfers = rows_by_transfer(directory, "transfer-summary.csv")
     require(set(transfers) == {1, 2}, "baseline transfer IDs changed")
@@ -491,6 +521,7 @@ def validate_replay(first, second):
         "ecmp-route-events.csv",
         "size-aware-reservation-events.csv",
         "size-aware-summary.json",
+        "capacity-aware-summary.json",
         "diagnostics/failure/flow-drop-reasons.csv",
     )
     for filename in deterministic_files:
@@ -528,6 +559,18 @@ def main():
     validate_dynamic_route(arguments.dynamic_route_second)
     validate_sender_finished(arguments.sender_finished)
     validate_same_epoch_readmission(arguments.same_epoch_readmission)
+    for directory in (
+        arguments.capacity_first,
+        arguments.capacity_second,
+        arguments.parallel_ecmp,
+        arguments.task_mode,
+        arguments.dynamic_route_first,
+        arguments.dynamic_route_second,
+        arguments.sender_finished,
+        arguments.same_epoch_readmission,
+    ):
+        validate_capacity_summary(directory, complete=True)
+    validate_capacity_summary(arguments.same_edge_epoch, complete=False)
     validate_replay(arguments.capacity_first, arguments.capacity_second)
     validate_replay(arguments.dynamic_route_first, arguments.dynamic_route_second)
     print(

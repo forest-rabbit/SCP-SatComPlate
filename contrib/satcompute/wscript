@@ -21,6 +21,7 @@ def build(bld):
         'metrics/diagnostics/failure-diagnostics.cc',
         'metrics/diagnostics/flow-drop-reason-diagnostics.cc',
         'metrics/metrics.cc',
+        'metrics/routing/capacity-aware-metrics.cc',
         'metrics/routing/ecmp-metrics.cc',
         'metrics/routing/ecmp-route-recorder.cc',
         'metrics/routing/size-aware-metrics.cc',

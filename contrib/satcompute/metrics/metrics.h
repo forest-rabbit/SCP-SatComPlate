@@ -2,6 +2,7 @@
 #define SATCOMPUTE_METRICS_H
 
 #include "../topology/link/satellite-link-state.h"
+#include "../routing/capacity-aware-route-admission.h"
 #include "../routing/satcompute-ipv4-global-routing.h"
 #include "../traffic/network-transfer-receiver.h"
 
@@ -91,6 +92,7 @@ public:
                   const std::vector<TransferSummaryRecord>& transferSummaries,
                   const std::vector<EcmpRouteDecisionEvent>& routeEvents,
                   Ptr<SizeAwareFlowRegistry> sizeAwareRegistry,
+                  const CapacityAwareRuntimeSummary& capacityAwareSummary,
                   const std::vector<IslDirectedLink>& directedLinks,
                   const std::vector<IslQueueDropEvent>& queueDropEvents,
                   const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
@@ -109,6 +111,7 @@ private:
   std::vector<TransferSummaryRecord> m_transferSummaries;
   std::vector<EcmpRouteDecisionEvent> m_routeEvents;
   Ptr<SizeAwareFlowRegistry> m_sizeAwareRegistry;
+  CapacityAwareRuntimeSummary m_capacityAwareSummary;
   const std::vector<IslDirectedLink>& m_directedLinks;
   const std::vector<IslQueueDropEvent>& m_queueDropEvents;
   const std::vector<UdpSocketDropEvent>& m_udpSocketDropEvents;

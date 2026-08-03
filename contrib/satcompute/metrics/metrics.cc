@@ -24,6 +24,7 @@
 #include "core/transfer-metrics.h"
 #include "diagnostics/failure-diagnostics.h"
 #include "diagnostics/flow-drop-reason-diagnostics.h"
+#include "routing/capacity-aware-metrics.h"
 #include "routing/ecmp-metrics.h"
 #include "routing/size-aware-metrics.h"
 #include "../task/task-coordinator.h"
@@ -157,6 +158,7 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
                                  const std::vector<TransferSummaryRecord>& transferSummaries,
                                  const std::vector<EcmpRouteDecisionEvent>& routeEvents,
                                  Ptr<SizeAwareFlowRegistry> sizeAwareRegistry,
+                                 const CapacityAwareRuntimeSummary& capacityAwareSummary,
                                  const std::vector<IslDirectedLink>& directedLinks,
                                  const std::vector<IslQueueDropEvent>& queueDropEvents,
                                  const std::vector<UdpSocketDropEvent>& udpSocketDropEvents,
@@ -171,6 +173,7 @@ MetricsRecorder::MetricsRecorder(Ptr<FlowMonitor> monitor,
     m_transferSummaries(transferSummaries),
     m_routeEvents(routeEvents),
     m_sizeAwareRegistry(sizeAwareRegistry),
+    m_capacityAwareSummary(capacityAwareSummary),
     m_directedLinks(directedLinks),
     m_queueDropEvents(queueDropEvents),
     m_udpSocketDropEvents(udpSocketDropEvents),
@@ -225,6 +228,15 @@ MetricsRecorder::Record()
       NS_ABORT_MSG_IF(m_sizeAwareRegistry != nullptr,
                       "非 size-aware 运行不应持有 flow registry");
       RemoveSizeAwareMetrics(m_outputDirectory);
+    }
+  if (m_runMetadata.routingMode == "global-capacity-aware-hrw")
+    {
+      WriteCapacityAwareMetrics(m_capacityAwareSummary,
+                                m_outputDirectory);
+    }
+  else
+    {
+      RemoveCapacityAwareMetrics(m_outputDirectory);
     }
   WriteTransferSummaries(m_transferSummaries, m_outputDirectory);
   if (m_taskCoordinator != nullptr)

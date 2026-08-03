@@ -424,6 +424,21 @@ main(int argc, char* argv[])
       udpSocketDropEvents =
         taskCoordinator->GetTransferEngine()->CollectUdpSocketDropEvents();
     }
+  CapacityAwareRuntimeSummary capacityAwareSummary;
+  if (config.routingMode == "global-capacity-aware-hrw")
+    {
+      if (transferMode)
+        {
+          capacityAwareSummary =
+            networkTransfers.engine->CollectCapacityAwareSummary();
+        }
+      else if (taskMode)
+        {
+          capacityAwareSummary =
+            taskCoordinator->GetTransferEngine()
+              ->CollectCapacityAwareSummary();
+        }
+    }
   RunMetadata runMetadata = {
     runMode,
     config.routingMode,
@@ -451,6 +466,7 @@ main(int argc, char* argv[])
                           transferSummaries,
                           routeRecorder.GetEvents(),
                           topology.GetSizeAwareFlowRegistry(),
+                          capacityAwareSummary,
                           topology.GetIslDirectedLinks(),
                           topology.GetIslQueueDropEvents(),
                           udpSocketDropEvents,

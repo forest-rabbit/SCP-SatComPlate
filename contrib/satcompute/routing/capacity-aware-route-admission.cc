@@ -216,6 +216,23 @@ CapacityAwareRouteAdmission::IsActivePathValid(
   return expectedSource == destinationSatelliteId;
 }
 
+CapacityAwareRuntimeSummary
+CapacityAwareRouteAdmission::CollectSummary() const
+{
+  CapacityAwareRuntimeSummary summary;
+  summary.activePathCountAtEnd = m_activePaths.size();
+  summary.reservedDirectedLinkCountAtEnd = m_reservedRateBps.size();
+  for (const auto& reservation : m_reservedRateBps)
+    {
+      NS_ABORT_MSG_IF(
+        summary.totalReservedRateBpsAtEnd
+          > std::numeric_limits<uint64_t>::max() - reservation.second,
+        "capacity-aware total reserved rate 溢出");
+      summary.totalReservedRateBpsAtEnd += reservation.second;
+    }
+  return summary;
+}
+
 void
 CapacityAwareRouteAdmission::Reserve(uint64_t transferId,
                                      const CapacityAwarePath& path)

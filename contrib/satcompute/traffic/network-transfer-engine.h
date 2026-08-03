@@ -64,6 +64,7 @@ public:
   std::vector<TransferFlowMetadata> CollectFlowMetadata() const;
   std::vector<TransferSummaryRecord> CollectSummaries() const;
   std::vector<UdpSocketDropEvent> CollectUdpSocketDropEvents() const;
+  CapacityAwareRuntimeSummary CollectCapacityAwareSummary() const;
 
 private:
   enum TransferState

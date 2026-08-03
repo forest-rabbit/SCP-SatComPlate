@@ -743,4 +743,17 @@ NetworkTransferEngine::CollectUdpSocketDropEvents() const
   return events;
 }
 
+CapacityAwareRuntimeSummary
+NetworkTransferEngine::CollectCapacityAwareSummary() const
+{
+  NS_ABORT_MSG_IF(!m_configured
+                    || !m_capacityAwareRouting
+                    || m_capacityAdmission == nullptr,
+                  "capacity-aware summary 未配置");
+  CapacityAwareRuntimeSummary summary =
+    m_capacityAdmission->CollectSummary();
+  summary.pendingTransferCountAtEnd = m_pendingCapacityTransfers.size();
+  return summary;
+}
+
 } // namespace ns3
