@@ -6,6 +6,7 @@ build_lib(
     model/sha256.cc
     topology/ipv4/satellite-ipv4-addressing.cc
     topology/link/satellite-link-state.cc
+    topology/replay/replay-topology-controller.cc
     topology/satellite-id-map.cc
     topology/snapshot/snapshot-reader.cc
     topology/snapshot/snapshot-schedule.cc
@@ -15,6 +16,7 @@ build_lib(
     model/sha256.h
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
+    topology/replay/replay-topology-controller.h
     topology/satellite-id-map.h
     topology/snapshot/snapshot-reader.h
     topology/snapshot/snapshot-schedule.h
@@ -62,6 +64,15 @@ build_exec(
   EXECNAME satcompute-link-state-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/link-state-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-replay-controller-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/replay-controller-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

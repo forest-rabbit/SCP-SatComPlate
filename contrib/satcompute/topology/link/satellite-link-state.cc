@@ -86,11 +86,10 @@ SatelliteLinkState::ValidateAndCanonicalize(const std::vector<SatelliteLink>& li
         {
             throw SatelliteLinkStateError("ISL bandwidth must be positive");
         }
-        if (link.delayUs >
-            static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) / 1000)
+        if (link.delayNs < 0)
         {
             throw SatelliteLinkStateError(
-                "ISL delay cannot be represented as integer nanoseconds");
+                "ISL delay must be non-negative integer nanoseconds");
         }
         const LinkKey key = MakeKey(link.sourceId, link.destinationId);
         link.sourceId = key.first;
@@ -164,7 +163,7 @@ SatelliteLinkState::ConfigureLink(const NetDeviceContainer& devices,
     }
     channel->SetAttribute(
         "Delay",
-        TimeValue(NanoSeconds(static_cast<int64_t>(link.delayUs * 1000))));
+        TimeValue(NanoSeconds(link.delayNs)));
 }
 
 void
@@ -255,7 +254,7 @@ SatelliteLinkState::InstallLink(const SatelliteLink& link)
     helper.SetDeviceAttribute("Mtu", UintegerValue(m_islMtuBytes));
     helper.SetChannelAttribute(
         "Delay",
-        TimeValue(NanoSeconds(static_cast<int64_t>(link.delayUs * 1000))));
+        TimeValue(NanoSeconds(link.delayNs)));
     helper.SetQueue("ns3::DropTailQueue",
                     "MaxSize",
                     StringValue(std::to_string(m_islQueueBytes) + "B"));

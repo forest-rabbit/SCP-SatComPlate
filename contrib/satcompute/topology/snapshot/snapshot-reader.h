@@ -23,8 +23,8 @@ class TopologySnapshotError : public std::runtime_error
  * Read and strictly validate one legacy-compatible topology snapshot pair.
  *
  * Legacy input stores delay in microseconds and link bandwidth in kilobits per
- * second. The returned structure preserves delayUs and converts bandwidth once
- * to bits per second.
+ * second. The returned structure converts delay to integer nanoseconds and
+ * bandwidth to bits per second exactly once.
  *
  * @param nodesFilename JSON file containing the complete satellite ID set.
  * @param linksFilename JSON file containing the complete active ISL set.

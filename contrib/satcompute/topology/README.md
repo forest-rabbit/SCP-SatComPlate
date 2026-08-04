@@ -21,6 +21,14 @@ controller must recompute IPv4 routes only when `ActiveEdgeSetChanged()` is
 true. Changing only propagation delay or bandwidth updates the existing channel
 and devices without changing the route epoch.
 
+`ReplayTopologyController` selects slices using the scenario duration and
+network interval. Scenario bandwidth always overrides legacy snapshot metadata.
+In `fixed` mode, `fixed_delay_us` is converted once and overrides every slice;
+in `distance` mode, each slice's legacy microsecond delay is converted once to
+integer nanoseconds. The controller repopulates routes initially and then calls
+one recomputation only for an active-edge change. Its stock `global-first`
+routing guard is temporary until the compatibility adapters are migrated.
+
 The ns-3 `QueueSize` byte counter is unsigned 32-bit. Scenario schema 0.2
 therefore rejects `network.isl_queue_bytes` above 4,294,967,295 during loading,
 before any network device is created.

@@ -27,6 +27,8 @@ using Json = nlohmann::json;
 
 constexpr uint64_t UINT32_MAX_VALUE = std::numeric_limits<uint32_t>::max();
 constexpr uint64_t UINT16_MAX_VALUE = std::numeric_limits<uint16_t>::max();
+constexpr uint64_t MAX_TIME_MICROSECONDS =
+    static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) / 1000;
 constexpr uint32_t MAX_SATELLITES = 99999;
 
 [[noreturn]] void
@@ -577,8 +579,11 @@ LoadScenarioConfig(const std::filesystem::path& path)
     const Json& fixedDelay = GetField(network, "fixed_delay_us");
     if (config.network.delayMode == "fixed")
     {
-        config.network.fixedDelayUs =
-            RequireUint64(fixedDelay, "network.fixed_delay_us", 1, UINT64_MAX);
+        const uint64_t fixedDelayUs = RequireUint64(fixedDelay,
+                                                    "network.fixed_delay_us",
+                                                    1,
+                                                    MAX_TIME_MICROSECONDS);
+        config.network.fixedDelayNs = static_cast<int64_t>(fixedDelayUs * 1000);
     }
     else
     {
@@ -586,7 +591,7 @@ LoadScenarioConfig(const std::filesystem::path& path)
         {
             Fail("network.fixed_delay_us", "must be null for distance mode");
         }
-        config.network.fixedDelayUs = std::nullopt;
+        config.network.fixedDelayNs = std::nullopt;
     }
     config.network.networkUpdateIntervalNs = ParseSecondsToNanoseconds(
         GetField(network, "network_update_interval_s").dump(),
@@ -755,8 +760,8 @@ WriteEffectiveConfig(const ScenarioConfig& config, const std::filesystem::path& 
           {"seam_enabled", config.network.seamEnabled},
           {"max_isl_distance_m", static_cast<double>(config.network.maxIslDistanceM)},
           {"delay_mode", config.network.delayMode},
-          {"fixed_delay_us",
-           config.network.fixedDelayUs ? Json(*config.network.fixedDelayUs) : Json(nullptr)},
+          {"fixed_delay_ns",
+           config.network.fixedDelayNs ? Json(*config.network.fixedDelayNs) : Json(nullptr)},
           {"network_update_interval_ns", config.network.networkUpdateIntervalNs},
           {"link_bandwidth_bps", config.network.linkBandwidthBps},
           {"isl_mtu_bytes", config.network.islMtuBytes},

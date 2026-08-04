@@ -127,10 +127,10 @@ main()
 
         SatelliteLinkState linkState(idMap, 1500, 1500000, false);
         const std::vector<SatelliteLink> initialLinks = {
-            {40, 30, 1000, 100000000},
-            {30, 10, 1000, 100000000},
-            {20, 10, 1000, 100000000},
-            {40, 20, 1000, 100000000},
+            {40, 30, 1000000, 100000000},
+            {30, 10, 1000000, 100000000},
+            {20, 10, 1000000, 100000000},
+            {40, 20, 1000000, 100000000},
         };
         const TopologyLinkUpdateSummary initial =
             linkState.ApplyFullSnapshot(initialLinks);
@@ -170,7 +170,7 @@ main()
               "ISL byte queue capacity differs");
 
         std::vector<SatelliteLink> delayOnly = initialLinks;
-        delayOnly.at(2).delayUs = 2000;
+        delayOnly.at(2).delayNs = 2000000;
         delayOnly.at(2).bandwidthBps = 200000000;
         const TopologyLinkUpdateSummary reconfigured =
             linkState.ApplyFullSnapshot(delayOnly);

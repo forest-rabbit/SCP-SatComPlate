@@ -1,0 +1,11 @@
+{
+  "links": [
+    {
+      "node1_id": 0,
+      "node2_id": 1,
+      "type": "sat",
+      "delay": 1500,
+      "link_bandwidth": 100000
+    }
+  ]
+}
