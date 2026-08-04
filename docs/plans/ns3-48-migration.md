@@ -124,7 +124,7 @@ Dependencies: Task 1.3.
 ### Checkpoint 1
 
 - Module, schema, loader, and manifest checks pass.
-- Upstream tests remain green.
+- The targeted module build and all project-owned configuration tests pass.
 - Configuration PRs are merged and their branches are removed.
 
 ## Phase 2: Legacy Static Topology on ns-3.48
