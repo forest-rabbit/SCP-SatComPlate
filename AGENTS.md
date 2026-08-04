@@ -18,12 +18,13 @@ stations, feeder links, the frontend transport, fault execution, IPv6, and
 SRv6 are outside the current implementation scope.
 
 SatCompute-owned tests and fixtures stay under
-`contrib/satcompute/tests/{unit,integration,fixtures,support}`. Each increment
+`contrib/satcompute/tests/{unit,integration,fixtures}`. Each increment
 must build, pass its focused tests, and leave the worktree clean before it is
 committed. Preserve fixture content unless a task explicitly changes its
 contract.
 
-Configure project work with `./ns3 configure --enable-modules=satcompute`.
+Configure project work with
+`./ns3 configure --enable-modules=satcompute -G Ninja`.
 Do not enable ns-3's global examples or test suites in SatCompute configuration
 or GitHub CI, and do not run `test.py` or upstream example tests there. Project
 verification consists of the targeted module build plus the maintained tests
@@ -43,9 +44,9 @@ distance-mode delays, but global routes are recomputed only when the effective
 active-link set changes. A future fault event is an asynchronous nanosecond
 event and will bypass the periodic cadence.
 
-Use small `agent/*` branches and pull requests. After a PR is merged and its
-head is confirmed reachable from `main`, delete the corresponding local and
-remote feature branch. Never delete `legacy/ns-3.33`.
+Use small `feature/*` or `docs/*` branches and pull requests. After a PR is
+merged and its head is confirmed reachable from `main`, delete the
+corresponding local and remote branch. Never delete `legacy/ns-3.33`.
 
 ## Project Overview
 
@@ -58,7 +59,7 @@ ns-3 is a discrete-event network simulator for Internet systems, written in C++ 
 **Configuration:**
 
 ```bash
-./ns3 configure --enable-modules=satcompute       # SCP-SatComPlate setup
+./ns3 configure --enable-modules=satcompute -G Ninja  # SCP-SatComPlate setup
 ./ns3 configure --help                            # Show all options
 ```
 

@@ -1,3 +1,43 @@
+# SCP-SatComPlate
+
+[![SatCompute CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/per_commit.yml/badge.svg)](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/per_commit.yml)
+
+SCP-SatComPlate is the ns-3.48 mainline of SatCompute. The repository retains
+the official ns-3.48 history on `main`, implements the platform as
+`contrib/satcompute`, and preserves the previous implementation on the
+permanent `legacy/ns-3.33` branch.
+
+Configure only the SatCompute module and its dependencies:
+
+```bash
+./ns3 configure --enable-modules=satcompute -G Ninja
+./ns3 build
+```
+
+The project deliberately leaves ns-3's global examples and test suites off.
+Its maintained verification is project-owned and remains under
+`contrib/satcompute/tests/`:
+
+```bash
+python3 -m unittest discover \
+  -s contrib/satcompute/tests/unit -p 'test_*.py' -v
+contrib/satcompute/tests/unit/run-cpp-tests.sh
+contrib/satcompute/tests/integration/smoke/run-all.sh
+contrib/satcompute/tests/integration/regression/run-all.sh
+```
+
+Start with [the SatCompute module guide](contrib/satcompute/README.md),
+[scenario 0.2 specification](docs/specs/platform-v0.2.md), and
+[migration status](docs/ns3-48-migration-status.md). The current scope covers
+deterministic IPv4 satellite networking, online circular orbits, offline
+topology traces, transfer/task/compute workloads, and metrics. Fault execution,
+frontend transport, IPv6, and SRv6 are explicitly deferred.
+
+The remainder of this file is the upstream ns-3.48 README and describes the
+full simulator; its example/test commands are not SCP-SatComPlate CI gates.
+
+---
+
 # The Network Simulator, Version 3
 
 [![codecov](https://codecov.io/gh/nsnam/ns-3-dev-git/branch/master/graph/badge.svg)](https://codecov.io/gh/nsnam/ns-3-dev-git/branch/master/)

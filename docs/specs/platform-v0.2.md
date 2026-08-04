@@ -1,6 +1,6 @@
 # Spec: SCP-SatComPlate on ns-3.48
 
-Status: approved for incremental implementation on 2026-08-04.
+Status: implemented and verified on 2026-08-05.
 
 ## Objective
 
