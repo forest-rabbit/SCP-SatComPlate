@@ -1,0 +1,12 @@
+{
+  "schema_version": "0.1",
+  "transfers": [
+    {
+      "transfer_id": 1,
+      "source_node_id": 10,
+      "destination_node_id": 70,
+      "size_bytes": 1024,
+      "arrival_time_ns": 1000000000
+    }
+  ]
+}
