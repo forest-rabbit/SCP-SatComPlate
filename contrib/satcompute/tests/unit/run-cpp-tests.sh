@@ -23,3 +23,10 @@ replay_scenario="contrib/satcompute/tests/fixtures/scenario/replay-dynamic.json"
   "satcompute-snapshot-test --scenario=$replay_scenario --outputDir=$test_output/snapshot"
 
 ./ns3 run --no-build "satcompute-link-state-test"
+
+replay_fixed="contrib/satcompute/tests/fixtures/scenario/replay-delay-fixed.json"
+replay_distance="contrib/satcompute/tests/fixtures/scenario/replay-delay-distance.json"
+replay_dynamic="contrib/satcompute/tests/fixtures/scenario/replay-dynamic.json"
+./ns3 run --no-build \
+  "satcompute-replay-controller-test --fixedScenario=$replay_fixed \
+--distanceScenario=$replay_distance --dynamicScenario=$replay_dynamic"

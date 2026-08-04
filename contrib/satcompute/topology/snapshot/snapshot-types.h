@@ -17,7 +17,7 @@ struct SatelliteLink
 {
     uint32_t sourceId{};
     uint32_t destinationId{};
-    uint64_t delayUs{};
+    int64_t delayNs{};
     uint64_t bandwidthBps{};
 
     bool operator==(const SatelliteLink&) const = default;

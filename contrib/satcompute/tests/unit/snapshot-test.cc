@@ -147,7 +147,7 @@ main(int argc, char* argv[])
         Check(initial.satelliteIds == std::vector<uint32_t>({0, 1, 2, 3}),
               "satellite IDs are not canonical");
         Check(initial.links.size() == 4, "initial link count differs");
-        Check(initial.links.at(0) == SatelliteLink{0, 1, 1000, 100000000},
+        Check(initial.links.at(0) == SatelliteLink{0, 1, 1000000, 100000000},
               "legacy link units or canonical ordering differ");
 
         const SatelliteSnapshot update = ReadSatelliteSnapshot(

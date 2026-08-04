@@ -222,8 +222,10 @@ ReadSatelliteLinks(const std::filesystem::path& filename)
                  "topology contains duplicate satellite link " +
                      std::to_string(key.first) + "<->" + std::to_string(key.second));
         }
-        parsedLinks.push_back(
-            {key.first, key.second, delayUs, bandwidthKbps * 1000});
+        parsedLinks.push_back({key.first,
+                               key.second,
+                               static_cast<int64_t>(delayUs * 1000),
+                               bandwidthKbps * 1000});
     }
 
     std::sort(parsedLinks.begin(),

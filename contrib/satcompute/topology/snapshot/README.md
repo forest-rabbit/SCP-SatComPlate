@@ -7,7 +7,8 @@ The replay layer accepts the legacy SatCompute pair of files at each timestamp:
 - `topology_<seconds>s.json` contains exactly a `links` array. Each item
   contains `node1_id`, `node2_id`, `type`, `delay`, and `link_bandwidth`.
   Legacy `delay` is in microseconds and `link_bandwidth` is in kilobits per
-  second. The loader converts bandwidth to bits per second once.
+  second. The loader converts them to integer nanoseconds and bits per second
+  once.
 
 Timestamp tokens are converted exactly to integer nanoseconds. Aliases such as
 `1s` and `1.0s` are therefore duplicate timestamps, and precision finer than a

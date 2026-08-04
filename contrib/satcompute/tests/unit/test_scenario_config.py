@@ -64,12 +64,12 @@ class ScenarioParsingTest(unittest.TestCase):
         self.assertEqual(config.simulation.duration_ns, 1_000_000_000_000)
         self.assertEqual(config.network.network_update_interval_ns, 20_000_000_000)
         self.assertEqual(config.trace_export.interval_ns, 1_000_000_000)
-        self.assertEqual(config.network.fixed_delay_us, 8000)
+        self.assertEqual(config.network.fixed_delay_ns, 8_000_000)
 
     def test_distance_example_uses_its_own_update_interval(self) -> None:
         config = load_scenario(EXAMPLE_DIRECTORY / "synthetic-66-distance.json")
         self.assertEqual(config.network.delay_mode, "distance")
-        self.assertIsNone(config.network.fixed_delay_us)
+        self.assertIsNone(config.network.fixed_delay_ns)
         self.assertEqual(config.network.network_update_interval_ns, 1_000_000_000)
 
     def test_compute_and_task_inputs_are_direct_scenario_references(self) -> None:
@@ -159,6 +159,12 @@ class ScenarioParsingTest(unittest.TestCase):
     def test_isl_queue_must_fit_ns3_queue_size(self) -> None:
         payload = load_payload()
         payload["network"]["isl_queue_bytes"] = 4_294_967_296
+        with self.assertRaisesRegex(ScenarioConfigError, "integer in"):
+            parse_scenario(payload)
+
+    def test_fixed_delay_must_fit_integer_nanoseconds(self) -> None:
+        payload = load_payload()
+        payload["network"]["fixed_delay_us"] = 9_223_372_036_854_776
         with self.assertRaisesRegex(ScenarioConfigError, "integer in"):
             parse_scenario(payload)
 

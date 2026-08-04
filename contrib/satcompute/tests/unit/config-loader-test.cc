@@ -126,12 +126,12 @@ main(int argc, char* argv[])
               "fixed simulation duration differs");
         Check(fixed.network.networkUpdateIntervalNs == 20000000000,
               "fixed network update interval differs");
-        Check(fixed.network.fixedDelayUs == 8000, "fixed delay differs");
+        Check(fixed.network.fixedDelayNs == 8000000, "fixed delay differs");
         Check(fixed.traceExport.intervalNs == 1000000000, "trace interval differs");
 
         const ScenarioConfig distance = LoadScenarioConfig(distanceScenario);
         Check(distance.network.delayMode == "distance", "distance mode differs");
-        Check(!distance.network.fixedDelayUs, "distance fixed delay is not null");
+        Check(!distance.network.fixedDelayNs, "distance fixed delay is not null");
         Check(distance.network.networkUpdateIntervalNs == 1000000000,
               "distance network update interval differs");
 
@@ -174,6 +174,15 @@ main(int argc, char* argv[])
             [&invalidQueuePath] { LoadScenarioConfig(invalidQueuePath); },
             "ISL queue larger than ns-3 QueueSize was accepted");
 
+        nlohmann::json invalidDelay = nlohmann::json::parse(ReadFile(fixed.sourcePath));
+        invalidDelay.at("network")["fixed_delay_us"] = 9223372036854776ULL;
+        const std::filesystem::path invalidDelayPath =
+            std::filesystem::path(outputDirectory) / "invalid-delay.json";
+        WriteJson(invalidDelayPath, invalidDelay);
+        ExpectConfigError(
+            [&invalidDelayPath] { LoadScenarioConfig(invalidDelayPath); },
+            "fixed delay larger than int64 nanoseconds was accepted");
+
         const std::filesystem::path effectivePath =
             WriteEffectiveConfig(fixed, outputDirectory);
         const std::string firstOutput = ReadFile(effectivePath);
@@ -184,6 +193,8 @@ main(int argc, char* argv[])
         const nlohmann::json effective = nlohmann::json::parse(firstOutput);
         Check(effective.at("simulation").at("duration_ns") == 1000000000000,
               "effective duration differs");
+        Check(effective.at("network").at("fixed_delay_ns") == 8000000,
+              "effective fixed delay differs");
         Check(effective.at("network").at("network_update_interval_ns") == 20000000000,
               "effective network interval differs");
         Check(effective.at("input_hashes").at("scenario_config").at("sha256") ==

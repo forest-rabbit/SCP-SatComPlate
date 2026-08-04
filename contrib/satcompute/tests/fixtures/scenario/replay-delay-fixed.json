@@ -1,15 +1,15 @@
 {
   "schema_version": "0.2",
-  "scenario_name": "replay-dynamic-fixture",
+  "scenario_name": "replay-delay-fixed",
   "simulation": {
     "start_time_s": 0,
-    "duration_s": 5
+    "duration_s": 2
   },
   "constellation": {
     "orbit_provider": "json-replay",
-    "constellation_name": "diamond-4",
+    "constellation_name": "delay-only-2",
     "constellation_pattern": "walker-star",
-    "num_orbits": 2,
+    "num_orbits": 1,
     "satellites_per_orbit": 2,
     "altitude_m": 780000,
     "inclination_deg": 86.4,
@@ -18,14 +18,14 @@
   },
   "network": {
     "topology_source": "json-replay",
-    "replay_directory": "../topology/snapshots/diamond-4-dynamic",
+    "replay_directory": "../topology/snapshots/delay-only",
     "isl_candidate_strategy": "plus-grid",
     "seam_enabled": false,
     "max_isl_distance_m": 6174589,
     "delay_mode": "fixed",
-    "fixed_delay_us": 1000,
-    "network_update_interval_s": 2,
-    "link_bandwidth_bps": 100000000,
+    "fixed_delay_us": 8000,
+    "network_update_interval_s": 1,
+    "link_bandwidth_bps": 200000000,
     "isl_mtu_bytes": 1500,
     "isl_queue_bytes": 1500000,
     "receiver_rcv_buf_bytes": 131072

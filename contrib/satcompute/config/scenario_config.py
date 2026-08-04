@@ -13,6 +13,7 @@ from typing import Any
 SCHEMA_VERSION = "0.2"
 NANOSECONDS_PER_SECOND = Decimal(1_000_000_000)
 INT64_MAX = (1 << 63) - 1
+MAX_TIME_MICROSECONDS = INT64_MAX // 1000
 UINT32_MAX = (1 << 32) - 1
 UINT64_MAX = (1 << 64) - 1
 MAX_SATELLITES = 99_999
@@ -131,7 +132,7 @@ class NetworkConfig:
     seam_enabled: bool
     max_isl_distance_m: Decimal
     delay_mode: str
-    fixed_delay_us: int | None
+    fixed_delay_ns: int | None
     network_update_interval_ns: int
     link_bandwidth_bps: int
     isl_mtu_bytes: int
@@ -419,15 +420,18 @@ def _parse_network(payload: Any, base_directory: Path) -> NetworkConfig:
     )
     fixed_delay = data["fixed_delay_us"]
     if delay_mode == "fixed":
-        fixed_delay_us = _require_integer(
-            fixed_delay, "network.fixed_delay_us", 1, UINT64_MAX
+        fixed_delay_ns = 1000 * _require_integer(
+            fixed_delay,
+            "network.fixed_delay_us",
+            1,
+            MAX_TIME_MICROSECONDS,
         )
     else:
         if fixed_delay is not None:
             raise ScenarioConfigError(
                 "network.fixed_delay_us must be null for distance mode"
             )
-        fixed_delay_us = None
+        fixed_delay_ns = None
 
     return NetworkConfig(
         topology_source=topology_source,
@@ -447,7 +451,7 @@ def _parse_network(payload: Any, base_directory: Path) -> NetworkConfig:
             minimum_exclusive=True,
         ),
         delay_mode=delay_mode,
-        fixed_delay_us=fixed_delay_us,
+        fixed_delay_ns=fixed_delay_ns,
         network_update_interval_ns=seconds_to_nanoseconds(
             data["network_update_interval_s"],
             "network.network_update_interval_s",

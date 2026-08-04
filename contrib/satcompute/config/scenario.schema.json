@@ -197,7 +197,8 @@
         "fixed_delay_us": {
           "description": "Positive one-way propagation delay in microseconds for fixed mode; null for distance mode.",
           "type": ["integer", "null"],
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9223372036854775
         },
         "network_update_interval_s": {
           "description": "Positive periodic orbit, distance-gate, link-delay, and topology evaluation interval in seconds.",
@@ -223,7 +224,8 @@
         "receiver_rcv_buf_bytes": {
           "description": "UDP receive socket buffer capacity per receiver in bytes.",
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 4294967295
         }
       },
       "allOf": [

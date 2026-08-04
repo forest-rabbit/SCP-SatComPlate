@@ -15,6 +15,11 @@ All time values are written in seconds. `scenario_config.py` parses decimal
 tokens without a binary floating-point round trip and converts them exactly to
 signed 64-bit nanoseconds before any event is scheduled.
 
+The input field `network.fixed_delay_us` remains legacy-compatible and
+human-readable. Resolved Python/C++ configuration and `effective-config.json`
+store it as `fixed_delay_ns`, so every scheduled or channel time is an integer
+nanosecond value.
+
 The C++ `ScenarioConfig` loader enforces the same field and cross-field rules
 before ns-3 setup. A validated platform invocation writes a canonical
 `effective-config.json` containing resolved absolute paths, integer-nanosecond

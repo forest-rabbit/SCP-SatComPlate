@@ -50,7 +50,7 @@ struct NetworkConfig
     bool seamEnabled;
     long double maxIslDistanceM;
     std::string delayMode;
-    std::optional<uint64_t> fixedDelayUs;
+    std::optional<int64_t> fixedDelayNs;
     int64_t networkUpdateIntervalNs;
     uint64_t linkBandwidthBps;
     uint16_t islMtuBytes;
