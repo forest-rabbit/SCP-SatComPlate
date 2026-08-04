@@ -4,10 +4,15 @@ build_lib(
     model/satcompute-version.cc
     model/scenario-config.cc
     model/sha256.cc
+    topology/snapshot/snapshot-reader.cc
+    topology/snapshot/snapshot-schedule.cc
   HEADER_FILES
     model/satcompute-version.h
     model/scenario-config.h
     model/sha256.h
+    topology/snapshot/snapshot-reader.h
+    topology/snapshot/snapshot-schedule.h
+    topology/snapshot/snapshot-types.h
   LIBRARIES_TO_LINK ${libcore}
 )
 
@@ -28,6 +33,15 @@ build_exec(
   EXECNAME satcompute-config-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/config-loader-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-snapshot-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/snapshot-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

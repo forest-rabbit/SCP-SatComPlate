@@ -18,3 +18,8 @@ contrib/satcompute/tests/integration/smoke/run-all.sh
 The current scenario contract is `config/scenario.schema.json`. Its
 `description` entries are the parameter reference; maintained configurations
 are under `input/examples/`.
+
+Legacy-compatible JSON replay slices and their exact integer-nanosecond
+selection rules are documented under `topology/snapshot/`. A scenario may point
+at a finer replay directory while its own `network_update_interval_s` controls
+which complete pairs the simulator consumes.

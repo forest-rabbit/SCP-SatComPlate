@@ -83,6 +83,17 @@ class ScenarioParsingTest(unittest.TestCase):
             SCENARIO_FIXTURES / "traffic/task-trace.json",
         )
 
+    def test_replay_directory_and_cadence_come_from_scenario(self) -> None:
+        config = load_scenario(SCENARIO_FIXTURES / "replay-dynamic.json")
+        self.assertEqual(config.constellation.orbit_provider, "json-replay")
+        self.assertEqual(config.network.topology_source, "json-replay")
+        self.assertEqual(
+            config.network.replay_directory,
+            SCENARIO_FIXTURES.parent / "topology/snapshots/diamond-4-dynamic",
+        )
+        self.assertEqual(config.simulation.duration_ns, 5_000_000_000)
+        self.assertEqual(config.network.network_update_interval_ns, 2_000_000_000)
+
     def test_unknown_and_missing_fields_are_rejected(self) -> None:
         unknown = load_payload()
         unknown["unexpected"] = True
