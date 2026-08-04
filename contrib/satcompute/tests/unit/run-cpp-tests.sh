@@ -61,3 +61,7 @@ task_fixtures="contrib/satcompute/tests/fixtures/task"
   "satcompute-task-input-test --fixtureRoot=$task_fixtures"
 
 ./ns3 run --no-build "satcompute-compute-service-test"
+
+./ns3 run --no-build \
+  "satcompute-task-coordinator-test --scenario=$replay_dynamic \
+--fixtureRoot=$task_fixtures"

@@ -37,3 +37,17 @@ Tasks are ordered by `(queue_enter_time_ns, task_id)`. Dispatch is deferred to
 the end of the current ns-3 event batch, so tasks whose input transfers finish
 in the same nanosecond are ordered by task ID regardless of callback order.
 There is no random compute scheduling state.
+
+## Runtime coordination
+
+`TaskCoordinator` creates one `ComputeService` for each profile entry and two
+real UDP transfer plans for each task. Task arrival starts the input transfer;
+receiver completion atomically queues compute work; exact compute completion
+starts the result transfer; and result receiver completion marks the task
+complete. The result transfer therefore has no independent input timestamp.
+
+All five IPv4 routing modes consume the same derived stable transfer IDs and
+five-tuples. Size-aware state follows sender lifetime, while capacity-aware
+complete-path state remains reserved through receiver completion. A completed
+task must have exactly five recorded state transitions, two completed network
+transfers, and no remaining compute work.
