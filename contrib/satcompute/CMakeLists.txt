@@ -21,7 +21,10 @@ build_lib(
     topology/satellite-id-map.cc
     topology/snapshot/snapshot-reader.cc
     topology/snapshot/snapshot-schedule.cc
+    traffic/network-transfer-application.cc
     traffic/network-transfer-config.cc
+    traffic/network-transfer-engine.cc
+    traffic/network-transfer-receiver.cc
   HEADER_FILES
     model/satcompute-version.h
     model/scenario-config.h
@@ -51,10 +54,15 @@ build_lib(
     topology/replay/replay-topology-controller.h
     topology/satellite-endpoint-view.h
     topology/satellite-id-map.h
+    topology/satellite-runtime-view.h
     topology/snapshot/snapshot-reader.h
     topology/snapshot/snapshot-schedule.h
     topology/snapshot/snapshot-types.h
+    traffic/network-transfer-application.h
     traffic/network-transfer-config.h
+    traffic/network-transfer-engine.h
+    traffic/network-transfer-receiver.h
+    traffic/network-transfer-records.h
   LIBRARIES_TO_LINK
     ${libcore}
     ${libnetwork}
@@ -143,6 +151,15 @@ build_exec(
   EXECNAME satcompute-transfer-trace-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/transfer-trace-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-network-transfer-engine-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/network-transfer-engine-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

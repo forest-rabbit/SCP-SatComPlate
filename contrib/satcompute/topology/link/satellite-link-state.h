@@ -76,6 +76,8 @@ class SatelliteLinkState
                        uint32_t islQueueBytes,
                        bool collectQueueDrops);
 
+    /** Install the fixed candidate-device superset in an initially down state. */
+    void PrepareCandidateLinks(const std::vector<SatelliteLink>& links);
     TopologyLinkUpdateSummary ApplyFullSnapshot(const std::vector<SatelliteLink>& links);
     bool IsLinkActive(uint32_t firstSatelliteId, uint32_t secondSatelliteId) const;
     NetDeviceContainer GetLinkDevices(uint32_t firstSatelliteId,
