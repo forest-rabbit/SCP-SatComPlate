@@ -1,0 +1,78 @@
+/*
+ * SPDX-License-Identifier: GPL-2.0-only
+ */
+
+#ifndef SATCOMPUTE_CIRCULAR_ORBIT_TOPOLOGY_POLICY_H
+#define SATCOMPUTE_CIRCULAR_ORBIT_TOPOLOGY_POLICY_H
+
+#include "../../model/scenario-config.h"
+#include "../orbit/online-orbit-constellation.h"
+#include "../snapshot/snapshot-types.h"
+#include "plus-grid-candidate.h"
+
+#include <cstdint>
+#include <stdexcept>
+#include <vector>
+
+namespace ns3
+{
+
+inline constexpr uint64_t SATCOMPUTE_SPEED_OF_LIGHT_M_PER_S = 299792458;
+
+class CircularOrbitTopologyPolicyError : public std::runtime_error
+{
+  public:
+    using std::runtime_error::runtime_error;
+};
+
+/** One fixed candidate evaluated against current ECEF positions. */
+struct EvaluatedSatelliteLink
+{
+    uint32_t sourceId{};
+    uint32_t destinationId{};
+    PlusGridCandidateKind kind{PlusGridCandidateKind::INTRA_PLANE};
+    double distanceM{};
+    int64_t delayNs{};
+    bool active{};
+};
+
+/** Complete deterministic orbit/topology state at one simulation time. */
+struct CircularOrbitTopologyState
+{
+    int64_t simulationTimeNs{};
+    std::vector<SatelliteEcefPosition> positions;
+    std::vector<EvaluatedSatelliteLink> evaluatedLinks;
+
+    std::vector<SatelliteLink> GetCandidateLinks(uint64_t bandwidthBps) const;
+    std::vector<SatelliteLink> GetActiveLinks(uint64_t bandwidthBps) const;
+};
+
+/** Convert a non-negative one-way distance to nearest integer nanoseconds. */
+int64_t DistanceToPropagationDelayNs(double distanceM);
+
+/**
+ * Shared online/offline fixed-candidate topology policy.
+ *
+ * The policy never searches for a nearest replacement. It evaluates only the
+ * canonical plus-grid identities constructed at initialization.
+ */
+class CircularOrbitTopologyPolicy
+{
+  public:
+    explicit CircularOrbitTopologyPolicy(const ScenarioConfig& config);
+
+    const std::vector<PlusGridCandidateLink>& GetCandidates() const;
+    CircularOrbitTopologyState EvaluateCurrent(
+        const OnlineOrbitConstellation& constellation) const;
+    CircularOrbitTopologyState EvaluatePositions(
+        int64_t simulationTimeNs,
+        const std::vector<SatelliteEcefPosition>& positions) const;
+
+  private:
+    ScenarioConfig m_config;
+    std::vector<PlusGridCandidateLink> m_candidates;
+};
+
+} // namespace ns3
+
+#endif // SATCOMPUTE_CIRCULAR_ORBIT_TOPOLOGY_POLICY_H

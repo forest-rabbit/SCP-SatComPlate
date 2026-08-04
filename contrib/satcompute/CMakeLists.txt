@@ -23,6 +23,8 @@ build_lib(
     task/task-trace.cc
     topology/ipv4/satellite-ipv4-addressing.cc
     topology/link/satellite-link-state.cc
+    topology/online/circular-orbit-topology-policy.cc
+    topology/online/online-topology-controller.cc
     topology/online/plus-grid-candidate.cc
     topology/orbit/online-orbit-constellation.cc
     topology/replay/replay-topology-controller.cc
@@ -65,6 +67,8 @@ build_lib(
     task/task-trace.h
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
+    topology/online/circular-orbit-topology-policy.h
+    topology/online/online-topology-controller.h
     topology/online/plus-grid-candidate.h
     topology/orbit/online-orbit-constellation.h
     topology/replay/replay-topology-controller.h
@@ -222,6 +226,15 @@ build_exec(
   EXECNAME satcompute-online-orbit-foundation-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/online-orbit-foundation-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-online-topology-controller-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/online-topology-controller-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

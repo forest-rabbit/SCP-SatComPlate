@@ -191,7 +191,7 @@
           "exclusiveMinimum": 0
         },
         "delay_mode": {
-          "description": "fixed uses one configured propagation delay; distance derives one-way delay from current separation.",
+          "description": "fixed uses one configured propagation delay; distance divides current separation by 299792458 m/s and rounds the one-way result to nearest integer nanoseconds, with an exact half rounded upward.",
           "enum": ["fixed", "distance"]
         },
         "fixed_delay_us": {
