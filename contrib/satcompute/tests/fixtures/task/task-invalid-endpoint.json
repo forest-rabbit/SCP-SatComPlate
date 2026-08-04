@@ -1,0 +1,15 @@
+{
+  "schema_version": "0.1",
+  "tasks": [
+    {
+      "task_id": 1,
+      "source_node_id": 1,
+      "compute_node_id": 1,
+      "result_node_id": 0,
+      "input_bytes": 1024,
+      "output_bytes": 512,
+      "compute_work_units": 300000,
+      "arrival_time_ns": 100
+    }
+  ]
+}

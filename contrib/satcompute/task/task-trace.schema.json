@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forest-rabbit.github.io/SCP-SatComPlate/schema/task-trace-0.1.json",
+  "title": "SatCompute TaskTrace 0.1",
+  "description": "Closed-world input-transfer, compute, and result-transfer workload for one scenario.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "tasks"],
+  "properties": {
+    "schema_version": {
+      "description": "TaskTrace contract version; version 0.1 is required by this schema.",
+      "const": "0.1"
+    },
+    "tasks": {
+      "description": "Non-empty task set; array order has no semantic effect.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/task"
+      }
+    }
+  },
+  "$defs": {
+    "task": {
+      "description": "One task whose input is transferred to a compute satellite and whose result is transferred onward.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "source_node_id",
+        "compute_node_id",
+        "result_node_id",
+        "input_bytes",
+        "output_bytes",
+        "compute_work_units",
+        "arrival_time_ns"
+      ],
+      "properties": {
+        "task_id": {
+          "description": "Positive unique uint64 ID no greater than UINT64_MAX/2; input and result transfer IDs are derived as 2*task_id-1 and 2*task_id.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "source_node_id": {
+          "description": "External uint32 satellite ID holding the input; it must differ from compute_node_id.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "compute_node_id": {
+          "description": "External uint32 satellite ID that must appear in ComputeProfile and differ from both transfer peers.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "result_node_id": {
+          "description": "External uint32 satellite ID receiving the result; it may equal source_node_id but not compute_node_id.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "input_bytes": {
+          "description": "Positive application bytes transferred from source_node_id to compute_node_id.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709551615
+        },
+        "output_bytes": {
+          "description": "Positive application bytes transferred from compute_node_id to result_node_id after compute completion.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709551615
+        },
+        "compute_work_units": {
+          "description": "Positive abstract work consumed by the non-preemptive compute service.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709551615
+        },
+        "arrival_time_ns": {
+          "description": "Non-negative integer-ns task arrival offset that precedes simulation stop.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    }
+  }
+}

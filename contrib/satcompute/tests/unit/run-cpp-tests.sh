@@ -55,3 +55,9 @@ transfer_fixtures="contrib/satcompute/tests/fixtures/traffic/transfers"
 --capacityScenario=contrib/satcompute/tests/fixtures/scenario/capacity-pending.json \
 --basicTransfers=$transfer_fixtures/engine-basic.json \
 --capacityTransfers=$transfer_fixtures/capacity-pending.json"
+
+task_fixtures="contrib/satcompute/tests/fixtures/task"
+./ns3 run --no-build \
+  "satcompute-task-input-test --fixtureRoot=$task_fixtures"
+
+./ns3 run --no-build "satcompute-compute-service-test"
