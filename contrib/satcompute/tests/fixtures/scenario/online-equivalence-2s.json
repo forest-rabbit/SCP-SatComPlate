@@ -1,0 +1,57 @@
+{
+  "schema_version": "0.2",
+  "scenario_name": "online-equivalence-2s",
+  "simulation": {
+    "start_time_s": 0,
+    "duration_s": 41
+  },
+  "constellation": {
+    "orbit_provider": "ns3-circular",
+    "constellation_name": "equivalence-diamond-4",
+    "constellation_pattern": "walker-star",
+    "num_orbits": 2,
+    "satellites_per_orbit": 2,
+    "altitude_m": 780000,
+    "inclination_deg": 86.4,
+    "phase_diff": false,
+    "orbit_epoch_offset_s": 0
+  },
+  "network": {
+    "topology_source": "online",
+    "replay_directory": null,
+    "isl_candidate_strategy": "plus-grid",
+    "seam_enabled": false,
+    "max_isl_distance_m": 30000000,
+    "delay_mode": "distance",
+    "fixed_delay_us": null,
+    "network_update_interval_s": 20,
+    "link_bandwidth_bps": 100000000,
+    "isl_mtu_bytes": 1500,
+    "isl_queue_bytes": 1500000,
+    "receiver_rcv_buf_bytes": 131072
+  },
+  "routing": {
+    "mode": "global-first",
+    "hash_seed": 1,
+    "recompute_policy": "on-topology-change"
+  },
+  "workloads": {
+    "transfer_trace": null,
+    "compute_profile": null,
+    "task_trace": null,
+    "transfer_chunk_mode": "fixed",
+    "transfer_payload_bytes": 1024,
+    "task_completion_policy": "strict"
+  },
+  "trace_export": {
+    "enabled": true,
+    "interval_s": 2,
+    "include_final_state": true,
+    "format": "json-slices"
+  },
+  "randomness": {
+    "seed": 1,
+    "run": 1,
+    "stream_start": 0
+  }
+}

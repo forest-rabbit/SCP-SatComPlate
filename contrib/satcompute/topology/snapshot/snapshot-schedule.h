@@ -17,6 +17,9 @@ namespace ns3
  * Discover paired replay files and select the scenario network-update cadence.
  *
  * Snapshot filenames use nodes_<seconds>s.json and topology_<seconds>s.json.
+ * When a version 0.2 manifest.json exists, its ordered inventory is
+ * authoritative and every listed SHA-256 is verified; unlisted stale files are
+ * ignored. Legacy directories without a manifest retain filename discovery.
  * Seconds are parsed exactly to integer nanoseconds. A directory may contain a
  * finer cadence than the simulation consumes; only t = 0, interval, 2*interval
  * and so on strictly before the stop time are selected. Every selected time

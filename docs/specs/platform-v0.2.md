@@ -329,12 +329,17 @@ Tests stay under 'contrib/satcompute/tests/':
 High-risk contracts include:
 
 1. A 1 s offline trace downsampled at 20 s equals a 20 s online run at every
-   shared timestamp.
+   shared timestamp; the same gate also covers a 2 s trace.
 2. Repeated runs produce identical normalized topology, route, and metric
    output.
 3. Distance-only delay changes do not rebuild routes.
 4. One effective edge-set change causes exactly one route recomputation.
 5. Legacy fixed-hash golden mappings remain unchanged.
+
+Generated 0.2 traces are also replay inputs. A present manifest is
+authoritative: every listed file hash is checked, unlisted stale files are
+ignored, embedded pair times must match the selected filename time, and a
+periodic update exactly at the simulation stop boundary is not applied.
 
 ## Boundaries
 

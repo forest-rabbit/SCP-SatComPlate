@@ -75,10 +75,12 @@ class ReplayTopologyController : public SatelliteTopologyController
   private:
     SatelliteSnapshot ReadAndNormalizeSnapshot(
         const std::filesystem::path& nodesFilename,
-        const std::filesystem::path& linksFilename) const;
+        const std::filesystem::path& linksFilename,
+        int64_t expectedTimeNs) const;
     void ValidateSatelliteIds(const SatelliteSnapshot& snapshot,
                               const std::filesystem::path& filename) const;
-    void ApplyScheduledSnapshot(std::filesystem::path nodesFilename,
+    void ApplyScheduledSnapshot(int64_t expectedTimeNs,
+                                std::filesystem::path nodesFilename,
                                 std::filesystem::path linksFilename);
     void RequireInitialized() const;
 

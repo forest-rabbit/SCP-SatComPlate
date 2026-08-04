@@ -73,10 +73,11 @@ ReplayTopologyController::ValidateSatelliteIds(
 SatelliteSnapshot
 ReplayTopologyController::ReadAndNormalizeSnapshot(
     const std::filesystem::path& nodesFilename,
-    const std::filesystem::path& linksFilename) const
+    const std::filesystem::path& linksFilename,
+    int64_t expectedTimeNs) const
 {
     SatelliteSnapshot snapshot =
-        ReadSatelliteSnapshot(nodesFilename, linksFilename);
+        ReadSatelliteSnapshot(nodesFilename, linksFilename, expectedTimeNs);
     ValidateSatelliteIds(snapshot, nodesFilename);
     for (SatelliteLink& link : snapshot.links)
     {
@@ -104,7 +105,8 @@ ReplayTopologyController::Initialize()
         m_config.network.networkUpdateIntervalNs);
     const SatelliteSnapshot rawInitial = ReadSatelliteSnapshot(
         schedule.initialNodesFilename,
-        schedule.initialLinksFilename);
+        schedule.initialLinksFilename,
+        0);
 
     const uint32_t satelliteCount = m_config.constellation.GetSatelliteCount();
     m_expectedSatelliteIds.resize(satelliteCount);
@@ -144,7 +146,8 @@ ReplayTopologyController::Initialize()
 
     const SatelliteSnapshot initial = ReadAndNormalizeSnapshot(
         schedule.initialNodesFilename,
-        schedule.initialLinksFilename);
+        schedule.initialLinksFilename,
+        0);
     std::map<std::pair<uint32_t, uint32_t>, SatelliteLink> candidateLinks;
     const auto rememberCandidates = [&candidateLinks](const SatelliteSnapshot& snapshot) {
         for (const SatelliteLink& link : snapshot.links)
@@ -158,7 +161,8 @@ ReplayTopologyController::Initialize()
     for (const SnapshotUpdate& update : schedule.updates)
     {
         rememberCandidates(ReadAndNormalizeSnapshot(update.nodesFilename,
-                                                    update.linksFilename));
+                                                    update.linksFilename,
+                                                    update.timeNs));
     }
     std::vector<SatelliteLink> candidateDefinitions;
     candidateDefinitions.reserve(candidateLinks.size());
@@ -178,6 +182,7 @@ ReplayTopologyController::Initialize()
         Simulator::Schedule(NanoSeconds(update.timeNs),
                             &ReplayTopologyController::ApplyScheduledSnapshot,
                             this,
+                            update.timeNs,
                             update.nodesFilename,
                             update.linksFilename);
     }
@@ -185,11 +190,12 @@ ReplayTopologyController::Initialize()
 
 void
 ReplayTopologyController::ApplyScheduledSnapshot(
+    int64_t expectedTimeNs,
     std::filesystem::path nodesFilename,
     std::filesystem::path linksFilename)
 {
     const SatelliteSnapshot snapshot =
-        ReadAndNormalizeSnapshot(nodesFilename, linksFilename);
+        ReadAndNormalizeSnapshot(nodesFilename, linksFilename, expectedTimeNs);
     m_lastUpdateSummary = m_linkState->ApplyFullSnapshot(snapshot.links);
     ++m_appliedSnapshotCount;
     if (m_lastUpdateSummary.ActiveEdgeSetChanged())

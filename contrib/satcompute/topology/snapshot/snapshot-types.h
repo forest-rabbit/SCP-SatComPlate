@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <vector>
 
 namespace ns3
@@ -23,10 +24,31 @@ struct SatelliteLink
     bool operator==(const SatelliteLink&) const = default;
 };
 
-/** One complete legacy-compatible satellite topology snapshot. */
+/** Replay input encoding selected from the closed-world root fields. */
+enum class SatelliteSnapshotSchema
+{
+    LEGACY,
+    VERSION_0_2,
+};
+
+/** One stable ECEF position carried by a version 0.2 node slice. */
+struct SatelliteSnapshotPosition
+{
+    uint32_t satelliteId{};
+    double xM{};
+    double yM{};
+    double zM{};
+
+    bool operator==(const SatelliteSnapshotPosition&) const = default;
+};
+
+/** One complete legacy or self-describing 0.2 topology snapshot. */
 struct SatelliteSnapshot
 {
+    SatelliteSnapshotSchema schema{SatelliteSnapshotSchema::LEGACY};
+    std::optional<int64_t> simulationTimeNs;
     std::vector<uint32_t> satelliteIds;
+    std::vector<SatelliteSnapshotPosition> positions;
     std::vector<SatelliteLink> links;
 };
 
@@ -46,6 +68,7 @@ struct SnapshotSchedule
     std::vector<SnapshotUpdate> updates;
     uint32_t discoveredSnapshotCount{};
     uint32_t selectedSnapshotCount{};
+    bool manifestAuthoritative{};
 };
 
 } // namespace ns3

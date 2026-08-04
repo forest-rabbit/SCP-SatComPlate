@@ -77,3 +77,7 @@ Legacy-compatible JSON replay slices and their exact integer-nanosecond
 selection rules are documented under `topology/snapshot/`. A scenario may point
 at a finer replay directory while its own `network_update_interval_s` controls
 which complete pairs the simulator consumes.
+
+The same replay path accepts generated 0.2 traces. When `manifest.json` is
+present, its inventory and SHA-256 values are enforced, so a generated 1 s or
+2 s trace can be replayed at 20 s without scanning unlisted stale files.

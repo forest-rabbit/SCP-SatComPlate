@@ -108,6 +108,8 @@ main(int argc, char* argv[])
                                    config.network.networkUpdateIntervalNs);
         Check(everyTwoSeconds.discoveredSnapshotCount == 3,
               "discovered snapshot count differs");
+        Check(!everyTwoSeconds.manifestAuthoritative,
+              "legacy snapshot directory unexpectedly required a manifest");
         Check(everyTwoSeconds.selectedSnapshotCount == 3,
               "selected snapshot count differs");
         Check(everyTwoSeconds.updates.size() == 2, "two-second update count differs");
