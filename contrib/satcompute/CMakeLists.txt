@@ -4,6 +4,7 @@ build_lib(
     model/satcompute-version.cc
     model/scenario-config.cc
     model/sha256.cc
+    metrics/run-output-writer.cc
     routing/algorithm/capacity-aware-hrw-policy.cc
     routing/algorithm/global-first-policy.cc
     routing/algorithm/hash-per-flow-policy.cc
@@ -34,6 +35,7 @@ build_lib(
     model/satcompute-version.h
     model/scenario-config.h
     model/sha256.h
+    metrics/run-output-writer.h
     routing/algorithm/capacity-aware-hrw-policy.h
     routing/algorithm/capacity-aware-path-types.h
     routing/algorithm/capacity-aware-path-view.h
@@ -197,6 +199,15 @@ build_exec(
   EXECNAME satcompute-task-coordinator-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/task-coordinator-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-run-output-writer-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/run-output-writer-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
