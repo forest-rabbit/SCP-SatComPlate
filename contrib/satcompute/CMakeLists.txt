@@ -15,6 +15,10 @@ build_lib(
     routing/state/capacity-reservation-state.cc
     routing/state/flow-route-registry.cc
     routing/state/size-aware-load-state.cc
+    task/compute-profile.cc
+    task/compute-service.cc
+    task/compute-task.cc
+    task/task-trace.cc
     topology/ipv4/satellite-ipv4-addressing.cc
     topology/link/satellite-link-state.cc
     topology/replay/replay-topology-controller.cc
@@ -49,6 +53,10 @@ build_lib(
     routing/state/flow-route-state.h
     routing/state/size-aware-load-state.h
     routing/state/size-aware-load-view.h
+    task/compute-profile.h
+    task/compute-service.h
+    task/compute-task.h
+    task/task-trace.h
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
     topology/replay/replay-topology-controller.h
@@ -160,6 +168,24 @@ build_exec(
   EXECNAME satcompute-network-transfer-engine-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/network-transfer-engine-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-task-input-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/task-input-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-compute-service-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/compute-service-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
