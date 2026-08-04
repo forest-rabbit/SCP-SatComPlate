@@ -8,13 +8,21 @@ the order in which ns-3 nodes were created.
 IPv4 service addresses occupy `172.16.0.0/12` and follow canonical satellite
 order. Each service address retains the legacy dedicated interface, so the
 first PointToPoint ISL remains interface 2. ISL networks are allocated as
-deterministic `/30` subnets from `10.0.0.0/8` in canonical first-install order.
+deterministic `/30` subnets from `10.0.0.0/8` in canonical fixed-candidate
+order.
 
 `SatelliteLinkState` applies a complete active-edge snapshot. It validates and
 canonicalizes the entire logical snapshot before changing devices. Removed
 links retain their devices, addresses, and output-interface identities while
 their IPv4 interfaces are down; restoring the edge brings the same interfaces
 back up.
+
+Before simulation starts, the replay controller scans every selected slice and
+preinstalls the canonical union of candidate-link devices. Candidates absent
+from the initial active snapshot start with both IPv4 interfaces down. Runtime
+updates therefore only reconfigure or toggle known interfaces; they never add
+a late net device that ns-3 TrafficControl has not initialized. The later
+online controller uses the same rule with the plus-grid candidate set.
 
 The update summary separates active-edge changes from attribute changes. A
 controller must recompute IPv4 routes only when `ActiveEdgeSetChanged()` is

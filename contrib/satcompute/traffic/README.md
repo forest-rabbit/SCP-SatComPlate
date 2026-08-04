@@ -28,3 +28,26 @@ remainder in the final packet. In `size-aware` mode, the preserved policy is:
 Packet count, final-packet payload, ports, addresses, transmission spacing, and
 routing decisions are derived runtime state and therefore are not accepted as
 trace fields.
+
+## Runtime lifecycle
+
+`NetworkTransferEngine` registers every stable five-tuple before the first
+arrival. One receiver socket is shared by all transfers terminating at the
+same satellite, while every transfer owns one sender application. The first
+packet is submitted exactly at `arrival_time_ns`; subsequent packets are paced
+by the current first-hop serialization time. Capacity-aware routing instead
+uses its admitted complete-path bottleneck rate.
+
+Size-aware reservations begin immediately before first send and end after the
+sender submits its final packet. Capacity-aware paths remain reserved until
+the receiver obtains the declared application bytes. If no complete path has
+residual capacity, a flow sends no bytes and waits; completion or a route
+update retries pending flows in deterministic order. A topology update pauses
+an active sender whose admitted path became invalid, releases the entire old
+path, and resumes only after complete-path re-admission.
+
+The transport remains UDP-compatible with the legacy platform and does not
+invent retransmissions. A future fault model may therefore produce an
+incomplete transfer when it disables a link carrying an in-flight packet; that
+outcome is reported by completion policy and diagnostics rather than hidden by
+this engine.

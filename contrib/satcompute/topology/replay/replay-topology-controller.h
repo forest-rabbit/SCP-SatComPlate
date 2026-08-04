@@ -12,7 +12,7 @@
 #include "../ipv4/satellite-ipv4-addressing.h"
 #include "../link/satellite-link-state.h"
 #include "../satellite-id-map.h"
-#include "../satellite-endpoint-view.h"
+#include "../satellite-runtime-view.h"
 #include "../snapshot/snapshot-types.h"
 
 #include "ns3/callback.h"
@@ -40,20 +40,21 @@ class ReplayTopologyControllerError : public std::runtime_error
  * The controller installs the SatCompute ns-3.48 global-routing adapter and
  * must outlive all scheduled simulation events.
  */
-class ReplayTopologyController : public CapacityAwarePathView, public SatelliteEndpointView
+class ReplayTopologyController : public SatelliteRuntimeView
 {
   public:
     explicit ReplayTopologyController(const ScenarioConfig& config);
 
     void Initialize();
-    void RegisterRouteUpdateCallback(Callback<void> callback);
-    void InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const;
+    void RegisterRouteUpdateCallback(Callback<void> callback) override;
+    void InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const override;
 
     const ScenarioConfig& GetConfig() const;
     const NodeContainer& GetNodes() const;
     const SatelliteIdMap& GetIdMap() const;
     const SatelliteLinkState& GetLinkState() const;
-    Ptr<FlowRouteRegistry> GetFlowRouteRegistry() const;
+    Ptr<Node> GetNodeBySatelliteId(uint32_t satelliteId) const override;
+    Ptr<FlowRouteRegistry> GetFlowRouteRegistry() const override;
     bool HasSatelliteId(uint32_t satelliteId) const override;
     Ipv4Address GetServiceAddress(uint32_t satelliteId) const override;
     std::vector<EcmpRouteCandidate> GetEcmpRouteCandidates(
@@ -63,9 +64,9 @@ class ReplayTopologyController : public CapacityAwarePathView, public SatelliteE
                                    uint32_t outputInterface) const override;
     uint64_t GetIslDataRateBps(uint32_t sourceSatelliteId,
                                uint32_t outputInterface) const override;
-    uint64_t GetRouteEpoch(uint32_t satelliteId) const;
-    uint64_t GetHashSeed() const;
-    bool IsCapacityAwareRouting() const;
+    uint64_t GetRouteEpoch(uint32_t satelliteId) const override;
+    uint64_t GetHashSeed() const override;
+    bool IsCapacityAwareRouting() const override;
     uint32_t GetAppliedSnapshotCount() const;
     uint32_t GetRouteComputationCount() const;
     const TopologyLinkUpdateSummary& GetLastUpdateSummary() const;

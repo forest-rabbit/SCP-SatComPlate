@@ -18,6 +18,7 @@
 #include "ns3/simulator.h"
 
 #include <algorithm>
+#include <map>
 #include <numeric>
 #include <string>
 
@@ -141,15 +142,31 @@ ReplayTopologyController::Initialize()
         m_config.network.islQueueBytes,
         false);
 
-    SatelliteSnapshot initial = rawInitial;
-    for (SatelliteLink& link : initial.links)
-    {
-        link.bandwidthBps = m_config.network.linkBandwidthBps;
-        if (m_config.network.delayMode == "fixed")
+    const SatelliteSnapshot initial = ReadAndNormalizeSnapshot(
+        schedule.initialNodesFilename,
+        schedule.initialLinksFilename);
+    std::map<std::pair<uint32_t, uint32_t>, SatelliteLink> candidateLinks;
+    const auto rememberCandidates = [&candidateLinks](const SatelliteSnapshot& snapshot) {
+        for (const SatelliteLink& link : snapshot.links)
         {
-            link.delayNs = *m_config.network.fixedDelayNs;
+            candidateLinks.try_emplace(
+                std::make_pair(link.sourceId, link.destinationId),
+                link);
         }
+    };
+    rememberCandidates(initial);
+    for (const SnapshotUpdate& update : schedule.updates)
+    {
+        rememberCandidates(ReadAndNormalizeSnapshot(update.nodesFilename,
+                                                    update.linksFilename));
     }
+    std::vector<SatelliteLink> candidateDefinitions;
+    candidateDefinitions.reserve(candidateLinks.size());
+    for (const auto& item : candidateLinks)
+    {
+        candidateDefinitions.push_back(item.second);
+    }
+    m_linkState->PrepareCandidateLinks(candidateDefinitions);
     m_lastUpdateSummary = m_linkState->ApplyFullSnapshot(initial.links);
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
     m_appliedSnapshotCount = 1;
@@ -246,6 +263,13 @@ ReplayTopologyController::GetFlowRouteRegistry() const
 {
     RequireInitialized();
     return m_flowRouteRegistry;
+}
+
+Ptr<Node>
+ReplayTopologyController::GetNodeBySatelliteId(uint32_t satelliteId) const
+{
+    RequireInitialized();
+    return m_idMap->GetNodeBySatelliteId(satelliteId);
 }
 
 bool

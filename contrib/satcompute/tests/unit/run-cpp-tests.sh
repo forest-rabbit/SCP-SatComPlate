@@ -49,3 +49,9 @@ transfer_fixtures="contrib/satcompute/tests/fixtures/traffic/transfers"
 --invalidDuplicateId=$transfer_fixtures/invalid-duplicate-id.json \
 --invalidUnknownSatellite=$transfer_fixtures/invalid-unknown-satellite.json \
 --invalidStopTime=$transfer_fixtures/invalid-stop-time.json"
+
+./ns3 run --no-build \
+  "satcompute-network-transfer-engine-test --scenario=$replay_dynamic \
+--capacityScenario=contrib/satcompute/tests/fixtures/scenario/capacity-pending.json \
+--basicTransfers=$transfer_fixtures/engine-basic.json \
+--capacityTransfers=$transfer_fixtures/capacity-pending.json"

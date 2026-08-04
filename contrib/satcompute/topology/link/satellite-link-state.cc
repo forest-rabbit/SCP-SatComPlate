@@ -352,6 +352,25 @@ SatelliteLinkState::ApplyFullSnapshot(const std::vector<SatelliteLink>& links)
     return summary;
 }
 
+void
+SatelliteLinkState::PrepareCandidateLinks(const std::vector<SatelliteLink>& links)
+{
+    if (!m_installedLinks.empty() || !m_activeLinks.empty())
+    {
+        throw SatelliteLinkStateError(
+            "candidate links must be prepared before the first active snapshot");
+    }
+    const std::vector<SatelliteLink> canonical = ValidateAndCanonicalize(links);
+    for (const SatelliteLink& link : canonical)
+    {
+        const LinkKey key = MakeKey(link.sourceId, link.destinationId);
+        const NetDeviceContainer devices = InstallLink(link);
+        SetLinkState(devices, false);
+        m_installedLinks.emplace(key, devices);
+        m_linkDefinitions.emplace(key, link);
+    }
+}
+
 bool
 SatelliteLinkState::IsLinkActive(uint32_t firstSatelliteId,
                                  uint32_t secondSatelliteId) const
