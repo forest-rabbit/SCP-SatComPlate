@@ -3,9 +3,20 @@
 *.patch
 *.rej
 
+# Editors, language servers, and local IDE state
+.vscode/
+.clangd/
+compile_commands.json
+
 *.o
 *.pyc
 *.pyo
+*.pyd
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 *.cwnd
 *.dat
@@ -25,6 +36,7 @@ testpy-output
 bindings/python/pybindgen/
 
 venv/
+.venv/
 
 ms_print.*
 massif.*
@@ -50,3 +62,26 @@ vcpkg/
 
 # Ignore local cache used by e.g. clangd
 .cache/
+
+# Local secrets. Commit documented examples only.
+.env
+.env.*
+!.env.example
+
+# SatCompute local simulation and analysis outputs
+archive/local-output/
+output/
+**/output/
+# Keep this guard directory visible so accidental experiment output appears in
+# Git status instead of being silently ignored.
+!contrib/satcompute/output/
+output.txt
+output1.txt
+RlinkUtilization.csv
+clusterNetworkInf.csv
+adj_list.txt
+no_cluster.txt
+
+# Common editor backup and temporary files
+*.tmp
+*.swp
