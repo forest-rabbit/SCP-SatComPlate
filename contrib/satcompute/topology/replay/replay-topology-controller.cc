@@ -8,12 +8,16 @@
 #include "../snapshot/snapshot-schedule.h"
 #include "../../routing/ns3/satcompute-ipv4-global-routing-helper.h"
 
+#include "ns3/data-rate.h"
 #include "ns3/internet-stack-helper.h"
+#include "ns3/ipv4.h"
 #include "ns3/ipv4-global-routing-helper.h"
 #include "ns3/ipv4-list-routing-helper.h"
 #include "ns3/ipv4-static-routing-helper.h"
+#include "ns3/point-to-point-net-device.h"
 #include "ns3/simulator.h"
 
+#include <algorithm>
 #include <numeric>
 #include <string>
 
@@ -38,12 +42,11 @@ ReplayTopologyController::ReplayTopologyController(const ScenarioConfig& config)
     if (m_routingMode != RoutingMode::GLOBAL_FIRST &&
         m_routingMode != RoutingMode::HASH_PER_FLOW &&
         m_routingMode != RoutingMode::HRW_PER_FLOW &&
-        m_routingMode != RoutingMode::SIZE_AWARE_HRW)
+        m_routingMode != RoutingMode::SIZE_AWARE_HRW &&
+        m_routingMode != RoutingMode::CAPACITY_AWARE_HRW)
     {
         throw ReplayTopologyControllerError(
-            "replay controller currently supports global-first, "
-            "global-hash-per-flow, global-hrw-per-flow, and "
-            "global-size-aware-hrw only");
+            "unsupported replay routing mode");
     }
     if (m_config.network.delayMode == "fixed" &&
         !m_config.network.fixedDelayNs)
@@ -110,7 +113,7 @@ ReplayTopologyController::Initialize()
     m_nodes.Create(satelliteCount);
     m_idMap =
         std::make_unique<SatelliteIdMap>(m_nodes, m_expectedSatelliteIds);
-    if (m_routingMode == RoutingMode::SIZE_AWARE_HRW)
+    if (IsReservationAwareRoutingMode(m_routingMode))
     {
         m_flowRouteRegistry = CreateObject<FlowRouteRegistry>();
     }
@@ -177,7 +180,28 @@ ReplayTopologyController::ApplyScheduledSnapshot(
         Ipv4GlobalRoutingHelper::RecomputeRoutingTables();
         SatComputeIpv4GlobalRoutingHelper::AdvanceRouteEpoch(m_nodes);
         ++m_routeComputationCount;
+        for (const Callback<void>& callback : m_routeUpdateCallbacks)
+        {
+            callback();
+        }
     }
+}
+
+void
+ReplayTopologyController::RegisterRouteUpdateCallback(Callback<void> callback)
+{
+    if (callback.IsNull())
+    {
+        throw ReplayTopologyControllerError("route update callback cannot be null");
+    }
+    m_routeUpdateCallbacks.push_back(callback);
+}
+
+void
+ReplayTopologyController::InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const
+{
+    RequireInitialized();
+    SatComputeIpv4GlobalRoutingHelper::InvalidateDecisionCache(m_nodes, flowKey);
 }
 
 void
@@ -229,6 +253,88 @@ ReplayTopologyController::GetServiceAddress(uint32_t satelliteId) const
 {
     RequireInitialized();
     return m_serviceMap->GetServiceAddress(satelliteId);
+}
+
+std::vector<EcmpRouteCandidate>
+ReplayTopologyController::GetEcmpRouteCandidates(uint32_t sourceSatelliteId,
+                                                 uint32_t destinationSatelliteId) const
+{
+    RequireInitialized();
+    if (sourceSatelliteId == destinationSatelliteId)
+    {
+        throw ReplayTopologyControllerError(
+            "ECMP candidate query requires different satellites");
+    }
+    Ptr<SatComputeIpv4GlobalRouting> routing = SatComputeIpv4GlobalRoutingHelper::GetRouting(
+        m_idMap->GetNodeBySatelliteId(sourceSatelliteId));
+    return routing->GetEffectiveRouteCandidates(GetServiceAddress(destinationSatelliteId));
+}
+
+uint32_t
+ReplayTopologyController::GetNextHopSatelliteId(uint32_t sourceSatelliteId,
+                                                uint32_t outputInterface) const
+{
+    RequireInitialized();
+    const std::vector<IslDirectedLink>& links = m_linkState->GetDirectedLinks();
+    auto link = std::find_if(links.begin(),
+                             links.end(),
+                             [sourceSatelliteId, outputInterface](const IslDirectedLink& item) {
+                                 return item.sourceSatelliteId == sourceSatelliteId &&
+                                        item.outputInterface == outputInterface;
+                             });
+    if (link == links.end())
+    {
+        throw ReplayTopologyControllerError(
+            "output interface cannot be mapped to an ISL next hop");
+    }
+    return link->destinationSatelliteId;
+}
+
+uint64_t
+ReplayTopologyController::GetIslDataRateBps(uint32_t sourceSatelliteId,
+                                            uint32_t outputInterface) const
+{
+    RequireInitialized();
+    Ptr<Node> source = m_idMap->GetNodeBySatelliteId(sourceSatelliteId);
+    Ptr<Ipv4> ipv4 = source->GetObject<Ipv4>();
+    if (ipv4 == nullptr || outputInterface >= ipv4->GetNInterfaces())
+    {
+        throw ReplayTopologyControllerError("ISL data-rate query has an invalid interface");
+    }
+    Ptr<PointToPointNetDevice> device =
+        DynamicCast<PointToPointNetDevice>(ipv4->GetNetDevice(outputInterface));
+    if (device == nullptr)
+    {
+        throw ReplayTopologyControllerError("ISL data-rate query target is not point-to-point");
+    }
+    DataRateValue dataRate;
+    if (!device->GetAttributeFailSafe("DataRate", dataRate) ||
+        dataRate.Get().GetBitRate() == 0)
+    {
+        throw ReplayTopologyControllerError("ISL data-rate query returned zero bandwidth");
+    }
+    return dataRate.Get().GetBitRate();
+}
+
+uint64_t
+ReplayTopologyController::GetRouteEpoch(uint32_t satelliteId) const
+{
+    RequireInitialized();
+    return SatComputeIpv4GlobalRoutingHelper::GetRouting(
+               m_idMap->GetNodeBySatelliteId(satelliteId))
+        ->GetRouteEpoch();
+}
+
+uint64_t
+ReplayTopologyController::GetHashSeed() const
+{
+    return m_config.routing.hashSeed;
+}
+
+bool
+ReplayTopologyController::IsCapacityAwareRouting() const
+{
+    return m_routingMode == RoutingMode::CAPACITY_AWARE_HRW;
 }
 
 uint32_t

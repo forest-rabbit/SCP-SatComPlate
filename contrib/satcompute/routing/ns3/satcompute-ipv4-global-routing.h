@@ -6,6 +6,7 @@
 #define SATCOMPUTE_IPV4_GLOBAL_ROUTING_H
 
 #include "../algorithm/hash-per-flow-policy.h"
+#include "../algorithm/hrw-per-flow-policy.h"
 #include "../common/ecmp-flow-key.h"
 #include "../common/ecmp-route-candidate.h"
 #include "../common/routing-mode.h"
@@ -94,6 +95,10 @@ class SatComputeIpv4GlobalRouting : public Ipv4GlobalRouting
                                  const Ipv4Header& header,
                                  Ptr<NetDevice> outputInterface,
                                  bool& handled);
+    EcmpHrwSelection SelectCapacityAwareForwardingRoute(
+        const EcmpFlowKey& flowKey,
+        const std::vector<EcmpRouteCandidate>& candidates,
+        std::string& selectionReason);
     void RecordDecision(const EcmpRouteDecisionEvent& event);
 
     RoutingMode m_selectionMode;

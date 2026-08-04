@@ -57,12 +57,12 @@ SatComputeIpv4GlobalRouting::Configure(RoutingMode selectionMode,
     NS_ABORT_MSG_IF(selectionMode != RoutingMode::GLOBAL_FIRST &&
                         selectionMode != RoutingMode::HASH_PER_FLOW &&
                         selectionMode != RoutingMode::HRW_PER_FLOW &&
-                        selectionMode != RoutingMode::SIZE_AWARE_HRW,
-                    "this migration slice supports global-first, global-hash-per-flow, and "
-                    "global-hrw-per-flow, and global-size-aware-hrw only");
-    NS_ABORT_MSG_IF(selectionMode == RoutingMode::SIZE_AWARE_HRW &&
+                        selectionMode != RoutingMode::SIZE_AWARE_HRW &&
+                        selectionMode != RoutingMode::CAPACITY_AWARE_HRW,
+                    "SatCompute IPv4 adapter received an unsupported routing mode");
+    NS_ABORT_MSG_IF(IsReservationAwareRoutingMode(selectionMode) &&
                         flowRouteRegistry == nullptr,
-                    "size-aware HRW routing requires a flow registry");
+                    "reservation-aware HRW routing requires a flow registry");
     m_selectionMode = selectionMode;
     m_hashSeed = hashSeed;
     m_flowRouteRegistry = flowRouteRegistry;
@@ -283,6 +283,44 @@ SatComputeIpv4GlobalRouting::BuildRoute(const EcmpRouteCandidate& candidate) con
     return route;
 }
 
+EcmpHrwSelection
+SatComputeIpv4GlobalRouting::SelectCapacityAwareForwardingRoute(
+    const EcmpFlowKey& flowKey,
+    const std::vector<EcmpRouteCandidate>& candidates,
+    std::string& selectionReason)
+{
+    NS_ABORT_MSG_IF(candidates.empty() || m_flowRouteRegistry == nullptr ||
+                        !m_flowRouteRegistry->IsSenderActive(flowKey),
+                    "capacity-aware forwarding requires an active registered flow");
+    NS_ABORT_MSG_IF(m_selectionMode != RoutingMode::CAPACITY_AWARE_HRW,
+                    "capacity-aware forwarding used with another routing mode");
+
+    FlowRouteAssignment sticky;
+    if (m_flowRouteRegistry->FindAssignment(m_satelliteId, flowKey, sticky))
+    {
+        auto selected = std::find(candidates.begin(), candidates.end(), sticky.candidate);
+        if (selected != candidates.end())
+        {
+            const uint32_t selectedIndex =
+                static_cast<uint32_t>(selected - candidates.begin());
+            m_flowRouteRegistry->ValidateAssignment(m_satelliteId,
+                                                    flowKey,
+                                                    m_routeEpoch,
+                                                    "CAPACITY_AWARE_STICKY");
+            selectionReason = "CAPACITY_AWARE_STICKY";
+            return {selectedIndex,
+                    ScoreEcmpHrwRoute(m_hashSeed, flowKey, candidates[selectedIndex])};
+        }
+    }
+
+    // A packet already in flight can temporarily reach a node on a released
+    // path. Forward it deterministically without creating a partial-path
+    // reservation; complete-path re-admission belongs to the transfer engine.
+    const EcmpHrwSelection selected = SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
+    selectionReason = "CAPACITY_AWARE_TRANSITION_FALLBACK";
+    return selected;
+}
+
 Ptr<Ipv4Route>
 SatComputeIpv4GlobalRouting::LookupPerFlow(Ptr<const Packet> packet,
                                            const Ipv4Header& header,
@@ -383,14 +421,25 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(Ptr<const Packet> packet,
         score = decision.score;
         selectionReason = decision.selectionReason;
     }
-    else if (m_selectionMode == RoutingMode::SIZE_AWARE_HRW)
+    else if (m_selectionMode == RoutingMode::SIZE_AWARE_HRW ||
+             m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW)
     {
-        const EcmpHrwSelection selection = SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
+        EcmpHrwSelection selection = {};
+        if (m_selectionMode == RoutingMode::CAPACITY_AWARE_HRW && outputInterface == nullptr &&
+            m_flowRouteRegistry->IsSenderActive(flowKey))
+        {
+            selection =
+                SelectCapacityAwareForwardingRoute(flowKey, candidates, selectionReason);
+        }
+        else
+        {
+            selection = SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
+            selectionReason = m_flowRouteRegistry->IsRegistered(flowKey)
+                                  ? "HRW_FALLBACK_INACTIVE"
+                                  : "HRW_FALLBACK_UNREGISTERED";
+        }
         selectedIndex = selection.candidateIndex;
         score = selection.score;
-        selectionReason = m_flowRouteRegistry->IsRegistered(flowKey)
-                              ? "HRW_FALLBACK_INACTIVE"
-                              : "HRW_FALLBACK_UNREGISTERED";
     }
     else
     {
