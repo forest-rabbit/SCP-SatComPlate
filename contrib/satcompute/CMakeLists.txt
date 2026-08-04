@@ -6,6 +6,7 @@ build_lib(
     model/sha256.cc
     routing/algorithm/global-first-policy.cc
     routing/algorithm/hash-per-flow-policy.cc
+    routing/algorithm/hrw-per-flow-policy.cc
     routing/common/routing-mode.cc
     routing/ns3/satcompute-ipv4-global-routing.cc
     routing/ns3/satcompute-ipv4-global-routing-helper.cc
@@ -21,6 +22,7 @@ build_lib(
     model/sha256.h
     routing/algorithm/global-first-policy.h
     routing/algorithm/hash-per-flow-policy.h
+    routing/algorithm/hrw-per-flow-policy.h
     routing/algorithm/next-hop-policy.h
     routing/common/ecmp-flow-key.h
     routing/common/ecmp-route-candidate.h

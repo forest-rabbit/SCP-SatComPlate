@@ -36,11 +36,12 @@ ReplayTopologyController::ReplayTopologyController(const ScenarioConfig& config)
                                             m_config.routing.mode);
     }
     if (m_routingMode != RoutingMode::GLOBAL_FIRST &&
-        m_routingMode != RoutingMode::HASH_PER_FLOW)
+        m_routingMode != RoutingMode::HASH_PER_FLOW &&
+        m_routingMode != RoutingMode::HRW_PER_FLOW)
     {
         throw ReplayTopologyControllerError(
-            "replay controller currently supports global-first and "
-            "global-hash-per-flow only");
+            "replay controller currently supports global-first, "
+            "global-hash-per-flow, and global-hrw-per-flow only");
     }
     if (m_config.network.delayMode == "fixed" &&
         !m_config.network.fixedDelayNs)

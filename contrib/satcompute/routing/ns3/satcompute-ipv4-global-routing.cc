@@ -6,6 +6,8 @@
 
 #include "satcompute-ipv4-global-routing.h"
 
+#include "../algorithm/hrw-per-flow-policy.h"
+
 #include "ns3/abort.h"
 #include "ns3/ipv4-route.h"
 #include "ns3/ipv4-routing-table-entry.h"
@@ -50,14 +52,19 @@ void
 SatComputeIpv4GlobalRouting::Configure(RoutingMode selectionMode, uint64_t hashSeed)
 {
     NS_ABORT_MSG_IF(selectionMode != RoutingMode::GLOBAL_FIRST &&
-                        selectionMode != RoutingMode::HASH_PER_FLOW,
-                    "this migration slice supports global-first and "
-                    "global-hash-per-flow only");
+                        selectionMode != RoutingMode::HASH_PER_FLOW &&
+                        selectionMode != RoutingMode::HRW_PER_FLOW,
+                    "this migration slice supports global-first, global-hash-per-flow, and "
+                    "global-hrw-per-flow only");
     m_selectionMode = selectionMode;
     m_hashSeed = hashSeed;
     if (selectionMode == RoutingMode::HASH_PER_FLOW)
     {
         m_nextHopPolicy = std::make_unique<HashPerFlowPolicy>();
+    }
+    else if (selectionMode == RoutingMode::HRW_PER_FLOW)
+    {
+        m_nextHopPolicy = std::make_unique<HrwPerFlowPolicy>();
     }
     else
     {
@@ -330,8 +337,10 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(Ptr<const Packet> packet,
         return nullptr;
     }
 
-    NS_ABORT_MSG_IF(m_selectionMode != RoutingMode::HASH_PER_FLOW || m_nextHopPolicy == nullptr,
-                    "per-flow lookup requires hash-per-flow policy");
+    NS_ABORT_MSG_IF((m_selectionMode != RoutingMode::HASH_PER_FLOW &&
+                     m_selectionMode != RoutingMode::HRW_PER_FLOW) ||
+                        m_nextHopPolicy == nullptr,
+                    "per-flow lookup requires a migrated deterministic policy");
     NextHopSelectionContext context = {m_satelliteId, m_routeEpoch, m_hashSeed, flowKey};
     const NextHopDecision decision = m_nextHopPolicy->Select(context, candidates);
     NS_ABORT_MSG_IF(decision.useNativeGlobalRouting || decision.candidateIndex >= candidates.size(),
