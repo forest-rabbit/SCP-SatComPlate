@@ -165,6 +165,15 @@ main(int argc, char* argv[])
             [&invalidPrecisionPath] { LoadScenarioConfig(invalidPrecisionPath); },
             "sub-nanosecond scenario time was accepted");
 
+        nlohmann::json invalidQueue = nlohmann::json::parse(ReadFile(fixed.sourcePath));
+        invalidQueue.at("network")["isl_queue_bytes"] = 4294967296ULL;
+        const std::filesystem::path invalidQueuePath =
+            std::filesystem::path(outputDirectory) / "invalid-queue.json";
+        WriteJson(invalidQueuePath, invalidQueue);
+        ExpectConfigError(
+            [&invalidQueuePath] { LoadScenarioConfig(invalidQueuePath); },
+            "ISL queue larger than ns-3 QueueSize was accepted");
+
         const std::filesystem::path effectivePath =
             WriteEffectiveConfig(fixed, outputDirectory);
         const std::string firstOutput = ReadFile(effectivePath);

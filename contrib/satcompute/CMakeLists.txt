@@ -4,16 +4,27 @@ build_lib(
     model/satcompute-version.cc
     model/scenario-config.cc
     model/sha256.cc
+    topology/ipv4/satellite-ipv4-addressing.cc
+    topology/link/satellite-link-state.cc
+    topology/satellite-id-map.cc
     topology/snapshot/snapshot-reader.cc
     topology/snapshot/snapshot-schedule.cc
   HEADER_FILES
     model/satcompute-version.h
     model/scenario-config.h
     model/sha256.h
+    topology/ipv4/satellite-ipv4-addressing.h
+    topology/link/satellite-link-state.h
+    topology/satellite-id-map.h
     topology/snapshot/snapshot-reader.h
     topology/snapshot/snapshot-schedule.h
     topology/snapshot/snapshot-types.h
-  LIBRARIES_TO_LINK ${libcore}
+  LIBRARIES_TO_LINK
+    ${libcore}
+    ${libnetwork}
+    ${libinternet}
+    ${libpoint-to-point}
+    ${libcsma}
 )
 
 # The platform entry point is a project executable, not an ns-3 example.  It is
@@ -42,6 +53,15 @@ build_exec(
   EXECNAME satcompute-snapshot-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/snapshot-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-link-state-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/link-state-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

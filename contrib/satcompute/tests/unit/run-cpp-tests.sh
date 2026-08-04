@@ -21,3 +21,5 @@ invalid="contrib/satcompute/tests/fixtures/scenario/invalid-unknown-field.json"
 replay_scenario="contrib/satcompute/tests/fixtures/scenario/replay-dynamic.json"
 ./ns3 run --no-build \
   "satcompute-snapshot-test --scenario=$replay_scenario --outputDir=$test_output/snapshot"
+
+./ns3 run --no-build "satcompute-link-state-test"
