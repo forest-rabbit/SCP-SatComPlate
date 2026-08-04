@@ -1,0 +1,401 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forest-rabbit.github.io/SCP-SatComPlate/schema/scenario-0.2.json",
+  "title": "SCP-SatComPlate scenario 0.2",
+  "description": "Authoritative closed-world input for one SatCompute online simulation or deterministic offline topology export.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scenario_name",
+    "simulation",
+    "constellation",
+    "network",
+    "routing",
+    "workloads",
+    "trace_export",
+    "randomness"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Scenario contract version; version 0.2 is required by this schema.",
+      "const": "0.2"
+    },
+    "scenario_name": {
+      "description": "Stable filesystem-safe scenario name used in manifests and output labels.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "simulation": {
+      "description": "Simulation clock bounds expressed in user-facing seconds.",
+      "$ref": "#/$defs/simulation"
+    },
+    "constellation": {
+      "description": "Circular orbital shell and stable external satellite identity layout.",
+      "$ref": "#/$defs/constellation"
+    },
+    "network": {
+      "description": "Candidate ISLs, distance gate, link resources, delay mode, and periodic update cadence.",
+      "$ref": "#/$defs/network"
+    },
+    "routing": {
+      "description": "Deterministic IPv4 routing selection and route-recomputation behavior.",
+      "$ref": "#/$defs/routing"
+    },
+    "workloads": {
+      "description": "Referenced transfer, compute-resource, and task inputs plus compatibility behavior.",
+      "$ref": "#/$defs/workloads"
+    },
+    "trace_export": {
+      "description": "Deterministic offline JSON slice cadence and end-point inclusion policy.",
+      "$ref": "#/$defs/trace_export"
+    },
+    "randomness": {
+      "description": "Explicit ns-3 seed, run, and assigned stream base used for reproducibility.",
+      "$ref": "#/$defs/randomness"
+    }
+  },
+  "$defs": {
+    "seconds": {
+      "description": "A finite non-negative duration in seconds with no precision finer than one nanosecond.",
+      "type": "number",
+      "minimum": 0
+    },
+    "positive_seconds": {
+      "description": "A finite positive duration in seconds with no precision finer than one nanosecond.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "optional_path": {
+      "description": "A non-empty path resolved relative to the scenario file, or null when the input is disabled.",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "simulation": {
+      "description": "Simulation time window.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_time_s", "duration_s"],
+      "properties": {
+        "start_time_s": {
+          "description": "Simulation start time in seconds; ns-3 execution currently starts at exactly 0 s.",
+          "const": 0
+        },
+        "duration_s": {
+          "description": "Positive simulated duration in seconds, converted exactly to integer nanoseconds.",
+          "$ref": "#/$defs/positive_seconds"
+        }
+      }
+    },
+    "constellation": {
+      "description": "One deterministic circular-orbit shell.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "orbit_provider",
+        "constellation_name",
+        "constellation_pattern",
+        "num_orbits",
+        "satellites_per_orbit",
+        "altitude_m",
+        "inclination_deg",
+        "phase_diff",
+        "orbit_epoch_offset_s"
+      ],
+      "properties": {
+        "orbit_provider": {
+          "description": "Position source: ns3-circular computes ECEF positions online; json-replay reuses audited slices.",
+          "enum": ["ns3-circular", "json-replay"]
+        },
+        "constellation_name": {
+          "description": "Stable constellation token recorded in topology and run manifests.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "constellation_pattern": {
+          "description": "Orbital-plane RAAN span: walker-star spans 180 degrees and walker-delta spans 360 degrees.",
+          "enum": ["walker-star", "walker-delta"]
+        },
+        "num_orbits": {
+          "description": "Number of orbital planes; stable satellite ID equals plane times satellites_per_orbit plus slot.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99999
+        },
+        "satellites_per_orbit": {
+          "description": "Number of stable satellite slots in every orbital plane.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99999
+        },
+        "altitude_m": {
+          "description": "Circular orbit altitude above the ns-3 reference Earth surface in metres.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "inclination_deg": {
+          "description": "Orbital inclination in degrees in the half-open interval [0, 180).",
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 180
+        },
+        "phase_diff": {
+          "description": "When true, odd planes receive the legacy alternating half-slot phase offset; this is not Walker F.",
+          "type": "boolean"
+        },
+        "orbit_epoch_offset_s": {
+          "description": "Non-negative physical orbit sampling offset from the scenario epoch in seconds.",
+          "$ref": "#/$defs/seconds"
+        }
+      }
+    },
+    "network": {
+      "description": "Satellite-only network state and update policy.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topology_source",
+        "replay_directory",
+        "isl_candidate_strategy",
+        "seam_enabled",
+        "max_isl_distance_m",
+        "delay_mode",
+        "fixed_delay_us",
+        "network_update_interval_s",
+        "link_bandwidth_bps",
+        "isl_mtu_bytes",
+        "isl_queue_bytes",
+        "receiver_rcv_buf_bytes"
+      ],
+      "properties": {
+        "topology_source": {
+          "description": "online evaluates the shared orbit core periodically; json-replay reads deterministic topology slices.",
+          "enum": ["online", "json-replay"]
+        },
+        "replay_directory": {
+          "description": "Scenario-relative directory containing replay slices, or null for online topology.",
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "isl_candidate_strategy": {
+          "description": "Fixed candidate-neighbour graph; plus-grid never substitutes a nearer non-candidate satellite.",
+          "const": "plus-grid"
+        },
+        "seam_enabled": {
+          "description": "Whether inter-plane candidates connect the final plane back to the first plane.",
+          "type": "boolean"
+        },
+        "max_isl_distance_m": {
+          "description": "Maximum active candidate-link distance in metres, with equality considered active.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "delay_mode": {
+          "description": "fixed uses one configured propagation delay; distance derives one-way delay from current separation.",
+          "enum": ["fixed", "distance"]
+        },
+        "fixed_delay_us": {
+          "description": "Positive one-way propagation delay in microseconds for fixed mode; null for distance mode.",
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "network_update_interval_s": {
+          "description": "Positive periodic orbit, distance-gate, link-delay, and topology evaluation interval in seconds.",
+          "$ref": "#/$defs/positive_seconds"
+        },
+        "link_bandwidth_bps": {
+          "description": "Full-duplex data rate of each active ISL in bits per second.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "isl_mtu_bytes": {
+          "description": "Point-to-point ISL maximum transmission unit in bytes.",
+          "type": "integer",
+          "minimum": 68,
+          "maximum": 65535
+        },
+        "isl_queue_bytes": {
+          "description": "Drop-tail queue capacity per ISL net device in bytes.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "receiver_rcv_buf_bytes": {
+          "description": "UDP receive socket buffer capacity per receiver in bytes.",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"delay_mode": {"const": "fixed"}},
+            "required": ["delay_mode"]
+          },
+          "then": {
+            "properties": {"fixed_delay_us": {"type": "integer", "minimum": 1}}
+          },
+          "else": {
+            "properties": {"fixed_delay_us": {"type": "null"}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"topology_source": {"const": "online"}},
+            "required": ["topology_source"]
+          },
+          "then": {
+            "properties": {"replay_directory": {"type": "null"}}
+          },
+          "else": {
+            "properties": {"replay_directory": {"type": "string", "minLength": 1}}
+          }
+        }
+      ]
+    },
+    "routing": {
+      "description": "IPv4 route selection settings.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "hash_seed", "recompute_policy"],
+      "properties": {
+        "mode": {
+          "description": "One of the five migrated deterministic IPv4 routing modes.",
+          "enum": [
+            "global-first",
+            "global-hash-per-flow",
+            "global-hrw-per-flow",
+            "global-size-aware-hrw",
+            "global-capacity-aware-hrw"
+          ]
+        },
+        "hash_seed": {
+          "description": "Unsigned 64-bit seed for legacy FNV and HRW candidate selection.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "recompute_policy": {
+          "description": "Route tables rebuild only when the effective active-edge set changes.",
+          "const": "on-topology-change"
+        }
+      }
+    },
+    "workloads": {
+      "description": "Independent versioned input references and transfer/task compatibility controls.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transfer_trace",
+        "compute_profile",
+        "task_trace",
+        "transfer_chunk_mode",
+        "transfer_payload_bytes",
+        "task_completion_policy"
+      ],
+      "properties": {
+        "transfer_trace": {
+          "description": "Scenario-relative TransferTrace JSON path, or null when direct transfers are disabled.",
+          "$ref": "#/$defs/optional_path"
+        },
+        "compute_profile": {
+          "description": "Scenario-relative static satellite ComputeProfile JSON path, or null when task compute is disabled.",
+          "$ref": "#/$defs/optional_path"
+        },
+        "task_trace": {
+          "description": "Scenario-relative TaskTrace JSON path, or null when task compute is disabled.",
+          "$ref": "#/$defs/optional_path"
+        },
+        "transfer_chunk_mode": {
+          "description": "fixed uses transfer_payload_bytes; size-aware uses the preserved three-tier payload policy.",
+          "enum": ["fixed", "size-aware"]
+        },
+        "transfer_payload_bytes": {
+          "description": "UDP application payload ceiling in bytes for fixed chunking mode.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65507
+        },
+        "task_completion_policy": {
+          "description": "strict returns failure for unfinished tasks; report records partial completion as a valid run.",
+          "enum": ["strict", "report"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"compute_profile": {"type": "null"}},
+            "required": ["compute_profile"]
+          },
+          "then": {
+            "properties": {"task_trace": {"type": "null"}}
+          },
+          "else": {
+            "properties": {"task_trace": {"type": "string", "minLength": 1}}
+          }
+        },
+        {
+          "if": {
+            "properties": {"transfer_trace": {"type": "string"}},
+            "required": ["transfer_trace"]
+          },
+          "then": {
+            "properties": {
+              "compute_profile": {"type": "null"},
+              "task_trace": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "trace_export": {
+      "description": "Offline trace output controls independent of the online network update interval.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "interval_s", "include_final_state", "format"],
+      "properties": {
+        "enabled": {
+          "description": "Whether to emit deterministic position and topology JSON slices.",
+          "type": "boolean"
+        },
+        "interval_s": {
+          "description": "Positive interval in seconds between exported offline topology slices.",
+          "$ref": "#/$defs/positive_seconds"
+        },
+        "include_final_state": {
+          "description": "Whether to add a final slice at the simulation end when it is not already on the cadence.",
+          "type": "boolean"
+        },
+        "format": {
+          "description": "Version 0.2 emits canonical per-time JSON slice files.",
+          "const": "json-slices"
+        }
+      }
+    },
+    "randomness": {
+      "description": "Explicit ns-3 pseudo-random stream identity.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "run", "stream_start"],
+      "properties": {
+        "seed": {
+          "description": "ns-3 RngSeedManager seed in the unsigned 32-bit range; fixed inputs reproduce fixed streams.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "run": {
+          "description": "ns-3 independent run number in the unsigned 64-bit range.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "stream_start": {
+          "description": "First non-negative deterministic stream index reserved for SatCompute objects.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    }
+  }
+}

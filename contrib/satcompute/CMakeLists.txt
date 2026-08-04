@@ -1,0 +1,17 @@
+build_lib(
+  LIBNAME satcompute
+  SOURCE_FILES model/satcompute-version.cc
+  HEADER_FILES model/satcompute-version.h
+  LIBRARIES_TO_LINK ${libcore}
+)
+
+# The platform entry point is a project executable, not an ns-3 example.  It is
+# therefore available when the global examples and tests switches are disabled.
+build_exec(
+  EXECNAME satcompute
+  EXECNAME_PREFIX satcompute_app_
+  SOURCE_FILES app/satcompute.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
+)
