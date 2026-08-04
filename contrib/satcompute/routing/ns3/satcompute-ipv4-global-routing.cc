@@ -7,6 +7,7 @@
 #include "satcompute-ipv4-global-routing.h"
 
 #include "../algorithm/hrw-per-flow-policy.h"
+#include "../algorithm/size-aware-hrw-policy.h"
 
 #include "ns3/abort.h"
 #include "ns3/ipv4-route.h"
@@ -49,15 +50,22 @@ SatComputeIpv4GlobalRouting::~SatComputeIpv4GlobalRouting()
 }
 
 void
-SatComputeIpv4GlobalRouting::Configure(RoutingMode selectionMode, uint64_t hashSeed)
+SatComputeIpv4GlobalRouting::Configure(RoutingMode selectionMode,
+                                       uint64_t hashSeed,
+                                       Ptr<FlowRouteRegistry> flowRouteRegistry)
 {
     NS_ABORT_MSG_IF(selectionMode != RoutingMode::GLOBAL_FIRST &&
                         selectionMode != RoutingMode::HASH_PER_FLOW &&
-                        selectionMode != RoutingMode::HRW_PER_FLOW,
+                        selectionMode != RoutingMode::HRW_PER_FLOW &&
+                        selectionMode != RoutingMode::SIZE_AWARE_HRW,
                     "this migration slice supports global-first, global-hash-per-flow, and "
-                    "global-hrw-per-flow only");
+                    "global-hrw-per-flow, and global-size-aware-hrw only");
+    NS_ABORT_MSG_IF(selectionMode == RoutingMode::SIZE_AWARE_HRW &&
+                        flowRouteRegistry == nullptr,
+                    "size-aware HRW routing requires a flow registry");
     m_selectionMode = selectionMode;
     m_hashSeed = hashSeed;
+    m_flowRouteRegistry = flowRouteRegistry;
     if (selectionMode == RoutingMode::HASH_PER_FLOW)
     {
         m_nextHopPolicy = std::make_unique<HashPerFlowPolicy>();
@@ -65,6 +73,12 @@ SatComputeIpv4GlobalRouting::Configure(RoutingMode selectionMode, uint64_t hashS
     else if (selectionMode == RoutingMode::HRW_PER_FLOW)
     {
         m_nextHopPolicy = std::make_unique<HrwPerFlowPolicy>();
+    }
+    else if (selectionMode == RoutingMode::SIZE_AWARE_HRW)
+    {
+        m_nextHopPolicy = std::make_unique<SizeAwareHrwPolicy>(
+            *flowRouteRegistry,
+            flowRouteRegistry->GetSizeAwareLoadState());
     }
     else
     {
@@ -160,6 +174,7 @@ SatComputeIpv4GlobalRouting::DoDispose()
     m_decisionCache.clear();
     m_recordedDecisionKeys.clear();
     m_nextHopPolicy.reset();
+    m_flowRouteRegistry = nullptr;
     m_ipv4 = nullptr;
     Ipv4GlobalRouting::DoDispose();
 }
@@ -320,6 +335,17 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(Ptr<const Packet> packet,
 
     if (candidates.empty())
     {
+        if (m_selectionMode == RoutingMode::SIZE_AWARE_HRW && outputInterface == nullptr &&
+            hasFiveTuple && m_flowRouteRegistry->IsSenderActive(flowKey))
+        {
+            FlowRouteAssignment assignment;
+            if (m_flowRouteRegistry->FindAssignment(m_satelliteId, flowKey, assignment))
+            {
+                m_flowRouteRegistry->ReleaseInvalidAssignment(m_satelliteId,
+                                                              flowKey,
+                                                              m_routeEpoch);
+            }
+        }
         event.selectionReason = "BASE_FALLBACK_NO_HOST_ROUTE";
         if (outputInterface == nullptr)
         {
@@ -337,22 +363,46 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(Ptr<const Packet> packet,
         return nullptr;
     }
 
-    NS_ABORT_MSG_IF((m_selectionMode != RoutingMode::HASH_PER_FLOW &&
-                     m_selectionMode != RoutingMode::HRW_PER_FLOW) ||
-                        m_nextHopPolicy == nullptr,
-                    "per-flow lookup requires a migrated deterministic policy");
-    NextHopSelectionContext context = {m_satelliteId, m_routeEpoch, m_hashSeed, flowKey};
-    const NextHopDecision decision = m_nextHopPolicy->Select(context, candidates);
-    NS_ABORT_MSG_IF(decision.useNativeGlobalRouting || decision.candidateIndex >= candidates.size(),
-                    "next-hop policy returned an invalid selection");
-    const uint32_t selectedIndex = decision.candidateIndex;
+    uint32_t selectedIndex = 0;
+    uint64_t score = 0;
+    std::string selectionReason;
+    const bool useStatefulSizeAware = m_selectionMode == RoutingMode::SIZE_AWARE_HRW &&
+                                      outputInterface == nullptr &&
+                                      m_flowRouteRegistry->IsSenderActive(flowKey);
+    if (m_selectionMode == RoutingMode::HASH_PER_FLOW ||
+        m_selectionMode == RoutingMode::HRW_PER_FLOW || useStatefulSizeAware)
+    {
+        NS_ABORT_MSG_IF(m_nextHopPolicy == nullptr,
+                        "per-flow lookup requires a migrated deterministic policy");
+        NextHopSelectionContext context = {m_satelliteId, m_routeEpoch, m_hashSeed, flowKey};
+        const NextHopDecision decision = m_nextHopPolicy->Select(context, candidates);
+        NS_ABORT_MSG_IF(decision.useNativeGlobalRouting ||
+                            decision.candidateIndex >= candidates.size(),
+                        "next-hop policy returned an invalid selection");
+        selectedIndex = decision.candidateIndex;
+        score = decision.score;
+        selectionReason = decision.selectionReason;
+    }
+    else if (m_selectionMode == RoutingMode::SIZE_AWARE_HRW)
+    {
+        const EcmpHrwSelection selection = SelectEcmpHrwRoute(m_hashSeed, flowKey, candidates);
+        selectedIndex = selection.candidateIndex;
+        score = selection.score;
+        selectionReason = m_flowRouteRegistry->IsRegistered(flowKey)
+                              ? "HRW_FALLBACK_INACTIVE"
+                              : "HRW_FALLBACK_UNREGISTERED";
+    }
+    else
+    {
+        NS_ABORT_MSG("global-first 不应进入逐流候选选择");
+    }
     const EcmpRouteCandidate& selected = candidates[selectedIndex];
 
     event.selectedIndex = selectedIndex;
     event.selectedGateway = selected.gateway;
     event.selectedOutputInterface = selected.outputInterface;
-    event.hashValue = decision.score;
-    event.selectionReason = candidates.size() == 1 ? "SINGLE_CANDIDATE" : decision.selectionReason;
+    event.hashValue = score;
+    event.selectionReason = candidates.size() == 1 ? "SINGLE_CANDIDATE" : selectionReason;
     if (outputInterface == nullptr)
     {
         RecordDecision(event);

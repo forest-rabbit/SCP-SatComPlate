@@ -9,6 +9,7 @@
 #include "../common/ecmp-flow-key.h"
 #include "../common/ecmp-route-candidate.h"
 #include "../common/routing-mode.h"
+#include "../state/flow-route-registry.h"
 #include "ns3/global-routing.h"
 #include "ns3/traced-callback.h"
 
@@ -46,7 +47,9 @@ class SatComputeIpv4GlobalRouting : public Ipv4GlobalRouting
     SatComputeIpv4GlobalRouting();
     ~SatComputeIpv4GlobalRouting() override;
 
-    void Configure(RoutingMode selectionMode, uint64_t hashSeed);
+    void Configure(RoutingMode selectionMode,
+                   uint64_t hashSeed,
+                   Ptr<FlowRouteRegistry> flowRouteRegistry = nullptr);
     void SetSatelliteId(uint32_t satelliteId);
     void AdvanceRouteEpoch();
     void InvalidateDecisionCache(const EcmpFlowKey& flowKey);
@@ -95,6 +98,7 @@ class SatComputeIpv4GlobalRouting : public Ipv4GlobalRouting
 
     RoutingMode m_selectionMode;
     uint64_t m_hashSeed;
+    Ptr<FlowRouteRegistry> m_flowRouteRegistry;
     std::unique_ptr<NextHopPolicy> m_nextHopPolicy;
     bool m_hasSatelliteId;
     uint32_t m_satelliteId;

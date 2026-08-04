@@ -7,6 +7,7 @@
 
 #include "../../model/scenario-config.h"
 #include "../../routing/common/routing-mode.h"
+#include "../../routing/state/flow-route-registry.h"
 #include "../ipv4/satellite-ipv4-addressing.h"
 #include "../link/satellite-link-state.h"
 #include "../satellite-id-map.h"
@@ -47,6 +48,7 @@ class ReplayTopologyController
     const NodeContainer& GetNodes() const;
     const SatelliteIdMap& GetIdMap() const;
     const SatelliteLinkState& GetLinkState() const;
+    Ptr<FlowRouteRegistry> GetFlowRouteRegistry() const;
     Ipv4Address GetServiceAddress(uint32_t satelliteId) const;
     uint32_t GetAppliedSnapshotCount() const;
     uint32_t GetRouteComputationCount() const;
@@ -68,6 +70,7 @@ class ReplayTopologyController
     std::unique_ptr<SatelliteIdMap> m_idMap;
     std::unique_ptr<SatelliteIpv4ServiceMap> m_serviceMap;
     std::unique_ptr<SatelliteLinkState> m_linkState;
+    Ptr<FlowRouteRegistry> m_flowRouteRegistry;
     std::vector<uint32_t> m_expectedSatelliteIds;
     TopologyLinkUpdateSummary m_lastUpdateSummary;
     uint32_t m_appliedSnapshotCount{};

@@ -7,9 +7,12 @@ build_lib(
     routing/algorithm/global-first-policy.cc
     routing/algorithm/hash-per-flow-policy.cc
     routing/algorithm/hrw-per-flow-policy.cc
+    routing/algorithm/size-aware-hrw-policy.cc
     routing/common/routing-mode.cc
     routing/ns3/satcompute-ipv4-global-routing.cc
     routing/ns3/satcompute-ipv4-global-routing-helper.cc
+    routing/state/flow-route-registry.cc
+    routing/state/size-aware-load-state.cc
     topology/ipv4/satellite-ipv4-addressing.cc
     topology/link/satellite-link-state.cc
     topology/replay/replay-topology-controller.cc
@@ -24,12 +27,17 @@ build_lib(
     routing/algorithm/hash-per-flow-policy.h
     routing/algorithm/hrw-per-flow-policy.h
     routing/algorithm/next-hop-policy.h
+    routing/algorithm/size-aware-hrw-policy.h
     routing/common/ecmp-flow-key.h
     routing/common/ecmp-route-candidate.h
     routing/common/fnv1a64.h
     routing/common/routing-mode.h
     routing/ns3/satcompute-ipv4-global-routing.h
     routing/ns3/satcompute-ipv4-global-routing-helper.h
+    routing/state/flow-route-registry.h
+    routing/state/flow-route-state.h
+    routing/state/size-aware-load-state.h
+    routing/state/size-aware-load-view.h
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
     topology/replay/replay-topology-controller.h
@@ -98,6 +106,15 @@ build_exec(
   EXECNAME satcompute-routing-compatibility-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/routing-compatibility-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-size-aware-routing-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/size-aware-routing-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
