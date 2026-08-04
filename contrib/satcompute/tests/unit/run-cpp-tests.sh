@@ -65,3 +65,9 @@ task_fixtures="contrib/satcompute/tests/fixtures/task"
 ./ns3 run --no-build \
   "satcompute-task-coordinator-test --scenario=$replay_dynamic \
 --fixtureRoot=$task_fixtures"
+
+./ns3 run --no-build \
+  "satcompute-run-output-writer-test \
+--taskScenario=contrib/satcompute/tests/fixtures/scenario/task-replay.json \
+--transferScenario=contrib/satcompute/tests/fixtures/scenario/transfer-replay.json \
+--outputDir=$test_output/run-output"
