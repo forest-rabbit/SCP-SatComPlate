@@ -156,6 +156,12 @@ class ScenarioParsingTest(unittest.TestCase):
         with self.assertRaisesRegex(ScenarioConfigError, "integer"):
             parse_scenario(payload)
 
+    def test_isl_queue_must_fit_ns3_queue_size(self) -> None:
+        payload = load_payload()
+        payload["network"]["isl_queue_bytes"] = 4_294_967_296
+        with self.assertRaisesRegex(ScenarioConfigError, "integer in"):
+            parse_scenario(payload)
+
 
 class SchemaDocumentationTest(unittest.TestCase):
     """The JSON Schema is the para.cc-style parameter reference."""

@@ -466,7 +466,7 @@ def _parse_network(payload: Any, base_directory: Path) -> NetworkConfig:
             data["isl_queue_bytes"],
             "network.isl_queue_bytes",
             1,
-            UINT64_MAX,
+            UINT32_MAX,
         ),
         receiver_rcv_buf_bytes=_require_integer(
             data["receiver_rcv_buf_bytes"],

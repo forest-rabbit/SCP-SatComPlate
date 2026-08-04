@@ -54,7 +54,7 @@ struct NetworkConfig
     int64_t networkUpdateIntervalNs;
     uint64_t linkBandwidthBps;
     uint16_t islMtuBytes;
-    uint64_t islQueueBytes;
+    uint32_t islQueueBytes;
     uint32_t receiverRcvBufBytes;
 };
 

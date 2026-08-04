@@ -601,10 +601,11 @@ LoadScenarioConfig(const std::filesystem::path& path)
                       "network.isl_mtu_bytes",
                       68,
                       UINT16_MAX_VALUE));
-    config.network.islQueueBytes = RequireUint64(GetField(network, "isl_queue_bytes"),
-                                                 "network.isl_queue_bytes",
-                                                 1,
-                                                 UINT64_MAX);
+    config.network.islQueueBytes = static_cast<uint32_t>(
+        RequireUint64(GetField(network, "isl_queue_bytes"),
+                      "network.isl_queue_bytes",
+                      1,
+                      UINT32_MAX_VALUE));
     config.network.receiverRcvBufBytes = static_cast<uint32_t>(
         RequireUint64(GetField(network, "receiver_rcv_buf_bytes"),
                       "network.receiver_rcv_buf_bytes",

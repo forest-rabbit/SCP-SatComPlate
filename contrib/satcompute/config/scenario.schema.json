@@ -217,7 +217,8 @@
         "isl_queue_bytes": {
           "description": "Drop-tail queue capacity per ISL net device in bytes.",
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 4294967295
         },
         "receiver_rcv_buf_bytes": {
           "description": "UDP receive socket buffer capacity per receiver in bytes.",
