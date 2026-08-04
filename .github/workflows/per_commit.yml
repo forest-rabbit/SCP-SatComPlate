@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   satcompute:
+    name: SatCompute CI
     runs-on: ubuntu-latest
     env:
       CCACHE_BASEDIR: ${{ github.workspace }}

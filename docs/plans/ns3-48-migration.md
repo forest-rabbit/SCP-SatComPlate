@@ -1,5 +1,8 @@
 # Implementation Plan: SCP-SatComPlate ns-3.48 Migration
 
+Status: completed on 2026-08-05. The maintained verification commands and
+deferred boundaries remain normative for follow-up work.
+
 ## Overview
 
 Deliver the approved platform specification through small, reviewable branches.
@@ -71,7 +74,7 @@ Acceptance:
 
 Verification:
 
-- './ns3 configure --enable-modules=satcompute'
+- './ns3 configure --enable-modules=satcompute -G Ninja'
 - './ns3 build'
 - the project smoke runner invokes the module-owned executable successfully
 
@@ -394,14 +397,15 @@ Dependencies: Task 6.2.
 
 ## Branch and PR Protocol
 
-1. Start each slice from current 'main' as 'agent/<short-description>'.
+1. Start each slice from current 'main' as 'feature/<short-description>' or
+   'docs/<short-description>'.
 2. Stage only the files belonging to that slice.
 3. Run focused build/tests and 'git diff --check'.
 4. Commit in imperative mood with an ns-3-style subject.
 5. Push and open a draft PR with scope and checks.
 6. Mark ready and merge only after its checkpoint passes.
 7. Verify the PR head is reachable from updated 'main'.
-8. Delete the merged local and remote 'agent/*' branch.
+8. Delete the merged local and remote feature/documentation branch.
 9. Never delete 'legacy/ns-3.33'.
 
 ## Open Questions

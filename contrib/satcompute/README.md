@@ -81,3 +81,7 @@ which complete pairs the simulator consumes.
 The same replay path accepts generated 0.2 traces. When `manifest.json` is
 present, its inventory and SHA-256 values are enforced, so a generated 1 s or
 2 s trace can be replayed at 20 s without scanning unlisted stale files.
+
+The repository-wide completion matrix, determinism guarantees, and deferred
+fault/frontend/IPv6/SRv6 boundaries are recorded in the
+[migration status](../../docs/ns3-48-migration-status.md).
