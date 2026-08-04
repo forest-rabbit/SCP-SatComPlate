@@ -1,7 +1,13 @@
 build_lib(
   LIBNAME satcompute
-  SOURCE_FILES model/satcompute-version.cc
-  HEADER_FILES model/satcompute-version.h
+  SOURCE_FILES
+    model/satcompute-version.cc
+    model/scenario-config.cc
+    model/sha256.cc
+  HEADER_FILES
+    model/satcompute-version.h
+    model/scenario-config.h
+    model/sha256.h
   LIBRARIES_TO_LINK ${libcore}
 )
 
@@ -14,4 +20,15 @@ build_exec(
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
+)
+
+# Project-owned C++ checks are normal executables because SCP-SatComPlate does
+# not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-config-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/config-loader-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )

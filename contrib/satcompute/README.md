@@ -11,6 +11,7 @@ From the repository root:
 ./ns3 build
 python3 -m unittest discover \
   -s contrib/satcompute/tests/unit -p 'test_*.py' -v
+contrib/satcompute/tests/unit/run-cpp-tests.sh
 contrib/satcompute/tests/integration/smoke/run-all.sh
 ```
 

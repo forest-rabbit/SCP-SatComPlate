@@ -14,3 +14,9 @@ The two maintained 66-satellite inputs demonstrate the independent cadences:
 All time values are written in seconds. `scenario_config.py` parses decimal
 tokens without a binary floating-point round trip and converts them exactly to
 signed 64-bit nanoseconds before any event is scheduled.
+
+The C++ `ScenarioConfig` loader enforces the same field and cross-field rules
+before ns-3 setup. A validated platform invocation writes a canonical
+`effective-config.json` containing resolved absolute paths, integer-nanosecond
+times, operational output location, and SHA-256 for the scenario and every
+enabled transfer, compute-profile, and task input.
