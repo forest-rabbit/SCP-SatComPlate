@@ -19,6 +19,11 @@ The current scenario contract is `config/scenario.schema.json`. Its
 `description` entries are the parameter reference; maintained configurations
 are under `input/examples/`.
 
+Direct network workloads use the closed-world
+`traffic/transfer-trace.schema.json` contract. Its legacy-compatible nanosecond
+arrival field and deterministic five-tuple/chunk derivation are documented in
+`traffic/README.md`.
+
 Legacy-compatible JSON replay slices and their exact integer-nanosecond
 selection rules are documented under `topology/snapshot/`. A scenario may point
 at a finer replay directory while its own `network_update_interval_s` controls

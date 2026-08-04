@@ -39,3 +39,13 @@ replay_dynamic="contrib/satcompute/tests/fixtures/scenario/replay-dynamic.json"
 
 ./ns3 run --no-build \
   "satcompute-capacity-aware-routing-test --scenario=$replay_dynamic"
+
+transfer_fixtures="contrib/satcompute/tests/fixtures/traffic/transfers"
+./ns3 run --no-build \
+  "satcompute-transfer-trace-test \
+--canonicalA=$transfer_fixtures/canonical-order-a.json \
+--canonicalB=$transfer_fixtures/canonical-order-b.json \
+--invalidUnknownField=$transfer_fixtures/invalid-unknown-field.json \
+--invalidDuplicateId=$transfer_fixtures/invalid-duplicate-id.json \
+--invalidUnknownSatellite=$transfer_fixtures/invalid-unknown-satellite.json \
+--invalidStopTime=$transfer_fixtures/invalid-stop-time.json"

@@ -21,6 +21,7 @@ build_lib(
     topology/satellite-id-map.cc
     topology/snapshot/snapshot-reader.cc
     topology/snapshot/snapshot-schedule.cc
+    traffic/network-transfer-config.cc
   HEADER_FILES
     model/satcompute-version.h
     model/scenario-config.h
@@ -48,10 +49,12 @@ build_lib(
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
     topology/replay/replay-topology-controller.h
+    topology/satellite-endpoint-view.h
     topology/satellite-id-map.h
     topology/snapshot/snapshot-reader.h
     topology/snapshot/snapshot-schedule.h
     topology/snapshot/snapshot-types.h
+    traffic/network-transfer-config.h
   LIBRARIES_TO_LINK
     ${libcore}
     ${libnetwork}
@@ -131,6 +134,15 @@ build_exec(
   EXECNAME satcompute-capacity-aware-routing-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/capacity-aware-routing-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-transfer-trace-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/transfer-trace-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

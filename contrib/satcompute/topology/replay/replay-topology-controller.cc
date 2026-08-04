@@ -248,6 +248,13 @@ ReplayTopologyController::GetFlowRouteRegistry() const
     return m_flowRouteRegistry;
 }
 
+bool
+ReplayTopologyController::HasSatelliteId(uint32_t satelliteId) const
+{
+    RequireInitialized();
+    return m_idMap->HasSatelliteId(satelliteId);
+}
+
 Ipv4Address
 ReplayTopologyController::GetServiceAddress(uint32_t satelliteId) const
 {
