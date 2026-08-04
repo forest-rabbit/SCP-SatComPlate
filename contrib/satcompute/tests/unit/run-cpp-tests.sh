@@ -73,3 +73,5 @@ task_fixtures="contrib/satcompute/tests/fixtures/task"
 --outputDir=$test_output/run-output"
 
 ./ns3 run --no-build "satcompute-online-orbit-foundation-test"
+
+./ns3 run --no-build "satcompute-online-topology-controller-test"

@@ -182,9 +182,9 @@ base topology and reapply the active-fault mask.
   inter-plane neighbor is never replaced by a nearer satellite.
 - A candidate link is active when its distance is less than or equal to the
   configured maximum and inactive otherwise.
-- Fixed delay uses the scenario value. Distance delay is the one-way
-  propagation time derived from current distance and the documented speed of
-  light.
+- Fixed delay uses the scenario value. Distance delay divides current distance
+  by 299792458 m/s and rounds the one-way result to the nearest integer
+  nanosecond; an exact half-nanosecond is rounded upward.
 - Offline and online output at identical timestamps has identical external IDs
   and active-edge sets. Coordinates use a documented numerical tolerance and
   canonical serialization.
