@@ -27,8 +27,9 @@ In `fixed` mode, `fixed_delay_us` is converted once and overrides every slice;
 in `distance` mode, each slice's legacy microsecond delay is converted once to
 integer nanoseconds. The controller repopulates routes initially and then calls
 one recomputation only for an active-edge change. It installs the SatCompute
-ns-3.48 adapter for both `global-first` and deterministic legacy
-`global-hash-per-flow`, advancing its route epoch after each recomputation.
+ns-3.48 adapter for `global-first`, deterministic legacy
+`global-hash-per-flow`, and stable `global-hrw-per-flow`, advancing its route
+epoch after each recomputation.
 
 The ns-3 `QueueSize` byte counter is unsigned 32-bit. Scenario schema 0.2
 therefore rejects `network.isl_queue_bytes` above 4,294,967,295 during loading,

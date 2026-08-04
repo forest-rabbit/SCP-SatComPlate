@@ -169,7 +169,7 @@ main(int argc, char* argv[])
         Check(!dynamicScenario.empty(), "dynamicScenario is required");
 
         ScenarioConfig unsupported = LoadScenarioConfig(dynamicScenario);
-        unsupported.routing.mode = "global-hrw-per-flow";
+        unsupported.routing.mode = "global-size-aware-hrw";
         ExpectControllerError(
             [&unsupported] { ReplayTopologyController controller(unsupported); },
             "unmigrated routing mode was silently run as global-first");
