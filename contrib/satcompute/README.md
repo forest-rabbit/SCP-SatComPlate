@@ -24,6 +24,28 @@ Direct network workloads use the closed-world
 arrival field and deterministic five-tuple/chunk derivation are documented in
 `traffic/README.md`.
 
+Compute resources and task workloads use the documented contracts under
+`task/`. To execute a JSON-replay scenario and write its effective
+configuration, transfer/task metrics, routing metrics, run summary, and any
+partial-run diagnostics:
+
+```bash
+./ns3 run "satcompute \
+  --scenarioConfig=contrib/satcompute/tests/fixtures/scenario/task-replay.json \
+  --outputDir=/tmp/satcompute-run"
+```
+
+`workloads.task_completion_policy=strict` returns exit code 3 after recording
+a partial run; `report` records the same diagnostics and returns success.
+`--validateOnly=true` performs strict input resolution and hashing without
+starting a simulation. Until the online controller is installed, this flag is
+also the supported way to check `ns3-circular` configurations.
+
+Execution applies `randomness.seed` and `randomness.run` before constructing
+the topology or workloads. The current replay core is otherwise deterministic
+and consumes no random streams; `stream_start` is reserved for future explicit
+failure-model stream assignment rather than silently perturbing routing.
+
 Legacy-compatible JSON replay slices and their exact integer-nanosecond
 selection rules are documented under `topology/snapshot/`. A scenario may point
 at a finer replay directory while its own `network_update_interval_s` controls
