@@ -251,3 +251,12 @@ build_exec(
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )
+
+build_exec(
+  EXECNAME satcompute-topology-replay-equivalence-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/topology-replay-equivalence-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)

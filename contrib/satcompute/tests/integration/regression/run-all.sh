@@ -102,6 +102,37 @@ if [[ "$export_trace_result" != *'"status":"exported"'* ]]; then
 fi
 
 python3 - \
+  "$online_trace" \
+  "$regression_output/export-trace/topology-trace" \
+  "$regression_output/generated-replay-scenario.json" <<'PY'
+import json
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1])
+trace_directory = pathlib.Path(sys.argv[2]).resolve()
+target = pathlib.Path(sys.argv[3])
+scenario = json.loads(source.read_text(encoding="utf-8"))
+scenario["scenario_name"] = "generated-v0.2-replay"
+scenario["constellation"]["orbit_provider"] = "json-replay"
+scenario["network"]["topology_source"] = "json-replay"
+scenario["network"]["replay_directory"] = str(trace_directory)
+scenario["trace_export"]["enabled"] = False
+target.write_text(
+    json.dumps(scenario, indent=2, separators=(",", ": ")) + "\n",
+    encoding="utf-8",
+)
+PY
+
+generated_replay_result="$(run_platform \
+  "$regression_output/generated-replay-scenario.json" \
+  "$regression_output/generated-replay")"
+if [[ "$generated_replay_result" != *'"status":"completed"'* ]]; then
+  echo "generated 0.2 topology replay regression failed: $generated_replay_result" >&2
+  exit 1
+fi
+
+python3 - \
   "$online_fixed" \
   "$regression_output/online-capacity-scenario.json" \
   "contrib/satcompute/input/examples/synthetic-66-fixed.json" \
@@ -266,6 +297,14 @@ if trace_manifest["network_update_interval_ns"] != 2_000_000_000:
     raise SystemExit("trace network interval differs")
 if trace_manifest != export_manifest:
     raise SystemExit("online and export-only manifests differ")
+
+generated_replay = load_json("generated-replay/run-summary.json")
+if generated_replay["topology_source"] != "json-replay":
+    raise SystemExit("generated trace was not consumed through JSON replay")
+if generated_replay["applied_topology_slice_count"] != 2:
+    raise SystemExit("generated trace replay update count differs")
+if generated_replay["route_computation_count"] != 1:
+    raise SystemExit("generated delay-only trace replay rebuilt routes")
 
 online_trace_root = root / "online-trace/topology-trace"
 export_trace_root = root / "export-trace/topology-trace"

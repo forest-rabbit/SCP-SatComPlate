@@ -80,3 +80,9 @@ task_fixtures="contrib/satcompute/tests/fixtures/task"
   "satcompute-topology-trace-exporter-test \
 --scenario=contrib/satcompute/tests/fixtures/scenario/online-trace.json \
 --outputDir=$test_output/topology-trace"
+
+./ns3 run --no-build \
+  "satcompute-topology-replay-equivalence-test \
+--oneSecondScenario=contrib/satcompute/tests/fixtures/scenario/online-equivalence-1s.json \
+--twoSecondScenario=contrib/satcompute/tests/fixtures/scenario/online-equivalence-2s.json \
+--outputDir=$test_output/topology-equivalence"
