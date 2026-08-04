@@ -23,6 +23,8 @@ build_lib(
     task/task-trace.cc
     topology/ipv4/satellite-ipv4-addressing.cc
     topology/link/satellite-link-state.cc
+    topology/online/plus-grid-candidate.cc
+    topology/orbit/online-orbit-constellation.cc
     topology/replay/replay-topology-controller.cc
     topology/satellite-id-map.cc
     topology/snapshot/snapshot-reader.cc
@@ -63,6 +65,8 @@ build_lib(
     task/task-trace.h
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
+    topology/online/plus-grid-candidate.h
+    topology/orbit/online-orbit-constellation.h
     topology/replay/replay-topology-controller.h
     topology/satellite-endpoint-view.h
     topology/satellite-id-map.h
@@ -79,6 +83,7 @@ build_lib(
     ${libcore}
     ${libnetwork}
     ${libinternet}
+    ${libmobility}
     ${libpoint-to-point}
     ${libcsma}
 )
@@ -208,6 +213,15 @@ build_exec(
   EXECNAME satcompute-run-output-writer-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/run-output-writer-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-online-orbit-foundation-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/online-orbit-foundation-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
