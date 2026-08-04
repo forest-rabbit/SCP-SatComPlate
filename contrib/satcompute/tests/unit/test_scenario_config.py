@@ -19,6 +19,7 @@ from contrib.satcompute.config.scenario_config import (
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 EXAMPLE_DIRECTORY = REPOSITORY_ROOT / "contrib/satcompute/input/examples"
 SCHEMA_PATH = REPOSITORY_ROOT / "contrib/satcompute/config/scenario.schema.json"
+SCENARIO_FIXTURES = REPOSITORY_ROOT / "contrib/satcompute/tests/fixtures/scenario"
 
 
 def load_payload(name: str = "synthetic-66-fixed.json") -> dict[str, object]:
@@ -70,6 +71,17 @@ class ScenarioParsingTest(unittest.TestCase):
         self.assertEqual(config.network.delay_mode, "distance")
         self.assertIsNone(config.network.fixed_delay_us)
         self.assertEqual(config.network.network_update_interval_ns, 1_000_000_000)
+
+    def test_compute_and_task_inputs_are_direct_scenario_references(self) -> None:
+        config = load_scenario(SCENARIO_FIXTURES / "task-input.json")
+        self.assertEqual(
+            config.workloads.compute_profile,
+            SCENARIO_FIXTURES / "resources/compute-profile.json",
+        )
+        self.assertEqual(
+            config.workloads.task_trace,
+            SCENARIO_FIXTURES / "traffic/task-trace.json",
+        )
 
     def test_unknown_and_missing_fields_are_rejected(self) -> None:
         unknown = load_payload()

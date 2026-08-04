@@ -81,6 +81,7 @@ ns-3 is a discrete-event network simulator for Internet systems, written in C++ 
 ```bash
 python3 -m unittest discover \
   -s contrib/satcompute/tests/unit -p 'test_*.py' -v
+contrib/satcompute/tests/unit/run-cpp-tests.sh
 contrib/satcompute/tests/integration/smoke/run-all.sh
 contrib/satcompute/tests/integration/regression/run-all.sh
 ```
@@ -205,8 +206,9 @@ class MyClass
 ### Running Single Tests
 
 ```bash
-python3 contrib/satcompute/tests/unit/test_schema.py
-contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
+python3 contrib/satcompute/tests/unit/test_scenario_config.py
+contrib/satcompute/tests/unit/run-cpp-tests.sh
+contrib/satcompute/tests/integration/smoke/run-all.sh
 ```
 
 Tests can be run with ns-3 logging enabled via the `NS_LOG` environment variable:

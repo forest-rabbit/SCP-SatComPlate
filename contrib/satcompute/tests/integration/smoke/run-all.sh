@@ -13,4 +13,16 @@ if [[ "$actual" != "$expected" ]]; then
   exit 1
 fi
 
-echo "SatCompute module smoke passed."
+smoke_output="$(mktemp -d /tmp/satcompute-smoke.XXXXXX)"
+trap 'rm -rf "$smoke_output"' EXIT
+scenario="contrib/satcompute/input/examples/synthetic-66-fixed.json"
+
+validated="$(./ns3 run --no-build \
+  "satcompute --scenarioConfig=$scenario --outputDir=$smoke_output")"
+if [[ "$validated" != *'"status":"validated"'* ]]; then
+  echo "scenario validation smoke failed: $validated" >&2
+  exit 1
+fi
+
+python3 -m json.tool "$smoke_output/effective-config.json" >/dev/null
+echo "SatCompute module and configuration smoke passed."

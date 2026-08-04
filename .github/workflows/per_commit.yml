@@ -43,6 +43,10 @@ jobs:
           -p 'test_*.py'
           -v
 
+      - name: Run SatCompute C++ unit tests
+        if: ${{ hashFiles('contrib/satcompute/tests/unit/run-cpp-tests.sh') != '' }}
+        run: contrib/satcompute/tests/unit/run-cpp-tests.sh
+
       - name: Run SatCompute smoke tests
         if: ${{ hashFiles('contrib/satcompute/tests/integration/smoke/run-all.sh') != '' }}
         run: contrib/satcompute/tests/integration/smoke/run-all.sh
