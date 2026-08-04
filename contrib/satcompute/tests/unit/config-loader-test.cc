@@ -197,6 +197,8 @@ main(int argc, char* argv[])
               "effective fixed delay differs");
         Check(effective.at("network").at("network_update_interval_ns") == 20000000000,
               "effective network interval differs");
+        Check(effective.at("operational").at("validate_only") == false,
+              "effective operational validation mode differs");
         Check(effective.at("input_hashes").at("scenario_config").at("sha256") ==
                   Sha256File(fixed.sourcePath),
               "effective scenario hash differs");
