@@ -18,6 +18,7 @@ build_lib(
     task/compute-profile.cc
     task/compute-service.cc
     task/compute-task.cc
+    task/task-coordinator.cc
     task/task-trace.cc
     topology/ipv4/satellite-ipv4-addressing.cc
     topology/link/satellite-link-state.cc
@@ -56,6 +57,7 @@ build_lib(
     task/compute-profile.h
     task/compute-service.h
     task/compute-task.h
+    task/task-coordinator.h
     task/task-trace.h
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
@@ -186,6 +188,15 @@ build_exec(
   EXECNAME satcompute-compute-service-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/compute-service-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-task-coordinator-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/task-coordinator-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
