@@ -28,8 +28,10 @@ in `distance` mode, each slice's legacy microsecond delay is converted once to
 integer nanoseconds. The controller repopulates routes initially and then calls
 one recomputation only for an active-edge change. It installs the SatCompute
 ns-3.48 adapter for `global-first`, deterministic legacy
-`global-hash-per-flow`, and stable `global-hrw-per-flow`, advancing its route
-epoch after each recomputation.
+`global-hash-per-flow`, stable `global-hrw-per-flow`, and stateful deterministic
+`global-size-aware-hrw`, advancing its route epoch after each recomputation.
+Reservation-aware modes share one controller-owned flow registry so later
+workload integration observes the same state at every satellite.
 
 The ns-3 `QueueSize` byte counter is unsigned 32-bit. Scenario schema 0.2
 therefore rejects `network.isl_queue_bytes` above 4,294,967,295 during loading,

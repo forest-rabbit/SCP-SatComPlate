@@ -37,11 +37,13 @@ ReplayTopologyController::ReplayTopologyController(const ScenarioConfig& config)
     }
     if (m_routingMode != RoutingMode::GLOBAL_FIRST &&
         m_routingMode != RoutingMode::HASH_PER_FLOW &&
-        m_routingMode != RoutingMode::HRW_PER_FLOW)
+        m_routingMode != RoutingMode::HRW_PER_FLOW &&
+        m_routingMode != RoutingMode::SIZE_AWARE_HRW)
     {
         throw ReplayTopologyControllerError(
             "replay controller currently supports global-first, "
-            "global-hash-per-flow, and global-hrw-per-flow only");
+            "global-hash-per-flow, global-hrw-per-flow, and "
+            "global-size-aware-hrw only");
     }
     if (m_config.network.delayMode == "fixed" &&
         !m_config.network.fixedDelayNs)
@@ -108,10 +110,15 @@ ReplayTopologyController::Initialize()
     m_nodes.Create(satelliteCount);
     m_idMap =
         std::make_unique<SatelliteIdMap>(m_nodes, m_expectedSatelliteIds);
+    if (m_routingMode == RoutingMode::SIZE_AWARE_HRW)
+    {
+        m_flowRouteRegistry = CreateObject<FlowRouteRegistry>();
+    }
     Ipv4StaticRoutingHelper staticRouting;
     SatComputeIpv4GlobalRoutingHelper globalRouting(
         m_routingMode,
-        m_config.routing.hashSeed);
+        m_config.routing.hashSeed,
+        m_flowRouteRegistry);
     Ipv4ListRoutingHelper listRouting;
     listRouting.Add(staticRouting, 0);
     listRouting.Add(globalRouting, -10);
@@ -208,6 +215,13 @@ ReplayTopologyController::GetLinkState() const
 {
     RequireInitialized();
     return *m_linkState;
+}
+
+Ptr<FlowRouteRegistry>
+ReplayTopologyController::GetFlowRouteRegistry() const
+{
+    RequireInitialized();
+    return m_flowRouteRegistry;
 }
 
 Ipv4Address

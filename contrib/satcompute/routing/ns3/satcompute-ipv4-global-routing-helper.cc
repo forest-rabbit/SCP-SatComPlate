@@ -14,15 +14,19 @@
 namespace ns3
 {
 
-SatComputeIpv4GlobalRoutingHelper::SatComputeIpv4GlobalRoutingHelper(RoutingMode selectionMode,
-                                                                     uint64_t hashSeed)
-    : m_selectionMode(selectionMode), m_hashSeed(hashSeed)
+SatComputeIpv4GlobalRoutingHelper::SatComputeIpv4GlobalRoutingHelper(
+    RoutingMode selectionMode,
+    uint64_t hashSeed,
+    Ptr<FlowRouteRegistry> flowRouteRegistry)
+    : m_selectionMode(selectionMode), m_hashSeed(hashSeed),
+      m_flowRouteRegistry(flowRouteRegistry)
 {
 }
 
 SatComputeIpv4GlobalRoutingHelper::SatComputeIpv4GlobalRoutingHelper(
     const SatComputeIpv4GlobalRoutingHelper& other)
-    : m_selectionMode(other.m_selectionMode), m_hashSeed(other.m_hashSeed)
+    : m_selectionMode(other.m_selectionMode), m_hashSeed(other.m_hashSeed),
+      m_flowRouteRegistry(other.m_flowRouteRegistry)
 {
 }
 
@@ -41,7 +45,7 @@ SatComputeIpv4GlobalRoutingHelper::Create(Ptr<Node> node) const
     node->AggregateObject(globalRouter);
 
     Ptr<SatComputeIpv4GlobalRouting> routing = CreateObject<SatComputeIpv4GlobalRouting>();
-    routing->Configure(m_selectionMode, m_hashSeed);
+    routing->Configure(m_selectionMode, m_hashSeed, m_flowRouteRegistry);
     globalRouter->SetRoutingProtocol(routing);
     return routing;
 }
