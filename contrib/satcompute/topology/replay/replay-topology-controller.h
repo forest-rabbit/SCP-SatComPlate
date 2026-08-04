@@ -6,6 +6,7 @@
 #define SATCOMPUTE_REPLAY_TOPOLOGY_CONTROLLER_H
 
 #include "../../model/scenario-config.h"
+#include "../../routing/algorithm/capacity-aware-path-view.h"
 #include "../../routing/common/routing-mode.h"
 #include "../../routing/state/flow-route-registry.h"
 #include "../ipv4/satellite-ipv4-addressing.h"
@@ -13,6 +14,7 @@
 #include "../satellite-id-map.h"
 #include "../snapshot/snapshot-types.h"
 
+#include "ns3/callback.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/node-container.h"
 
@@ -37,12 +39,14 @@ class ReplayTopologyControllerError : public std::runtime_error
  * The controller installs the SatCompute ns-3.48 global-routing adapter and
  * must outlive all scheduled simulation events.
  */
-class ReplayTopologyController
+class ReplayTopologyController : public CapacityAwarePathView
 {
   public:
     explicit ReplayTopologyController(const ScenarioConfig& config);
 
     void Initialize();
+    void RegisterRouteUpdateCallback(Callback<void> callback);
+    void InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const;
 
     const ScenarioConfig& GetConfig() const;
     const NodeContainer& GetNodes() const;
@@ -50,6 +54,16 @@ class ReplayTopologyController
     const SatelliteLinkState& GetLinkState() const;
     Ptr<FlowRouteRegistry> GetFlowRouteRegistry() const;
     Ipv4Address GetServiceAddress(uint32_t satelliteId) const;
+    std::vector<EcmpRouteCandidate> GetEcmpRouteCandidates(
+        uint32_t sourceSatelliteId,
+        uint32_t destinationSatelliteId) const override;
+    uint32_t GetNextHopSatelliteId(uint32_t sourceSatelliteId,
+                                   uint32_t outputInterface) const override;
+    uint64_t GetIslDataRateBps(uint32_t sourceSatelliteId,
+                               uint32_t outputInterface) const override;
+    uint64_t GetRouteEpoch(uint32_t satelliteId) const;
+    uint64_t GetHashSeed() const;
+    bool IsCapacityAwareRouting() const;
     uint32_t GetAppliedSnapshotCount() const;
     uint32_t GetRouteComputationCount() const;
     const TopologyLinkUpdateSummary& GetLastUpdateSummary() const;
@@ -71,6 +85,7 @@ class ReplayTopologyController
     std::unique_ptr<SatelliteIpv4ServiceMap> m_serviceMap;
     std::unique_ptr<SatelliteLinkState> m_linkState;
     Ptr<FlowRouteRegistry> m_flowRouteRegistry;
+    std::vector<Callback<void>> m_routeUpdateCallbacks;
     std::vector<uint32_t> m_expectedSatelliteIds;
     TopologyLinkUpdateSummary m_lastUpdateSummary;
     uint32_t m_appliedSnapshotCount{};

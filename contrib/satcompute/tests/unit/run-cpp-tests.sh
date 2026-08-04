@@ -36,3 +36,6 @@ replay_dynamic="contrib/satcompute/tests/fixtures/scenario/replay-dynamic.json"
 
 ./ns3 run --no-build \
   "satcompute-size-aware-routing-test --scenario=$replay_dynamic"
+
+./ns3 run --no-build \
+  "satcompute-capacity-aware-routing-test --scenario=$replay_dynamic"

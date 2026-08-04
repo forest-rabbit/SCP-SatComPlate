@@ -168,12 +168,6 @@ main(int argc, char* argv[])
         Check(!distanceScenario.empty(), "distanceScenario is required");
         Check(!dynamicScenario.empty(), "dynamicScenario is required");
 
-        ScenarioConfig unsupported = LoadScenarioConfig(dynamicScenario);
-        unsupported.routing.mode = "global-capacity-aware-hrw";
-        ExpectControllerError(
-            [&unsupported] { ReplayTopologyController controller(unsupported); },
-            "unmigrated routing mode was silently run as global-first");
-
         RunDelayCase(fixedScenario, 8000000, 8000000, 0);
         RunDelayCase(distanceScenario, 1000000, 1500000, 1);
         RunDynamicCase(dynamicScenario);
