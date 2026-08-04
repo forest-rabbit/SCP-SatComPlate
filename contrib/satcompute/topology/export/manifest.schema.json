@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forest-rabbit.github.io/SCP-SatComPlate/schemas/topology-trace-manifest-0.2.json",
+  "title": "SatCompute topology trace manifest 0.2",
+  "description": "Reproducibility metadata and an authoritative ordered inventory for one deterministic topology trace.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scenario_name",
+    "scenario_config_sha256",
+    "ns3_version",
+    "state_semantics",
+    "coordinate_frame",
+    "coordinate_units",
+    "speed_of_light_m_per_s",
+    "simulation_duration_ns",
+    "trace_interval_ns",
+    "network_update_interval_ns",
+    "include_final_state",
+    "constellation",
+    "topology",
+    "randomness",
+    "slice_count",
+    "slices"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Topology trace contract version.",
+      "const": "0.2"
+    },
+    "scenario_name": {
+      "description": "Stable scenario name copied from the authoritative scenario input.",
+      "type": "string",
+      "minLength": 1
+    },
+    "scenario_config_sha256": {
+      "description": "Lowercase SHA-256 of the exact scenario JSON bytes.",
+      "$ref": "#/$defs/sha256"
+    },
+    "ns3_version": {
+      "description": "Official ns-3 platform baseline used by this trace implementation.",
+      "const": "3.48"
+    },
+    "state_semantics": {
+      "description": "Every listed slice is a direct orbit and topology-policy evaluation, independent of live network update cadence.",
+      "const": "orbit-policy-evaluation"
+    },
+    "coordinate_frame": {
+      "description": "Earth-centred, Earth-fixed Cartesian coordinate frame used by node slices.",
+      "const": "ECEF"
+    },
+    "coordinate_units": {
+      "description": "Position coordinate unit used by node slices.",
+      "const": "m"
+    },
+    "speed_of_light_m_per_s": {
+      "description": "Propagation constant used to derive distance-mode delays.",
+      "const": 299792458
+    },
+    "simulation_duration_ns": {
+      "description": "Configured positive simulation duration in exact integer nanoseconds.",
+      "$ref": "#/$defs/positive_nanoseconds"
+    },
+    "trace_interval_ns": {
+      "description": "Configured positive output evaluation interval in exact integer nanoseconds.",
+      "$ref": "#/$defs/positive_nanoseconds"
+    },
+    "network_update_interval_ns": {
+      "description": "Independent live-network update interval in exact integer nanoseconds.",
+      "$ref": "#/$defs/positive_nanoseconds"
+    },
+    "include_final_state": {
+      "description": "Whether the trace inventory contains a slice exactly at simulation_duration_ns.",
+      "type": "boolean"
+    },
+    "constellation": {
+      "description": "Circular-orbit parameters needed to audit regeneration.",
+      "$ref": "#/$defs/constellation"
+    },
+    "topology": {
+      "description": "Fixed-candidate, distance-gate, delay, and bandwidth parameters used for every slice.",
+      "$ref": "#/$defs/topology"
+    },
+    "randomness": {
+      "description": "Explicit ns-3 random identity recorded even though the current orbit/topology core consumes no streams.",
+      "$ref": "#/$defs/randomness"
+    },
+    "slice_count": {
+      "description": "Number of ordered entries in slices.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "slices": {
+      "description": "Authoritative ordered slice inventory; files not listed here are not part of this trace.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/slice"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "description": "A lowercase hexadecimal SHA-256 digest.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "positive_nanoseconds": {
+      "description": "A positive signed 64-bit integer duration in nanoseconds.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "constellation": {
+      "description": "Resolved deterministic circular-orbit shell parameters.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "pattern",
+        "num_orbits",
+        "satellites_per_orbit",
+        "satellite_count",
+        "altitude_m",
+        "inclination_deg",
+        "phase_diff",
+        "orbit_epoch_offset_ns"
+      ],
+      "properties": {
+        "name": {
+          "description": "Stable constellation token from the scenario.",
+          "type": "string",
+          "minLength": 1
+        },
+        "pattern": {
+          "description": "RAAN span selected by the scenario.",
+          "enum": ["walker-star", "walker-delta"]
+        },
+        "num_orbits": {
+          "description": "Number of orbital planes.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99999
+        },
+        "satellites_per_orbit": {
+          "description": "Stable satellite slots in each plane.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99999
+        },
+        "satellite_count": {
+          "description": "Product of num_orbits and satellites_per_orbit.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "altitude_m": {
+          "description": "Circular orbit altitude in metres.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "inclination_deg": {
+          "description": "Orbital inclination in degrees.",
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 180
+        },
+        "phase_diff": {
+          "description": "Whether odd planes use the legacy alternating half-slot phase offset.",
+          "type": "boolean"
+        },
+        "orbit_epoch_offset_ns": {
+          "description": "Physical orbit sampling offset in exact integer nanoseconds.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    },
+    "topology": {
+      "description": "Resolved topology-policy parameters.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_strategy",
+        "seam_enabled",
+        "max_isl_distance_m",
+        "delay_mode",
+        "fixed_delay_ns",
+        "link_bandwidth_bps"
+      ],
+      "properties": {
+        "candidate_strategy": {
+          "description": "Fixed candidate-neighbour strategy.",
+          "const": "plus-grid"
+        },
+        "seam_enabled": {
+          "description": "Whether the final and first orbital planes have inter-plane candidates.",
+          "type": "boolean"
+        },
+        "max_isl_distance_m": {
+          "description": "Inclusive active-link distance gate in metres.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "delay_mode": {
+          "description": "Configured propagation-delay policy.",
+          "enum": ["fixed", "distance"]
+        },
+        "fixed_delay_ns": {
+          "description": "Positive fixed-mode delay in nanoseconds, or null in distance mode.",
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "link_bandwidth_bps": {
+          "description": "Full-duplex link bandwidth in bits per second.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "randomness": {
+      "description": "Resolved random seed, run, and reserved stream start.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "run", "stream_start"],
+      "properties": {
+        "seed": {
+          "description": "ns-3 RngSeedManager seed.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "run": {
+          "description": "ns-3 independent run number.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "stream_start": {
+          "description": "First deterministic random stream reserved for SatCompute.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    },
+    "slice": {
+      "description": "One paired node/topology output and its integrity hashes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "simulation_time_ns",
+        "nodes_file",
+        "nodes_sha256",
+        "topology_file",
+        "topology_sha256",
+        "active_link_count"
+      ],
+      "properties": {
+        "simulation_time_ns": {
+          "description": "Exact paired slice time in integer nanoseconds.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "nodes_file": {
+          "description": "Manifest-relative node-slice filename.",
+          "type": "string",
+          "pattern": "^nodes_[0-9]+(?:\\.[0-9]+)?s\\.json$"
+        },
+        "nodes_sha256": {
+          "description": "SHA-256 of the exact node-slice bytes.",
+          "$ref": "#/$defs/sha256"
+        },
+        "topology_file": {
+          "description": "Manifest-relative topology-slice filename.",
+          "type": "string",
+          "pattern": "^topology_[0-9]+(?:\\.[0-9]+)?s\\.json$"
+        },
+        "topology_sha256": {
+          "description": "SHA-256 of the exact topology-slice bytes.",
+          "$ref": "#/$defs/sha256"
+        },
+        "active_link_count": {
+          "description": "Copied active-link count for inventory inspection.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      }
+    }
+  }
+}

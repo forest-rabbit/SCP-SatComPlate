@@ -132,11 +132,13 @@ ScenarioConfig LoadScenarioConfig(const std::filesystem::path& path);
  * @param config Validated scenario.
  * @param outputDirectory Operational output directory.
  * @param validateOnly Operational no-simulation mode selected by the CLI.
+ * @param exportOnly Operational orbit-trace-only mode selected by the CLI.
  * @return Path to effective-config.json.
  */
 std::filesystem::path WriteEffectiveConfig(const ScenarioConfig& config,
                                            const std::filesystem::path& outputDirectory,
-                                           bool validateOnly = false);
+                                           bool validateOnly = false,
+                                           bool exportOnly = false);
 
 } // namespace ns3
 

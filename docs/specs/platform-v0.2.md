@@ -227,6 +227,14 @@ representation containing at least simulation time, stable satellite ID, ECEF
 x/y/z coordinates in metres, active links, current link delays, and optional
 compute state.
 
+Version 0.2 writes paired node/topology JSON files plus a hashed manifest. An
+exported frame is an `orbit-policy-evaluation`: it samples the continuous orbit
+and shared topology policy at the configured trace cadence, independently of
+when the live network applies updates. Thus a 1 s trace with a 20 s network
+interval contains audit states at 1–19 s while the network still retains its
+0 s state. The two paths must agree at every shared timestamp. The manifest,
+not a directory scan, is the authoritative slice inventory.
+
 ## Tech Stack and Commands
 
 - ns-3.48 with CMake and C++23;
@@ -242,7 +250,7 @@ The project configuration and GitHub CI deliberately leave ns-3's global
 examples and test suites disabled:
 
 ~~~bash
-PATH="$PWD/.venv/bin:$PATH" ./ns3 configure --enable-modules=satcompute
+PATH="$PWD/.venv/bin:$PATH" ./ns3 configure --enable-modules=satcompute -G Ninja
 PATH="$PWD/.venv/bin:$PATH" ./ns3 build
 ~~~
 

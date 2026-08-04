@@ -78,17 +78,28 @@ online_task_first="$(run_platform \
   "$online_task" "$regression_output/online-task-first")"
 online_task_second="$(run_platform \
   "$online_task" "$regression_output/online-task-second")"
+online_trace="contrib/satcompute/tests/fixtures/scenario/online-trace.json"
+online_trace_result="$(run_platform \
+  "$online_trace" "$regression_output/online-trace")"
+export_trace_result="$(./ns3 run --no-build \
+  "satcompute --scenarioConfig=$online_trace \
+--outputDir=$regression_output/export-trace --exportOnly=true")"
 for result in \
   "$online_fixed_result" \
   "$online_distance_result" \
   "$online_transfer_result" \
   "$online_task_first" \
-  "$online_task_second"; do
+  "$online_task_second" \
+  "$online_trace_result"; do
   if [[ "$result" != *'"status":"completed"'* ]]; then
     echo "online platform regression failed: $result" >&2
     exit 1
   fi
 done
+if [[ "$export_trace_result" != *'"status":"exported"'* ]]; then
+  echo "export-only topology trace regression failed: $export_trace_result" >&2
+  exit 1
+fi
 
 python3 - \
   "$online_fixed" \
@@ -241,6 +252,32 @@ if large["run_status"] != "COMPLETE" or large["topology_source"] != "online":
     raise SystemExit("66-satellite online run differs")
 if large["applied_topology_slice_count"] != 1:
     raise SystemExit("66-satellite online initial update count differs")
+
+online_trace = load_json("online-trace/run-summary.json")
+trace_manifest = load_json("online-trace/topology-trace/manifest.json")
+export_manifest = load_json("export-trace/topology-trace/manifest.json")
+if online_trace["applied_topology_slice_count"] != 2:
+    raise SystemExit("trace scenario network update count differs")
+if trace_manifest["slice_count"] != 4:
+    raise SystemExit("independent one-second trace slice count differs")
+if trace_manifest["trace_interval_ns"] != 1_000_000_000:
+    raise SystemExit("trace output interval differs")
+if trace_manifest["network_update_interval_ns"] != 2_000_000_000:
+    raise SystemExit("trace network interval differs")
+if trace_manifest != export_manifest:
+    raise SystemExit("online and export-only manifests differ")
+
+online_trace_root = root / "online-trace/topology-trace"
+export_trace_root = root / "export-trace/topology-trace"
+online_files = sorted(path.name for path in online_trace_root.iterdir())
+export_files = sorted(path.name for path in export_trace_root.iterdir())
+if online_files != export_files:
+    raise SystemExit("online and export-only trace inventories differ")
+for filename in online_files:
+    if (online_trace_root / filename).read_bytes() != (
+        export_trace_root / filename
+    ).read_bytes():
+        raise SystemExit(f"online and export-only trace differs: {filename}")
 PY
 
-echo "SatCompute replay and online platform regressions passed."
+echo "SatCompute replay, online, and topology-trace regressions passed."

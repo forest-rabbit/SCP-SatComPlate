@@ -199,6 +199,13 @@ main(int argc, char* argv[])
               "effective network interval differs");
         Check(effective.at("operational").at("validate_only") == false,
               "effective operational validation mode differs");
+        Check(effective.at("operational").at("export_only") == false,
+              "effective operational export mode differs");
+
+        const nlohmann::json exportOnlyEffective = nlohmann::json::parse(
+            ReadFile(WriteEffectiveConfig(fixed, outputDirectory, false, true)));
+        Check(exportOnlyEffective.at("operational").at("export_only") == true,
+              "effective export-only mode was not recorded");
         Check(effective.at("input_hashes").at("scenario_config").at("sha256") ==
                   Sha256File(fixed.sourcePath),
               "effective scenario hash differs");

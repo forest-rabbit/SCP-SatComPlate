@@ -17,6 +17,9 @@ namespace ns3
  */
 std::string_view GetSatComputeSchemaVersion();
 
+/** Return the ns-3 platform baseline targeted by this module. */
+std::string_view GetSatComputeNs3Version();
+
 } // namespace ns3
 
 #endif // SATCOMPUTE_VERSION_H
