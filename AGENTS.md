@@ -2,6 +2,51 @@
 
 This file provides guidance to AI agents when working with code in this repository.
 
+## SCP-SatComPlate Project Rules
+
+These project-specific rules override the generic upstream ns-3 guidance below
+for all SatCompute branches and GitHub workflows.
+
+The `main` branch is based on the official ns-3.48 tag. The permanent
+`legacy/ns-3.33` branch preserves the previous SatCompute implementation and
+must not be merged into `main` as an unrelated history.
+
+Project-specific code belongs in `contrib/satcompute/`; do not modify upstream
+`src/` modules unless a separately reviewed upstream-compatible change is
+required. SatCompute models satellites and inter-satellite links only. Ground
+stations, feeder links, the frontend transport, fault execution, IPv6, and
+SRv6 are outside the current implementation scope.
+
+SatCompute-owned tests and fixtures stay under
+`contrib/satcompute/tests/{unit,integration,fixtures,support}`. Each increment
+must build, pass its focused tests, and leave the worktree clean before it is
+committed. Preserve fixture content unless a task explicitly changes its
+contract.
+
+Configure project work with `./ns3 configure --enable-modules=satcompute`.
+Do not enable ns-3's global examples or test suites in SatCompute configuration
+or GitHub CI, and do not run `test.py` or upstream example tests there. Project
+verification consists of the targeted module build plus the maintained tests
+under `contrib/satcompute/tests/`.
+
+The versioned scenario JSON is the sole source of simulation semantics. Every
+schema property must have a useful JSON Schema `description`, explicit units,
+and closed-world validation. Human-facing durations use seconds; loaders must
+convert them once to exact integer nanoseconds before scheduling events.
+Relative input paths resolve from the scenario file, never from the shell
+working directory. Every run writes its resolved effective configuration.
+
+The online simulator and offline trace generator must share orbit, candidate
+link, distance-gate, and delay implementations. Stable external satellite IDs
+must not depend on ns-3 `Node::GetId()`. Periodic network updates always refresh
+distance-mode delays, but global routes are recomputed only when the effective
+active-link set changes. A future fault event is an asynchronous nanosecond
+event and will bypass the periodic cadence.
+
+Use small `agent/*` branches and pull requests. After a PR is merged and its
+head is confirmed reachable from `main`, delete the corresponding local and
+remote feature branch. Never delete `legacy/ns-3.33`.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
@@ -13,7 +58,7 @@ ns-3 is a discrete-event network simulator for Internet systems, written in C++ 
 **Configuration:**
 
 ```bash
-./ns3 configure --enable-examples --enable-tests  # Basic setup
+./ns3 configure --enable-modules=satcompute       # SCP-SatComPlate setup
 ./ns3 configure --help                            # Show all options
 ```
 
@@ -34,10 +79,10 @@ ns-3 is a discrete-event network simulator for Internet systems, written in C++ 
 **Testing:**
 
 ```bash
-./test.py                                        # Run all tests
-./test.py -s module-name                         # Run specific module tests, where `module-name`
-                                                 # is the name of the module to be tested.
-./test.py -v                                     # Verbose output
+python3 -m unittest discover \
+  -s contrib/satcompute/tests/unit -p 'test_*.py' -v
+contrib/satcompute/tests/integration/smoke/run-all.sh
+contrib/satcompute/tests/integration/regression/run-all.sh
 ```
 
 **Utilities:**
@@ -141,9 +186,10 @@ class MyClass
 
 ### Testing Requirements
 
-- All code must build with examples and tests enabled
-- Tests must pass before commits
-- Use `./test.py -s module-name` for module-specific testing
+- SatCompute must build from a targeted configuration without globally enabling
+  ns-3 examples or tests.
+- Maintained tests under `contrib/satcompute/tests/` must pass before commits.
+- GitHub workflows must not run `test.py` or upstream example tests.
 
 ### Commit Guidelines
 
@@ -159,8 +205,8 @@ class MyClass
 ### Running Single Tests
 
 ```bash
-./test.py -s core                       # Run core module tests
-./test.py -e simple-global-routing      # Run specific example
+python3 contrib/satcompute/tests/unit/test_schema.py
+contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
 ```
 
 Tests can be run with ns-3 logging enabled via the `NS_LOG` environment variable:
