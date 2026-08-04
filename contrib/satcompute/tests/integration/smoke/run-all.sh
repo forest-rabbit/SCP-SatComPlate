@@ -53,4 +53,27 @@ if summary["transfer"]["completed_transfer_count"] != 2:
     raise SystemExit("replay smoke did not complete both task transfers")
 PY
 
-echo "SatCompute readiness, validation, and replay execution smoke passed."
+online_scenario="contrib/satcompute/tests/fixtures/scenario/online-fixed.json"
+online_output="$smoke_output/online"
+online_completed="$(./ns3 run --no-build \
+  "satcompute --scenarioConfig=$online_scenario --outputDir=$online_output")"
+if [[ "$online_completed" != *'"status":"completed"'* ]]; then
+  echo "online execution smoke failed: $online_completed" >&2
+  exit 1
+fi
+
+python3 - "$online_output/run-summary.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    summary = json.load(source)
+if summary["run_status"] != "COMPLETE":
+    raise SystemExit("online smoke run summary is not COMPLETE")
+if summary["topology_source"] != "online":
+    raise SystemExit("online smoke topology source differs")
+if summary["applied_topology_slice_count"] != 3:
+    raise SystemExit("online smoke update count differs")
+PY
+
+echo "SatCompute readiness, validation, replay, and online execution smoke passed."

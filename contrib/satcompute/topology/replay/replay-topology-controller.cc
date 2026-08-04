@@ -376,6 +376,12 @@ ReplayTopologyController::GetAppliedSnapshotCount() const
 }
 
 uint32_t
+ReplayTopologyController::GetAppliedTopologySliceCount() const
+{
+    return GetAppliedSnapshotCount();
+}
+
+uint32_t
 ReplayTopologyController::GetRouteComputationCount() const
 {
     RequireInitialized();
