@@ -18,14 +18,28 @@ permissions:
 jobs:
   satcompute:
     runs-on: ubuntu-latest
+    env:
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPRESS: "true"
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build tools
         if: ${{ hashFiles('contrib/satcompute/CMakeLists.txt') != '' }}
         run: |
           sudo apt-get update
-          sudo apt-get install --yes cmake g++ ninja-build python3
+          sudo apt-get install --yes ccache cmake g++ ninja-build python3
+
+      - name: Restore compiler cache
+        if: ${{ hashFiles('contrib/satcompute/CMakeLists.txt') != '' }}
+        uses: actions/cache@v6
+        with:
+          path: .ccache
+          key: satcompute-ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            satcompute-ccache-${{ runner.os }}-
 
       - name: Configure SatCompute only
         if: ${{ hashFiles('contrib/satcompute/CMakeLists.txt') != '' }}
@@ -34,6 +48,10 @@ jobs:
       - name: Build SatCompute and dependencies
         if: ${{ hashFiles('contrib/satcompute/CMakeLists.txt') != '' }}
         run: ./ns3 build
+
+      - name: Report compiler cache
+        if: ${{ hashFiles('contrib/satcompute/CMakeLists.txt') != '' }}
+        run: ccache --show-stats
 
       - name: Run SatCompute unit tests
         if: ${{ hashFiles('contrib/satcompute/tests/unit/test_*.py') != '' }}
