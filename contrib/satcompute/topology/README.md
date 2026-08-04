@@ -48,3 +48,7 @@ are visible.
 The ns-3 `QueueSize` byte counter is unsigned 32-bit. Scenario schema 0.2
 therefore rejects `network.isl_queue_bytes` above 4,294,967,295 during loading,
 before any network device is created.
+
+Deterministic online orbit position and topology-policy slices, including the
+independent trace/network cadence semantics and frontend boundary, are
+documented under `topology/export/`.

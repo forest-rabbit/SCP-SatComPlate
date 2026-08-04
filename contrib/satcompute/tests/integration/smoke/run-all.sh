@@ -76,4 +76,37 @@ if summary["applied_topology_slice_count"] != 3:
     raise SystemExit("online smoke update count differs")
 PY
 
-echo "SatCompute readiness, validation, replay, and online execution smoke passed."
+trace_scenario="contrib/satcompute/tests/fixtures/scenario/online-trace.json"
+trace_output="$smoke_output/trace-export"
+exported="$(./ns3 run --no-build \
+  "satcompute --scenarioConfig=$trace_scenario --outputDir=$trace_output \
+--exportOnly=true")"
+if [[ "$exported" != *'"status":"exported"'* ]]; then
+  echo "topology trace export smoke failed: $exported" >&2
+  exit 1
+fi
+
+python3 - "$trace_output/topology-trace/manifest.json" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+manifest_path = pathlib.Path(sys.argv[1])
+with manifest_path.open(encoding="utf-8") as source:
+    manifest = json.load(source)
+if manifest["state_semantics"] != "orbit-policy-evaluation":
+    raise SystemExit("trace smoke state semantics differ")
+if manifest["slice_count"] != 4:
+    raise SystemExit("trace smoke slice count differs")
+for slice_record in manifest["slices"]:
+    for file_key, hash_key in (
+        ("nodes_file", "nodes_sha256"),
+        ("topology_file", "topology_sha256"),
+    ):
+        payload = (manifest_path.parent / slice_record[file_key]).read_bytes()
+        if hashlib.sha256(payload).hexdigest() != slice_record[hash_key]:
+            raise SystemExit(f"trace smoke hash differs: {slice_record[file_key]}")
+PY
+
+echo "SatCompute readiness, validation, replay, online, and trace-export smoke passed."

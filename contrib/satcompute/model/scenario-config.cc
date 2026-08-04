@@ -725,7 +725,8 @@ LoadScenarioConfig(const std::filesystem::path& path)
 std::filesystem::path
 WriteEffectiveConfig(const ScenarioConfig& config,
                      const std::filesystem::path& outputDirectory,
-                     bool validateOnly)
+                     bool validateOnly,
+                     bool exportOnly)
 {
     const std::filesystem::path resolvedOutput =
         std::filesystem::absolute(outputDirectory).lexically_normal();
@@ -790,7 +791,9 @@ WriteEffectiveConfig(const ScenarioConfig& config,
           {"run", config.randomness.run},
           {"stream_start", config.randomness.streamStart}}},
         {"operational",
-         {{"output_directory", resolvedOutput.string()}, {"validate_only", validateOnly}}}};
+         {{"output_directory", resolvedOutput.string()},
+          {"validate_only", validateOnly},
+          {"export_only", exportOnly}}}};
 
     Json inputHashes = {{"scenario_config", InputHash(config.sourcePath)}};
     if (config.workloads.transferTrace)

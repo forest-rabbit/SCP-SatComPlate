@@ -4,8 +4,10 @@
 
 #include "ns3/command-line.h"
 #include "ns3/compute-profile.h"
+#include "ns3/circular-orbit-trace-exporter.h"
 #include "ns3/network-transfer-config.h"
 #include "ns3/network-transfer-engine.h"
+#include "ns3/online-orbit-constellation.h"
 #include "ns3/online-topology-controller.h"
 #include "ns3/replay-topology-controller.h"
 #include "ns3/rng-seed-manager.h"
@@ -35,24 +37,35 @@ main(int argc, char* argv[])
     std::string scenarioConfig;
     std::string outputDirectory = "/tmp/satcompute-output";
     bool validateOnly = false;
+    bool exportOnly = false;
     CommandLine command(__FILE__);
     command.AddValue("scenarioConfig", "Path to authoritative scenario 0.2 JSON", scenarioConfig);
     command.AddValue("outputDir", "Operational output directory", outputDirectory);
     command.AddValue("validateOnly", "Validate and resolve inputs without simulation", validateOnly);
+    command.AddValue("exportOnly", "Generate online orbit/topology JSON slices only", exportOnly);
     command.Parse(argc, argv);
 
     try
     {
         if (scenarioConfig.empty())
         {
+            if (validateOnly || exportOnly)
+            {
+                throw std::runtime_error("scenarioConfig is required for validateOnly or exportOnly");
+            }
             std::cout << "{\"application\":\"satcompute\",\"scenario_schema_version\":\""
                       << GetSatComputeSchemaVersion() << "\",\"status\":\"ready\"}" << std::endl;
             return 0;
         }
 
+        if (validateOnly && exportOnly)
+        {
+            throw std::runtime_error("validateOnly and exportOnly are mutually exclusive");
+        }
+
         const ScenarioConfig config = LoadScenarioConfig(scenarioConfig);
         const std::filesystem::path effectiveConfig =
-            WriteEffectiveConfig(config, outputDirectory, validateOnly);
+            WriteEffectiveConfig(config, outputDirectory, validateOnly, exportOnly);
         if (validateOnly)
         {
             const nlohmann::json result = {{"application", "satcompute"},
@@ -64,18 +77,51 @@ main(int argc, char* argv[])
             std::cout << result.dump() << std::endl;
             return 0;
         }
-        if (config.traceExport.enabled)
+        if (exportOnly && (!config.traceExport.enabled ||
+                           config.network.topologySource != "online"))
         {
             throw std::runtime_error(
-                "trace export is not available yet; disable it for simulation execution");
+                "exportOnly requires enabled trace export with online topology");
+        }
+        if (!exportOnly && config.traceExport.enabled &&
+            config.network.topologySource != "online")
+        {
+            throw std::runtime_error("trace export during simulation requires online topology");
         }
 
         RngSeedManager::SetSeed(config.randomness.seed);
         RngSeedManager::SetRun(config.randomness.run);
         RngSeedManager::ResetNextStreamIndex();
 
+        if (exportOnly)
+        {
+            TopologyTraceExportResult traceResult;
+            {
+                OnlineOrbitConstellation constellation(config.constellation);
+                CircularOrbitTraceExporter exporter(config,
+                                                     std::filesystem::path(outputDirectory) /
+                                                         "topology-trace",
+                                                     constellation);
+                exporter.Initialize();
+                Simulator::Stop(NanoSeconds(config.simulation.durationNs));
+                Simulator::Run();
+                traceResult = exporter.Finalize();
+            }
+            Simulator::Destroy();
+            const nlohmann::json result = {
+                {"application", "satcompute"},
+                {"effective_config", effectiveConfig.string()},
+                {"satellite_count", config.constellation.GetSatelliteCount()},
+                {"scenario", config.scenarioName},
+                {"status", "exported"},
+                {"topology_trace_manifest", traceResult.manifestPath.string()}};
+            std::cout << result.dump() << std::endl;
+            return 0;
+        }
+
         int exitCode = 0;
         nlohmann::json result;
+        std::optional<std::filesystem::path> topologyTraceManifest;
         {
             std::unique_ptr<SatelliteTopologyController> controller;
             if (config.network.topologySource == "json-replay")
@@ -87,6 +133,23 @@ main(int argc, char* argv[])
                 controller = std::make_unique<OnlineTopologyController>(config);
             }
             controller->Initialize();
+
+            std::unique_ptr<CircularOrbitTraceExporter> traceExporter;
+            if (config.traceExport.enabled)
+            {
+                const auto onlineController =
+                    dynamic_cast<OnlineTopologyController*>(controller.get());
+                if (onlineController == nullptr)
+                {
+                    throw std::runtime_error(
+                        "online trace export could not access the orbit controller");
+                }
+                traceExporter = std::make_unique<CircularOrbitTraceExporter>(
+                    config,
+                    std::filesystem::path(outputDirectory) / "topology-trace",
+                    onlineController->GetConstellation());
+                traceExporter->Initialize();
+            }
 
             Ptr<NetworkTransferEngine> transferEngine;
             Ptr<TaskCoordinator> taskCoordinator;
@@ -136,6 +199,10 @@ main(int argc, char* argv[])
             const auto wallStop = std::chrono::steady_clock::now();
             const int64_t wallClockNs =
                 std::chrono::duration_cast<std::chrono::nanoseconds>(wallStop - wallStart).count();
+            if (traceExporter)
+            {
+                topologyTraceManifest = traceExporter->Finalize().manifestPath;
+            }
 
             std::optional<CapacityAwareRuntimeSummary> capacitySummary;
             if (config.routing.mode == "global-capacity-aware-hrw")
@@ -169,6 +236,10 @@ main(int argc, char* argv[])
                       {"run_summary", output.runSummaryPath.string()},
                       {"satellite_count", config.constellation.GetSatelliteCount()},
                       {"scenario", config.scenarioName},
+                      {"topology_trace_manifest",
+                       topologyTraceManifest
+                           ? nlohmann::json(topologyTraceManifest->string())
+                           : nlohmann::json(nullptr)},
                       {"status", output.complete ? "completed" : "partial"}};
         }
         Simulator::Destroy();
