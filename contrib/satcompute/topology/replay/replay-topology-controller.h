@@ -6,6 +6,7 @@
 #define SATCOMPUTE_REPLAY_TOPOLOGY_CONTROLLER_H
 
 #include "../../model/scenario-config.h"
+#include "../../routing/common/routing-mode.h"
 #include "../ipv4/satellite-ipv4-addressing.h"
 #include "../link/satellite-link-state.h"
 #include "../satellite-id-map.h"
@@ -32,9 +33,8 @@ class ReplayTopologyControllerError : public std::runtime_error
 /**
  * Build and schedule a deterministic IPv4 topology from JSON replay slices.
  *
- * This migration-stage controller supports stock global-first routing. Later
- * routing adapters reuse the same identity, address, snapshot, and link-state
- * layers. The controller must outlive all scheduled simulation events.
+ * The controller installs the SatCompute ns-3.48 global-routing adapter and
+ * must outlive all scheduled simulation events.
  */
 class ReplayTopologyController
 {
@@ -63,6 +63,7 @@ class ReplayTopologyController
     void RequireInitialized() const;
 
     ScenarioConfig m_config;
+    RoutingMode m_routingMode{RoutingMode::GLOBAL_FIRST};
     NodeContainer m_nodes;
     std::unique_ptr<SatelliteIdMap> m_idMap;
     std::unique_ptr<SatelliteIpv4ServiceMap> m_serviceMap;
