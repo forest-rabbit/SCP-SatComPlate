@@ -337,6 +337,12 @@ OnlineTopologyController::GetAppliedUpdateCount() const
 }
 
 uint32_t
+OnlineTopologyController::GetAppliedTopologySliceCount() const
+{
+    return GetAppliedUpdateCount();
+}
+
+uint32_t
 OnlineTopologyController::GetRouteComputationCount() const
 {
     RequireInitialized();

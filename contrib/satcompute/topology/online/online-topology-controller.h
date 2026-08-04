@@ -11,7 +11,7 @@
 #include "../ipv4/satellite-ipv4-addressing.h"
 #include "../link/satellite-link-state.h"
 #include "../orbit/online-orbit-constellation.h"
-#include "../satellite-runtime-view.h"
+#include "../satellite-topology-controller.h"
 #include "circular-orbit-topology-policy.h"
 
 #include "ns3/callback.h"
@@ -33,12 +33,12 @@ class OnlineTopologyControllerError : public std::runtime_error
 };
 
 /** Build and periodically update an IPv4 topology from online orbit state. */
-class OnlineTopologyController : public SatelliteRuntimeView
+class OnlineTopologyController : public SatelliteTopologyController
 {
   public:
     explicit OnlineTopologyController(const ScenarioConfig& config);
 
-    void Initialize();
+    void Initialize() override;
     void RegisterRouteUpdateCallback(Callback<void> callback) override;
     void InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const override;
 
@@ -63,7 +63,8 @@ class OnlineTopologyController : public SatelliteRuntimeView
     uint64_t GetHashSeed() const override;
     bool IsCapacityAwareRouting() const override;
     uint32_t GetAppliedUpdateCount() const;
-    uint32_t GetRouteComputationCount() const;
+    uint32_t GetAppliedTopologySliceCount() const override;
+    uint32_t GetRouteComputationCount() const override;
     const std::vector<int64_t>& GetAppliedUpdateTimesNs() const;
     const TopologyLinkUpdateSummary& GetLastUpdateSummary() const;
 

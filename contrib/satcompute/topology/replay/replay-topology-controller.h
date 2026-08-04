@@ -12,7 +12,7 @@
 #include "../ipv4/satellite-ipv4-addressing.h"
 #include "../link/satellite-link-state.h"
 #include "../satellite-id-map.h"
-#include "../satellite-runtime-view.h"
+#include "../satellite-topology-controller.h"
 #include "../snapshot/snapshot-types.h"
 
 #include "ns3/callback.h"
@@ -40,12 +40,12 @@ class ReplayTopologyControllerError : public std::runtime_error
  * The controller installs the SatCompute ns-3.48 global-routing adapter and
  * must outlive all scheduled simulation events.
  */
-class ReplayTopologyController : public SatelliteRuntimeView
+class ReplayTopologyController : public SatelliteTopologyController
 {
   public:
     explicit ReplayTopologyController(const ScenarioConfig& config);
 
-    void Initialize();
+    void Initialize() override;
     void RegisterRouteUpdateCallback(Callback<void> callback) override;
     void InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const override;
 
@@ -68,7 +68,8 @@ class ReplayTopologyController : public SatelliteRuntimeView
     uint64_t GetHashSeed() const override;
     bool IsCapacityAwareRouting() const override;
     uint32_t GetAppliedSnapshotCount() const;
-    uint32_t GetRouteComputationCount() const;
+    uint32_t GetAppliedTopologySliceCount() const override;
+    uint32_t GetRouteComputationCount() const override;
     const TopologyLinkUpdateSummary& GetLastUpdateSummary() const;
 
   private:

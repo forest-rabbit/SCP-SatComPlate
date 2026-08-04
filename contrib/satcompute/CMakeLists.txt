@@ -75,6 +75,7 @@ build_lib(
     topology/satellite-endpoint-view.h
     topology/satellite-id-map.h
     topology/satellite-runtime-view.h
+    topology/satellite-topology-controller.h
     topology/snapshot/snapshot-reader.h
     topology/snapshot/snapshot-schedule.h
     topology/snapshot/snapshot-types.h
