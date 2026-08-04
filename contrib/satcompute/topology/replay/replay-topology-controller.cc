@@ -6,9 +6,12 @@
 
 #include "../snapshot/snapshot-reader.h"
 #include "../snapshot/snapshot-schedule.h"
+#include "../../routing/ns3/satcompute-ipv4-global-routing-helper.h"
 
 #include "ns3/internet-stack-helper.h"
 #include "ns3/ipv4-global-routing-helper.h"
+#include "ns3/ipv4-list-routing-helper.h"
+#include "ns3/ipv4-static-routing-helper.h"
 #include "ns3/simulator.h"
 
 #include <numeric>
@@ -27,10 +30,17 @@ ReplayTopologyController::ReplayTopologyController(const ScenarioConfig& config)
         throw ReplayTopologyControllerError(
             "replay controller requires matching json-replay orbit and topology sources");
     }
-    if (m_config.routing.mode != "global-first")
+    if (!TryParseRoutingMode(m_config.routing.mode, m_routingMode))
+    {
+        throw ReplayTopologyControllerError("unknown routing mode " +
+                                            m_config.routing.mode);
+    }
+    if (m_routingMode != RoutingMode::GLOBAL_FIRST &&
+        m_routingMode != RoutingMode::HASH_PER_FLOW)
     {
         throw ReplayTopologyControllerError(
-            "replay controller currently supports routing.mode=global-first only");
+            "replay controller currently supports global-first and "
+            "global-hash-per-flow only");
     }
     if (m_config.network.delayMode == "fixed" &&
         !m_config.network.fixedDelayNs)
@@ -97,8 +107,22 @@ ReplayTopologyController::Initialize()
     m_nodes.Create(satelliteCount);
     m_idMap =
         std::make_unique<SatelliteIdMap>(m_nodes, m_expectedSatelliteIds);
+    Ipv4StaticRoutingHelper staticRouting;
+    SatComputeIpv4GlobalRoutingHelper globalRouting(
+        m_routingMode,
+        m_config.routing.hashSeed);
+    Ipv4ListRoutingHelper listRouting;
+    listRouting.Add(staticRouting, 0);
+    listRouting.Add(globalRouting, -10);
+
     InternetStackHelper internet;
+    internet.SetRoutingHelper(listRouting);
     internet.Install(m_nodes);
+    for (uint32_t index = 0; index < m_nodes.GetN(); ++index)
+    {
+        SatComputeIpv4GlobalRoutingHelper::GetRouting(m_nodes.Get(index))
+            ->SetSatelliteId(m_expectedSatelliteIds[index]);
+    }
     m_serviceMap = std::make_unique<SatelliteIpv4ServiceMap>(*m_idMap);
     m_linkState = std::make_unique<SatelliteLinkState>(
         *m_idMap,
@@ -143,6 +167,7 @@ ReplayTopologyController::ApplyScheduledSnapshot(
     if (m_lastUpdateSummary.ActiveEdgeSetChanged())
     {
         Ipv4GlobalRoutingHelper::RecomputeRoutingTables();
+        SatComputeIpv4GlobalRoutingHelper::AdvanceRouteEpoch(m_nodes);
         ++m_routeComputationCount;
     }
 }

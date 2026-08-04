@@ -4,6 +4,11 @@ build_lib(
     model/satcompute-version.cc
     model/scenario-config.cc
     model/sha256.cc
+    routing/algorithm/global-first-policy.cc
+    routing/algorithm/hash-per-flow-policy.cc
+    routing/common/routing-mode.cc
+    routing/ns3/satcompute-ipv4-global-routing.cc
+    routing/ns3/satcompute-ipv4-global-routing-helper.cc
     topology/ipv4/satellite-ipv4-addressing.cc
     topology/link/satellite-link-state.cc
     topology/replay/replay-topology-controller.cc
@@ -14,6 +19,15 @@ build_lib(
     model/satcompute-version.h
     model/scenario-config.h
     model/sha256.h
+    routing/algorithm/global-first-policy.h
+    routing/algorithm/hash-per-flow-policy.h
+    routing/algorithm/next-hop-policy.h
+    routing/common/ecmp-flow-key.h
+    routing/common/ecmp-route-candidate.h
+    routing/common/fnv1a64.h
+    routing/common/routing-mode.h
+    routing/ns3/satcompute-ipv4-global-routing.h
+    routing/ns3/satcompute-ipv4-global-routing-helper.h
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
     topology/replay/replay-topology-controller.h
@@ -73,6 +87,15 @@ build_exec(
   EXECNAME satcompute-replay-controller-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/replay-controller-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-routing-compatibility-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/routing-compatibility-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

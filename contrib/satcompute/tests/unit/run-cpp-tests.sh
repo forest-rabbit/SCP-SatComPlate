@@ -30,3 +30,6 @@ replay_dynamic="contrib/satcompute/tests/fixtures/scenario/replay-dynamic.json"
 ./ns3 run --no-build \
   "satcompute-replay-controller-test --fixedScenario=$replay_fixed \
 --distanceScenario=$replay_distance --dynamicScenario=$replay_dynamic"
+
+./ns3 run --no-build \
+  "satcompute-routing-compatibility-test --scenario=$replay_dynamic"
