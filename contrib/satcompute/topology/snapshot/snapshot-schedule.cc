@@ -5,7 +5,7 @@
 #include "snapshot-schedule.h"
 
 #include "snapshot-reader.h"
-#include "../../model/scenario-config.h"
+#include "../../para.h"
 #include "../../model/sha256.h"
 #include "../../third-party/nlohmann/json.hpp"
 
@@ -79,9 +79,9 @@ ParseSnapshotTimeNs(const std::string& filename, std::string_view prefix)
 
     try
     {
-        return ParseSecondsToNanoseconds(token, "snapshot filename time");
+        return SatComputeDecimalSecondsToNanoseconds(token, "snapshot filename time");
     }
-    catch (const ScenarioConfigError& error)
+    catch (const SatComputeConfigError& error)
     {
         throw TopologySnapshotError("invalid snapshot timestamp filename " + filename +
                                     " (" + error.what() + ")");
