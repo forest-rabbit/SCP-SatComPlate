@@ -1,6 +1,7 @@
 build_lib(
   LIBNAME satcompute
   SOURCE_FILES
+    effective-config.cc
     para.cc
     resolved-config.cc
     model/satcompute-version.cc
@@ -40,6 +41,7 @@ build_lib(
     traffic/network-transfer-engine.cc
     traffic/network-transfer-receiver.cc
   HEADER_FILES
+    effective-config.h
     para.h
     resolved-config.h
     model/satcompute-version.h
@@ -136,6 +138,15 @@ build_exec(
   EXECNAME satcompute-resolved-config-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/resolved-config-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-effective-config-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/effective-config-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
