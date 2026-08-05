@@ -1,7 +1,7 @@
 # 实施计划：SatCompute ns-3.48 legacy-parity 迁移
 
-状态：已批准，阶段 0、阶段 1 和阶段 2 已完成；阶段 3 的拓扑 facade 与共享
-核心审计完成，阶段检查点 CI 将在本次收口合并到 `main` 后唯一触发。
+状态：已批准，阶段 0 至阶段 4 已完成；阶段 4 唯一一次 GitHub CI run
+`30974934528` 已通过，下一步进入阶段 5 的 routing、traffic 和 task 对应迁移。
 
 依据：[平台 v0.3 规格](../specs/platform-v0.3.md)。
 
@@ -188,8 +188,8 @@ controller、地址管理和 link state。
   重算路由，distance 时延或带宽单独变化不会推进 route epoch；
 - facade、online、replay、切片导出和回放测试覆盖稳定 ID、固定候选、链路恢复、
   66 星 online，以及 1 秒/2 秒导出和 20 秒网络更新在 0/20/40 秒的等价性；
-- 本阶段完整本地验证在本 closeout 合并前执行，唯一一次 GitHub CI 在合并后从
-  `main` 手动触发。
+- 本阶段完整本地验证通过；唯一一次 GitHub CI run `30972203958` 已从 `main`
+  手动触发并通过。
 
 ## 阶段 4：input 与 tools
 
@@ -210,16 +210,45 @@ JSON 内容和稳定 ID，不把运行结果提交到仓库。
 
 优先恢复仍适用于当前输出合同的工具；对路径变化做最小适配，并恢复其单元测试。
 
+实现结果（2026-08-05）：
+
+- PR #43 恢复 7 个 legacy validation CLI；它们当前可读和可显示帮助，阶段 6
+  在分层 metrics 恢复后接回黄金输出检查；
+- PR #46 恢复 topology interval 的边状态、连通性和无权 ECMP 候选分析，将输入
+  从完整 scenario 改为 v0.3 topology trace，并以逐字节复制方式降采样；
+- PR #47 恢复三维查看器、交互播放和可选 GIF 结构，位置只读取 manifest 列出的
+  ECEF XYZ；默认关闭路径不读取 trace 或导入可选图形依赖；
+- 旧 C++ route audit 随阶段 5 的 routing 公共接口接回；依赖 Hypatia 和旧
+  fixed-delay 结论的冻结报告、PNG 不迁移。
+
 ### 任务 4.3：重建 topology generator
 
 保留 `tools/generation/topology/` 边界，但删除 Hypatia vendor/adapter。拓扑生成器
 作为链接 `libsatcompute` 的 C++ executable 调用共享 ns-3.48 轨道核心；Python
 只做命令编排和结果检查。
 
+实现结果（2026-08-05）：
+
+- PR #45 新增链接 `libsatcompute` 的 `satcompute-topology-generator`，直接复用
+  `OnlineOrbitConstellation`、拓扑 policy 与 `CircularOrbitTraceExporter`；
+- Python checker 只检查 closed-world manifest、稳定 ID、配对切片和 SHA-256，
+  不含轨道公式；
+- 平台 `--exportOnly=true` 与独立生成器在相同参数下的全部输出逐字节相同。
+
 ### 任务 4.4：恢复 scenario generator
 
 `tools/generation/scenario/` 只组合 compute、task、traffic 和未来 fault 输入，
 通过拓扑 manifest 获取卫星 ID，不重新计算轨道。
+
+实现结果（2026-08-05）：
+
+- PR #48 将旧入口重建为独立 input bundle 组合器，不恢复完整 scenario 配置；
+- task 模式严格组合 ComputeProfile + TaskTrace，transfer 模式只组合
+  NetworkTransfer，两种模式互斥并与 para 校验一致；
+- 数据文件逐字节复制，bundle manifest 记录 topology/constellation 哈希、稳定
+  satellite ID、条目数和输入哈希；future `fault_trace` 明确保留为 `null`；
+- 真实 C++ topology trace 生成 task/transfer bundle 后，两种 bundle 均被平台
+  直接读取并完成仿真。
 
 ### 阶段 4 检查点
 
@@ -227,6 +256,18 @@ JSON 内容和稳定 ID，不把运行结果提交到仓库。
 - online 与离线 generator 输出等价；
 - 大阶段本地工具测试通过；
 - `main` 手动运行一次 SatCompute CI。
+
+实现结果（2026-08-05）：
+
+- PR #42 恢复 33 个 legacy input 文件，PR #44 恢复确定性 task/transfer workload
+  生成器，PR #43、#45、#46、#47、#48 分别完成 validation、共享拓扑生成、
+  interval analysis、trace visualization 和 input bundle；
+- SatCompute-only 完整构建通过，配置明确显示 `Examples: OFF`、`Tests: OFF`；
+- 61 个项目 Python 测试、18 组 C++ 可执行测试、smoke 和 regression 全部通过；
+- 额外本地门禁覆盖真实 66 星 headless XYZ/ISL 渲染、真实 trace 降采样分析，以及
+  C++ generator -> input bundle -> C++ 平台的 task/transfer 两条链路；
+- 阶段 4 唯一一次 GitHub CI run `30974934528` 从 `main` 手动触发并通过，工作流
+  未启用或运行 ns-3 examples、全局 tests 或 `test.py`。
 
 ## 阶段 5：routing、traffic 和 task 对应
 
