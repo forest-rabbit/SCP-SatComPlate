@@ -1,7 +1,8 @@
 # SatCompute ns-3.33 到 ns-3.48 迁移矩阵
 
-状态：阶段 0、阶段 1 已完成；阶段 2 的配置合同切换实现完成，阶段检查点 CI
-将在本次合并后从 `main` 唯一触发。每完成一个阶段更新“结果”列，最终逐文件审计。
+状态：阶段 0、阶段 1 和阶段 2 已完成；阶段 3 的拓扑 facade 与共享核心审计
+完成，阶段检查点 CI 将在本次收口合并后从 `main` 唯一触发。每完成一个阶段
+更新“结果”列，最终逐文件审计。
 
 动作定义：
 
@@ -78,14 +79,14 @@
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
 | `topology/satellite-topology.*` | 已恢复 facade | 恢复 facade，内部委托 current | 已完成；平台入口只使用 facade，内部选择 online/replay controller |
-| `topology/snapshot/*` | 同路径并扩展 | 保留 legacy replay + manifest 扩展 | 待审计 |
-| `topology/link/satellite-link-state.*` | 同路径并适配 | 保留路径与设备/队列合同 | 待审计 |
-| 无 | `topology/orbit/*` | 保留 ns-3.48 原生轨道核心 | 已确定 |
-| 无 | `topology/online/*` | 保留为 facade 内部 online 实现 | 已确定 |
-| 无 | `topology/replay/*` | 保留为 facade 内部 replay 实现 | 已确定 |
-| 无 | `topology/export/*` | 保留 XYZ/链路/manifest 导出 | 已确定 |
-| 无 | `topology/ipv4/*` | 保留为 facade 内部地址实现 | 待审计 |
-| 无 | `satellite-*view.h`、`satellite-id-map.*` | 保留稳定 ID 和只读状态接口 | 已确定 |
+| `topology/snapshot/*` | 同路径并扩展 | 保留 legacy replay + manifest 扩展 | 已审计；全量快照、0.2/0.3 manifest、哈希和 cadence 降采样均有测试 |
+| `topology/link/satellite-link-state.*` | 同路径并适配 | 保留路径与设备/队列合同 | 已审计；固定 candidate 设备、接口身份、属性更新和启停恢复均有测试 |
+| 无 | `topology/orbit/*` | 保留 ns-3.48 原生轨道核心 | 已完成；online/export 共用唯一圆轨道实现 |
+| 无 | `topology/online/*` | 保留为 facade 内部 online 实现 | 已完成；固定候选、距离门控、两种时延和边变化路由策略已验证 |
+| 无 | `topology/replay/*` | 保留为 facade 内部 replay 实现 | 已完成；按 network cadence 消费全量切片并委托统一运行时接口 |
+| 无 | `topology/export/*` | 保留 XYZ/链路/manifest 导出 | 已完成；独立 cadence、ECEF XYZ、有效链路和哈希清单已验证 |
+| 无 | `topology/ipv4/*` | 保留为 facade 内部地址实现 | 已审计；稳定 ID canonical service `/32` 与 ISL `/30` 已验证 |
+| 无 | `satellite-*view.h`、`satellite-id-map.*` | 保留稳定 ID 和只读状态接口 | 已完成；节点下标与外部卫星 ID 查询已显式区分 |
 
 ## input
 
