@@ -42,7 +42,7 @@ NetDevice、路由、FlowMonitor 或任务对象。
 |---|---|
 | `satcompute.cc` | CLI 注册、跨参数校验、两种运行模式和组件编排 |
 | `para.h/.cc` | 参数结构、默认值与中文说明 |
-| `time-conversion.h/.cc` | 秒到整数纳秒的统一边界转换 |
+| [`common/`](common/README.md) | 跨模块共用的秒到整数纳秒边界转换 |
 | [`topology/`](topology/README.md) | 星座读取、原生轨道、固定候选、在线更新、IPv4 地址和切片 |
 | [`routing/`](routing/README.md) | 五种 IPv4 策略、hash、HRW 和 reservation 状态 |
 | [`task/`](task/README.md) | ComputeProfile、TaskTrace、FCFS 服务和任务协调 |

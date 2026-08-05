@@ -5,7 +5,7 @@
 #include "online-topology-controller.h"
 
 #include "../../routing/ns3/satcompute-ipv4-global-routing-helper.h"
-#include "../../time-conversion.h"
+#include "../../common/time-conversion.h"
 
 #include "ns3/data-rate.h"
 #include "ns3/internet-stack-helper.h"
