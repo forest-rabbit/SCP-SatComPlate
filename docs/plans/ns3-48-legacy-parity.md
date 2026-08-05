@@ -1,7 +1,7 @@
 # 实施计划：SatCompute ns-3.48 legacy-parity 迁移
 
-状态：已批准，阶段 0 和阶段 1 已完成；阶段 2 的配置合同切换实现完成，阶段
-检查点 CI 将在相关改动合并到 `main` 后唯一触发。
+状态：已批准，阶段 0、阶段 1 和阶段 2 已完成；阶段 3 的拓扑 facade 与共享
+核心审计完成，阶段检查点 CI 将在本次收口合并到 `main` 后唯一触发。
 
 依据：[平台 v0.3 规格](../specs/platform-v0.3.md)。
 
@@ -103,7 +103,7 @@ git status --short --branch
 - 本地 configure/build、26 项 Python 合同测试、17 组 C++ 测试、smoke 和
   regression 全部通过；
 - production 入口仍只读取 scenario 0.2，`para` 尚未接入，不存在双活动配置源；
-- 本阶段唯一一次 GitHub CI 在本 closeout 合并后从 `main` 手动触发。
+- 本阶段唯一一次 GitHub CI 已从 `main` 手动触发并通过。
 
 ## 阶段 2：配置合同切换
 
@@ -150,16 +150,16 @@ git status --short --branch
 - 根入口已切换为 `para.cc + CLI`，完整 scenario schema、加载器、示例和 fixture
   已删除，生产代码不再存在双配置源；
 - fixed、distance、online、replay、正常导出和 export-only 已由本地 smoke 与
-  regression 覆盖；本阶段唯一一次 GitHub CI 在本次合并后从 `main` 手动触发。
+  regression 覆盖；本阶段唯一一次 GitHub CI run `30971563245` 已通过。
 
 ## 阶段 3：拓扑外观与共享核心
 
-### 任务 3.1：恢复 `SatelliteTopology` facade
+### 任务 3.1：恢复 `SatelliteTopology` facade（已完成）
 
 动作：恢复 legacy 公共入口和调用层次，并在内部委托 current online/replay
 controller、地址管理和 link state。
 
-### 任务 3.2：统一 online、export 和 replay
+### 任务 3.2：统一 online、export 和 replay（已完成）
 
 动作：
 
@@ -168,7 +168,7 @@ controller、地址管理和 link state。
 - 保持 network cadence 与 export cadence 独立；
 - 链路集合不变时不重算路由。
 
-### 任务 3.3：恢复拓扑 wrapper 相关测试
+### 任务 3.3：恢复拓扑 wrapper 相关测试（已完成）
 
 验收：legacy replay、66 星 online、1/2 秒与 20 秒共同时间点等价。
 
@@ -177,6 +177,19 @@ controller、地址管理和 link state。
 - 拓扑公共接口与 legacy 对应；
 - 完整本地 topology/routing smoke 通过；
 - `main` 手动运行一次 SatCompute CI。
+
+实现结果（2026-08-05）：
+
+- PR #40 恢复 `topology/satellite-topology.h/.cc`，平台入口、流量和任务只面向
+  facade；online/replay controller、稳定 ID、IPv4 地址与 link state 均由其委托；
+- online controller 与 exporter 共用 `OnlineOrbitConstellation` 和
+  `CircularOrbitTopologyPolicy`，replay 通过权威 manifest 消费相同 JSON 状态；
+- network cadence 与 export cadence 保持独立，controller 只在有效边集合变化时
+  重算路由，distance 时延或带宽单独变化不会推进 route epoch；
+- facade、online、replay、切片导出和回放测试覆盖稳定 ID、固定候选、链路恢复、
+  66 星 online，以及 1 秒/2 秒导出和 20 秒网络更新在 0/20/40 秒的等价性；
+- 本阶段完整本地验证在本 closeout 合并前执行，唯一一次 GitHub CI 在合并后从
+  `main` 手动触发。
 
 ## 阶段 4：input 与 tools
 
