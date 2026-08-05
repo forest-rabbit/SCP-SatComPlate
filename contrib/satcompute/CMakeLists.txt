@@ -128,6 +128,13 @@ build_lib(
     ${libcsma}
 )
 
+# SatCompute vendors nlohmann/json once at the repository root.  PUBLIC lets
+# the platform executable and project-only tests include the same header.
+target_include_directories(
+  satcompute
+  PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third-party>
+)
+
 # The platform entry point is a project executable, not an ns-3 example.  It is
 # therefore available when the global examples and tests switches are disabled.
 build_exec(

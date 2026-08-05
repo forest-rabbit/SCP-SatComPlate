@@ -5,7 +5,7 @@
 #include "constellation-definition.h"
 
 #include "../../para.h"
-#include "../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <cmath>
 #include <fstream>

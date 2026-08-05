@@ -45,7 +45,8 @@ capacity-aware 有向链路速率账本；`routing/ns3/` 只负责读取 ns-3 �
 fallback。发送暂停、恢复、pacing 和 pending admission 仍由 `traffic/` 编排。
 
 任务、流量和拓扑 JSON 共用
-`third-party/nlohmann/json.hpp` 中固定版本的 nlohmann JSON 单头文件（MIT）。
+仓库根目录 `third-party/nlohmann/json.hpp` 中固定版本的 nlohmann JSON 单头文件
+（MIT）。
 它是运行时依赖，不属于 `tools/`；`tools/` 只保存输入生成、分析、检查和可视化
 工具。轨道传播公式只在共享 C++ 核心中实现，Python 工具不复制轨道计算。
 

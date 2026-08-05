@@ -8,7 +8,7 @@
 
 #include "../../para.h"
 #include "../../task/task-coordinator.h"
-#include "../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <filesystem>

@@ -4,7 +4,7 @@
 
 #include "snapshot-reader.h"
 
-#include "../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cmath>

@@ -7,7 +7,7 @@
 #include "run-summary.h"
 
 #include "task-metrics.h"
-#include "../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <filesystem>
