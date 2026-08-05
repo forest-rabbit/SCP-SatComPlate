@@ -335,7 +335,7 @@ WriteTaskSummaries(const std::filesystem::path& outputDirectory,
 }
 
 std::filesystem::path
-WriteComputeNodeSummaries(const ScenarioConfig& config,
+WriteComputeNodeSummaries(const ResolvedSatComputeConfig& config,
                           const std::filesystem::path& outputDirectory,
                           Ptr<TaskCoordinator> coordinator)
 {
@@ -387,7 +387,7 @@ WriteReservationEvents(const std::filesystem::path& outputDirectory,
 }
 
 std::filesystem::path
-WriteRoutingSummary(const ScenarioConfig& config,
+WriteRoutingSummary(const ResolvedSatComputeConfig& config,
                     const RunOutputContext& context,
                     const std::filesystem::path& outputDirectory)
 {
@@ -490,7 +490,7 @@ WriteIncompleteTasks(const std::filesystem::path& diagnosticsDirectory,
 }
 
 void
-ValidateInputs(const ScenarioConfig& config,
+ValidateInputs(const ResolvedSatComputeConfig& config,
                Ptr<NetworkTransferEngine> transferEngine,
                Ptr<TaskCoordinator> taskCoordinator)
 {
@@ -521,7 +521,7 @@ ValidateInputs(const ScenarioConfig& config,
 } // namespace
 
 RunOutputResult
-WriteRunOutputs(const ScenarioConfig& config,
+WriteRunOutputs(const ResolvedSatComputeConfig& config,
                 const RunOutputContext& context,
                 Ptr<NetworkTransferEngine> transferEngine,
                 Ptr<TaskCoordinator> taskCoordinator)
@@ -617,7 +617,7 @@ WriteRunOutputs(const ScenarioConfig& config,
     {
         if (event.receiverRcvBufBytes != config.network.receiverRcvBufBytes)
         {
-            throw RunOutputError("UDP drop receiver buffer differs from scenario config");
+            throw RunOutputError("UDP drop receiver buffer differs from resolved config");
         }
         udpDropBytes = CheckedAdd(udpDropBytes, event.packetSizeBytes, "UDP drop bytes");
         droppedReceivers.emplace(event.destinationSatelliteId, event.destinationPort);
@@ -628,7 +628,7 @@ WriteRunOutputs(const ScenarioConfig& config,
                                          : (transferEngine != nullptr ? "transfer" : "none");
     Json summary = {
         {"schema_version", "0.1"},
-        {"scenario_name", config.scenarioName},
+        {"scenario_name", config.runName},
         {"scenario_schema_version", config.schemaVersion},
         {"effective_config",
          {{"path", effectiveConfig.string()}, {"sha256", Sha256File(effectiveConfig)}}},

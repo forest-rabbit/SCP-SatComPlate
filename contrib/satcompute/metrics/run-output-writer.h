@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_RUN_OUTPUT_WRITER_H
 #define SATCOMPUTE_RUN_OUTPUT_WRITER_H
 
-#include "../model/scenario-config.h"
+#include "../resolved-config.h"
 #include "../routing/state/capacity-reservation-state.h"
 #include "../routing/state/flow-route-registry.h"
 #include "../task/task-coordinator.h"
@@ -48,7 +48,7 @@ struct RunOutputResult
 };
 
 /** Write deterministic CSV/JSON results for one completed or partial run. */
-RunOutputResult WriteRunOutputs(const ScenarioConfig& config,
+RunOutputResult WriteRunOutputs(const ResolvedSatComputeConfig& config,
                                 const RunOutputContext& context,
                                 Ptr<NetworkTransferEngine> transferEngine,
                                 Ptr<TaskCoordinator> taskCoordinator);

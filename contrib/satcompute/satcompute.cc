@@ -223,7 +223,7 @@ main(int argc, char* argv[])
                 controller->GetRouteComputationCount(),
                 controller->GetFlowRouteRegistry(),
                 capacitySummary};
-            const RunOutputResult output = WriteRunOutputs(legacyConfig,
+            const RunOutputResult output = WriteRunOutputs(config,
                                                            outputContext,
                                                            transferEngine,
                                                            taskCoordinator);

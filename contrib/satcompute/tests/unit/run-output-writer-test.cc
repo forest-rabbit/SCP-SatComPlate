@@ -82,12 +82,13 @@ RunCompleteTaskOutput(const std::string& scenarioFilename,
                       const std::filesystem::path& outputRoot)
 {
     {
-        const ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
+        const ScenarioConfig legacyConfig = LoadScenarioConfig(scenarioFilename);
         const std::filesystem::path outputDirectory = outputRoot / "complete";
         const std::filesystem::path effectiveConfig =
-            WriteEffectiveConfig(config, outputDirectory);
-        ReplayTopologyController controller(
-            ResolveLegacyScenarioConfig(config, outputDirectory));
+            WriteEffectiveConfig(legacyConfig, outputDirectory);
+        const ResolvedSatComputeConfig config =
+            ResolveLegacyScenarioConfig(legacyConfig, outputDirectory);
+        ReplayTopologyController controller(config);
         controller.Initialize();
         const ComputeProfile profile =
             ReadComputeProfile(*config.workloads.computeProfile, controller);
@@ -172,12 +173,13 @@ RunPartialTransferOutput(const std::string& scenarioFilename,
                          const std::filesystem::path& outputRoot)
 {
     {
-        const ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
+        const ScenarioConfig legacyConfig = LoadScenarioConfig(scenarioFilename);
         const std::filesystem::path outputDirectory = outputRoot / "partial";
         const std::filesystem::path effectiveConfig =
-            WriteEffectiveConfig(config, outputDirectory);
-        ReplayTopologyController controller(
-            ResolveLegacyScenarioConfig(config, outputDirectory));
+            WriteEffectiveConfig(legacyConfig, outputDirectory);
+        const ResolvedSatComputeConfig config =
+            ResolveLegacyScenarioConfig(legacyConfig, outputDirectory);
+        ReplayTopologyController controller(config);
         controller.Initialize();
         std::vector<NetworkTransfer> plans =
             ReadNetworkTransferTrace(*config.workloads.transferTrace,
