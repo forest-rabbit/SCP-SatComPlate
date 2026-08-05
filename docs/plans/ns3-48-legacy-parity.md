@@ -285,6 +285,17 @@ JSON 内容和稳定 ID，不把运行结果提交到仓库。
 恢复 legacy fixtures 和黄金结果，验证 canonical 输入顺序、五元组、分包、FCFS、
 异构算力、strict/report 和动态拓扑行为。
 
+阶段 5 行为门禁映射：
+
+- `legacy-workload-manifest.json` 固定 54 个 legacy fixture 的路径与 SHA-256；
+- `legacy-workload-parity-test.cc` 直接读取旧 ComputeProfile、TaskTrace、
+  NetworkTransfer 和静态拓扑，验证 canonical 顺序、派生 transfer ID、IPv4/UDP
+  五元组、分包、精确服务时长、FCFS 与异构算力；
+- 同一 parity test 将旧 12-transfer 输入运行在规则 0/2/4s 动态切片上，验证仅链路
+  集合变化时发生三次路由计算；
+- 当前 `task-*`、`network-transfer-*`、五种 routing C++ 测试继续作为 ns-3.48
+  行为门禁；统一 regression 负责平台 strict/report 与 online/replay 重复性。
+
 ### 阶段 5 检查点
 
 - 五种 IPv4 模式和任务闭环通过 legacy 黄金回归；

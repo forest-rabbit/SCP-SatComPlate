@@ -45,32 +45,32 @@
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `routing/algorithm/*` | 同路径，已适配 ns-3.48 | 保留路径并逐文件行为审计 | 待审计 |
-| `routing/common/*` | 同路径，已适配 ns-3.48 | 保留 legacy hash/候选合同 | 待审计 |
-| `routing/ns3/*` | 同路径，已适配 ns-3.48 | 保留 current API 适配 | 待审计 |
-| `routing/state/*` | 同路径，已适配 ns-3.48 | 保留并验证确定性 | 待审计 |
-| `routing/routing-policy-factory.*` | 已恢复，next-hop/path 公共调用均经过工厂 | 保留 legacy 接口并扩展完整路径策略入口 | 已迁移，待阶段 5 回归 |
+| `routing/algorithm/*` | 同路径，已适配 ns-3.48 | 保留路径并逐文件行为审计 | 已审计；五种模式、HRW 黄金分数与 capacity 完整路径均有 C++ 门禁 |
+| `routing/common/*` | 同路径，已适配 ns-3.48 | 保留 legacy hash/候选合同 | 已审计；21/37-byte 编码、canonical candidate 与 seed 行为固定 |
+| `routing/ns3/*` | 同路径，已适配 ns-3.48 | 保留 current API 适配 | 已审计；IPv4 adapter、route epoch 和动态候选变化已验证 |
+| `routing/state/*` | 同路径，已适配 ns-3.48 | 保留并验证确定性 | 已审计；size/capacity reservation、释放和重准入已验证 |
+| `routing/routing-policy-factory.*` | 已恢复，next-hop/path 公共调用均经过工厂 | 保留 legacy 接口并扩展完整路径策略入口 | 已迁移；真实 IPv4/transfer 调用路径与独立工厂测试通过 |
 
 ## task
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `task/compute-profile.*` | 同路径 | 保留路径并验证 JSON 合同 | 待审计 |
-| `task/compute-service.*` | 同路径 | 保留并验证 FCFS | 待审计 |
-| `task/compute-task.*` | 同路径 | 保留状态机语义 | 待审计 |
-| `task/task-coordinator.*` | 同路径 | 保留任务闭环 | 待审计 |
-| `task/task-trace.*` | 同路径 | 保留 canonical 输入 | 待审计 |
+| `task/compute-profile.*` | 同路径 | 保留路径并验证 JSON 合同 | 已审计；current 与 legacy 速率、排序和查找均验证 |
+| `task/compute-service.*` | 同路径 | 保留并验证 FCFS | 已审计；同 ns tie-break、无空隙非抢占 FCFS 与向上取整固定 |
+| `task/compute-task.*` | 同路径 | 保留状态机语义 | 已审计；六状态、五次转换和时间戳不变量固定 |
+| `task/task-coordinator.*` | 同路径 | 保留任务闭环 | 已审计；五种路由、单任务、FCFS、异构和 legacy 黄金闭环通过 |
+| `task/task-trace.*` | 同路径 | 保留 canonical 输入 | 已审计；输入数组顺序不影响 task/transfer ID 输出 |
 | 无 | `task/*.schema.json` | 保留为数据合同 | 已确定 |
 
 ## traffic
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `traffic/network-transfer.*` | 已恢复并由平台入口调用 | 保留秒兼容入口，内部统一纳秒 | 已迁移，待阶段 5 回归 |
-| `traffic/network-transfer-application.*` | 同路径 | 保留并审计 ns-3.48 socket 行为 | 待审计 |
-| `traffic/network-transfer-config.*` | 同路径 | 保留数据合同 | 待审计 |
-| `traffic/network-transfer-engine.*` | 同路径 | 保留 current 适配 | 待审计 |
-| `traffic/network-transfer-receiver.*` | 同路径 | 保留 current 适配 | 待审计 |
+| `traffic/network-transfer.*` | 已恢复并由平台入口调用 | 保留秒兼容入口，内部统一纳秒 | 已迁移；summary/verbose/silent 和 collector 调用链通过 |
+| `traffic/network-transfer-application.*` | 同路径 | 保留并审计 ns-3.48 socket 行为 | 已审计；首跳/路径瓶颈 pacing 与完成回调由五模式引擎测试覆盖 |
+| `traffic/network-transfer-config.*` | 同路径 | 保留数据合同 | 已审计；closed-world JSON、canonical 端口/五元组和三档分包固定 |
+| `traffic/network-transfer-engine.*` | 同路径 | 保留 current 适配 | 已审计；声明/任务触发、capacity 等待重准入和资源释放通过 |
+| `traffic/network-transfer-receiver.*` | 同路径 | 保留 current 适配 | 已审计；按 transfer 聚合、完成时间和 UDP drop 采集接口通过 |
 | 无 | `traffic/network-transfer-records.h` | 保留内部记录类型 | 已确定 |
 | 无 | `traffic/transfer-trace.schema.json` | 保留为独立数据合同 | 已确定 |
 
@@ -118,11 +118,11 @@
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `tests/fixtures/topology/snapshots/*` | 大量缺失或改名 | 恢复黄金 fixtures | 待迁移 |
-| `tests/fixtures/topology/compute-profiles/*` | 部分改名/缺失 | 恢复 | 待迁移 |
-| `tests/fixtures/traffic/transfers/*` | 部分改名/缺失 | 恢复 | 待迁移 |
-| `tests/fixtures/traffic/tasks/*` | 部分改名/缺失 | 恢复 | 待迁移 |
-| `tests/support/*` | 缺失 | 恢复 | 待迁移 |
+| `tests/fixtures/topology/snapshots/*` | legacy 文件已按原路径和哈希恢复 | 恢复黄金 fixtures | 已迁移，规则 cadence 由 current 动态 fixture 回归 |
+| `tests/fixtures/topology/compute-profiles/*` | legacy 文件已按原路径和哈希恢复 | 恢复 | 已迁移，旧速率黄金值进入 parity test |
+| `tests/fixtures/traffic/transfers/*` | legacy 文件已按原路径和哈希恢复 | 保留并运行黄金兼容测试 | 已迁移，待阶段 5 回归 |
+| `tests/fixtures/traffic/tasks/*` | legacy 文件已按原路径和哈希恢复 | 保留并运行黄金兼容测试 | 已迁移，待阶段 5 回归 |
+| `tests/support/*` | 已恢复并适配 `ns3` 根标记 | 恢复 | 已迁移 |
 | legacy Python generation/analysis/visualization tests | 适用于 v0.3 的核心测试已恢复 | 随 tools 恢复 | 已完成阶段 4 范围；61 个项目 Python 测试通过 |
 | legacy smoke/regression scripts | 被两个 `run-all.sh` 替代 | 恢复分层脚本并保留统一入口 | 待迁移 |
 | current C++ unit executables | 新增 | 保留并按最终接口适配 | 待审计 |
