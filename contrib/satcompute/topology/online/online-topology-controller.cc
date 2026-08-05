@@ -22,16 +22,15 @@
 namespace ns3
 {
 
-OnlineTopologyController::OnlineTopologyController(const ScenarioConfig& config)
+OnlineTopologyController::OnlineTopologyController(const ResolvedSatComputeConfig& config)
     : m_config(config),
       m_topologyPolicy(config)
 {
-    if (m_config.constellation.orbitProvider != "ns3-circular" ||
-        m_config.network.topologySource != "online" ||
+    if (m_config.network.topologySource != "online" ||
         m_config.network.replayDirectory)
     {
         throw OnlineTopologyControllerError(
-            "online controller requires matching ns3-circular and online sources");
+            "online controller requires an online source without a replay directory");
     }
     if (!TryParseRoutingMode(m_config.routing.mode, m_routingMode))
     {
@@ -75,7 +74,9 @@ OnlineTopologyController::Initialize()
             "online topology controller must be initialized at simulation time zero");
     }
 
-    m_constellation = std::make_unique<OnlineOrbitConstellation>(m_config.constellation);
+    m_constellation = std::make_unique<OnlineOrbitConstellation>(
+        m_config.constellation,
+        m_config.simulation.startTimeNs);
     const NodeContainer& nodes = m_constellation->GetNodes();
     const SatelliteIdMap& idMap = m_constellation->GetIdMap();
     if (IsReservationAwareRoutingMode(m_routingMode))
@@ -176,7 +177,7 @@ OnlineTopologyController::RequireInitialized() const
     }
 }
 
-const ScenarioConfig&
+const ResolvedSatComputeConfig&
 OnlineTopologyController::GetConfig() const
 {
     return m_config;

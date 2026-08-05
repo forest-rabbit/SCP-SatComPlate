@@ -9,6 +9,7 @@
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/online-topology-controller.h"
 #include "ns3/replay-topology-controller.h"
+#include "ns3/resolved-config.h"
 #include "ns3/rng-seed-manager.h"
 #include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
@@ -76,13 +77,16 @@ WriteText(const std::filesystem::path& path, const std::string& content, bool ap
 TopologyTraceExportResult
 ExportTrace(const ScenarioConfig& config, const std::filesystem::path& outputDirectory)
 {
+    const ResolvedSatComputeConfig resolved =
+        ResolveLegacyScenarioConfig(config, outputDirectory);
     TopologyTraceExportResult result;
-    RngSeedManager::SetSeed(config.randomness.seed);
-    RngSeedManager::SetRun(config.randomness.run);
+    RngSeedManager::SetSeed(resolved.randomness.seed);
+    RngSeedManager::SetRun(resolved.randomness.run);
     RngSeedManager::ResetNextStreamIndex();
     {
-        OnlineOrbitConstellation constellation(config.constellation);
-        CircularOrbitTraceExporter exporter(config, outputDirectory, constellation);
+        OnlineOrbitConstellation constellation(resolved.constellation,
+                                               resolved.simulation.startTimeNs);
+        CircularOrbitTraceExporter exporter(resolved, outputDirectory, constellation);
         exporter.Initialize();
         Simulator::Stop(NanoSeconds(config.simulation.durationNs));
         Simulator::Run();
@@ -102,7 +106,7 @@ ReadSharedSnapshots(const ScenarioConfig& config,
         config.simulation.durationNs,
         config.network.networkUpdateIntervalNs);
     Check(schedule.manifestAuthoritative,
-          "version 0.2 trace manifest was not authoritative");
+          "version 0.3 trace manifest was not authoritative");
     Check(schedule.discoveredSnapshotCount == expectedDiscoveredCount,
           "fine trace discovery count differs");
     Check(schedule.selectedSnapshotCount == 3 && schedule.updates.size() == 2,
@@ -124,12 +128,14 @@ ReadSharedSnapshots(const ScenarioConfig& config,
 std::vector<CircularOrbitTopologyState>
 RunOnlineAtSharedTimes(const ScenarioConfig& config)
 {
+    const ResolvedSatComputeConfig resolved =
+        ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test");
     std::vector<CircularOrbitTopologyState> states;
     RngSeedManager::SetSeed(config.randomness.seed);
     RngSeedManager::SetRun(config.randomness.run);
     RngSeedManager::ResetNextStreamIndex();
     {
-        OnlineTopologyController controller(config);
+        OnlineTopologyController controller(resolved);
         controller.Initialize();
         states.push_back(controller.GetLastTopologyState());
         for (const int64_t timeNs : {20000000000LL, 40000000000LL})
@@ -205,9 +211,9 @@ void
 RunGeneratedReplay(const ScenarioConfig& onlineConfig,
                    const std::filesystem::path& traceDirectory)
 {
-    ScenarioConfig replayConfig = onlineConfig;
-    replayConfig.constellation.orbitProvider = "json-replay";
-    replayConfig.network.topologySource = "json-replay";
+    ResolvedSatComputeConfig replayConfig =
+        ResolveLegacyScenarioConfig(onlineConfig, "/tmp/satcompute-test");
+    replayConfig.network.topologySource = "replay";
     replayConfig.network.replayDirectory = traceDirectory;
     replayConfig.traceExport.enabled = false;
     RngSeedManager::SetSeed(replayConfig.randomness.seed);

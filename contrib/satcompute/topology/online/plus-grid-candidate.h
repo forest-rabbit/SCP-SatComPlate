@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_PLUS_GRID_CANDIDATE_H
 #define SATCOMPUTE_PLUS_GRID_CANDIDATE_H
 
-#include "../../model/scenario-config.h"
+#include "../orbit/constellation-definition.h"
 
 #include <cstdint>
 #include <stdexcept>
@@ -38,7 +38,7 @@ struct PlusGridCandidateLink
 
 /** Build the canonical plus-grid graph without consulting satellite distance. */
 std::vector<PlusGridCandidateLink> BuildPlusGridCandidateLinks(
-    const ConstellationConfig& constellation,
+    const ConstellationDefinition& constellation,
     bool seamEnabled);
 
 } // namespace ns3

@@ -8,6 +8,8 @@
 #include "ns3/plus-grid-candidate.h"
 #include "ns3/simulator.h"
 
+#include "../support/config-factory.h"
+
 #include <cmath>
 #include <iostream>
 #include <set>
@@ -19,6 +21,8 @@ using namespace ns3;
 
 namespace
 {
+
+using satcompute::test::MakeTestConstellation;
 
 void
 Check(bool condition, const std::string& message)
@@ -39,26 +43,6 @@ CheckClose(double actual, double expected, double tolerance, const std::string& 
     }
 }
 
-ConstellationConfig
-MakeConfig(uint32_t numOrbits,
-           uint32_t satellitesPerOrbit,
-           const std::string& pattern = "walker-star",
-           bool phaseDiff = true,
-           int64_t epochOffsetNs = 0)
-{
-    ConstellationConfig config{};
-    config.orbitProvider = "ns3-circular";
-    config.constellationName = "unit-test";
-    config.constellationPattern = pattern;
-    config.numOrbits = numOrbits;
-    config.satellitesPerOrbit = satellitesPerOrbit;
-    config.altitudeM = 780000.0L;
-    config.inclinationDeg = 86.4L;
-    config.phaseDiff = phaseDiff;
-    config.orbitEpochOffsetNs = epochOffsetNs;
-    return config;
-}
-
 double
 Distance(const Vector& first, const Vector& second)
 {
@@ -72,7 +56,7 @@ void
 RunIdentityAndMotionCase()
 {
     {
-        OnlineOrbitConstellation constellation(MakeConfig(3, 4));
+        OnlineOrbitConstellation constellation(MakeTestConstellation(3, 4));
         const auto& identities = constellation.GetOrbitIdentities();
         Check(constellation.GetNodes().GetN() == 12, "online orbit node count differs");
         Check(identities.size() == 12, "online orbit identity count differs");
@@ -119,7 +103,8 @@ void
 RunPatternCase()
 {
     {
-        OnlineOrbitConstellation delta(MakeConfig(3, 4, "walker-delta", false));
+        OnlineOrbitConstellation delta(
+            MakeTestConstellation(3, 4, "walker-delta", false));
         const auto& identities = delta.GetOrbitIdentities();
         CheckClose(identities.at(4).raanDeg, 120.0, 1e-12, "Walker Delta RAAN differs");
         CheckClose(identities.at(8).raanDeg, 240.0, 1e-12, "Walker Delta span differs");
@@ -136,9 +121,12 @@ RunEpochOffsetCase()
 {
     constexpr int64_t offsetNs = 100000000000LL;
     {
-        OnlineOrbitConstellation offset(MakeConfig(2, 3, "walker-star", true, offsetNs));
-        OnlineOrbitConstellation reference(MakeConfig(2, 3));
+        OnlineOrbitConstellation offset(
+            MakeTestConstellation(2, 3, "walker-star", true, offsetNs));
+        OnlineOrbitConstellation started(MakeTestConstellation(2, 3), offsetNs);
+        OnlineOrbitConstellation reference(MakeTestConstellation(2, 3));
         const Vector offsetPositionAtZero = offset.GetPosition(4);
+        const Vector startedPositionAtZero = started.GetPosition(4);
         Vector referencePositionAtOffset;
         Simulator::Schedule(NanoSeconds(offsetNs), [&] {
             referencePositionAtOffset = reference.GetPosition(4);
@@ -147,6 +135,8 @@ RunEpochOffsetCase()
         Simulator::Run();
         Check(Distance(offsetPositionAtZero, referencePositionAtOffset) < 0.001,
               "orbit_epoch_offset did not include orbital progress and Earth rotation");
+        Check(Distance(startedPositionAtZero, referencePositionAtOffset) < 0.001,
+              "simulation start did not advance the initial orbit state");
     }
     Simulator::Destroy();
 }
@@ -167,7 +157,7 @@ ToSet(const std::vector<PlusGridCandidateLink>& links)
 void
 RunCandidateCase()
 {
-    const ConstellationConfig config = MakeConfig(3, 4);
+    const ConstellationDefinition config = MakeTestConstellation(3, 4);
     const auto withoutSeam = BuildPlusGridCandidateLinks(config, false);
     const auto withSeam = BuildPlusGridCandidateLinks(config, true);
     Check(withoutSeam.size() == 20, "plus-grid no-seam edge count differs");
@@ -193,12 +183,12 @@ RunCandidateCase()
     Check(seamSet.contains({0, 8, PlusGridCandidateKind::INTER_PLANE}),
           "enabled seam candidate is missing");
 
-    const ConstellationConfig small = MakeConfig(2, 2);
+    const ConstellationDefinition small = MakeTestConstellation(2, 2);
     Check(BuildPlusGridCandidateLinks(small, false).size() == 4,
           "small plus-grid did not deduplicate two-node rings");
     Check(BuildPlusGridCandidateLinks(small, true).size() == 4,
           "small plus-grid did not deduplicate its seam");
-    Check(BuildPlusGridCandidateLinks(MakeConfig(1, 1), true).empty(),
+    Check(BuildPlusGridCandidateLinks(MakeTestConstellation(1, 1), true).empty(),
           "single-satellite plus-grid created a self-loop");
     Check(withoutSeam == BuildPlusGridCandidateLinks(config, false),
           "fixed candidate identities changed between evaluations");
@@ -207,8 +197,8 @@ RunCandidateCase()
 void
 RunValidationCase()
 {
-    ConstellationConfig invalid = MakeConfig(1, 1);
-    invalid.orbitProvider = "json-replay";
+    ConstellationDefinition invalid = MakeTestConstellation(1, 1);
+    invalid.altitudeM = 0.0L;
     try
     {
         OnlineOrbitConstellation constellation(invalid);
@@ -219,7 +209,7 @@ RunValidationCase()
         return;
     }
     Simulator::Destroy();
-    throw std::runtime_error("online orbit accepted a replay provider");
+    throw std::runtime_error("online orbit accepted an invalid altitude");
 }
 
 } // namespace

@@ -17,6 +17,7 @@ namespace ns3
 {
 
 struct SatComputeConfig;
+struct ScenarioConfig;
 
 /** 平台参数和星座结构无法解析为唯一内部配置时抛出的异常。 */
 class ResolvedSatComputeConfigError : public std::runtime_error
@@ -122,6 +123,19 @@ struct ResolvedSatComputeConfig
  * @throws ResolvedSatComputeConfigError 参数、文件或跨字段约束无效时抛出。
  */
 ResolvedSatComputeConfig ResolveSatComputeConfig(const SatComputeConfig& config);
+
+/**
+ * 在生产入口切换期间把旧 scenario 0.2 转成新的内部类型。
+ *
+ * 该兼容函数只用于保持每个迁移增量可构建；完整 scenario 输入删除时同步删除。
+ *
+ * @param scenario 已校验的旧 scenario 0.2 配置。
+ * @param outputDirectory 当前 operational 输出目录。
+ * @return 与旧场景语义等价的临时内部配置。
+ */
+ResolvedSatComputeConfig ResolveLegacyScenarioConfig(
+    const ScenarioConfig& scenario,
+    const std::filesystem::path& outputDirectory);
 
 } // namespace ns3
 

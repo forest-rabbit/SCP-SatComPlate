@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_ONLINE_TOPOLOGY_CONTROLLER_H
 #define SATCOMPUTE_ONLINE_TOPOLOGY_CONTROLLER_H
 
-#include "../../model/scenario-config.h"
+#include "../../resolved-config.h"
 #include "../../routing/common/routing-mode.h"
 #include "../../routing/state/flow-route-registry.h"
 #include "../ipv4/satellite-ipv4-addressing.h"
@@ -36,13 +36,13 @@ class OnlineTopologyControllerError : public std::runtime_error
 class OnlineTopologyController : public SatelliteTopologyController
 {
   public:
-    explicit OnlineTopologyController(const ScenarioConfig& config);
+    explicit OnlineTopologyController(const ResolvedSatComputeConfig& config);
 
     void Initialize() override;
     void RegisterRouteUpdateCallback(Callback<void> callback) override;
     void InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const override;
 
-    const ScenarioConfig& GetConfig() const;
+    const ResolvedSatComputeConfig& GetConfig() const;
     const NodeContainer& GetNodes() const;
     const SatelliteIdMap& GetIdMap() const;
     const SatelliteLinkState& GetLinkState() const;
@@ -72,7 +72,7 @@ class OnlineTopologyController : public SatelliteTopologyController
     void ApplyScheduledUpdate();
     void RequireInitialized() const;
 
-    ScenarioConfig m_config;
+    ResolvedSatComputeConfig m_config;
     RoutingMode m_routingMode{RoutingMode::GLOBAL_FIRST};
     CircularOrbitTopologyPolicy m_topologyPolicy;
     std::unique_ptr<OnlineOrbitConstellation> m_constellation;

@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_CIRCULAR_ORBIT_TRACE_EXPORTER_H
 #define SATCOMPUTE_CIRCULAR_ORBIT_TRACE_EXPORTER_H
 
-#include "../../model/scenario-config.h"
+#include "../../resolved-config.h"
 #include "../online/circular-orbit-topology-policy.h"
 #include "../orbit/online-orbit-constellation.h"
 
@@ -58,7 +58,7 @@ std::string FormatTopologyTraceTimeToken(int64_t simulationTimeNs);
 class CircularOrbitTraceExporter
 {
   public:
-    CircularOrbitTraceExporter(const ScenarioConfig& config,
+    CircularOrbitTraceExporter(const ResolvedSatComputeConfig& config,
                                const std::filesystem::path& outputDirectory,
                                const OnlineOrbitConstellation& constellation);
 
@@ -70,7 +70,7 @@ class CircularOrbitTraceExporter
   private:
     void WriteScheduledSlice(int64_t expectedTimeNs);
 
-    ScenarioConfig m_config;
+    ResolvedSatComputeConfig m_config;
     std::filesystem::path m_outputDirectory;
     const OnlineOrbitConstellation* m_constellation;
     CircularOrbitTopologyPolicy m_policy;

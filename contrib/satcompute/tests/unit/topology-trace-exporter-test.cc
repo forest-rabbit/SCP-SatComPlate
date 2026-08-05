@@ -5,6 +5,7 @@
 #include "ns3/circular-orbit-trace-exporter.h"
 #include "ns3/command-line.h"
 #include "ns3/online-orbit-constellation.h"
+#include "ns3/resolved-config.h"
 #include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 
@@ -55,10 +56,13 @@ ReadJson(const std::filesystem::path& path)
 TopologyTraceExportResult
 RunExport(const ScenarioConfig& config, const std::filesystem::path& outputDirectory)
 {
+    const ResolvedSatComputeConfig resolved =
+        ResolveLegacyScenarioConfig(config, outputDirectory);
     TopologyTraceExportResult result;
     {
-        OnlineOrbitConstellation constellation(config.constellation);
-        CircularOrbitTraceExporter exporter(config, outputDirectory, constellation);
+        OnlineOrbitConstellation constellation(resolved.constellation,
+                                               resolved.simulation.startTimeNs);
+        CircularOrbitTraceExporter exporter(resolved, outputDirectory, constellation);
         Check(exporter.GetScheduledTimesNs() ==
                   std::vector<int64_t>({0,
                                         1000000000LL,
@@ -124,7 +128,12 @@ CheckExportContent(const ScenarioConfig& config,
           "trace slice count differs");
 
     const nlohmann::json manifest = ReadJson(first.manifestPath);
-    Check(manifest.at("schema_version") == "0.2", "trace manifest version differs");
+    Check(manifest.at("schema_version") == "0.3", "trace manifest version differs");
+    Check(manifest.at("run_name") == config.scenarioName,
+          "trace manifest run name differs");
+    Check(manifest.contains("constellation_config_sha256") &&
+              !manifest.contains("scenario_config_sha256"),
+          "trace manifest still exposes the removed scenario input");
     Check(manifest.at("state_semantics") == "orbit-policy-evaluation",
           "trace manifest state semantics differ");
     Check(manifest.at("coordinate_frame") == "ECEF", "trace coordinate frame differs");

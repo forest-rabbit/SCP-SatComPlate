@@ -10,6 +10,7 @@
 #include "ns3/nstime.h"
 #include "ns3/point-to-point-net-device.h"
 #include "ns3/replay-topology-controller.h"
+#include "ns3/resolved-config.h"
 #include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 
@@ -90,7 +91,8 @@ RunDelayCase(const std::string& scenarioFilename,
 {
     {
         const ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
-        ReplayTopologyController controller(config);
+        ReplayTopologyController controller(
+            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
         ExpectControllerError(
             [&controller] { controller.GetNodes(); },
             "uninitialized replay controller exposed nodes");
@@ -130,7 +132,8 @@ RunDynamicCase(const std::string& scenarioFilename)
 {
     {
         const ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
-        ReplayTopologyController controller(config);
+        ReplayTopologyController controller(
+            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
         controller.Initialize();
         Check(controller.GetRouteComputationCount() == 1,
               "dynamic replay initial route count differs");
