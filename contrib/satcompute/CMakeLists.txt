@@ -5,7 +5,6 @@ build_lib(
     para.cc
     resolved-config.cc
     model/satcompute-version.cc
-    model/scenario-config.cc
     model/sha256.cc
     metrics/run-output-writer.cc
     routing/algorithm/capacity-aware-hrw-policy.cc
@@ -45,7 +44,6 @@ build_lib(
     para.h
     resolved-config.h
     model/satcompute-version.h
-    model/scenario-config.h
     model/sha256.h
     metrics/run-output-writer.h
     routing/algorithm/capacity-aware-hrw-policy.h
@@ -147,15 +145,6 @@ build_exec(
   EXECNAME satcompute-effective-config-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/effective-config-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-config-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/config-loader-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

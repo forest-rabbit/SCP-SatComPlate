@@ -112,9 +112,9 @@ main(int argc, char* argv[])
 
         auto task = defaults;
         task.computeProfile =
-            "contrib/satcompute/tests/fixtures/scenario/resources/compute-profile.json";
+            "contrib/satcompute/tests/fixtures/task/compute-profile-single.json";
         task.taskTrace =
-            "contrib/satcompute/tests/fixtures/scenario/traffic/task-trace.json";
+            "contrib/satcompute/tests/fixtures/task/task-single.json";
         const auto resolvedTask = ns3::ResolveSatComputeConfig(task);
         Require(resolvedTask.workloads.computeProfile->is_absolute() &&
                     resolvedTask.workloads.taskTrace->is_absolute(),

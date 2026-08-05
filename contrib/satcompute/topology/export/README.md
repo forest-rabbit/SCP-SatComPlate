@@ -1,74 +1,77 @@
-# Online orbit state and topology trace export
+# 在线轨道状态与拓扑切片导出
 
-SatCompute 0.2 can evaluate the same ns-3.48 circular-orbit and fixed-candidate
-topology policy used by the live simulator and emit deterministic JSON slices.
-The output is a read-only state boundary for audit, replay, future fault-model
-generation, and a later backend/frontend adapter. This module does not open a
-socket or define a frontend transport protocol.
+SatCompute 0.3 使用与在线仿真相同的 ns-3.48 圆轨道模型、固定候选 ISL、距离
+门控和时延核心，生成确定性的 JSON 切片。输出是只读状态边界，可用于审计、
+回放、后续故障模型生成以及未来后端/前端适配。本模块不打开 socket，也不定义
+前端传输协议。
 
-The three closed-world output contracts are:
+三个 closed-world 输出合同分别是：
 
-- `nodes-slice.schema.json` for stable satellite IDs and ECEF x/y/z positions;
-- `topology-slice.schema.json` for active fixed-candidate ISLs, distance,
-  propagation delay, and bandwidth;
-- `manifest.schema.json` for provenance, cadence, hashes, and the authoritative
-  ordered file inventory.
+- `nodes-slice.schema.json`：稳定卫星 ID 和 ECEF `x/y/z` 坐标；
+- `topology-slice.schema.json`：当前有效的固定候选 ISL、距离、传播时延和带宽；
+- `manifest.schema.json`：运行来源、切片间隔、输入哈希和权威有序文件清单。
 
-All human-facing cadence values remain seconds in the scenario. The loader
-converts them exactly once to signed 64-bit integer nanoseconds. A trace always
-contains time zero, every positive trace interval strictly before the
-simulation duration, and—when `include_final_state` is true—one exact final
-state without duplication. Filename tokens are canonical decimal seconds, for
-example `nodes_0s.json`, `nodes_1s.json`, and `nodes_2.5s.json`.
+人工输入的仿真时间和间隔都以秒写入 `para.cc` 或同名 CLI，平台只在启动时进行
+一次精确的有符号 64 位整数纳秒转换。导出序列始终包含起点、严格早于仿真结束
+的各个正间隔点；当 `includeFinalTopologyState=true` 时，再包含一个不重复的精确
+终点。文件名使用规范十进制秒，例如 `nodes_0s.json`、`nodes_1s.json` 和
+`nodes_2.5s.json`。
 
-## Trace cadence versus network cadence
+## 导出间隔与网络更新间隔
 
-`trace_export.interval_s` and `network.network_update_interval_s` are
-independent inputs. Every exported slice has
-`state_semantics=orbit-policy-evaluation`: it evaluates continuous orbital
-positions, the fixed plus-grid candidates, the distance gate, and link delay at
-that exact trace time. It does not claim that the simulated network applied an
-interface or routing update at that time.
+`topologyExportInterval` 和 `networkUpdateInterval` 是两个独立输入。每个导出切片
+都使用 `state_semantics=orbit-policy-evaluation`：在该切片时刻计算连续轨道位置、
+固定 plus-grid 候选、距离门控和链路时延，但不表示仿真网络在该时刻执行了接口
+或路由更新。
 
-For example, a scenario may export every 1 s while updating the simulated
-network every 20 s. The 1–19 s files are fine-grained policy states for audit or
-fault generation. The live network retains its state from the 0 s update until
-the 20 s update. At shared timestamps such as 0 s and 20 s, both paths evaluate
-the same orbit object and topology policy and must agree.
+例如，导出可每 1 秒执行一次，而仿真网络每 20 秒更新一次。1–19 秒文件是供审计
+或故障生成使用的高精度策略状态；在线网络仍保持 0 秒 tick 应用的状态，直到
+20 秒 tick。0 秒、20 秒等共同时间点必须由同一个轨道对象和拓扑策略给出一致
+结果。
 
-## Invocation
+## 运行方式
 
-Normal online execution can emit the trace alongside network, routing, and
-workload outputs:
+普通 online 仿真可同时输出网络、路由、业务结果和拓扑切片：
 
 ```bash
 ./ns3 run "satcompute \
-  --scenarioConfig=contrib/satcompute/tests/fixtures/scenario/online-trace.json \
+  --runName=online-trace \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --topologySource=online \
+  --simulationDuration=2.5 \
+  --delayMode=distance \
+  --fixedDelay=0 \
+  --networkUpdateInterval=2 \
+  --topologyExportEnabled=true \
+  --topologyExportInterval=1 \
   --outputDir=/tmp/satcompute-online-trace"
 ```
 
-The same scenario can generate only orbit/topology state without installing
-network devices, routes, or workloads:
+相同参数也可只生成轨道和拓扑状态，不安装网络设备、路由或业务：
 
 ```bash
 ./ns3 run "satcompute \
-  --scenarioConfig=contrib/satcompute/tests/fixtures/scenario/online-trace.json \
+  --runName=online-trace \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --topologySource=online \
+  --simulationDuration=2.5 \
+  --delayMode=distance \
+  --fixedDelay=0 \
+  --networkUpdateInterval=2 \
+  --topologyExportEnabled=true \
+  --topologyExportInterval=1 \
   --outputDir=/tmp/satcompute-export-only \
   --exportOnly=true"
 ```
 
-`--exportOnly=true` requires an online `ns3-circular` scenario with trace
-export enabled and is mutually exclusive with `--validateOnly=true`. A normal
-run and export-only run using identical scenario bytes produce byte-identical
-`topology-trace/` contents.
+`--exportOnly=true` 只允许用于启用切片导出的 online 运行，并且不能与
+`--validateOnly=true` 同时使用。除输出目录和 `exportOnly` 外参数相同时，普通
+运行与 export-only 运行生成的 `topology-trace/` 内容逐字节一致。
 
-Consumers must start from `topology-trace/manifest.json`, verify each recorded
-SHA-256, and process only listed files. The manifest is authoritative if an
-output directory contains stale files from an older run. Use a fresh output
-directory for operational runs whenever possible.
+消费者必须从 `topology-trace/manifest.json` 开始，验证其中记录的每个 SHA-256，
+并且只处理清单列出的文件。如果输出目录残留旧文件，manifest 仍是唯一权威清单；
+正式实验应尽量使用新的输出目录。
 
-Coordinates are ECEF metres. Active link distance is in metres, delay is
-integer nanoseconds, and bandwidth is bits per second. Fixed delay uses the
-scenario value. Distance delay divides raw ECEF separation by 299792458 m/s and
-rounds to the nearest nanosecond with exact halves upward, exactly as the live
-online controller does.
+坐标单位为 ECEF 米，链路距离为米，时延为整数纳秒，带宽为 bit/s。fixed 模式
+使用 `fixedDelay`；distance 模式以原始 ECEF 距离除以 299792458 m/s，并按精确
+半值向上规则舍入到最近纳秒，与在线网络控制器完全一致。

@@ -162,9 +162,9 @@ routing 或 metrics。
 - 未来的故障/修复事件输入。
 
 生成器专用配置只能放在 `tools/generation/*/config/`，只描述生成策略，不作为
-平台完整运行配置。当前 `input/examples/synthetic-66-fixed.json`、
+平台完整运行配置。原 `input/examples/synthetic-66-fixed.json`、
 `synthetic-66-distance.json`、scenario schema、`--scenarioConfig` 和对应完整配置
-加载器在切换完成后删除，不保留双输入路径。
+加载器已随阶段 2 配置切换删除，不保留双输入路径。
 
 ### 有效配置和可复现性
 

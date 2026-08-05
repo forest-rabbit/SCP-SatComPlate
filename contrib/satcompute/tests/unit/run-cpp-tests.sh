@@ -8,11 +8,6 @@ cd "$repository_root"
 test_output="$(mktemp -d /tmp/satcompute-cpp-tests.XXXXXX)"
 trap 'rm -rf "$test_output"' EXIT
 
-fixed="contrib/satcompute/input/examples/synthetic-66-fixed.json"
-distance="contrib/satcompute/input/examples/synthetic-66-distance.json"
-task="contrib/satcompute/tests/fixtures/scenario/task-input.json"
-invalid="contrib/satcompute/tests/fixtures/scenario/invalid-unknown-field.json"
-
 ./ns3 run --no-build "satcompute-para-test"
 ./ns3 run --no-build \
   "satcompute-para-test --verifyOverrides=transfer --runName=cli-run \
@@ -42,11 +37,6 @@ invalid="contrib/satcompute/tests/fixtures/scenario/invalid-unknown-field.json"
 
 ./ns3 run --no-build \
   "satcompute-effective-config-test --outputDir=$test_output/effective"
-
-./ns3 run --no-build \
-  "satcompute-config-test --fixedScenario=$fixed \
---distanceScenario=$distance --taskScenario=$task \
---invalidScenario=$invalid --outputDir=$test_output"
 
 dynamic_topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
 delay_topology="contrib/satcompute/tests/fixtures/topology/snapshots/delay-only"

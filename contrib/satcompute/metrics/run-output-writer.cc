@@ -628,8 +628,8 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
                                          : (transferEngine != nullptr ? "transfer" : "none");
     Json summary = {
         {"schema_version", "0.1"},
-        {"scenario_name", config.runName},
-        {"scenario_schema_version", config.schemaVersion},
+        {"run_name", config.runName},
+        {"config_schema_version", config.schemaVersion},
         {"effective_config",
          {{"path", effectiveConfig.string()}, {"sha256", Sha256File(effectiveConfig)}}},
         {"simulation_duration_ns", config.simulation.durationNs},

@@ -1,6 +1,7 @@
 # SatCompute ns-3.33 到 ns-3.48 迁移矩阵
 
-状态：阶段 0 和阶段 1 已完成。每完成一个阶段更新“结果”列，最终逐文件审计。
+状态：阶段 0、阶段 1 已完成；阶段 2 的配置合同切换实现完成，阶段检查点 CI
+将在本次合并后从 `main` 唯一触发。每完成一个阶段更新“结果”列，最终逐文件审计。
 
 动作定义：
 
@@ -15,12 +16,12 @@
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
 | `README.md`（中文） | 已恢复中文 v0.3 基线 | 恢复 legacy 主体并更新 ns-3.48 | 已恢复；阶段 7 最终校对 |
-| `para.h/.cc` | 已恢复；scenario 暂未切换 | 恢复并扩展 | 已恢复并完成独立测试 |
-| `satcompute.cc` | 已移回模块根目录 | 移回根目录并切换 para | 路径已恢复；para 切换待阶段 2 |
+| `para.h/.cc` | 已恢复并接管生产入口 | 恢复并扩展 | 已恢复；typed defaults、CLI、组合校验和精确时间转换均有独立测试 |
+| `satcompute.cc` | 已移回模块根目录 | 移回根目录并切换 para | 已恢复并只使用 `para.cc + CLI` |
 | `wscript` | `CMakeLists.txt` | 由 CMake 替代 | 已确定 |
 | 无 | `model/satcompute-version.*` | 按实际职责保留或并入运行摘要 | 待审计 |
 | 无 | `model/sha256.*` | 移入 manifest/effective-config 所属职责 | 待审计 |
-| 无 | `config/scenario*` | 完整 scenario 输入切换后删除 | 待迁移 |
+| 无 | `config/scenario*` | 完整 scenario 输入切换后删除 | 已删除 |
 
 ## metrics
 
@@ -93,9 +94,9 @@
 | `input/topology/examples/xw-66sat*` | 缺失 | 恢复 | 待迁移 |
 | `input/topology/resources/workload/*` | 缺失 | 恢复算力输入 | 待迁移 |
 | `input/traffic/workload/*` | 缺失 | 恢复流量输入 | 待迁移 |
-| 无 | `input/topology/constellations/*` | 新增精简星座结构合同 | 待迁移 |
-| 无 | `input/examples/synthetic-66-fixed.json` | 删除完整配置 | 待迁移 |
-| 无 | `input/examples/synthetic-66-distance.json` | 删除完整配置 | 待迁移 |
+| 无 | `input/topology/constellations/*` | 新增精简星座结构合同 | 已完成；closed-world schema、读取器和 66 星默认输入已验证 |
+| 无 | `input/examples/synthetic-66-fixed.json` | 删除完整配置 | 已删除 |
+| 无 | `input/examples/synthetic-66-distance.json` | 删除完整配置 | 已删除 |
 
 ## tools
 

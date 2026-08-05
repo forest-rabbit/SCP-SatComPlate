@@ -88,9 +88,9 @@ main(int argc, char* argv[])
         auto task = defaults;
         task.outputDirectory = (outputRoot / "task").string();
         task.computeProfile =
-            "contrib/satcompute/tests/fixtures/scenario/resources/compute-profile.json";
+            "contrib/satcompute/tests/fixtures/task/compute-profile-single.json";
         task.taskTrace =
-            "contrib/satcompute/tests/fixtures/scenario/traffic/task-trace.json";
+            "contrib/satcompute/tests/fixtures/task/task-single.json";
         const auto resolvedTask = ns3::ResolveSatComputeConfig(task);
         const auto taskEffective = nlohmann::json::parse(
             ReadFile(ns3::WriteEffectiveConfig(resolvedTask, true, false)));

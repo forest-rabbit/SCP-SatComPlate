@@ -1,4 +1,4 @@
-"""Documentation-contract tests for topology trace output schema 0.2."""
+"""Documentation-contract tests for topology trace output contracts."""
 
 from __future__ import annotations
 

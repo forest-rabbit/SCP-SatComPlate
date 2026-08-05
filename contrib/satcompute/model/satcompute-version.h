@@ -10,13 +10,6 @@
 namespace ns3
 {
 
-/**
- * Return the version of the authoritative SatCompute scenario contract.
- *
- * @return Scenario schema version.
- */
-std::string_view GetSatComputeSchemaVersion();
-
 /** Return the ns-3 platform baseline targeted by this module. */
 std::string_view GetSatComputeNs3Version();
 

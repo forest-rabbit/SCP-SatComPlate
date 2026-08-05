@@ -1,6 +1,7 @@
 # 实施计划：SatCompute ns-3.48 legacy-parity 迁移
 
-状态：已批准，阶段 0 和阶段 1 已完成，阶段 2 待执行。
+状态：已批准，阶段 0 和阶段 1 已完成；阶段 2 的配置合同切换实现完成，阶段
+检查点 CI 将在相关改动合并到 `main` 后唯一触发。
 
 依据：[平台 v0.3 规格](../specs/platform-v0.3.md)。
 
@@ -140,6 +141,16 @@ git status --short --branch
 - 无双配置源；
 - 大阶段本地回归通过；
 - `main` 手动运行一次 SatCompute CI。
+
+实现结果（2026-08-05）：
+
+- 星座 JSON 已缩减为只含物理结构的 closed-world 合同，默认 66 星输入已迁移；
+- `SatComputeConfig + ConstellationDefinition` 统一解析为只读 resolved config，
+  online、replay、export、metrics 和有效配置均使用该视图；
+- 根入口已切换为 `para.cc + CLI`，完整 scenario schema、加载器、示例和 fixture
+  已删除，生产代码不再存在双配置源；
+- fixed、distance、online、replay、正常导出和 export-only 已由本地 smoke 与
+  regression 覆盖；本阶段唯一一次 GitHub CI 在本次合并后从 `main` 手动触发。
 
 ## 阶段 3：拓扑外观与共享核心
 
