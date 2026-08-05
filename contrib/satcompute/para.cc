@@ -183,7 +183,7 @@ AddSatComputeCommandLineOptions(CommandLine& commandLine, SatComputeConfig& conf
                          "Fixed one-way link delay in seconds",
                          config.fixedDelaySeconds);
     commandLine.AddValue("networkUpdateInterval",
-                         "Online network update interval in seconds",
+                         "Network state update interval in seconds",
                          config.networkUpdateIntervalSeconds);
 
     commandLine.AddValue("islBandwidthBps", "ISL data rate in bit/s", config.islBandwidthBps);

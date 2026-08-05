@@ -42,7 +42,7 @@ struct SatComputeConfig
     double maxIslDistanceMeters;          ///< ISL 最大允许距离，单位为米。
     std::string delayMode;                ///< 时延模式：fixed 或 distance。
     double fixedDelaySeconds;             ///< fixed 模式单向链路时延，单位为秒。
-    double networkUpdateIntervalSeconds;  ///< 在线网络状态更新时间，单位为秒。
+    double networkUpdateIntervalSeconds;  ///< 网络状态应用周期，单位为秒。
 
     uint64_t islBandwidthBps;     ///< 每条 ISL 的数据速率，单位为 bit/s。
     uint16_t islMtuBytes;         ///< 每个 ISL 设备的 MTU，单位为字节。
