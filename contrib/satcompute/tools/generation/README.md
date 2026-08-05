@@ -1,38 +1,20 @@
-# 独立数据生成工具
+# 任务输入生成器
 
-本目录只生成 SatCompute 的独立数据输入，不生成平台完整运行配置，也不复制
-ns-3.48 轨道传播公式。
-
-## NetworkTransfer
-
-`generate-transfer-workload.py` 从一个 `nodes_<time>s.json` 读取稳定卫星 ID，按
-确定性轮转规则生成 NetworkTransfer 0.1：
-
-```bash
-python3 contrib/satcompute/tools/generation/generate-transfer-workload.py \
-  --nodes-file=contrib/satcompute/input/topology/examples/xw-66sat/nodes_0s.json \
-  --count=100 --min-size-bytes=1024 --max-size-bytes=1048576 \
-  --arrival-start-ns=100000000 --arrival-step-ns=1000000 \
-  --output=/tmp/transfers.json
-```
-
-## TaskTrace
-
-`generate-task-workload.py` 同时读取卫星 ID 和独立 ComputeProfile，以显式 seed、
-rules version、总输入字节预算、到达窗口和任务类别比例生成 TaskTrace 0.1，并
-输出包含 SHA-256 和分布统计的只读 summary：
+本目录只生成 TaskTrace，不生成完整平台配置，也不复制 ns-3.48 的轨道传播。
+星座与任务仍然分开：先运行 `topologyOnly` 得到节点切片，再把任意一个
+`nodes_<time>s.json` 和独立 ComputeProfile 交给生成器。
 
 ```bash
 python3 contrib/satcompute/tools/generation/generate-task-workload.py \
-  --nodes-file=contrib/satcompute/input/topology/examples/xw-66sat/nodes_0s.json \
+  --nodes-file=/tmp/satcompute-topology/topology/nodes_0s.json \
   --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-compute-profile.json \
   --task-count=100 --total-input-bytes=500000000 \
-  --seed=example --rules-version=v1 \
+  --seed=example \
   --arrival-start-ns=0 --arrival-end-ns=1000000000 --arrival-mode=uniform \
   --output-task-trace=/tmp/tasks.json \
   --output-workload-summary=/tmp/tasks-summary.json
 ```
 
-相同输入字节与参数必须生成逐字节相同的结果。输出中的纳秒事件字段属于业务
-数据合同；仿真时长、网络/导出周期、时延、路由和输出目录仍只由
-`para.cc`/CLI 决定。
+相同节点、算力、seed 和参数生成逐字节相同的 TaskTrace。任务中的
+`input_bytes`、`compute_work_units` 和 `output_bytes` 都会显式落盘。summary
+只保存分布统计和实际生成参数，不保存生成器版本、规则版本或文件哈希。

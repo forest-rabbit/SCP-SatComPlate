@@ -10,7 +10,6 @@ smoke_output="$(mktemp -d /tmp/satcompute-diagnostics-smoke.XXXXXX)"
 trap 'rm -rf "$smoke_output"' EXIT
 
 constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
-topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 
 set +e
@@ -31,12 +30,31 @@ if [[ $status -ne 3 || "$result" != *'"status":"partial"'* ]]; then
   exit 1
 fi
 
-python3 contrib/satcompute/tools/validation/check-task-output.py failure \
-  --topology-dir="$topology" \
-  --compute-profile="$repository_root/$task_inputs/compute-profile-single.json" \
-  --task-trace="$repository_root/$task_inputs/task-single.json" \
-  --output-dir="$smoke_output/run" \
-  --require-queue-drop
+python3 - "$smoke_output/run" <<'PY'
+import csv
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+with (root / "run-summary.json").open(encoding="utf-8") as source:
+    run = json.load(source)
+if run["run_status"] != "PARTIAL" or not run["diagnostics_generated"]:
+    raise SystemExit("diagnostic run summary differs")
+failure = root / "diagnostics" / "failure"
+for name in (
+    "incomplete-tasks.csv",
+    "incomplete-transfers.csv",
+    "isl-queue-drops.csv",
+    "diagnostic-summary.json",
+    "flow-drop-reasons.csv",
+):
+    if not (failure / name).is_file():
+        raise SystemExit(f"missing diagnostic file: {name}")
+with (failure / "isl-queue-drops.csv").open(newline="", encoding="utf-8") as source:
+    if not list(csv.DictReader(source)):
+        raise SystemExit("diagnostic run recorded no ISL queue drop")
+PY
 python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
   --output-dir="$smoke_output/run" \
   --require-reason=QUEUE --require-zero-unattributed

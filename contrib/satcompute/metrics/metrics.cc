@@ -116,16 +116,8 @@ ValidateInputs(const SatComputeConfig& config,
                Ptr<NetworkTransferEngine> transferEngine,
                Ptr<TaskCoordinator> taskCoordinator)
 {
-    const bool directMode = !config.transferTrace.empty();
     const bool taskMode = !config.computeProfile.empty() && !config.taskTrace.empty();
-    if (directMode)
-    {
-        if (transferEngine == nullptr || taskCoordinator != nullptr)
-        {
-            throw MetricsError("direct-transfer config and runtime metrics disagree");
-        }
-    }
-    else if (taskMode)
+    if (taskMode)
     {
         if (transferEngine == nullptr || taskCoordinator == nullptr ||
             taskCoordinator->GetTransferEngine() != transferEngine)
@@ -222,10 +214,8 @@ MetricsRecorder::Record()
         throw MetricsError("complete run leaked capacity-aware path state");
     }
 
-    const std::string workloadMode = taskCoordinator != nullptr
-                                         ? "task"
-                                         : (transferEngine != nullptr ? "transfer" : "none");
-    const std::string runMode = workloadMode == "transfer" ? "network-transfer" : workloadMode;
+    const std::string workloadMode = taskCoordinator != nullptr ? "task" : "none";
+    const std::string runMode = workloadMode;
     const std::string pacingMode = transfers.empty()
                                        ? (transferEngine == nullptr
                                               ? "none"
@@ -301,8 +291,7 @@ MetricsRecorder::Record()
     const bool writeFailureDiagnostics = config.diagnosticMode == "failure" &&
                                          taskCoordinator != nullptr && !tasksComplete;
     const bool writeFlowDropReasons = config.diagnosticMode == "failure" &&
-                                      (runMode == "network-transfer" ||
-                                       (taskCoordinator != nullptr && !tasksComplete));
+                                      taskCoordinator != nullptr && !tasksComplete;
     const std::filesystem::path failureDirectory =
         outputDirectory / "diagnostics" / "failure";
     if (writeFlowDropReasons)

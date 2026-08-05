@@ -17,7 +17,6 @@ run_platform() {
 
 constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.csv"
 constellation_4="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
-transfer_inputs="contrib/satcompute/tests/fixtures/traffic/transfers"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 
 common="--simulationDuration=3 --constellationConfig=$constellation_4 \
@@ -28,10 +27,12 @@ first_result="$(run_platform "$regression_output/first" \
   "$common --routingMode=global-first")"
 hash_result="$(run_platform "$regression_output/hash" \
   "$common --routingMode=global-hash-per-flow \
---transferTrace=$transfer_inputs/engine-basic.json")"
+--computeProfile=$task_inputs/compute-profile-single.json \
+--taskTrace=$task_inputs/task-single.json")"
 hrw_result="$(run_platform "$regression_output/hrw" \
   "$common --routingMode=global-hrw-per-flow \
---transferTrace=$transfer_inputs/engine-basic.json")"
+--computeProfile=$task_inputs/compute-profile-single.json \
+--taskTrace=$task_inputs/task-single.json")"
 size_arguments="$common --routingMode=global-size-aware-hrw \
 --computeProfile=$task_inputs/compute-profile-single.json \
 --taskTrace=$task_inputs/task-single.json"
@@ -39,7 +40,8 @@ size_first_result="$(run_platform "$regression_output/size-first" "$size_argumen
 size_second_result="$(run_platform "$regression_output/size-second" "$size_arguments")"
 capacity_result="$(run_platform "$regression_output/capacity" \
   "$common --routingMode=global-capacity-aware-hrw \
---transferTrace=$transfer_inputs/engine-basic.json")"
+--computeProfile=$task_inputs/compute-profile-single.json \
+--taskTrace=$task_inputs/task-single.json")"
 distance_result="$(run_platform "$regression_output/distance" \
   "--simulationDuration=3 --constellationConfig=$constellation_4 \
 --maxIslDistance=30000000 --delayMode=distance --fixedDelay=0 \
@@ -98,6 +100,10 @@ for directory in ("hash", "hrw", "capacity"):
         "completed_transfer_count"
     ] != 2:
         raise SystemExit(f"{directory} did not complete both transfers")
+    if load_json(f"{directory}/run-summary.json")["task"][
+        "completed_task_count"
+    ] != 1:
+        raise SystemExit(f"{directory} did not complete its task")
 
 if load_json("size-first/run-summary.json")["task"]["completed_task_count"] != 1:
     raise SystemExit("size-aware mode did not complete its task")

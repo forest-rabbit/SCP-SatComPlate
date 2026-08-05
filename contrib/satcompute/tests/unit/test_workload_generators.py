@@ -10,15 +10,8 @@ import unittest
 
 MODULE_ROOT = Path(__file__).resolve().parents[2]
 GENERATION_ROOT = MODULE_ROOT / "tools" / "generation"
-NODES = MODULE_ROOT / "input" / "topology" / "examples" / "xw-66sat" / "nodes_0s.json"
-COMPUTE = (
-    MODULE_ROOT
-    / "input"
-    / "topology"
-    / "resources"
-    / "workload"
-    / "xw-66sat-static-2g-compute-profile.json"
-)
+NODES = MODULE_ROOT / "tests" / "fixtures" / "topology" / "nodes_0s.json"
+COMPUTE = MODULE_ROOT / "tests" / "fixtures" / "task" / "compute-profile-single.json"
 
 
 def run_tool(*arguments):
@@ -33,45 +26,6 @@ def run_tool(*arguments):
 
 
 class WorkloadGeneratorTest(unittest.TestCase):
-    def test_transfer_generator_is_deterministic_and_closed_world(self):
-        script = GENERATION_ROOT / "generate-transfer-workload.py"
-        with tempfile.TemporaryDirectory() as directory:
-            first = Path(directory) / "first.json"
-            second = Path(directory) / "second.json"
-            common = (
-                script,
-                "--nodes-file",
-                NODES,
-                "--count",
-                "5",
-                "--min-size-bytes",
-                "1024",
-                "--max-size-bytes",
-                "2048",
-                "--arrival-start-ns",
-                "100",
-                "--arrival-step-ns",
-                "10",
-            )
-            for output in (first, second):
-                result = run_tool(*common, "--output", output)
-                self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(first.read_bytes(), second.read_bytes())
-            document = json.loads(first.read_text(encoding="utf-8"))
-            self.assertEqual(set(document), {"schema_version", "transfers"})
-            self.assertEqual(document["schema_version"], "0.1")
-            self.assertEqual(len(document["transfers"]), 5)
-            self.assertEqual(
-                set(document["transfers"][0]),
-                {
-                    "transfer_id",
-                    "source_node_id",
-                    "destination_node_id",
-                    "size_bytes",
-                    "arrival_time_ns",
-                },
-            )
-
     def test_task_generator_is_deterministic_and_budget_exact(self):
         script = GENERATION_ROOT / "generate-task-workload.py"
         with tempfile.TemporaryDirectory() as directory:
@@ -92,8 +46,6 @@ class WorkloadGeneratorTest(unittest.TestCase):
                 str(24 * (1 << 20)),
                 "--seed",
                 "unit-seed",
-                "--rules-version",
-                "unit-v1",
                 "--arrival-start-ns",
                 "0",
                 "--arrival-end-ns",
@@ -119,11 +71,15 @@ class WorkloadGeneratorTest(unittest.TestCase):
 
             trace = json.loads(trace_first.read_text(encoding="utf-8"))
             summary = json.loads(summary_first.read_text(encoding="utf-8"))
-            self.assertEqual(set(trace), {"schema_version", "tasks"})
+            self.assertEqual(set(trace), {"tasks"})
             self.assertEqual(len(trace["tasks"]), 12)
             self.assertEqual(sum(task["input_bytes"] for task in trace["tasks"]), 24 * (1 << 20))
+            self.assertTrue(all(task["output_bytes"] > 0 for task in trace["tasks"]))
             self.assertEqual(summary["task_count"], 12)
             self.assertEqual(summary["total_input_bytes"], 24 * (1 << 20))
+            self.assertNotIn("generator_version", summary)
+            self.assertNotIn("rules_version", summary)
+            self.assertNotIn("task_trace_sha256", summary)
 
 
 if __name__ == "__main__":

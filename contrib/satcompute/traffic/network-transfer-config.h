@@ -6,15 +6,12 @@
 #define SATCOMPUTE_NETWORK_TRANSFER_CONFIG_H
 
 #include "../routing/common/ecmp-flow-key.h"
-#include "../topology/satellite-endpoint-view.h"
 
 #include "ns3/ipv4-address.h"
 
 #include <cstdint>
-#include <filesystem>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace ns3
 {
@@ -49,14 +46,6 @@ uint32_t ResolveNetworkTransferPayloadBytes(const std::string& chunkMode,
                                             uint32_t fixedPayloadBytes,
                                             uint64_t transferSizeBytes);
 EcmpFlowKey BuildNetworkTransferFlowKey(const NetworkTransfer& transfer);
-
-/** Read, validate, canonicalize, and derive deterministic transfer plans. */
-std::vector<NetworkTransfer> ReadNetworkTransferTrace(
-    const std::filesystem::path& filename,
-    int64_t simulationDurationNs,
-    const std::string& chunkMode,
-    uint32_t fixedPayloadBytes,
-    const SatelliteEndpointView& endpoints);
 
 } // namespace ns3
 

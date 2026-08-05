@@ -1,0 +1,9 @@
+{
+  "simulation_time_ns": 0,
+  "nodes": [
+    {"node_id": 0, "node_type": "sat", "x": 7000000.0, "y": 0.0, "z": 0.0},
+    {"node_id": 1, "node_type": "sat", "x": 0.0, "y": 7000000.0, "z": 0.0},
+    {"node_id": 2, "node_type": "sat", "x": -7000000.0, "y": 0.0, "z": 0.0},
+    {"node_id": 3, "node_type": "sat", "x": 0.0, "y": -7000000.0, "z": 0.0}
+  ]
+}

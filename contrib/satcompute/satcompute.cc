@@ -8,7 +8,6 @@
 #include "ns3/circular-orbit-topology-policy.h"
 #include "ns3/ecmp-route-recorder.h"
 #include "ns3/flow-metrics.h"
-#include "ns3/network-transfer.h"
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/para.h"
 #include "ns3/rng-seed-manager.h"
@@ -94,6 +93,37 @@ ResolveOptionalInputFile(const std::string& value, std::string_view fieldName)
 }
 
 void
+LogTaskInputs(const ComputeProfile& profile,
+              const TaskTrace& trace,
+              const std::string& logMode)
+{
+    if (logMode == "silent")
+    {
+        return;
+    }
+    std::cout << "[TASK]" << std::endl
+              << "  compute nodes : " << profile.nodes.size() << std::endl
+              << "  tasks         : " << trace.tasks.size() << std::endl;
+    if (logMode != "verbose")
+    {
+        return;
+    }
+    for (const ComputeNodeProfile& node : profile.nodes)
+    {
+        std::cout << "  compute node  : id=" << node.nodeId
+                  << " rate=" << node.computeRateWorkUnitsPerSecond << std::endl;
+    }
+    for (const TaskDefinition& task : trace.tasks)
+    {
+        std::cout << "  task          : id=" << task.taskId
+                  << " source=" << task.sourceNodeId << " compute=" << task.computeNodeId
+                  << " result=" << task.resultNodeId << " input=" << task.inputBytes
+                  << " work=" << task.computeWorkUnits << " output=" << task.outputBytes
+                  << " arrival_ns=" << task.arrivalTimeNs << std::endl;
+    }
+}
+
+void
 AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
 {
     commandLine.AddValue("simulationDuration",
@@ -124,9 +154,6 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
                          config.receiverRcvBufBytes);
     commandLine.AddValue("routingMode", "IPv4 routing policy", config.routingMode);
     commandLine.AddValue("ecmpHashSeed", "Per-flow ECMP and HRW hash seed", config.ecmpHashSeed);
-    commandLine.AddValue("transferTrace",
-                         "Migration-only NetworkTransfer JSON path",
-                         config.transferTrace);
     commandLine.AddValue("computeProfile",
                          "Satellite compute profile JSON path",
                          config.computeProfile);
@@ -150,7 +177,6 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
                          "Export the simulation end state",
                          config.includeFinalTopologyState);
     commandLine.AddValue("outputDir", "Structured output directory", config.outputDirectory);
-    commandLine.AddValue("transferLogMode", "Transfer log mode", config.transferLogMode);
     commandLine.AddValue("taskLogMode", "Task log mode", config.taskLogMode);
     commandLine.AddValue("diagnosticMode", "Failure diagnostic mode", config.diagnosticMode);
     commandLine.AddValue("randomSeed", "ns-3 global random seed", config.randomSeed);
@@ -204,10 +230,6 @@ ValidateConfig(const SatComputeConfig& config)
     {
         FailConfig("workloads", "computeProfile and taskTrace must be provided together");
     }
-    if (!config.transferTrace.empty() && hasComputeProfile)
-    {
-        FailConfig("workloads", "transferTrace cannot be mixed with task inputs");
-    }
     RequireChoice(config.transferChunkMode, "transferChunkMode", {"fixed", "size-aware"});
     if (config.transferPayloadBytes == 0 || config.transferPayloadBytes > 65507)
     {
@@ -224,12 +246,11 @@ ValidateConfig(const SatComputeConfig& config)
     }
     RequireChoice(config.taskCompletionPolicy, "taskCompletionPolicy", {"strict", "report"});
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
-    if (config.topologyOnly && (!config.transferTrace.empty() || hasComputeProfile))
+    if (config.topologyOnly && hasComputeProfile)
     {
-        FailConfig("topologyOnly", "cannot load transfer or task workloads");
+        FailConfig("topologyOnly", "cannot load task inputs");
     }
     RequireNotEmpty(config.outputDirectory, "outputDir");
-    RequireChoice(config.transferLogMode, "transferLogMode", {"summary", "verbose", "silent"});
     RequireChoice(config.taskLogMode, "taskLogMode", {"summary", "verbose", "silent"});
     RequireChoice(config.diagnosticMode, "diagnosticMode", {"off", "failure"});
     if (config.randomSeed == 0)
@@ -252,7 +273,6 @@ main(int argc, char* argv[])
     {
         ValidateConfig(inputConfig);
         SatComputeConfig config = inputConfig;
-        config.transferTrace = ResolveOptionalInputFile(config.transferTrace, "transferTrace");
         config.computeProfile =
             ResolveOptionalInputFile(config.computeProfile, "computeProfile");
         config.taskTrace = ResolveOptionalInputFile(config.taskTrace, "taskTrace");
@@ -318,21 +338,7 @@ main(int argc, char* argv[])
 
             Ptr<NetworkTransferEngine> transferEngine;
             Ptr<TaskCoordinator> taskCoordinator;
-            if (!config.transferTrace.empty())
-            {
-                const NetworkTransferState networkTransfers = InstallNetworkTransfersNs(
-                    config.transferTrace,
-                    config.transferChunkMode,
-                    config.transferPayloadBytes,
-                    config.islMtuBytes,
-                    config.receiverRcvBufBytes,
-                    config.diagnosticMode == "failure",
-                    config.transferLogMode,
-                    simulationDurationNs,
-                    topology);
-                transferEngine = networkTransfers.engine;
-            }
-            else if (!config.computeProfile.empty() && !config.taskTrace.empty())
+            if (!config.computeProfile.empty() && !config.taskTrace.empty())
             {
                 const ComputeProfile profile =
                     ReadComputeProfile(config.computeProfile, topology);
@@ -340,6 +346,7 @@ main(int argc, char* argv[])
                                                       simulationDurationNs,
                                                       topology,
                                                       profile);
+                LogTaskInputs(profile, trace, config.taskLogMode);
                 taskCoordinator = CreateObject<TaskCoordinator>();
                 taskCoordinator->Initialize(profile,
                                             trace,

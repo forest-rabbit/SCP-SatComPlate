@@ -43,7 +43,6 @@ class NetworkTransferEngine : public Object
                    bool collectUdpSocketDrops,
                    int64_t simulationDurationNs);
     void RegisterPlans(std::vector<NetworkTransfer> plans);
-    void ScheduleDeclaredTransfers();
     void StartTransferNow(uint64_t transferId,
                           Callback<void, uint64_t, int64_t> completionCallback = {});
 
@@ -68,7 +67,6 @@ class NetworkTransferEngine : public Object
     uint32_t GetPlanIndex(uint64_t transferId) const;
     EcmpFlowKey GetFlowKey(uint32_t index) const;
     const char* GetTransferStateName(uint32_t index) const;
-    void StartDeclaredTransfer(uint64_t transferId);
     void ActivateTransfer(uint64_t transferId);
     bool TryActivateCapacityAwareTransfer(uint64_t transferId);
     void TryActivatePendingCapacityAwareTransfers();
@@ -85,7 +83,6 @@ class NetworkTransferEngine : public Object
     int64_t m_simulationDurationNs{};
     bool m_configured{};
     bool m_registered{};
-    bool m_declaredTransfersScheduled{};
     bool m_capacityAwareRouting{};
     Ptr<FlowRouteRegistry> m_flowRouteRegistry;
     std::unique_ptr<PathPolicy> m_capacityPathPolicy;

@@ -1,17 +1,12 @@
 # SatCompute 测试
 
-本目录只保存 SatCompute 自己的测试资产，不启用或运行 ns-3 上游 examples、
-全局 tests 或 `test.py`：
+本目录只保存平台自己的轻量测试，不启用 ns-3 上游 examples、全局 tests 或
+`test.py`。
 
-- `unit/`：Python 单元测试与项目自有 C++ 可执行测试；
-- `integration/smoke/`：沿用 legacy 的路由、capacity-aware、任务和诊断入口，
-  并增加 ns-3.48 原生 topology-only 入口；
-- `integration/regression/`：沿用 legacy 的完整路由与完整 workload 两层入口；
-- `fixtures/`：仅供测试使用的小型 JSON 输入与 legacy 黄金输入；
-- `support/`：稳定仓库路径和共享 fixture 辅助代码。
-
-正式示例和 workload 放在 `../input/`。不得把正式输入迁入 `fixtures/`，也不得
-把 test-only fixture 放回生产输入目录。
+- `unit/`：一个任务生成器 Python 测试和 7 个聚焦 C++ 可执行测试；
+- `integration/smoke/`：路由、capacity-aware、任务、诊断和原生 topology-only；
+- `integration/regression/`：五种 IPv4 路由以及完整任务/完成策略回归；
+- `fixtures/`：4 星测试星座、一个节点切片和最小 ComputeProfile/TaskTrace。
 
 配置与构建只启用 SatCompute 及其依赖：
 
@@ -20,7 +15,7 @@
 ./ns3 build
 ```
 
-在仓库根目录运行项目测试：
+在仓库根目录依次运行：
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
@@ -30,22 +25,6 @@ contrib/satcompute/tests/integration/smoke/run-all.sh
 contrib/satcompute/tests/integration/regression/run-all.sh
 ```
 
-两个 `run-all.sh` 只负责按顺序编排下列具名入口，单项调试时可以直接运行：
-
-```bash
-contrib/satcompute/tests/integration/smoke/run-routing-smoke.sh
-contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
-contrib/satcompute/tests/integration/smoke/run-task-smoke.sh
-contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
-contrib/satcompute/tests/integration/smoke/run-topology-smoke.sh
-contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
-contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
-```
-
-保留的 legacy workload/topology fixture 用于验证 canonical 顺序、五元组、分包、
-FCFS、异构算力和动态拓扑行为。平台不再维护 manifest 或 SHA-256 完整性层。
-
-旧 Hypatia/TLE 传播测试不迁入当前 Python 测试集；轨道位置、固定候选 ISL 和
-topology-only 切片由共享 ns-3.48 C++ 核心、项目 C++ 检查和入口 smoke 验证。
-
-所有临时测试输出写入 `/tmp`；需要长期保留的正式实验必须显式选择仓库外目录。
+smoke 与 regression 使用具名脚本，失败时可以直接运行单项。所有临时输出均写入
+`/tmp`。路由、任务和 topology-only 已由集成层覆盖的重复 unit executable、旧
+replay 拓扑、纯 transfer fixture、schema 测试及 SHA manifest 均不再保留。

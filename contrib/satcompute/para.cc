@@ -58,9 +58,6 @@ GetDefaultSatComputeConfig()
     // --ecmpHashSeed：逐流 ECMP 和 HRW 的确定性 hash seed。
     config.ecmpHashSeed = 1;
 
-    // transferTrace 仅供迁移期回放回归；正式平台任务由下面两个 JSON 共同输入。
-    config.transferTrace = "";
-
     // --computeProfile：每颗卫星的算力资源 JSON；必须与 taskTrace 同时提供。
     config.computeProfile = "";
 
@@ -87,9 +84,6 @@ GetDefaultSatComputeConfig()
 
     // --outputDir：结构化结果输出目录；默认写入 /tmp，避免污染工作树。
     config.outputDirectory = "/tmp/satcompute-output";
-
-    // --transferLogMode：summary、verbose 或 silent。
-    config.transferLogMode = "summary";
 
     // --taskLogMode：summary、verbose 或 silent。
     config.taskLogMode = "summary";

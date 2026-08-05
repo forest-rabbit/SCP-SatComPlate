@@ -207,24 +207,6 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
     m_registered = true;
 }
 
-void
-NetworkTransferEngine::ScheduleDeclaredTransfers()
-{
-    NS_ABORT_MSG_IF(!m_registered, "transfer plans have not been registered");
-    NS_ABORT_MSG_IF(m_declaredTransfersScheduled,
-                    "declared transfers can only be scheduled once");
-    for (const NetworkTransfer& plan : m_plans)
-    {
-        NS_ABORT_MSG_IF(plan.arrivalTimeNs < 0,
-                        "declared transfer scheduling requires an arrival time");
-        Simulator::Schedule(NanoSeconds(plan.arrivalTimeNs),
-                            &NetworkTransferEngine::StartDeclaredTransfer,
-                            this,
-                            plan.transferId);
-    }
-    m_declaredTransfersScheduled = true;
-}
-
 uint32_t
 NetworkTransferEngine::GetPlanIndex(uint64_t transferId) const
 {
@@ -254,12 +236,6 @@ NetworkTransferEngine::GetTransferStateName(uint32_t index) const
         return "COMPLETED";
     }
     return "UNKNOWN";
-}
-
-void
-NetworkTransferEngine::StartDeclaredTransfer(uint64_t transferId)
-{
-    StartTransferNow(transferId, Callback<void, uint64_t, int64_t>());
 }
 
 void

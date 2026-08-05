@@ -46,8 +46,7 @@ main()
         Require(config.routingMode == "global-capacity-aware-hrw" &&
                     config.ecmpHashSeed == 1,
                 "unexpected routing defaults");
-        Require(config.transferTrace.empty() && config.computeProfile.empty() &&
-                    config.taskTrace.empty(),
+        Require(config.computeProfile.empty() && config.taskTrace.empty(),
                 "workload inputs must be opt-in");
         Require(config.transferChunkMode == "fixed" && config.transferPayloadBytes == 1024 &&
                     config.taskCompletionPolicy == "strict",
@@ -56,7 +55,6 @@ main()
                     config.includeFinalTopologyState,
                 "unexpected topology-only defaults");
         Require(config.outputDirectory == "/tmp/satcompute-output" &&
-                    config.transferLogMode == "summary" &&
                     config.taskLogMode == "summary" && config.diagnosticMode == "off",
                 "unexpected output defaults");
         Require(config.randomSeed == 1 && config.randomRun == 1,
