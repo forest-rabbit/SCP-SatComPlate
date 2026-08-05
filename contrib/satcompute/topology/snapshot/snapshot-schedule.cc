@@ -300,27 +300,62 @@ ReadManifestFiles(const std::filesystem::path& directory,
                   const std::filesystem::path& manifestPath)
 {
     const Json root = ReadManifestJson(manifestPath);
-    RequireManifestFields(root,
-                          {"schema_version",
-                           "scenario_name",
-                           "scenario_config_sha256",
-                           "ns3_version",
-                           "state_semantics",
-                           "coordinate_frame",
-                           "coordinate_units",
-                           "speed_of_light_m_per_s",
-                           "simulation_duration_ns",
-                           "trace_interval_ns",
-                           "network_update_interval_ns",
-                           "include_final_state",
-                           "constellation",
-                           "topology",
-                           "randomness",
-                           "slice_count",
-                           "slices"},
-                          "manifest root",
-                          manifestPath);
-    RequireManifestString(root.at("schema_version"), "schema_version", "0.2", manifestPath);
+    if (!root.is_object() || !root.contains("schema_version"))
+    {
+        FailManifest(manifestPath, "manifest root is missing field schema_version");
+    }
+    const std::string schemaVersion =
+        ParseManifestString(root.at("schema_version"), "schema_version", manifestPath);
+    if (schemaVersion == "0.2")
+    {
+        RequireManifestFields(root,
+                              {"schema_version",
+                               "scenario_name",
+                               "scenario_config_sha256",
+                               "ns3_version",
+                               "state_semantics",
+                               "coordinate_frame",
+                               "coordinate_units",
+                               "speed_of_light_m_per_s",
+                               "simulation_duration_ns",
+                               "trace_interval_ns",
+                               "network_update_interval_ns",
+                               "include_final_state",
+                               "constellation",
+                               "topology",
+                               "randomness",
+                               "slice_count",
+                               "slices"},
+                              "manifest root",
+                              manifestPath);
+    }
+    else if (schemaVersion == "0.3")
+    {
+        RequireManifestFields(root,
+                              {"schema_version",
+                               "run_name",
+                               "constellation_config_sha256",
+                               "ns3_version",
+                               "state_semantics",
+                               "coordinate_frame",
+                               "coordinate_units",
+                               "speed_of_light_m_per_s",
+                               "simulation_duration_ns",
+                               "trace_interval_ns",
+                               "network_update_interval_ns",
+                               "include_final_state",
+                               "constellation",
+                               "topology",
+                               "randomness",
+                               "slice_count",
+                               "slices"},
+                              "manifest root",
+                              manifestPath);
+    }
+    else
+    {
+        FailManifest(manifestPath, "schema_version must equal 0.2 or 0.3");
+    }
     RequireManifestString(root.at("ns3_version"), "ns3_version", "3.48", manifestPath);
     RequireManifestString(root.at("state_semantics"),
                           "state_semantics",
@@ -347,16 +382,18 @@ ReadManifestFiles(const std::filesystem::path& directory,
     {
         FailManifest(manifestPath, "include_final_state must be a boolean");
     }
-    const std::string scenarioName =
-        ParseManifestString(root.at("scenario_name"), "scenario_name", manifestPath);
-    if (scenarioName.empty())
+    const std::string nameField = schemaVersion == "0.2" ? "scenario_name" : "run_name";
+    const std::string runName =
+        ParseManifestString(root.at(nameField), nameField, manifestPath);
+    if (runName.empty())
     {
-        FailManifest(manifestPath, "scenario_name must not be empty");
+        FailManifest(manifestPath, nameField + " must not be empty");
     }
-    RequireSha256(ParseManifestString(root.at("scenario_config_sha256"),
-                                      "scenario_config_sha256",
-                                      manifestPath),
-                  "scenario_config_sha256",
+    const std::string hashField = schemaVersion == "0.2"
+                                      ? "scenario_config_sha256"
+                                      : "constellation_config_sha256";
+    RequireSha256(ParseManifestString(root.at(hashField), hashField, manifestPath),
+                  hashField,
                   manifestPath);
 
     RequireManifestFields(root.at("constellation"),

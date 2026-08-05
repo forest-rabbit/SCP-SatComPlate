@@ -128,7 +128,7 @@ FormatTopologyTraceTimeToken(int64_t simulationTimeNs)
 }
 
 CircularOrbitTraceExporter::CircularOrbitTraceExporter(
-    const ScenarioConfig& config,
+    const ResolvedSatComputeConfig& config,
     const std::filesystem::path& outputDirectory,
     const OnlineOrbitConstellation& constellation)
     : m_config(config),
@@ -144,11 +144,10 @@ CircularOrbitTraceExporter::CircularOrbitTraceExporter(
         throw CircularOrbitTraceExporterError(
             "circular-orbit trace exporter requires enabled json-slices output");
     }
-    if (m_config.network.topologySource != "online" ||
-        m_config.constellation.orbitProvider != "ns3-circular")
+    if (m_config.network.topologySource != "online")
     {
         throw CircularOrbitTraceExporterError(
-            "circular-orbit trace exporter requires online ns3-circular state");
+            "circular-orbit trace exporter requires online orbit state");
     }
 }
 
@@ -284,9 +283,9 @@ CircularOrbitTraceExporter::Finalize()
              {"active_link_count", slice.activeLinkCount}});
     }
     const Json manifest = {
-        {"schema_version", "0.2"},
-        {"scenario_name", m_config.scenarioName},
-        {"scenario_config_sha256", Sha256File(m_config.sourcePath)},
+        {"schema_version", "0.3"},
+        {"run_name", m_config.runName},
+        {"constellation_config_sha256", Sha256File(m_config.constellation.sourcePath)},
         {"ns3_version", GetSatComputeNs3Version()},
         {"state_semantics", "orbit-policy-evaluation"},
         {"coordinate_frame", "ECEF"},

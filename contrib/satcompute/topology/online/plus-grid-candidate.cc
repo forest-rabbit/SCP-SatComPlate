@@ -13,7 +13,7 @@ namespace ns3
 {
 
 std::vector<PlusGridCandidateLink>
-BuildPlusGridCandidateLinks(const ConstellationConfig& constellation, bool seamEnabled)
+BuildPlusGridCandidateLinks(const ConstellationDefinition& constellation, bool seamEnabled)
 {
     if (constellation.numOrbits == 0 || constellation.satellitesPerOrbit == 0)
     {

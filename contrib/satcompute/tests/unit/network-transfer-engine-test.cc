@@ -9,6 +9,7 @@
 #include "ns3/network-transfer-config.h"
 #include "ns3/network-transfer-engine.h"
 #include "ns3/replay-topology-controller.h"
+#include "ns3/resolved-config.h"
 #include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 
@@ -107,7 +108,8 @@ RunBasicMode(const std::string& scenarioFilename,
     {
         ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
         config.routing.mode = routingMode;
-        ReplayTopologyController controller(config);
+        ReplayTopologyController controller(
+            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
         controller.Initialize();
 
         std::vector<NetworkTransfer> plans = ReadNetworkTransferTrace(
@@ -160,7 +162,8 @@ RunCapacityPending(const std::string& scenarioFilename,
 {
     {
         ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
-        ReplayTopologyController controller(config);
+        ReplayTopologyController controller(
+            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
         controller.Initialize();
 
         std::vector<NetworkTransfer> plans = ReadNetworkTransferTrace(

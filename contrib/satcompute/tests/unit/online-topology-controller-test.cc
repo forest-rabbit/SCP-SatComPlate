@@ -10,6 +10,8 @@
 #include "ns3/point-to-point-net-device.h"
 #include "ns3/simulator.h"
 
+#include "../support/config-factory.h"
+
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -21,6 +23,8 @@ using namespace ns3;
 
 namespace
 {
+
+using satcompute::test::MakeOnlineTestConfig;
 
 void
 Check(bool condition, const std::string& message)
@@ -35,54 +39,6 @@ void
 IncrementCounter(uint32_t* counter)
 {
     ++*counter;
-}
-
-ScenarioConfig
-MakeConfig(uint32_t numOrbits,
-           uint32_t satellitesPerOrbit,
-           const std::string& delayMode,
-           int64_t durationNs,
-           int64_t updateIntervalNs,
-           long double maxDistanceM)
-{
-    ScenarioConfig config{};
-    config.schemaVersion = "0.2";
-    config.scenarioName = "online-controller-test";
-    config.simulation = {0, durationNs};
-    config.constellation.orbitProvider = "ns3-circular";
-    config.constellation.constellationName = "unit-test";
-    config.constellation.constellationPattern = "walker-star";
-    config.constellation.numOrbits = numOrbits;
-    config.constellation.satellitesPerOrbit = satellitesPerOrbit;
-    config.constellation.altitudeM = 780000.0L;
-    config.constellation.inclinationDeg = 86.4L;
-    config.constellation.phaseDiff = true;
-    config.constellation.orbitEpochOffsetNs = 0;
-    config.network.topologySource = "online";
-    config.network.replayDirectory = std::nullopt;
-    config.network.islCandidateStrategy = "plus-grid";
-    config.network.seamEnabled = false;
-    config.network.maxIslDistanceM = maxDistanceM;
-    config.network.delayMode = delayMode;
-    config.network.fixedDelayNs = delayMode == "fixed" ? std::optional<int64_t>(8000000)
-                                                       : std::nullopt;
-    config.network.networkUpdateIntervalNs = updateIntervalNs;
-    config.network.linkBandwidthBps = 2000000000;
-    config.network.islMtuBytes = 1500;
-    config.network.islQueueBytes = 1500000;
-    config.network.receiverRcvBufBytes = 131072;
-    config.routing.mode = "global-first";
-    config.routing.hashSeed = 1;
-    config.routing.recomputePolicy = "on-topology-change";
-    config.workloads.transferTrace = std::nullopt;
-    config.workloads.computeProfile = std::nullopt;
-    config.workloads.taskTrace = std::nullopt;
-    config.workloads.transferChunkMode = "fixed";
-    config.workloads.transferPayloadBytes = 1024;
-    config.workloads.taskCompletionPolicy = "strict";
-    config.traceExport = {false, 1000000000, true, "json-slices"};
-    config.randomness = {1, 1, 0};
-    return config;
 }
 
 void
@@ -110,8 +66,8 @@ GetLinkDelayNs(const OnlineTopologyController& controller,
 void
 RunPolicyContractCase()
 {
-    ScenarioConfig config =
-        MakeConfig(1, 2, "distance", 1000000000, 1000000000, 5.0L);
+    ResolvedSatComputeConfig config =
+        MakeOnlineTestConfig(1, 2, "distance", 1000000000, 1000000000, 5.0L);
     const std::vector<SatelliteEcefPosition> positions = {
         {0, Vector(0.0, 0.0, 0.0)},
         {1, Vector(3.0, 4.0, 0.0)},
@@ -140,13 +96,13 @@ RunPolicyContractCase()
 void
 RunControllerValidationCase()
 {
-    const ScenarioConfig excessive =
-        MakeConfig(1,
-                   2,
-                   "fixed",
-                   std::numeric_limits<int64_t>::max(),
-                   1,
-                   30000000.0L);
+    const ResolvedSatComputeConfig excessive =
+        MakeOnlineTestConfig(1,
+                             2,
+                             "fixed",
+                             std::numeric_limits<int64_t>::max(),
+                             1,
+                             30000000.0L);
     try
     {
         OnlineTopologyController controller(excessive);
@@ -161,8 +117,8 @@ RunControllerValidationCase()
 void
 RunFixedPeriodicCase()
 {
-    const ScenarioConfig config =
-        MakeConfig(2, 3, "fixed", 2500000000LL, 1000000000LL, 30000000.0L);
+    const ResolvedSatComputeConfig config =
+        MakeOnlineTestConfig(2, 3, "fixed", 2500000000LL, 1000000000LL, 30000000.0L);
     {
         OnlineTopologyController controller(config);
         controller.Initialize();
@@ -201,8 +157,13 @@ RunFixedPeriodicCase()
 void
 RunDistanceDelayOnlyCase()
 {
-    const ScenarioConfig config =
-        MakeConfig(3, 4, "distance", 21000000000LL, 10000000000LL, 30000000.0L);
+    const ResolvedSatComputeConfig config = MakeOnlineTestConfig(
+        3,
+        4,
+        "distance",
+        21000000000LL,
+        10000000000LL,
+        30000000.0L);
     {
         OnlineTopologyController controller(config);
         controller.Initialize();
@@ -235,8 +196,13 @@ RunDistanceDelayOnlyCase()
 long double
 FindCrossingThreshold()
 {
-    const ScenarioConfig config =
-        MakeConfig(3, 4, "distance", 61000000000LL, 60000000000LL, 30000000.0L);
+    const ResolvedSatComputeConfig config = MakeOnlineTestConfig(
+        3,
+        4,
+        "distance",
+        61000000000LL,
+        60000000000LL,
+        30000000.0L);
     CircularOrbitTopologyState initial;
     CircularOrbitTopologyState finalState;
     {
@@ -267,8 +233,13 @@ void
 RunEdgeChangeCase()
 {
     const long double threshold = FindCrossingThreshold();
-    const ScenarioConfig config =
-        MakeConfig(3, 4, "fixed", 61000000000LL, 60000000000LL, threshold);
+    const ResolvedSatComputeConfig config = MakeOnlineTestConfig(
+        3,
+        4,
+        "fixed",
+        61000000000LL,
+        60000000000LL,
+        threshold);
     {
         OnlineTopologyController controller(config);
         controller.Initialize();

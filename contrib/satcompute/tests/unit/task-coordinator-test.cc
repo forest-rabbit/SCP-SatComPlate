@@ -8,6 +8,7 @@
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
 #include "ns3/replay-topology-controller.h"
+#include "ns3/resolved-config.h"
 #include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 #include "ns3/task-coordinator.h"
@@ -115,7 +116,8 @@ RunSingleTaskMode(const std::string& scenarioFilename,
     {
         ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
         config.routing.mode = routingMode;
-        ReplayTopologyController controller(config);
+        ReplayTopologyController controller(
+            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
         Ptr<TaskCoordinator> coordinator =
             CreateCoordinator(fixtureRoot / "compute-profile-single.json",
                               fixtureRoot / "task-single.json",
@@ -173,7 +175,8 @@ RunFcfsTasks(const std::string& scenarioFilename, const std::filesystem::path& f
     {
         ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
         config.routing.mode = "global-first";
-        ReplayTopologyController controller(config);
+        ReplayTopologyController controller(
+            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
         Ptr<TaskCoordinator> coordinator =
             CreateCoordinator(fixtureRoot / "compute-profile-single.json",
                               fixtureRoot / "task-fcfs.json",
@@ -211,7 +214,8 @@ RunHeterogeneousTasks(const std::string& scenarioFilename,
     {
         ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
         config.routing.mode = "global-first";
-        ReplayTopologyController controller(config);
+        ReplayTopologyController controller(
+            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
         Ptr<TaskCoordinator> coordinator =
             CreateCoordinator(fixtureRoot / "compute-profile-order-a.json",
                               fixtureRoot / "task-heterogeneous.json",

@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_CIRCULAR_ORBIT_TOPOLOGY_POLICY_H
 #define SATCOMPUTE_CIRCULAR_ORBIT_TOPOLOGY_POLICY_H
 
-#include "../../model/scenario-config.h"
+#include "../../resolved-config.h"
 #include "../orbit/online-orbit-constellation.h"
 #include "../snapshot/snapshot-types.h"
 #include "plus-grid-candidate.h"
@@ -59,7 +59,7 @@ int64_t DistanceToPropagationDelayNs(double distanceM);
 class CircularOrbitTopologyPolicy
 {
   public:
-    explicit CircularOrbitTopologyPolicy(const ScenarioConfig& config);
+    explicit CircularOrbitTopologyPolicy(const ResolvedSatComputeConfig& config);
 
     const std::vector<PlusGridCandidateLink>& GetCandidates() const;
     CircularOrbitTopologyState EvaluateCurrent(
@@ -69,7 +69,7 @@ class CircularOrbitTopologyPolicy
         const std::vector<SatelliteEcefPosition>& positions) const;
 
   private:
-    ScenarioConfig m_config;
+    ResolvedSatComputeConfig m_config;
     std::vector<PlusGridCandidateLink> m_candidates;
 };
 

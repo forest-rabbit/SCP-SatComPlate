@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_ONLINE_ORBIT_CONSTELLATION_H
 #define SATCOMPUTE_ONLINE_ORBIT_CONSTELLATION_H
 
-#include "../../model/scenario-config.h"
+#include "constellation-definition.h"
 #include "../satellite-id-map.h"
 
 #include "ns3/leo-circular-orbit-mobility-model.h"
@@ -54,9 +54,10 @@ struct SatelliteEcefPosition
 class OnlineOrbitConstellation
 {
   public:
-    explicit OnlineOrbitConstellation(const ConstellationConfig& config);
+    explicit OnlineOrbitConstellation(const ConstellationDefinition& config,
+                                      int64_t simulationStartTimeNs = 0);
 
-    const ConstellationConfig& GetConfig() const;
+    const ConstellationDefinition& GetConfig() const;
     const NodeContainer& GetNodes() const;
     const SatelliteIdMap& GetIdMap() const;
     const std::vector<SatelliteOrbitIdentity>& GetOrbitIdentities() const;
@@ -65,7 +66,7 @@ class OnlineOrbitConstellation
     std::vector<SatelliteEcefPosition> GetPositions() const;
 
   private:
-    ConstellationConfig m_config;
+    ConstellationDefinition m_config;
     NodeContainer m_nodes;
     std::unique_ptr<SatelliteIdMap> m_idMap;
     std::vector<SatelliteOrbitIdentity> m_identities;

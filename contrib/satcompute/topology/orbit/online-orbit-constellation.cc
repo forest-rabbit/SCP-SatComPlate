@@ -36,14 +36,10 @@ GetRaanSpanDeg(const std::string& pattern)
 
 } // namespace
 
-OnlineOrbitConstellation::OnlineOrbitConstellation(const ConstellationConfig& config)
+OnlineOrbitConstellation::OnlineOrbitConstellation(const ConstellationDefinition& config,
+                                                   int64_t simulationStartTimeNs)
     : m_config(config)
 {
-    if (m_config.orbitProvider != "ns3-circular")
-    {
-        throw OnlineOrbitConstellationError(
-            "online orbit constellation requires orbit_provider=ns3-circular");
-    }
     if (m_config.numOrbits == 0 || m_config.satellitesPerOrbit == 0)
     {
         throw OnlineOrbitConstellationError("online orbit dimensions must be positive");
@@ -56,7 +52,10 @@ OnlineOrbitConstellation::OnlineOrbitConstellation(const ConstellationConfig& co
     }
     if (m_config.altitudeM <= 0.0L || !std::isfinite(m_config.altitudeM) ||
         m_config.inclinationDeg < 0.0L || m_config.inclinationDeg >= 180.0L ||
-        !std::isfinite(m_config.inclinationDeg) || m_config.orbitEpochOffsetNs < 0)
+        !std::isfinite(m_config.inclinationDeg) || m_config.orbitEpochOffsetNs < 0 ||
+        simulationStartTimeNs < 0 ||
+        simulationStartTimeNs >
+            std::numeric_limits<int64_t>::max() - m_config.orbitEpochOffsetNs)
     {
         throw OnlineOrbitConstellationError("online orbit parameters are outside their domains");
     }
@@ -72,7 +71,9 @@ OnlineOrbitConstellation::OnlineOrbitConstellation(const ConstellationConfig& co
     const double raanSpanDeg = GetRaanSpanDeg(m_config.constellationPattern);
     const double slotSpanDeg = 360.0 / m_config.satellitesPerOrbit;
     const double halfSlotDeg = m_config.phaseDiff ? slotSpanDeg / 2.0 : 0.0;
-    const double epochSeconds = NanoSeconds(m_config.orbitEpochOffsetNs).GetSeconds();
+    const int64_t effectiveEpochNs =
+        m_config.orbitEpochOffsetNs + simulationStartTimeNs;
+    const double epochSeconds = NanoSeconds(effectiveEpochNs).GetSeconds();
     const double earthRotationRadPerSecond = 2.0 * std::numbers::pi / SECONDS_PER_DAY;
 
     for (uint32_t plane = 0; plane < m_config.numOrbits; ++plane)
@@ -112,7 +113,7 @@ OnlineOrbitConstellation::OnlineOrbitConstellation(const ConstellationConfig& co
     }
 }
 
-const ConstellationConfig&
+const ConstellationDefinition&
 OnlineOrbitConstellation::GetConfig() const
 {
     return m_config;

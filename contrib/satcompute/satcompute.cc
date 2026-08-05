@@ -10,6 +10,7 @@
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/online-topology-controller.h"
 #include "ns3/replay-topology-controller.h"
+#include "ns3/resolved-config.h"
 #include "ns3/rng-seed-manager.h"
 #include "ns3/run-output-writer.h"
 #include "ns3/satcompute-version.h"
@@ -63,16 +64,18 @@ main(int argc, char* argv[])
             throw std::runtime_error("validateOnly and exportOnly are mutually exclusive");
         }
 
-        const ScenarioConfig config = LoadScenarioConfig(scenarioConfig);
+        const ScenarioConfig legacyConfig = LoadScenarioConfig(scenarioConfig);
+        const ResolvedSatComputeConfig config =
+            ResolveLegacyScenarioConfig(legacyConfig, outputDirectory);
         const std::filesystem::path effectiveConfig =
-            WriteEffectiveConfig(config, outputDirectory, validateOnly, exportOnly);
+            WriteEffectiveConfig(legacyConfig, outputDirectory, validateOnly, exportOnly);
         if (validateOnly)
         {
             const nlohmann::json result = {{"application", "satcompute"},
                                            {"effective_config", effectiveConfig.string()},
                                            {"satellite_count",
                                             config.constellation.GetSatelliteCount()},
-                                           {"scenario", config.scenarioName},
+                                           {"scenario", config.runName},
                                            {"status", "validated"}};
             std::cout << result.dump() << std::endl;
             return 0;
@@ -97,7 +100,8 @@ main(int argc, char* argv[])
         {
             TopologyTraceExportResult traceResult;
             {
-                OnlineOrbitConstellation constellation(config.constellation);
+                OnlineOrbitConstellation constellation(config.constellation,
+                                                       config.simulation.startTimeNs);
                 CircularOrbitTraceExporter exporter(config,
                                                      std::filesystem::path(outputDirectory) /
                                                          "topology-trace",
@@ -112,7 +116,7 @@ main(int argc, char* argv[])
                 {"application", "satcompute"},
                 {"effective_config", effectiveConfig.string()},
                 {"satellite_count", config.constellation.GetSatelliteCount()},
-                {"scenario", config.scenarioName},
+                {"scenario", config.runName},
                 {"status", "exported"},
                 {"topology_trace_manifest", traceResult.manifestPath.string()}};
             std::cout << result.dump() << std::endl;
@@ -124,7 +128,7 @@ main(int argc, char* argv[])
         std::optional<std::filesystem::path> topologyTraceManifest;
         {
             std::unique_ptr<SatelliteTopologyController> controller;
-            if (config.network.topologySource == "json-replay")
+            if (config.network.topologySource == "replay")
             {
                 controller = std::make_unique<ReplayTopologyController>(config);
             }
@@ -219,7 +223,7 @@ main(int argc, char* argv[])
                 controller->GetRouteComputationCount(),
                 controller->GetFlowRouteRegistry(),
                 capacitySummary};
-            const RunOutputResult output = WriteRunOutputs(config,
+            const RunOutputResult output = WriteRunOutputs(legacyConfig,
                                                            outputContext,
                                                            transferEngine,
                                                            taskCoordinator);
@@ -235,7 +239,7 @@ main(int argc, char* argv[])
                       {"effective_config", effectiveConfig.string()},
                       {"run_summary", output.runSummaryPath.string()},
                       {"satellite_count", config.constellation.GetSatelliteCount()},
-                      {"scenario", config.scenarioName},
+                      {"scenario", config.runName},
                       {"topology_trace_manifest",
                        topologyTraceManifest
                            ? nlohmann::json(topologyTraceManifest->string())

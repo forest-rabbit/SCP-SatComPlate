@@ -9,6 +9,7 @@
 #include "ns3/network-transfer-config.h"
 #include "ns3/network-transfer-engine.h"
 #include "ns3/replay-topology-controller.h"
+#include "ns3/resolved-config.h"
 #include "ns3/run-output-writer.h"
 #include "ns3/scenario-config.h"
 #include "ns3/sha256.h"
@@ -85,7 +86,8 @@ RunCompleteTaskOutput(const std::string& scenarioFilename,
         const std::filesystem::path outputDirectory = outputRoot / "complete";
         const std::filesystem::path effectiveConfig =
             WriteEffectiveConfig(config, outputDirectory);
-        ReplayTopologyController controller(config);
+        ReplayTopologyController controller(
+            ResolveLegacyScenarioConfig(config, outputDirectory));
         controller.Initialize();
         const ComputeProfile profile =
             ReadComputeProfile(*config.workloads.computeProfile, controller);
@@ -174,7 +176,8 @@ RunPartialTransferOutput(const std::string& scenarioFilename,
         const std::filesystem::path outputDirectory = outputRoot / "partial";
         const std::filesystem::path effectiveConfig =
             WriteEffectiveConfig(config, outputDirectory);
-        ReplayTopologyController controller(config);
+        ReplayTopologyController controller(
+            ResolveLegacyScenarioConfig(config, outputDirectory));
         controller.Initialize();
         std::vector<NetworkTransfer> plans =
             ReadNetworkTransferTrace(*config.workloads.transferTrace,

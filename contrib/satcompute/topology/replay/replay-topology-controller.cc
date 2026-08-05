@@ -25,15 +25,14 @@
 namespace ns3
 {
 
-ReplayTopologyController::ReplayTopologyController(const ScenarioConfig& config)
+ReplayTopologyController::ReplayTopologyController(const ResolvedSatComputeConfig& config)
     : m_config(config)
 {
-    if (m_config.constellation.orbitProvider != "json-replay" ||
-        m_config.network.topologySource != "json-replay" ||
+    if (m_config.network.topologySource != "replay" ||
         !m_config.network.replayDirectory)
     {
         throw ReplayTopologyControllerError(
-            "replay controller requires matching json-replay orbit and topology sources");
+            "replay controller requires a replay source and replay directory");
     }
     if (!TryParseRoutingMode(m_config.routing.mode, m_routingMode))
     {
@@ -237,7 +236,7 @@ ReplayTopologyController::RequireInitialized() const
     }
 }
 
-const ScenarioConfig&
+const ResolvedSatComputeConfig&
 ReplayTopologyController::GetConfig() const
 {
     return m_config;

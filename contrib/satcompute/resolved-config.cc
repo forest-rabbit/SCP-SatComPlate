@@ -5,6 +5,7 @@
 #include "resolved-config.h"
 
 #include "para.h"
+#include "model/scenario-config.h"
 
 #include <limits>
 #include <string_view>
@@ -154,6 +155,61 @@ ResolveSatComputeConfig(const SatComputeConfig& config)
     resolved.randomness.run = config.randomRun;
     resolved.randomness.streamStart = config.randomStreamStart;
     resolved.outputDirectory = ResolveOutputDirectory(config.outputDirectory);
+    return resolved;
+}
+
+ResolvedSatComputeConfig
+ResolveLegacyScenarioConfig(const ScenarioConfig& scenario,
+                            const std::filesystem::path& outputDirectory)
+{
+    ResolvedSatComputeConfig resolved{};
+    resolved.schemaVersion = "0.3";
+    resolved.runName = scenario.scenarioName;
+    resolved.simulation = {scenario.simulation.startTimeNs, scenario.simulation.durationNs};
+    resolved.constellation = {"legacy-inline",
+                              scenario.sourcePath,
+                              scenario.constellation.constellationName,
+                              scenario.constellation.constellationPattern,
+                              scenario.constellation.numOrbits,
+                              scenario.constellation.satellitesPerOrbit,
+                              scenario.constellation.altitudeM,
+                              scenario.constellation.inclinationDeg,
+                              scenario.constellation.phaseDiff,
+                              scenario.constellation.orbitEpochOffsetNs};
+    resolved.network.topologySource =
+        scenario.network.topologySource == "json-replay" ? "replay" : "online";
+    resolved.network.replayDirectory = scenario.network.replayDirectory;
+    resolved.network.islCandidateStrategy = scenario.network.islCandidateStrategy;
+    resolved.network.seamEnabled = scenario.network.seamEnabled;
+    resolved.network.maxIslDistanceM = scenario.network.maxIslDistanceM;
+    resolved.network.delayMode = scenario.network.delayMode;
+    resolved.network.fixedDelayNs = scenario.network.fixedDelayNs;
+    resolved.network.networkUpdateIntervalNs = scenario.network.networkUpdateIntervalNs;
+    resolved.network.linkBandwidthBps = scenario.network.linkBandwidthBps;
+    resolved.network.islMtuBytes = scenario.network.islMtuBytes;
+    resolved.network.islQueueBytes = scenario.network.islQueueBytes;
+    resolved.network.receiverRcvBufBytes = scenario.network.receiverRcvBufBytes;
+    resolved.routing = {scenario.routing.mode,
+                        scenario.routing.hashSeed,
+                        scenario.routing.recomputePolicy};
+    resolved.workloads = {scenario.workloads.transferTrace,
+                          scenario.workloads.computeProfile,
+                          scenario.workloads.taskTrace,
+                          scenario.workloads.transferChunkMode,
+                          scenario.workloads.transferPayloadBytes,
+                          scenario.workloads.taskCompletionPolicy};
+    resolved.traceExport = {scenario.traceExport.enabled,
+                            scenario.traceExport.intervalNs,
+                            scenario.traceExport.includeFinalState,
+                            scenario.traceExport.format};
+    const SatComputeConfig defaults = GetDefaultSatComputeConfig();
+    resolved.logging = {defaults.transferLogMode,
+                        defaults.taskLogMode,
+                        defaults.diagnosticMode};
+    resolved.randomness = {scenario.randomness.seed,
+                           scenario.randomness.run,
+                           scenario.randomness.streamStart};
+    resolved.outputDirectory = std::filesystem::absolute(outputDirectory).lexically_normal();
     return resolved;
 }
 

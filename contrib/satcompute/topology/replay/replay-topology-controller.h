@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_REPLAY_TOPOLOGY_CONTROLLER_H
 #define SATCOMPUTE_REPLAY_TOPOLOGY_CONTROLLER_H
 
-#include "../../model/scenario-config.h"
+#include "../../resolved-config.h"
 #include "../../routing/algorithm/capacity-aware-path-view.h"
 #include "../../routing/common/routing-mode.h"
 #include "../../routing/state/flow-route-registry.h"
@@ -43,13 +43,13 @@ class ReplayTopologyControllerError : public std::runtime_error
 class ReplayTopologyController : public SatelliteTopologyController
 {
   public:
-    explicit ReplayTopologyController(const ScenarioConfig& config);
+    explicit ReplayTopologyController(const ResolvedSatComputeConfig& config);
 
     void Initialize() override;
     void RegisterRouteUpdateCallback(Callback<void> callback) override;
     void InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const override;
 
-    const ScenarioConfig& GetConfig() const;
+    const ResolvedSatComputeConfig& GetConfig() const;
     const NodeContainer& GetNodes() const;
     const SatelliteIdMap& GetIdMap() const;
     const SatelliteLinkState& GetLinkState() const;
@@ -84,7 +84,7 @@ class ReplayTopologyController : public SatelliteTopologyController
                                 std::filesystem::path linksFilename);
     void RequireInitialized() const;
 
-    ScenarioConfig m_config;
+    ResolvedSatComputeConfig m_config;
     RoutingMode m_routingMode{RoutingMode::GLOBAL_FIRST};
     NodeContainer m_nodes;
     std::unique_ptr<SatelliteIdMap> m_idMap;

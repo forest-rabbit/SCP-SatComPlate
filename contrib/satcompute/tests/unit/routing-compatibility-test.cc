@@ -11,6 +11,7 @@
 #include "ns3/ipv4-header.h"
 #include "ns3/ipv4-route.h"
 #include "ns3/replay-topology-controller.h"
+#include "ns3/resolved-config.h"
 #include "ns3/routing-mode.h"
 #include "ns3/satcompute-ipv4-global-routing-helper.h"
 #include "ns3/scenario-config.h"
@@ -227,7 +228,8 @@ CheckNs348Adapter(const std::string& scenarioFilename)
 {
     ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
     config.routing.mode = "global-hash-per-flow";
-    ReplayTopologyController controller(config);
+    ReplayTopologyController controller(
+        ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
     controller.Initialize();
 
     Ptr<SatComputeIpv4GlobalRouting> routing = SatComputeIpv4GlobalRoutingHelper::GetRouting(
@@ -269,7 +271,8 @@ CheckNs348HrwAdapter(const std::string& scenarioFilename)
 {
     ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
     config.routing.mode = "global-hrw-per-flow";
-    ReplayTopologyController controller(config);
+    ReplayTopologyController controller(
+        ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
     controller.Initialize();
 
     Ptr<SatComputeIpv4GlobalRouting> routing = SatComputeIpv4GlobalRoutingHelper::GetRouting(

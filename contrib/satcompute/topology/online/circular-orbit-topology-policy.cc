@@ -87,16 +87,16 @@ DistanceToPropagationDelayNs(double distanceM)
     return static_cast<int64_t>(std::floor(delayNs + 0.5L));
 }
 
-CircularOrbitTopologyPolicy::CircularOrbitTopologyPolicy(const ScenarioConfig& config)
+CircularOrbitTopologyPolicy::CircularOrbitTopologyPolicy(
+    const ResolvedSatComputeConfig& config)
     : m_config(config),
       m_candidates(BuildPlusGridCandidateLinks(config.constellation,
                                                config.network.seamEnabled))
 {
-    if (m_config.constellation.orbitProvider != "ns3-circular" ||
-        m_config.network.topologySource != "online")
+    if (m_config.network.topologySource != "online")
     {
         throw CircularOrbitTopologyPolicyError(
-            "circular-orbit topology policy requires ns3-circular online sources");
+            "circular-orbit topology policy requires an online topology source");
     }
     if (m_config.network.islCandidateStrategy != "plus-grid")
     {
