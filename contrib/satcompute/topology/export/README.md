@@ -1,9 +1,9 @@
 # topology-only 切片
 
 `TopologySliceExporter` 是平台 `--topologyOnly=1` 使用的轻量输出组件。它只读取
-ns-3.48 原生轨道坐标，并调用与正式在线仿真相同的固定 plus-grid 候选、距离
-门控和 fixed/distance 时延策略；它不会创建 InternetStack、NetDevice、路由、
-FlowMonitor、任务或指标对象。
+ns-3.48 原生轨道坐标，并调用与正式在线仿真相同的 `t=0` 最近循环一对一异轨
+匹配、固定候选、距离门控和 fixed/distance 时延策略；它不会创建 InternetStack、
+NetDevice、路由、FlowMonitor、任务或指标对象。
 
 切片写入 `outputDir/topology/`：
 
