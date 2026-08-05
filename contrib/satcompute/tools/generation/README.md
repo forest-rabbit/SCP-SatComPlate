@@ -36,3 +36,19 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 相同输入字节与参数必须生成逐字节相同的结果。输出中的纳秒事件字段属于业务
 数据合同；仿真时长、网络/导出周期、时延、路由和输出目录仍只由
 `para.cc`/CLI 决定。
+
+## 独立输入 bundle
+
+`scenario/generate_scenario.py` 保留旧版目录入口，但不生成完整 scenario 配置。
+它通过已校验的 topology manifest 取得稳定 satellite ID，将 ComputeProfile +
+TaskTrace 或 NetworkTransfer 逐字节复制为确定性 bundle，并记录输入哈希：
+
+```bash
+python3 -m contrib.satcompute.tools.generation.scenario.generate_scenario \
+  --bundle-name=task-demo --topology-trace=/tmp/topology-trace \
+  --compute-profile=/tmp/compute-profile.json --task-trace=/tmp/tasks.json \
+  --output-dir=/tmp/task-bundle
+```
+
+详情见 `scenario/README.md`。bundle manifest 只作生成证据；平台仍通过
+`--computeProfile`、`--taskTrace` 或 `--transferTrace` 读取各自文件。

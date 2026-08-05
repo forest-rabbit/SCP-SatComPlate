@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forest-rabbit.github.io/SCP-SatComPlate/schema/input-bundle-0.1.json",
+  "title": "SatCompute independent input bundle 0.1",
+  "description": "Generated provenance for one task or direct-transfer workload. This document is not a platform runtime configuration.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bundle_name",
+    "workload_mode",
+    "topology_provenance",
+    "inputs",
+    "counts"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Bundle evidence schema version.",
+      "const": "0.1"
+    },
+    "bundle_name": {
+      "description": "Stable human-selected bundle name.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "workload_mode": {
+      "description": "The mutually exclusive platform workload mode represented by the copied files.",
+      "enum": ["task", "transfer"]
+    },
+    "topology_provenance": {
+      "description": "Stable IDs, duration, and hashes read from a checked topology trace; no topology state is copied into the bundle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_sha256",
+        "constellation_config_sha256",
+        "simulation_duration_ns",
+        "satellite_ids"
+      ],
+      "properties": {
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "constellation_config_sha256": {"$ref": "#/$defs/sha256"},
+        "simulation_duration_ns": {
+          "description": "Positive trace duration used to validate workload arrival times.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "satellite_ids": {
+          "description": "Canonical stable satellite IDs read from the first manifest-listed nodes slice.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 0, "maximum": 4294967295}
+        }
+      }
+    },
+    "inputs": {
+      "description": "Closed-world copied input inventory. fault_trace remains null until its contract is implemented.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compute_profile", "task_trace", "transfer_trace", "fault_trace"],
+      "properties": {
+        "compute_profile": {"$ref": "#/$defs/optional_file"},
+        "task_trace": {"$ref": "#/$defs/optional_file"},
+        "transfer_trace": {"$ref": "#/$defs/optional_file"},
+        "fault_trace": {"type": "null"}
+      }
+    },
+    "counts": {
+      "description": "Recomputed item counts used by the checker.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compute_node_count", "task_count", "transfer_count"],
+      "properties": {
+        "compute_node_count": {"type": "integer", "minimum": 0},
+        "task_count": {"type": "integer", "minimum": 0},
+        "transfer_count": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "optional_file": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["filename", "sha256"],
+          "properties": {
+            "filename": {"type": "string"},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    }
+  }
+}
