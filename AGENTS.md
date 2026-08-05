@@ -33,23 +33,23 @@ after all pull requests for a major migration phase have merged to `main`, not
 for every commit or pull request. Focused local builds and tests remain required
 for every increment.
 
-The authoritative migration contract is `docs/specs/platform-v0.3.md`.
+The authoritative platform contract is `docs/specs/platform-v0.4.md`.
 Platform execution uses typed defaults in `para.h`/`para.cc` with optional CLI
-overrides. A separate closed-world constellation JSON describes only orbital
-structure. Topology slices, transfers, compute profiles, tasks, and future
-fault events remain independent data JSON files. Do not reintroduce a complete
-scenario JSON or duplicate a parameter across `para.cc` and the constellation
-file. Human-facing simulation durations and cadences use seconds and are
-converted once to ns-3 `Time` or integer nanoseconds before scheduling. Every
-run writes its resolved effective configuration and input hashes as output
-evidence, never as a second input format.
+overrides registered and validated in `satcompute.cc`. The constellation input
+uses the native ns-3.48 `LeoOrbitalShell` CSV columns and describes orbital
+structure only. Compute profiles, tasks, topology slices, and future fault
+events remain independent data files. Do not reintroduce a complete scenario
+JSON, a resolved/effective configuration layer, schema/software version fields,
+or duplicate a parameter across `para.cc` and the constellation file.
+Human-facing simulation durations and cadences use seconds and are converted to
+ns-3 `Time` or integer nanoseconds only at component boundaries.
 
-The online simulator and offline trace generator must share orbit, candidate
-link, distance-gate, and delay implementations. Stable external satellite IDs
-must not depend on ns-3 `Node::GetId()`. Periodic network updates always refresh
-distance-mode delays, but global routes are recomputed only when the effective
-active-link set changes. A future fault event is an asynchronous nanosecond
-event and will bypass the periodic cadence.
+The online simulator and topology-only platform mode must share orbit,
+candidate-link, distance-gate, delay, and slice-export implementations. Stable
+external satellite IDs must not depend on ns-3 `Node::GetId()`. Periodic network
+updates always refresh distance-mode delays, but global routes are recomputed
+only when the effective active-link set changes. A future fault event is an
+asynchronous nanosecond event and will bypass the periodic cadence.
 
 Use small `feature/*`, `refactor/*`, `migration/*`, or `docs/*` branches and
 pull requests. After a PR is merged and its head is confirmed reachable from
