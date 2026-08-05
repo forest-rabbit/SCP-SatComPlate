@@ -92,6 +92,10 @@ transfer_fixtures="contrib/satcompute/tests/fixtures/traffic/transfers"
 --basicTransfers=$transfer_fixtures/engine-basic.json \
 --capacityTransfers=$transfer_fixtures/capacity-pending.json"
 
+./ns3 run --no-build \
+  "satcompute-network-transfer-wrapper-test --topologyDir=$dynamic_topology \
+--transfers=$transfer_fixtures/engine-basic.json"
+
 task_fixtures="contrib/satcompute/tests/fixtures/task"
 ./ns3 run --no-build \
   "satcompute-task-input-test --fixtureRoot=$task_fixtures"

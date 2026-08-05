@@ -6,8 +6,7 @@
 #include "ns3/compute-profile.h"
 #include "ns3/circular-orbit-trace-exporter.h"
 #include "ns3/effective-config.h"
-#include "ns3/network-transfer-config.h"
-#include "ns3/network-transfer-engine.h"
+#include "ns3/network-transfer.h"
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/para.h"
 #include "ns3/resolved-config.h"
@@ -26,8 +25,6 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <utility>
-#include <vector>
 
 using namespace ns3;
 
@@ -128,22 +125,17 @@ main(int argc, char* argv[])
             Ptr<TaskCoordinator> taskCoordinator;
             if (config.workloads.transferTrace)
             {
-                std::vector<NetworkTransfer> plans =
-                    ReadNetworkTransferTrace(*config.workloads.transferTrace,
-                                             config.simulation.durationNs,
-                                             config.workloads.transferChunkMode,
-                                             config.workloads.transferPayloadBytes,
-                                             topology);
-                transferEngine = CreateObject<NetworkTransferEngine>();
-                transferEngine->Configure(topology,
-                                          config.workloads.transferChunkMode,
-                                          config.workloads.transferPayloadBytes,
-                                          config.network.islMtuBytes,
-                                          config.network.receiverRcvBufBytes,
-                                          true,
-                                          config.simulation.durationNs);
-                transferEngine->RegisterPlans(std::move(plans));
-                transferEngine->ScheduleDeclaredTransfers();
+                const NetworkTransferState networkTransfers = InstallNetworkTransfersNs(
+                    *config.workloads.transferTrace,
+                    config.workloads.transferChunkMode,
+                    config.workloads.transferPayloadBytes,
+                    config.network.islMtuBytes,
+                    config.network.receiverRcvBufBytes,
+                    config.logging.diagnosticMode == "failure",
+                    config.logging.transferLogMode,
+                    config.simulation.durationNs,
+                    topology);
+                transferEngine = networkTransfers.engine;
             }
             else if (config.workloads.computeProfile && config.workloads.taskTrace)
             {

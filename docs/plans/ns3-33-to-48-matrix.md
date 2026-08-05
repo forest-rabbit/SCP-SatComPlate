@@ -66,7 +66,7 @@
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `traffic/network-transfer.*` | 被删除 | 恢复 legacy wrapper | 待迁移 |
+| `traffic/network-transfer.*` | 已恢复并由平台入口调用 | 保留秒兼容入口，内部统一纳秒 | 已迁移，待阶段 5 回归 |
 | `traffic/network-transfer-application.*` | 同路径 | 保留并审计 ns-3.48 socket 行为 | 待审计 |
 | `traffic/network-transfer-config.*` | 同路径 | 保留数据合同 | 待审计 |
 | `traffic/network-transfer-engine.*` | 同路径 | 保留 current 适配 | 待审计 |

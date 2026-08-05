@@ -40,6 +40,7 @@ build_lib(
     traffic/network-transfer-application.cc
     traffic/network-transfer-config.cc
     traffic/network-transfer-engine.cc
+    traffic/network-transfer.cc
     traffic/network-transfer-receiver.cc
   HEADER_FILES
     effective-config.h
@@ -94,6 +95,7 @@ build_lib(
     traffic/network-transfer-application.h
     traffic/network-transfer-config.h
     traffic/network-transfer-engine.h
+    traffic/network-transfer.h
     traffic/network-transfer-receiver.h
     traffic/network-transfer-records.h
   LIBRARIES_TO_LINK
@@ -259,6 +261,15 @@ build_exec(
   EXECNAME satcompute-network-transfer-engine-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/network-transfer-engine-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-network-transfer-wrapper-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/network-transfer-wrapper-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
