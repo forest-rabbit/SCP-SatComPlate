@@ -10,6 +10,7 @@
 #include "ns3/simulator.h"
 
 #include <algorithm>
+#include <set>
 #include <utility>
 
 namespace ns3
@@ -168,7 +169,16 @@ void
 TaskCoordinator::HandleTaskArrival(uint64_t taskId)
 {
     TaskRuntime& task = GetTask(taskId);
+    if (IsTerminalTaskState(task.state))
+    {
+        return;
+    }
     const int64_t timeNs = Simulator::Now().GetNanoSeconds();
+    if (!GetComputeService(task.definition.computeNodeId)->IsComputeAvailable())
+    {
+        FailTaskForComputeNode(task, timeNs, "COMPUTE_NODE_UNAVAILABLE_AT_ARRIVAL");
+        return;
+    }
     TransitionTask(taskId,
                    TASK_INPUT_TRANSFERRING,
                    task.definition.sourceNodeId,
@@ -188,6 +198,17 @@ TaskCoordinator::HandleInputTransferComplete(uint64_t transferId, int64_t comple
     TaskRuntime& task = GetTask(mapping->second);
     NS_ABORT_MSG_IF(task.definition.inputTransferId != transferId,
                     "TaskCoordinator input-transfer mapping is inconsistent");
+    if (IsTerminalTaskState(task.state))
+    {
+        return;
+    }
+    if (!GetComputeService(task.definition.computeNodeId)->IsComputeAvailable())
+    {
+        FailTaskForComputeNode(task,
+                               completionTimeNs,
+                               "COMPUTE_NODE_UNAVAILABLE_AFTER_INPUT");
+        return;
+    }
     TransitionTask(task.definition.taskId,
                    TASK_QUEUED,
                    task.definition.computeNodeId,
@@ -205,6 +226,10 @@ TaskCoordinator::HandleComputeStart(uint64_t taskId, uint32_t nodeId, int64_t st
     const TaskRuntime& task = GetTask(taskId);
     NS_ABORT_MSG_IF(task.definition.computeNodeId != nodeId,
                     "compute-start node does not match the task definition");
+    if (IsTerminalTaskState(task.state))
+    {
+        return;
+    }
     TransitionTask(taskId, TASK_RUNNING, nodeId, startTimeNs, "COMPUTE_DISPATCH");
 }
 
@@ -216,6 +241,10 @@ TaskCoordinator::HandleComputeComplete(uint64_t taskId,
     TaskRuntime& task = GetTask(taskId);
     NS_ABORT_MSG_IF(task.definition.computeNodeId != nodeId,
                     "compute-completion node does not match the task definition");
+    if (IsTerminalTaskState(task.state))
+    {
+        return;
+    }
     TransitionTask(taskId,
                    TASK_RESULT_TRANSFERRING,
                    nodeId,
@@ -236,6 +265,10 @@ TaskCoordinator::HandleResultTransferComplete(uint64_t transferId,
     TaskRuntime& task = GetTask(mapping->second);
     NS_ABORT_MSG_IF(task.definition.resultTransferId != transferId,
                     "TaskCoordinator result-transfer mapping is inconsistent");
+    if (IsTerminalTaskState(task.state))
+    {
+        return;
+    }
     TransitionTask(task.definition.taskId,
                    TASK_COMPLETED,
                    task.definition.resultNodeId,
@@ -304,6 +337,116 @@ const std::vector<TaskEventRecord>&
 TaskCoordinator::GetTaskEvents() const
 {
     return m_taskEvents;
+}
+
+TaskFaultImpact
+TaskCoordinator::FailTaskForComputeNode(TaskRuntime& task,
+                                        int64_t eventTimeNs,
+                                        const std::string& cause)
+{
+    TaskFaultImpact impact;
+    if (IsTerminalTaskState(task.state))
+    {
+        return impact;
+    }
+    const TaskState fromState = task.state;
+    NS_ABORT_MSG_IF(fromState == TASK_RESULT_TRANSFERRING,
+                    "compute-only failure cannot fail a result-transferring task");
+    Ptr<ComputeService> service = GetComputeService(task.definition.computeNodeId);
+    if (fromState == TASK_QUEUED)
+    {
+        NS_ABORT_MSG_IF(!service->RemoveQueuedTaskForFailure(task.definition.taskId),
+                        "queued task was absent from ComputeService");
+    }
+    else if (fromState == TASK_RUNNING)
+    {
+        NS_ABORT_MSG_IF(!service->CancelRunningTaskForFailure(task.definition.taskId),
+                        "running task was absent from ComputeService");
+    }
+
+    NS_ABORT_MSG_IF(!task.FailIfActive(eventTimeNs,
+                                      TaskFailureReason::COMPUTE_NODE_FAILURE,
+                                      cause),
+                    "active task could not enter TASK_FAILED");
+    m_taskEvents.push_back({eventTimeNs,
+                            task.definition.taskId,
+                            fromState,
+                            TASK_FAILED,
+                            task.definition.computeNodeId,
+                            cause});
+    impact.affectedTaskCount = 1;
+
+    if (fromState == TASK_PENDING || fromState == TASK_INPUT_TRANSFERRING)
+    {
+        impact.affectedTransferCount +=
+            m_transferEngine->FinalizeTransferIfActive(
+                task.definition.inputTransferId,
+                TransferTerminalState::CANCELLED,
+                TransferTerminalReason::TASK_FAILED)
+                ? 1
+                : 0;
+    }
+    impact.affectedTransferCount +=
+        m_transferEngine->FinalizeTransferIfActive(
+            task.definition.resultTransferId,
+            TransferTerminalState::CANCELLED,
+            TransferTerminalReason::TASK_FAILED)
+            ? 1
+            : 0;
+    return impact;
+}
+
+std::map<uint32_t, TaskFaultImpact>
+TaskCoordinator::ApplyComputeFaultBatch(
+    const std::vector<uint32_t>& recoveredNodeIds,
+    const std::vector<uint32_t>& startedNodeIds)
+{
+    NS_ABORT_MSG_IF(!m_initialized,
+                    "TaskCoordinator is not initialized for compute faults");
+    std::set<uint32_t> recovered;
+    for (const uint32_t nodeId : recoveredNodeIds)
+    {
+        NS_ABORT_MSG_IF(!recovered.insert(nodeId).second,
+                        "compute recovery batch contains a duplicate node");
+        GetComputeService(nodeId)->SetComputeAvailable(true);
+    }
+
+    std::set<uint32_t> started;
+    std::map<uint32_t, TaskFaultImpact> impacts;
+    for (const uint32_t nodeId : startedNodeIds)
+    {
+        NS_ABORT_MSG_IF(!started.insert(nodeId).second,
+                        "compute start batch contains a duplicate node");
+        GetComputeService(nodeId)->SetComputeAvailable(false);
+        impacts.emplace(nodeId, TaskFaultImpact{});
+    }
+
+    const int64_t eventTimeNs = Simulator::Now().GetNanoSeconds();
+    for (TaskRuntime& task : m_tasks)
+    {
+        if (!started.contains(task.definition.computeNodeId) ||
+            IsTerminalTaskState(task.state) ||
+            task.state == TASK_RESULT_TRANSFERRING ||
+            (task.state == TASK_PENDING &&
+             task.definition.arrivalTimeNs != eventTimeNs))
+        {
+            continue;
+        }
+        TaskFaultImpact taskImpact =
+            FailTaskForComputeNode(task, eventTimeNs, "COMPUTE_FAULT_START");
+        TaskFaultImpact& nodeImpact = impacts.at(task.definition.computeNodeId);
+        nodeImpact.affectedTaskCount += taskImpact.affectedTaskCount;
+        nodeImpact.affectedTransferCount += taskImpact.affectedTransferCount;
+    }
+    return impacts;
+}
+
+bool
+TaskCoordinator::IsComputeAvailable(uint32_t nodeId) const
+{
+    NS_ABORT_MSG_IF(!m_initialized,
+                    "TaskCoordinator is not initialized for compute availability");
+    return GetComputeService(nodeId)->IsComputeAvailable();
 }
 
 } // namespace ns3

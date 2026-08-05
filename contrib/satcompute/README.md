@@ -48,7 +48,7 @@ NetDevice、路由、FlowMonitor 或任务对象。
 | [`routing/`](routing/README.md) | 五种 IPv4 策略、hash、HRW 和 reservation 状态 |
 | [`task/`](task/README.md) | ComputeProfile、TaskTrace、FCFS 服务和任务协调 |
 | [`traffic/`](traffic/README.md) | 任务内部的 UDP 输入/结果传输 |
-| [`fault/`](fault/README.md) | 确定性故障定义、输入校验与后续执行控制 |
+| [`fault/`](fault/README.md) | 确定性故障定义、状态覆盖与批处理执行控制 |
 | [`metrics/`](metrics/README.md) | 网络、路由、任务和失败诊断输出 |
 | [`input/`](input/README.md) | 星座、算力、任务、故障与组合示例 |
 | [`tools/`](tools/README.md) | 任务生成与输出校验工具 |
@@ -144,8 +144,10 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 |---|---:|---|---|
 | `--faultTrace` | 空 | 路径 | 确定性故障 JSON；字段合同见 `input/fault/README.md` |
 
-空路径完全保持无故障行为。当前小步只读取和校验，故障执行由后续 N4A 阶段接入；
-`failure_probability` 不用于重新抽样故障是否发生。
+空路径完全保持无故障行为。当前已执行 `compute` 故障：按精确纳秒批处理预警、开始
+与有限恢复，并终止尚未越过计算阶段的任务；通信链路和路由不变。`satellite`
+字段已经纳入输入合同，但整星执行将在下一小步接入，因此当前运行会明确拒绝包含
+该类型的 trace。`failure_probability` 只作为风险元数据保留，不参与重新抽样。
 
 ### output
 
@@ -173,7 +175,7 @@ plane-major 顺序编号为 `0..65`，不直接使用全局 `Node::GetId()`。
 - 每个 tick 都更新 distance 时延，但只在 active 边集合变化时重算路由；
 - 固定星座、参数、任务、seed/run 与同时事件顺序时，拓扑和路由结果可复现。
 
-## topology-only 与未来故障流程
+## topology-only 与故障流程
 
 生成 0–100 秒、每秒一个切片：
 
@@ -192,8 +194,8 @@ plane-major 顺序编号为 `0..65`，不直接使用全局 `Node::GetId()`。
 [topology/export](topology/export/README.md)。
 
 故障工作流是：先生成整个周期的拓扑切片，再据此生成故障 JSON，最后让正式平台
-在线计算同一自然拓扑并读取故障事件。FaultTrace 的严格输入合同已经实现；精确
-事件执行、资源禁用和即时重路由在后续 N4A 小步接入，不等待下一个网络 tick。
+在线计算同一自然拓扑并读取故障事件。compute 故障已经按精确时刻禁用/恢复算力；
+整星故障的通信资源禁用和即时重路由在下一小步接入，并且不会等待网络周期 tick。
 
 ## 任务与计算
 
