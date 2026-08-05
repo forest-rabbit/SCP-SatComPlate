@@ -112,7 +112,7 @@
 | `tools/generation/topology/orbit/hypatia/*` | 缺失 | 不迁移 | 已确定删除 |
 | `tools/analysis/topology_interval/*` | v0.3 trace 降采样、边状态与 ECMP 分析已恢复 | 恢复适用分析；C++ route gate 随阶段 5 接回 | Python 核心已迁移；旧 scenario 编排器和冻结报告不迁移 |
 | `tools/validation/*` | 已恢复 legacy 检查器 | 恢复并对齐 metrics 输出 | 入口和 CLI 已恢复；阶段 6 随分层 metrics 接回黄金输出 |
-| `tools/visualization/orbit/*` | 缺失 | 恢复为切片消费者，不计算轨道 | 待迁移 |
+| `tools/visualization/orbit/*` | 已恢复为 v0.3 trace/XYZ 消费者 | 恢复为切片消费者，不计算轨道 | 已完成；旧 Hypatia PNG 不迁移，显示间隔采用上一切片 |
 
 ## tests
 
