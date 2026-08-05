@@ -41,6 +41,23 @@ if [[ "$no_workload_result" != *'"status":"completed"'* ]]; then
   exit 1
 fi
 
+example_root="contrib/satcompute/input/examples/leo-66-100s-20tasks"
+example_profile="contrib/satcompute/input/topology/resources/workload/\
+xw-66sat-static-2g-compute-profile.json"
+example_arguments="--simulationDuration=100 \
+--constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+--delayMode=fixed --fixedDelay=0.008 --networkUpdateInterval=20 \
+--routingMode=global-capacity-aware-hrw \
+--computeProfile=$example_profile --taskTrace=$example_root/task-trace.json"
+example_result="$(run_platform \
+  "$regression_output/complete-example" \
+  "$example_arguments")"
+if [[ "$example_result" != *'"satellite_count":66'* ||
+      "$example_result" != *'"status":"completed"'* ]]; then
+  echo "66-satellite complete example failed: $example_result" >&2
+  exit 1
+fi
+
 partial_common="--simulationDuration=1 --constellationConfig=$constellation \
 --maxIslDistance=30000000 --delayMode=fixed \
 --fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
@@ -116,6 +133,14 @@ if int(transfers[2]["declared_size_bytes"]) != task["output_bytes"]:
 no_workload = load_json("no-workload/run-summary.json")
 if no_workload["workload_mode"] != "none" or no_workload["run_status"] != "COMPLETE":
     raise SystemExit("workload-free run summary differs")
+
+example = load_json("complete-example/run-summary.json")
+if example["simulation_duration_ns"] != 100_000_000_000:
+    raise SystemExit("complete example duration differs")
+if example["task"]["task_count"] != 20 or example["task"]["completed_task_count"] != 20:
+    raise SystemExit("complete example did not complete all 20 tasks")
+if example["transfer"]["transfer_count"] != 40 or example["transfer"]["completed_transfer_count"] != 40:
+    raise SystemExit("complete example did not complete all 40 transfers")
 
 for directory, policy in (("strict", "strict"), ("report", "report")):
     run = load_json(f"{directory}/run-summary.json")
