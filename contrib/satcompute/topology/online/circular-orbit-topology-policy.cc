@@ -89,7 +89,7 @@ DistanceToPropagationDelayNs(double distanceM)
 
 CircularOrbitTopologyPolicy::CircularOrbitTopologyPolicy(
     const ConstellationDefinition& constellation,
-    bool seamEnabled,
+    const std::vector<SatelliteEcefPosition>& initialPositions,
     long double maxIslDistanceM,
     const std::string& delayMode,
     std::optional<int64_t> fixedDelayNs)
@@ -97,7 +97,7 @@ CircularOrbitTopologyPolicy::CircularOrbitTopologyPolicy(
       m_maxIslDistanceM(maxIslDistanceM),
       m_delayMode(delayMode),
       m_fixedDelayNs(fixedDelayNs),
-      m_candidates(BuildPlusGridCandidateLinks(constellation, seamEnabled))
+      m_candidates(BuildPlusGridCandidateLinks(constellation, initialPositions))
 {
     if (m_maxIslDistanceM <= 0.0L || !std::isfinite(m_maxIslDistanceM))
     {

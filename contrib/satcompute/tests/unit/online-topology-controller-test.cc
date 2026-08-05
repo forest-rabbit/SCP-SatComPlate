@@ -37,11 +37,12 @@ Check(bool condition, const std::string& message)
 }
 
 CircularOrbitTopologyPolicy
-MakePolicy(const OnlineTestConfiguration& config)
+MakePolicy(const OnlineTestConfiguration& config,
+           const std::vector<SatelliteEcefPosition>& initialPositions)
 {
     const SatComputeConfig& parameters = config.parameters;
     return {config.constellation,
-            parameters.seamEnabled,
+            initialPositions,
             parameters.maxIslDistanceMeters,
             parameters.delayMode,
             parameters.delayMode == "fixed"
@@ -87,7 +88,7 @@ RunPolicyContractCase()
         {0, Vector(0.0, 0.0, 0.0)},
         {1, Vector(3.0, 4.0, 0.0)},
     };
-    const CircularOrbitTopologyPolicy boundaryPolicy = MakePolicy(config);
+    const CircularOrbitTopologyPolicy boundaryPolicy = MakePolicy(config, positions);
     const CircularOrbitTopologyState boundary = boundaryPolicy.EvaluatePositions(0, positions);
     Check(boundary.evaluatedLinks.size() == 1,
           "two-satellite policy candidate count differs");
@@ -101,7 +102,7 @@ RunPolicyContractCase()
           "one-way speed-of-light conversion differs");
 
     config.parameters.maxIslDistanceMeters = std::nextafter(5.0, 0.0);
-    const CircularOrbitTopologyPolicy belowBoundaryPolicy = MakePolicy(config);
+    const CircularOrbitTopologyPolicy belowBoundaryPolicy = MakePolicy(config, positions);
     Check(!belowBoundaryPolicy.EvaluatePositions(0, positions)
                .evaluatedLinks.front()
                .active,
@@ -202,6 +203,9 @@ RunDistanceDelayOnlyCase()
         const auto& finalLinks = controller.GetLastTopologyState().evaluatedLinks;
         for (std::size_t index = 0; index < initial.size(); ++index)
         {
+            Check(initial[index].sourceId == finalLinks[index].sourceId &&
+                      initial[index].destinationId == finalLinks[index].destinationId,
+                  "periodic update changed a fixed initial-nearest endpoint");
             delayChanged = delayChanged || initial[index].delayNs != finalLinks[index].delayNs;
         }
         Check(delayChanged, "distance mode produced no changed propagation delay");
@@ -223,7 +227,7 @@ FindCrossingThreshold()
     CircularOrbitTopologyState finalState;
     {
         OnlineOrbitConstellation constellation(config.constellation);
-        CircularOrbitTopologyPolicy policy = MakePolicy(config);
+        CircularOrbitTopologyPolicy policy = MakePolicy(config, constellation.GetPositions());
         initial = policy.EvaluateCurrent(constellation);
         Simulator::Schedule(Seconds(60), [&] {
             finalState = policy.EvaluateCurrent(constellation);

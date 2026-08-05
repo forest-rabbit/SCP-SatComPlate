@@ -14,8 +14,10 @@ ISL `/30` 网段从 `10.0.0.0/8` 按固定候选链路的 canonical 顺序分配
 
 ## 固定候选链路与周期更新
 
-`CircularOrbitTopologyPolicy` 在初始化时生成固定 plus-grid 候选。每个网络 tick
-只读取当前坐标、距离门限和时延模式，不会选择新的最近异轨卫星。
+`CircularOrbitTopologyPolicy` 在 `t=0` 生成固定 plus-grid 候选：同轨连接环形前后
+邻居；每对相邻轨道面选择总距离最小的循环一对一 slot 偏移。首尾轨道面不跨
+seam 连接。每个网络 tick 只读取当前坐标、距离门限和时延模式，不会重新选择
+异轨对端。
 
 `SatelliteLinkState` 预先安装候选设备集合。距离超过门限时保留设备、地址和
 output-interface 身份，只把接口置为 down；恢复时重新启用相同接口。更新摘要将

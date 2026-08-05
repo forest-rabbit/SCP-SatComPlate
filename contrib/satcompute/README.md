@@ -9,8 +9,8 @@
 1. 从 `para.cc` 取得默认值，再由同名命令行参数覆盖；
 2. 读取 ns-3.48 原生 LEO shell CSV，按稳定卫星 ID 创建节点并实时计算 ECEF
    `x/y/z`；
-3. 初始化时生成固定 plus-grid 候选 ISL，运行中不会改成“选择当前最近的异轨
-   卫星”；
+3. 同轨固定连接前后邻居；相邻轨道面在 `t=0` 选择总距离最小的循环一对一匹配，
+   保存卫星 ID 对后不再按当前距离更换对端；
 4. 每个网络更新时间重新计算坐标、距离门控和 distance 时延；只有有效链路集合
    发生变化时才重算 hop-based IPv4 路由；
 5. 可选读取分离的 ComputeProfile 与 TaskTrace，依次执行输入传输、FCFS 计算和
@@ -65,21 +65,19 @@ JSON 统一使用仓库根目录 `third-party/nlohmann/json.hpp`。`tools/` 不�
 ```text
 simulationDuration        = 1000
 constellationConfig       = contrib/satcompute/input/topology/constellations/synthetic-66.csv
-islCandidateStrategy      = plus-grid
-seamEnabled               = false
 maxIslDistance            = 6174589
 delayMode                 = fixed
 fixedDelay                = 0.008
 networkUpdateInterval     = 20
 islBandwidthBps           = 2000000000
-islMtuBytes               = 1500
+islMtuBytes               = 64028
 islQueueBytes             = 1500000
 receiverRcvBufBytes       = 131072
 routingMode               = global-capacity-aware-hrw
 ecmpHashSeed              = 1
 computeProfile            = empty
 taskTrace                 = empty
-transferChunkMode         = fixed
+transferChunkMode         = size-aware
 transferPayloadBytes      = 1024
 taskCompletionPolicy      = strict
 topologyOnly              = false
@@ -92,8 +90,9 @@ randomSeed                = 1
 randomRun                 = 1
 ```
 
-`para.cc` 只负责这些赋值及其中文注释；`CommandLine::AddValue`、文件检查、组合
-校验和时间转换都在入口或使用参数的组件中。
+`para.cc` 按 `simulation`、`topology`、`link`、`routing`、`workload` 和
+`output` 六类排列，只负责赋值及其中文注释；`CommandLine::AddValue`、文件检查、
+组合校验和时间转换都在入口或使用参数的组件中。
 
 ## 星座与拓扑更新
 
@@ -105,8 +104,10 @@ altitudeKm,inclinationDegrees,numberOfPlanes,numberOfSatellitesPerPlane,phasingF
 ```
 
 卫星 ID 按 plane-major 创建顺序稳定映射，不直接使用全局 `Node::GetId()`。
-plus-grid 候选身份在初始化时固定；`maxIslDistance` 只决定某个候选在当前时刻是否
-有效，不会替换它的对端。
+每颗卫星固定连接同轨前后两个槽位。对于每一对相邻轨道面，平台在 `t=0` 枚举
+所有循环 slot 偏移，选择链路总距离最小的偏移，形成一对一异轨匹配；不连接首尾
+轨道面。候选身份确定后不再变化，`maxIslDistance` 只决定候选当前是否有效，不会
+替换它的对端。
 
 - `delayMode=fixed`：活动链路使用 `fixedDelay`，实验通常可把
   `networkUpdateInterval` 设为 20 秒；

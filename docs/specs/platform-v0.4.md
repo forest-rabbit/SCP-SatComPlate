@@ -111,7 +111,7 @@ ns-3 `Time`/整数纳秒转换均位于入口或使用该值的组件，不放�
 - 星座 CSV、算力 JSON、任务 JSON和输出目录路径；
 - 仿真时长、网络更新时间、拓扑切片间隔和是否包含终点；
 - `topologyOnly`；
-- 固定 plus-grid 候选、seam 开关和最大 ISL 距离；
+- 最大 ISL 距离；固定候选构造是平台行为，不再提供只有一个取值的策略参数；
 - `fixed`/`distance` 时延及 fixed 时延；
 - ISL 带宽、MTU、队列和 UDP 接收缓冲；
 - 五种 IPv4 路由模式、ECMP hash seed；
@@ -149,7 +149,8 @@ TaskTrace 中每个任务继续明确给出 `input_bytes`、`compute_work_units`
 ## 拓扑与时间语义
 
 1. `LeoOrbitNodeHelper` 创建卫星并安装 `LeoCircularOrbitMobilityModel`；
-2. plus-grid 在初始化时按稳定卫星身份生成固定候选，不动态选择最近异轨卫星；
+2. 同轨固定连接前后邻居；每对相邻轨道面在 `t=0` 选择总距离最小的循环一对一
+   slot 偏移，此后固定卫星 ID 对且不连接首尾轨道面；
 3. 每次采样只依据当前坐标、距离阈值和时延模式更新候选状态；
 4. `distance` 模式通常用 1 s/2 s 的 `networkUpdateIntervalSeconds`，`fixed` 模式
    可用 20 s；这两个值都是 `para.cc`/CLI 输入，不在代码中绑定；

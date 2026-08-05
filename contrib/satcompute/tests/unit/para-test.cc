@@ -32,23 +32,23 @@ main()
         Require(config.constellationConfig ==
                     "contrib/satcompute/input/topology/constellations/synthetic-66.csv",
                 "unexpected constellation path");
-        Require(config.islCandidateStrategy == "plus-grid" && !config.seamEnabled,
-                "unexpected candidate defaults");
         Require(config.maxIslDistanceMeters == 6174589.0, "unexpected ISL distance");
         Require(config.delayMode == "fixed" && config.fixedDelaySeconds == 0.008,
                 "unexpected delay defaults");
         Require(config.networkUpdateIntervalSeconds == 20.0,
                 "unexpected network interval");
-        Require(config.islBandwidthBps == 2000000000ULL && config.islMtuBytes == 1500 &&
-                    config.islQueueBytes == 1500000 &&
-                    config.receiverRcvBufBytes == 131072,
+        Require(config.islBandwidthBps == 2'000'000'000 &&
+                    config.islMtuBytes == 64'028 &&
+                    config.islQueueBytes == 1'500'000 &&
+                    config.receiverRcvBufBytes == 131'072,
                 "unexpected link defaults");
         Require(config.routingMode == "global-capacity-aware-hrw" &&
                     config.ecmpHashSeed == 1,
                 "unexpected routing defaults");
         Require(config.computeProfile.empty() && config.taskTrace.empty(),
                 "workload inputs must be opt-in");
-        Require(config.transferChunkMode == "fixed" && config.transferPayloadBytes == 1024 &&
+        Require(config.transferChunkMode == "size-aware" &&
+                    config.transferPayloadBytes == 1'024 &&
                     config.taskCompletionPolicy == "strict",
                 "unexpected workload defaults");
         Require(!config.topologyOnly && config.topologySliceIntervalSeconds == 1.0 &&
