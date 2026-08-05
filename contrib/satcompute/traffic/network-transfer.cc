@@ -6,7 +6,7 @@
 
 #include "network-transfer.h"
 
-#include "../para.h"
+#include "../time-conversion.h"
 
 #include "ns3/abort.h"
 

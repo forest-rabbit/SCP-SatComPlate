@@ -15,7 +15,6 @@
 #include "routing/capacity-aware-metrics.h"
 #include "routing/ecmp-metrics.h"
 #include "routing/size-aware-metrics.h"
-#include "../sha256.h"
 
 #include <algorithm>
 #include <limits>
@@ -181,13 +180,6 @@ MetricsRecorder::Record()
     {
         throw MetricsError("metrics context requires the simulation FlowMonitor");
     }
-    std::error_code error;
-    const std::filesystem::path effectiveConfig =
-        std::filesystem::weakly_canonical(context.effectiveConfigPath, error);
-    if (error || !std::filesystem::is_regular_file(effectiveConfig))
-    {
-        throw MetricsError("effective config must be an existing regular file");
-    }
     const std::filesystem::path outputDirectory =
         std::filesystem::absolute(context.outputDirectory).lexically_normal();
 
@@ -347,14 +339,9 @@ MetricsRecorder::Record()
         }
     }
     result.diagnosticsGenerated = writeFlowDropReasons || writeFailureDiagnostics;
-    const RunSummaryEvidence evidence = {config.runName,
-                                         config.schemaVersion,
-                                         effectiveConfig,
-                                         Sha256File(effectiveConfig),
-                                         config.simulation.durationNs,
+    const RunSummaryEvidence evidence = {config.simulation.durationNs,
                                          context.wallClockNs,
                                          workloadMode,
-                                         config.network.topologySource,
                                          context.appliedTopologySliceCount,
                                          context.routeComputationCount,
                                          complete,

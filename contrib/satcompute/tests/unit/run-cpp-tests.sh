@@ -9,22 +9,6 @@ test_output="$(mktemp -d /tmp/satcompute-cpp-tests.XXXXXX)"
 trap 'rm -rf "$test_output"' EXIT
 
 ./ns3 run --no-build "satcompute-para-test"
-./ns3 run --no-build \
-  "satcompute-para-test --verifyOverrides=transfer --runName=cli-run \
---simulationStart=5 --simulationDuration=15 --constellationConfig=constellation.csv \
---topologySource=replay --topologyDir=slices --islCandidateStrategy=plus-grid \
---seamEnabled=1 --maxIslDistance=7000000 --delayMode=distance --fixedDelay=0 \
---networkUpdateInterval=2 --islBandwidthBps=1000 --islMtuBytes=65000 \
---islQueueBytes=2000 --receiverRcvBufBytes=3000 --routingMode=global-hrw-per-flow \
---routingRecomputePolicy=on-topology-change --ecmpHashSeed=8 \
---transferTrace=transfers.json --transferChunkMode=size-aware --transferPayloadBytes=2048 \
---taskCompletionPolicy=report --topologyOnly=0 --topologySliceInterval=2 \
---includeFinalTopologyState=0 --outputDir=/tmp/cli-output --transferLogMode=verbose \
---taskLogMode=silent --diagnosticMode=failure --randomSeed=9 --randomRun=10 \
---randomStreamStart=11"
-./ns3 run --no-build \
-  "satcompute-para-test --verifyOverrides=task --computeProfile=compute.json \
---taskTrace=tasks.json"
 
 ./ns3 run --no-build \
   "satcompute-constellation-definition-test \
@@ -33,9 +17,6 @@ trap 'rm -rf "$test_output"' EXIT
 
 ./ns3 run --no-build \
   "satcompute-resolved-config-test --outputDir=$test_output/resolved"
-
-./ns3 run --no-build \
-  "satcompute-effective-config-test --outputDir=$test_output/effective"
 
 input_root="contrib/satcompute/input"
 ./ns3 run --no-build \

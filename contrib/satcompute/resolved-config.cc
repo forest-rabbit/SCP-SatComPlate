@@ -5,6 +5,7 @@
 #include "resolved-config.h"
 
 #include "para.h"
+#include "time-conversion.h"
 
 #include <string_view>
 
@@ -71,21 +72,8 @@ ResolveOutputDirectory(const std::string& value)
 ResolvedSatComputeConfig
 ResolveSatComputeConfig(const SatComputeConfig& config)
 {
-    try
-    {
-        ValidateSatComputeConfig(config);
-    }
-    catch (const SatComputeConfigError& error)
-    {
-        throw ResolvedSatComputeConfigError(error.what());
-    }
-
     ResolvedSatComputeConfig resolved{};
-    resolved.schemaVersion = "0.3";
-    resolved.runName = config.runName;
     resolved.topologyOnly = config.topologyOnly;
-    resolved.simulation.startTimeNs =
-        SatComputeSecondsToNanoseconds(config.simulationStartSeconds, "simulationStart");
     resolved.simulation.durationNs =
         SatComputeSecondsToNanoseconds(config.simulationDurationSeconds, "simulationDuration");
 
@@ -122,7 +110,6 @@ ResolveSatComputeConfig(const SatComputeConfig& config)
 
     resolved.routing.mode = config.routingMode;
     resolved.routing.hashSeed = config.ecmpHashSeed;
-    resolved.routing.recomputePolicy = config.routingRecomputePolicy;
 
     resolved.workloads.transferTrace =
         ResolveOptionalFile(config.transferTrace, "transferTrace");
@@ -143,7 +130,6 @@ ResolveSatComputeConfig(const SatComputeConfig& config)
     resolved.logging.diagnosticMode = config.diagnosticMode;
     resolved.randomness.seed = config.randomSeed;
     resolved.randomness.run = config.randomRun;
-    resolved.randomness.streamStart = config.randomStreamStart;
     resolved.outputDirectory = ResolveOutputDirectory(config.outputDirectory);
     return resolved;
 }

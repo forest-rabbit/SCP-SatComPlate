@@ -24,14 +24,14 @@ common="--simulationDuration=5 --constellationConfig=$constellation \
 --fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=100000000"
 
 direct_result="$(run_platform "$regression_output/direct" \
-  "$common --runName=direct-replay --routingMode=global-first \
+  "$common --routingMode=global-first \
 --transferTrace=$transfer_inputs/engine-basic.json")"
 if [[ "$direct_result" != *'"status":"completed"'* ]]; then
   echo "direct replay regression failed: $direct_result" >&2
   exit 1
 fi
 
-task_arguments="$common --runName=task-replay \
+task_arguments="$common \
 --routingMode=global-size-aware-hrw \
 --computeProfile=$task_inputs/compute-profile-single.json \
 --taskTrace=$task_inputs/task-single.json"
@@ -45,7 +45,7 @@ fi
 
 no_workload_result="$(run_platform \
   "$regression_output/no-workload" \
-  "$common --runName=no-workload --routingMode=global-first")"
+  "$common --routingMode=global-first")"
 if [[ "$no_workload_result" != *'"status":"completed"'* ]]; then
   echo "workload-free replay regression failed: $no_workload_result" >&2
   exit 1
@@ -58,7 +58,7 @@ partial_common="--simulationDuration=1 --constellationConfig=$constellation \
 --transferPayloadBytes=1400 --diagnosticMode=failure"
 set +e
 strict_result="$(run_platform "$regression_output/strict" \
-  "$partial_common --runName=partial-strict --taskCompletionPolicy=strict")"
+  "$partial_common --taskCompletionPolicy=strict")"
 strict_status=$?
 set -e
 if [[ $strict_status -ne 3 || "$strict_result" != *'"status":"partial"'* ]]; then
@@ -67,7 +67,7 @@ if [[ $strict_status -ne 3 || "$strict_result" != *'"status":"partial"'* ]]; the
 fi
 
 report_result="$(run_platform "$regression_output/report" \
-  "$partial_common --runName=partial-report --taskCompletionPolicy=report")"
+  "$partial_common --taskCompletionPolicy=report")"
 if [[ "$report_result" != *'"status":"partial"'* ]]; then
   echo "report partial-completion policy regression failed: $report_result" >&2
   exit 1
@@ -87,7 +87,7 @@ task_failure_common="--simulationDuration=1 --constellationConfig=$constellation
 --diagnosticMode=failure --taskCompletionPolicy=strict"
 set +e
 task_failure_result="$(run_platform "$regression_output/task-failure" \
-  "$task_failure_common --runName=task-failure")"
+  "$task_failure_common")"
 task_failure_status=$?
 set -e
 if [[ $task_failure_status -ne 3 ||

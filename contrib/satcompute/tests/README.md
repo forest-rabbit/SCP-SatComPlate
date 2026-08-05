@@ -42,10 +42,8 @@ contrib/satcompute/tests/integration/regression/run-full-routing-regression.sh
 contrib/satcompute/tests/integration/regression/run-full-workload-regression.sh
 ```
 
-阶段 5 恢复的 54 个 legacy workload/topology fixture 由
-`fixtures/legacy-workload-manifest.json` 固定 SHA-256；C++ parity test 直接验证旧输入
-canonical 顺序、五元组、分包、FCFS、异构算力和动态拓扑行为。除明确更新合同外，
-不得静默修改这些黄金文件。
+保留的 legacy workload/topology fixture 用于验证 canonical 顺序、五元组、分包、
+FCFS、异构算力和动态拓扑行为。平台不再维护 manifest 或 SHA-256 完整性层。
 
 旧 Hypatia/TLE 传播测试不迁入当前 Python 测试集；轨道位置、固定候选 ISL 和
 topology-only 切片由共享 ns-3.48 C++ 核心、项目 C++ 检查和入口 smoke 验证。

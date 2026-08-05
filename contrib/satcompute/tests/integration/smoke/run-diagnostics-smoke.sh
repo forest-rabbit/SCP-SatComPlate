@@ -15,7 +15,7 @@ task_inputs="contrib/satcompute/tests/fixtures/task"
 
 set +e
 result="$(./ns3 run --no-build \
-  "satcompute --runName=smoke-task-failure --simulationDuration=1 \
+  "satcompute --simulationDuration=1 \
 --constellationConfig=$constellation --topologySource=replay \
 --topologyDir=$topology --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 --islQueueBytes=1 \

@@ -1,11 +1,9 @@
 build_lib(
   LIBNAME satcompute
   SOURCE_FILES
-    effective-config.cc
     para.cc
     resolved-config.cc
-    satcompute-version.cc
-    sha256.cc
+    time-conversion.cc
     metrics/core/flow-metrics.cc
     metrics/core/run-summary.cc
     metrics/core/task-metrics.cc
@@ -53,11 +51,9 @@ build_lib(
     traffic/network-transfer.cc
     traffic/network-transfer-receiver.cc
   HEADER_FILES
-    effective-config.h
     para.h
     resolved-config.h
-    satcompute-version.h
-    sha256.h
+    time-conversion.h
     metrics/core/flow-metrics.h
     metrics/core/run-summary.h
     metrics/core/task-metrics.h
@@ -170,15 +166,6 @@ build_exec(
   EXECNAME satcompute-resolved-config-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/resolved-config-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-effective-config-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/effective-config-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

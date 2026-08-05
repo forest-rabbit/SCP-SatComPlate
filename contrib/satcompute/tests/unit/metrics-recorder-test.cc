@@ -4,7 +4,6 @@
 
 #include "ns3/command-line.h"
 #include "ns3/compute-profile.h"
-#include "ns3/effective-config.h"
 #include "ns3/ecmp-route-recorder.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/ipv4-address-generator.h"
@@ -13,7 +12,6 @@
 #include "ns3/network-transfer-config.h"
 #include "ns3/network-transfer-engine.h"
 #include "ns3/replay-topology-controller.h"
-#include "ns3/sha256.h"
 #include "ns3/simulator.h"
 #include "ns3/task-coordinator.h"
 #include "ns3/task-trace.h"
@@ -109,13 +107,11 @@ RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
         const std::filesystem::path outputDirectory = outputRoot / "complete";
         ResolvedSatComputeConfig config =
             MakeDiamondReplayTestConfig(topologyDirectory);
-        config.runName = "task-replay-fixture";
         config.constellation = LoadConstellationDefinition(constellationConfig);
         config.routing.mode = "global-size-aware-hrw";
         config.workloads.computeProfile = fixtureRoot / "compute-profile-single.json";
         config.workloads.taskTrace = fixtureRoot / "task-single.json";
         config.outputDirectory = outputDirectory;
-        const std::filesystem::path effectiveConfig = WriteEffectiveConfig(config);
         ReplayTopologyController controller(config);
         controller.Initialize();
         EcmpRouteRecorder routeRecorder(controller);
@@ -148,7 +144,6 @@ RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
                          "stale\n");
 
         const MetricsRuntimeContext context = {
-            effectiveConfig,
             outputDirectory,
             123456,
             controller.GetAppliedSnapshotCount(),
@@ -189,15 +184,11 @@ RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
               "legacy transfer summary header differs");
 
         const Json summary = ReadJson(result.runSummaryPath);
-        Check(summary.at("run_name") == "task-replay-fixture" &&
-                  summary.at("config_schema_version") == "0.3" &&
-                  summary.at("run_status") == "COMPLETE" &&
+        Check(summary.at("run_status") == "COMPLETE" &&
                   summary.at("mode") == "task" &&
                   summary.at("simulation_duration_s") == 5.0 &&
                   summary.at("workload_mode") == "task" &&
                   summary.at("wall_clock_ns") == 123456 &&
-                  summary.at("effective_config").at("sha256") ==
-                      Sha256File(effectiveConfig) &&
                   summary.at("transfer").at("transfer_count") == 2 &&
                   summary.at("transfer").at("completed_transfer_count") == 2 &&
                   summary.at("transfer").at("declared_application_bytes") == 6146 &&
@@ -237,12 +228,10 @@ RunPartialTransferOutput(const std::filesystem::path& constellationConfig,
         const std::filesystem::path outputDirectory = outputRoot / "partial";
         ResolvedSatComputeConfig config =
             MakeDiamondReplayTestConfig(topologyDirectory);
-        config.runName = "transfer-replay-fixture";
         config.constellation = LoadConstellationDefinition(constellationConfig);
         config.logging.diagnosticMode = "failure";
         config.workloads.transferTrace = fixtureRoot / "traffic/transfers/engine-basic.json";
         config.outputDirectory = outputDirectory;
-        const std::filesystem::path effectiveConfig = WriteEffectiveConfig(config);
         ReplayTopologyController controller(config);
         controller.Initialize();
         EcmpRouteRecorder routeRecorder(controller);
@@ -269,7 +258,6 @@ RunPartialTransferOutput(const std::filesystem::path& constellationConfig,
               "partial-output fixture unexpectedly completed");
 
         const MetricsRuntimeContext context = {
-            effectiveConfig,
             outputDirectory,
             999,
             controller.GetAppliedSnapshotCount(),
@@ -319,14 +307,12 @@ RunPartialTaskDiagnostics(const std::filesystem::path& constellationConfig,
     {
         const std::filesystem::path outputDirectory = outputRoot / "partial-task";
         ResolvedSatComputeConfig config = MakeDiamondReplayTestConfig(topologyDirectory);
-        config.runName = "task-failure-diagnostic-fixture";
         config.constellation = LoadConstellationDefinition(constellationConfig);
         config.logging.diagnosticMode = "failure";
         config.network.islQueueBytes = 1;
         config.workloads.computeProfile = fixtureRoot / "compute-profile-single.json";
         config.workloads.taskTrace = fixtureRoot / "task-single.json";
         config.outputDirectory = outputDirectory;
-        const std::filesystem::path effectiveConfig = WriteEffectiveConfig(config);
         ReplayTopologyController controller(config);
         controller.Initialize();
         EcmpRouteRecorder routeRecorder(controller);
@@ -352,7 +338,6 @@ RunPartialTaskDiagnostics(const std::filesystem::path& constellationConfig,
         Check(!coordinator->IsComplete(), "failure diagnostic task unexpectedly completed");
 
         const MetricsRuntimeContext context = {
-            effectiveConfig,
             outputDirectory,
             1234,
             controller.GetAppliedSnapshotCount(),

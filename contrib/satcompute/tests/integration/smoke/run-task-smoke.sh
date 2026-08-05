@@ -14,7 +14,7 @@ topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic
 task_inputs="contrib/satcompute/tests/fixtures/task"
 
 completed="$(./ns3 run --no-build \
-  "satcompute --runName=smoke-task-replay --simulationDuration=5 \
+  "satcompute --simulationDuration=5 \
 --constellationConfig=$constellation --topologySource=replay \
 --topologyDir=$topology --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \

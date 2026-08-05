@@ -1,6 +1,5 @@
 # SatCompute ns-3.48 运行说明
 
-> 迁移状态：v0.3 已于 2026-08-05 完成，最终阶段 7 CI run `30986962812` 通过。
 > `main` 使用官方 ns-3.48，`legacy/ns-3.33` 永久保留为只读行为基线。本文以
 > ns-3.33 中文 README 的章节和合同为主体。生产入口只接受 `para.cc` 默认值及
 > 同名 CLI 覆盖；CSV 只承担星座物理结构，JSON 承担拓扑回放、流量、算力和
@@ -21,7 +20,7 @@
    才调用原生 `GlobalRouteManager` 重算当前 hop-based IPv4 路由；
 5. 可选安装 NetworkTransfer JSON 或分离输入的任务闭环；无输入时只运行拓扑；
 6. 拓扑导出按独立间隔输出卫星 ID、ECEF `x/y/z` 和有效链路，不改变网络 tick；
-7. 输出有效配置、输入 manifest、网络、传输、任务、路由和计算节点的结构化证据。
+7. 输出网络、传输、任务、路由和计算节点的结构化结果，不生成第二份运行配置。
 
 程序不会创建地面站，不解析 cluster，也不支持 CSV 拓扑。故障执行、前后端
 传输、IPv6 与 SRv6 属于后续阶段，不在本轮兼容迁移中提前实现。
@@ -55,14 +54,13 @@ fallback。发送暂停、恢复、pacing 和 pending admission 仍由 `traffic/
 ```bash
 ./ns3 configure --enable-modules=satcompute -G Ninja
 ./ns3 build
-./ns3 run "satcompute --validateOnly=true"
 ./ns3 run "satcompute --simulationDuration=2"
 ./ns3 run "satcompute --simulationDuration=2 --topologyOnly=1"
 ./ns3 run "satcompute --help"
 ```
 
 不带参数运行 `satcompute` 会按 `para.cc` 的完整默认实验执行 1000 秒仿真；日常
-开发建议使用 `--validateOnly=true` 或显式给出较短的 `simulationDuration`。
+开发建议显式给出较短的 `simulationDuration`。
 
 日常和 CI 配置都不启用 ns-3 全局 examples 或 tests，也不运行上游 `test.py`。
 SatCompute 自有 C++ 检查作为普通 executable 构建，自有测试仍保存在原来的
@@ -80,8 +78,6 @@ contrib/satcompute/tests/integration/regression/run-all.sh
 统一转换为整数纳秒：
 
 ```text
-runName                  = synthetic-66-fixed
-simulationStart          = 0
 simulationDuration       = 1000
 constellationConfig      = contrib/satcompute/input/topology/constellations/synthetic-66.csv
 topologySource           = online
@@ -97,7 +93,6 @@ islMtuBytes              = 1500
 islQueueBytes            = 1500000
 receiverRcvBufBytes      = 131072
 routingMode              = global-capacity-aware-hrw
-routingRecomputePolicy   = on-topology-change
 ecmpHashSeed             = 1
 transferTrace            = empty
 computeProfile           = empty
@@ -114,7 +109,6 @@ taskLogMode              = summary
 diagnosticMode           = off
 randomSeed               = 1
 randomRun                = 1
-randomStreamStart        = 0
 ```
 
 ## CI 与本地验证
@@ -142,9 +136,7 @@ capacity-aware、任务、FCFS、strict/report、诊断与 canonical ordering �
 
 ## 参数合同
 
-- `--runName`：本次运行写入证据文件的稳定名称。
-- `--simulationStart`、`--simulationDuration`：非负开始时刻与有限正持续时间，
-  单位为秒。
+- `--simulationDuration`：有限正持续时间，单位为秒。
 - `--constellationConfig`：ns-3.48 原生 LEO shell CSV 路径；不得包含仿真、
   时延、路由、workload、随机数或输出参数。
 - `--topologySource`：`online` 或 `replay`。前者实时计算，后者读取全量切片。
@@ -163,7 +155,6 @@ capacity-aware、任务、FCFS、strict/report、诊断与 canonical ordering �
 - `--routingMode`：`global-first`、`global-hash-per-flow`、
   `global-hrw-per-flow`、`global-size-aware-hrw` 或
   `global-capacity-aware-hrw`，默认最后一种。
-- `--routingRecomputePolicy`：当前只支持 `on-topology-change`。
 - `--ecmpHashSeed`：逐流 Hash、HRW、size-aware 与 capacity-aware 的确定性 seed。
 - `--transferTrace`：可选 NetworkTransfer JSON。
 - `--computeProfile`：`topology/resources` 下的静态计算能力 JSON。
@@ -180,13 +171,11 @@ capacity-aware、任务、FCFS、strict/report、诊断与 canonical ordering �
 - `--transferLogMode`、`--taskLogMode`：`summary`、`verbose` 或 `silent`。
 - `--diagnosticMode`：`off` 只保留基础指标；`failure` 在任务失败时额外
   采集未完成对象、ISL 队列 Drop 和路由集中度。
-- `--randomSeed`、`--randomRun`、`--randomStreamStart`：固定 ns-3 随机过程和
-  未来故障模型的显式 stream 分配边界。
+- `--randomSeed`、`--randomRun`：固定 ns-3 随机过程以复现实验。
 
 `computeProfile` 与 `taskTrace` 必须同时指定，任务模式不能同时指定
-`transferTrace`。NetworkTransfer 与任务模式都使用 UDP；三项输入均为空时
-运行 `topology-only`，不安装 PacketSink、NetworkTransfer 或
-TaskCoordinator。
+`transferTrace`。NetworkTransfer 与任务模式都使用 UDP；只有显式设置
+`topologyOnly=1` 时才不安装网络、NetworkTransfer 或 TaskCoordinator。
 
 下面各节保留 ns-3.33 的业务、路由、指标和验证合同，并使用当前 ns-3.48
 参数补齐可执行命令。旧 fixture、检查器和分层 metrics 均已恢复；Hypatia/TLE、

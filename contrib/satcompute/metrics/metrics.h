@@ -35,7 +35,6 @@ class MetricsError : public std::runtime_error
 /** ns-3.48 runtime and provenance sources consumed by the legacy metrics layers. */
 struct MetricsRuntimeContext
 {
-    std::filesystem::path effectiveConfigPath;
     std::filesystem::path outputDirectory;
     int64_t wallClockNs{};
     uint32_t appliedTopologySliceCount{};

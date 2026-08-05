@@ -185,7 +185,6 @@ WriteSummary(const FlowAggregate& flow,
         static_cast<double>(evidence.simulationDurationNs) / 1000000000.0;
     const double wallClockSeconds = static_cast<double>(evidence.wallClockNs) / 1000000000.0;
     Json summary = {
-        {"schema_version", "0.1"},
         {"simulation_duration_s", durationSeconds},
         {"wall_clock_s", wallClockSeconds},
         {"mode", metadata.mode},
@@ -221,15 +220,9 @@ WriteSummary(const FlowAggregate& flow,
         {"total_compute_work_units", tasks.totalComputeWorkUnits},
         {"mean_task_completion_delay_ns", tasks.meanCompletionDelayNs},
         {"max_task_completion_delay_ns", tasks.maxCompletionDelayNs},
-        {"run_name", evidence.runName},
-        {"config_schema_version", evidence.configSchemaVersion},
-        {"effective_config",
-         {{"path", evidence.effectiveConfigPath.string()},
-          {"sha256", evidence.effectiveConfigSha256}}},
         {"simulation_duration_ns", evidence.simulationDurationNs},
         {"wall_clock_ns", evidence.wallClockNs},
         {"workload_mode", evidence.workloadMode},
-        {"topology_source", evidence.topologySource},
         {"applied_topology_slice_count", evidence.appliedTopologySliceCount},
         {"hash_seed", metadata.ecmpHashSeed},
         {"route_computation_count", evidence.routeComputationCount},
@@ -302,16 +295,11 @@ WriteRunSummary(const FlowAggregate& aggregate,
     const TransferAggregate transfers = CollectTransfers(transferSummaries);
     const TaskAggregate tasks = CollectTaskAggregate(taskCoordinator);
     const RunSummaryEvidence evidence = {
-        "",
-        "",
-        {},
-        "",
         static_cast<int64_t>(simulationDurationSeconds * 1000000000.0),
         static_cast<int64_t>(wallClockSeconds * 1000000000.0),
         runMetadata.mode == "task"
             ? "task"
             : (runMetadata.mode == "network-transfer" ? "transfer" : "none"),
-        "",
         0,
         0,
         LegacyRunComplete(runMetadata, transfers, tasks, taskCoordinator),

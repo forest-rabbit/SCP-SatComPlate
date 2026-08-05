@@ -57,9 +57,6 @@ main(int argc, char* argv[])
         defaults.outputDirectory = outputDirectory;
         const ns3::ResolvedSatComputeConfig resolved =
             ns3::ResolveSatComputeConfig(defaults);
-        Require(resolved.schemaVersion == "0.3", "resolved schema version differs");
-        Require(resolved.runName == "synthetic-66-fixed", "resolved run name differs");
-        Require(resolved.simulation.startTimeNs == 0, "resolved start time differs");
         Require(resolved.simulation.durationNs == 1000000000000LL,
                 "resolved duration differs");
         Require(resolved.constellation.GetSatelliteCount() == 66,
@@ -86,13 +83,11 @@ main(int argc, char* argv[])
                     resolved.logging.taskLogMode == "summary" &&
                     resolved.logging.diagnosticMode == "off",
                 "logging resolution differs");
-        Require(resolved.randomness.seed == 1 && resolved.randomness.run == 1 &&
-                    resolved.randomness.streamStart == 0,
+        Require(resolved.randomness.seed == 1 && resolved.randomness.run == 1,
                 "randomness resolution differs");
         Require(resolved.outputDirectory.is_absolute(), "output directory is not absolute");
 
         auto distance = defaults;
-        distance.runName = "synthetic-66-distance";
         distance.delayMode = "distance";
         distance.fixedDelaySeconds = 0.0;
         distance.networkUpdateIntervalSeconds = 2.0;

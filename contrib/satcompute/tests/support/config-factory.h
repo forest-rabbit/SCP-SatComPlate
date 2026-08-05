@@ -44,10 +44,8 @@ MakeOnlineTestConfig(uint32_t numOrbits,
                      long double maxDistanceM)
 {
     ResolvedSatComputeConfig config{};
-    config.schemaVersion = "0.3";
-    config.runName = "online-controller-test";
     config.topologyOnly = false;
-    config.simulation = {0, durationNs};
+    config.simulation = {durationNs};
     config.constellation = MakeTestConstellation(numOrbits, satellitesPerOrbit);
     config.network = {"online",
                       std::nullopt,
@@ -62,7 +60,7 @@ MakeOnlineTestConfig(uint32_t numOrbits,
                       1500,
                       1500000,
                       131072};
-    config.routing = {"global-first", 1, "on-topology-change"};
+    config.routing = {"global-first", 1};
     config.workloads = {std::nullopt,
                         std::nullopt,
                         std::nullopt,
@@ -71,7 +69,7 @@ MakeOnlineTestConfig(uint32_t numOrbits,
                         "strict"};
     config.topologySlices = {1000000000, true};
     config.logging = {"summary", "summary", "off"};
-    config.randomness = {1, 1, 0};
+    config.randomness = {1, 1};
     config.outputDirectory = "/tmp/satcompute-test";
     return config;
 }
@@ -103,7 +101,6 @@ MakeReplayTestConfig(const std::filesystem::path& replayDirectory,
                                                            durationNs,
                                                            updateIntervalNs,
                                                            30000000.0L);
-    config.runName = "replay-test";
     config.network.delayMode = delayMode;
     config.network.fixedDelayNs = fixedDelayNs;
     config.network.linkBandwidthBps = linkBandwidthBps;

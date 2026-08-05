@@ -2,486 +2,110 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
+// 集中定义 SatCompute 的默认运行参数；所有参数均可由入口中的同名 CLI 覆盖。
+
 #include "para.h"
-
-#include "ns3/command-line.h"
-
-#include <cmath>
-#include <initializer_list>
-#include <limits>
-#include <string>
 
 namespace ns3
 {
-
-namespace
-{
-
-[[noreturn]] void
-FailConfig(std::string_view fieldName, std::string_view message)
-{
-    throw SatComputeConfigError(std::string(fieldName) + " " + std::string(message));
-}
-
-void
-RequireNotEmpty(const std::string& value, std::string_view fieldName)
-{
-    if (value.empty())
-    {
-        FailConfig(fieldName, "must not be empty");
-    }
-}
-
-void
-RequireChoice(const std::string& value,
-              std::string_view fieldName,
-              std::initializer_list<std::string_view> choices)
-{
-    for (const std::string_view choice : choices)
-    {
-        if (value == choice)
-        {
-            return;
-        }
-    }
-    FailConfig(fieldName, "has an unsupported value: " + value);
-}
-
-void
-RequirePositiveSeconds(double value, std::string_view fieldName)
-{
-    if (SatComputeSecondsToNanoseconds(value, fieldName) <= 0)
-    {
-        FailConfig(fieldName, "must be greater than zero");
-    }
-}
-
-int
-ParseExponent(std::string_view token, std::size_t& position, std::string_view fieldName)
-{
-    if (position == token.size() || (token[position] != 'e' && token[position] != 'E'))
-    {
-        return 0;
-    }
-    ++position;
-    bool negative = false;
-    if (position < token.size() && (token[position] == '+' || token[position] == '-'))
-    {
-        negative = token[position] == '-';
-        ++position;
-    }
-    if (position == token.size() || token[position] < '0' || token[position] > '9')
-    {
-        FailConfig(fieldName, "contains an invalid exponent");
-    }
-    int exponent = 0;
-    while (position < token.size() && token[position] >= '0' && token[position] <= '9')
-    {
-        if (exponent > 100000)
-        {
-            FailConfig(fieldName, "contains an exponent outside the supported range");
-        }
-        exponent = exponent * 10 + (token[position] - '0');
-        ++position;
-    }
-    return negative ? -exponent : exponent;
-}
-
-} // namespace
 
 SatComputeConfig
 GetDefaultSatComputeConfig()
 {
     SatComputeConfig config;
 
-    // 运行窗口：所有人工配置都使用秒，解析后再统一转换为 ns-3 Time。
-    config.runName = "synthetic-66-fixed";
-    config.simulationStartSeconds = 0.0;
+    // --simulationDuration：仿真持续时间，单位为秒，必须是有限正数。
     config.simulationDurationSeconds = 1000.0;
 
-    // 拓扑来源：默认由 ns-3.48 原生圆轨道模型在线计算。
+    // --constellationConfig：ns-3.48 LeoOrbitalShell 六列 CSV。
     config.constellationConfig =
         "contrib/satcompute/input/topology/constellations/synthetic-66.csv";
+
+    // topologySource/topologyDirectory 仅供迁移期回放测试；正式平台使用在线轨道。
     config.topologySource = "online";
     config.topologyDirectory = "";
 
-    // 候选卫星身份固定；距离门限只控制候选链路是否有效。
+    // --islCandidateStrategy：固定为 plus-grid；卫星邻居身份不随距离变化。
     config.islCandidateStrategy = "plus-grid";
+
+    // --seamEnabled：是否建立首尾轨道面之间的固定候选链路。
     config.seamEnabled = false;
+
+    // --maxIslDistance：候选链路的最大有效距离，单位为米。
     config.maxIslDistanceMeters = 6174589.0;
 
-    // 默认实验使用固定时延和 20 秒网络更新；distance 实验由 CLI 覆盖。
+    // --delayMode：fixed 使用固定时延，distance 按当前卫星距离计算时延。
     config.delayMode = "fixed";
+
+    // --fixedDelay：fixed 模式的单向链路时延，单位为秒。
     config.fixedDelaySeconds = 0.008;
+
+    // --networkUpdateInterval：在线链路状态和时延的更新周期，单位为秒。
     config.networkUpdateIntervalSeconds = 20.0;
 
-    // ISL 与接收端资源沿用 ns-3.33 平台的默认合同。
+    // --islBandwidthBps：每条 ISL 的数据速率，单位为 bit/s。
     config.islBandwidthBps = 2000000000ULL;
+
+    // --islMtuBytes：每个 ISL PointToPointNetDevice 的 MTU，单位为字节。
     config.islMtuBytes = 1500;
+
+    // --islQueueBytes：每个 ISL 队列的总容量，单位为字节。
     config.islQueueBytes = 1500000;
+
+    // --receiverRcvBufBytes：每个任务传输 UDP 接收 socket 的缓冲区，单位为字节。
     config.receiverRcvBufBytes = 131072;
 
-    // 路由只在有效链路集合变化时重算；距离时延变化不触发 hop 路由重算。
+    // --routingMode：支持 global-first、逐流 hash、HRW、size-aware HRW 和
+    // capacity-aware HRW；有效链路集合不变时不重算 hop 路由。
     config.routingMode = "global-capacity-aware-hrw";
-    config.routingRecomputePolicy = "on-topology-change";
+
+    // --ecmpHashSeed：逐流 ECMP 和 HRW 的确定性 hash seed。
     config.ecmpHashSeed = 1;
 
-    // 空 workload 路径表示纯拓扑运行；数据 JSON 与平台参数保持分离。
+    // transferTrace 仅供迁移期回放回归；正式平台任务由下面两个 JSON 共同输入。
     config.transferTrace = "";
+
+    // --computeProfile：每颗卫星的算力资源 JSON；必须与 taskTrace 同时提供。
     config.computeProfile = "";
+
+    // --taskTrace：任务到达、输入字节、计算量和输出字节 JSON。
     config.taskTrace = "";
+
+    // --transferChunkMode：fixed 使用统一 payload，size-aware 按任务传输大小分档。
     config.transferChunkMode = "fixed";
+
+    // --transferPayloadBytes：fixed 模式 UDP payload 上限，单位为字节。
     config.transferPayloadBytes = 1024;
+
+    // --taskCompletionPolicy：strict 对未完成任务返回非零，report 只报告结果。
     config.taskCompletionPolicy = "strict";
 
-    // 拓扑切片精度独立于网络更新频率，输出默认写到工作树之外。
+    // --topologyOnly：只推进原生轨道并输出拓扑切片，不创建网络与任务对象。
     config.topologyOnly = false;
+
+    // --topologySliceInterval：topologyOnly 切片间隔，单位为秒。
     config.topologySliceIntervalSeconds = 1.0;
+
+    // --includeFinalTopologyState：是否额外输出仿真终点的拓扑状态。
     config.includeFinalTopologyState = true;
+
+    // --outputDir：结构化结果输出目录；默认写入 /tmp，避免污染工作树。
     config.outputDirectory = "/tmp/satcompute-output";
+
+    // --transferLogMode：summary、verbose 或 silent。
     config.transferLogMode = "summary";
+
+    // --taskLogMode：summary、verbose 或 silent。
     config.taskLogMode = "summary";
+
+    // --diagnosticMode：off 关闭失败诊断，failure 在未完成时输出诊断文件。
     config.diagnosticMode = "off";
 
-    // 固定 seed、run 和 stream 起点可复现相同的随机过程。
+    // --randomSeed 和 --randomRun：固定 ns-3 随机过程以复现实验。
     config.randomSeed = 1;
     config.randomRun = 1;
-    config.randomStreamStart = 0;
 
     return config;
-}
-
-void
-AddSatComputeCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
-{
-    commandLine.AddValue("runName", "Stable name recorded for this run", config.runName);
-    commandLine.AddValue("simulationStart",
-                         "Simulation start time in seconds",
-                         config.simulationStartSeconds);
-    commandLine.AddValue("simulationDuration",
-                         "Simulation duration in seconds",
-                         config.simulationDurationSeconds);
-
-    commandLine.AddValue("constellationConfig",
-                         "Path to the native LEO shell CSV",
-                         config.constellationConfig);
-    commandLine.AddValue("topologySource",
-                         "Topology source: online or replay",
-                         config.topologySource);
-    commandLine.AddValue("topologyDir",
-                         "Topology slice directory for replay",
-                         config.topologyDirectory);
-    commandLine.AddValue("islCandidateStrategy",
-                         "Fixed candidate ISL strategy",
-                         config.islCandidateStrategy);
-    commandLine.AddValue("seamEnabled", "Enable seam candidate links", config.seamEnabled);
-    commandLine.AddValue("maxIslDistance",
-                         "Maximum valid ISL distance in meters",
-                         config.maxIslDistanceMeters);
-    commandLine.AddValue("delayMode", "Link delay mode: fixed or distance", config.delayMode);
-    commandLine.AddValue("fixedDelay",
-                         "Fixed one-way link delay in seconds",
-                         config.fixedDelaySeconds);
-    commandLine.AddValue("networkUpdateInterval",
-                         "Network state update interval in seconds",
-                         config.networkUpdateIntervalSeconds);
-
-    commandLine.AddValue("islBandwidthBps", "ISL data rate in bit/s", config.islBandwidthBps);
-    commandLine.AddValue("islMtuBytes", "ISL MTU in bytes", config.islMtuBytes);
-    commandLine.AddValue("islQueueBytes", "ISL queue capacity in bytes", config.islQueueBytes);
-    commandLine.AddValue("receiverRcvBufBytes",
-                         "UDP receive buffer in bytes",
-                         config.receiverRcvBufBytes);
-
-    commandLine.AddValue("routingMode", "IPv4 routing policy", config.routingMode);
-    commandLine.AddValue("routingRecomputePolicy",
-                         "Route recomputation policy",
-                         config.routingRecomputePolicy);
-    commandLine.AddValue("ecmpHashSeed", "Per-flow ECMP and HRW hash seed", config.ecmpHashSeed);
-
-    commandLine.AddValue("transferTrace", "NetworkTransfer JSON path", config.transferTrace);
-    commandLine.AddValue("computeProfile",
-                         "Satellite compute profile JSON path",
-                         config.computeProfile);
-    commandLine.AddValue("taskTrace", "Task trace JSON path", config.taskTrace);
-    commandLine.AddValue("transferChunkMode", "Transfer chunking policy", config.transferChunkMode);
-    commandLine.AddValue("transferPayloadBytes",
-                         "Fixed UDP payload size in bytes",
-                         config.transferPayloadBytes);
-    commandLine.AddValue("taskCompletionPolicy",
-                         "Task completion policy: strict or report",
-                         config.taskCompletionPolicy);
-
-    commandLine.AddValue("topologyOnly",
-                         "Generate topology slices without network simulation",
-                         config.topologyOnly);
-    commandLine.AddValue("topologySliceInterval",
-                         "Topology slice interval in seconds",
-                         config.topologySliceIntervalSeconds);
-    commandLine.AddValue("includeFinalTopologyState",
-                         "Export the simulation end state",
-                         config.includeFinalTopologyState);
-    commandLine.AddValue("outputDir", "Structured output directory", config.outputDirectory);
-    commandLine.AddValue("transferLogMode", "Transfer log mode", config.transferLogMode);
-    commandLine.AddValue("taskLogMode", "Task log mode", config.taskLogMode);
-    commandLine.AddValue("diagnosticMode", "Failure diagnostic mode", config.diagnosticMode);
-
-    commandLine.AddValue("randomSeed", "ns-3 global random seed", config.randomSeed);
-    commandLine.AddValue("randomRun", "ns-3 independent run number", config.randomRun);
-    commandLine.AddValue("randomStreamStart",
-                         "First random stream reserved by SatCompute",
-                         config.randomStreamStart);
-}
-
-void
-ValidateSatComputeConfig(const SatComputeConfig& config)
-{
-    RequireNotEmpty(config.runName, "runName");
-    RequireNotEmpty(config.constellationConfig, "constellationConfig");
-
-    const int64_t startNs =
-        SatComputeSecondsToNanoseconds(config.simulationStartSeconds, "simulationStart");
-    RequirePositiveSeconds(config.simulationDurationSeconds, "simulationDuration");
-    const int64_t durationNs =
-        SatComputeSecondsToNanoseconds(config.simulationDurationSeconds, "simulationDuration");
-    if (startNs > std::numeric_limits<int64_t>::max() - durationNs)
-    {
-        FailConfig("simulation", "start plus duration exceeds the int64 nanosecond range");
-    }
-
-    RequireChoice(config.topologySource, "topologySource", {"online", "replay"});
-    if (config.topologySource == "online" && !config.topologyDirectory.empty())
-    {
-        FailConfig("topologyDir", "must be empty for online topology");
-    }
-    if (config.topologySource == "replay" && config.topologyDirectory.empty())
-    {
-        FailConfig("topologyDir", "is required for replay topology");
-    }
-    RequireChoice(config.islCandidateStrategy, "islCandidateStrategy", {"plus-grid"});
-    if (!std::isfinite(config.maxIslDistanceMeters) || config.maxIslDistanceMeters <= 0.0)
-    {
-        FailConfig("maxIslDistance", "must be a finite positive number of meters");
-    }
-    RequireChoice(config.delayMode, "delayMode", {"fixed", "distance"});
-    const int64_t fixedDelayNs =
-        SatComputeSecondsToNanoseconds(config.fixedDelaySeconds, "fixedDelay");
-    if (config.delayMode == "fixed" && fixedDelayNs <= 0)
-    {
-        FailConfig("fixedDelay", "must be greater than zero in fixed mode");
-    }
-    RequirePositiveSeconds(config.networkUpdateIntervalSeconds, "networkUpdateInterval");
-
-    if (config.islBandwidthBps == 0)
-    {
-        FailConfig("islBandwidthBps", "must be greater than zero");
-    }
-    if (config.islMtuBytes < 68)
-    {
-        FailConfig("islMtuBytes", "must be at least 68");
-    }
-    if (config.islQueueBytes == 0)
-    {
-        FailConfig("islQueueBytes", "must be greater than zero");
-    }
-    if (config.receiverRcvBufBytes == 0)
-    {
-        FailConfig("receiverRcvBufBytes", "must be greater than zero");
-    }
-
-    RequireChoice(config.routingMode,
-                  "routingMode",
-                  {"global-first",
-                   "global-hash-per-flow",
-                   "global-hrw-per-flow",
-                   "global-size-aware-hrw",
-                   "global-capacity-aware-hrw"});
-    RequireChoice(config.routingRecomputePolicy,
-                  "routingRecomputePolicy",
-                  {"on-topology-change"});
-
-    const bool hasComputeProfile = !config.computeProfile.empty();
-    const bool hasTaskTrace = !config.taskTrace.empty();
-    if (hasComputeProfile != hasTaskTrace)
-    {
-        FailConfig("workloads", "computeProfile and taskTrace must be provided together");
-    }
-    if (!config.transferTrace.empty() && hasComputeProfile)
-    {
-        FailConfig("workloads", "transferTrace cannot be mixed with task inputs");
-    }
-    RequireChoice(config.transferChunkMode, "transferChunkMode", {"fixed", "size-aware"});
-    if (config.transferPayloadBytes == 0 || config.transferPayloadBytes > 65507)
-    {
-        FailConfig("transferPayloadBytes", "must be in the range 1..65507");
-    }
-    if (config.transferChunkMode == "fixed" &&
-        config.transferPayloadBytes + 28 > config.islMtuBytes)
-    {
-        FailConfig("transferPayloadBytes", "plus UDP/IPv4 headers exceeds islMtuBytes");
-    }
-    if (config.transferChunkMode == "size-aware" && config.islMtuBytes < 64028)
-    {
-        FailConfig("islMtuBytes", "must be at least 64028 for size-aware chunking");
-    }
-    RequireChoice(config.taskCompletionPolicy,
-                  "taskCompletionPolicy",
-                  {"strict", "report"});
-
-    RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
-    if (config.topologyOnly && config.topologySource != "online")
-    {
-        FailConfig("topologyOnly", "requires online topology");
-    }
-    if (config.topologyOnly &&
-        (!config.transferTrace.empty() || hasComputeProfile || hasTaskTrace))
-    {
-        FailConfig("topologyOnly", "cannot load transfer or task workloads");
-    }
-    RequireNotEmpty(config.outputDirectory, "outputDir");
-    RequireChoice(config.transferLogMode,
-                  "transferLogMode",
-                  {"summary", "verbose", "silent"});
-    RequireChoice(config.taskLogMode, "taskLogMode", {"summary", "verbose", "silent"});
-    RequireChoice(config.diagnosticMode, "diagnosticMode", {"off", "failure"});
-    if (config.randomSeed == 0)
-    {
-        FailConfig("randomSeed", "must be greater than zero");
-    }
-    if (config.randomStreamStart < 0)
-    {
-        FailConfig("randomStreamStart", "must be non-negative");
-    }
-}
-
-int64_t
-SatComputeSecondsToNanoseconds(double seconds, std::string_view fieldName)
-{
-    if (!std::isfinite(seconds) || seconds < 0.0)
-    {
-        throw SatComputeConfigError(std::string(fieldName) +
-                                    " must be a finite non-negative number of seconds");
-    }
-
-    constexpr long double NANOSECONDS_PER_SECOND = 1000000000.0L;
-    const long double nanoseconds =
-        static_cast<long double>(seconds) * NANOSECONDS_PER_SECOND;
-    const long double roundedNanoseconds = std::round(nanoseconds);
-    if (roundedNanoseconds > static_cast<long double>(std::numeric_limits<int64_t>::max()))
-    {
-        throw SatComputeConfigError(std::string(fieldName) +
-                                    " exceeds the int64 nanosecond range");
-    }
-    return static_cast<int64_t>(roundedNanoseconds);
-}
-
-int64_t
-SatComputeDecimalSecondsToNanoseconds(std::string_view token,
-                                     std::string_view fieldName,
-                                     bool positive)
-{
-    if (token.empty() || token.front() == '-' || token.front() == '+')
-    {
-        FailConfig(fieldName, "must be a non-negative decimal number");
-    }
-
-    std::size_t position = 0;
-    if (token[position] < '0' || token[position] > '9')
-    {
-        FailConfig(fieldName, "contains an invalid decimal number");
-    }
-    if (token[position] == '0' && position + 1 < token.size() &&
-        token[position + 1] >= '0' && token[position + 1] <= '9')
-    {
-        FailConfig(fieldName, "contains a leading zero");
-    }
-
-    std::string digits;
-    while (position < token.size() && token[position] >= '0' && token[position] <= '9')
-    {
-        digits.push_back(token[position]);
-        ++position;
-    }
-
-    int fractionalDigits = 0;
-    if (position < token.size() && token[position] == '.')
-    {
-        ++position;
-        const std::size_t fractionStart = position;
-        while (position < token.size() && token[position] >= '0' && token[position] <= '9')
-        {
-            digits.push_back(token[position]);
-            ++fractionalDigits;
-            ++position;
-        }
-        if (position == fractionStart)
-        {
-            FailConfig(fieldName, "contains an empty fractional part");
-        }
-    }
-
-    const int exponent = ParseExponent(token, position, fieldName);
-    if (position != token.size())
-    {
-        FailConfig(fieldName, "contains trailing characters");
-    }
-
-    const std::size_t firstNonzero = digits.find_first_not_of('0');
-    if (firstNonzero == std::string::npos)
-    {
-        digits = "0";
-    }
-    else if (firstNonzero > 0)
-    {
-        digits.erase(0, firstNonzero);
-    }
-
-    const int64_t nanosecondPower =
-        9 + static_cast<int64_t>(exponent) - static_cast<int64_t>(fractionalDigits);
-    if (digits != "0" && nanosecondPower >= 0)
-    {
-        if (nanosecondPower > 19 ||
-            digits.size() + static_cast<std::size_t>(nanosecondPower) > 19)
-        {
-            FailConfig(fieldName, "exceeds signed 64-bit nanosecond range");
-        }
-        digits.append(static_cast<std::size_t>(nanosecondPower), '0');
-    }
-    else if (digits != "0" && nanosecondPower < 0)
-    {
-        const int64_t divisorDigits = -nanosecondPower;
-        if (divisorDigits > static_cast<int64_t>(digits.size()))
-        {
-            FailConfig(fieldName, "has precision finer than one nanosecond");
-        }
-        const std::size_t keep = digits.size() - static_cast<std::size_t>(divisorDigits);
-        for (std::size_t index = keep; index < digits.size(); ++index)
-        {
-            if (digits[index] != '0')
-            {
-                FailConfig(fieldName, "has precision finer than one nanosecond");
-            }
-        }
-        digits.resize(keep);
-    }
-
-    uint64_t nanoseconds = 0;
-    const uint64_t maximum = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
-    for (const char character : digits)
-    {
-        const uint64_t digit = static_cast<uint64_t>(character - '0');
-        if (nanoseconds > (maximum - digit) / 10)
-        {
-            FailConfig(fieldName, "exceeds signed 64-bit nanosecond range");
-        }
-        nanoseconds = nanoseconds * 10 + digit;
-    }
-    const int64_t parsed = static_cast<int64_t>(nanoseconds);
-    if (positive && parsed == 0)
-    {
-        FailConfig(fieldName, "must be positive");
-    }
-    return parsed;
 }
 
 } // namespace ns3
