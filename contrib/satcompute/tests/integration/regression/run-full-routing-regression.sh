@@ -32,11 +32,11 @@ hash_static_common="--simulationDuration=3 --constellationConfig=$constellation_
 --transferChunkMode=fixed --transferPayloadBytes=1024 \
 --transferLogMode=silent"
 hash_static_first="$(run_platform "$regression_output/hash-static-first" \
-  "$hash_static_common --runName=hash-static-first")"
+  "$hash_static_common")"
 hash_static_second="$(run_platform "$regression_output/hash-static-second" \
-  "$hash_static_common --runName=hash-static-second")"
+  "$hash_static_common")"
 hash_dynamic="$(run_platform "$regression_output/hash-dynamic" \
-  "--runName=hash-dynamic --simulationDuration=6 \
+  "--simulationDuration=6 \
 --constellationConfig=$constellation_4 --topologySource=replay \
 --topologyDir=$dynamic_topology --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
@@ -59,17 +59,16 @@ online_common="--simulationDuration=3 --constellationConfig=$constellation_4 \
 --topologySource=online --maxIslDistance=30000000 --delayMode=fixed \
 --fixedDelay=0.008 --networkUpdateInterval=1 --islBandwidthBps=100000000"
 online_fixed_result="$(run_platform "$regression_output/online-fixed" \
-  "$online_common --runName=online-fixed --routingMode=global-first")"
+  "$online_common --routingMode=global-first")"
 online_distance_result="$(run_platform "$regression_output/online-distance" \
   "--simulationDuration=3 --constellationConfig=$constellation_4 \
 --topologySource=online --maxIslDistance=30000000 --delayMode=distance \
 --fixedDelay=0 --networkUpdateInterval=1 --islBandwidthBps=100000000 \
---routingMode=global-hrw-per-flow \
---runName=online-distance")"
+--routingMode=global-hrw-per-flow")"
 online_transfer_result="$(run_platform "$regression_output/online-transfer" \
-  "$online_common --runName=online-transfer --routingMode=global-hash-per-flow \
+  "$online_common --routingMode=global-hash-per-flow \
 --transferTrace=$transfer_inputs/engine-basic.json")"
-online_task_arguments="$online_common --runName=online-task \
+online_task_arguments="$online_common \
 --routingMode=global-size-aware-hrw \
 --computeProfile=$task_inputs/compute-profile-single.json \
 --taskTrace=$task_inputs/task-single.json"
@@ -79,11 +78,11 @@ online_task_second="$(run_platform \
   "$regression_output/online-task-second" "$online_task_arguments")"
 online_capacity_result="$(run_platform \
   "$regression_output/online-capacity" \
-  "$online_common --runName=online-capacity \
+  "$online_common \
 --routingMode=global-capacity-aware-hrw")"
 online_66_result="$(run_platform \
   "$regression_output/online-66" \
-  "--runName=online-66 --simulationDuration=1 \
+  "--simulationDuration=1 \
 --constellationConfig=$constellation_66 --topologySource=online \
 --routingMode=global-first")"
 
@@ -102,7 +101,7 @@ for result in \
 done
 
 replay_capacity_result="$(run_platform "$regression_output/replay-capacity" \
-  "--runName=replay-capacity --simulationDuration=3 \
+  "--simulationDuration=3 \
 --constellationConfig=$constellation_2 --topologySource=replay \
 --topologyDir=$capacity_topology --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=1 --islBandwidthBps=1000000 \
@@ -136,8 +135,6 @@ for directory, mode in online_modes.items():
     summary = load_json(f"{directory}/run-summary.json")
     if summary["run_status"] != "COMPLETE":
         raise SystemExit(f"{directory} is not complete")
-    if summary["topology_source"] != "online":
-        raise SystemExit(f"{directory} did not use online topology")
     if summary["routing_mode"] != mode:
         raise SystemExit(f"{directory} routing mode differs")
     if summary["applied_topology_slice_count"] != 3:
@@ -171,7 +168,7 @@ for filename in (
         raise SystemExit(f"repeated online task output differs: {filename}")
 
 large = load_json("online-66/run-summary.json")
-if large["run_status"] != "COMPLETE" or large["topology_source"] != "online":
+if large["run_status"] != "COMPLETE":
     raise SystemExit("66-satellite online run differs")
 if large["applied_topology_slice_count"] != 1:
     raise SystemExit("66-satellite online initial update count differs")

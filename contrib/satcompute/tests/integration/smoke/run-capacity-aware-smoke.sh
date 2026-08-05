@@ -14,7 +14,7 @@ topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic
 transfers="contrib/satcompute/tests/fixtures/traffic/transfers/engine-basic.json"
 
 completed="$(./ns3 run --no-build \
-  "satcompute --runName=smoke-capacity-aware --simulationDuration=5 \
+  "satcompute --simulationDuration=5 \
 --constellationConfig=$constellation --topologySource=replay \
 --topologyDir=$topology --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \

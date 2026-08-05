@@ -41,14 +41,9 @@ struct RunMetadata
 /** Additional ns-3.48 provenance that must survive legacy metric restoration. */
 struct RunSummaryEvidence
 {
-    std::string runName;
-    std::string configSchemaVersion;
-    std::filesystem::path effectiveConfigPath;
-    std::string effectiveConfigSha256;
     int64_t simulationDurationNs{};
     int64_t wallClockNs{};
     std::string workloadMode;
-    std::string topologySource;
     uint32_t appliedTopologySliceCount{};
     uint32_t routeComputationCount{};
     bool runComplete{};

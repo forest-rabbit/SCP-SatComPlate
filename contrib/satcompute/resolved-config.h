@@ -28,7 +28,6 @@ class ResolvedSatComputeConfigError : public std::runtime_error
 /** 已转换为整数纳秒的仿真窗口。 */
 struct ResolvedSimulationConfig
 {
-    int64_t startTimeNs; ///< 逻辑仿真开始时刻。
     int64_t durationNs;  ///< 仿真持续时间。
 };
 
@@ -52,9 +51,8 @@ struct ResolvedNetworkConfig
 /** 已解析的 IPv4 路由参数。 */
 struct ResolvedRoutingConfig
 {
-    std::string mode;            ///< 五种受支持路由模式之一。
-    uint64_t hashSeed;           ///< 逐流 ECMP 与 HRW seed。
-    std::string recomputePolicy; ///< 路由重算策略。
+    std::string mode;  ///< 五种受支持路由模式之一。
+    uint64_t hashSeed; ///< 逐流 ECMP 与 HRW seed。
 };
 
 /** 已规范化为绝对路径的独立业务输入。 */
@@ -86,9 +84,8 @@ struct ResolvedLoggingConfig
 /** 可复现运行所需的 ns-3 随机数边界。 */
 struct ResolvedRandomnessConfig
 {
-    uint32_t seed;       ///< ns-3 全局 seed。
-    uint64_t run;        ///< ns-3 独立 run 编号。
-    int64_t streamStart; ///< SatCompute stream 起点。
+    uint32_t seed; ///< ns-3 全局 seed。
+    uint64_t run;  ///< ns-3 独立 run 编号。
 };
 
 /**
@@ -99,8 +96,6 @@ struct ResolvedRandomnessConfig
  */
 struct ResolvedSatComputeConfig
 {
-    std::string schemaVersion;                 ///< effective config 合同版本。
-    std::string runName;                       ///< 本次运行名称。
     bool topologyOnly;                         ///< 是否只生成轨道和拓扑切片。
     ResolvedSimulationConfig simulation;       ///< 仿真窗口。
     ConstellationDefinition constellation;     ///< 星座物理结构。
