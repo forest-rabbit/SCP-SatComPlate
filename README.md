@@ -10,6 +10,8 @@ SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真�
 建模和前端可视化提供输入。`main` 是 ns-3.48 开发主线；`legacy/ns-3.33` 只读
 保留旧版 SatCompute，不与主线合并。
 
+阶段进展、集成提交和验收证据见 [`MILESTONES.md`](MILESTONES.md)。
+
 ## 当前能力
 
 - 采用稳定卫星 ID 和 ns-3.48 原生 LEO 位置计算；
@@ -32,6 +34,7 @@ SCP-SatComPlate/
 ├── src/                      官方 ns-3.48 模块，不放项目代码
 ├── doc/                      官方 ns-3.48 文档源码
 ├── ns3                       ns-3 构建和运行入口
+├── MILESTONES.md             已完成阶段与验收证据
 ├── NOTICE.md                 上游来源说明
 └── .github/workflows/        阶段 CI
 ```
@@ -91,6 +94,7 @@ Python 工具仅依赖标准库，因此仓库不维护额外的 `uv.lock`，也
 
 | 文档 | 内容 |
 |---|---|
+| [项目里程碑](MILESTONES.md) | 已完成阶段、集成证据、验证结论与后续边界 |
 | [SatCompute 运行手册](contrib/satcompute/README.md) | 执行流程、全部参数、输入输出与运行模式 |
 | [输入说明](contrib/satcompute/input/README.md) | `para.cc`、星座、算力、任务与未来故障输入的边界 |
 | [拓扑模块](contrib/satcompute/topology/README.md) | 原生轨道、固定候选链路、在线更新与切片 |
