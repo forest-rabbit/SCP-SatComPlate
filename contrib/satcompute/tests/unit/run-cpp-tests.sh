@@ -21,5 +21,7 @@ trap 'rm -rf "$test_output"' EXIT
   "satcompute-task-input-test --fixtureRoot=contrib/satcompute/tests/fixtures/task"
 ./ns3 run --no-build "satcompute-compute-service-test"
 ./ns3 run --no-build "satcompute-fault-lifecycle-test"
+./ns3 run --no-build \
+  "satcompute-fault-trace-test --outputDir=$test_output/fault-trace"
 ./ns3 run --no-build "satcompute-online-orbit-foundation-test"
 ./ns3 run --no-build "satcompute-online-topology-controller-test"

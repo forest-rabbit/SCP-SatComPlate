@@ -2,7 +2,7 @@
 
 SatCompute 是 SCP-SatComPlate 在 ns-3.48 上的项目模块，只模拟卫星、星间链路、
 IPv4 路由、任务传输和星上计算。平台入口为 `satcompute.cc`；`para.h/.cc` 保存唯一
-一组类型化运行参数和默认值，星座、算力与任务则使用彼此独立的数据文件。
+一组类型化运行参数和默认值，星座、算力、任务与故障则使用彼此独立的数据文件。
 
 ## 执行流程
 
@@ -31,7 +31,8 @@ topologyOnly                正式仿真
 5. 后续只更新候选链路距离、active 状态和 distance 时延，不更换异轨对端；
 6. 只有 active 边集合变化时才重算 hop-based IPv4 路由；
 7. 同时提供 ComputeProfile 与 TaskTrace 时，执行输入传输、FCFS 计算和结果传输；
-8. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
+8. 提供 FaultTrace 时先完成字段、引用、时间区间和顺序校验；
+9. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
 
 `topologyOnly=1` 使用相同轨道和候选链路实现，但不会创建 InternetStack、
 NetDevice、路由、FlowMonitor 或任务对象。
@@ -47,8 +48,9 @@ NetDevice、路由、FlowMonitor 或任务对象。
 | [`routing/`](routing/README.md) | 五种 IPv4 策略、hash、HRW 和 reservation 状态 |
 | [`task/`](task/README.md) | ComputeProfile、TaskTrace、FCFS 服务和任务协调 |
 | [`traffic/`](traffic/README.md) | 任务内部的 UDP 输入/结果传输 |
+| [`fault/`](fault/README.md) | 确定性故障定义、输入校验与后续执行控制 |
 | [`metrics/`](metrics/README.md) | 网络、路由、任务和失败诊断输出 |
-| [`input/`](input/README.md) | 星座、算力、任务与组合示例 |
+| [`input/`](input/README.md) | 星座、算力、任务、故障与组合示例 |
 | [`tools/`](tools/README.md) | 任务生成与输出校验工具 |
 | [`tests/`](tests/README.md) | SatCompute 自有 unit、smoke、regression 和 fixture |
 
@@ -73,8 +75,8 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 ## 参数边界
 
 人工设置的时长和间隔统一以秒传入，平台在组件边界转换为 ns-3 `Time` 或有符号
-整数纳秒。星座 CSV 只描述轨道结构，算力和任务分别位于独立 JSON；两类数据与
-`para.cc` 不重复。
+整数纳秒。星座 CSV 只描述轨道结构，算力、任务和故障分别位于独立输入文件；这些
+数据与 `para.cc` 不重复。
 
 ### simulation
 
@@ -91,7 +93,7 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 | `--constellationConfig` | `input/topology/constellations/synthetic-66.csv` | 路径 | 一个原生 LEO shell CSV；不能为空且必须通过星座校验 |
 | `--maxIslDistance` | `6171353` | 米 | 候选 ISL 最大有效距离；不得超过对应轨道高度的 80 km clearance 上限 |
 | `--networkUpdateInterval` | `20` | 秒 | 正式仿真的链路状态/时延更新周期；必须大于 0 |
-| `--topologyOnly` | `false` | bool | 只输出轨道和拓扑切片；启用时禁止任务输入 |
+| `--topologyOnly` | `false` | bool | 只输出轨道和拓扑切片；启用时禁止任务和故障输入 |
 | `--topologySliceInterval` | `1` | 秒 | topology-only 采样周期；必须大于 0 |
 | `--includeFinalTopologyState` | `true` | bool | cadence 未覆盖终点时，是否额外输出仿真终点状态 |
 
@@ -135,6 +137,15 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 
 size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload，此时
 `transferPayloadBytes` 不参与分包，但仍需位于合法整数范围。
+
+### fault
+
+| CLI | 默认值 | 类型/单位 | 含义与约束 |
+|---|---:|---|---|
+| `--faultTrace` | 空 | 路径 | 确定性故障 JSON；字段合同见 `input/fault/README.md` |
+
+空路径完全保持无故障行为。当前小步只读取和校验，故障执行由后续 N4A 阶段接入；
+`failure_probability` 不用于重新抽样故障是否发生。
 
 ### output
 
@@ -180,9 +191,9 @@ plane-major 顺序编号为 `0..65`，不直接使用全局 `Node::GetId()`。
 固定候选并记录 `active`、距离、时延和带宽。详细合同见
 [topology/export](topology/export/README.md)。
 
-计划中的故障工作流是：先生成整个周期的拓扑切片，再据此生成故障 JSON，最后让
-正式平台在线计算同一拓扑并读取故障事件。未来故障将在精确事件时刻立即禁用资源
-并重算路由，不等待下一个网络 tick；故障生成和执行当前尚未实现。
+故障工作流是：先生成整个周期的拓扑切片，再据此生成故障 JSON，最后让正式平台
+在线计算同一自然拓扑并读取故障事件。FaultTrace 的严格输入合同已经实现；精确
+事件执行、资源禁用和即时重路由在后续 N4A 小步接入，不等待下一个网络 tick。
 
 ## 任务与计算
 

@@ -90,6 +90,11 @@ GetDefaultSatComputeConfig()
     // --taskCompletionPolicy：strict 对未完成任务返回非零，report 只报告结果。
     config.taskCompletionPolicy = "strict";
 
+    // fault
+
+    // --faultTrace：确定性故障轨迹 JSON；空路径完全保持无故障行为。
+    config.faultTrace = "";
+
     // output
 
     // --outputDir：结构化结果输出目录；默认写入 /tmp，避免污染工作树。

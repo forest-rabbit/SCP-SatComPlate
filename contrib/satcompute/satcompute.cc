@@ -7,6 +7,7 @@
 #include "ns3/constellation-definition.h"
 #include "ns3/circular-orbit-topology-policy.h"
 #include "ns3/ecmp-route-recorder.h"
+#include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/para.h"
@@ -163,6 +164,9 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
     commandLine.AddValue("taskCompletionPolicy",
                          "Task completion policy: strict or report",
                          config.taskCompletionPolicy);
+    commandLine.AddValue("faultTrace",
+                         "Deterministic satellite fault trace JSON path",
+                         config.faultTrace);
     commandLine.AddValue("topologyOnly",
                          "Generate topology slices without network simulation",
                          config.topologyOnly);
@@ -245,6 +249,10 @@ ValidateConfig(const SatComputeConfig& config)
     {
         FailConfig("topologyOnly", "cannot load task inputs");
     }
+    if (config.topologyOnly && !config.faultTrace.empty())
+    {
+        FailConfig("topologyOnly", "cannot load a fault trace");
+    }
     RequireNotEmpty(config.outputDirectory, "outputDir");
     RequireChoice(config.taskLogMode, "taskLogMode", {"summary", "verbose", "silent"});
     RequireChoice(config.diagnosticMode, "diagnosticMode", {"off", "failure"});
@@ -271,6 +279,7 @@ main(int argc, char* argv[])
         config.computeProfile =
             ResolveOptionalInputFile(config.computeProfile, "computeProfile");
         config.taskTrace = ResolveOptionalInputFile(config.taskTrace, "taskTrace");
+        config.faultTrace = ResolveOptionalInputFile(config.faultTrace, "faultTrace");
         const int64_t simulationDurationNs =
             SatComputeSecondsToNanoseconds(config.simulationDurationSeconds,
                                            "simulationDuration");
@@ -335,18 +344,32 @@ main(int argc, char* argv[])
 
             Ptr<NetworkTransferEngine> transferEngine;
             Ptr<TaskCoordinator> taskCoordinator;
+            std::optional<ComputeProfile> computeProfile;
+            std::optional<TaskTrace> taskTrace;
             if (!config.computeProfile.empty() && !config.taskTrace.empty())
             {
-                const ComputeProfile profile =
-                    ReadComputeProfile(config.computeProfile, topology);
-                const TaskTrace trace = ReadTaskTrace(config.taskTrace,
-                                                      simulationDurationNs,
-                                                      topology,
-                                                      profile);
-                LogTaskInputs(profile, trace, config.taskLogMode);
+                computeProfile = ReadComputeProfile(config.computeProfile, topology);
+                taskTrace = ReadTaskTrace(config.taskTrace,
+                                          simulationDurationNs,
+                                          topology,
+                                          computeProfile.value());
+                LogTaskInputs(computeProfile.value(), taskTrace.value(), config.taskLogMode);
+            }
+            if (!config.faultTrace.empty())
+            {
+                const FaultTrace faultTrace =
+                    ReadFaultTrace(config.faultTrace,
+                                   simulationDurationNs,
+                                   topology,
+                                   computeProfile.has_value() ? &computeProfile.value()
+                                                              : nullptr);
+                (void)faultTrace;
+            }
+            if (computeProfile.has_value() && taskTrace.has_value())
+            {
                 taskCoordinator = CreateObject<TaskCoordinator>();
-                taskCoordinator->Initialize(profile,
-                                            trace,
+                taskCoordinator->Initialize(computeProfile.value(),
+                                            taskTrace.value(),
                                             topology,
                                             config.transferChunkMode,
                                             config.transferPayloadBytes,
