@@ -18,7 +18,7 @@
 #include "ns3/task-coordinator.h"
 #include "ns3/task-trace.h"
 
-#include "../third-party/nlohmann/json.hpp"
+#include "third-party/nlohmann/json.hpp"
 
 #include <chrono>
 #include <filesystem>

@@ -100,7 +100,7 @@ build_lib(
 build_exec(
   EXECNAME satcompute
   EXECNAME_PREFIX satcompute_app_
-  SOURCE_FILES app/satcompute.cc
+  SOURCE_FILES satcompute.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
