@@ -286,6 +286,8 @@ main(int argc, char* argv[])
             std::filesystem::absolute(config.outputDirectory).lexically_normal();
         const ConstellationDefinition constellationDefinition =
             LoadConstellationDefinition(config.constellationConfig);
+        ValidateMaxIslDistanceAgainstOrbit(constellationDefinition.shell,
+                                           config.maxIslDistanceMeters);
 
         RngSeedManager::SetSeed(config.randomSeed);
         RngSeedManager::SetRun(config.randomRun);

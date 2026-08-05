@@ -89,7 +89,7 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
 | `--constellationConfig` | `input/topology/constellations/synthetic-66.csv` | 路径 | 一个原生 LEO shell CSV；不能为空且必须通过星座校验 |
-| `--maxIslDistance` | `6174589` | 米 | 候选 ISL 的最大有效距离；必须为有限正数 |
+| `--maxIslDistance` | `6171353` | 米 | 候选 ISL 最大有效距离；不得超过对应轨道高度的 80 km clearance 上限 |
 | `--networkUpdateInterval` | `20` | 秒 | 正式仿真的链路状态/时延更新周期；必须大于 0 |
 | `--topologyOnly` | `false` | bool | 只输出轨道和拓扑切片；启用时禁止任务输入 |
 | `--topologySliceInterval` | `1` | 秒 | topology-only 采样周期；必须大于 0 |

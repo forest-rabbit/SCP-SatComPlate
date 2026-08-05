@@ -30,7 +30,7 @@ GetDefaultSatComputeConfig()
         "contrib/satcompute/input/topology/constellations/synthetic-66.csv";
 
     // --maxIslDistance：候选链路的最大有效距离，单位为米。
-    config.maxIslDistanceMeters = 6'174'589.0;
+    config.maxIslDistanceMeters = 6'171'353.0;
 
     // --networkUpdateInterval：在线链路状态和时延的更新周期，单位为秒。
     config.networkUpdateIntervalSeconds = 20.0;

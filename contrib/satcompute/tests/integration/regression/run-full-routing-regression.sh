@@ -16,11 +16,11 @@ run_platform() {
 }
 
 constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.csv"
-constellation_4="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
+constellation_16="contrib/satcompute/tests/fixtures/constellation/connected-16.csv"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 
-common="--simulationDuration=3 --constellationConfig=$constellation_4 \
---maxIslDistance=30000000 --delayMode=fixed --fixedDelay=0.001 \
+common="--simulationDuration=3 --constellationConfig=$constellation_16 \
+--maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=1 --islBandwidthBps=100000000"
 
 first_result="$(run_platform "$regression_output/first" \
@@ -43,8 +43,8 @@ capacity_result="$(run_platform "$regression_output/capacity" \
 --computeProfile=$task_inputs/compute-profile-single.json \
 --taskTrace=$task_inputs/task-single.json")"
 distance_result="$(run_platform "$regression_output/distance" \
-  "--simulationDuration=3 --constellationConfig=$constellation_4 \
---maxIslDistance=30000000 --delayMode=distance --fixedDelay=0 \
+  "--simulationDuration=3 --constellationConfig=$constellation_16 \
+--maxIslDistance=6171353 --delayMode=distance --fixedDelay=0 \
 --networkUpdateInterval=1 --islBandwidthBps=100000000 \
 --routingMode=global-first")"
 large_result="$(run_platform "$regression_output/online-66" \

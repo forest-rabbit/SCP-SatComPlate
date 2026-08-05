@@ -15,12 +15,12 @@ run_platform() {
   ./ns3 run --no-build "satcompute --outputDir=$output_directory $*"
 }
 
-constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
+constellation="contrib/satcompute/tests/fixtures/constellation/connected-16.csv"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 profile="$task_inputs/compute-profile-single.json"
 trace="$task_inputs/task-single.json"
 common="--simulationDuration=5 --constellationConfig=$constellation \
---maxIslDistance=30000000 --delayMode=fixed \
+--maxIslDistance=6171353 --delayMode=fixed \
 --fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=100000000"
 
 task_arguments="$common --routingMode=global-size-aware-hrw \
@@ -59,7 +59,7 @@ if [[ "$example_result" != *'"satellite_count":66'* ||
 fi
 
 partial_common="--simulationDuration=1 --constellationConfig=$constellation \
---maxIslDistance=30000000 --delayMode=fixed \
+--maxIslDistance=6171353 --delayMode=fixed \
 --fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --islQueueBytes=1 --routingMode=global-first \
 --computeProfile=$profile --taskTrace=$trace --transferPayloadBytes=1024 \
