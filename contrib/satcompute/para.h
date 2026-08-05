@@ -1,0 +1,74 @@
+/*
+ * SPDX-License-Identifier: GPL-2.0-only
+ */
+
+#ifndef SATCOMPUTE_PARA_H
+#define SATCOMPUTE_PARA_H
+
+#include <cstdint>
+#include <string>
+
+namespace ns3
+{
+
+/**
+ * SatCompute 的平台运行参数。
+ *
+ * 人工设置的时间参数统一使用秒；解析完成后再转换为 ns-3 Time。
+ * 星座 JSON 只描述星座物理结构，运行策略和数据文件路径均由本结构管理。
+ */
+struct SatComputeConfig
+{
+    std::string runName;                  ///< 本次运行的稳定名称。
+    double simulationStartSeconds;        ///< 仿真开始时刻，单位为秒。
+    double simulationDurationSeconds;     ///< 仿真持续时间，单位为秒。
+
+    std::string constellationConfig;      ///< 星座物理结构 JSON 路径。
+    std::string topologySource;           ///< 拓扑来源：online 或 replay。
+    std::string topologyDirectory;        ///< replay 拓扑切片目录。
+    std::string islCandidateStrategy;     ///< 固定候选 ISL 生成策略。
+    bool seamEnabled;                     ///< 是否允许跨 seam 候选链路。
+    double maxIslDistanceMeters;          ///< ISL 最大允许距离，单位为米。
+    std::string delayMode;                ///< 时延模式：fixed 或 distance。
+    double fixedDelaySeconds;             ///< fixed 模式单向链路时延，单位为秒。
+    double networkUpdateIntervalSeconds;  ///< 在线网络状态更新时间，单位为秒。
+
+    uint64_t islBandwidthBps;     ///< 每条 ISL 的数据速率，单位为 bit/s。
+    uint16_t islMtuBytes;         ///< 每个 ISL 设备的 MTU，单位为字节。
+    uint32_t islQueueBytes;       ///< 每个 ISL 队列容量，单位为字节。
+    uint32_t receiverRcvBufBytes; ///< UDP 接收缓冲区，单位为字节。
+
+    std::string routingMode;            ///< IPv4 路由模式。
+    std::string routingRecomputePolicy; ///< 路由重算策略。
+    uint64_t ecmpHashSeed;               ///< 逐流 ECMP 与 HRW 的 hash seed。
+
+    std::string transferTrace;         ///< NetworkTransfer 输入 JSON 路径。
+    std::string computeProfile;        ///< 卫星算力资源 JSON 路径。
+    std::string taskTrace;             ///< 任务输入 JSON 路径。
+    std::string transferChunkMode;     ///< 传输分包策略。
+    uint32_t transferPayloadBytes;     ///< fixed 分包的 UDP payload 字节数。
+    std::string taskCompletionPolicy;  ///< 任务完成策略：strict 或 report。
+
+    bool topologyExportEnabled;           ///< 是否导出坐标和拓扑切片。
+    double topologyExportIntervalSeconds; ///< 拓扑导出间隔，单位为秒。
+    bool includeFinalTopologyState;       ///< 是否额外导出仿真终点状态。
+    std::string outputDirectory;          ///< 结构化结果输出目录。
+    std::string transferLogMode;          ///< 传输日志级别。
+    std::string taskLogMode;              ///< 任务日志级别。
+    std::string diagnosticMode;           ///< 失败诊断模式。
+
+    uint32_t randomSeed;       ///< ns-3 全局随机 seed。
+    uint64_t randomRun;        ///< ns-3 独立运行编号。
+    int64_t randomStreamStart; ///< SatCompute 预留随机 stream 起点。
+};
+
+/**
+ * 返回平台唯一的一组内置默认参数。
+ *
+ * @return 尚未经过命令行覆盖和语义校验的默认配置。
+ */
+SatComputeConfig GetDefaultSatComputeConfig();
+
+} // namespace ns3
+
+#endif // SATCOMPUTE_PARA_H

@@ -13,6 +13,8 @@ distance="contrib/satcompute/input/examples/synthetic-66-distance.json"
 task="contrib/satcompute/tests/fixtures/scenario/task-input.json"
 invalid="contrib/satcompute/tests/fixtures/scenario/invalid-unknown-field.json"
 
+./ns3 run --no-build "satcompute-para-test"
+
 ./ns3 run --no-build \
   "satcompute-config-test --fixedScenario=$fixed \
 --distanceScenario=$distance --taskScenario=$task \
