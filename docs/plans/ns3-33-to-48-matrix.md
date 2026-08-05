@@ -49,7 +49,7 @@
 | `routing/common/*` | 同路径，已适配 ns-3.48 | 保留 legacy hash/候选合同 | 待审计 |
 | `routing/ns3/*` | 同路径，已适配 ns-3.48 | 保留 current API 适配 | 待审计 |
 | `routing/state/*` | 同路径，已适配 ns-3.48 | 保留并验证确定性 | 待审计 |
-| `routing/routing-policy-factory.*` | 被删除 | 恢复 legacy 工厂边界 | 待迁移 |
+| `routing/routing-policy-factory.*` | 已恢复，next-hop/path 公共调用均经过工厂 | 保留 legacy 接口并扩展完整路径策略入口 | 已迁移，待阶段 5 回归 |
 
 ## task
 

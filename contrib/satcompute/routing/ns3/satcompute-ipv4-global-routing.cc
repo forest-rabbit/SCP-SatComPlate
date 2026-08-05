@@ -7,7 +7,7 @@
 #include "satcompute-ipv4-global-routing.h"
 
 #include "../algorithm/hrw-per-flow-policy.h"
-#include "../algorithm/size-aware-hrw-policy.h"
+#include "../routing-policy-factory.h"
 
 #include "ns3/abort.h"
 #include "ns3/ipv4-route.h"
@@ -66,24 +66,12 @@ SatComputeIpv4GlobalRouting::Configure(RoutingMode selectionMode,
     m_selectionMode = selectionMode;
     m_hashSeed = hashSeed;
     m_flowRouteRegistry = flowRouteRegistry;
-    if (selectionMode == RoutingMode::HASH_PER_FLOW)
-    {
-        m_nextHopPolicy = std::make_unique<HashPerFlowPolicy>();
-    }
-    else if (selectionMode == RoutingMode::HRW_PER_FLOW)
-    {
-        m_nextHopPolicy = std::make_unique<HrwPerFlowPolicy>();
-    }
-    else if (selectionMode == RoutingMode::SIZE_AWARE_HRW)
-    {
-        m_nextHopPolicy = std::make_unique<SizeAwareHrwPolicy>(
-            *flowRouteRegistry,
-            flowRouteRegistry->GetSizeAwareLoadState());
-    }
-    else
-    {
-        m_nextHopPolicy.reset();
-    }
+    const SizeAwareLoadView* sizeAwareLoadView =
+        flowRouteRegistry == nullptr ? nullptr : &flowRouteRegistry->GetSizeAwareLoadState();
+    m_nextHopPolicy = RoutingPolicyFactory::CreateNextHopPolicy(
+        selectionMode,
+        PeekPointer(flowRouteRegistry),
+        sizeAwareLoadView);
 }
 
 void

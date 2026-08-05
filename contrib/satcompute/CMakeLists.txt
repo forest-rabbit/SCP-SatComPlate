@@ -13,6 +13,7 @@ build_lib(
     routing/algorithm/hrw-per-flow-policy.cc
     routing/algorithm/size-aware-hrw-policy.cc
     routing/common/routing-mode.cc
+    routing/routing-policy-factory.cc
     routing/ns3/satcompute-ipv4-global-routing.cc
     routing/ns3/satcompute-ipv4-global-routing-helper.cc
     routing/state/capacity-reservation-state.cc
@@ -60,6 +61,7 @@ build_lib(
     routing/common/ecmp-route-candidate.h
     routing/common/fnv1a64.h
     routing/common/routing-mode.h
+    routing/routing-policy-factory.h
     routing/ns3/satcompute-ipv4-global-routing.h
     routing/ns3/satcompute-ipv4-global-routing-helper.h
     routing/state/capacity-reservation-state.h
@@ -212,6 +214,15 @@ build_exec(
   EXECNAME satcompute-routing-compatibility-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/routing-compatibility-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-routing-policy-factory-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/routing-policy-factory-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

@@ -6,6 +6,8 @@
 
 #include "network-transfer-engine.h"
 
+#include "../routing/routing-policy-factory.h"
+
 #include "ns3/abort.h"
 #include "ns3/simulator.h"
 
@@ -85,9 +87,12 @@ NetworkTransferEngine::Configure(SatelliteRuntimeView& topology,
         NS_ABORT_MSG_IF(m_flowRouteRegistry == nullptr,
                         "capacity-aware routing requires a flow registry");
         m_capacityReservationState = std::make_unique<CapacityReservationState>();
-        m_capacityPathPolicy = std::make_unique<CapacityAwareHrwPolicy>(
-            topology,
-            *m_capacityReservationState);
+        m_capacityPathPolicy = RoutingPolicyFactory::CreatePathPolicy(
+            RoutingMode::CAPACITY_AWARE_HRW,
+            &topology,
+            m_capacityReservationState.get());
+        NS_ABORT_MSG_IF(m_capacityPathPolicy == nullptr,
+                        "capacity-aware routing factory returned no path policy");
         topology.RegisterRouteUpdateCallback(
             MakeCallback(&NetworkTransferEngine::HandleTopologyRouteUpdate, this));
     }

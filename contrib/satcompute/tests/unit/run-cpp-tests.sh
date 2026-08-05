@@ -68,6 +68,8 @@ diamond_constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4
 ./ns3 run --no-build \
   "satcompute-routing-compatibility-test --topologyDir=$dynamic_topology"
 
+./ns3 run --no-build "satcompute-routing-policy-factory-test"
+
 ./ns3 run --no-build \
   "satcompute-size-aware-routing-test --topologyDir=$dynamic_topology"
 

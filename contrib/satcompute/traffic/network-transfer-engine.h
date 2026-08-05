@@ -5,7 +5,6 @@
 #ifndef SATCOMPUTE_NETWORK_TRANSFER_ENGINE_H
 #define SATCOMPUTE_NETWORK_TRANSFER_ENGINE_H
 
-#include "../routing/algorithm/capacity-aware-hrw-policy.h"
 #include "../routing/algorithm/path-policy.h"
 #include "../routing/state/capacity-reservation-state.h"
 #include "../topology/satellite-runtime-view.h"
