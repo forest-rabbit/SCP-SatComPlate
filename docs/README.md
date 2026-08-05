@@ -1,16 +1,16 @@
 # 文档索引
 
-## 当前基线
+本目录只保留仍然有效的项目规范和必要的上游归档，不再保存已经完成的迁移计划、
+临时审计表或被否决的历史配置方案。
 
-- [v0.4 平台规格](specs/platform-v0.4.md)：当前架构、输入输出、行为边界和完成标准；
-- [v0.4 实施计划](plans/platform-v0.4-simplification.md)：本轮迁移与精简任务；
-- [ns-3.48 迁移状态](ns3-48-migration-status.md)：当前 `main` 已实现能力概览。
+## 当前项目文档
 
-README 与上述 v0.4 文档共同描述当前平台。若历史文档中的命令、目录或字段与它们
-冲突，以 v0.4 为准。
+- [v0.4 平台规格](specs/platform-v0.4.md)：当前架构、输入输出、行为边界和
+  后续范围；
+- [项目总览](../README.md)：环境、构建、快速运行和文档导航；
+- [SatCompute 运行手册](../contrib/satcompute/README.md)：执行流程、参数和输入输出。
 
-## 历史资料
+## 上游归档
 
-`specs/platform-v0.2.md`、`specs/platform-v0.3.md` 以及除 v0.4 实施计划外的
-`plans/` 文件记录早期迁移、文件对照和设计取舍。它们保留用于审计，不再代表当前
-CLI、拓扑工作流、输入输出格式或测试清单。
+[ns-3.48 上游资料](upstream/ns-3.48/README.md)只用于保留作者名单、API 变更记录
+和发行说明，不代表 SCP-SatComPlate 的贡献流程或发布记录。
