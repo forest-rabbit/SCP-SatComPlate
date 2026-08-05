@@ -193,10 +193,18 @@ controller、地址管理和 link state。
 
 ## 阶段 4：input 与 tools
 
-### 任务 4.1：恢复 legacy input
+### 任务 4.1：恢复 legacy input（已完成）
 
 恢复 topology examples、compute profiles、traffic workloads 和 README；保持提交的
 JSON 内容和稳定 ID，不把运行结果提交到仓库。
+
+实现结果（2026-08-05）：
+
+- 33 个 legacy input 文件按原 blob 恢复，包括 66 星静态/10 秒 replay 快照、
+  22/66 节点 ComputeProfile、5000 条 varied transfer 与 10 条本地大流输入；
+- 新增快速合同测试只解析大型 workload，不在 CI 执行完整压力仿真；
+- 真实 66 星 replay 平台运行应用 0/10/20 秒三个切片，链路集合不变时只进行
+  一次初始路由计算。
 
 ### 任务 4.2：恢复 analysis、validation 和 visualization
 
