@@ -1,7 +1,7 @@
 # 实施计划：SatCompute ns-3.48 legacy-parity 迁移
 
-状态：已批准，阶段 0 至阶段 4 已完成；阶段 4 唯一一次 GitHub CI run
-`30974934528` 已通过，下一步进入阶段 5 的 routing、traffic 和 task 对应迁移。
+状态：已批准，阶段 0 至阶段 5 已完成；阶段 5 唯一一次 GitHub CI run
+`30977572201` 已通过，下一步进入阶段 6 的 metrics 与诊断迁移。
 
 依据：[平台 v0.3 规格](../specs/platform-v0.3.md)。
 
@@ -301,6 +301,23 @@ JSON 内容和稳定 ID，不把运行结果提交到仓库。
 - 五种 IPv4 模式和任务闭环通过 legacy 黄金回归；
 - 大阶段本地完整业务回归通过；
 - `main` 手动运行一次 SatCompute CI。
+
+实现结果（2026-08-05）：
+
+- PR #50 恢复 `routing-policy-factory.*`，IPv4 next-hop 与 capacity-aware 完整
+  路径都通过工厂进入真实调用链；
+- PR #51 恢复 `traffic/network-transfer.*`，保留 legacy 秒签名，新增明确的纳秒
+  内部入口，并让平台重新使用 wrapper 与 `transferLogMode`；
+- PR #52 按原路径、原字节恢复 54 个 legacy fixture，增加 SHA-256 inventory、
+  `tests/support` 和 legacy workload parity 门禁；
+- SatCompute-only 完整构建通过，配置明确显示 `Examples: OFF`、`Tests: OFF`；
+- 62 个项目 Python 测试、25 组 C++ 可执行测试、smoke 和 regression 全部通过；
+- 本地黄金回归覆盖 canonical 顺序、派生 transfer ID、IPv4/UDP 五元组、三档
+  分包、精确服务时长、FCFS、异构算力、五种 IPv4 模式、strict/report 和动态
+  链路集合变化；
+- 阶段 5 唯一一次 GitHub CI run `30977572201` 在 `main` commit `b73f15af9`
+  上手动触发，1m52s 通过；工作流未启用或运行 ns-3 examples、全局 tests 或
+  `test.py`。
 
 ## 阶段 6：metrics 与诊断
 
