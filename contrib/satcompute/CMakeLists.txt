@@ -303,6 +303,15 @@ build_exec(
 )
 
 build_exec(
+  EXECNAME satcompute-legacy-workload-parity-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/legacy-workload-parity-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
   EXECNAME satcompute-run-output-writer-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/run-output-writer-test.cc

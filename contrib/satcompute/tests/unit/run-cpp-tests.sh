@@ -107,6 +107,14 @@ task_fixtures="contrib/satcompute/tests/fixtures/task"
 --fixtureRoot=$task_fixtures"
 
 ./ns3 run --no-build \
+  "satcompute-legacy-workload-parity-test \
+--staticTopology=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+--dynamicTopology=$dynamic_topology \
+--computeRoot=contrib/satcompute/tests/fixtures/topology/compute-profiles \
+--taskRoot=contrib/satcompute/tests/fixtures/traffic/tasks \
+--transferRoot=$transfer_fixtures"
+
+./ns3 run --no-build \
   "satcompute-run-output-writer-test \
 --constellationConfig=$diamond_constellation --topologyDir=$dynamic_topology \
 --fixtureRoot=contrib/satcompute/tests/fixtures \
