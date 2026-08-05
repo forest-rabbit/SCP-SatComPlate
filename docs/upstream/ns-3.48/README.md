@@ -8,4 +8,4 @@
 
 这些文件只用于保留上游来源和离线查询，不描述 SCP-SatComPlate 的当前功能、
 贡献流程或发布计划。项目当前说明以根目录 `README.md`、
-`contrib/satcompute/README.md` 和 `docs/specs/platform-v0.4.md` 为准。
+`contrib/satcompute/README.md` 和各模块 README 为准。

@@ -38,8 +38,8 @@ struct ConstellationDefinition
 /**
  * 读取并严格校验一个 ns-3.48 LeoOrbitalShell CSV。
  *
- * SatCompute v0.4 当前只支持一个 shell。注释和一行标题允许存在，唯一数据行
- * 使用 altitudeKm、inclinationDegrees、numberOfPlanes、
+ * 当前实现只支持一个 shell。注释和一行标题允许存在，唯一数据行使用
+ * altitudeKm、inclinationDegrees、numberOfPlanes、
  * numberOfSatellitesPerPlane、phasingFactor、raanSpanDeg 六列。
  *
  * @param path 星座结构 CSV 路径。

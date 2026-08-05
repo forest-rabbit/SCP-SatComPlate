@@ -33,16 +33,18 @@ after all pull requests for a major migration phase have merged to `main`, not
 for every commit or pull request. Focused local builds and tests remain required
 for every increment.
 
-The authoritative platform contract is `docs/specs/platform-v0.4.md`.
-Platform execution uses typed defaults in `para.h`/`para.cc` with optional CLI
-overrides registered and validated in `satcompute.cc`. The constellation input
-uses the native ns-3.48 `LeoOrbitalShell` CSV columns and describes orbital
-structure only. Compute profiles, tasks, topology slices, and future fault
-events remain independent data files. Do not reintroduce a complete scenario
-JSON, a resolved/effective configuration layer, schema/software version fields,
-or duplicate a parameter across `para.cc` and the constellation file.
-Human-facing simulation durations and cadences use seconds and are converted to
-ns-3 `Time` or integer nanoseconds only at component boundaries.
+The current platform contract is documented next to the implementation:
+`contrib/satcompute/README.md` defines execution and parameters, while each
+module README defines its own behavior and files. Platform execution uses typed
+defaults in `para.h`/`para.cc` with optional CLI overrides registered and
+validated in `satcompute.cc`. The constellation input uses the native ns-3.48
+`LeoOrbitalShell` CSV columns and describes orbital structure only. Compute
+profiles, tasks, topology slices, and future fault events remain independent
+data files. Do not reintroduce a complete scenario JSON, a resolved/effective
+configuration layer, schema/software version fields, or duplicate a parameter
+across `para.cc` and the constellation file. Human-facing simulation durations
+and cadences use seconds and are converted to ns-3 `Time` or integer nanoseconds
+only at component boundaries.
 
 The online simulator and topology-only platform mode must share orbit,
 candidate-link, distance-gate, delay, and slice-export implementations. Stable

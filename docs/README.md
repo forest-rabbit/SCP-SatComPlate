@@ -1,16 +1,13 @@
-# 文档索引
+# 文档归档
 
-本目录只保留仍然有效的项目规范和必要的上游归档，不再保存已经完成的迁移计划、
-临时审计表或被否决的历史配置方案。
+项目当前行为直接记录在根目录总览、SatCompute 运行手册和各模块 README 中，避免
+再维护一份容易与实现分离的迁移规格。本目录只保留必要的
+[ns-3.48 上游资料](upstream/ns-3.48/README.md)：作者名单、API 变更记录和发行
+说明；它们不代表 SCP-SatComPlate 的贡献流程或发布记录。
 
-## 当前项目文档
+当前项目文档入口：
 
-- [v0.4 平台规格](specs/platform-v0.4.md)：当前架构、输入输出、行为边界和
-  后续范围；
-- [项目总览](../README.md)：环境、构建、快速运行和文档导航；
-- [SatCompute 运行手册](../contrib/satcompute/README.md)：执行流程、参数和输入输出。
-
-## 上游归档
-
-[ns-3.48 上游资料](upstream/ns-3.48/README.md)只用于保留作者名单、API 变更记录
-和发行说明，不代表 SCP-SatComPlate 的贡献流程或发布记录。
+- [项目总览](../README.md)：环境、构建、完整示例和文档导航；
+- [SatCompute 运行手册](../contrib/satcompute/README.md)：执行流程、全部参数和
+  输入输出；
+- [模块文档](../contrib/satcompute/)：拓扑、路由、任务、传输、指标、工具与测试。

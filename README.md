@@ -28,7 +28,7 @@ SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真�
 SCP-SatComPlate/
 ├── contrib/satcompute/       SatCompute 平台代码、输入、工具和测试
 ├── third-party/              仓库级第三方依赖
-├── docs/                     当前平台规范与 ns-3.48 上游归档
+├── docs/                     ns-3.48 上游资料归档
 ├── src/                      官方 ns-3.48 模块，不放项目代码
 ├── doc/                      官方 ns-3.48 文档源码
 ├── ns3                       ns-3 构建和运行入口
@@ -97,7 +97,7 @@ Python 工具仅依赖标准库，因此仓库不维护额外的 `uv.lock`，也
 | [路由模块](contrib/satcompute/routing/README.md) | 五种 IPv4 策略、核心公式与确定性状态 |
 | [任务与传输](contrib/satcompute/task/README.md) | 任务状态机、FCFS 与结果大小 |
 | [指标模块](contrib/satcompute/metrics/README.md) | 输出文件、字段职责与失败诊断 |
+| [辅助工具](contrib/satcompute/tools/README.md) | TaskTrace 生成与失败输出检查 |
 | [测试说明](contrib/satcompute/tests/README.md) | 本地测试入口、覆盖范围与阶段 CI 规则 |
-| [平台 v0.4 规范](docs/specs/platform-v0.4.md) | 当前行为合同与明确延期范围 |
 
 许可证和上游来源见 [NOTICE](NOTICE.md)。
