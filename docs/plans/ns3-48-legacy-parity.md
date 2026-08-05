@@ -1,6 +1,6 @@
 # 实施计划：SatCompute ns-3.48 legacy-parity 迁移
 
-状态：已批准，执行中。
+状态：已批准，阶段 0 和阶段 1 已完成，阶段 2 待执行。
 
 依据：[平台 v0.3 规格](../specs/platform-v0.3.md)。
 
@@ -61,7 +61,7 @@ git status --short --branch
 
 ## 阶段 1：目录、入口和默认参数外形
 
-### 任务 1.1：恢复根目录入口
+### 任务 1.1：恢复根目录入口（已完成）
 
 动作：
 
@@ -71,7 +71,7 @@ git status --short --branch
 
 验收：模块构建且 `./ns3 run "satcompute --help"` 成功。
 
-### 任务 1.2：恢复 `para.h/para.cc`
+### 任务 1.2：恢复 `para.h/para.cc`（已完成）
 
 动作：
 
@@ -82,7 +82,7 @@ git status --short --branch
 
 验收：默认值、CLI 覆盖和秒到 ns 转换可独立测试。
 
-### 任务 1.3：恢复中文 README 基线
+### 任务 1.3：恢复中文 README 基线（已完成）
 
 动作：以 legacy README 的章节和语义为底稿，先更新构建方式与“迁移中”边界，
 后续阶段随合同落地更新具体命令。
@@ -93,6 +93,16 @@ git status --short --branch
 - 当前 scenario 路径仍是唯一活动路径，新增 para 尚未形成第二活动配置源；
 - 完整本地项目验证通过；
 - `main` 手动运行一次 SatCompute CI。
+
+实现结果（2026-08-05）：
+
+- PR #27 将平台入口恢复到模块根目录；
+- PR #28 和 #29 恢复 typed defaults、集中 CLI 注册、组合校验及秒到纳秒转换；
+- PR #30 以 ns-3.33 中文 README 为主体恢复运行说明；
+- 本地 configure/build、26 项 Python 合同测试、17 组 C++ 测试、smoke 和
+  regression 全部通过；
+- production 入口仍只读取 scenario 0.2，`para` 尚未接入，不存在双活动配置源；
+- 本阶段唯一一次 GitHub CI 在本 closeout 合并后从 `main` 手动触发。
 
 ## 阶段 2：配置合同切换
 
