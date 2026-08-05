@@ -6,6 +6,7 @@
 # Include specific files that should be tracked by Git
 !/.gitignore
 !/satcompute/
+!/satcompute/**
 
 # Keep generated Python and experiment output out of the tracked contrib tree.
 satcompute/**/__pycache__/
