@@ -1,23 +1,19 @@
 name: SatCompute CI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "contrib/satcompute/**"
-      - ".github/workflows/per_commit.yml"
-  pull_request:
-    paths:
-      - "contrib/satcompute/**"
-      - ".github/workflows/per_commit.yml"
   workflow_dispatch:
+    inputs:
+      phase:
+        description: "Completed migration phase (for example: phase-0)"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   satcompute:
-    name: SatCompute CI
+    name: SatCompute CI (${{ inputs.phase }})
     runs-on: ubuntu-latest
     env:
       CCACHE_BASEDIR: ${{ github.workspace }}

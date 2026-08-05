@@ -1,7 +1,10 @@
 # Implementation Plan: SCP-SatComPlate ns-3.48 Migration
 
-Status: completed on 2026-08-05. The maintained verification commands and
-deferred boundaries remain normative for follow-up work.
+Status: superseded on 2026-08-05 by the
+[legacy-parity plan](ns3-48-legacy-parity.md).
+
+This file records execution of the rejected v0.2 rearchitecture for audit only
+and is not normative for new work.
 
 ## Overview
 
