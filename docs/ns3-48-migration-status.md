@@ -1,102 +1,94 @@
-# SatCompute ns-3.48 migration status
+# SatCompute ns-3.48 迁移状态
 
-Status: historical v0.2 closeout, superseded on 2026-08-05 by the approved
-[v0.3 legacy-parity specification](specs/platform-v0.3.md) and
-[implementation plan](plans/ns3-48-legacy-parity.md).
+状态：v0.4 已作为 `main` 的长期开发基线。本文只描述当前实现；v0.2/v0.3
+迁移资料保留在 `docs/specs/` 和 `docs/plans/` 中作为历史审计记录。
 
-The results below describe the rejected v0.2 architecture and remain only as
-an audit record. The later v0.3 migration is complete; its authoritative
-closeout is recorded in the
-[v0.3 implementation plan](plans/ns3-48-legacy-parity.md) and
-[file migration matrix](plans/ns3-33-to-48-matrix.md).
+## 仓库基线
 
-## Repository baseline
+- `main` 基于官方 ns-3.48，是当前开发主线；
+- `legacy/ns-3.33` 只读保留旧实现，不与 `main` 合并；
+- 项目代码位于 `contrib/satcompute/`，不修改上游 `src/`；
+- nlohmann/json 统一位于根目录 `third-party/`；
+- `.vscode/` 不受 Git 跟踪；
+- 日常配置不启用 ns-3 全局 examples/tests，也不运行 `test.py`。
 
-- `main` descends from the official ns-3.48 tag and is the active development
-  line.
-- SatCompute is isolated in `contrib/satcompute`; upstream `src/` behavior is
-  unchanged.
-- `legacy/ns-3.33` permanently preserves the previous implementation and is
-  not a merge parent of `main`.
-- GitHub has one project check named `SatCompute CI`. It configures with
-  `./ns3 configure --enable-modules=satcompute -G Ninja`; global ns-3 examples,
-  tests, and `test.py` are not enabled or run.
+## 当前运行模型
 
-## Delivered contracts
+平台只有一个 `satcompute` 入口和一个 `SatComputeConfig` 参数对象。`para.cc`
+仅定义带中文解释的默认值；命令行注册与校验位于入口。仿真时长、网络更新间隔和
+拓扑切片间隔以秒输入，在 C++ 使用边界转换为 ns-3 `Time` 或整数纳秒。
 
-| Area | ns-3.48 result |
-|---|---|
-| Experiment input | Closed-world scenario schema 0.2 with descriptions, explicit units, exact seconds-to-nanoseconds conversion, resolved paths, effective config, and input hashes |
-| Orbit | Official `LeoCircularOrbitMobilityModel` with stable plane-major satellite IDs, Walker Star/Delta RAAN span, legacy optional half-slot phasing, and configurable epoch offset |
-| ISL topology | Fixed canonical plus-grid candidates, optional seam, inclusive distance gate, and no nearest-satellite substitution |
-| Network cadence | Scenario-controlled periodic updates; fixed and distance modes can independently use values such as 20 s, 1 s, or 2 s |
-| Delay | Fixed integer-nanosecond delay or distance divided by 299792458 m/s and rounded to nearest nanosecond with exact halves upward |
-| IPv4 routing | `global-first`, legacy fixed-hash per flow, HRW per flow, size-aware HRW, and capacity-aware HRW |
-| Workloads | Deterministic direct UDP transfers plus task input transfer, FCFS compute, and result transfer |
-| Compute input | Independent closed-world compute profile referenced by the scenario rather than embedded in orbit state |
-| Outputs | Effective configuration, routing/transfer/task/compute metrics, partial-run diagnostics, and run summary |
-| Offline state | Version 0.2 ECEF node slices, active-link slices, SHA-256 manifest, normal-run export, and `--exportOnly=true` |
-| Replay | Legacy slices and self-describing 0.2 traces; a present manifest is authoritative and every listed file hash is verified |
+星座输入采用 ns-3.48 `LeoOrbitalShell` 六列 CSV。卫星由
+`LeoOrbitNodeHelper` 创建并使用 `LeoCircularOrbitMobilityModel` 实时计算位置。
+稳定卫星 ID 按 plane-major 顺序映射，不直接暴露 `Node::GetId()`。
 
-## Time and topology behavior
+plus-grid 候选链路在初始化时固定；平台不会在每个时刻改连最近的异轨卫星。
+每个网络更新时间点只根据当前坐标、最大距离和时延模式刷新候选状态：
 
-Continuous circular-orbit positions are available at every ns-3 simulation
-time. The configured network cadence controls when the simulated interfaces,
-distance-derived delays, and distance gate are refreshed. Between two network
-ticks, the network retains the last applied state.
+- `fixed` 直接使用配置的固定时延；
+- `distance` 使用当前距离计算传播时延；
+- 活动链路集合变化时重算 IPv4 路由；
+- 只有距离时延变化而链路集合不变时，不重复计算 hop-based 路由。
 
-The trace cadence is independent. For example, a scenario can evaluate and
-write orbit/topology state every 1 s while applying the network only every
-20 s. Those intermediate files are audit/fault-generation inputs, not hidden
-network updates. Regression gates prove that 1 s and 2 s traces downsampled at
-20 s exactly match a 20 s online run at 0, 20, and 40 s for stable IDs, active
-edges, integer delays, and ECEF coordinates within 1e-6 m.
+## 两阶段工作流
 
-Routes are populated initially and recomputed only when the effective active
-edge set changes. A distance-only delay refresh does not rebuild the current
-hop-based IPv4 routes. Future asynchronous failure/repair events are specified
-to apply immediately at their exact integer-nanosecond time and then trigger
-one route rebuild, without waiting for the next periodic tick.
+拓扑预处理使用 `--topologyOnly=1`。它按配置的切片间隔推进同一套 ns-3.48
+轨道模型，输出 `nodes_<time>.json` 与 `links_<time>.json`，但不安装协议栈、
+NetDevice、路由、FlowMonitor 或任务应用。节点切片包含稳定 ID 和 ECEF `x/y/z`；
+链路切片包含全部固定候选的 active、distance、delay 与 bandwidth 状态。
 
-## Determinism
+未来的故障生成器将读取这些切片并产生故障 JSON。正式仿真不会回放切片，而是用
+同一个星座和参数在线生成相同的确定性拓扑，再在故障发生的精确仿真时刻应用覆盖。
+故障生成与执行尚未在 v0.4 实现。
 
-The legacy hash route is fixed for a fixed IPv4 five-tuple, hash seed, and
-canonical candidate set. HRW is likewise deterministic. Size-aware and
-capacity-aware modes are stateful, but fixed task/transfer inputs and canonical
-same-time ordering make their reservations and route choices reproducible;
-they do not draw random routes.
+## 任务与路由
 
-The scenario records the ns-3 seed, run number, and reserved stream start.
-Current orbit, topology, workload, and routing paths consume no random streams.
-Repeated online/export-only runs produce byte-identical topology traces, and
-repeated workload runs preserve normalized metrics and routing results.
+正式业务输入只有 TaskTrace 与 ComputeProfile。每个任务明确给出
+`input_bytes`、`compute_work_units` 和 `output_bytes`；计算结束后的结果传输大小
+严格取 `output_bytes`。独立 NetworkTransfer workload 已删除，`traffic/` 中的
+UDP 传输引擎仅作为任务输入和结果传输的内部机制。
 
-## Verification maintained in the repository
+当前保留五种确定性的 IPv4 路由模式：
 
-- Python contract tests cover scenario, transfer/task/compute, and topology
-  output schemas.
-- C++ unit executables cover exact time conversion, snapshot validation,
-  addressing/link transitions, five routing modes, UDP/task/compute behavior,
-  online orbit/topology policy, trace export, manifest integrity, generated
-  replay, and 1/2 s versus 20 s equivalence.
-- Smoke tests exercise validation, legacy replay, online execution, and
-  export-only execution.
-- Regression tests exercise all five online IPv4 modes, deterministic repeated
-  tasks, 66-satellite online construction, normal/export-only trace equality,
-  and platform-level replay of a newly generated 0.2 trace.
+- `global-first`；
+- `global-hash-per-flow`；
+- `global-hrw-per-flow`；
+- `global-size-aware-hrw`；
+- `global-capacity-aware-hrw`。
 
-## Explicitly deferred work
+固定星座、参数、任务、seed/run 与 canonical 同时事件顺序时，所有模式均可复现。
+IPv6 与 SRv6 延期到独立阶段，不在本次迁移中预建半成品接口。
 
-The following items are intentionally not partial implementations in this
-migration:
+## 已移除的迁移层
 
-- executable satellite/link fault generation and fault overlays;
-- backend/frontend state transport or wall-clock streaming;
-- IPv6 routing and SRv6;
-- ground stations and feeder links;
-- SGP4/TLE and non-circular online orbit providers.
+当前平台不再提供完整 scenario JSON、resolved/effective config、软件/格式版本字段、
+SHA-256 manifest、拓扑 replay、独立 scenario/topology/transfer 生成程序或
+`transferTrace` 命令行入口。星座结构位于 CSV，算力与任务分别位于 JSON，运行参数
+统一由 `para.cc` 默认值和命令行覆盖。
 
-The existing trace and manifest are the intended deterministic input boundary
-for later position-dependent fault generation. A later frontend adapter can
-consume the same read-only state (`simulation_time_ns`, stable ID, ECEF x/y/z,
-active links, and delay) without changing simulation event order.
+## 验证入口
+
+仓库保留一个 Python 任务生成器测试、7 个聚焦 C++ 可执行测试、5 个 smoke 和
+2 个 regression：
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+  -s contrib/satcompute/tests/unit -p 'test_*.py' -v
+contrib/satcompute/tests/unit/run-cpp-tests.sh
+contrib/satcompute/tests/integration/smoke/run-all.sh
+contrib/satcompute/tests/integration/regression/run-all.sh
+```
+
+GitHub 只保留手动触发的 `SatCompute CI` 阶段门禁。它构建 SatCompute 并运行上述
+项目测试，不运行上游 examples/tests。
+
+## 延期范围
+
+- 基于拓扑切片生成并执行卫星/链路故障；
+- 后端到前端的卫星状态输出接口；
+- IPv6、SRv6；
+- 地面站、馈电链路及非圆轨道模型。
+
+当前合同与完成标准见
+[v0.4 规格](specs/platform-v0.4.md)和
+[v0.4 实施计划](plans/platform-v0.4-simplification.md)。
