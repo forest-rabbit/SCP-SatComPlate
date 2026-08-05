@@ -6,6 +6,7 @@
 #include "ns3/compute-profile.h"
 #include "ns3/circular-orbit-trace-exporter.h"
 #include "ns3/effective-config.h"
+#include "ns3/flow-metrics.h"
 #include "ns3/network-transfer.h"
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/para.h"
@@ -153,11 +154,12 @@ main(int argc, char* argv[])
                                             config.workloads.transferPayloadBytes,
                                             config.network.islMtuBytes,
                                             config.network.receiverRcvBufBytes,
-                                            true,
+                                            config.logging.diagnosticMode == "failure",
                                             config.simulation.durationNs);
                 transferEngine = taskCoordinator->GetTransferEngine();
             }
 
+            const Ptr<FlowMonitor> flowMonitor = InstallSimulationFlowMonitor();
             Simulator::Stop(NanoSeconds(config.simulation.durationNs));
             const auto wallStart = std::chrono::steady_clock::now();
             Simulator::Run();
@@ -183,7 +185,8 @@ main(int argc, char* argv[])
                 topology.GetAppliedTopologySliceCount(),
                 topology.GetRouteComputationCount(),
                 topology.GetFlowRouteRegistry(),
-                capacitySummary};
+                capacitySummary,
+                flowMonitor};
             const RunOutputResult output = WriteRunOutputs(config,
                                                            outputContext,
                                                            transferEngine,

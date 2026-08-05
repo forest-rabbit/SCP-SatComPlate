@@ -22,6 +22,8 @@
 namespace ns3
 {
 
+class FlowMonitor;
+
 class RunOutputError : public std::runtime_error
 {
   public:
@@ -37,6 +39,7 @@ struct RunOutputContext
     uint32_t routeComputationCount{};
     Ptr<FlowRouteRegistry> flowRouteRegistry;
     std::optional<CapacityAwareRuntimeSummary> capacityAwareSummary;
+    Ptr<FlowMonitor> flowMonitor;
 };
 
 struct RunOutputResult

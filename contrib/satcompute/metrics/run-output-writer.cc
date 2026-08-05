@@ -6,15 +6,16 @@
 
 #include "run-output-writer.h"
 
+#include "core/flow-metrics.h"
+#include "core/run-summary.h"
+#include "core/task-metrics.h"
+#include "core/transfer-metrics.h"
 #include "../model/sha256.h"
 #include "../third-party/nlohmann/json.hpp"
 
 #include <algorithm>
 #include <fstream>
-#include <iomanip>
 #include <limits>
-#include <map>
-#include <set>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -37,19 +38,6 @@ struct TransferAggregate
     uint64_t derivedPackets{};
     uint64_t sentPackets{};
     uint64_t receivedPackets{};
-};
-
-struct TaskAggregate
-{
-    uint64_t computeNodeCount{};
-    uint64_t taskCount{};
-    uint64_t completedTaskCount{};
-    uint64_t totalInputBytes{};
-    uint64_t totalOutputBytes{};
-    uint64_t totalComputeWorkUnits{};
-    uint64_t totalCompletionDelayNs{};
-    uint64_t meanCompletionDelayNs{};
-    uint64_t maximumCompletionDelayNs{};
 };
 
 uint64_t
@@ -116,20 +104,6 @@ WriteJson(const std::filesystem::path& outputDirectory,
     return path;
 }
 
-int64_t
-OptionalDifference(int64_t endTimeNs, int64_t startTimeNs, const std::string& field)
-{
-    if (endTimeNs < 0 || startTimeNs < 0)
-    {
-        return -1;
-    }
-    if (endTimeNs < startTimeNs)
-    {
-        throw RunOutputError(field + " has decreasing timestamps");
-    }
-    return endTimeNs - startTimeNs;
-}
-
 TransferAggregate
 CollectTransferAggregate(const std::vector<TransferSummaryRecord>& summaries)
 {
@@ -160,77 +134,6 @@ CollectTransferAggregate(const std::vector<TransferSummaryRecord>& summaries)
     return aggregate;
 }
 
-TaskAggregate
-CollectTaskAggregate(Ptr<TaskCoordinator> coordinator)
-{
-    TaskAggregate aggregate;
-    if (coordinator == nullptr)
-    {
-        return aggregate;
-    }
-    aggregate.computeNodeCount = coordinator->GetComputeServices().size();
-    aggregate.taskCount = coordinator->GetTaskRuntimes().size();
-    for (const TaskRuntime& task : coordinator->GetTaskRuntimes())
-    {
-        aggregate.totalInputBytes = CheckedAdd(aggregate.totalInputBytes,
-                                               task.definition.inputBytes,
-                                               "task input bytes");
-        aggregate.totalOutputBytes = CheckedAdd(aggregate.totalOutputBytes,
-                                                task.definition.outputBytes,
-                                                "task output bytes");
-        aggregate.totalComputeWorkUnits = CheckedAdd(aggregate.totalComputeWorkUnits,
-                                                     task.definition.computeWorkUnits,
-                                                     "task compute work");
-        if (task.state != TASK_COMPLETED)
-        {
-            continue;
-        }
-        ++aggregate.completedTaskCount;
-        const int64_t delay = OptionalDifference(task.resultTransferCompleteTimeNs,
-                                                 task.definition.arrivalTimeNs,
-                                                 "task completion delay");
-        aggregate.totalCompletionDelayNs = CheckedAdd(aggregate.totalCompletionDelayNs,
-                                                      static_cast<uint64_t>(delay),
-                                                      "task completion delay");
-        aggregate.maximumCompletionDelayNs =
-            std::max(aggregate.maximumCompletionDelayNs, static_cast<uint64_t>(delay));
-    }
-    if (aggregate.completedTaskCount > 0)
-    {
-        aggregate.meanCompletionDelayNs =
-            aggregate.totalCompletionDelayNs / aggregate.completedTaskCount;
-    }
-    return aggregate;
-}
-
-std::filesystem::path
-WriteTransferSummaries(const std::filesystem::path& outputDirectory,
-                       const std::vector<TransferSummaryRecord>& summaries)
-{
-    std::ostringstream output;
-    output << "transfer_id,source_node_id,destination_node_id,source_address,"
-              "destination_address,source_port,destination_port,declared_size_bytes,"
-              "effective_payload_bytes,pacing_mode,derived_packet_count,"
-              "final_packet_payload_bytes,arrival_time_ns,last_send_time_ns,"
-              "sent_application_bytes,sent_packet_count,received_application_bytes,"
-              "received_packet_count,completion_time_ns,completion_delay_ns,transfer_state\n";
-    for (const TransferSummaryRecord& summary : summaries)
-    {
-        output << summary.transferId << ',' << summary.sourceSatelliteId << ','
-               << summary.destinationSatelliteId << ',' << summary.sourceAddress << ','
-               << summary.destinationAddress << ',' << summary.sourcePort << ','
-               << summary.destinationPort << ',' << summary.declaredSizeBytes << ','
-               << summary.payloadBytesPerPacket << ',' << summary.pacingMode << ','
-               << summary.derivedPacketCount << ',' << summary.finalPacketPayloadBytes << ','
-               << summary.arrivalTimeNs << ',' << summary.lastSendTimeNs << ','
-               << summary.sentApplicationBytes << ',' << summary.sentPacketCount << ','
-               << summary.receivedApplicationBytes << ',' << summary.receivedPacketCount << ','
-               << summary.completionTimeNs << ',' << summary.completionDelayNs << ','
-               << summary.transferState << '\n';
-    }
-    return WriteCsv(outputDirectory, "transfer-summary.csv", output.str());
-}
-
 std::filesystem::path
 WriteUdpSocketDrops(const std::filesystem::path& outputDirectory,
                     const std::vector<UdpSocketDropEvent>& events)
@@ -247,117 +150,6 @@ WriteUdpSocketDrops(const std::filesystem::path& outputDirectory,
                << event.cumulativeDropBytes << ',' << event.receiverRcvBufBytes << '\n';
     }
     return WriteCsv(outputDirectory, "udp-socket-drops.csv", output.str());
-}
-
-std::filesystem::path
-WriteTaskEvents(const std::filesystem::path& outputDirectory,
-                Ptr<TaskCoordinator> coordinator)
-{
-    std::ostringstream output;
-    output << "simulation_time_ns,task_id,from_state,to_state,node_id,cause\n";
-    for (const TaskEventRecord& event : coordinator->GetTaskEvents())
-    {
-        output << event.simulationTimeNs << ',' << event.taskId << ','
-               << TaskStateToString(event.fromState) << ',' << TaskStateToString(event.toState)
-               << ',' << event.nodeId << ',' << event.cause << '\n';
-    }
-    return WriteCsv(outputDirectory, "task-events.csv", output.str());
-}
-
-std::map<uint32_t, uint64_t>
-GetComputeRates(Ptr<TaskCoordinator> coordinator)
-{
-    std::map<uint32_t, uint64_t> rates;
-    for (const Ptr<ComputeService>& service : coordinator->GetComputeServices())
-    {
-        if (!rates.emplace(service->GetNodeId(),
-                           service->GetComputeRateWorkUnitsPerSecond())
-                 .second)
-        {
-            throw RunOutputError("duplicate compute service in run output");
-        }
-    }
-    return rates;
-}
-
-std::filesystem::path
-WriteTaskSummaries(const std::filesystem::path& outputDirectory,
-                   Ptr<TaskCoordinator> coordinator)
-{
-    const std::map<uint32_t, uint64_t> rates = GetComputeRates(coordinator);
-    std::ostringstream output;
-    output << "task_id,source_node_id,compute_node_id,result_node_id,input_bytes,output_bytes,"
-              "compute_work_units,compute_rate_work_units_per_second,input_transfer_id,"
-              "result_transfer_id,arrival_time_ns,input_transfer_complete_time_ns,"
-              "queue_enter_time_ns,compute_start_time_ns,compute_complete_time_ns,"
-              "result_transfer_start_time_ns,result_transfer_complete_time_ns,"
-              "input_transfer_delay_ns,queue_delay_ns,compute_service_time_ns,"
-              "result_transfer_delay_ns,end_to_end_completion_delay_ns,final_state\n";
-    for (const TaskRuntime& task : coordinator->GetTaskRuntimes())
-    {
-        const auto rate = rates.find(task.definition.computeNodeId);
-        if (rate == rates.end())
-        {
-            throw RunOutputError("task output has no matching compute service");
-        }
-        output << task.definition.taskId << ',' << task.definition.sourceNodeId << ','
-               << task.definition.computeNodeId << ',' << task.definition.resultNodeId << ','
-               << task.definition.inputBytes << ',' << task.definition.outputBytes << ','
-               << task.definition.computeWorkUnits << ',' << rate->second << ','
-               << task.definition.inputTransferId << ',' << task.definition.resultTransferId
-               << ',' << task.definition.arrivalTimeNs << ','
-               << task.inputTransferCompleteTimeNs << ',' << task.queueEnterTimeNs << ','
-               << task.computeStartTimeNs << ',' << task.computeCompleteTimeNs << ','
-               << task.resultTransferStartTimeNs << ',' << task.resultTransferCompleteTimeNs
-               << ','
-               << OptionalDifference(task.inputTransferCompleteTimeNs,
-                                     task.definition.arrivalTimeNs,
-                                     "input transfer delay")
-               << ','
-               << OptionalDifference(task.computeStartTimeNs,
-                                     task.queueEnterTimeNs,
-                                     "queue delay")
-               << ','
-               << OptionalDifference(task.computeCompleteTimeNs,
-                                     task.computeStartTimeNs,
-                                     "compute service time")
-               << ','
-               << OptionalDifference(task.resultTransferCompleteTimeNs,
-                                     task.resultTransferStartTimeNs,
-                                     "result transfer delay")
-               << ','
-               << OptionalDifference(task.resultTransferCompleteTimeNs,
-                                     task.definition.arrivalTimeNs,
-                                     "task completion delay")
-               << ',' << TaskStateToString(task.state) << '\n';
-    }
-    return WriteCsv(outputDirectory, "task-summary.csv", output.str());
-}
-
-std::filesystem::path
-WriteComputeNodeSummaries(const ResolvedSatComputeConfig& config,
-                          const std::filesystem::path& outputDirectory,
-                          Ptr<TaskCoordinator> coordinator)
-{
-    std::ostringstream output;
-    output << "node_id,compute_rate_work_units_per_second,enqueued_tasks,completed_tasks,"
-              "busy_time_ns,max_queue_length,utilization_percent\n";
-    for (const Ptr<ComputeService>& service : coordinator->GetComputeServices())
-    {
-        if (service->GetBusyTimeNs() > static_cast<uint64_t>(config.simulation.durationNs))
-        {
-            throw RunOutputError("compute busy time exceeds simulation duration");
-        }
-        const long double utilization =
-            static_cast<long double>(service->GetBusyTimeNs()) * 100.0L /
-            static_cast<long double>(config.simulation.durationNs);
-        output << std::setprecision(15) << service->GetNodeId() << ','
-               << service->GetComputeRateWorkUnitsPerSecond() << ','
-               << service->GetEnqueuedTaskCount() << ',' << service->GetCompletedTaskCount()
-               << ',' << service->GetBusyTimeNs() << ',' << service->GetMaxQueueLength() << ','
-               << static_cast<double>(utilization) << '\n';
-    }
-    return WriteCsv(outputDirectory, "compute-node-summary.csv", output.str());
 }
 
 std::filesystem::path
@@ -542,6 +334,10 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
     {
         throw RunOutputError("run output has invalid duration metadata");
     }
+    if (context.flowMonitor == nullptr)
+    {
+        throw RunOutputError("run output requires the simulation FlowMonitor");
+    }
     std::error_code error;
     const std::filesystem::path effectiveConfig =
         std::filesystem::weakly_canonical(context.effectiveConfigPath, error);
@@ -553,16 +349,19 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
         std::filesystem::absolute(context.outputDirectory).lexically_normal();
 
     std::vector<TransferSummaryRecord> transfers;
+    std::vector<TransferFlowMetadata> transferFlows;
     std::vector<UdpSocketDropEvent> udpDrops;
     ApplicationMetrics applicationMetrics;
     if (transferEngine != nullptr)
     {
         transfers = transferEngine->CollectSummaries();
+        transferFlows = transferEngine->CollectFlowMetadata();
         udpDrops = transferEngine->CollectUdpSocketDropEvents();
         applicationMetrics = transferEngine->CollectApplicationMetrics();
     }
+    const FlowAggregate flowAggregate = CollectFlowAggregate(context.flowMonitor);
     const TransferAggregate transferAggregate = CollectTransferAggregate(transfers);
-    const TaskAggregate taskAggregate = CollectTaskAggregate(taskCoordinator);
+    const TaskAggregate taskAggregate = CollectTaskAggregate(PeekPointer(taskCoordinator));
     if (transferAggregate.sentBytes != applicationMetrics.sentBytes ||
         transferAggregate.receivedBytes != applicationMetrics.receivedBytes)
     {
@@ -591,18 +390,27 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
 
     RunOutputResult result;
     result.complete = complete;
+    WriteNetworkMetrics(flowAggregate, outputDirectory.string());
+    result.files.push_back(outputDirectory / "network-flow-metrics.csv");
+    WriteNetworkFlowDetails(context.flowMonitor,
+                            transferFlows,
+                            outputDirectory.string(),
+                            complete);
+    result.files.push_back(outputDirectory / "network-flow-details.csv");
     if (transferEngine != nullptr)
     {
-        result.files.push_back(WriteTransferSummaries(outputDirectory, transfers));
+        WriteTransferSummaries(transfers, outputDirectory.string());
+        result.files.push_back(outputDirectory / "transfer-summary.csv");
         result.files.push_back(WriteUdpSocketDrops(outputDirectory, udpDrops));
     }
     if (taskCoordinator != nullptr)
     {
-        result.files.push_back(WriteTaskEvents(outputDirectory, taskCoordinator));
-        result.files.push_back(WriteTaskSummaries(outputDirectory, taskCoordinator));
-        result.files.push_back(WriteComputeNodeSummaries(config,
-                                                         outputDirectory,
-                                                         taskCoordinator));
+        WriteTaskMetricsNs(*taskCoordinator,
+                           config.simulation.durationNs,
+                           outputDirectory.string());
+        result.files.push_back(outputDirectory / "task-events.csv");
+        result.files.push_back(outputDirectory / "task-summary.csv");
+        result.files.push_back(outputDirectory / "compute-node-summary.csv");
     }
     if (context.flowRouteRegistry != nullptr)
     {
@@ -612,7 +420,6 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
     result.files.push_back(WriteRoutingSummary(config, context, outputDirectory));
 
     uint64_t udpDropBytes = 0;
-    std::set<std::pair<uint32_t, uint16_t>> droppedReceivers;
     for (const UdpSocketDropEvent& event : udpDrops)
     {
         if (event.receiverRcvBufBytes != config.network.receiverRcvBufBytes)
@@ -620,50 +427,7 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
             throw RunOutputError("UDP drop receiver buffer differs from resolved config");
         }
         udpDropBytes = CheckedAdd(udpDropBytes, event.packetSizeBytes, "UDP drop bytes");
-        droppedReceivers.emplace(event.destinationSatelliteId, event.destinationPort);
     }
-
-    const std::string workloadMode = taskCoordinator != nullptr
-                                         ? "task"
-                                         : (transferEngine != nullptr ? "transfer" : "none");
-    Json summary = {
-        {"schema_version", "0.1"},
-        {"run_name", config.runName},
-        {"config_schema_version", config.schemaVersion},
-        {"effective_config",
-         {{"path", effectiveConfig.string()}, {"sha256", Sha256File(effectiveConfig)}}},
-        {"simulation_duration_ns", config.simulation.durationNs},
-        {"wall_clock_ns", context.wallClockNs},
-        {"run_status", complete ? "COMPLETE" : "PARTIAL"},
-        {"task_completion_policy", config.workloads.taskCompletionPolicy},
-        {"workload_mode", workloadMode},
-        {"topology_source", config.network.topologySource},
-        {"applied_topology_slice_count", context.appliedTopologySliceCount},
-        {"routing_mode", config.routing.mode},
-        {"hash_seed", config.routing.hashSeed},
-        {"route_computation_count", context.routeComputationCount},
-        {"transfer",
-         {{"sink_application_count", applicationMetrics.sinkApplications},
-          {"transfer_count", transferAggregate.transferCount},
-          {"completed_transfer_count", transferAggregate.completedTransferCount},
-          {"declared_application_bytes", transferAggregate.declaredBytes},
-          {"sent_application_bytes", transferAggregate.sentBytes},
-          {"received_application_bytes", transferAggregate.receivedBytes},
-          {"derived_udp_packets", transferAggregate.derivedPackets},
-          {"sent_udp_packets", transferAggregate.sentPackets},
-          {"received_udp_packets", transferAggregate.receivedPackets},
-          {"udp_socket_drop_packets", udpDrops.size()},
-          {"udp_socket_drop_bytes", udpDropBytes},
-          {"udp_socket_dropped_receiver_count", droppedReceivers.size()}}},
-        {"task",
-         {{"compute_node_count", taskAggregate.computeNodeCount},
-          {"task_count", taskAggregate.taskCount},
-          {"completed_task_count", taskAggregate.completedTaskCount},
-          {"total_input_bytes", taskAggregate.totalInputBytes},
-          {"total_output_bytes", taskAggregate.totalOutputBytes},
-          {"total_compute_work_units", taskAggregate.totalComputeWorkUnits},
-          {"mean_completion_delay_ns", taskAggregate.meanCompletionDelayNs},
-          {"maximum_completion_delay_ns", taskAggregate.maximumCompletionDelayNs}}}};
 
     if (!complete)
     {
@@ -683,8 +447,55 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
                                          diagnosticSummary));
         result.diagnosticsGenerated = true;
     }
-    summary["diagnostics_generated"] = result.diagnosticsGenerated;
-    result.runSummaryPath = WriteJson(outputDirectory, "run-summary.json", summary);
+    const std::string workloadMode = taskCoordinator != nullptr
+                                         ? "task"
+                                         : (transferEngine != nullptr ? "transfer" : "none");
+    const std::string runMode = workloadMode == "transfer" ? "network-transfer" : workloadMode;
+    const std::string pacingMode = transfers.empty()
+                                       ? (transferEngine == nullptr
+                                              ? "none"
+                                              : (capacityAware
+                                                     ? "path-bottleneck-serialization"
+                                                     : "first-hop-serialization"))
+                                       : transfers.front().pacingMode;
+    const RunMetadata runMetadata = {
+        runMode,
+        config.routing.mode,
+        config.routing.hashSeed,
+        config.network.islMtuBytes,
+        config.network.islQueueBytes,
+        config.network.receiverRcvBufBytes,
+        transferEngine != nullptr && config.logging.diagnosticMode == "failure",
+        config.logging.diagnosticMode,
+        config.workloads.taskCompletionPolicy,
+        pacingMode,
+        transferEngine != nullptr ? config.workloads.transferChunkMode : "none",
+        transferEngine != nullptr && config.workloads.transferChunkMode == "fixed"
+            ? config.workloads.transferPayloadBytes
+            : 0,
+        config.workloads.computeProfile ? config.workloads.computeProfile->string() : "",
+        config.workloads.taskTrace ? config.workloads.taskTrace->string() : ""};
+    const RunSummaryEvidence evidence = {config.runName,
+                                         config.schemaVersion,
+                                         effectiveConfig,
+                                         Sha256File(effectiveConfig),
+                                         config.simulation.durationNs,
+                                         context.wallClockNs,
+                                         workloadMode,
+                                         config.network.topologySource,
+                                         context.appliedTopologySliceCount,
+                                         context.routeComputationCount,
+                                         complete,
+                                         result.diagnosticsGenerated};
+    WriteRunSummaryWithEvidence(flowAggregate,
+                                runMetadata,
+                                evidence,
+                                applicationMetrics,
+                                transfers,
+                                udpDrops,
+                                PeekPointer(taskCoordinator),
+                                outputDirectory.string());
+    result.runSummaryPath = outputDirectory / "run-summary.json";
     result.files.push_back(result.runSummaryPath);
     return result;
 }

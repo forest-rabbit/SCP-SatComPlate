@@ -6,6 +6,10 @@ build_lib(
     resolved-config.cc
     model/satcompute-version.cc
     model/sha256.cc
+    metrics/core/flow-metrics.cc
+    metrics/core/run-summary.cc
+    metrics/core/task-metrics.cc
+    metrics/core/transfer-metrics.cc
     metrics/run-output-writer.cc
     routing/algorithm/capacity-aware-hrw-policy.cc
     routing/algorithm/global-first-policy.cc
@@ -48,6 +52,10 @@ build_lib(
     resolved-config.h
     model/satcompute-version.h
     model/sha256.h
+    metrics/core/flow-metrics.h
+    metrics/core/run-summary.h
+    metrics/core/task-metrics.h
+    metrics/core/transfer-metrics.h
     metrics/run-output-writer.h
     routing/algorithm/capacity-aware-hrw-policy.h
     routing/algorithm/capacity-aware-path-types.h
@@ -102,6 +110,7 @@ build_lib(
     ${libcore}
     ${libnetwork}
     ${libinternet}
+    ${libflow-monitor}
     ${libmobility}
     ${libpoint-to-point}
     ${libcsma}
