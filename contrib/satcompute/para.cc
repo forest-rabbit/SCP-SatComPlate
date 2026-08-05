@@ -21,10 +21,6 @@ GetDefaultSatComputeConfig()
     config.constellationConfig =
         "contrib/satcompute/input/topology/constellations/synthetic-66.csv";
 
-    // topologySource/topologyDirectory 仅供迁移期回放测试；正式平台使用在线轨道。
-    config.topologySource = "online";
-    config.topologyDirectory = "";
-
     // --islCandidateStrategy：固定为 plus-grid；卫星邻居身份不随距离变化。
     config.islCandidateStrategy = "plus-grid";
 

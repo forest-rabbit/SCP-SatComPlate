@@ -10,13 +10,12 @@ smoke_output="$(mktemp -d /tmp/satcompute-task-smoke.XXXXXX)"
 trap 'rm -rf "$smoke_output"' EXIT
 
 constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
-topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 
 completed="$(./ns3 run --no-build \
   "satcompute --simulationDuration=5 \
---constellationConfig=$constellation --topologySource=replay \
---topologyDir=$topology --delayMode=fixed --fixedDelay=0.001 \
+--constellationConfig=$constellation --maxIslDistance=30000000 \
+--delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --routingMode=global-size-aware-hrw \
 --computeProfile=$task_inputs/compute-profile-single.json \

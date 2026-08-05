@@ -5,8 +5,8 @@
 #ifndef SATCOMPUTE_SATELLITE_LINK_STATE_H
 #define SATCOMPUTE_SATELLITE_LINK_STATE_H
 
+#include "satellite-link.h"
 #include "../satellite-id-map.h"
-#include "../snapshot/snapshot-types.h"
 
 #include "ns3/net-device-container.h"
 #include "ns3/packet.h"

@@ -5,13 +5,11 @@
 #ifndef SATCOMPUTE_TEST_CONFIG_FACTORY_H
 #define SATCOMPUTE_TEST_CONFIG_FACTORY_H
 
-#include "ns3/resolved-config.h"
+#include "ns3/constellation-definition.h"
+#include "ns3/para.h"
 
 #include <cstdint>
-#include <filesystem>
-#include <optional>
 #include <string>
-#include <utility>
 
 namespace ns3::satcompute::test
 {
@@ -34,8 +32,17 @@ MakeTestConstellation(uint32_t numOrbits,
                             raanSpanDeg)};
 }
 
-/** 构造完整的 online 内部配置，避免单元测试依赖已废弃的 scenario 输入。 */
-inline ResolvedSatComputeConfig
+/** 在线拓扑测试所需的平台参数、星座和精确时间。 */
+struct OnlineTestConfiguration
+{
+    SatComputeConfig parameters;
+    ConstellationDefinition constellation;
+    int64_t durationNs{};
+    int64_t updateIntervalNs{};
+};
+
+/** 构造不读取 scenario 或 resolved 配置的在线测试输入。 */
+inline OnlineTestConfiguration
 MakeOnlineTestConfig(uint32_t numOrbits,
                      uint32_t satellitesPerOrbit,
                      const std::string& delayMode,
@@ -43,79 +50,19 @@ MakeOnlineTestConfig(uint32_t numOrbits,
                      int64_t updateIntervalNs,
                      long double maxDistanceM)
 {
-    ResolvedSatComputeConfig config{};
-    config.topologyOnly = false;
-    config.simulation = {durationNs};
-    config.constellation = MakeTestConstellation(numOrbits, satellitesPerOrbit);
-    config.network = {"online",
-                      std::nullopt,
-                      "plus-grid",
-                      false,
-                      maxDistanceM,
-                      delayMode,
-                      delayMode == "fixed" ? std::optional<int64_t>(8000000)
-                                           : std::nullopt,
-                      updateIntervalNs,
-                      2000000000,
-                      1500,
-                      1500000,
-                      131072};
-    config.routing = {"global-first", 1};
-    config.workloads = {std::nullopt,
-                        std::nullopt,
-                        std::nullopt,
-                        "fixed",
-                        1024,
-                        "strict"};
-    config.topologySlices = {1000000000, true};
-    config.logging = {"summary", "summary", "off"};
-    config.randomness = {1, 1};
+    SatComputeConfig config = GetDefaultSatComputeConfig();
+    config.simulationDurationSeconds = static_cast<double>(durationNs) / 1000000000.0;
+    config.delayMode = delayMode;
+    config.fixedDelaySeconds = delayMode == "fixed" ? 0.008 : 0.0;
+    config.networkUpdateIntervalSeconds =
+        static_cast<double>(updateIntervalNs) / 1000000000.0;
+    config.maxIslDistanceMeters = static_cast<double>(maxDistanceM);
+    config.routingMode = "global-first";
     config.outputDirectory = "/tmp/satcompute-test";
-    return config;
-}
-
-/** 将 online 测试配置切换为 replay，其他行为参数保持不变。 */
-inline ResolvedSatComputeConfig
-MakeReplayTestConfig(ResolvedSatComputeConfig config,
-                     const std::filesystem::path& replayDirectory)
-{
-    config.network.topologySource = "replay";
-    config.network.replayDirectory = replayDirectory;
-    return config;
-}
-
-/** 构造具有明确星座规模、切片周期和链路参数的 replay 测试配置。 */
-inline ResolvedSatComputeConfig
-MakeReplayTestConfig(const std::filesystem::path& replayDirectory,
-                     uint32_t numOrbits,
-                     uint32_t satellitesPerOrbit,
-                     int64_t durationNs,
-                     int64_t updateIntervalNs,
-                     const std::string& delayMode = "fixed",
-                     std::optional<int64_t> fixedDelayNs = 1000000,
-                     uint64_t linkBandwidthBps = 100000000)
-{
-    ResolvedSatComputeConfig config = MakeOnlineTestConfig(numOrbits,
-                                                           satellitesPerOrbit,
-                                                           delayMode,
-                                                           durationNs,
-                                                           updateIntervalNs,
-                                                           30000000.0L);
-    config.network.delayMode = delayMode;
-    config.network.fixedDelayNs = fixedDelayNs;
-    config.network.linkBandwidthBps = linkBandwidthBps;
-    return MakeReplayTestConfig(std::move(config), replayDirectory);
-}
-
-/** 构造路由、流量和任务测试共用的四节点动态菱形回放。 */
-inline ResolvedSatComputeConfig
-MakeDiamondReplayTestConfig(const std::filesystem::path& replayDirectory)
-{
-    return MakeReplayTestConfig(replayDirectory,
-                                2,
-                                2,
-                                5000000000LL,
-                                2000000000LL);
+    return {config,
+            MakeTestConstellation(numOrbits, satellitesPerOrbit),
+            durationNs,
+            updateIntervalNs};
 }
 
 } // namespace ns3::satcompute::test

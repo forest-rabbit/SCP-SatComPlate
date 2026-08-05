@@ -4,13 +4,13 @@
 
 #include "ns3/command-line.h"
 #include "ns3/compute-profile.h"
+#include "ns3/constellation-definition.h"
 #include "ns3/circular-orbit-topology-policy.h"
 #include "ns3/ecmp-route-recorder.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/network-transfer.h"
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/para.h"
-#include "ns3/resolved-config.h"
 #include "ns3/rng-seed-manager.h"
 #include "ns3/metrics.h"
 #include "ns3/satellite-topology.h"
@@ -77,6 +77,22 @@ RequirePositiveSeconds(double value, std::string_view fieldName)
     }
 }
 
+std::string
+ResolveOptionalInputFile(const std::string& value, std::string_view fieldName)
+{
+    if (value.empty())
+    {
+        return {};
+    }
+    std::error_code error;
+    const std::filesystem::path resolved = std::filesystem::weakly_canonical(value, error);
+    if (error || !std::filesystem::is_regular_file(resolved))
+    {
+        FailConfig(fieldName, "must reference an existing regular file: " + value);
+    }
+    return resolved.string();
+}
+
 void
 AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
 {
@@ -86,12 +102,6 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
     commandLine.AddValue("constellationConfig",
                          "Path to the native LEO shell CSV",
                          config.constellationConfig);
-    commandLine.AddValue("topologySource",
-                         "Migration-only topology source: online or replay",
-                         config.topologySource);
-    commandLine.AddValue("topologyDir",
-                         "Migration-only topology slice directory for replay",
-                         config.topologyDirectory);
     commandLine.AddValue("islCandidateStrategy",
                          "Fixed candidate ISL strategy",
                          config.islCandidateStrategy);
@@ -152,15 +162,6 @@ ValidateConfig(const SatComputeConfig& config)
 {
     RequireNotEmpty(config.constellationConfig, "constellationConfig");
     RequirePositiveSeconds(config.simulationDurationSeconds, "simulationDuration");
-    RequireChoice(config.topologySource, "topologySource", {"online", "replay"});
-    if (config.topologySource == "online" && !config.topologyDirectory.empty())
-    {
-        FailConfig("topologyDir", "must be empty for online topology");
-    }
-    if (config.topologySource == "replay" && config.topologyDirectory.empty())
-    {
-        FailConfig("topologyDir", "is required for replay topology");
-    }
     RequireChoice(config.islCandidateStrategy, "islCandidateStrategy", {"plus-grid"});
     if (!std::isfinite(config.maxIslDistanceMeters) || config.maxIslDistanceMeters <= 0.0)
     {
@@ -223,10 +224,6 @@ ValidateConfig(const SatComputeConfig& config)
     }
     RequireChoice(config.taskCompletionPolicy, "taskCompletionPolicy", {"strict", "report"});
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
-    if (config.topologyOnly && config.topologySource != "online")
-    {
-        FailConfig("topologyOnly", "requires online topology");
-    }
     if (config.topologyOnly && (!config.transferTrace.empty() || hasComputeProfile))
     {
         FailConfig("topologyOnly", "cannot load transfer or task workloads");
@@ -254,37 +251,57 @@ main(int argc, char* argv[])
     try
     {
         ValidateConfig(inputConfig);
-        const ResolvedSatComputeConfig config = ResolveSatComputeConfig(inputConfig);
-        RngSeedManager::SetSeed(config.randomness.seed);
-        RngSeedManager::SetRun(config.randomness.run);
+        SatComputeConfig config = inputConfig;
+        config.transferTrace = ResolveOptionalInputFile(config.transferTrace, "transferTrace");
+        config.computeProfile =
+            ResolveOptionalInputFile(config.computeProfile, "computeProfile");
+        config.taskTrace = ResolveOptionalInputFile(config.taskTrace, "taskTrace");
+        const int64_t simulationDurationNs =
+            SatComputeSecondsToNanoseconds(config.simulationDurationSeconds,
+                                           "simulationDuration");
+        const int64_t topologySliceIntervalNs =
+            SatComputeSecondsToNanoseconds(config.topologySliceIntervalSeconds,
+                                           "topologySliceInterval");
+        const std::optional<int64_t> fixedDelayNs =
+            config.delayMode == "fixed"
+                ? std::optional<int64_t>(
+                      SatComputeSecondsToNanoseconds(config.fixedDelaySeconds, "fixedDelay"))
+                : std::nullopt;
+        const std::filesystem::path outputDirectory =
+            std::filesystem::absolute(config.outputDirectory).lexically_normal();
+        const ConstellationDefinition constellationDefinition =
+            LoadConstellationDefinition(config.constellationConfig);
+
+        RngSeedManager::SetSeed(config.randomSeed);
+        RngSeedManager::SetRun(config.randomRun);
         RngSeedManager::ResetNextStreamIndex();
 
         if (config.topologyOnly)
         {
             TopologySliceExportResult sliceResult;
             {
-                OnlineOrbitConstellation constellation(config.constellation);
-                CircularOrbitTopologyPolicy policy(config.constellation,
-                                                   config.network.seamEnabled,
-                                                   config.network.maxIslDistanceM,
-                                                   config.network.delayMode,
-                                                   config.network.fixedDelayNs);
-                TopologySliceExporter exporter(config.simulation.durationNs,
-                                               config.topologySlices.intervalNs,
-                                               config.topologySlices.includeFinalState,
-                                               config.network.linkBandwidthBps,
-                                               config.outputDirectory / "topology",
+                OnlineOrbitConstellation constellation(constellationDefinition);
+                CircularOrbitTopologyPolicy policy(constellationDefinition,
+                                                   config.seamEnabled,
+                                                   config.maxIslDistanceMeters,
+                                                   config.delayMode,
+                                                   fixedDelayNs);
+                TopologySliceExporter exporter(simulationDurationNs,
+                                               topologySliceIntervalNs,
+                                               config.includeFinalTopologyState,
+                                               config.islBandwidthBps,
+                                               outputDirectory / "topology",
                                                constellation,
                                                policy);
                 exporter.Initialize();
-                Simulator::Stop(NanoSeconds(config.simulation.durationNs));
+                Simulator::Stop(NanoSeconds(simulationDurationNs));
                 Simulator::Run();
                 sliceResult = exporter.Finalize();
             }
             Simulator::Destroy();
             const nlohmann::json result = {
                 {"application", "satcompute"},
-                {"satellite_count", config.constellation.GetSatelliteCount()},
+                {"satellite_count", constellationDefinition.GetSatelliteCount()},
                 {"slice_count", sliceResult.slices.size()},
                 {"status", "topology-only"},
                 {"topology_directory", sliceResult.outputDirectory.string()}};
@@ -295,63 +312,64 @@ main(int argc, char* argv[])
         int exitCode = 0;
         nlohmann::json result;
         {
-            SatelliteTopology topology(config);
+            SatelliteTopology topology(config, constellationDefinition);
             topology.Initialize();
             EcmpRouteRecorder routeRecorder(topology);
 
             Ptr<NetworkTransferEngine> transferEngine;
             Ptr<TaskCoordinator> taskCoordinator;
-            if (config.workloads.transferTrace)
+            if (!config.transferTrace.empty())
             {
                 const NetworkTransferState networkTransfers = InstallNetworkTransfersNs(
-                    *config.workloads.transferTrace,
-                    config.workloads.transferChunkMode,
-                    config.workloads.transferPayloadBytes,
-                    config.network.islMtuBytes,
-                    config.network.receiverRcvBufBytes,
-                    config.logging.diagnosticMode == "failure",
-                    config.logging.transferLogMode,
-                    config.simulation.durationNs,
+                    config.transferTrace,
+                    config.transferChunkMode,
+                    config.transferPayloadBytes,
+                    config.islMtuBytes,
+                    config.receiverRcvBufBytes,
+                    config.diagnosticMode == "failure",
+                    config.transferLogMode,
+                    simulationDurationNs,
                     topology);
                 transferEngine = networkTransfers.engine;
             }
-            else if (config.workloads.computeProfile && config.workloads.taskTrace)
+            else if (!config.computeProfile.empty() && !config.taskTrace.empty())
             {
                 const ComputeProfile profile =
-                    ReadComputeProfile(*config.workloads.computeProfile, topology);
-                const TaskTrace trace = ReadTaskTrace(*config.workloads.taskTrace,
-                                                      config.simulation.durationNs,
+                    ReadComputeProfile(config.computeProfile, topology);
+                const TaskTrace trace = ReadTaskTrace(config.taskTrace,
+                                                      simulationDurationNs,
                                                       topology,
                                                       profile);
                 taskCoordinator = CreateObject<TaskCoordinator>();
                 taskCoordinator->Initialize(profile,
                                             trace,
                                             topology,
-                                            config.workloads.transferChunkMode,
-                                            config.workloads.transferPayloadBytes,
-                                            config.network.islMtuBytes,
-                                            config.network.receiverRcvBufBytes,
-                                            config.logging.diagnosticMode == "failure",
-                                            config.simulation.durationNs);
+                                            config.transferChunkMode,
+                                            config.transferPayloadBytes,
+                                            config.islMtuBytes,
+                                            config.receiverRcvBufBytes,
+                                            config.diagnosticMode == "failure",
+                                            simulationDurationNs);
                 transferEngine = taskCoordinator->GetTransferEngine();
             }
 
             const Ptr<FlowMonitor> flowMonitor = InstallSimulationFlowMonitor();
-            Simulator::Stop(NanoSeconds(config.simulation.durationNs));
+            Simulator::Stop(NanoSeconds(simulationDurationNs));
             const auto wallStart = std::chrono::steady_clock::now();
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
             const int64_t wallClockNs =
                 std::chrono::duration_cast<std::chrono::nanoseconds>(wallStop - wallStart).count();
             std::optional<CapacityAwareRuntimeSummary> capacitySummary;
-            if (config.routing.mode == "global-capacity-aware-hrw")
+            if (config.routingMode == "global-capacity-aware-hrw")
             {
                 capacitySummary = transferEngine != nullptr
                                       ? transferEngine->CollectCapacityAwareSummary()
                                       : CapacityAwareRuntimeSummary();
             }
             MetricsRuntimeContext metricsContext = {
-                config.outputDirectory,
+                outputDirectory,
+                simulationDurationNs,
                 wallClockNs,
                 topology.GetAppliedTopologySliceCount(),
                 topology.GetRouteComputationCount(),
@@ -370,13 +388,13 @@ main(int argc, char* argv[])
             {
                 taskCoordinator->ValidateCompleted();
             }
-            if (!output.complete && config.workloads.taskCompletionPolicy == "strict")
+            if (!output.complete && config.taskCompletionPolicy == "strict")
             {
                 exitCode = 3;
             }
             result = {{"application", "satcompute"},
                       {"run_summary", output.runSummaryPath.string()},
-                      {"satellite_count", config.constellation.GetSatelliteCount()},
+                      {"satellite_count", constellationDefinition.GetSatelliteCount()},
                       {"status", output.complete ? "completed" : "partial"}};
         }
         Simulator::Destroy();

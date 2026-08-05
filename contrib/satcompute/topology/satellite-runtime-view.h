@@ -18,7 +18,7 @@
 namespace ns3
 {
 
-/** Runtime services shared by replay and online satellite controllers. */
+/** Runtime services exposed by the online satellite controller. */
 class SatelliteRuntimeView : public CapacityAwarePathView, public SatelliteEndpointView
 {
   public:

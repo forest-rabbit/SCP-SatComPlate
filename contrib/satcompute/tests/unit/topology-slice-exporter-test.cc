@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -27,6 +28,7 @@ namespace
 {
 
 using satcompute::test::MakeOnlineTestConfig;
+using satcompute::test::OnlineTestConfiguration;
 
 void
 Check(bool condition, const std::string& message)
@@ -72,9 +74,10 @@ GetFilenames(const std::filesystem::path& directory)
 }
 
 TopologySliceExportResult
-RunExport(const ResolvedSatComputeConfig& config,
+RunExport(const OnlineTestConfiguration& config,
           const std::filesystem::path& outputDirectory)
 {
+    const SatComputeConfig& parameters = config.parameters;
     TopologySliceExportResult result;
     {
         OnlineOrbitConstellation constellation(config.constellation);
@@ -86,14 +89,14 @@ RunExport(const ResolvedSatComputeConfig& config,
                   "topology-only constellation unexpectedly has an InternetStack");
         }
         CircularOrbitTopologyPolicy policy(config.constellation,
-                                           config.network.seamEnabled,
-                                           config.network.maxIslDistanceM,
-                                           config.network.delayMode,
-                                           config.network.fixedDelayNs);
-        TopologySliceExporter exporter(config.simulation.durationNs,
-                                       config.topologySlices.intervalNs,
-                                       config.topologySlices.includeFinalState,
-                                       config.network.linkBandwidthBps,
+                                           parameters.seamEnabled,
+                                           parameters.maxIslDistanceMeters,
+                                           parameters.delayMode,
+                                           std::nullopt);
+        TopologySliceExporter exporter(config.durationNs,
+                                       1000000000LL,
+                                       parameters.includeFinalTopologyState,
+                                       parameters.islBandwidthBps,
                                        outputDirectory,
                                        constellation,
                                        policy);
@@ -104,7 +107,7 @@ RunExport(const ResolvedSatComputeConfig& config,
                                         2500000000LL}),
               "topology-only schedule differs");
         exporter.Initialize();
-        Simulator::Stop(NanoSeconds(config.simulation.durationNs));
+        Simulator::Stop(NanoSeconds(config.durationNs));
         Simulator::Run();
         result = exporter.Finalize();
     }
@@ -134,7 +137,7 @@ CheckScheduleAndFilenameContracts()
 }
 
 void
-CheckExportContent(const ResolvedSatComputeConfig& config,
+CheckExportContent(const OnlineTestConfiguration& config,
                    const std::filesystem::path& firstDirectory,
                    const std::filesystem::path& secondDirectory)
 {
@@ -216,16 +219,17 @@ main(int argc, char* argv[])
         Check(!constellationConfig.empty(), "constellationConfig is required");
         Check(!outputDirectory.empty(), "outputDir is required");
         CheckScheduleAndFilenameContracts();
-        ResolvedSatComputeConfig config = MakeOnlineTestConfig(2,
-                                                               2,
-                                                               "distance",
-                                                               2500000000LL,
-                                                               2000000000LL,
-                                                               1.0L);
+        OnlineTestConfiguration config = MakeOnlineTestConfig(2,
+                                                              2,
+                                                              "distance",
+                                                              2500000000LL,
+                                                              2000000000LL,
+                                                              1.0L);
         config.constellation = LoadConstellationDefinition(constellationConfig);
-        config.topologyOnly = true;
-        config.topologySlices = {1000000000LL, true};
-        config.network.linkBandwidthBps = 100000000;
+        config.parameters.topologyOnly = true;
+        config.parameters.topologySliceIntervalSeconds = 1.0;
+        config.parameters.includeFinalTopologyState = true;
+        config.parameters.islBandwidthBps = 100000000;
         CheckExportContent(config,
                            std::filesystem::path(outputDirectory) / "first",
                            std::filesystem::path(outputDirectory) / "second");

@@ -16,8 +16,8 @@ task_inputs="contrib/satcompute/tests/fixtures/task"
 set +e
 result="$(./ns3 run --no-build \
   "satcompute --simulationDuration=1 \
---constellationConfig=$constellation --topologySource=replay \
---topologyDir=$topology --delayMode=fixed --fixedDelay=0.001 \
+--constellationConfig=$constellation --maxIslDistance=30000000 \
+--delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 --islQueueBytes=1 \
 --routingMode=global-first \
 --computeProfile=$task_inputs/compute-profile-single.json \

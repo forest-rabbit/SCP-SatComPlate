@@ -13,7 +13,7 @@ constellation_4="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
 
 completed="$(./ns3 run --no-build \
   "satcompute --simulationDuration=3 \
---constellationConfig=$constellation_4 --topologySource=online \
+--constellationConfig=$constellation_4 \
 --maxIslDistance=30000000 --delayMode=fixed --fixedDelay=0.008 \
 --networkUpdateInterval=1 --islBandwidthBps=100000000 \
 --routingMode=global-first \

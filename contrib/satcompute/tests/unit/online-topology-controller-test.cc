@@ -14,7 +14,7 @@
 
 #include <cmath>
 #include <iostream>
-#include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -25,6 +25,7 @@ namespace
 {
 
 using satcompute::test::MakeOnlineTestConfig;
+using satcompute::test::OnlineTestConfiguration;
 
 void
 Check(bool condition, const std::string& message)
@@ -36,13 +37,17 @@ Check(bool condition, const std::string& message)
 }
 
 CircularOrbitTopologyPolicy
-MakePolicy(const ResolvedSatComputeConfig& config)
+MakePolicy(const OnlineTestConfiguration& config)
 {
+    const SatComputeConfig& parameters = config.parameters;
     return {config.constellation,
-            config.network.seamEnabled,
-            config.network.maxIslDistanceM,
-            config.network.delayMode,
-            config.network.fixedDelayNs};
+            parameters.seamEnabled,
+            parameters.maxIslDistanceMeters,
+            parameters.delayMode,
+            parameters.delayMode == "fixed"
+                ? std::optional<int64_t>(static_cast<int64_t>(parameters.fixedDelaySeconds *
+                                                               1000000000.0))
+                : std::nullopt};
 }
 
 void
@@ -76,7 +81,7 @@ GetLinkDelayNs(const OnlineTopologyController& controller,
 void
 RunPolicyContractCase()
 {
-    ResolvedSatComputeConfig config =
+    OnlineTestConfiguration config =
         MakeOnlineTestConfig(1, 2, "distance", 1000000000, 1000000000, 5.0L);
     const std::vector<SatelliteEcefPosition> positions = {
         {0, Vector(0.0, 0.0, 0.0)},
@@ -95,7 +100,7 @@ RunPolicyContractCase()
     Check(DistanceToPropagationDelayNs(299792.458) == 1000000,
           "one-way speed-of-light conversion differs");
 
-    config.network.maxIslDistanceM = std::nextafter(5.0L, 0.0L);
+    config.parameters.maxIslDistanceMeters = std::nextafter(5.0, 0.0);
     const CircularOrbitTopologyPolicy belowBoundaryPolicy = MakePolicy(config);
     Check(!belowBoundaryPolicy.EvaluatePositions(0, positions)
                .evaluatedLinks.front()
@@ -106,16 +111,17 @@ RunPolicyContractCase()
 void
 RunControllerValidationCase()
 {
-    const ResolvedSatComputeConfig excessive =
+    const OnlineTestConfiguration excessive =
         MakeOnlineTestConfig(1,
                              2,
                              "fixed",
-                             std::numeric_limits<int64_t>::max(),
+                             5000000000LL,
                              1,
                              30000000.0L);
     try
     {
-        OnlineTopologyController controller(excessive);
+        OnlineTopologyController controller(excessive.parameters,
+                                            excessive.constellation);
     }
     catch (const OnlineTopologyControllerError&)
     {
@@ -127,10 +133,10 @@ RunControllerValidationCase()
 void
 RunFixedPeriodicCase()
 {
-    const ResolvedSatComputeConfig config =
+    const OnlineTestConfiguration config =
         MakeOnlineTestConfig(2, 3, "fixed", 2500000000LL, 1000000000LL, 30000000.0L);
     {
-        OnlineTopologyController controller(config);
+        OnlineTopologyController controller(config.parameters, config.constellation);
         controller.Initialize();
         Check(controller.GetAppliedUpdateCount() == 1,
               "online initial evaluation count differs");
@@ -139,14 +145,14 @@ RunFixedPeriodicCase()
         Check(controller.GetLinkState().GetActiveLinks().size() == 9,
               "fixed online plus-grid did not activate all candidates");
         Check(controller.GetServiceAddress(0) == Ipv4Address("172.16.0.1"),
-              "online service address differs from replay");
+              "online service address differs from the stable allocation");
         Check(GetLinkDelayNs(controller, 0, 1) == 8000000,
               "fixed online delay differs at time zero");
 
         uint32_t callbackCount = 0;
         controller.RegisterRouteUpdateCallback(
             MakeBoundCallback(&IncrementCounter, &callbackCount));
-        Simulator::Stop(NanoSeconds(config.simulation.durationNs));
+        Simulator::Stop(NanoSeconds(config.durationNs));
         Simulator::Run();
 
         Check(controller.GetAppliedUpdateCount() == 3,
@@ -167,7 +173,7 @@ RunFixedPeriodicCase()
 void
 RunDistanceDelayOnlyCase()
 {
-    const ResolvedSatComputeConfig config = MakeOnlineTestConfig(
+    const OnlineTestConfiguration config = MakeOnlineTestConfig(
         3,
         4,
         "distance",
@@ -175,12 +181,12 @@ RunDistanceDelayOnlyCase()
         10000000000LL,
         30000000.0L);
     {
-        OnlineTopologyController controller(config);
+        OnlineTopologyController controller(config.parameters, config.constellation);
         controller.Initialize();
         const std::vector<EvaluatedSatelliteLink> initial =
             controller.GetLastTopologyState().evaluatedLinks;
 
-        Simulator::Stop(NanoSeconds(config.simulation.durationNs));
+        Simulator::Stop(NanoSeconds(config.durationNs));
         Simulator::Run();
 
         Check(controller.GetAppliedUpdateCount() == 3,
@@ -206,7 +212,7 @@ RunDistanceDelayOnlyCase()
 long double
 FindCrossingThreshold()
 {
-    const ResolvedSatComputeConfig config = MakeOnlineTestConfig(
+    const OnlineTestConfiguration config = MakeOnlineTestConfig(
         3,
         4,
         "distance",
@@ -243,7 +249,7 @@ void
 RunEdgeChangeCase()
 {
     const long double threshold = FindCrossingThreshold();
-    const ResolvedSatComputeConfig config = MakeOnlineTestConfig(
+    const OnlineTestConfiguration config = MakeOnlineTestConfig(
         3,
         4,
         "fixed",
@@ -251,7 +257,7 @@ RunEdgeChangeCase()
         60000000000LL,
         threshold);
     {
-        OnlineTopologyController controller(config);
+        OnlineTopologyController controller(config.parameters, config.constellation);
         controller.Initialize();
         const auto initialEdges = controller.GetLinkState().GetActiveLinks();
         uint32_t callbackCount = 0;
@@ -262,7 +268,7 @@ RunEdgeChangeCase()
         Simulator::Schedule(Seconds(60), [&] {
             updatePrecededSameTimeObserver = controller.GetAppliedUpdateCount() == 2;
         });
-        Simulator::Stop(NanoSeconds(config.simulation.durationNs));
+        Simulator::Stop(NanoSeconds(config.durationNs));
         Simulator::Run();
 
         Check(controller.GetLinkState().GetActiveLinks() != initialEdges,

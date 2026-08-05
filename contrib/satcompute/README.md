@@ -2,7 +2,7 @@
 
 > `main` 使用官方 ns-3.48，`legacy/ns-3.33` 永久保留为只读行为基线。本文以
 > ns-3.33 中文 README 的章节和合同为主体。生产入口只接受 `para.cc` 默认值及
-> 同名 CLI 覆盖；CSV 只承担星座物理结构，JSON 承担拓扑回放、流量、算力和
+> 同名 CLI 覆盖；CSV 只承担星座物理结构，JSON 承担流量、算力和
 > 任务等相互独立的数据合同。
 
 最终边界见 [v0.3 平台规格](../../docs/specs/platform-v0.3.md)，逐项结果见
@@ -11,9 +11,8 @@
 ## 执行模型
 
 1. 由 `para.cc` 默认值和同名 CLI 覆盖得到平台运行参数；
-2. online 模式读取 ns-3.48 原生 LEO shell CSV，由原生圆轨道 mobility
-   实时计算稳定卫星 ID 对应的 ECEF 坐标；replay 模式读取配对的
-   `nodes_<time>s.json` 与 `topology_<time>s.json` 全量快照；
+2. 读取 ns-3.48 原生 LEO shell CSV，由原生圆轨道 mobility 实时计算稳定卫星
+   ID 对应的 ECEF 坐标；正式仿真不回放预处理切片；
 3. 按外部卫星 ID 的稳定顺序创建节点和 `/32` service 地址，按无向端点 ID 的
    canonical 顺序创建固定候选 ISL 和 `/30` 网段；
 4. 每个网络 tick 更新位置、距离门控和 distance 时延；只有有效链路集合变化时
@@ -29,10 +28,9 @@
 
 目标布局保持 ns-3.33 的职责边界：根目录 `satcompute.cc` 是平台入口，
 `para.h/.cc` 是唯一平台参数入口；`topology/satellite-topology.*` 是统一 facade。
-facade 内部的 `topology/orbit/`、`online/`、`replay/` 与 `export/` 保存 ns-3.48
-新增的原生轨道、在线应用、JSON 回放和切片导出实现。`topology/snapshot/` 保存
-快照数据类型、JSON 读取器和目录调度器；`topology/link/` 保存运行期 ISL 资源与
-启停状态。facade 已恢复并成为平台唯一拓扑入口；分层 `metrics/` 已按 legacy
+facade 内部的 `topology/orbit/`、`online/` 与 `export/` 保存 ns-3.48
+新增的原生轨道、在线应用和切片导出实现；`topology/link/` 保存运行期 ISL 资源与
+启停状态。facade 是平台唯一拓扑入口；分层 `metrics/` 已按 legacy
 的 `core/`、`routing/`、`diagnostics/` 与顶层 recorder 完成恢复。
 
 `routing/common/` 保存路由模式、五元组、候选和 FNV 值类型；
@@ -80,8 +78,6 @@ contrib/satcompute/tests/integration/regression/run-all.sh
 ```text
 simulationDuration       = 1000
 constellationConfig      = contrib/satcompute/input/topology/constellations/synthetic-66.csv
-topologySource           = online
-topologyDir              = empty
 islCandidateStrategy     = plus-grid
 seamEnabled              = false
 maxIslDistance           = 6174589
@@ -139,15 +135,12 @@ capacity-aware、任务、FCFS、strict/report、诊断与 canonical ordering �
 - `--simulationDuration`：有限正持续时间，单位为秒。
 - `--constellationConfig`：ns-3.48 原生 LEO shell CSV 路径；不得包含仿真、
   时延、路由、workload、随机数或输出参数。
-- `--topologySource`：`online` 或 `replay`。前者实时计算，后者读取全量切片。
-- `--topologyDir`：`replay` 模式的 JSON 全量快照目录；online 模式必须为空。
 - `--islCandidateStrategy`：固定候选 ISL 策略，当前为 `plus-grid`。
 - `--seamEnabled`、`--maxIslDistance`：seam 候选开关和有效链路距离门限。
 - `--delayMode`：`fixed` 或 `distance`；两者使用同一星座和固定候选身份。
 - `--fixedDelay`：fixed 模式单向链路时延，单位为秒。
-- `--networkUpdateInterval`：online/replay 网络状态应用周期，单位为秒。
-  distance 实验可设 1 秒或 2 秒，fixed 实验可设 20 秒，均由输入决定；replay
-  目录必须存在这些规则时刻的切片。
+- `--networkUpdateInterval`：在线网络状态应用周期，单位为秒。distance 实验可设
+  1 秒或 2 秒，fixed 实验可设 20 秒，均由输入决定。
 - `--islBandwidthBps`：每条 ISL 的 bit/s 数据率。
 - `--islMtuBytes`：所有当前及后续 ISL 的 MTU，默认 1500。
 - `--islQueueBytes`：所有当前及后续 ISL DropTail 队列字节容量，默认 1500000。
