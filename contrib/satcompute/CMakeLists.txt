@@ -16,7 +16,7 @@ build_lib(
     metrics/routing/ecmp-metrics.cc
     metrics/routing/ecmp-route-recorder.cc
     metrics/routing/size-aware-metrics.cc
-    metrics/run-output-writer.cc
+    metrics/metrics.cc
     routing/algorithm/capacity-aware-hrw-policy.cc
     routing/algorithm/global-first-policy.cc
     routing/algorithm/hash-per-flow-policy.cc
@@ -68,7 +68,7 @@ build_lib(
     metrics/routing/ecmp-metrics.h
     metrics/routing/ecmp-route-recorder.h
     metrics/routing/size-aware-metrics.h
-    metrics/run-output-writer.h
+    metrics/metrics.h
     routing/algorithm/capacity-aware-hrw-policy.h
     routing/algorithm/capacity-aware-path-types.h
     routing/algorithm/capacity-aware-path-view.h
@@ -342,9 +342,9 @@ build_exec(
 )
 
 build_exec(
-  EXECNAME satcompute-run-output-writer-test
+  EXECNAME satcompute-metrics-recorder-test
   EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/run-output-writer-test.cc
+  SOURCE_FILES tests/unit/metrics-recorder-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

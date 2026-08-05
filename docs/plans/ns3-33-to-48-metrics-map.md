@@ -32,6 +32,9 @@
 `applied_topology_slice_count` 和 `route_computation_count`。`effective-config.json`、
 轨道坐标切片及其 manifest 继续由各自模块负责，不归 metrics 重复生成。
 
-当前过渡期的 `routing-summary.json` 仅作为聚合 writer 的临时输出；任务 6.2
-恢复三个 legacy routing 输出后审计其独有字段，任务 6.4 删除
-`run-output-writer.*` 时一并决定是否保留为附加证据。
+任务 6.4 已删除 `run-output-writer.*`，改由 `MetricsRecorder` 统一编排。
+过渡期的 `routing-summary.json` 和 `routing-reservation-events.csv` 不保留：前者字段
+已由 `run-summary.json`、`size-aware-summary.json` 与
+`capacity-aware-summary.json` 覆盖，后者与
+`size-aware-reservation-events.csv` 的事件字段等价。复用输出目录时仍会精确清理
+这两个旧文件，避免把历史结果误认为本次证据。

@@ -263,8 +263,6 @@ for filename in (
     "ecmp-route-events.csv",
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
-    "routing-reservation-events.csv",
-    "routing-summary.json",
 ):
     first = (root / "task-first" / filename).read_bytes()
     second = (root / "task-second" / filename).read_bytes()
@@ -338,8 +336,6 @@ for filename in (
     "ecmp-route-events.csv",
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
-    "routing-reservation-events.csv",
-    "routing-summary.json",
 ):
     first = (root / "online-task-first" / filename).read_bytes()
     second = (root / "online-task-second" / filename).read_bytes()

@@ -5,10 +5,10 @@
 平台输出均来自真实运行时数据源，不生成占位统计。
 
 每次运行至少写出 `run-summary.json`、`network-flow-metrics.csv`、
-`network-flow-details.csv`、`ecmp-route-events.csv` 和当前过渡期保留的
-`routing-summary.json`。存在网络工作负载时增加 `transfer-summary.csv`；任务模式
-增加 `task-events.csv`、`task-summary.csv` 和 `compute-node-summary.csv`。
-size-aware 与 capacity-aware 模式分别增加其 legacy 路由指标。
+`network-flow-details.csv` 和 `ecmp-route-events.csv`。存在网络工作负载时增加
+`transfer-summary.csv`；任务模式增加 `task-events.csv`、`task-summary.csv` 和
+`compute-node-summary.csv`。size-aware 与 capacity-aware 模式分别增加其
+legacy 路由指标。
 
 `run-summary.json` 保留 ns-3.33 扁平字段，同时记录 resolved 配置哈希、拓扑来源、
 切片应用次数和路由重算次数等 ns-3.48 可复现证据。CSV 使用稳定顺序；计数和字节
@@ -24,3 +24,5 @@ size-aware 与 capacity-aware 模式分别增加其 legacy 路由指标。
 
 复用同一输出目录时，仅清理根目录、旧 `diagnostics/` 路径和
 `diagnostics/failure/` 中九个已知诊断文件；未知文件不会被递归删除。
+已移除的过渡输出 `routing-summary.json` 和 `routing-reservation-events.csv`
+也会按精确文件名清理，其字段已分别由 run、size-aware 和 capacity-aware 输出覆盖。

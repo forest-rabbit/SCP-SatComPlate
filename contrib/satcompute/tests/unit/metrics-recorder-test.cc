@@ -9,10 +9,10 @@
 #include "ns3/flow-metrics.h"
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
+#include "ns3/metrics.h"
 #include "ns3/network-transfer-config.h"
 #include "ns3/network-transfer-engine.h"
 #include "ns3/replay-topology-controller.h"
-#include "ns3/run-output-writer.h"
 #include "ns3/sha256.h"
 #include "ns3/simulator.h"
 #include "ns3/task-coordinator.h"
@@ -141,30 +141,35 @@ RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
         coordinator->ValidateCompleted();
 
         WriteFixtureFile(outputDirectory / "udp-socket-drops.csv", "stale\n");
+        WriteFixtureFile(outputDirectory / "routing-summary.json", "{}\n");
+        WriteFixtureFile(outputDirectory / "routing-reservation-events.csv", "stale\n");
         WriteFixtureFile(outputDirectory / "diagnostics/diagnostic-summary.json", "{}\n");
         WriteFixtureFile(outputDirectory / "diagnostics/failure/incomplete-tasks.csv",
                          "stale\n");
 
-        const RunOutputContext context = {effectiveConfig,
-                                          outputDirectory,
-                                          123456,
-                                          controller.GetAppliedSnapshotCount(),
-                                          controller.GetRouteComputationCount(),
-                                          controller.GetFlowRouteRegistry(),
-                                          std::nullopt,
-                                          flowMonitor,
-                                          routeRecorder.GetEvents(),
-                                          controller.GetLinkState().GetDirectedLinks(),
-                                          controller.GetLinkState().GetQueueDropEvents()};
+        const MetricsRuntimeContext context = {
+            effectiveConfig,
+            outputDirectory,
+            123456,
+            controller.GetAppliedSnapshotCount(),
+            controller.GetRouteComputationCount(),
+            controller.GetFlowRouteRegistry(),
+            std::nullopt,
+            flowMonitor,
+            routeRecorder.GetEvents(),
+            controller.GetLinkState().GetDirectedLinks(),
+            controller.GetLinkState().GetQueueDropEvents()};
         Ptr<NetworkTransferEngine> engine = coordinator->GetTransferEngine();
-        const RunOutputResult result = WriteRunOutputs(config,
-                                                       context,
-                                                       engine,
-                                                       coordinator);
-        Check(result.complete && !result.diagnosticsGenerated && result.files.size() == 12,
+        MetricsRecorder metrics(config, context, engine, coordinator);
+        const MetricsRecordResult result = metrics.Record();
+        Check(result.complete && !result.diagnosticsGenerated && result.files.size() == 10,
               "complete task output result differs");
         Check(!std::filesystem::exists(outputDirectory / "diagnostics"),
               "complete run unexpectedly generated diagnostics");
+        Check(!std::filesystem::exists(outputDirectory / "routing-summary.json") &&
+                  !std::filesystem::exists(outputDirectory /
+                                           "routing-reservation-events.csv"),
+              "obsolete aggregate-writer outputs were retained");
         Check(CountLines(outputDirectory / "transfer-summary.csv") == 3 &&
                   CountLines(outputDirectory / "network-flow-metrics.csv") == 2 &&
                   CountLines(outputDirectory / "network-flow-details.csv") == 3 &&
@@ -172,8 +177,7 @@ RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
                   CountLines(outputDirectory / "size-aware-reservation-events.csv") > 1 &&
                   CountLines(outputDirectory / "task-events.csv") == 6 &&
                   CountLines(outputDirectory / "task-summary.csv") == 2 &&
-                  CountLines(outputDirectory / "compute-node-summary.csv") == 2 &&
-                  CountLines(outputDirectory / "routing-reservation-events.csv") > 1,
+                  CountLines(outputDirectory / "compute-node-summary.csv") == 2,
               "complete CSV row counts differ");
         Check(FirstLine(outputDirectory / "transfer-summary.csv") ==
                       "transfer_id,source_node_id,destination_node_id,source_address,"
@@ -205,13 +209,6 @@ RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
                   summary.at("flow_monitor_lost_packets") == 0 &&
                   summary.at("route_computation_count") == 3,
               "complete run summary fields differ");
-        const Json routing = ReadJson(outputDirectory / "routing-summary.json");
-        Check(routing.at("routing_mode") == "global-size-aware-hrw" &&
-                  routing.at("flow_registry").at("registered_flow_count") == 2 &&
-                  routing.at("flow_registry").at("active_flow_count_at_end") == 0 &&
-                  routing.at("flow_registry").at("assignment_count_at_end") == 0 &&
-                  routing.at("flow_registry").at("peak_reserved_bytes").get<uint64_t>() > 0,
-              "reservation-aware routing summary differs");
         const Json sizeAware = ReadJson(outputDirectory / "size-aware-summary.json");
         Check(sizeAware.at("registered_flow_count") == 2 &&
                   sizeAware.at("active_flow_count_at_end") == 0 &&
@@ -222,10 +219,7 @@ RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
 
         const std::string firstSummary = ReadText(result.runSummaryPath);
         const std::string firstTransfers = ReadText(outputDirectory / "transfer-summary.csv");
-        const RunOutputResult repeated = WriteRunOutputs(config,
-                                                         context,
-                                                         engine,
-                                                         coordinator);
+        const MetricsRecordResult repeated = metrics.Record();
         Check(ReadText(repeated.runSummaryPath) == firstSummary &&
                   ReadText(outputDirectory / "transfer-summary.csv") == firstTransfers,
               "repeated output publication was not byte deterministic");
@@ -274,18 +268,20 @@ RunPartialTransferOutput(const std::filesystem::path& constellationConfig,
         Check(!engine->AreAllTransfersCompleted(),
               "partial-output fixture unexpectedly completed");
 
-        const RunOutputContext context = {effectiveConfig,
-                                          outputDirectory,
-                                          999,
-                                          controller.GetAppliedSnapshotCount(),
-                                          controller.GetRouteComputationCount(),
-                                          controller.GetFlowRouteRegistry(),
-                                          std::nullopt,
-                                          flowMonitor,
-                                          routeRecorder.GetEvents(),
-                                          controller.GetLinkState().GetDirectedLinks(),
-                                          controller.GetLinkState().GetQueueDropEvents()};
-        const RunOutputResult result = WriteRunOutputs(config, context, engine, nullptr);
+        const MetricsRuntimeContext context = {
+            effectiveConfig,
+            outputDirectory,
+            999,
+            controller.GetAppliedSnapshotCount(),
+            controller.GetRouteComputationCount(),
+            controller.GetFlowRouteRegistry(),
+            std::nullopt,
+            flowMonitor,
+            routeRecorder.GetEvents(),
+            controller.GetLinkState().GetDirectedLinks(),
+            controller.GetLinkState().GetQueueDropEvents()};
+        MetricsRecorder metrics(config, context, engine, nullptr);
+        const MetricsRecordResult result = metrics.Record();
         Check(!result.complete && result.diagnosticsGenerated,
               "partial transfer output status differs");
         Check(CountLines(outputDirectory / "ecmp-route-events.csv") == 1 &&
@@ -355,21 +351,23 @@ RunPartialTaskDiagnostics(const std::filesystem::path& constellationConfig,
         Simulator::Run();
         Check(!coordinator->IsComplete(), "failure diagnostic task unexpectedly completed");
 
-        const RunOutputContext context = {effectiveConfig,
-                                          outputDirectory,
-                                          1234,
-                                          controller.GetAppliedSnapshotCount(),
-                                          controller.GetRouteComputationCount(),
-                                          controller.GetFlowRouteRegistry(),
-                                          std::nullopt,
-                                          flowMonitor,
-                                          routeRecorder.GetEvents(),
-                                          controller.GetLinkState().GetDirectedLinks(),
-                                          controller.GetLinkState().GetQueueDropEvents()};
-        const RunOutputResult result = WriteRunOutputs(config,
-                                                       context,
-                                                       coordinator->GetTransferEngine(),
-                                                       coordinator);
+        const MetricsRuntimeContext context = {
+            effectiveConfig,
+            outputDirectory,
+            1234,
+            controller.GetAppliedSnapshotCount(),
+            controller.GetRouteComputationCount(),
+            controller.GetFlowRouteRegistry(),
+            std::nullopt,
+            flowMonitor,
+            routeRecorder.GetEvents(),
+            controller.GetLinkState().GetDirectedLinks(),
+            controller.GetLinkState().GetQueueDropEvents()};
+        MetricsRecorder metrics(config,
+                                context,
+                                coordinator->GetTransferEngine(),
+                                coordinator);
+        const MetricsRecordResult result = metrics.Record();
         const std::filesystem::path failure = outputDirectory / "diagnostics/failure";
         Check(!result.complete && result.diagnosticsGenerated,
               "partial task diagnostic status differs");
@@ -466,7 +464,7 @@ main(int argc, char* argv[])
                                   topologyDirectory,
                                   std::filesystem::path(fixtureRoot) / "task",
                                   outputDirectory);
-        std::cout << "SatCompute structured run output tests passed." << std::endl;
+        std::cout << "SatCompute MetricsRecorder tests passed." << std::endl;
         return 0;
     }
     catch (const std::exception& error)
