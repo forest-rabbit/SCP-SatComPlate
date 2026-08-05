@@ -91,6 +91,15 @@ FirstLine(const std::filesystem::path& filename)
 }
 
 void
+WriteFixtureFile(const std::filesystem::path& filename, const std::string& content)
+{
+    std::filesystem::create_directories(filename.parent_path());
+    std::ofstream output(filename, std::ios::out | std::ios::trunc);
+    Check(output.is_open(), "cannot seed stale diagnostic fixture");
+    output << content;
+}
+
+void
 RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
                       const std::filesystem::path& topologyDirectory,
                       const std::filesystem::path& fixtureRoot,
@@ -131,6 +140,11 @@ RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
         Simulator::Run();
         coordinator->ValidateCompleted();
 
+        WriteFixtureFile(outputDirectory / "udp-socket-drops.csv", "stale\n");
+        WriteFixtureFile(outputDirectory / "diagnostics/diagnostic-summary.json", "{}\n");
+        WriteFixtureFile(outputDirectory / "diagnostics/failure/incomplete-tasks.csv",
+                         "stale\n");
+
         const RunOutputContext context = {effectiveConfig,
                                           outputDirectory,
                                           123456,
@@ -139,13 +153,15 @@ RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
                                           controller.GetFlowRouteRegistry(),
                                           std::nullopt,
                                           flowMonitor,
-                                          routeRecorder.GetEvents()};
+                                          routeRecorder.GetEvents(),
+                                          controller.GetLinkState().GetDirectedLinks(),
+                                          controller.GetLinkState().GetQueueDropEvents()};
         Ptr<NetworkTransferEngine> engine = coordinator->GetTransferEngine();
         const RunOutputResult result = WriteRunOutputs(config,
                                                        context,
                                                        engine,
                                                        coordinator);
-        Check(result.complete && !result.diagnosticsGenerated && result.files.size() == 13,
+        Check(result.complete && !result.diagnosticsGenerated && result.files.size() == 12,
               "complete task output result differs");
         Check(!std::filesystem::exists(outputDirectory / "diagnostics"),
               "complete run unexpectedly generated diagnostics");
@@ -229,6 +245,7 @@ RunPartialTransferOutput(const std::filesystem::path& constellationConfig,
             MakeDiamondReplayTestConfig(topologyDirectory);
         config.runName = "transfer-replay-fixture";
         config.constellation = LoadConstellationDefinition(constellationConfig);
+        config.logging.diagnosticMode = "failure";
         config.workloads.transferTrace = fixtureRoot / "traffic/transfers/engine-basic.json";
         config.outputDirectory = outputDirectory;
         const std::filesystem::path effectiveConfig = WriteEffectiveConfig(config);
@@ -265,7 +282,9 @@ RunPartialTransferOutput(const std::filesystem::path& constellationConfig,
                                           controller.GetFlowRouteRegistry(),
                                           std::nullopt,
                                           flowMonitor,
-                                          routeRecorder.GetEvents()};
+                                          routeRecorder.GetEvents(),
+                                          controller.GetLinkState().GetDirectedLinks(),
+                                          controller.GetLinkState().GetQueueDropEvents()};
         const RunOutputResult result = WriteRunOutputs(config, context, engine, nullptr);
         Check(!result.complete && result.diagnosticsGenerated,
               "partial transfer output status differs");
@@ -273,20 +292,143 @@ RunPartialTransferOutput(const std::filesystem::path& constellationConfig,
                   !std::filesystem::exists(outputDirectory / "size-aware-summary.json") &&
                   !std::filesystem::exists(outputDirectory / "capacity-aware-summary.json"),
               "global-first routing metric ownership differs");
-        Check(CountLines(outputDirectory / "diagnostics/incomplete-transfers.csv") == 3 &&
-                  CountLines(outputDirectory / "diagnostics/incomplete-tasks.csv") == 1,
-              "partial diagnostic row counts differ");
+        const std::filesystem::path failure = outputDirectory / "diagnostics/failure";
+        Check(FirstLine(failure / "flow-drop-reasons.csv") ==
+                      "flow_monitor_id,transfer_id,source_address,destination_address,protocol,"
+                      "source_port,destination_port,reason_code,reason_name,dropped_packets,"
+                      "dropped_bytes,flow_lost_packets,flow_reported_drop_packets,"
+                      "flow_unattributed_lost_packets" &&
+                  !std::filesystem::exists(failure / "incomplete-transfers.csv") &&
+                  !std::filesystem::exists(failure / "incomplete-tasks.csv") &&
+                  !std::filesystem::exists(failure / "diagnostic-summary.json") &&
+                  !std::filesystem::exists(outputDirectory / "udp-socket-drops.csv"),
+              "direct-transfer diagnostic ownership differs");
         const Json summary = ReadJson(result.runSummaryPath);
-        const Json diagnostic =
-            ReadJson(outputDirectory / "diagnostics/diagnostic-summary.json");
         Check(summary.at("run_status") == "PARTIAL" &&
                   summary.at("task_completion_policy") == "strict" &&
                   summary.at("diagnostics_generated") == true &&
                   summary.at("transfer").at("transfer_count") == 2 &&
-                  summary.at("transfer").at("completed_transfer_count") == 0 &&
+                  summary.at("transfer").at("completed_transfer_count") == 0,
+              "partial direct-transfer run summary differs");
+    }
+    ResetSimulationGlobals();
+}
+
+void
+RunPartialTaskDiagnostics(const std::filesystem::path& constellationConfig,
+                          const std::filesystem::path& topologyDirectory,
+                          const std::filesystem::path& fixtureRoot,
+                          const std::filesystem::path& outputRoot)
+{
+    {
+        const std::filesystem::path outputDirectory = outputRoot / "partial-task";
+        ResolvedSatComputeConfig config = MakeDiamondReplayTestConfig(topologyDirectory);
+        config.runName = "task-failure-diagnostic-fixture";
+        config.constellation = LoadConstellationDefinition(constellationConfig);
+        config.logging.diagnosticMode = "failure";
+        config.network.islQueueBytes = 1;
+        config.workloads.computeProfile = fixtureRoot / "compute-profile-single.json";
+        config.workloads.taskTrace = fixtureRoot / "task-single.json";
+        config.outputDirectory = outputDirectory;
+        const std::filesystem::path effectiveConfig = WriteEffectiveConfig(config);
+        ReplayTopologyController controller(config);
+        controller.Initialize();
+        EcmpRouteRecorder routeRecorder(controller);
+        const ComputeProfile profile =
+            ReadComputeProfile(*config.workloads.computeProfile, controller);
+        const TaskTrace trace = ReadTaskTrace(*config.workloads.taskTrace,
+                                              config.simulation.durationNs,
+                                              controller,
+                                              profile);
+        Ptr<TaskCoordinator> coordinator = CreateObject<TaskCoordinator>();
+        coordinator->Initialize(profile,
+                                trace,
+                                controller,
+                                config.workloads.transferChunkMode,
+                                config.workloads.transferPayloadBytes,
+                                config.network.islMtuBytes,
+                                config.network.receiverRcvBufBytes,
+                                true,
+                                config.simulation.durationNs);
+        const Ptr<FlowMonitor> flowMonitor = InstallSimulationFlowMonitor();
+        Simulator::Stop(NanoSeconds(101000000));
+        Simulator::Run();
+        Check(!coordinator->IsComplete(), "failure diagnostic task unexpectedly completed");
+
+        const RunOutputContext context = {effectiveConfig,
+                                          outputDirectory,
+                                          1234,
+                                          controller.GetAppliedSnapshotCount(),
+                                          controller.GetRouteComputationCount(),
+                                          controller.GetFlowRouteRegistry(),
+                                          std::nullopt,
+                                          flowMonitor,
+                                          routeRecorder.GetEvents(),
+                                          controller.GetLinkState().GetDirectedLinks(),
+                                          controller.GetLinkState().GetQueueDropEvents()};
+        const RunOutputResult result = WriteRunOutputs(config,
+                                                       context,
+                                                       coordinator->GetTransferEngine(),
+                                                       coordinator);
+        const std::filesystem::path failure = outputDirectory / "diagnostics/failure";
+        Check(!result.complete && result.diagnosticsGenerated,
+              "partial task diagnostic status differs");
+        Check(FirstLine(failure / "incomplete-tasks.csv") ==
+                      "task_id,state,source_node_id,compute_node_id,result_node_id,"
+                      "input_transfer_id,result_transfer_id,arrival_time_ns,"
+                      "last_transition_time_ns,input_transfer_complete_time_ns,"
+                      "queue_enter_time_ns,compute_start_time_ns,compute_complete_time_ns,"
+                      "result_transfer_complete_time_ns" &&
+                  FirstLine(failure / "incomplete-transfers.csv") ==
+                      "transfer_id,transfer_state,source_node_id,destination_node_id,"
+                      "source_address,destination_address,source_port,destination_port,"
+                      "declared_size_bytes,payload_bytes_per_packet,derived_packet_count,"
+                      "sent_application_bytes,sent_packet_count,received_application_bytes,"
+                      "received_packet_count,missing_application_bytes,"
+                      "missing_packet_count_lower_bound,arrival_time_ns,last_send_time_ns,"
+                      "completion_time_ns" &&
+                  FirstLine(failure / "isl-queue-drops.csv") ==
+                      "simulation_time_ns,source_node_id,destination_node_id,output_interface,"
+                      "packet_size_bytes,cumulative_drop_packets,cumulative_drop_bytes" &&
+                  FirstLine(failure / "isl-queue-drop-summary.csv") ==
+                      "source_node_id,destination_node_id,output_interface,drop_packets,"
+                      "drop_bytes,first_drop_time_ns,last_drop_time_ns" &&
+                  FirstLine(failure / "udp-socket-drops.csv") ==
+                      "simulation_time_ns,destination_node_id,destination_address,"
+                      "destination_port,packet_size_bytes,cumulative_drop_packets,"
+                      "cumulative_drop_bytes,receiver_rcv_buf_bytes" &&
+                  FirstLine(failure / "udp-socket-drop-summary.csv") ==
+                      "destination_node_id,destination_address,destination_port,"
+                      "receiver_rcv_buf_bytes,drop_packets,drop_bytes,first_drop_time_ns,"
+                      "last_drop_time_ns" &&
+                  FirstLine(failure / "flow-link-concentration.csv") ==
+                      "source_node_id,destination_node_id,output_interface,"
+                      "unique_transfer_count,planned_application_bytes,large_transfer_count,"
+                      "input_transfer_count,result_transfer_count,adjacent_to_compute_node,"
+                      "drop_packets,drop_bytes" &&
+                  FirstLine(failure / "flow-drop-reasons.csv") ==
+                      "flow_monitor_id,transfer_id,source_address,destination_address,protocol,"
+                      "source_port,destination_port,reason_code,reason_name,dropped_packets,"
+                      "dropped_bytes,flow_lost_packets,flow_reported_drop_packets,"
+                      "flow_unattributed_lost_packets",
+              "legacy failure diagnostic CSV headers differ");
+        Check(CountLines(failure / "incomplete-tasks.csv") == 2 &&
+                  CountLines(failure / "incomplete-transfers.csv") == 3,
+              "incomplete task diagnostic row counts differ");
+
+        const Json diagnostic = ReadJson(failure / "diagnostic-summary.json");
+        const Json summary = ReadJson(result.runSummaryPath);
+        Check(diagnostic.at("run_status") == "INCOMPLETE" &&
+                  diagnostic.at("task_count") == 1 &&
+                  diagnostic.at("incomplete_task_count") == 1 &&
+                  diagnostic.at("transfer_count") == 2 &&
                   diagnostic.at("incomplete_transfer_count") == 2 &&
-                  diagnostic.at("incomplete_task_count") == 0,
-              "partial run or diagnostic summary differs");
+                  diagnostic.at("compute_node_count") == 1 &&
+                  diagnostic.at("receiver_rcv_buf_bytes") ==
+                      config.network.receiverRcvBufBytes &&
+                  summary.at("run_status") == "PARTIAL" &&
+                  summary.at("diagnostics_generated") == true,
+              "partial task diagnostic summaries differ");
     }
     ResetSimulationGlobals();
 }
@@ -320,6 +462,10 @@ main(int argc, char* argv[])
                                  topologyDirectory,
                                  fixtureRoot,
                                  outputDirectory);
+        RunPartialTaskDiagnostics(constellationConfig,
+                                  topologyDirectory,
+                                  std::filesystem::path(fixtureRoot) / "task",
+                                  outputDirectory);
         std::cout << "SatCompute structured run output tests passed." << std::endl;
         return 0;
     }

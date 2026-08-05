@@ -122,6 +122,18 @@ task_fixtures="contrib/satcompute/tests/fixtures/task"
 --constellationConfig=$diamond_constellation --topologyDir=$dynamic_topology \
 --fixtureRoot=contrib/satcompute/tests/fixtures \
 --outputDir=$test_output/run-output"
+python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
+  --output-dir="$test_output/run-output/partial" \
+  --minimum-explicit-drop-packets=0 --require-zero-unattributed
+python3 contrib/satcompute/tools/validation/check-task-output.py failure \
+  --topology-dir="$dynamic_topology" \
+  --compute-profile="$task_fixtures/compute-profile-single.json" \
+  --task-trace="$task_fixtures/task-single.json" \
+  --output-dir="$test_output/run-output/partial-task" \
+  --require-queue-drop
+python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
+  --output-dir="$test_output/run-output/partial-task" \
+  --require-reason=QUEUE --require-zero-unattributed
 
 ./ns3 run --no-build "satcompute-online-orbit-foundation-test"
 

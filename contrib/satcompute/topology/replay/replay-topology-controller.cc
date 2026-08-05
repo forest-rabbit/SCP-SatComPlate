@@ -141,7 +141,7 @@ ReplayTopologyController::Initialize()
         *m_idMap,
         m_config.network.islMtuBytes,
         m_config.network.islQueueBytes,
-        false);
+        m_config.logging.diagnosticMode == "failure");
 
     const SatelliteSnapshot initial = ReadAndNormalizeSnapshot(
         schedule.initialNodesFilename,
