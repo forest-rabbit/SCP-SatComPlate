@@ -123,7 +123,7 @@
 | `tests/fixtures/traffic/transfers/*` | 部分改名/缺失 | 恢复 | 待迁移 |
 | `tests/fixtures/traffic/tasks/*` | 部分改名/缺失 | 恢复 | 待迁移 |
 | `tests/support/*` | 缺失 | 恢复 | 待迁移 |
-| legacy Python generation/analysis/visualization tests | 缺失 | 随 tools 恢复 | 待迁移 |
+| legacy Python generation/analysis/visualization tests | 适用于 v0.3 的核心测试已恢复 | 随 tools 恢复 | 已完成阶段 4 范围；61 个项目 Python 测试通过 |
 | legacy smoke/regression scripts | 被两个 `run-all.sh` 替代 | 恢复分层脚本并保留统一入口 | 待迁移 |
 | current C++ unit executables | 新增 | 保留并按最终接口适配 | 待审计 |
 
