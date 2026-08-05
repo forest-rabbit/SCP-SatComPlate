@@ -118,7 +118,7 @@ task_fixtures="contrib/satcompute/tests/fixtures/task"
 --transferRoot=$transfer_fixtures"
 
 ./ns3 run --no-build \
-  "satcompute-run-output-writer-test \
+  "satcompute-metrics-recorder-test \
 --constellationConfig=$diamond_constellation --topologyDir=$dynamic_topology \
 --fixtureRoot=contrib/satcompute/tests/fixtures \
 --outputDir=$test_output/run-output"

@@ -13,7 +13,7 @@
 #include "ns3/para.h"
 #include "ns3/resolved-config.h"
 #include "ns3/rng-seed-manager.h"
-#include "ns3/run-output-writer.h"
+#include "ns3/metrics.h"
 #include "ns3/satellite-topology.h"
 #include "ns3/simulator.h"
 #include "ns3/task-coordinator.h"
@@ -27,6 +27,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
 using namespace ns3;
 
@@ -180,7 +181,7 @@ main(int argc, char* argv[])
                                       ? transferEngine->CollectCapacityAwareSummary()
                                       : CapacityAwareRuntimeSummary();
             }
-            const RunOutputContext outputContext = {
+            MetricsRuntimeContext metricsContext = {
                 effectiveConfig,
                 config.outputDirectory,
                 wallClockNs,
@@ -192,10 +193,11 @@ main(int argc, char* argv[])
                 routeRecorder.GetEvents(),
                 topology.GetIslDirectedLinks(),
                 topology.GetIslQueueDropEvents()};
-            const RunOutputResult output = WriteRunOutputs(config,
-                                                           outputContext,
-                                                           transferEngine,
-                                                           taskCoordinator);
+            MetricsRecorder metrics(config,
+                                    std::move(metricsContext),
+                                    transferEngine,
+                                    taskCoordinator);
+            const MetricsRecordResult output = metrics.Record();
             if (output.complete && taskCoordinator != nullptr)
             {
                 taskCoordinator->ValidateCompleted();

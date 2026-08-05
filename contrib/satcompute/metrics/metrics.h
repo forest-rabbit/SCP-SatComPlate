@@ -2,8 +2,8 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
-#ifndef SATCOMPUTE_RUN_OUTPUT_WRITER_H
-#define SATCOMPUTE_RUN_OUTPUT_WRITER_H
+#ifndef SATCOMPUTE_METRICS_H
+#define SATCOMPUTE_METRICS_H
 
 #include "../resolved-config.h"
 #include "../routing/ns3/satcompute-ipv4-global-routing.h"
@@ -26,13 +26,14 @@ namespace ns3
 
 class FlowMonitor;
 
-class RunOutputError : public std::runtime_error
+class MetricsError : public std::runtime_error
 {
   public:
     using std::runtime_error::runtime_error;
 };
 
-struct RunOutputContext
+/** ns-3.48 runtime and provenance sources consumed by the legacy metrics layers. */
+struct MetricsRuntimeContext
 {
     std::filesystem::path effectiveConfigPath;
     std::filesystem::path outputDirectory;
@@ -47,7 +48,7 @@ struct RunOutputContext
     std::vector<IslQueueDropEvent> queueDropEvents;
 };
 
-struct RunOutputResult
+struct MetricsRecordResult
 {
     bool complete{};
     bool diagnosticsGenerated{};
@@ -55,12 +56,24 @@ struct RunOutputResult
     std::vector<std::filesystem::path> files;
 };
 
-/** Write deterministic CSV/JSON results for one completed or partial run. */
-RunOutputResult WriteRunOutputs(const ResolvedSatComputeConfig& config,
-                                const RunOutputContext& context,
-                                Ptr<NetworkTransferEngine> transferEngine,
-                                Ptr<TaskCoordinator> taskCoordinator);
+/** Orchestrate core, routing, and failure metrics for one simulation run. */
+class MetricsRecorder
+{
+  public:
+    MetricsRecorder(const ResolvedSatComputeConfig& config,
+                    MetricsRuntimeContext context,
+                    Ptr<NetworkTransferEngine> transferEngine,
+                    Ptr<TaskCoordinator> taskCoordinator);
+
+    MetricsRecordResult Record();
+
+  private:
+    ResolvedSatComputeConfig m_config;
+    MetricsRuntimeContext m_context;
+    Ptr<NetworkTransferEngine> m_transferEngine;
+    Ptr<TaskCoordinator> m_taskCoordinator;
+};
 
 } // namespace ns3
 
-#endif
+#endif // SATCOMPUTE_METRICS_H

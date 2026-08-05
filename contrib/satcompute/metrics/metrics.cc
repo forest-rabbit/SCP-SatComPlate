@@ -2,9 +2,9 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
-// Persist only metrics backed by the current runtime's explicit data sources.
+// Orchestrate the restored legacy metric layers with ns-3.48 runtime evidence.
 
-#include "run-output-writer.h"
+#include "metrics.h"
 
 #include "core/flow-metrics.h"
 #include "core/run-summary.h"
@@ -16,12 +16,9 @@
 #include "routing/ecmp-metrics.h"
 #include "routing/size-aware-metrics.h"
 #include "../model/sha256.h"
-#include "../third-party/nlohmann/json.hpp"
 
 #include <algorithm>
-#include <fstream>
 #include <limits>
-#include <sstream>
 #include <string>
 #include <utility>
 
@@ -30,8 +27,6 @@ namespace ns3
 
 namespace
 {
-
-using Json = nlohmann::json;
 
 struct TransferAggregate
 {
@@ -50,63 +45,41 @@ CheckedAdd(uint64_t left, uint64_t right, const std::string& field)
 {
     if (left > std::numeric_limits<uint64_t>::max() - right)
     {
-        throw RunOutputError("run output " + field + " overflow");
+        throw MetricsError("metrics " + field + " overflow");
     }
     return left + right;
 }
 
 void
-WriteTextFile(const std::filesystem::path& filename, const std::string& content)
+RemoveObsoleteWriterOutputs(const std::filesystem::path& outputDirectory)
 {
-    std::error_code error;
-    std::filesystem::create_directories(filename.parent_path(), error);
-    if (error)
+    static const std::vector<std::string> filenames = {"routing-summary.json",
+                                                        "routing-reservation-events.csv"};
+    for (const std::string& filename : filenames)
     {
-        throw RunOutputError("cannot create output directory " +
-                             filename.parent_path().string() + ": " + error.message());
-    }
-    std::filesystem::path temporary = filename;
-    temporary += ".tmp";
-    {
-        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-        if (!output.is_open())
+        const std::filesystem::path path = outputDirectory / filename;
+        std::error_code error;
+        const std::filesystem::file_status status = std::filesystem::symlink_status(path, error);
+        if (error == std::errc::no_such_file_or_directory)
         {
-            throw RunOutputError("cannot write output file " + temporary.string());
+            continue;
         }
-        output << content;
-        output.close();
-        if (!output)
+        if (error)
         {
-            throw RunOutputError("cannot finish output file " + temporary.string());
+            throw MetricsError("cannot inspect obsolete writer output " + path.string() +
+                               ": " + error.message());
+        }
+        if (!std::filesystem::is_regular_file(status))
+        {
+            continue;
+        }
+        std::filesystem::remove(path, error);
+        if (error)
+        {
+            throw MetricsError("cannot remove obsolete writer output " + path.string() +
+                               ": " + error.message());
         }
     }
-    std::filesystem::rename(temporary, filename, error);
-    if (error)
-    {
-        std::filesystem::remove(temporary);
-        throw RunOutputError("cannot publish output file " + filename.string() + ": " +
-                             error.message());
-    }
-}
-
-std::filesystem::path
-WriteCsv(const std::filesystem::path& outputDirectory,
-         const std::string& filename,
-         const std::string& content)
-{
-    const std::filesystem::path path = outputDirectory / filename;
-    WriteTextFile(path, content);
-    return path;
-}
-
-std::filesystem::path
-WriteJson(const std::filesystem::path& outputDirectory,
-          const std::string& filename,
-          const Json& content)
-{
-    const std::filesystem::path path = outputDirectory / filename;
-    WriteTextFile(path, content.dump(2) + "\n");
-    return path;
 }
 
 TransferAggregate
@@ -139,75 +112,6 @@ CollectTransferAggregate(const std::vector<TransferSummaryRecord>& summaries)
     return aggregate;
 }
 
-std::filesystem::path
-WriteReservationEvents(const std::filesystem::path& outputDirectory,
-                       Ptr<FlowRouteRegistry> registry)
-{
-    std::ostringstream output;
-    output << "simulation_time_ns,action,selection_reason,route_epoch,node_id,transfer_id,"
-              "declared_bytes,source_address,destination_address,protocol,source_port,"
-              "destination_port,gateway,output_interface,route_destination,"
-              "route_destination_mask,candidate_reserved_before,candidate_reserved_after,"
-              "total_reserved_before,total_reserved_after\n";
-    for (const FlowRouteReservationEvent& event : registry->GetEvents())
-    {
-        output << event.simulationTimeNs << ',' << event.action << ',' << event.selectionReason
-               << ',' << event.routeEpoch << ',' << event.nodeId << ',' << event.transferId << ','
-               << event.declaredBytes << ',' << event.flowKey.sourceAddress << ','
-               << event.flowKey.destinationAddress << ','
-               << static_cast<uint32_t>(event.flowKey.protocol) << ',' << event.flowKey.sourcePort
-               << ',' << event.flowKey.destinationPort << ',' << event.candidate.gateway << ','
-               << event.candidate.outputInterface << ',' << event.candidate.destination << ','
-               << event.candidate.destinationMask << ',' << event.candidateReservedBefore << ','
-               << event.candidateReservedAfter << ',' << event.totalReservedBefore << ','
-               << event.totalReservedAfter << '\n';
-    }
-    return WriteCsv(outputDirectory, "routing-reservation-events.csv", output.str());
-}
-
-std::filesystem::path
-WriteRoutingSummary(const ResolvedSatComputeConfig& config,
-                    const RunOutputContext& context,
-                    const std::filesystem::path& outputDirectory)
-{
-    Json routing = {{"schema_version", "0.1"},
-                    {"routing_mode", config.routing.mode},
-                    {"hash_seed", config.routing.hashSeed},
-                    {"route_computation_count", context.routeComputationCount}};
-    if (context.flowRouteRegistry == nullptr)
-    {
-        routing["flow_registry"] = nullptr;
-    }
-    else
-    {
-        routing["flow_registry"] = {
-            {"registered_flow_count", context.flowRouteRegistry->GetRegisteredFlowCount()},
-            {"active_flow_count_at_end", context.flowRouteRegistry->GetActiveFlowCount()},
-            {"assignment_count_at_end", context.flowRouteRegistry->GetAssignmentCount()},
-            {"reservation_event_count", context.flowRouteRegistry->GetEvents().size()},
-            {"reserved_bytes_at_end", context.flowRouteRegistry->GetTotalReservedBytes()},
-            {"peak_reserved_bytes", context.flowRouteRegistry->GetPeakReservedBytes()},
-            {"peak_candidate_reserved_bytes",
-             context.flowRouteRegistry->GetPeakCandidateReservedBytes()}};
-    }
-    if (context.capacityAwareSummary)
-    {
-        routing["capacity_aware"] = {
-            {"active_path_count_at_end", context.capacityAwareSummary->activePathCountAtEnd},
-            {"reserved_directed_link_count_at_end",
-             context.capacityAwareSummary->reservedDirectedLinkCountAtEnd},
-            {"total_reserved_rate_bps_at_end",
-             context.capacityAwareSummary->totalReservedRateBpsAtEnd},
-            {"pending_transfer_count_at_end",
-             context.capacityAwareSummary->pendingTransferCountAtEnd}};
-    }
-    else
-    {
-        routing["capacity_aware"] = nullptr;
-    }
-    return WriteJson(outputDirectory, "routing-summary.json", routing);
-}
-
 void
 ValidateInputs(const ResolvedSatComputeConfig& config,
                Ptr<NetworkTransferEngine> transferEngine,
@@ -220,7 +124,7 @@ ValidateInputs(const ResolvedSatComputeConfig& config,
     {
         if (transferEngine == nullptr || taskCoordinator != nullptr)
         {
-            throw RunOutputError("direct-transfer config and runtime outputs disagree");
+            throw MetricsError("direct-transfer config and runtime metrics disagree");
         }
     }
     else if (taskMode)
@@ -228,49 +132,61 @@ ValidateInputs(const ResolvedSatComputeConfig& config,
         if (transferEngine == nullptr || taskCoordinator == nullptr ||
             taskCoordinator->GetTransferEngine() != transferEngine)
         {
-            throw RunOutputError("task config and runtime outputs disagree");
+            throw MetricsError("task config and runtime metrics disagree");
         }
     }
     else if (transferEngine != nullptr || taskCoordinator != nullptr)
     {
-        throw RunOutputError("workload-free config has runtime workload outputs");
+        throw MetricsError("workload-free config has runtime workload metrics");
     }
 }
 
 } // namespace
 
-RunOutputResult
-WriteRunOutputs(const ResolvedSatComputeConfig& config,
-                const RunOutputContext& context,
-                Ptr<NetworkTransferEngine> transferEngine,
-                Ptr<TaskCoordinator> taskCoordinator)
+MetricsRecorder::MetricsRecorder(const ResolvedSatComputeConfig& config,
+                                 MetricsRuntimeContext context,
+                                 Ptr<NetworkTransferEngine> transferEngine,
+                                 Ptr<TaskCoordinator> taskCoordinator)
+    : m_config(config),
+      m_context(std::move(context)),
+      m_transferEngine(transferEngine),
+      m_taskCoordinator(taskCoordinator)
 {
+}
+
+MetricsRecordResult
+MetricsRecorder::Record()
+{
+    const ResolvedSatComputeConfig& config = m_config;
+    const MetricsRuntimeContext& context = m_context;
+    const Ptr<NetworkTransferEngine> transferEngine = m_transferEngine;
+    const Ptr<TaskCoordinator> taskCoordinator = m_taskCoordinator;
     ValidateInputs(config, transferEngine, taskCoordinator);
     const bool reservationAware = config.routing.mode == "global-size-aware-hrw" ||
                                   config.routing.mode == "global-capacity-aware-hrw";
     const bool capacityAware = config.routing.mode == "global-capacity-aware-hrw";
     if (reservationAware != (context.flowRouteRegistry != nullptr))
     {
-        throw RunOutputError("routing mode and flow-registry output context disagree");
+        throw MetricsError("routing mode and flow-registry metrics context disagree");
     }
     if (capacityAware != context.capacityAwareSummary.has_value())
     {
-        throw RunOutputError("routing mode and capacity-aware output context disagree");
+        throw MetricsError("routing mode and capacity-aware metrics context disagree");
     }
     if (config.simulation.durationNs <= 0 || context.wallClockNs < 0)
     {
-        throw RunOutputError("run output has invalid duration metadata");
+        throw MetricsError("metrics context has invalid duration metadata");
     }
     if (context.flowMonitor == nullptr)
     {
-        throw RunOutputError("run output requires the simulation FlowMonitor");
+        throw MetricsError("metrics context requires the simulation FlowMonitor");
     }
     std::error_code error;
     const std::filesystem::path effectiveConfig =
         std::filesystem::weakly_canonical(context.effectiveConfigPath, error);
     if (error || !std::filesystem::is_regular_file(effectiveConfig))
     {
-        throw RunOutputError("effective config must be an existing regular file");
+        throw MetricsError("effective config must be an existing regular file");
     }
     const std::filesystem::path outputDirectory =
         std::filesystem::absolute(context.outputDirectory).lexically_normal();
@@ -292,7 +208,7 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
     if (transferAggregate.sentBytes != applicationMetrics.sentBytes ||
         transferAggregate.receivedBytes != applicationMetrics.receivedBytes)
     {
-        throw RunOutputError("transfer summaries and application metrics disagree");
+        throw MetricsError("transfer summaries and application metrics disagree");
     }
 
     const bool transfersComplete =
@@ -304,7 +220,7 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
          context.flowRouteRegistry->GetAssignmentCount() != 0 ||
          context.flowRouteRegistry->GetTotalReservedBytes() != 0))
     {
-        throw RunOutputError("complete run leaked flow reservation state");
+        throw MetricsError("complete run leaked flow reservation state");
     }
     if (complete && context.capacityAwareSummary &&
         (context.capacityAwareSummary->activePathCountAtEnd != 0 ||
@@ -312,7 +228,7 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
          context.capacityAwareSummary->totalReservedRateBpsAtEnd != 0 ||
          context.capacityAwareSummary->pendingTransferCountAtEnd != 0))
     {
-        throw RunOutputError("complete run leaked capacity-aware path state");
+        throw MetricsError("complete run leaked capacity-aware path state");
     }
 
     const std::string workloadMode = taskCoordinator != nullptr
@@ -345,8 +261,9 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
         config.workloads.taskTrace ? config.workloads.taskTrace->string() : ""};
 
     RemoveFailureDiagnosticOutputs(outputDirectory.string());
+    RemoveObsoleteWriterOutputs(outputDirectory);
 
-    RunOutputResult result;
+    MetricsRecordResult result;
     result.complete = complete;
     WriteNetworkMetrics(flowAggregate, outputDirectory.string());
     result.files.push_back(outputDirectory / "network-flow-metrics.csv");
@@ -376,8 +293,6 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
         WriteSizeAwareMetrics(context.flowRouteRegistry, outputDirectory.string());
         result.files.push_back(outputDirectory / "size-aware-reservation-events.csv");
         result.files.push_back(outputDirectory / "size-aware-summary.json");
-        result.files.push_back(WriteReservationEvents(outputDirectory,
-                                                      context.flowRouteRegistry));
     }
     else
     {
@@ -392,8 +307,6 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
     {
         RemoveCapacityAwareMetrics(outputDirectory.string());
     }
-    result.files.push_back(WriteRoutingSummary(config, context, outputDirectory));
-
     const bool writeFailureDiagnostics = config.logging.diagnosticMode == "failure" &&
                                          taskCoordinator != nullptr && !tasksComplete;
     const bool writeFlowDropReasons = config.logging.diagnosticMode == "failure" &&

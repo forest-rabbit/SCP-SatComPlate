@@ -28,7 +28,7 @@
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `metrics/metrics.*` | `metrics/run-output-writer.*` | 恢复 MetricsRecorder 编排 | 待迁移 |
+| `metrics/metrics.*` | 已恢复并由平台直接调用 `MetricsRecorder` | 恢复 MetricsRecorder 编排 | 已迁移；统一编排 core、routing、diagnostics 与 ns-3.48 provenance |
 | `metrics/core/flow-metrics.*` | 已恢复并接入真实 FlowMonitor | 恢复 FlowMonitor 指标 | 已迁移；聚合与逐流五元组输出通过门禁 |
 | `metrics/core/run-summary.*` | 已恢复独立实现 | 恢复独立文件 | 已迁移；legacy 扁平字段与 ns-3.48 provenance 加法兼容 |
 | `metrics/core/task-metrics.*` | 已恢复独立实现 | 恢复独立文件 | 已迁移；task、compute node 输出使用 resolved 纳秒时长 |
@@ -39,7 +39,7 @@
 | `metrics/routing/capacity-aware-metrics.*` | 已恢复独立实现 | 恢复 | 已迁移；容量账本结束状态通过门禁 |
 | `metrics/diagnostics/failure-diagnostics.*` | 已恢复并接入任务失败路径 | 恢复并适配当前记录类型 | 已迁移；九文件目录、旧版表头及 ISL queue Drop 映射通过门禁 |
 | `metrics/diagnostics/flow-drop-reason-diagnostics.*` | 已恢复并接入直传/任务失败路径 | 恢复 | 已迁移；FlowMonitor reason 与逐流五元组交叉校验通过 |
-| 无 | `metrics/run-output-writer.*` | 分层迁移完成后删除 | 待迁移 |
+| 无 | `metrics/run-output-writer.*` | 分层迁移完成后删除 | 已删除；两个过渡 routing 输出经字段审计后移除 |
 
 ## routing
 
