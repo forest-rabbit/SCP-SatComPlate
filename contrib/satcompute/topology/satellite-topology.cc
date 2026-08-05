@@ -4,9 +4,7 @@
 
 #include "satellite-topology.h"
 
-#include "../resolved-config.h"
 #include "online/online-topology-controller.h"
-#include "replay/replay-topology-controller.h"
 #include "satellite-id-map.h"
 
 #include <algorithm>
@@ -15,23 +13,10 @@
 namespace ns3
 {
 
-SatelliteTopology::SatelliteTopology(const ResolvedSatComputeConfig& config)
+SatelliteTopology::SatelliteTopology(const SatComputeConfig& config,
+                                     const ConstellationDefinition& constellation)
+    : m_controller(std::make_unique<OnlineTopologyController>(config, constellation))
 {
-    if (config.network.topologySource == "replay")
-    {
-        m_controller = std::make_unique<ReplayTopologyController>(config);
-    }
-    else if (config.network.topologySource == "online")
-    {
-        auto controller = std::make_unique<OnlineTopologyController>(config);
-        m_onlineController = controller.get();
-        m_controller = std::move(controller);
-    }
-    else
-    {
-        throw SatelliteTopologyError("unsupported topology source " +
-                                     config.network.topologySource);
-    }
 }
 
 SatelliteTopology::~SatelliteTopology() = default;
@@ -52,12 +37,6 @@ void
 SatelliteTopology::InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const
 {
     m_controller->InvalidateFlowRouteDecisionCache(flowKey);
-}
-
-const ResolvedSatComputeConfig&
-SatelliteTopology::GetConfig() const
-{
-    return m_controller->GetConfig();
 }
 
 const NodeContainer&
@@ -81,11 +60,7 @@ SatelliteTopology::GetLinkState() const
 const OnlineOrbitConstellation&
 SatelliteTopology::GetOnlineConstellation() const
 {
-    if (m_onlineController == nullptr)
-    {
-        throw SatelliteTopologyError("online orbit state is unavailable in replay mode");
-    }
-    return m_onlineController->GetConstellation();
+    return m_controller->GetConstellation();
 }
 
 uint32_t

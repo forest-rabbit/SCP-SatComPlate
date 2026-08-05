@@ -32,8 +32,6 @@ main()
         Require(config.constellationConfig ==
                     "contrib/satcompute/input/topology/constellations/synthetic-66.csv",
                 "unexpected constellation path");
-        Require(config.topologySource == "online" && config.topologyDirectory.empty(),
-                "unexpected migration topology defaults");
         Require(config.islCandidateStrategy == "plus-grid" && !config.seamEnabled,
                 "unexpected candidate defaults");
         Require(config.maxIslDistanceMeters == 6174589.0, "unexpected ISL distance");

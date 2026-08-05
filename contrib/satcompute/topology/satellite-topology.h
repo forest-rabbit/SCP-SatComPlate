@@ -21,6 +21,8 @@ namespace ns3
 
 class OnlineOrbitConstellation;
 class OnlineTopologyController;
+struct ConstellationDefinition;
+struct SatComputeConfig;
 
 class SatelliteTopologyError : public std::runtime_error
 {
@@ -29,24 +31,23 @@ class SatelliteTopologyError : public std::runtime_error
 };
 
 /**
- * Legacy-compatible public topology facade backed by ns-3.48 controllers.
+ * Legacy-compatible public topology facade backed by ns-3.48 online orbit state.
  *
- * The facade is the only platform-level topology entry. It selects replay or
- * online behavior from the resolved configuration and delegates lifecycle,
- * routing, endpoint, link-state, and run-counter services to the corresponding
- * controller.
+ * The facade is the only platform-level topology entry. It delegates lifecycle,
+ * routing, endpoint, link-state, and run-counter services to the online
+ * controller. Pre-generated topology slices are not a simulation input.
  */
 class SatelliteTopology : public SatelliteTopologyController
 {
   public:
-    explicit SatelliteTopology(const ResolvedSatComputeConfig& config);
+    SatelliteTopology(const SatComputeConfig& config,
+                      const ConstellationDefinition& constellation);
     ~SatelliteTopology() override;
 
     void Initialize() override;
     void RegisterRouteUpdateCallback(Callback<void> callback) override;
     void InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const override;
 
-    const ResolvedSatComputeConfig& GetConfig() const override;
     const NodeContainer& GetNodes() const override;
     const SatelliteIdMap& GetIdMap() const override;
     const SatelliteLinkState& GetLinkState() const override;
@@ -82,8 +83,7 @@ class SatelliteTopology : public SatelliteTopologyController
     uint32_t GetRouteComputationCount() const override;
 
   private:
-    std::unique_ptr<SatelliteTopologyController> m_controller;
-    OnlineTopologyController* m_onlineController{};
+    std::unique_ptr<OnlineTopologyController> m_controller;
 };
 
 } // namespace ns3

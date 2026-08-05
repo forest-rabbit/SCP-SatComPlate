@@ -5,8 +5,8 @@
 #ifndef SATCOMPUTE_CIRCULAR_ORBIT_TOPOLOGY_POLICY_H
 #define SATCOMPUTE_CIRCULAR_ORBIT_TOPOLOGY_POLICY_H
 
+#include "../link/satellite-link.h"
 #include "../orbit/online-orbit-constellation.h"
-#include "../snapshot/snapshot-types.h"
 #include "plus-grid-candidate.h"
 
 #include <cstdint>

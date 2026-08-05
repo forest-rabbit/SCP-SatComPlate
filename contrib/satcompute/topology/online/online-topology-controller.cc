@@ -5,6 +5,7 @@
 #include "online-topology-controller.h"
 
 #include "../../routing/ns3/satcompute-ipv4-global-routing-helper.h"
+#include "../../time-conversion.h"
 
 #include "ns3/data-rate.h"
 #include "ns3/internet-stack-helper.h"
@@ -22,23 +23,41 @@
 namespace ns3
 {
 
-OnlineTopologyController::OnlineTopologyController(const ResolvedSatComputeConfig& config)
-    : m_config(config),
-      m_topologyPolicy(config.constellation,
-                       config.network.seamEnabled,
-                       config.network.maxIslDistanceM,
-                       config.network.delayMode,
-                       config.network.fixedDelayNs)
+namespace
 {
-    if (m_config.network.topologySource != "online" ||
-        m_config.network.replayDirectory)
+
+std::optional<int64_t>
+ResolveFixedDelay(const SatComputeConfig& config)
+{
+    if (config.delayMode != "fixed")
     {
-        throw OnlineTopologyControllerError(
-            "online controller requires an online source without a replay directory");
+        return std::nullopt;
     }
-    if (!TryParseRoutingMode(m_config.routing.mode, m_routingMode))
+    return SatComputeSecondsToNanoseconds(config.fixedDelaySeconds, "fixedDelay");
+}
+
+} // namespace
+
+OnlineTopologyController::OnlineTopologyController(
+    const SatComputeConfig& config,
+    const ConstellationDefinition& constellation)
+    : m_config(config),
+      m_constellationDefinition(constellation),
+      m_simulationDurationNs(
+          SatComputeSecondsToNanoseconds(config.simulationDurationSeconds,
+                                         "simulationDuration")),
+      m_networkUpdateIntervalNs(
+          SatComputeSecondsToNanoseconds(config.networkUpdateIntervalSeconds,
+                                         "networkUpdateInterval")),
+      m_topologyPolicy(constellation,
+                       config.seamEnabled,
+                       config.maxIslDistanceMeters,
+                       config.delayMode,
+                       ResolveFixedDelay(config))
+{
+    if (!TryParseRoutingMode(m_config.routingMode, m_routingMode))
     {
-        throw OnlineTopologyControllerError("unknown routing mode " + m_config.routing.mode);
+        throw OnlineTopologyControllerError("unknown routing mode " + m_config.routingMode);
     }
     if (m_routingMode != RoutingMode::GLOBAL_FIRST &&
         m_routingMode != RoutingMode::HASH_PER_FLOW &&
@@ -48,15 +67,13 @@ OnlineTopologyController::OnlineTopologyController(const ResolvedSatComputeConfi
     {
         throw OnlineTopologyControllerError("unsupported online routing mode");
     }
-    if (m_config.network.networkUpdateIntervalNs <= 0 ||
-        m_config.simulation.durationNs <= 0)
+    if (m_networkUpdateIntervalNs <= 0 || m_simulationDurationNs <= 0)
     {
         throw OnlineTopologyControllerError(
             "online duration and network update interval must be positive");
     }
     const uint64_t scheduledUpdateCount = static_cast<uint64_t>(
-        (m_config.simulation.durationNs - 1) /
-        m_config.network.networkUpdateIntervalNs);
+        (m_simulationDurationNs - 1) / m_networkUpdateIntervalNs);
     if (scheduledUpdateCount >= std::numeric_limits<uint32_t>::max())
     {
         throw OnlineTopologyControllerError(
@@ -78,7 +95,7 @@ OnlineTopologyController::Initialize()
             "online topology controller must be initialized at simulation time zero");
     }
 
-    m_constellation = std::make_unique<OnlineOrbitConstellation>(m_config.constellation);
+    m_constellation = std::make_unique<OnlineOrbitConstellation>(m_constellationDefinition);
     const NodeContainer& nodes = m_constellation->GetNodes();
     const SatelliteIdMap& idMap = m_constellation->GetIdMap();
     if (IsReservationAwareRoutingMode(m_routingMode))
@@ -88,7 +105,7 @@ OnlineTopologyController::Initialize()
 
     Ipv4StaticRoutingHelper staticRouting;
     SatComputeIpv4GlobalRoutingHelper globalRouting(m_routingMode,
-                                                    m_config.routing.hashSeed,
+                                                    m_config.ecmpHashSeed,
                                                     m_flowRouteRegistry);
     Ipv4ListRoutingHelper listRouting;
     listRouting.Add(staticRouting, 0);
@@ -104,23 +121,22 @@ OnlineTopologyController::Initialize()
 
     m_serviceMap = std::make_unique<SatelliteIpv4ServiceMap>(idMap);
     m_linkState = std::make_unique<SatelliteLinkState>(idMap,
-                                                       m_config.network.islMtuBytes,
-                                                       m_config.network.islQueueBytes,
-                                                       m_config.logging.diagnosticMode ==
-                                                           "failure");
+                                                       m_config.islMtuBytes,
+                                                       m_config.islQueueBytes,
+                                                       m_config.diagnosticMode == "failure");
     m_lastTopologyState = m_topologyPolicy.EvaluateCurrent(*m_constellation);
     m_linkState->PrepareCandidateLinks(
-        m_lastTopologyState.GetCandidateLinks(m_config.network.linkBandwidthBps));
+        m_lastTopologyState.GetCandidateLinks(m_config.islBandwidthBps));
     m_lastUpdateSummary = m_linkState->ApplyFullSnapshot(
-        m_lastTopologyState.GetActiveLinks(m_config.network.linkBandwidthBps));
+        m_lastTopologyState.GetActiveLinks(m_config.islBandwidthBps));
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
     m_appliedUpdateCount = 1;
     m_routeComputationCount = 1;
     m_appliedUpdateTimesNs.push_back(0);
     m_initialized = true;
 
-    const int64_t intervalNs = m_config.network.networkUpdateIntervalNs;
-    const int64_t durationNs = m_config.simulation.durationNs;
+    const int64_t intervalNs = m_networkUpdateIntervalNs;
+    const int64_t durationNs = m_simulationDurationNs;
     for (int64_t updateTimeNs = intervalNs; updateTimeNs < durationNs;)
     {
         Simulator::Schedule(NanoSeconds(updateTimeNs),
@@ -139,7 +155,7 @@ OnlineTopologyController::ApplyScheduledUpdate()
 {
     m_lastTopologyState = m_topologyPolicy.EvaluateCurrent(*m_constellation);
     m_lastUpdateSummary = m_linkState->ApplyFullSnapshot(
-        m_lastTopologyState.GetActiveLinks(m_config.network.linkBandwidthBps));
+        m_lastTopologyState.GetActiveLinks(m_config.islBandwidthBps));
     ++m_appliedUpdateCount;
     m_appliedUpdateTimesNs.push_back(Simulator::Now().GetNanoSeconds());
     if (m_lastUpdateSummary.ActiveEdgeSetChanged())
@@ -178,12 +194,6 @@ OnlineTopologyController::RequireInitialized() const
     {
         throw OnlineTopologyControllerError("online topology controller is not initialized");
     }
-}
-
-const ResolvedSatComputeConfig&
-OnlineTopologyController::GetConfig() const
-{
-    return m_config;
 }
 
 const NodeContainer&
@@ -330,7 +340,7 @@ OnlineTopologyController::GetRouteEpoch(uint32_t satelliteId) const
 uint64_t
 OnlineTopologyController::GetHashSeed() const
 {
-    return m_config.routing.hashSeed;
+    return m_config.ecmpHashSeed;
 }
 
 bool

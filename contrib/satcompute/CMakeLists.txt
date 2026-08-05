@@ -2,7 +2,6 @@ build_lib(
   LIBNAME satcompute
   SOURCE_FILES
     para.cc
-    resolved-config.cc
     time-conversion.cc
     metrics/core/flow-metrics.cc
     metrics/core/run-summary.cc
@@ -40,11 +39,8 @@ build_lib(
     topology/online/online-topology-controller.cc
     topology/online/plus-grid-candidate.cc
     topology/orbit/online-orbit-constellation.cc
-    topology/replay/replay-topology-controller.cc
     topology/satellite-id-map.cc
     topology/satellite-topology.cc
-    topology/snapshot/snapshot-reader.cc
-    topology/snapshot/snapshot-schedule.cc
     traffic/network-transfer-application.cc
     traffic/network-transfer-config.cc
     traffic/network-transfer-engine.cc
@@ -52,7 +48,6 @@ build_lib(
     traffic/network-transfer-receiver.cc
   HEADER_FILES
     para.h
-    resolved-config.h
     time-conversion.h
     metrics/core/flow-metrics.h
     metrics/core/run-summary.h
@@ -95,19 +90,16 @@ build_lib(
     topology/orbit/constellation-definition.h
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
+    topology/link/satellite-link.h
     topology/online/circular-orbit-topology-policy.h
     topology/online/online-topology-controller.h
     topology/online/plus-grid-candidate.h
     topology/orbit/online-orbit-constellation.h
-    topology/replay/replay-topology-controller.h
     topology/satellite-endpoint-view.h
     topology/satellite-id-map.h
     topology/satellite-runtime-view.h
     topology/satellite-topology.h
     topology/satellite-topology-controller.h
-    topology/snapshot/snapshot-reader.h
-    topology/snapshot/snapshot-schedule.h
-    topology/snapshot/snapshot-types.h
     traffic/network-transfer-application.h
     traffic/network-transfer-config.h
     traffic/network-transfer-engine.h
@@ -163,33 +155,6 @@ build_exec(
 )
 
 build_exec(
-  EXECNAME satcompute-resolved-config-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/resolved-config-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-input-contract-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/input-contract-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-snapshot-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/snapshot-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
   EXECNAME satcompute-link-state-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/link-state-test.cc
@@ -199,54 +164,9 @@ build_exec(
 )
 
 build_exec(
-  EXECNAME satcompute-replay-controller-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/replay-controller-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-satellite-topology-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/satellite-topology-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-routing-compatibility-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/routing-compatibility-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
   EXECNAME satcompute-routing-policy-factory-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/routing-policy-factory-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-size-aware-routing-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/size-aware-routing-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-capacity-aware-routing-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/capacity-aware-routing-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
@@ -271,24 +191,6 @@ build_exec(
 )
 
 build_exec(
-  EXECNAME satcompute-network-transfer-engine-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/network-transfer-engine-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-network-transfer-wrapper-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/network-transfer-wrapper-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
   EXECNAME satcompute-task-input-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/task-input-test.cc
@@ -301,33 +203,6 @@ build_exec(
   EXECNAME satcompute-compute-service-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/compute-service-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-task-coordinator-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/task-coordinator-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-legacy-workload-parity-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/legacy-workload-parity-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-metrics-recorder-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/metrics-recorder-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

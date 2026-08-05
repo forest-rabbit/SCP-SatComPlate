@@ -22,8 +22,6 @@ struct SatComputeConfig
     double simulationDurationSeconds; ///< 仿真持续时间，单位为秒。
 
     std::string constellationConfig;      ///< 原生 LEO shell CSV 路径。
-    std::string topologySource;           ///< 迁移期回放测试或在线拓扑来源。
-    std::string topologyDirectory;        ///< 迁移期 replay 拓扑切片目录。
     std::string islCandidateStrategy;     ///< 固定候选 ISL 生成策略。
     bool seamEnabled;                     ///< 是否允许跨 seam 候选链路。
     double maxIslDistanceMeters;          ///< ISL 最大允许距离，单位为米。

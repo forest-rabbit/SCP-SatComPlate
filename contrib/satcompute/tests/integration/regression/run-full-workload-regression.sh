@@ -20,7 +20,7 @@ topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic
 transfer_inputs="contrib/satcompute/tests/fixtures/traffic/transfers"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 common="--simulationDuration=5 --constellationConfig=$constellation \
---topologySource=replay --topologyDir=$topology --delayMode=fixed \
+--maxIslDistance=30000000 --delayMode=fixed \
 --fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=100000000"
 
 direct_result="$(run_platform "$regression_output/direct" \
@@ -52,7 +52,7 @@ if [[ "$no_workload_result" != *'"status":"completed"'* ]]; then
 fi
 
 partial_common="--simulationDuration=1 --constellationConfig=$constellation \
---topologySource=replay --topologyDir=$topology --delayMode=fixed \
+--maxIslDistance=30000000 --delayMode=fixed \
 --fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=1000000 \
 --routingMode=global-first --transferTrace=$transfer_inputs/platform-partial.json \
 --transferPayloadBytes=1400 --diagnosticMode=failure"
@@ -79,7 +79,7 @@ for directory in strict report; do
 done
 
 task_failure_common="--simulationDuration=1 --constellationConfig=$constellation \
---topologySource=replay --topologyDir=$topology --delayMode=fixed \
+--maxIslDistance=30000000 --delayMode=fixed \
 --fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --islQueueBytes=1 --routingMode=global-first \
 --computeProfile=$task_inputs/compute-profile-single.json \

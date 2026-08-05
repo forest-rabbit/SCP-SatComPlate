@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_METRICS_H
 #define SATCOMPUTE_METRICS_H
 
-#include "../resolved-config.h"
+#include "../para.h"
 #include "../routing/ns3/satcompute-ipv4-global-routing.h"
 #include "../routing/state/capacity-reservation-state.h"
 #include "../routing/state/flow-route-registry.h"
@@ -36,6 +36,7 @@ class MetricsError : public std::runtime_error
 struct MetricsRuntimeContext
 {
     std::filesystem::path outputDirectory;
+    int64_t simulationDurationNs{};
     int64_t wallClockNs{};
     uint32_t appliedTopologySliceCount{};
     uint32_t routeComputationCount{};
@@ -59,7 +60,7 @@ struct MetricsRecordResult
 class MetricsRecorder
 {
   public:
-    MetricsRecorder(const ResolvedSatComputeConfig& config,
+    MetricsRecorder(const SatComputeConfig& config,
                     MetricsRuntimeContext context,
                     Ptr<NetworkTransferEngine> transferEngine,
                     Ptr<TaskCoordinator> taskCoordinator);
@@ -67,7 +68,7 @@ class MetricsRecorder
     MetricsRecordResult Record();
 
   private:
-    ResolvedSatComputeConfig m_config;
+    SatComputeConfig m_config;
     MetricsRuntimeContext m_context;
     Ptr<NetworkTransferEngine> m_transferEngine;
     Ptr<TaskCoordinator> m_taskCoordinator;

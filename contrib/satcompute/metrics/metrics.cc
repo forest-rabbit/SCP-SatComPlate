@@ -112,13 +112,12 @@ CollectTransferAggregate(const std::vector<TransferSummaryRecord>& summaries)
 }
 
 void
-ValidateInputs(const ResolvedSatComputeConfig& config,
+ValidateInputs(const SatComputeConfig& config,
                Ptr<NetworkTransferEngine> transferEngine,
                Ptr<TaskCoordinator> taskCoordinator)
 {
-    const bool directMode = config.workloads.transferTrace.has_value();
-    const bool taskMode = config.workloads.computeProfile.has_value() &&
-                          config.workloads.taskTrace.has_value();
+    const bool directMode = !config.transferTrace.empty();
+    const bool taskMode = !config.computeProfile.empty() && !config.taskTrace.empty();
     if (directMode)
     {
         if (transferEngine == nullptr || taskCoordinator != nullptr)
@@ -142,7 +141,7 @@ ValidateInputs(const ResolvedSatComputeConfig& config,
 
 } // namespace
 
-MetricsRecorder::MetricsRecorder(const ResolvedSatComputeConfig& config,
+MetricsRecorder::MetricsRecorder(const SatComputeConfig& config,
                                  MetricsRuntimeContext context,
                                  Ptr<NetworkTransferEngine> transferEngine,
                                  Ptr<TaskCoordinator> taskCoordinator)
@@ -156,14 +155,14 @@ MetricsRecorder::MetricsRecorder(const ResolvedSatComputeConfig& config,
 MetricsRecordResult
 MetricsRecorder::Record()
 {
-    const ResolvedSatComputeConfig& config = m_config;
+    const SatComputeConfig& config = m_config;
     const MetricsRuntimeContext& context = m_context;
     const Ptr<NetworkTransferEngine> transferEngine = m_transferEngine;
     const Ptr<TaskCoordinator> taskCoordinator = m_taskCoordinator;
     ValidateInputs(config, transferEngine, taskCoordinator);
-    const bool reservationAware = config.routing.mode == "global-size-aware-hrw" ||
-                                  config.routing.mode == "global-capacity-aware-hrw";
-    const bool capacityAware = config.routing.mode == "global-capacity-aware-hrw";
+    const bool reservationAware = config.routingMode == "global-size-aware-hrw" ||
+                                  config.routingMode == "global-capacity-aware-hrw";
+    const bool capacityAware = config.routingMode == "global-capacity-aware-hrw";
     if (reservationAware != (context.flowRouteRegistry != nullptr))
     {
         throw MetricsError("routing mode and flow-registry metrics context disagree");
@@ -172,7 +171,7 @@ MetricsRecorder::Record()
     {
         throw MetricsError("routing mode and capacity-aware metrics context disagree");
     }
-    if (config.simulation.durationNs <= 0 || context.wallClockNs < 0)
+    if (context.simulationDurationNs <= 0 || context.wallClockNs < 0)
     {
         throw MetricsError("metrics context has invalid duration metadata");
     }
@@ -236,21 +235,21 @@ MetricsRecorder::Record()
                                        : transfers.front().pacingMode;
     const RunMetadata runMetadata = {
         runMode,
-        config.routing.mode,
-        config.routing.hashSeed,
-        config.network.islMtuBytes,
-        config.network.islQueueBytes,
-        config.network.receiverRcvBufBytes,
-        transferEngine != nullptr && config.logging.diagnosticMode == "failure",
-        config.logging.diagnosticMode,
-        config.workloads.taskCompletionPolicy,
+        config.routingMode,
+        config.ecmpHashSeed,
+        config.islMtuBytes,
+        config.islQueueBytes,
+        config.receiverRcvBufBytes,
+        transferEngine != nullptr && config.diagnosticMode == "failure",
+        config.diagnosticMode,
+        config.taskCompletionPolicy,
         pacingMode,
-        transferEngine != nullptr ? config.workloads.transferChunkMode : "none",
-        transferEngine != nullptr && config.workloads.transferChunkMode == "fixed"
-            ? config.workloads.transferPayloadBytes
+        transferEngine != nullptr ? config.transferChunkMode : "none",
+        transferEngine != nullptr && config.transferChunkMode == "fixed"
+            ? config.transferPayloadBytes
             : 0,
-        config.workloads.computeProfile ? config.workloads.computeProfile->string() : "",
-        config.workloads.taskTrace ? config.workloads.taskTrace->string() : ""};
+        config.computeProfile,
+        config.taskTrace};
 
     RemoveFailureDiagnosticOutputs(outputDirectory.string());
     RemoveObsoleteWriterOutputs(outputDirectory);
@@ -274,7 +273,7 @@ MetricsRecorder::Record()
     if (taskCoordinator != nullptr)
     {
         WriteTaskMetricsNs(*taskCoordinator,
-                           config.simulation.durationNs,
+                           context.simulationDurationNs,
                            outputDirectory.string());
         result.files.push_back(outputDirectory / "task-events.csv");
         result.files.push_back(outputDirectory / "task-summary.csv");
@@ -299,9 +298,9 @@ MetricsRecorder::Record()
     {
         RemoveCapacityAwareMetrics(outputDirectory.string());
     }
-    const bool writeFailureDiagnostics = config.logging.diagnosticMode == "failure" &&
+    const bool writeFailureDiagnostics = config.diagnosticMode == "failure" &&
                                          taskCoordinator != nullptr && !tasksComplete;
-    const bool writeFlowDropReasons = config.logging.diagnosticMode == "failure" &&
+    const bool writeFlowDropReasons = config.diagnosticMode == "failure" &&
                                       (runMode == "network-transfer" ||
                                        (taskCoordinator != nullptr && !tasksComplete));
     const std::filesystem::path failureDirectory =
@@ -314,7 +313,7 @@ MetricsRecorder::Record()
     if (writeFailureDiagnostics)
     {
         WriteFailureDiagnosticsNs(flowAggregate,
-                                  config.simulation.durationNs,
+                                  context.simulationDurationNs,
                                   runMetadata,
                                   transferFlows,
                                   transfers,
@@ -339,7 +338,7 @@ MetricsRecorder::Record()
         }
     }
     result.diagnosticsGenerated = writeFlowDropReasons || writeFailureDiagnostics;
-    const RunSummaryEvidence evidence = {config.simulation.durationNs,
+    const RunSummaryEvidence evidence = {context.simulationDurationNs,
                                          context.wallClockNs,
                                          workloadMode,
                                          context.appliedTopologySliceCount,

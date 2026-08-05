@@ -12,12 +12,11 @@
 namespace ns3
 {
 
-struct ResolvedSatComputeConfig;
 class NodeContainer;
 class SatelliteIdMap;
 class SatelliteLinkState;
 
-/** Common lifecycle and run counters for replay and online controllers. */
+/** 在线卫星拓扑的公共生命周期和运行计数接口。 */
 class SatelliteTopologyController : public SatelliteRuntimeView
 {
   public:
@@ -26,7 +25,6 @@ class SatelliteTopologyController : public SatelliteRuntimeView
     }
 
     virtual void Initialize() = 0;
-    virtual const ResolvedSatComputeConfig& GetConfig() const = 0;
     virtual const NodeContainer& GetNodes() const = 0;
     virtual const SatelliteIdMap& GetIdMap() const = 0;
     virtual const SatelliteLinkState& GetLinkState() const = 0;

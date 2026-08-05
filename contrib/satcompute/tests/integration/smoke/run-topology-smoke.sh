@@ -11,7 +11,7 @@ trap 'rm -rf "$smoke_output"' EXIT
 
 constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
 arguments="--simulationDuration=2.5 --constellationConfig=$constellation \
---topologySource=online --maxIslDistance=1 --delayMode=distance --fixedDelay=0 \
+--maxIslDistance=1 --delayMode=distance --fixedDelay=0 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --topologyOnly=1 --topologySliceInterval=1 --includeFinalTopologyState=1"
 
