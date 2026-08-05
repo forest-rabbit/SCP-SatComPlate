@@ -6,6 +6,7 @@
 #include "ns3/compute-profile.h"
 #include "ns3/circular-orbit-trace-exporter.h"
 #include "ns3/effective-config.h"
+#include "ns3/ecmp-route-recorder.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/network-transfer.h"
 #include "ns3/online-orbit-constellation.h"
@@ -111,6 +112,7 @@ main(int argc, char* argv[])
         {
             SatelliteTopology topology(config);
             topology.Initialize();
+            EcmpRouteRecorder routeRecorder(topology);
 
             std::unique_ptr<CircularOrbitTraceExporter> traceExporter;
             if (config.traceExport.enabled)
@@ -186,7 +188,8 @@ main(int argc, char* argv[])
                 topology.GetRouteComputationCount(),
                 topology.GetFlowRouteRegistry(),
                 capacitySummary,
-                flowMonitor};
+                flowMonitor,
+                routeRecorder.GetEvents()};
             const RunOutputResult output = WriteRunOutputs(config,
                                                            outputContext,
                                                            transferEngine,

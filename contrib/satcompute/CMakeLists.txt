@@ -10,6 +10,10 @@ build_lib(
     metrics/core/run-summary.cc
     metrics/core/task-metrics.cc
     metrics/core/transfer-metrics.cc
+    metrics/routing/capacity-aware-metrics.cc
+    metrics/routing/ecmp-metrics.cc
+    metrics/routing/ecmp-route-recorder.cc
+    metrics/routing/size-aware-metrics.cc
     metrics/run-output-writer.cc
     routing/algorithm/capacity-aware-hrw-policy.cc
     routing/algorithm/global-first-policy.cc
@@ -56,6 +60,10 @@ build_lib(
     metrics/core/run-summary.h
     metrics/core/task-metrics.h
     metrics/core/transfer-metrics.h
+    metrics/routing/capacity-aware-metrics.h
+    metrics/routing/ecmp-metrics.h
+    metrics/routing/ecmp-route-recorder.h
+    metrics/routing/size-aware-metrics.h
     metrics/run-output-writer.h
     routing/algorithm/capacity-aware-hrw-policy.h
     routing/algorithm/capacity-aware-path-types.h
@@ -252,6 +260,15 @@ build_exec(
   EXECNAME satcompute-capacity-aware-routing-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/capacity-aware-routing-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-routing-metrics-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/routing-metrics-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
