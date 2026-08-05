@@ -15,7 +15,7 @@
 #include "routing/capacity-aware-metrics.h"
 #include "routing/ecmp-metrics.h"
 #include "routing/size-aware-metrics.h"
-#include "../model/sha256.h"
+#include "../sha256.h"
 
 #include <algorithm>
 #include <limits>

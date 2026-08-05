@@ -4,8 +4,8 @@ build_lib(
     effective-config.cc
     para.cc
     resolved-config.cc
-    model/satcompute-version.cc
-    model/sha256.cc
+    satcompute-version.cc
+    sha256.cc
     metrics/core/flow-metrics.cc
     metrics/core/run-summary.cc
     metrics/core/task-metrics.cc
@@ -56,8 +56,8 @@ build_lib(
     effective-config.h
     para.h
     resolved-config.h
-    model/satcompute-version.h
-    model/sha256.h
+    satcompute-version.h
+    sha256.h
     metrics/core/flow-metrics.h
     metrics/core/run-summary.h
     metrics/core/task-metrics.h

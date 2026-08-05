@@ -5,8 +5,8 @@
 #include "effective-config.h"
 
 #include "resolved-config.h"
-#include "model/satcompute-version.h"
-#include "model/sha256.h"
+#include "satcompute-version.h"
+#include "sha256.h"
 #include "topology/snapshot/snapshot-schedule.h"
 
 #include "third-party/nlohmann/json.hpp"
