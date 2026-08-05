@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://forest-rabbit.github.io/SCP-SatComPlate/schemas/topology-trace-manifest-0.2.json",
-  "title": "SatCompute topology trace manifest 0.2",
+  "$id": "https://forest-rabbit.github.io/SCP-SatComPlate/schemas/topology-trace-manifest-0.3.json",
+  "title": "SatCompute topology trace manifest 0.3",
   "description": "Reproducibility metadata and an authoritative ordered inventory for one deterministic topology trace.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
-    "scenario_name",
-    "scenario_config_sha256",
+    "run_name",
+    "constellation_config_sha256",
     "ns3_version",
     "state_semantics",
     "coordinate_frame",
@@ -27,15 +27,15 @@
   "properties": {
     "schema_version": {
       "description": "Topology trace contract version.",
-      "const": "0.2"
+      "const": "0.3"
     },
-    "scenario_name": {
-      "description": "Stable scenario name copied from the authoritative scenario input.",
+    "run_name": {
+      "description": "Stable run name resolved from para and command-line input.",
       "type": "string",
       "minLength": 1
     },
-    "scenario_config_sha256": {
-      "description": "Lowercase SHA-256 of the exact scenario JSON bytes.",
+    "constellation_config_sha256": {
+      "description": "Lowercase SHA-256 of the exact constellation-only JSON bytes.",
       "$ref": "#/$defs/sha256"
     },
     "ns3_version": {
@@ -130,12 +130,12 @@
       ],
       "properties": {
         "name": {
-          "description": "Stable constellation token from the scenario.",
+          "description": "Stable constellation token from the constellation input.",
           "type": "string",
           "minLength": 1
         },
         "pattern": {
-          "description": "RAAN span selected by the scenario.",
+          "description": "RAAN span selected by the constellation pattern.",
           "enum": ["walker-star", "walker-delta"]
         },
         "num_orbits": {

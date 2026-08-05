@@ -5,16 +5,16 @@
 #include "ns3/command-line.h"
 #include "ns3/compute-profile.h"
 #include "ns3/circular-orbit-trace-exporter.h"
+#include "ns3/effective-config.h"
 #include "ns3/network-transfer-config.h"
 #include "ns3/network-transfer-engine.h"
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/online-topology-controller.h"
+#include "ns3/para.h"
 #include "ns3/replay-topology-controller.h"
 #include "ns3/resolved-config.h"
 #include "ns3/rng-seed-manager.h"
 #include "ns3/run-output-writer.h"
-#include "ns3/satcompute-version.h"
-#include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 #include "ns3/task-coordinator.h"
 #include "ns3/task-trace.h"
@@ -35,47 +35,32 @@ using namespace ns3;
 int
 main(int argc, char* argv[])
 {
-    std::string scenarioConfig;
-    std::string outputDirectory = "/tmp/satcompute-output";
+    SatComputeConfig inputConfig = GetDefaultSatComputeConfig();
     bool validateOnly = false;
     bool exportOnly = false;
     CommandLine command(__FILE__);
-    command.AddValue("scenarioConfig", "Path to authoritative scenario 0.2 JSON", scenarioConfig);
-    command.AddValue("outputDir", "Operational output directory", outputDirectory);
+    AddSatComputeCommandLineOptions(command, inputConfig);
     command.AddValue("validateOnly", "Validate and resolve inputs without simulation", validateOnly);
     command.AddValue("exportOnly", "Generate online orbit/topology JSON slices only", exportOnly);
     command.Parse(argc, argv);
 
     try
     {
-        if (scenarioConfig.empty())
-        {
-            if (validateOnly || exportOnly)
-            {
-                throw std::runtime_error("scenarioConfig is required for validateOnly or exportOnly");
-            }
-            std::cout << "{\"application\":\"satcompute\",\"scenario_schema_version\":\""
-                      << GetSatComputeSchemaVersion() << "\",\"status\":\"ready\"}" << std::endl;
-            return 0;
-        }
-
         if (validateOnly && exportOnly)
         {
             throw std::runtime_error("validateOnly and exportOnly are mutually exclusive");
         }
 
-        const ScenarioConfig legacyConfig = LoadScenarioConfig(scenarioConfig);
-        const ResolvedSatComputeConfig config =
-            ResolveLegacyScenarioConfig(legacyConfig, outputDirectory);
+        const ResolvedSatComputeConfig config = ResolveSatComputeConfig(inputConfig);
         const std::filesystem::path effectiveConfig =
-            WriteEffectiveConfig(legacyConfig, outputDirectory, validateOnly, exportOnly);
+            WriteEffectiveConfig(config, validateOnly, exportOnly);
         if (validateOnly)
         {
             const nlohmann::json result = {{"application", "satcompute"},
                                            {"effective_config", effectiveConfig.string()},
                                            {"satellite_count",
                                             config.constellation.GetSatelliteCount()},
-                                           {"scenario", config.runName},
+                                           {"run", config.runName},
                                            {"status", "validated"}};
             std::cout << result.dump() << std::endl;
             return 0;
@@ -103,7 +88,7 @@ main(int argc, char* argv[])
                 OnlineOrbitConstellation constellation(config.constellation,
                                                        config.simulation.startTimeNs);
                 CircularOrbitTraceExporter exporter(config,
-                                                     std::filesystem::path(outputDirectory) /
+                                                     config.outputDirectory /
                                                          "topology-trace",
                                                      constellation);
                 exporter.Initialize();
@@ -116,7 +101,7 @@ main(int argc, char* argv[])
                 {"application", "satcompute"},
                 {"effective_config", effectiveConfig.string()},
                 {"satellite_count", config.constellation.GetSatelliteCount()},
-                {"scenario", config.runName},
+                {"run", config.runName},
                 {"status", "exported"},
                 {"topology_trace_manifest", traceResult.manifestPath.string()}};
             std::cout << result.dump() << std::endl;
@@ -150,7 +135,7 @@ main(int argc, char* argv[])
                 }
                 traceExporter = std::make_unique<CircularOrbitTraceExporter>(
                     config,
-                    std::filesystem::path(outputDirectory) / "topology-trace",
+                    config.outputDirectory / "topology-trace",
                     onlineController->GetConstellation());
                 traceExporter->Initialize();
             }
@@ -217,7 +202,7 @@ main(int argc, char* argv[])
             }
             const RunOutputContext outputContext = {
                 effectiveConfig,
-                outputDirectory,
+                config.outputDirectory,
                 wallClockNs,
                 controller->GetAppliedTopologySliceCount(),
                 controller->GetRouteComputationCount(),
@@ -239,7 +224,7 @@ main(int argc, char* argv[])
                       {"effective_config", effectiveConfig.string()},
                       {"run_summary", output.runSummaryPath.string()},
                       {"satellite_count", config.constellation.GetSatelliteCount()},
-                      {"scenario", config.runName},
+                      {"run", config.runName},
                       {"topology_trace_manifest",
                        topologyTraceManifest
                            ? nlohmann::json(topologyTraceManifest->string())

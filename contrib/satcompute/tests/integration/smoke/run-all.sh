@@ -5,33 +5,34 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)"
 cd "$repository_root"
 
-expected='{"application":"satcompute","scenario_schema_version":"0.2","status":"ready"}'
-actual="$(./ns3 run --no-build satcompute)"
-
-if [[ "$actual" != "$expected" ]]; then
-  echo "unexpected satcompute smoke output: $actual" >&2
-  exit 1
-fi
-
 smoke_output="$(mktemp -d /tmp/satcompute-smoke.XXXXXX)"
 trap 'rm -rf "$smoke_output"' EXIT
-validation_scenario="contrib/satcompute/input/examples/synthetic-66-fixed.json"
+constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.json"
+constellation_4="contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
+dynamic_topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
+task_inputs="contrib/satcompute/tests/fixtures/task"
 validation_output="$smoke_output/validation"
 
 validated="$(./ns3 run --no-build \
-  "satcompute --scenarioConfig=$validation_scenario \
+  "satcompute --constellationConfig=$constellation_66 \
 --outputDir=$validation_output --validateOnly=true")"
 if [[ "$validated" != *'"status":"validated"'* ]]; then
-  echo "scenario validation smoke failed: $validated" >&2
+  echo "para/constellation validation smoke failed: $validated" >&2
   exit 1
 fi
 
 python3 -m json.tool "$validation_output/effective-config.json" >/dev/null
 
-execution_scenario="contrib/satcompute/tests/fixtures/scenario/task-replay.json"
 execution_output="$smoke_output/execution"
 completed="$(./ns3 run --no-build \
-  "satcompute --scenarioConfig=$execution_scenario --outputDir=$execution_output")"
+  "satcompute --runName=smoke-task-replay --simulationDuration=5 \
+--constellationConfig=$constellation_4 --topologySource=replay \
+--topologyDir=$dynamic_topology --delayMode=fixed --fixedDelay=0.001 \
+--networkUpdateInterval=2 --islBandwidthBps=100000000 \
+--routingMode=global-size-aware-hrw \
+--computeProfile=$task_inputs/compute-profile-single.json \
+--taskTrace=$task_inputs/task-single.json --topologyExportEnabled=false \
+--outputDir=$execution_output")"
 if [[ "$completed" != *'"status":"completed"'* ]]; then
   echo "replay execution smoke failed: $completed" >&2
   exit 1
@@ -53,10 +54,14 @@ if summary["transfer"]["completed_transfer_count"] != 2:
     raise SystemExit("replay smoke did not complete both task transfers")
 PY
 
-online_scenario="contrib/satcompute/tests/fixtures/scenario/online-fixed.json"
 online_output="$smoke_output/online"
 online_completed="$(./ns3 run --no-build \
-  "satcompute --scenarioConfig=$online_scenario --outputDir=$online_output")"
+  "satcompute --runName=smoke-online-fixed --simulationDuration=3 \
+--constellationConfig=$constellation_4 --topologySource=online \
+--maxIslDistance=30000000 --delayMode=fixed --fixedDelay=0.008 \
+--networkUpdateInterval=1 --islBandwidthBps=100000000 \
+--routingMode=global-first --topologyExportEnabled=false \
+--outputDir=$online_output")"
 if [[ "$online_completed" != *'"status":"completed"'* ]]; then
   echo "online execution smoke failed: $online_completed" >&2
   exit 1
@@ -76,11 +81,14 @@ if summary["applied_topology_slice_count"] != 3:
     raise SystemExit("online smoke update count differs")
 PY
 
-trace_scenario="contrib/satcompute/tests/fixtures/scenario/online-trace.json"
 trace_output="$smoke_output/trace-export"
 exported="$(./ns3 run --no-build \
-  "satcompute --scenarioConfig=$trace_scenario --outputDir=$trace_output \
---exportOnly=true")"
+  "satcompute --runName=smoke-trace --simulationDuration=2.5 \
+--constellationConfig=$constellation_4 --topologySource=online \
+--maxIslDistance=30000000 --delayMode=distance --fixedDelay=0 \
+--networkUpdateInterval=2 --islBandwidthBps=100000000 \
+--routingMode=global-first --topologyExportEnabled=true \
+--topologyExportInterval=1 --outputDir=$trace_output --exportOnly=true")"
 if [[ "$exported" != *'"status":"exported"'* ]]; then
   echo "topology trace export smoke failed: $exported" >&2
   exit 1
@@ -109,4 +117,4 @@ for slice_record in manifest["slices"]:
             raise SystemExit(f"trace smoke hash differs: {slice_record[file_key]}")
 PY
 
-echo "SatCompute readiness, validation, replay, online, and trace-export smoke passed."
+echo "SatCompute para validation, replay, online, and trace-export smoke passed."

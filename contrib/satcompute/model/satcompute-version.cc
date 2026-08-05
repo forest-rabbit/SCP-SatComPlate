@@ -8,12 +8,6 @@ namespace ns3
 {
 
 std::string_view
-GetSatComputeSchemaVersion()
-{
-    return "0.2";
-}
-
-std::string_view
 GetSatComputeNs3Version()
 {
     return "3.48";

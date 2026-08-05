@@ -9,46 +9,73 @@ regression_output="$(mktemp -d /tmp/satcompute-regression.XXXXXX)"
 trap 'rm -rf "$regression_output"' EXIT
 
 run_platform() {
-  local scenario="$1"
-  local output_directory="$2"
+  local output_directory="$1"
+  shift
   ./ns3 run --no-build \
-    "satcompute --scenarioConfig=$scenario --outputDir=$output_directory"
+    "satcompute --outputDir=$output_directory $*"
 }
 
-direct_scenario="contrib/satcompute/tests/fixtures/scenario/transfer-replay.json"
-direct_result="$(run_platform "$direct_scenario" "$regression_output/direct")"
+constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.json"
+constellation_4="contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
+constellation_2="contrib/satcompute/tests/fixtures/constellation/delay-only-2.json"
+dynamic_topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
+capacity_topology="contrib/satcompute/tests/fixtures/topology/snapshots/capacity-pending"
+transfer_inputs="contrib/satcompute/tests/fixtures/traffic/transfers"
+task_inputs="contrib/satcompute/tests/fixtures/task"
+
+replay_common="--simulationDuration=5 --constellationConfig=$constellation_4 \
+--topologySource=replay --topologyDir=$dynamic_topology --delayMode=fixed \
+--fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
+--topologyExportEnabled=false"
+
+direct_result="$(run_platform "$regression_output/direct" \
+  "$replay_common --runName=direct-replay --routingMode=global-first \
+--transferTrace=$transfer_inputs/engine-basic.json")"
 if [[ "$direct_result" != *'"status":"completed"'* ]]; then
   echo "direct replay regression failed: $direct_result" >&2
   exit 1
 fi
 
-task_scenario="contrib/satcompute/tests/fixtures/scenario/task-replay.json"
-task_first="$(run_platform "$task_scenario" "$regression_output/task-first")"
-task_second="$(run_platform "$task_scenario" "$regression_output/task-second")"
+task_arguments="$replay_common --runName=task-replay \
+--routingMode=global-size-aware-hrw \
+--computeProfile=$task_inputs/compute-profile-single.json \
+--taskTrace=$task_inputs/task-single.json"
+task_first="$(run_platform "$regression_output/task-first" "$task_arguments")"
+task_second="$(run_platform "$regression_output/task-second" "$task_arguments")"
 if [[ "$task_first" != *'"status":"completed"'* ||
       "$task_second" != *'"status":"completed"'* ]]; then
   echo "task replay repeat regression failed" >&2
   exit 1
 fi
 
-no_workload_scenario="contrib/satcompute/tests/fixtures/scenario/replay-dynamic.json"
 no_workload_result="$(run_platform \
-  "$no_workload_scenario" "$regression_output/no-workload")"
+  "$regression_output/no-workload" \
+  "$replay_common --runName=no-workload --routingMode=global-first")"
 if [[ "$no_workload_result" != *'"status":"completed"'* ]]; then
   echo "workload-free replay regression failed: $no_workload_result" >&2
   exit 1
 fi
 
-capacity_scenario="contrib/satcompute/tests/fixtures/scenario/capacity-pending.json"
-capacity_result="$(run_platform "$capacity_scenario" "$regression_output/capacity")"
+capacity_result="$(run_platform "$regression_output/capacity" \
+  "--runName=capacity-pending --simulationDuration=3 \
+--constellationConfig=$constellation_2 --topologySource=replay \
+--topologyDir=$capacity_topology --delayMode=fixed --fixedDelay=0.001 \
+--networkUpdateInterval=1 --islBandwidthBps=1000000 \
+--routingMode=global-capacity-aware-hrw --transferPayloadBytes=1400 \
+--topologyExportEnabled=false")"
 if [[ "$capacity_result" != *'"status":"completed"'* ]]; then
   echo "workload-free capacity replay regression failed: $capacity_result" >&2
   exit 1
 fi
 
-strict_scenario="contrib/satcompute/tests/fixtures/scenario/transfer-partial-strict.json"
+partial_common="--simulationDuration=1 --constellationConfig=$constellation_4 \
+--topologySource=replay --topologyDir=$dynamic_topology --delayMode=fixed \
+--fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=1000000 \
+--routingMode=global-first --transferTrace=$transfer_inputs/platform-partial.json \
+--transferPayloadBytes=1400 --topologyExportEnabled=false"
 set +e
-strict_result="$(run_platform "$strict_scenario" "$regression_output/strict")"
+strict_result="$(run_platform "$regression_output/strict" \
+  "$partial_common --runName=partial-strict --taskCompletionPolicy=strict")"
 strict_status=$?
 set -e
 if [[ $strict_status -ne 3 || "$strict_result" != *'"status":"partial"'* ]]; then
@@ -56,34 +83,46 @@ if [[ $strict_status -ne 3 || "$strict_result" != *'"status":"partial"'* ]]; the
   exit 1
 fi
 
-report_scenario="contrib/satcompute/tests/fixtures/scenario/transfer-partial-report.json"
-report_result="$(run_platform "$report_scenario" "$regression_output/report")"
+report_result="$(run_platform "$regression_output/report" \
+  "$partial_common --runName=partial-report --taskCompletionPolicy=report")"
 if [[ "$report_result" != *'"status":"partial"'* ]]; then
   echo "report partial-completion policy regression failed: $report_result" >&2
   exit 1
 fi
 
-online_fixed="contrib/satcompute/tests/fixtures/scenario/online-fixed.json"
-online_distance="contrib/satcompute/tests/fixtures/scenario/online-distance.json"
-online_transfer="contrib/satcompute/tests/fixtures/scenario/online-transfer.json"
-online_task="contrib/satcompute/tests/fixtures/scenario/online-task.json"
-
-online_fixed_result="$(run_platform \
-  "$online_fixed" "$regression_output/online-fixed")"
-online_distance_result="$(run_platform \
-  "$online_distance" "$regression_output/online-distance")"
-online_transfer_result="$(run_platform \
-  "$online_transfer" "$regression_output/online-transfer")"
+online_common="--simulationDuration=3 --constellationConfig=$constellation_4 \
+--topologySource=online --maxIslDistance=30000000 --delayMode=fixed \
+--fixedDelay=0.008 --networkUpdateInterval=1 --islBandwidthBps=100000000 \
+--topologyExportEnabled=false"
+online_fixed_result="$(run_platform "$regression_output/online-fixed" \
+  "$online_common --runName=online-fixed --routingMode=global-first")"
+online_distance_result="$(run_platform "$regression_output/online-distance" \
+  "--simulationDuration=3 --constellationConfig=$constellation_4 \
+--topologySource=online --maxIslDistance=30000000 --delayMode=distance \
+--fixedDelay=0 --networkUpdateInterval=1 --islBandwidthBps=100000000 \
+--routingMode=global-hrw-per-flow --topologyExportEnabled=false \
+--runName=online-distance")"
+online_transfer_result="$(run_platform "$regression_output/online-transfer" \
+  "$online_common --runName=online-transfer --routingMode=global-hash-per-flow \
+--transferTrace=$transfer_inputs/engine-basic.json")"
+online_task_arguments="$online_common --runName=online-task \
+--routingMode=global-size-aware-hrw \
+--computeProfile=$task_inputs/compute-profile-single.json \
+--taskTrace=$task_inputs/task-single.json"
 online_task_first="$(run_platform \
-  "$online_task" "$regression_output/online-task-first")"
+  "$regression_output/online-task-first" "$online_task_arguments")"
 online_task_second="$(run_platform \
-  "$online_task" "$regression_output/online-task-second")"
-online_trace="contrib/satcompute/tests/fixtures/scenario/online-trace.json"
+  "$regression_output/online-task-second" "$online_task_arguments")"
+trace_arguments="--runName=online-trace --simulationDuration=2.5 \
+--constellationConfig=$constellation_4 --topologySource=online \
+--maxIslDistance=30000000 --delayMode=distance --fixedDelay=0 \
+--networkUpdateInterval=2 --islBandwidthBps=100000000 \
+--routingMode=global-first --topologyExportEnabled=true \
+--topologyExportInterval=1"
 online_trace_result="$(run_platform \
-  "$online_trace" "$regression_output/online-trace")"
-export_trace_result="$(./ns3 run --no-build \
-  "satcompute --scenarioConfig=$online_trace \
---outputDir=$regression_output/export-trace --exportOnly=true")"
+  "$regression_output/online-trace" "$trace_arguments")"
+export_trace_result="$(run_platform \
+  "$regression_output/export-trace" "$trace_arguments --exportOnly=true")"
 for result in \
   "$online_fixed_result" \
   "$online_distance_result" \
@@ -101,76 +140,28 @@ if [[ "$export_trace_result" != *'"status":"exported"'* ]]; then
   exit 1
 fi
 
-python3 - \
-  "$online_trace" \
-  "$regression_output/export-trace/topology-trace" \
-  "$regression_output/generated-replay-scenario.json" <<'PY'
-import json
-import pathlib
-import sys
-
-source = pathlib.Path(sys.argv[1])
-trace_directory = pathlib.Path(sys.argv[2]).resolve()
-target = pathlib.Path(sys.argv[3])
-scenario = json.loads(source.read_text(encoding="utf-8"))
-scenario["scenario_name"] = "generated-v0.2-replay"
-scenario["constellation"]["orbit_provider"] = "json-replay"
-scenario["network"]["topology_source"] = "json-replay"
-scenario["network"]["replay_directory"] = str(trace_directory)
-scenario["trace_export"]["enabled"] = False
-target.write_text(
-    json.dumps(scenario, indent=2, separators=(",", ": ")) + "\n",
-    encoding="utf-8",
-)
-PY
-
 generated_replay_result="$(run_platform \
-  "$regression_output/generated-replay-scenario.json" \
-  "$regression_output/generated-replay")"
+  "$regression_output/generated-replay" \
+  "--runName=generated-replay --simulationDuration=2.5 \
+--constellationConfig=$constellation_4 --topologySource=replay \
+--topologyDir=$regression_output/export-trace/topology-trace \
+--delayMode=distance --fixedDelay=0 --networkUpdateInterval=2 \
+--islBandwidthBps=100000000 --routingMode=global-first \
+--topologyExportEnabled=false")"
 if [[ "$generated_replay_result" != *'"status":"completed"'* ]]; then
-  echo "generated 0.2 topology replay regression failed: $generated_replay_result" >&2
+  echo "generated topology replay regression failed: $generated_replay_result" >&2
   exit 1
 fi
 
-python3 - \
-  "$online_fixed" \
-  "$regression_output/online-capacity-scenario.json" \
-  "contrib/satcompute/input/examples/synthetic-66-fixed.json" \
-  "$regression_output/online-66-scenario.json" <<'PY'
-import json
-import pathlib
-import sys
-
-fixed_source = pathlib.Path(sys.argv[1])
-capacity_target = pathlib.Path(sys.argv[2])
-large_source = pathlib.Path(sys.argv[3])
-large_target = pathlib.Path(sys.argv[4])
-
-capacity = json.loads(fixed_source.read_text(encoding="utf-8"))
-capacity["scenario_name"] = "online-capacity-fixture"
-capacity["routing"]["mode"] = "global-capacity-aware-hrw"
-capacity_target.write_text(
-    json.dumps(capacity, indent=2, separators=(",", ": ")) + "\n",
-    encoding="utf-8",
-)
-
-large = json.loads(large_source.read_text(encoding="utf-8"))
-large["scenario_name"] = "online-66-regression"
-large["simulation"]["duration_s"] = 1
-large["routing"]["mode"] = "global-first"
-large["trace_export"]["enabled"] = False
-large_target.write_text(
-    json.dumps(large, indent=2, separators=(",", ": ")) + "\n",
-    encoding="utf-8",
-)
-PY
-
 online_capacity_result="$(run_platform \
-  "$regression_output/online-capacity-scenario.json" \
-  "$regression_output/online-capacity")"
+  "$regression_output/online-capacity" \
+  "$online_common --runName=online-capacity \
+--routingMode=global-capacity-aware-hrw")"
 online_66_result="$(run_platform \
-  "$regression_output/online-66-scenario.json" \
-  "$regression_output/online-66")"
+  "$regression_output/online-66" \
+  "--runName=online-66 --simulationDuration=1 \
+--constellationConfig=$constellation_66 --topologySource=online \
+--routingMode=global-first --topologyExportEnabled=false")"
 if [[ "$online_capacity_result" != *'"status":"completed"'* ||
       "$online_66_result" != *'"status":"completed"'* ]]; then
   echo "capacity-aware or 66-satellite online regression failed" >&2
@@ -299,8 +290,8 @@ if trace_manifest != export_manifest:
     raise SystemExit("online and export-only manifests differ")
 
 generated_replay = load_json("generated-replay/run-summary.json")
-if generated_replay["topology_source"] != "json-replay":
-    raise SystemExit("generated trace was not consumed through JSON replay")
+if generated_replay["topology_source"] != "replay":
+    raise SystemExit("generated trace was not consumed through replay")
 if generated_replay["applied_topology_slice_count"] != 2:
     raise SystemExit("generated trace replay update count differs")
 if generated_replay["route_computation_count"] != 1:

@@ -2,8 +2,8 @@
 
 > 迁移状态：`main` 使用官方 ns-3.48，`legacy/ns-3.33` 永久保留为只读行为基线。
 > 本文以 ns-3.33 中文 README 的章节和合同为主体。根目录入口与 `para.h/.cc`
-> 已恢复，但生产入口在阶段 2 完成前仍临时使用 `--scenarioConfig`；因此当前不要
-> 同时把 `para` 和完整 scenario JSON 当作两套运行输入。
+> 已恢复；生产入口只接受 `para.cc` 默认值及同名 CLI 覆盖。JSON 只承担星座
+> 物理结构、拓扑回放、流量、算力和任务等相互独立的数据合同。
 
 批准的边界见 [v0.3 平台规格](../../docs/specs/platform-v0.3.md)，逐项进度见
 [ns-3.33 到 ns-3.48 迁移矩阵](../../docs/plans/ns3-33-to-48-matrix.md)。
@@ -52,9 +52,13 @@ fallback。发送暂停、恢复、pacing 和 pending admission 仍由 `traffic/
 ```bash
 ./ns3 configure --enable-modules=satcompute -G Ninja
 ./ns3 build
-./ns3 run "satcompute"
+./ns3 run "satcompute --validateOnly=true"
+./ns3 run "satcompute --simulationDuration=2 --topologyExportEnabled=false"
 ./ns3 run "satcompute --help"
 ```
+
+不带参数运行 `satcompute` 会按 `para.cc` 的完整默认实验执行 1000 秒仿真；日常
+开发建议使用 `--validateOnly=true` 或显式给出较短的 `simulationDuration`。
 
 日常和 CI 配置都不启用 ns-3 全局 examples 或 tests，也不运行上游 `test.py`。
 SatCompute 自有 C++ 检查作为普通 executable 构建，自有测试仍保存在原来的

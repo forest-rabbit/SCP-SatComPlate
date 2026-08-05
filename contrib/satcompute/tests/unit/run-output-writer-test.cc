@@ -141,7 +141,9 @@ RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
               "complete CSV row counts differ");
 
         const Json summary = ReadJson(result.runSummaryPath);
-        Check(summary.at("run_status") == "COMPLETE" &&
+        Check(summary.at("run_name") == "task-replay-fixture" &&
+                  summary.at("config_schema_version") == "0.3" &&
+                  summary.at("run_status") == "COMPLETE" &&
                   summary.at("workload_mode") == "task" &&
                   summary.at("wall_clock_ns") == 123456 &&
                   summary.at("effective_config").at("sha256") ==
