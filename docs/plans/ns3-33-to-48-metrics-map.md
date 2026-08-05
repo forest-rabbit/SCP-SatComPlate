@@ -12,10 +12,10 @@
 | `task-summary.csv` | `core/task-metrics` | 恢复输入、排队、计算、结果传输时延 | 已接入 |
 | `compute-node-summary.csv` | `core/task-metrics` | 用 resolved 纳秒时长计算利用率 | 已接入 |
 | `run-summary.json` | `core/run-summary` | 恢复 legacy 扁平字段，同时保留下述新增证据 | 已接入 |
-| `ecmp-route-events.csv` | `routing/ecmp-metrics` | 恢复逐流选路事件 | 任务 6.2 |
-| `size-aware-reservation-events.csv` | `routing/size-aware-metrics` | 恢复 reservation 生命周期 | 任务 6.2 |
-| `size-aware-summary.json` | `routing/size-aware-metrics` | 恢复 size-aware 聚合 | 任务 6.2 |
-| `capacity-aware-summary.json` | `routing/capacity-aware-metrics` | 恢复完整路径容量聚合 | 任务 6.2 |
+| `ecmp-route-events.csv` | `routing/ecmp-metrics` | 恢复逐流选路事件 | 已接入 |
+| `size-aware-reservation-events.csv` | `routing/size-aware-metrics` | 恢复 reservation 生命周期 | 已接入 |
+| `size-aware-summary.json` | `routing/size-aware-metrics` | 恢复 size-aware 聚合 | 已接入 |
+| `capacity-aware-summary.json` | `routing/capacity-aware-metrics` | 恢复完整路径容量聚合 | 已接入 |
 | `diagnostics/failure/incomplete-tasks.csv` | `diagnostics/failure-diagnostics` | 恢复未完成任务对象 | 任务 6.3 |
 | `diagnostics/failure/incomplete-transfers.csv` | `diagnostics/failure-diagnostics` | 恢复未完成传输对象 | 任务 6.3 |
 | `diagnostics/failure/isl-queue-drops.csv` | `diagnostics/failure-diagnostics` | 恢复逐次 ISL 队列丢包 | 任务 6.3 |

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)"
 cd "$repository_root"
@@ -19,9 +20,41 @@ constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.
 constellation_4="contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
 constellation_2="contrib/satcompute/tests/fixtures/constellation/delay-only-2.json"
 dynamic_topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
+static_topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static"
 capacity_topology="contrib/satcompute/tests/fixtures/topology/snapshots/capacity-pending"
 transfer_inputs="contrib/satcompute/tests/fixtures/traffic/transfers"
 task_inputs="contrib/satcompute/tests/fixtures/task"
+
+hash_static_common="--simulationDuration=3 --constellationConfig=$constellation_4 \
+--topologySource=replay --topologyDir=$static_topology --delayMode=fixed \
+--fixedDelay=0.001 --networkUpdateInterval=20 --islBandwidthBps=100000000 \
+--routingMode=global-hash-per-flow --ecmpHashSeed=1 \
+--transferTrace=$transfer_inputs/diamond-4-static-transfers.json \
+--transferChunkMode=fixed --transferPayloadBytes=1024 \
+--transferLogMode=silent --topologyExportEnabled=false"
+hash_static_first="$(run_platform "$regression_output/hash-static-first" \
+  "$hash_static_common --runName=hash-static-first")"
+hash_static_second="$(run_platform "$regression_output/hash-static-second" \
+  "$hash_static_common --runName=hash-static-second")"
+hash_dynamic="$(run_platform "$regression_output/hash-dynamic" \
+  "--runName=hash-dynamic --simulationDuration=6 \
+--constellationConfig=$constellation_4 --topologySource=replay \
+--topologyDir=$dynamic_topology --delayMode=fixed --fixedDelay=0.001 \
+--networkUpdateInterval=2 --islBandwidthBps=100000000 \
+--routingMode=global-hash-per-flow --ecmpHashSeed=1 \
+--transferTrace=$transfer_inputs/diamond-4-dynamic-transfers.json \
+--transferChunkMode=fixed --transferPayloadBytes=1024 \
+--transferLogMode=silent --topologyExportEnabled=false")"
+for result in "$hash_static_first" "$hash_static_second" "$hash_dynamic"; do
+  if [[ "$result" != *'"status":"completed"'* ]]; then
+    echo "legacy routing metric regression failed: $result" >&2
+    exit 1
+  fi
+done
+python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
+  --first="$regression_output/hash-static-first" \
+  --second="$regression_output/hash-static-second" \
+  --dynamic="$regression_output/hash-dynamic"
 
 replay_common="--simulationDuration=5 --constellationConfig=$constellation_4 \
 --topologySource=replay --topologyDir=$dynamic_topology --delayMode=fixed \
@@ -195,6 +228,9 @@ for filename in (
     "task-events.csv",
     "task-summary.csv",
     "compute-node-summary.csv",
+    "ecmp-route-events.csv",
+    "size-aware-reservation-events.csv",
+    "size-aware-summary.json",
     "routing-reservation-events.csv",
     "routing-summary.json",
 ):
@@ -207,9 +243,12 @@ no_workload = load_json("no-workload/run-summary.json")
 if no_workload["workload_mode"] != "none" or no_workload["run_status"] != "COMPLETE":
     raise SystemExit("workload-free run summary differs")
 
-capacity = load_json("capacity/routing-summary.json")
-if capacity["capacity_aware"]["active_path_count_at_end"] != 0:
+capacity = load_json("capacity/capacity-aware-summary.json")
+if capacity["active_path_count_at_end"] != 0:
     raise SystemExit("workload-free capacity state is not empty")
+capacity_size = load_json("capacity/size-aware-summary.json")
+if capacity_size["active_flow_count_at_end"] != 0:
+    raise SystemExit("workload-free capacity flow registry is not empty")
 
 strict = load_json("strict/run-summary.json")
 report = load_json("report/run-summary.json")
@@ -261,6 +300,9 @@ for filename in (
     "task-events.csv",
     "task-summary.csv",
     "compute-node-summary.csv",
+    "ecmp-route-events.csv",
+    "size-aware-reservation-events.csv",
+    "size-aware-summary.json",
     "routing-reservation-events.csv",
     "routing-summary.json",
 ):

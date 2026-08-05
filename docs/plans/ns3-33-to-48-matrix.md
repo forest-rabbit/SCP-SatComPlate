@@ -33,10 +33,10 @@
 | `metrics/core/run-summary.*` | 已恢复独立实现 | 恢复独立文件 | 已迁移；legacy 扁平字段与 ns-3.48 provenance 加法兼容 |
 | `metrics/core/task-metrics.*` | 已恢复独立实现 | 恢复独立文件 | 已迁移；task、compute node 输出使用 resolved 纳秒时长 |
 | `metrics/core/transfer-metrics.*` | 已恢复独立实现 | 恢复独立文件 | 已迁移；legacy 19 列表头通过精确检查 |
-| `metrics/routing/ecmp-route-recorder.*` | 无等价独立文件 | 恢复 | 待迁移 |
-| `metrics/routing/ecmp-metrics.*` | writer 内部逻辑 | 恢复 | 待迁移 |
-| `metrics/routing/size-aware-metrics.*` | writer 内部逻辑 | 恢复 | 待迁移 |
-| `metrics/routing/capacity-aware-metrics.*` | writer 内部逻辑 | 恢复 | 待迁移 |
+| `metrics/routing/ecmp-route-recorder.*` | 已恢复并连接所有卫星 routing trace | 恢复 | 已迁移；真实 task 仿真验证逐流事件 |
+| `metrics/routing/ecmp-metrics.*` | 已恢复独立实现 | 恢复 | 已迁移；legacy 15 列表头与事件值通过门禁 |
+| `metrics/routing/size-aware-metrics.*` | 已恢复独立实现 | 恢复 | 已迁移；reservation 生命周期和结束状态通过门禁 |
+| `metrics/routing/capacity-aware-metrics.*` | 已恢复独立实现 | 恢复 | 已迁移；容量账本结束状态通过门禁 |
 | `metrics/diagnostics/failure-diagnostics.*` | writer 中的部分诊断 | 恢复并适配当前记录类型 | 待迁移 |
 | `metrics/diagnostics/flow-drop-reason-diagnostics.*` | 无完整等价 | 恢复 | 待迁移 |
 | 无 | `metrics/run-output-writer.*` | 分层迁移完成后删除 | 待迁移 |

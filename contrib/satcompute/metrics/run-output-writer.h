@@ -6,6 +6,7 @@
 #define SATCOMPUTE_RUN_OUTPUT_WRITER_H
 
 #include "../resolved-config.h"
+#include "../routing/ns3/satcompute-ipv4-global-routing.h"
 #include "../routing/state/capacity-reservation-state.h"
 #include "../routing/state/flow-route-registry.h"
 #include "../task/task-coordinator.h"
@@ -40,6 +41,7 @@ struct RunOutputContext
     Ptr<FlowRouteRegistry> flowRouteRegistry;
     std::optional<CapacityAwareRuntimeSummary> capacityAwareSummary;
     Ptr<FlowMonitor> flowMonitor;
+    std::vector<EcmpRouteDecisionEvent> routeEvents;
 };
 
 struct RunOutputResult

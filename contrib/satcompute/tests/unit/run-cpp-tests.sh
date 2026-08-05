@@ -76,6 +76,9 @@ diamond_constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4
 ./ns3 run --no-build \
   "satcompute-capacity-aware-routing-test --topologyDir=$dynamic_topology"
 
+./ns3 run --no-build \
+  "satcompute-routing-metrics-test --outputDir=$test_output/routing-metrics"
+
 transfer_fixtures="contrib/satcompute/tests/fixtures/traffic/transfers"
 ./ns3 run --no-build \
   "satcompute-transfer-trace-test \

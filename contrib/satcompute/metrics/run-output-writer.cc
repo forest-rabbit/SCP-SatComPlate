@@ -10,6 +10,9 @@
 #include "core/run-summary.h"
 #include "core/task-metrics.h"
 #include "core/transfer-metrics.h"
+#include "routing/capacity-aware-metrics.h"
+#include "routing/ecmp-metrics.h"
+#include "routing/size-aware-metrics.h"
 #include "../model/sha256.h"
 #include "../third-party/nlohmann/json.hpp"
 
@@ -397,6 +400,8 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
                             outputDirectory.string(),
                             complete);
     result.files.push_back(outputDirectory / "network-flow-details.csv");
+    WriteEcmpRouteEvents(context.routeEvents, outputDirectory.string());
+    result.files.push_back(outputDirectory / "ecmp-route-events.csv");
     if (transferEngine != nullptr)
     {
         WriteTransferSummaries(transfers, outputDirectory.string());
@@ -414,8 +419,24 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
     }
     if (context.flowRouteRegistry != nullptr)
     {
+        WriteSizeAwareMetrics(context.flowRouteRegistry, outputDirectory.string());
+        result.files.push_back(outputDirectory / "size-aware-reservation-events.csv");
+        result.files.push_back(outputDirectory / "size-aware-summary.json");
         result.files.push_back(WriteReservationEvents(outputDirectory,
                                                       context.flowRouteRegistry));
+    }
+    else
+    {
+        RemoveSizeAwareMetrics(outputDirectory.string());
+    }
+    if (context.capacityAwareSummary)
+    {
+        WriteCapacityAwareMetrics(*context.capacityAwareSummary, outputDirectory.string());
+        result.files.push_back(outputDirectory / "capacity-aware-summary.json");
+    }
+    else
+    {
+        RemoveCapacityAwareMetrics(outputDirectory.string());
     }
     result.files.push_back(WriteRoutingSummary(config, context, outputDirectory));
 
