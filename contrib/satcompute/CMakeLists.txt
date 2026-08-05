@@ -33,6 +33,7 @@ build_lib(
     topology/orbit/online-orbit-constellation.cc
     topology/replay/replay-topology-controller.cc
     topology/satellite-id-map.cc
+    topology/satellite-topology.cc
     topology/snapshot/snapshot-reader.cc
     topology/snapshot/snapshot-schedule.cc
     traffic/network-transfer-application.cc
@@ -83,6 +84,7 @@ build_lib(
     topology/satellite-endpoint-view.h
     topology/satellite-id-map.h
     topology/satellite-runtime-view.h
+    topology/satellite-topology.h
     topology/satellite-topology-controller.h
     topology/snapshot/snapshot-reader.h
     topology/snapshot/snapshot-schedule.h
@@ -172,6 +174,15 @@ build_exec(
   EXECNAME satcompute-replay-controller-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/replay-controller-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-satellite-topology-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/satellite-topology-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

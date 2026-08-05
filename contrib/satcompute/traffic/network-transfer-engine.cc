@@ -124,8 +124,10 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
                             plan.arrivalTimeNs >= m_simulationDurationNs,
                         "transfer start time must be -1 or precede simulation stop");
 
-        plan.sourceAddress = m_topology->GetServiceAddress(plan.sourceSatelliteId);
-        plan.destinationAddress = m_topology->GetServiceAddress(plan.destinationSatelliteId);
+        plan.sourceAddress =
+            m_topology->GetServiceAddressBySatelliteId(plan.sourceSatelliteId);
+        plan.destinationAddress =
+            m_topology->GetServiceAddressBySatelliteId(plan.destinationSatelliteId);
         plan.destinationPort = NETWORK_TRANSFER_DESTINATION_PORT;
         const uint32_t ordinal = nextSourceOrdinal[plan.sourceSatelliteId];
         NS_ABORT_MSG_IF(ordinal > std::numeric_limits<uint16_t>::max() -

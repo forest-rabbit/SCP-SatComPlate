@@ -53,6 +53,9 @@ diamond_constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4
 --dynamicTopologyDir=$dynamic_topology"
 
 ./ns3 run --no-build \
+  "satcompute-satellite-topology-test --topologyDir=$dynamic_topology"
+
+./ns3 run --no-build \
   "satcompute-routing-compatibility-test --topologyDir=$dynamic_topology"
 
 ./ns3 run --no-build \
