@@ -2,33 +2,62 @@
 
 [![SatCompute CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/phase_gate.yml/badge.svg)](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/phase_gate.yml)
 
-SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真平台。`main` 是
-后续开发主线；`legacy/ns-3.33` 永久保留原 SatCompute，作为目录、输入、行为和
-指标的只读对照。
+SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真平台。`SCP` 也向
+“控制、收容、保护”轻轻致意——不过这里收容的是卫星、链路与计算任务。
 
-当前平台使用 ns-3.48 原生 LEO 圆轨道组件实时计算卫星 ECEF `x/y/z`。同轨链路
-固定连接前后邻居；每对相邻轨道面在 `t=0` 选择总距离最小的循环一对一匹配，
-此后固定卫星对端，只用距离门限控制链路状态。正式仿真在线生成拓扑；
-topology-only 模式可以预先输出节点和候选链路切片，供后续故障建模与前端可视化
-使用。
+平台使用 ns-3.48 原生圆轨道模型实时计算卫星 ECEF 坐标，支持确定性的动态星间
+链路、五种 IPv4 路由、任务传输与星上计算，并能独立输出拓扑切片，为后续故障
+建模和前端可视化提供输入。`main` 是 ns-3.48 开发主线；`legacy/ns-3.33` 只读
+保留旧版 SatCompute，不与主线合并。
 
-## 目录
+## 当前能力
+
+- 采用稳定卫星 ID 和 ns-3.48 原生 LEO 位置计算；
+- 同轨固定连接前后邻居，异轨在 `t=0` 选择最近的循环一对一匹配并固定对端；
+- 按距离门限控制候选链路启停，支持 fixed 与 distance 两种传播时延；
+- 仅在有效链路集合变化时重算 hop-based IPv4 路由；
+- 支持 global-first、逐流 hash、HRW、size-aware HRW 和 capacity-aware HRW；
+- 支持输入传输、非抢占 FCFS 计算和结果传输的完整任务闭环；
+- topology-only 模式可输出每个切片的卫星 `x/y/z` 与候选链路状态。
+
+故障执行、前后端实时状态传输、IPv6、SRv6、地面站和馈电链路尚未实现。
+
+## 仓库结构
 
 ```text
 SCP-SatComPlate/
-├── contrib/satcompute/      SatCompute 平台模块、入口、输入、工具和测试
-├── third-party/             仓库级第三方依赖
-├── docs/                    v0.4 规格、实施计划和历史迁移记录
-├── src/                     官方 ns-3.48 模块，不放项目代码
-├── ns3                      ns-3.48 构建入口
-└── .github/workflows/       项目阶段门禁
+├── contrib/satcompute/       SatCompute 平台代码、输入、工具和测试
+├── third-party/              仓库级第三方依赖
+├── docs/                     ns-3.48 上游资料归档
+├── src/                      官方 ns-3.48 模块，不放项目代码
+├── doc/                      官方 ns-3.48 文档源码
+├── ns3                       ns-3 构建和运行入口
+├── NOTICE.md                 上游来源说明
+└── .github/workflows/        阶段 CI
 ```
 
-平台代码只位于 `contrib/satcompute/`。入口是
-`contrib/satcompute/satcompute.cc`；`para.h/.cc` 只保存参数结构、默认值和中文
-解释；nlohmann JSON 位于仓库根目录 `third-party/`。
+项目代码只位于 `contrib/satcompute/`，不修改上游 `src/`。JSON 解析使用
+`third-party/nlohmann/json.hpp`。
 
-## 构建
+## 环境
+
+最低开发环境为支持 C++23 的 GNU C++ 11 或 Clang 17、CMake 3.25、Ninja 和
+Python 3。`ccache` 可选，但建议安装以缩短重复构建时间。
+
+如果系统已有合适的 CMake 与 Ninja，可以直接使用系统 Python。也可以用 uv 建立
+隔离工具环境：
+
+```bash
+uv venv --python 3.10
+source .venv/bin/activate
+uv pip install "cmake==3.25.*" ninja
+```
+
+uv 只管理 Python 工具环境，不能替代 C++ 编译器和系统库。当前 SatCompute 的
+Python 工具仅依赖标准库，因此仓库不维护额外的 `uv.lock`，也不执行 `uv sync`；
+根目录 `pyproject.toml` 仍是 ns-3 上游 Python 绑定的打包配置。
+
+## 构建与快速运行
 
 在仓库根目录执行：
 
@@ -39,35 +68,16 @@ SCP-SatComPlate/
 ./ns3 run "satcompute --help"
 ```
 
-配置时不启用 ns-3 上游 examples 或全局 tests，也不运行 `test.py`。SatCompute
-自己的 C++ 检查仍作为普通 executable 构建。
+该配置只构建 SatCompute 及其依赖，不启用 ns-3 上游 examples、全局 tests，也不
+运行 `test.py`。SatCompute 自有检查仍作为普通 executable 构建。
 
-## 配置与输入
+## 完整示例
 
-平台不读取完整运行配置 JSON。仿真时间、网络/切片间隔、距离门限、时延、带宽、
-路由、随机数和输出目录只来自 `para.cc` 默认值与同名 CLI。人工设置的时间参数以
-秒输入，平台内部统一转换为 ns-3 `Time` 和整数纳秒。
+仓库提供一组已经纳入回归测试的
+[100 秒、66 星、20 任务示例](contrib/satcompute/input/examples/leo-66-100s-20tasks/README.md)。
+它复用正式星座与算力文件，展示完整任务仿真和同周期 topology-only 切片生成。
 
-独立数据输入按职责分开：
-
-- `input/topology/constellations/*.csv`：ns-3.48 原生星座结构；
-- `input/topology/resources/*.json`：卫星静态算力；
-- `input/traffic/workload/*.json`：任务到达、输入大小、计算量和输出大小；
-- `outputDir/topology/`：topology-only 生成的节点/链路切片，不是正常仿真输入。
-
-ComputeProfile 与 TaskTrace 不包含 schema/version/hash 字段。独立
-NetworkTransfer workload 已删除；每个任务仍在内部执行输入传输、FCFS 计算和
-结果传输，结果大小严格使用任务显式给出的 `output_bytes`。
-
-## 时间与拓扑
-
-- `fixed` 时延实验可以把网络更新时间设为 20 秒；
-- `distance` 时延实验通常设为 1 秒或 2 秒；
-- topology-only 的切片间隔独立设置，例如 1 秒；
-- distance 模式每个网络 tick 更新链路时延；
-- 只有有效链路集合发生变化时才重算当前 hop-based IPv4 路由。
-
-生成拓扑切片：
+只生成 0–20 秒、每秒一个拓扑切片：
 
 ```bash
 ./ns3 run "satcompute \
@@ -77,32 +87,17 @@ NetworkTransfer workload 已删除；每个任务仍在内部执行输入传输�
   --outputDir=/tmp/satcompute-topology"
 ```
 
-相同星座、参数、seed/run 和采样时间会得到相同的卫星坐标与候选链路状态。未来
-故障流程将先基于这些切片生成故障 JSON，再让正式平台在线计算同一拓扑并在精确
-事件时刻应用故障；故障执行本身尚未纳入当前版本。
+## 文档
 
-## 路由与后续范围
+| 文档 | 内容 |
+|---|---|
+| [SatCompute 运行手册](contrib/satcompute/README.md) | 执行流程、全部参数、输入输出与运行模式 |
+| [输入说明](contrib/satcompute/input/README.md) | `para.cc`、星座、算力、任务与未来故障输入的边界 |
+| [拓扑模块](contrib/satcompute/topology/README.md) | 原生轨道、固定候选链路、在线更新与切片 |
+| [路由模块](contrib/satcompute/routing/README.md) | 五种 IPv4 策略、核心公式与确定性状态 |
+| [任务与传输](contrib/satcompute/task/README.md) | 任务状态机、FCFS 与结果大小 |
+| [指标模块](contrib/satcompute/metrics/README.md) | 输出文件、字段职责与失败诊断 |
+| [辅助工具](contrib/satcompute/tools/README.md) | TaskTrace 生成与失败输出检查 |
+| [测试说明](contrib/satcompute/tests/README.md) | 本地测试入口、覆盖范围与阶段 CI 规则 |
 
-当前保留五种 IPv4 模式：`global-first`、固定逐流 hash、HRW、size-aware HRW
-和 capacity-aware HRW。固定任务输入、星座、seed/run 与同时事件顺序时，五种
-模式均可复现。
-
-IPv6 和 SRv6、卫星故障/修复执行、后端到前端的实时状态接口、地面站与馈电链路
-留到后续阶段。本阶段不为尚未确定的接口预建框架。
-
-## 本地验证与 CI
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
-  -s contrib/satcompute/tests/unit -p 'test_*.py' -v
-contrib/satcompute/tests/unit/run-cpp-tests.sh
-contrib/satcompute/tests/integration/smoke/run-all.sh
-contrib/satcompute/tests/integration/regression/run-all.sh
-```
-
-每个大阶段只在全部分支合并并清理后，于 `main` 手动触发一次 GitHub CI。中间
-小步骤只执行本地验证。
-
-详细参数、JSON 合同、拓扑切片、路由和输出说明见
-[SatCompute 运行说明](contrib/satcompute/README.md)，当前长期基线见
-[平台 v0.4 规格](docs/specs/platform-v0.4.md)。
+许可证和上游来源见 [NOTICE](NOTICE.md)。

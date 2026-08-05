@@ -1,45 +1,59 @@
-# SatCompute ns-3.48 运行说明
+# SatCompute 运行手册
 
-`main` 基于官方 ns-3.48；`legacy/ns-3.33` 永久保留为只读行为基线。平台代码只
-位于 `contrib/satcompute/`，入口仍是根目录的 `satcompute.cc`，参数默认值仍集中
-在 `para.cc`。
+SatCompute 是 SCP-SatComPlate 在 ns-3.48 上的项目模块，只模拟卫星、星间链路、
+IPv4 路由、任务传输和星上计算。平台入口为 `satcompute.cc`；`para.h/.cc` 保存唯一
+一组类型化运行参数和默认值，星座、算力与任务则使用彼此独立的数据文件。
 
-## 执行模型
-
-1. 从 `para.cc` 取得默认值，再由同名命令行参数覆盖；
-2. 读取 ns-3.48 原生 LEO shell CSV，按稳定卫星 ID 创建节点并实时计算 ECEF
-   `x/y/z`；
-3. 同轨固定连接前后邻居；相邻轨道面在 `t=0` 选择总距离最小的循环一对一匹配，
-   保存卫星 ID 对后不再按当前距离更换对端；
-4. 每个网络更新时间重新计算坐标、距离门控和 distance 时延；只有有效链路集合
-   发生变化时才重算 hop-based IPv4 路由；
-5. 可选读取分离的 ComputeProfile 与 TaskTrace，依次执行输入传输、FCFS 计算和
-   结果传输；没有任务输入时只运行在线网络；
-6. `topologyOnly=1` 时不创建 InternetStack、NetDevice、路由、FlowMonitor 或
-   任务对象，只按独立间隔输出节点和候选链路切片；
-7. 正常网络仿真始终在线计算拓扑，不读取预生成切片。
-
-程序当前不创建地面站。故障执行、前后端状态接口、IPv6、SRv6、SGP4/TLE 和
-非圆轨道属于后续阶段。
-
-## 源码布局
+## 执行流程
 
 ```text
-contrib/satcompute/
-├── satcompute.cc       平台入口、CommandLine 和跨字段校验
-├── para.h/.cc          参数结构、默认值和中文解释
-├── topology/           原生轨道、固定候选、在线链路和切片导出
-├── routing/            五种 IPv4 路由策略及其运行状态
-├── task/               ComputeProfile、TaskTrace、FCFS 与任务协调
-├── traffic/            任务内部的输入/结果 UDP 传输
-├── metrics/            网络、路由、任务和失败诊断输出
-├── input/              星座 CSV、算力 JSON 和任务 JSON
-├── tools/              任务生成器与最小输出检查工具
-└── tests/              精简 unit、smoke、regression 和小型 fixture
+para.cc 默认值 + CLI 覆盖
+             |
+             v
+      星座 CSV 与原生 LEO 轨道
+             |
+             v
+  t=0 固定同轨/异轨候选卫星对
+             |
+      +------+------------------+
+      |                         |
+      v                         v
+topologyOnly                正式仿真
+节点/链路 JSON          IPv4 + 任务 + 指标
 ```
 
-JSON 统一使用仓库根目录 `third-party/nlohmann/json.hpp`。`tools/` 不复制轨道
-传播公式，卫星位置只由共享的 ns-3.48 C++ 实现计算。
+正式仿真的具体步骤是：
+
+1. 从 `para.cc` 取得默认值，再由同名 CLI 覆盖并做组合校验；
+2. 读取一个 ns-3.48 `LeoOrbitalShell` CSV，按 plane-major 顺序建立稳定卫星 ID；
+3. 使用 ns-3.48 原生圆轨道 mobility 实时计算 ECEF `x/y/z`；
+4. 同轨连接环形前后邻居，相邻轨道面在 `t=0` 选择总距离最小的循环一对一匹配；
+5. 后续只更新候选链路距离、active 状态和 distance 时延，不更换异轨对端；
+6. 只有 active 边集合变化时才重算 hop-based IPv4 路由；
+7. 同时提供 ComputeProfile 与 TaskTrace 时，执行输入传输、FCFS 计算和结果传输；
+8. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
+
+`topologyOnly=1` 使用相同轨道和候选链路实现，但不会创建 InternetStack、
+NetDevice、路由、FlowMonitor 或任务对象。
+
+## 目录与入口
+
+| 路径 | 职责 |
+|---|---|
+| `satcompute.cc` | CLI 注册、跨参数校验、两种运行模式和组件编排 |
+| `para.h/.cc` | 参数结构、默认值与中文说明 |
+| `time-conversion.h/.cc` | 秒到整数纳秒的统一边界转换 |
+| [`topology/`](topology/README.md) | 星座读取、原生轨道、固定候选、在线更新、IPv4 地址和切片 |
+| [`routing/`](routing/README.md) | 五种 IPv4 策略、hash、HRW 和 reservation 状态 |
+| [`task/`](task/README.md) | ComputeProfile、TaskTrace、FCFS 服务和任务协调 |
+| [`traffic/`](traffic/README.md) | 任务内部的 UDP 输入/结果传输 |
+| [`metrics/`](metrics/README.md) | 网络、路由、任务和失败诊断输出 |
+| [`input/`](input/README.md) | 星座、算力、任务与组合示例 |
+| [`tools/`](tools/README.md) | 任务生成与输出校验工具 |
+| [`tests/`](tests/README.md) | SatCompute 自有 unit、smoke、regression 和 fixture |
+
+JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 工具不实现
+第二套轨道传播公式。
 
 ## 构建与运行
 
@@ -52,212 +66,159 @@ JSON 统一使用仓库根目录 `third-party/nlohmann/json.hpp`。`tools/` 不�
 ./ns3 run "satcompute --help"
 ```
 
-配置时不启用 ns-3 全局 examples 或 tests，也不运行上游 `test.py`。SatCompute
-自有 C++ 测试作为普通 executable 构建，因此在上述配置下仍可运行。
+不带参数时，平台使用下表中的默认值运行 1000 秒。日常开发建议显式指定较短的
+`simulationDuration` 和独立的 `outputDir`。完整任务运行见
+[100 秒、66 星、20 任务示例](input/examples/leo-66-100s-20tasks/README.md)。
 
-不带参数会按默认值运行 1000 秒。日常开发建议显式给出较短的
-`simulationDuration` 和独立 `outputDir`。
+## 参数边界
 
-## 默认参数
+人工设置的时长和间隔统一以秒传入，平台在组件边界转换为 ns-3 `Time` 或有符号
+整数纳秒。星座 CSV 只描述轨道结构，算力和任务分别位于独立 JSON；两类数据与
+`para.cc` 不重复。
 
-人工设置的时间和间隔均以秒输入，入口校验后统一转换为 ns-3 `Time` 和整数纳秒。
+### simulation
 
-```text
-simulationDuration        = 1000
-constellationConfig       = contrib/satcompute/input/topology/constellations/synthetic-66.csv
-maxIslDistance            = 6174589
-delayMode                 = fixed
-fixedDelay                = 0.008
-networkUpdateInterval     = 20
-islBandwidthBps           = 2000000000
-islMtuBytes               = 64028
-islQueueBytes             = 1500000
-receiverRcvBufBytes       = 131072
-routingMode               = global-capacity-aware-hrw
-ecmpHashSeed              = 1
-computeProfile            = empty
-taskTrace                 = empty
-transferChunkMode         = size-aware
-transferPayloadBytes      = 1024
-taskCompletionPolicy      = strict
-topologyOnly              = false
-topologySliceInterval     = 1
-includeFinalTopologyState = true
-outputDir                 = /tmp/satcompute-output
-taskLogMode               = summary
-diagnosticMode            = off
-randomSeed                = 1
-randomRun                 = 1
-```
+| CLI | 默认值 | 类型/单位 | 含义与约束 |
+|---|---:|---|---|
+| `--simulationDuration` | `1000` | 秒 | 仿真持续时间；必须为可转换为正整数纳秒的有限值 |
+| `--randomSeed` | `1` | `uint32` | ns-3 全局随机 seed；必须大于 0 |
+| `--randomRun` | `1` | `uint64` | ns-3 独立运行编号；与 seed 共同固定随机流 |
 
-`para.cc` 按 `simulation`、`topology`、`link`、`routing`、`workload` 和
-`output` 六类排列，只负责赋值及其中文注释；`CommandLine::AddValue`、文件检查、
-组合校验和时间转换都在入口或使用参数的组件中。
+### topology
 
-## 星座与拓扑更新
+| CLI | 默认值 | 类型/单位 | 含义与约束 |
+|---|---:|---|---|
+| `--constellationConfig` | `input/topology/constellations/synthetic-66.csv` | 路径 | 一个原生 LEO shell CSV；不能为空且必须通过星座校验 |
+| `--maxIslDistance` | `6174589` | 米 | 候选 ISL 的最大有效距离；必须为有限正数 |
+| `--networkUpdateInterval` | `20` | 秒 | 正式仿真的链路状态/时延更新周期；必须大于 0 |
+| `--topologyOnly` | `false` | bool | 只输出轨道和拓扑切片；启用时禁止任务输入 |
+| `--topologySliceInterval` | `1` | 秒 | topology-only 采样周期；必须大于 0 |
+| `--includeFinalTopologyState` | `true` | bool | cadence 未覆盖终点时，是否额外输出仿真终点状态 |
 
-星座 CSV 只描述一个原生 Walker shell：
+表中的星座默认路径相对于仓库根目录，完整值为
+`contrib/satcompute/input/topology/constellations/synthetic-66.csv`。
 
-```text
-altitudeKm,inclinationDegrees,numberOfPlanes,numberOfSatellitesPerPlane,phasingFactor,raanSpanDeg
-780.0,86.4,6,11,1,180
-```
+### link
 
-卫星 ID 按 plane-major 创建顺序稳定映射，不直接使用全局 `Node::GetId()`。
-每颗卫星固定连接同轨前后两个槽位。对于每一对相邻轨道面，平台在 `t=0` 枚举
-所有循环 slot 偏移，选择链路总距离最小的偏移，形成一对一异轨匹配；不连接首尾
-轨道面。候选身份确定后不再变化，`maxIslDistance` 只决定候选当前是否有效，不会
-替换它的对端。
+| CLI | 默认值 | 类型/单位 | 含义与约束 |
+|---|---:|---|---|
+| `--delayMode` | `fixed` | 枚举 | `fixed` 或 `distance` |
+| `--fixedDelay` | `0.008` | 秒 | fixed 模式的单向链路时延；该模式下必须大于 0 |
+| `--islBandwidthBps` | `2000000000` | bit/s | 每条 ISL 的数据速率；必须大于 0 |
+| `--islMtuBytes` | `64028` | 字节 | ISL MTU；至少 68，size-aware 分包时至少 64028 |
+| `--islQueueBytes` | `1500000` | 字节 | 每条 ISL 队列容量；必须大于 0 |
 
-- `delayMode=fixed`：活动链路使用 `fixedDelay`，实验通常可把
-  `networkUpdateInterval` 设为 20 秒；
-- `delayMode=distance`：每个网络 tick 根据当前距离刷新传播时延，实验通常设为
-  1 秒或 2 秒；
-- 两个间隔都是输入，不在代码中写死；
-- 时延变化不会单独触发 hop 路由重算，只有活动链路集合变化才会重算。
+`distance` 时延按当前 ECEF 直线距离除以光速并四舍五入到整数纳秒；
+`fixedDelay` 在该模式下不参与链路时延。
 
-固定星座、参数、seed/run 和时间点会得到相同坐标、候选链路状态与路由输入。
+### routing
+
+| CLI | 默认值 | 类型/单位 | 含义与约束 |
+|---|---:|---|---|
+| `--routingMode` | `global-capacity-aware-hrw` | 枚举 | 五种 IPv4 模式之一，见下文与 routing README |
+| `--ecmpHashSeed` | `1` | `uint64` | 逐流 hash 和 HRW 的确定性 seed |
+
+合法路由值为 `global-first`、`global-hash-per-flow`、
+`global-hrw-per-flow`、`global-size-aware-hrw` 和
+`global-capacity-aware-hrw`。
+
+### workload
+
+| CLI | 默认值 | 类型/单位 | 含义与约束 |
+|---|---:|---|---|
+| `--computeProfile` | 空 | 路径 | 卫星静态算力 JSON；必须与 `taskTrace` 同时提供 |
+| `--taskTrace` | 空 | 路径 | 任务到达 JSON；必须与 `computeProfile` 同时提供 |
+| `--transferChunkMode` | `size-aware` | 枚举 | `fixed` 或 `size-aware` 分包 |
+| `--transferPayloadBytes` | `1024` | 字节 | fixed payload，范围 `1..65507`，加 28-byte IPv4/UDP 头后不能超过 MTU |
+| `--receiverRcvBufBytes` | `131072` | 字节 | 每个 UDP 接收 socket 的缓冲区；必须大于 0 |
+| `--taskCompletionPolicy` | `strict` | 枚举 | `strict` 对部分完成返回 3；`report` 只报告部分结果并返回 0 |
+
+size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload，此时
+`transferPayloadBytes` 不参与分包，但仍需位于合法整数范围。
+
+### output
+
+| CLI | 默认值 | 类型/单位 | 含义与约束 |
+|---|---:|---|---|
+| `--outputDir` | `/tmp/satcompute-output` | 路径 | 结构化结果目录；不能为空 |
+| `--taskLogMode` | `summary` | 枚举 | `summary`、`verbose` 或 `silent` |
+| `--diagnosticMode` | `off` | 枚举 | `off` 或 `failure`；后者在部分完成时写失败证据 |
+
+运行摘要会记录实际使用的关键参数和各层结果，仅作为本次仿真的输出证据，不是
+第二个配置入口。
+
+## 星座与动态拓扑
+
+默认星座为 780 km 高度、86.4 度倾角、6 个轨道面、每面 11 星。稳定卫星 ID 按
+plane-major 顺序编号为 `0..65`，不直接使用全局 `Node::GetId()`。
+
+每颗卫星固定连接同轨前后两个槽位。对于每对相邻轨道面，平台在 `t=0` 枚举全部
+循环 slot 偏移，选择链路总距离最小的偏移，形成一对一异轨匹配；首尾轨道面不
+建立 seam。候选卫星对在整个仿真期间保持不变，`maxIslDistance` 只控制候选当前
+是否 active。
+
+- fixed 实验通常可把 `networkUpdateInterval` 设为 20 秒；
+- distance 实验通常设为 1 秒或 2 秒，以刷新传播时延；
+- 每个 tick 都更新 distance 时延，但只在 active 边集合变化时重算路由；
+- 固定星座、参数、任务、seed/run 与同时事件顺序时，拓扑和路由结果可复现。
 
 ## topology-only 与未来故障流程
 
-生成 0–1000 秒、每秒一个切片的示例：
+生成 0–100 秒、每秒一个切片：
 
 ```bash
 ./ns3 run "satcompute \
-  --simulationDuration=1000 \
+  --simulationDuration=100 \
   --topologyOnly=1 \
   --topologySliceInterval=1 \
   --includeFinalTopologyState=1 \
   --outputDir=/tmp/satcompute-topology"
 ```
 
-输出位于 `/tmp/satcompute-topology/topology/`：
+输出位于 `outputDir/topology/`，每个采样点包含一对 `nodes_<time>s.json` 和
+`links_<time>s.json`。节点文件记录稳定 ID 与 ECEF `x/y/z`；链路文件保留全部
+固定候选并记录 `active`、距离、时延和带宽。详细合同见
+[topology/export](topology/export/README.md)。
 
-```text
-nodes_0s.json    links_0s.json
-nodes_1s.json    links_1s.json
-...
-```
+计划中的故障工作流是：先生成整个周期的拓扑切片，再据此生成故障 JSON，最后让
+正式平台在线计算同一拓扑并读取故障事件。未来故障将在精确事件时刻立即禁用资源
+并重算路由，不等待下一个网络 tick；故障生成和执行当前尚未实现。
 
-节点切片包含 `simulation_time_ns`、稳定 `node_id`、`node_type` 和 ECEF
-`x/y/z`。链路切片列出全部固定候选，并包含 `active`、`distance_m`、
-`delay_ns` 和 `link_bandwidth_bps`；暂时超过距离门限的候选不会从 JSON 消失。
-切片不包含 schema、软件版本、SHA 或 manifest。
+## 任务与计算
 
-后续故障建模计划是：先用同一配置生成完整节点/链路切片，再基于切片产生故障
-JSON，最后让正式仿真在线计算同一拓扑并读取故障事件。故障输入和精确纳秒故障
-执行尚未实现；未来实现后，故障会在事件时刻立即禁用资源并重算路由，不等待下一
-周期切片。
-
-## ComputeProfile 与 TaskTrace
-
-算力属于 topology side，位于 `input/topology/resources/`；任务到达属于 traffic
-side，位于 `input/traffic/workload/`。两者必须同时通过 `--computeProfile` 和
-`--taskTrace` 指定，均为 closed-world JSON，且不包含 `schema_version`。
-
-ComputeProfile：
-
-```json
-{
-  "compute_nodes": [
-    {"node_id": 3, "compute_rate_work_units_per_second": 1000000}
-  ]
-}
-```
-
-TaskTrace：
-
-```json
-{
-  "tasks": [
-    {
-      "task_id": 1,
-      "source_node_id": 0,
-      "compute_node_id": 3,
-      "result_node_id": 0,
-      "input_bytes": 4096,
-      "output_bytes": 2050,
-      "compute_work_units": 1000000,
-      "arrival_time_ns": 100000000
-    }
-  ]
-}
-```
+ComputeProfile 与 TaskTrace 必须成对提供。每个任务显式给出源卫星、计算卫星、
+结果卫星、`input_bytes`、`compute_work_units`、`output_bytes` 和整数纳秒到达时间。
 
 每个计算节点是单服务台、非抢占 FCFS，排序键为
-`(queue_enter_time_ns, task_id)`。整数服务时间为：
+`(queue_enter_time_ns, task_id)`。服务时间为：
 
 ```text
 ceil(compute_work_units * 1,000,000,000
      / compute_rate_work_units_per_second) ns
 ```
 
-平台不执行真实算法，因此计算完成后的结果大小严格取任务输入中的
-`output_bytes`。任务 ID `T` 在运行时派生输入传输 `2*T-1` 和结果传输 `2*T`；
-独立 NetworkTransfer workload、`--transferTrace` 及 transfer 生成器已经删除。
-
-最小任务运行：
-
-```bash
-./ns3 run "satcompute \
-  --simulationDuration=5 \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
-  --maxIslDistance=30000000 \
-  --delayMode=fixed --fixedDelay=0.001 \
-  --networkUpdateInterval=2 \
-  --computeProfile=contrib/satcompute/tests/fixtures/task/compute-profile-single.json \
-  --taskTrace=contrib/satcompute/tests/fixtures/task/task-single.json \
-  --routingMode=global-size-aware-hrw \
-  --outputDir=/tmp/satcompute-task"
-```
+平台不执行真实业务算法，因此结果传输大小严格采用 `output_bytes`。任务 ID `T`
+派生输入传输 ID `2*T-1` 和结果传输 ID `2*T`。详细输入合同见
+[task](task/README.md) 与 [input](input/README.md)。
 
 ## IPv4 路由
 
-当前保留五种模式：
+- `global-first`：直接采用 ns-3 `Ipv4GlobalRouting` 的原生首条路由行为；
+- `global-hash-per-flow`：固定五元组 hash 映射等价下一跳；
+- `global-hrw-per-flow`：使用 Rendezvous/HRW hash 选择最高分候选；
+- `global-size-aware-hrw`：在两个最高 HRW 候选中选择已保留声明字节更少者；
+- `global-capacity-aware-hrw`：在完整等价路径中最大化剩余瓶颈容量。
 
-- `global-first`：使用 ns-3 原生全局路由的首条等价最短路；
-- `global-hash-per-flow`：对稳定五元组做固定 FNV hash，再映射等价下一跳；
-- `global-hrw-per-flow`：使用 HRW/Rendezvous hash，候选变化时减少无关流迁移；
-- `global-size-aware-hrw`：在 HRW 候选间维护活动传输的声明字节账本；
-- `global-capacity-aware-hrw`：按完整等价路径剩余容量准入，并按瓶颈带宽 pacing。
+所有模式均为逐流确定性选择，不使用随机逐包 ECMP。公式、tie-break、粘滞状态和
+释放时机见 [routing README](routing/README.md)。当前只支持 IPv4；IPv6 与 SRv6
+留给后续阶段。
 
-任务、星座、seed/run 与同时事件 canonical 顺序固定时，size-aware 和
-capacity-aware 的选择同样确定；平台不使用随机逐包 ECMP。当前路由仍是 IPv4，
-IPv6 和 SRv6 不在本阶段迁移。
+## 输出与验证
 
-## 完成策略与输出
+正式仿真常用输出包括 `run-summary.json`、网络逐流指标、传输/任务指标、计算节点
+利用率、路由事件，以及相应 size-aware/capacity-aware 汇总。只有显式启用失败
+诊断且运行部分完成时，才保留 `diagnostics/failure/`。完整文件说明见
+[metrics README](metrics/README.md)。
 
-`taskCompletionPolicy=strict` 在任务未全部完成时先落盘再返回退出码 3；`report`
-写出同一结果但正常返回。`diagnosticMode=failure` 为未完成任务额外输出未完成
-任务/传输、ISL 队列 Drop、UDP socket Drop 和 FlowMonitor DropReason。
-
-常用输出包括：
-
-- `run-summary.json`；
-- `network-flow-metrics.csv`、`network-flow-details.csv`；
-- `transfer-summary.csv`、`task-events.csv`、`task-summary.csv`；
-- `compute-node-summary.csv`、`ecmp-route-events.csv`；
-- size-aware/capacity-aware 对应的 reservation 与 summary；
-- `diagnostics/failure/` 下的失败证据。
-
-运行摘要记录实际参数和运行证据，但不写 effective/resolved 配置、软件版本、输入
-哈希或格式版本，也不能作为第二个配置入口。
-
-## 测试与 CI
-
-本地完整门禁：
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
-  -s contrib/satcompute/tests/unit -p 'test_*.py' -v
-contrib/satcompute/tests/unit/run-cpp-tests.sh
-contrib/satcompute/tests/integration/smoke/run-all.sh
-contrib/satcompute/tests/integration/regression/run-all.sh
-```
-
-测试保留 4 个 legacy 业务 smoke、一个 ns-3.48 原生 topology-only smoke、两组
-完整 regression 和少量聚焦 unit。旧 replay fixture、schema/SHA 测试以及已被
-集成层覆盖的大量散列 C++ executable 已删除。
-
-开发过程只在一个大阶段全部 PR 合并并清理后，于 `main` 手动触发一次
-`SatCompute CI`；中间分支只运行本地测试。
+测试命令、覆盖范围和阶段 CI 规则统一放在
+[tests README](tests/README.md)，本手册不重复维护测试清单。

@@ -7,7 +7,12 @@
 .vscode/
 .clangd/
 compile_commands.json
+.idea/
+.vs/
+/.cproject
+/.project
 
+# Compilers, Python, and local caches
 *.o
 *.pyc
 *.pyo
@@ -18,7 +23,9 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .ccache/
+.cache/
 
+# ns-3 runtime traces and generated reports
 *.cwnd
 *.dat
 *.log
@@ -36,9 +43,11 @@ testpy-output
 
 bindings/python/pybindgen/
 
+# Local Python environments
 venv/
 .venv/
 
+# Profilers and development tools
 ms_print.*
 massif.*
 coverity
@@ -47,22 +56,13 @@ TAGS
 .lock-ns3_*
 .ns3rc
 
+# Build trees
 build-dir/
 build/
-/.cproject
-/.project
-
 version.cache
-
 .gitlab-ci-local/
-.idea/
 cmake-*/
 vcpkg/
-
-.vs/
-
-# Ignore local cache used by e.g. clangd
-.cache/
 
 # Local secrets. Commit documented examples only.
 .env
@@ -73,9 +73,6 @@ vcpkg/
 archive/local-output/
 output/
 **/output/
-# Keep this guard directory visible so accidental experiment output appears in
-# Git status instead of being silently ignored.
-!contrib/satcompute/output/
 output.txt
 output1.txt
 RlinkUtilization.csv
@@ -86,3 +83,32 @@ no_cluster.txt
 # Common editor backup and temporary files
 *.tmp
 *.swp
+
+# Generated ns-3 documentation
+/doc/docset/
+/doc/html/
+/doc/html-warn/
+/doc/latex/
+/doc/ns-3.docset
+/doc/ns3-object.txt
+/doc/introspected-doxygen.h
+/doc/introspected-command-line.h
+/doc/doxygen.docset.conf
+/doc/doxygen.log
+/doc/doxygen.warnings.log
+/doc/**/build/
+/doc/**/source-temp/
+/doc/ns3_html_theme/static/ns3_version.js
+/src/*/doc/build/
+/src/*/doc/source/figures/*.eps
+/src/*/doc/source/figures/*.pdf
+/src/*/doc/*.png
+
+# Keep ns-3 scratch examples tracked while ignoring local scratch programs.
+/scratch/*
+!/scratch/CMakeLists.txt
+!/scratch/scratch-simulator.cc
+!/scratch/nested-subdir/
+!/scratch/nested-subdir/**
+!/scratch/subdir/
+!/scratch/subdir/**
