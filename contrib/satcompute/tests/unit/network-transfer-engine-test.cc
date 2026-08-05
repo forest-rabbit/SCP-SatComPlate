@@ -9,11 +9,12 @@
 #include "ns3/network-transfer-config.h"
 #include "ns3/network-transfer-engine.h"
 #include "ns3/replay-topology-controller.h"
-#include "ns3/resolved-config.h"
-#include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 
+#include "../support/config-factory.h"
+
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -25,6 +26,9 @@ using namespace ns3;
 
 namespace
 {
+
+using satcompute::test::MakeDiamondReplayTestConfig;
+using satcompute::test::MakeReplayTestConfig;
 
 void
 Check(bool condition, const std::string& message)
@@ -101,15 +105,15 @@ CheckCompletedSummary(const NetworkTransferEngine& engine,
 }
 
 void
-RunBasicMode(const std::string& scenarioFilename,
+RunBasicMode(const std::filesystem::path& topologyDirectory,
              const std::string& transferFilename,
              const std::string& routingMode)
 {
     {
-        ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
+        ResolvedSatComputeConfig config =
+            MakeDiamondReplayTestConfig(topologyDirectory);
         config.routing.mode = routingMode;
-        ReplayTopologyController controller(
-            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
+        ReplayTopologyController controller(config);
         controller.Initialize();
 
         std::vector<NetworkTransfer> plans = ReadNetworkTransferTrace(
@@ -157,13 +161,21 @@ RunBasicMode(const std::string& scenarioFilename,
 }
 
 void
-RunCapacityPending(const std::string& scenarioFilename,
+RunCapacityPending(const std::filesystem::path& topologyDirectory,
                    const std::string& transferFilename)
 {
     {
-        ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
-        ReplayTopologyController controller(
-            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
+        ResolvedSatComputeConfig config = MakeReplayTestConfig(topologyDirectory,
+                                                               1,
+                                                               2,
+                                                               3000000000LL,
+                                                               1000000000LL,
+                                                               "fixed",
+                                                               1000000,
+                                                               1000000);
+        config.routing.mode = "global-capacity-aware-hrw";
+        config.workloads.transferPayloadBytes = 1400;
+        ReplayTopologyController controller(config);
         controller.Initialize();
 
         std::vector<NetworkTransfer> plans = ReadNetworkTransferTrace(
@@ -246,25 +258,25 @@ RunCapacityPending(const std::string& scenarioFilename,
 int
 main(int argc, char* argv[])
 {
-    std::string scenarioFilename;
-    std::string capacityScenarioFilename;
+    std::string topologyDirectory;
+    std::string capacityTopologyDirectory;
     std::string basicTransferFilename;
     std::string capacityTransferFilename;
     CommandLine command(__FILE__);
-    command.AddValue("scenario", "Dynamic diamond replay scenario", scenarioFilename);
-    command.AddValue("capacityScenario",
-                     "Initially disconnected capacity scenario",
-                     capacityScenarioFilename);
+    command.AddValue("topologyDir", "Dynamic diamond topology slices", topologyDirectory);
+    command.AddValue("capacityTopologyDir",
+                     "Initially disconnected topology slices",
+                     capacityTopologyDirectory);
     command.AddValue("basicTransfers", "Basic transfer trace", basicTransferFilename);
     command.AddValue("capacityTransfers", "Capacity pending trace", capacityTransferFilename);
     command.Parse(argc, argv);
 
     try
     {
-        Check(!scenarioFilename.empty() && !capacityScenarioFilename.empty() &&
+        Check(!topologyDirectory.empty() && !capacityTopologyDirectory.empty() &&
                   !basicTransferFilename.empty() &&
                   !capacityTransferFilename.empty(),
-              "scenario and transfer fixture paths are required");
+              "topology and transfer fixture paths are required");
         for (const char* mode : {"global-first",
                                  "global-hash-per-flow",
                                  "global-hrw-per-flow",
@@ -273,14 +285,14 @@ main(int argc, char* argv[])
         {
             try
             {
-                RunBasicMode(scenarioFilename, basicTransferFilename, mode);
+                RunBasicMode(topologyDirectory, basicTransferFilename, mode);
             }
             catch (const std::exception& error)
             {
                 throw std::runtime_error(std::string(mode) + ": " + error.what());
             }
         }
-        RunCapacityPending(capacityScenarioFilename, capacityTransferFilename);
+        RunCapacityPending(capacityTopologyDirectory, capacityTransferFilename);
         std::cout << "SatCompute UDP transfer engine tests passed." << std::endl;
         return 0;
     }

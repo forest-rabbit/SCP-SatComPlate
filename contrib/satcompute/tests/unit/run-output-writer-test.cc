@@ -4,19 +4,19 @@
 
 #include "ns3/command-line.h"
 #include "ns3/compute-profile.h"
+#include "ns3/effective-config.h"
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
 #include "ns3/network-transfer-config.h"
 #include "ns3/network-transfer-engine.h"
 #include "ns3/replay-topology-controller.h"
-#include "ns3/resolved-config.h"
 #include "ns3/run-output-writer.h"
-#include "ns3/scenario-config.h"
 #include "ns3/sha256.h"
 #include "ns3/simulator.h"
 #include "ns3/task-coordinator.h"
 #include "ns3/task-trace.h"
 
+#include "../support/config-factory.h"
 #include "../../third-party/nlohmann/json.hpp"
 
 #include <algorithm>
@@ -33,6 +33,7 @@ namespace
 {
 
 using Json = nlohmann::json;
+using satcompute::test::MakeDiamondReplayTestConfig;
 
 void
 Check(bool condition, const std::string& message)
@@ -78,16 +79,22 @@ CountLines(const std::filesystem::path& filename)
 }
 
 void
-RunCompleteTaskOutput(const std::string& scenarioFilename,
+RunCompleteTaskOutput(const std::filesystem::path& constellationConfig,
+                      const std::filesystem::path& topologyDirectory,
+                      const std::filesystem::path& fixtureRoot,
                       const std::filesystem::path& outputRoot)
 {
     {
-        const ScenarioConfig legacyConfig = LoadScenarioConfig(scenarioFilename);
         const std::filesystem::path outputDirectory = outputRoot / "complete";
-        const std::filesystem::path effectiveConfig =
-            WriteEffectiveConfig(legacyConfig, outputDirectory);
-        const ResolvedSatComputeConfig config =
-            ResolveLegacyScenarioConfig(legacyConfig, outputDirectory);
+        ResolvedSatComputeConfig config =
+            MakeDiamondReplayTestConfig(topologyDirectory);
+        config.runName = "task-replay-fixture";
+        config.constellation = LoadConstellationDefinition(constellationConfig);
+        config.routing.mode = "global-size-aware-hrw";
+        config.workloads.computeProfile = fixtureRoot / "compute-profile-single.json";
+        config.workloads.taskTrace = fixtureRoot / "task-single.json";
+        config.outputDirectory = outputDirectory;
+        const std::filesystem::path effectiveConfig = WriteEffectiveConfig(config);
         ReplayTopologyController controller(config);
         controller.Initialize();
         const ComputeProfile profile =
@@ -169,16 +176,20 @@ RunCompleteTaskOutput(const std::string& scenarioFilename,
 }
 
 void
-RunPartialTransferOutput(const std::string& scenarioFilename,
+RunPartialTransferOutput(const std::filesystem::path& constellationConfig,
+                         const std::filesystem::path& topologyDirectory,
+                         const std::filesystem::path& fixtureRoot,
                          const std::filesystem::path& outputRoot)
 {
     {
-        const ScenarioConfig legacyConfig = LoadScenarioConfig(scenarioFilename);
         const std::filesystem::path outputDirectory = outputRoot / "partial";
-        const std::filesystem::path effectiveConfig =
-            WriteEffectiveConfig(legacyConfig, outputDirectory);
-        const ResolvedSatComputeConfig config =
-            ResolveLegacyScenarioConfig(legacyConfig, outputDirectory);
+        ResolvedSatComputeConfig config =
+            MakeDiamondReplayTestConfig(topologyDirectory);
+        config.runName = "transfer-replay-fixture";
+        config.constellation = LoadConstellationDefinition(constellationConfig);
+        config.workloads.transferTrace = fixtureRoot / "traffic/transfers/engine-basic.json";
+        config.outputDirectory = outputDirectory;
+        const std::filesystem::path effectiveConfig = WriteEffectiveConfig(config);
         ReplayTopologyController controller(config);
         controller.Initialize();
         std::vector<NetworkTransfer> plans =
@@ -235,21 +246,30 @@ RunPartialTransferOutput(const std::string& scenarioFilename,
 int
 main(int argc, char* argv[])
 {
-    std::string taskScenario;
-    std::string transferScenario;
+    std::string constellationConfig;
+    std::string topologyDirectory;
+    std::string fixtureRoot;
     std::string outputDirectory;
     CommandLine command(__FILE__);
-    command.AddValue("taskScenario", "Task replay scenario", taskScenario);
-    command.AddValue("transferScenario", "Direct-transfer replay scenario", transferScenario);
+    command.AddValue("constellationConfig", "Four-satellite constellation", constellationConfig);
+    command.AddValue("topologyDir", "Dynamic diamond topology slices", topologyDirectory);
+    command.AddValue("fixtureRoot", "Independent test input root", fixtureRoot);
     command.AddValue("outputDir", "Temporary output root", outputDirectory);
     command.Parse(argc, argv);
 
     try
     {
-        Check(!taskScenario.empty() && !transferScenario.empty() && !outputDirectory.empty(),
-              "scenario and output paths are required");
-        RunCompleteTaskOutput(taskScenario, outputDirectory);
-        RunPartialTransferOutput(transferScenario, outputDirectory);
+        Check(!constellationConfig.empty() && !topologyDirectory.empty() &&
+                  !fixtureRoot.empty() && !outputDirectory.empty(),
+              "constellation, topology, input, and output paths are required");
+        RunCompleteTaskOutput(constellationConfig,
+                              topologyDirectory,
+                              std::filesystem::path(fixtureRoot) / "task",
+                              outputDirectory);
+        RunPartialTransferOutput(constellationConfig,
+                                 topologyDirectory,
+                                 fixtureRoot,
+                                 outputDirectory);
         std::cout << "SatCompute structured run output tests passed." << std::endl;
         return 0;
     }

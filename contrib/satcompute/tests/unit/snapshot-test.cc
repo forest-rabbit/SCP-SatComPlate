@@ -3,7 +3,6 @@
  */
 
 #include "ns3/command-line.h"
-#include "ns3/scenario-config.h"
 #include "ns3/snapshot-reader.h"
 #include "ns3/snapshot-schedule.h"
 
@@ -80,32 +79,25 @@ WritePair(const std::filesystem::path& directory, const std::string& timeToken)
 int
 main(int argc, char* argv[])
 {
-    std::string scenarioFilename;
+    std::string topologyDirectory;
     std::string outputDirectory;
     CommandLine command(__FILE__);
-    command.AddValue("scenario", "JSON-replay scenario fixture", scenarioFilename);
+    command.AddValue("topologyDir", "Dynamic topology slice directory", topologyDirectory);
     command.AddValue("outputDir", "Temporary test output directory", outputDirectory);
     command.Parse(argc, argv);
 
     try
     {
-        Check(!scenarioFilename.empty(), "scenario is required");
+        Check(!topologyDirectory.empty(), "topologyDir is required");
         Check(!outputDirectory.empty(), "outputDir is required");
-        const ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
-        Check(config.constellation.orbitProvider == "json-replay",
-              "scenario orbit provider is not json-replay");
-        Check(config.network.topologySource == "json-replay",
-              "scenario topology source is not json-replay");
-        Check(config.network.replayDirectory.has_value(),
-              "scenario replay directory was not resolved");
-        const std::filesystem::path fixture = *config.network.replayDirectory;
+        const std::filesystem::path fixture(topologyDirectory);
         const std::filesystem::path output(outputDirectory);
         std::filesystem::create_directories(output);
 
         const SnapshotSchedule everyTwoSeconds =
             ScanSatelliteSnapshots(fixture,
-                                   config.simulation.durationNs,
-                                   config.network.networkUpdateIntervalNs);
+                                   5000000000LL,
+                                   2000000000LL);
         Check(everyTwoSeconds.discoveredSnapshotCount == 3,
               "discovered snapshot count differs");
         Check(!everyTwoSeconds.manifestAuthoritative,
@@ -123,7 +115,7 @@ main(int argc, char* argv[])
         Check(everyFourSeconds.discoveredSnapshotCount == 3,
               "fine replay slices were not discovered");
         Check(everyFourSeconds.selectedSnapshotCount == 2,
-              "scenario cadence did not down-select replay slices");
+              "configured cadence did not down-select replay slices");
         Check(everyFourSeconds.updates.size() == 1 &&
                   everyFourSeconds.updates.front().timeNs == 4000000000,
               "four-second replay cadence differs");

@@ -9,12 +9,12 @@
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/online-topology-controller.h"
 #include "ns3/replay-topology-controller.h"
-#include "ns3/resolved-config.h"
 #include "ns3/rng-seed-manager.h"
-#include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 #include "ns3/snapshot-reader.h"
 #include "ns3/snapshot-schedule.h"
+
+#include "../support/config-factory.h"
 
 #include <cmath>
 #include <filesystem>
@@ -29,6 +29,9 @@ using namespace ns3;
 
 namespace
 {
+
+using satcompute::test::MakeOnlineTestConfig;
+using satcompute::test::MakeReplayTestConfig;
 
 void
 Check(bool condition, const std::string& message)
@@ -75,18 +78,17 @@ WriteText(const std::filesystem::path& path, const std::string& content, bool ap
 }
 
 TopologyTraceExportResult
-ExportTrace(const ScenarioConfig& config, const std::filesystem::path& outputDirectory)
+ExportTrace(const ResolvedSatComputeConfig& config,
+            const std::filesystem::path& outputDirectory)
 {
-    const ResolvedSatComputeConfig resolved =
-        ResolveLegacyScenarioConfig(config, outputDirectory);
     TopologyTraceExportResult result;
-    RngSeedManager::SetSeed(resolved.randomness.seed);
-    RngSeedManager::SetRun(resolved.randomness.run);
+    RngSeedManager::SetSeed(config.randomness.seed);
+    RngSeedManager::SetRun(config.randomness.run);
     RngSeedManager::ResetNextStreamIndex();
     {
-        OnlineOrbitConstellation constellation(resolved.constellation,
-                                               resolved.simulation.startTimeNs);
-        CircularOrbitTraceExporter exporter(resolved, outputDirectory, constellation);
+        OnlineOrbitConstellation constellation(config.constellation,
+                                               config.simulation.startTimeNs);
+        CircularOrbitTraceExporter exporter(config, outputDirectory, constellation);
         exporter.Initialize();
         Simulator::Stop(NanoSeconds(config.simulation.durationNs));
         Simulator::Run();
@@ -97,7 +99,7 @@ ExportTrace(const ScenarioConfig& config, const std::filesystem::path& outputDir
 }
 
 std::vector<SatelliteSnapshot>
-ReadSharedSnapshots(const ScenarioConfig& config,
+ReadSharedSnapshots(const ResolvedSatComputeConfig& config,
                     const std::filesystem::path& traceDirectory,
                     uint32_t expectedDiscoveredCount)
 {
@@ -126,16 +128,14 @@ ReadSharedSnapshots(const ScenarioConfig& config,
 }
 
 std::vector<CircularOrbitTopologyState>
-RunOnlineAtSharedTimes(const ScenarioConfig& config)
+RunOnlineAtSharedTimes(const ResolvedSatComputeConfig& config)
 {
-    const ResolvedSatComputeConfig resolved =
-        ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test");
     std::vector<CircularOrbitTopologyState> states;
     RngSeedManager::SetSeed(config.randomness.seed);
     RngSeedManager::SetRun(config.randomness.run);
     RngSeedManager::ResetNextStreamIndex();
     {
-        OnlineTopologyController controller(resolved);
+        OnlineTopologyController controller(config);
         controller.Initialize();
         states.push_back(controller.GetLastTopologyState());
         for (const int64_t timeNs : {20000000000LL, 40000000000LL})
@@ -208,14 +208,11 @@ CheckSharedTraceEquivalence(const std::vector<SatelliteSnapshot>& oneSecond,
 }
 
 void
-RunGeneratedReplay(const ScenarioConfig& onlineConfig,
+RunGeneratedReplay(const ResolvedSatComputeConfig& onlineConfig,
                    const std::filesystem::path& traceDirectory)
 {
     ResolvedSatComputeConfig replayConfig =
-        ResolveLegacyScenarioConfig(onlineConfig, "/tmp/satcompute-test");
-    replayConfig.network.topologySource = "replay";
-    replayConfig.network.replayDirectory = traceDirectory;
-    replayConfig.traceExport.enabled = false;
+        MakeReplayTestConfig(onlineConfig, traceDirectory);
     RngSeedManager::SetSeed(replayConfig.randomness.seed);
     RngSeedManager::SetRun(replayConfig.randomness.run);
     RngSeedManager::ResetNextStreamIndex();
@@ -237,22 +234,32 @@ RunGeneratedReplay(const ScenarioConfig& onlineConfig,
 int
 main(int argc, char* argv[])
 {
-    std::string oneSecondScenario;
-    std::string twoSecondScenario;
+    std::string constellationConfig;
     std::string outputDirectory;
     CommandLine command(__FILE__);
-    command.AddValue("oneSecondScenario", "One-second trace scenario", oneSecondScenario);
-    command.AddValue("twoSecondScenario", "Two-second trace scenario", twoSecondScenario);
+    command.AddValue("constellationConfig",
+                     "Four-satellite constellation JSON",
+                     constellationConfig);
     command.AddValue("outputDir", "Temporary trace directory", outputDirectory);
     command.Parse(argc, argv);
 
     try
     {
-        Check(!oneSecondScenario.empty(), "oneSecondScenario is required");
-        Check(!twoSecondScenario.empty(), "twoSecondScenario is required");
+        Check(!constellationConfig.empty(), "constellationConfig is required");
         Check(!outputDirectory.empty(), "outputDir is required");
-        const ScenarioConfig oneSecondConfig = LoadScenarioConfig(oneSecondScenario);
-        const ScenarioConfig twoSecondConfig = LoadScenarioConfig(twoSecondScenario);
+        ResolvedSatComputeConfig oneSecondConfig = MakeOnlineTestConfig(
+            2,
+            2,
+            "distance",
+            41000000000LL,
+            20000000000LL,
+            30000000.0L);
+        oneSecondConfig.runName = "online-equivalence-1s";
+        oneSecondConfig.constellation = LoadConstellationDefinition(constellationConfig);
+        oneSecondConfig.traceExport = {true, 1000000000LL, true, "json-slices"};
+        ResolvedSatComputeConfig twoSecondConfig = oneSecondConfig;
+        twoSecondConfig.runName = "online-equivalence-2s";
+        twoSecondConfig.traceExport.intervalNs = 2000000000LL;
         Check(oneSecondConfig.traceExport.intervalNs == 1000000000LL &&
                   twoSecondConfig.traceExport.intervalNs == 2000000000LL,
               "equivalence trace inputs do not use one and two seconds");

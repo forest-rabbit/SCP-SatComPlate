@@ -7,14 +7,15 @@
 #include "ns3/ipv4-header.h"
 #include "ns3/ipv4-route.h"
 #include "ns3/replay-topology-controller.h"
-#include "ns3/resolved-config.h"
 #include "ns3/satcompute-ipv4-global-routing-helper.h"
-#include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 #include "ns3/size-aware-hrw-policy.h"
 #include "ns3/udp-header.h"
 
+#include "../support/config-factory.h"
+
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -24,6 +25,8 @@ using namespace ns3;
 
 namespace
 {
+
+using satcompute::test::MakeDiamondReplayTestConfig;
 
 constexpr uint16_t DESTINATION_PORT = 9000;
 
@@ -162,12 +165,11 @@ LookupUdpRoute(Ptr<SatComputeIpv4GlobalRouting> routing, uint16_t sourcePort)
 }
 
 void
-CheckNs348Adapter(const std::string& scenarioFilename)
+CheckNs348Adapter(const std::filesystem::path& topologyDirectory)
 {
-    ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
+    ResolvedSatComputeConfig config = MakeDiamondReplayTestConfig(topologyDirectory);
     config.routing.mode = "global-size-aware-hrw";
-    ReplayTopologyController controller(
-        ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
+    ReplayTopologyController controller(config);
     controller.Initialize();
 
     Ptr<FlowRouteRegistry> registry = controller.GetFlowRouteRegistry();
@@ -231,16 +233,16 @@ CheckNs348Adapter(const std::string& scenarioFilename)
 int
 main(int argc, char* argv[])
 {
-    std::string scenarioFilename;
+    std::string topologyDirectory;
     CommandLine command(__FILE__);
-    command.AddValue("scenario", "Dynamic diamond scenario", scenarioFilename);
+    command.AddValue("topologyDir", "Dynamic diamond topology slices", topologyDirectory);
     command.Parse(argc, argv);
 
     try
     {
-        Check(!scenarioFilename.empty(), "scenario is required");
+        Check(!topologyDirectory.empty(), "topologyDir is required");
         CheckPolicyAndRegistry();
-        CheckNs348Adapter(scenarioFilename);
+        CheckNs348Adapter(topologyDirectory);
         std::cout << "SatCompute IPv4 size-aware routing tests passed." << std::endl;
         return 0;
     }

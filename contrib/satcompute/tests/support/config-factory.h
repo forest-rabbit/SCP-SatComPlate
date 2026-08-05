@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace ns3::satcompute::test
 {
@@ -85,6 +86,41 @@ MakeReplayTestConfig(ResolvedSatComputeConfig config,
     config.network.replayDirectory = replayDirectory;
     config.traceExport.enabled = false;
     return config;
+}
+
+/** 构造具有明确星座规模、切片周期和链路参数的 replay 测试配置。 */
+inline ResolvedSatComputeConfig
+MakeReplayTestConfig(const std::filesystem::path& replayDirectory,
+                     uint32_t numOrbits,
+                     uint32_t satellitesPerOrbit,
+                     int64_t durationNs,
+                     int64_t updateIntervalNs,
+                     const std::string& delayMode = "fixed",
+                     std::optional<int64_t> fixedDelayNs = 1000000,
+                     uint64_t linkBandwidthBps = 100000000)
+{
+    ResolvedSatComputeConfig config = MakeOnlineTestConfig(numOrbits,
+                                                           satellitesPerOrbit,
+                                                           delayMode,
+                                                           durationNs,
+                                                           updateIntervalNs,
+                                                           30000000.0L);
+    config.runName = "replay-test";
+    config.network.delayMode = delayMode;
+    config.network.fixedDelayNs = fixedDelayNs;
+    config.network.linkBandwidthBps = linkBandwidthBps;
+    return MakeReplayTestConfig(std::move(config), replayDirectory);
+}
+
+/** 构造路由、流量和任务测试共用的四节点动态菱形回放。 */
+inline ResolvedSatComputeConfig
+MakeDiamondReplayTestConfig(const std::filesystem::path& replayDirectory)
+{
+    return MakeReplayTestConfig(replayDirectory,
+                                2,
+                                2,
+                                5000000000LL,
+                                2000000000LL);
 }
 
 } // namespace ns3::satcompute::test

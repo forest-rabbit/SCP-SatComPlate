@@ -8,11 +8,11 @@
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
 #include "ns3/replay-topology-controller.h"
-#include "ns3/resolved-config.h"
-#include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 #include "ns3/task-coordinator.h"
 #include "ns3/task-trace.h"
+
+#include "../support/config-factory.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -25,6 +25,8 @@ using namespace ns3;
 
 namespace
 {
+
+using satcompute::test::MakeDiamondReplayTestConfig;
 
 void
 Check(bool condition, const std::string& message)
@@ -86,7 +88,7 @@ CheckLifecycle(const TaskCoordinator& coordinator, std::size_t expectedTasks)
 Ptr<TaskCoordinator>
 CreateCoordinator(const std::filesystem::path& computeProfileFilename,
                   const std::filesystem::path& taskTraceFilename,
-                  const ScenarioConfig& config,
+                  const ResolvedSatComputeConfig& config,
                   ReplayTopologyController& controller)
 {
     controller.Initialize();
@@ -109,15 +111,15 @@ CreateCoordinator(const std::filesystem::path& computeProfileFilename,
 }
 
 void
-RunSingleTaskMode(const std::string& scenarioFilename,
+RunSingleTaskMode(const std::filesystem::path& topologyDirectory,
                   const std::filesystem::path& fixtureRoot,
                   const std::string& routingMode)
 {
     {
-        ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
+        ResolvedSatComputeConfig config =
+            MakeDiamondReplayTestConfig(topologyDirectory);
         config.routing.mode = routingMode;
-        ReplayTopologyController controller(
-            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
+        ReplayTopologyController controller(config);
         Ptr<TaskCoordinator> coordinator =
             CreateCoordinator(fixtureRoot / "compute-profile-single.json",
                               fixtureRoot / "task-single.json",
@@ -132,7 +134,8 @@ RunSingleTaskMode(const std::string& scenarioFilename,
               "single-task exact compute duration differs");
         Ptr<NetworkTransferEngine> engine = coordinator->GetTransferEngine();
         const std::vector<NetworkTransfer>& plans = engine->GetPlans();
-        Check(plans.size() == 2 && plans[0].transferId == 1 && plans[0].arrivalTimeNs == 100000000 &&
+        Check(plans.size() == 2 && plans[0].transferId == 1 &&
+                  plans[0].arrivalTimeNs == 100000000 &&
                   plans[1].transferId == 2 && plans[1].arrivalTimeNs == task.computeCompleteTimeNs,
               "task transfer plans or runtime result start differ");
         const ApplicationMetrics metrics = engine->CollectApplicationMetrics();
@@ -170,13 +173,14 @@ RunSingleTaskMode(const std::string& scenarioFilename,
 }
 
 void
-RunFcfsTasks(const std::string& scenarioFilename, const std::filesystem::path& fixtureRoot)
+RunFcfsTasks(const std::filesystem::path& topologyDirectory,
+             const std::filesystem::path& fixtureRoot)
 {
     {
-        ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
+        ResolvedSatComputeConfig config =
+            MakeDiamondReplayTestConfig(topologyDirectory);
         config.routing.mode = "global-first";
-        ReplayTopologyController controller(
-            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
+        ReplayTopologyController controller(config);
         Ptr<TaskCoordinator> coordinator =
             CreateCoordinator(fixtureRoot / "compute-profile-single.json",
                               fixtureRoot / "task-fcfs.json",
@@ -208,14 +212,14 @@ RunFcfsTasks(const std::string& scenarioFilename, const std::filesystem::path& f
 }
 
 void
-RunHeterogeneousTasks(const std::string& scenarioFilename,
+RunHeterogeneousTasks(const std::filesystem::path& topologyDirectory,
                       const std::filesystem::path& fixtureRoot)
 {
     {
-        ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
+        ResolvedSatComputeConfig config =
+            MakeDiamondReplayTestConfig(topologyDirectory);
         config.routing.mode = "global-first";
-        ReplayTopologyController controller(
-            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
+        ReplayTopologyController controller(config);
         Ptr<TaskCoordinator> coordinator =
             CreateCoordinator(fixtureRoot / "compute-profile-order-a.json",
                               fixtureRoot / "task-heterogeneous.json",
@@ -248,17 +252,17 @@ RunHeterogeneousTasks(const std::string& scenarioFilename,
 int
 main(int argc, char* argv[])
 {
-    std::string scenarioFilename;
+    std::string topologyDirectory;
     std::string fixtureRoot;
     CommandLine command(__FILE__);
-    command.AddValue("scenario", "Dynamic diamond replay scenario", scenarioFilename);
+    command.AddValue("topologyDir", "Dynamic diamond topology slices", topologyDirectory);
     command.AddValue("fixtureRoot", "Compute/task fixture directory", fixtureRoot);
     command.Parse(argc, argv);
 
     try
     {
-        Check(!scenarioFilename.empty() && !fixtureRoot.empty(),
-              "scenario and fixture root are required");
+        Check(!topologyDirectory.empty() && !fixtureRoot.empty(),
+              "topology and fixture root are required");
         for (const char* mode : {"global-first",
                                  "global-hash-per-flow",
                                  "global-hrw-per-flow",
@@ -267,15 +271,15 @@ main(int argc, char* argv[])
         {
             try
             {
-                RunSingleTaskMode(scenarioFilename, fixtureRoot, mode);
+                RunSingleTaskMode(topologyDirectory, fixtureRoot, mode);
             }
             catch (const std::exception& error)
             {
                 throw std::runtime_error(std::string(mode) + ": " + error.what());
             }
         }
-        RunFcfsTasks(scenarioFilename, fixtureRoot);
-        RunHeterogeneousTasks(scenarioFilename, fixtureRoot);
+        RunFcfsTasks(topologyDirectory, fixtureRoot);
+        RunHeterogeneousTasks(topologyDirectory, fixtureRoot);
         std::cout << "SatCompute task coordinator tests passed." << std::endl;
         return 0;
     }
