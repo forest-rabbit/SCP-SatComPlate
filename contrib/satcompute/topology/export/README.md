@@ -42,8 +42,8 @@ links_1s.json
 ...
 ```
 
-非整数秒会去掉多余尾零，例如 `1.000000001s`。输出不包含 manifest、SHA-256、
-schema/software version 或 effective config。
+非整数秒会去掉多余尾零，例如 `1.000000001s`。每个 JSON 文件只描述文件名所示
+采样时刻的节点或候选链路状态。
 
 ## 节点文件
 

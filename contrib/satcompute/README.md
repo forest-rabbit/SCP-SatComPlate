@@ -2,8 +2,7 @@
 
 SatCompute 是 SCP-SatComPlate 在 ns-3.48 上的项目模块，只模拟卫星、星间链路、
 IPv4 路由、任务传输和星上计算。平台入口为 `satcompute.cc`；`para.h/.cc` 保存唯一
-一组类型化运行参数和默认值，不读取完整 scenario JSON，也不生成
-effective/resolved 配置副本。
+一组类型化运行参数和默认值，星座、算力与任务则使用彼此独立的数据文件。
 
 ## 执行流程
 
@@ -50,7 +49,7 @@ NetDevice、路由、FlowMonitor 或任务对象。
 | [`traffic/`](traffic/README.md) | 任务内部的 UDP 输入/结果传输 |
 | [`metrics/`](metrics/README.md) | 网络、路由、任务和失败诊断输出 |
 | [`input/`](input/README.md) | 星座、算力、任务与组合示例 |
-| [`tools/`](tools/generation/README.md) | 任务生成与输出校验工具 |
+| [`tools/`](tools/README.md) | 任务生成与输出校验工具 |
 | [`tests/`](tests/README.md) | SatCompute 自有 unit、smoke、regression 和 fixture |
 
 JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 工具不实现
@@ -145,8 +144,8 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 | `--taskLogMode` | `summary` | 枚举 | `summary`、`verbose` 或 `silent` |
 | `--diagnosticMode` | `off` | 枚举 | `off` 或 `failure`；后者在部分完成时写失败证据 |
 
-运行摘要会记录实际使用的参数和结果，但不是第二个配置入口，也不生成软件版本、
-schema、输入哈希或 effective/resolved 配置文件。
+运行摘要会记录实际使用的关键参数和各层结果，仅作为本次仿真的输出证据，不是
+第二个配置入口。
 
 ## 星座与动态拓扑
 
