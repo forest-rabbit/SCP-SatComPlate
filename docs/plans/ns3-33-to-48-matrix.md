@@ -1,8 +1,8 @@
 # SatCompute ns-3.33 到 ns-3.48 迁移矩阵
 
-状态：阶段 0、阶段 1 和阶段 2 已完成；阶段 3 的拓扑 facade 与共享核心审计
-完成，阶段检查点 CI 将在本次收口合并后从 `main` 唯一触发。每完成一个阶段
-更新“结果”列，最终逐文件审计。
+状态：阶段 0 至阶段 5 已完成；阶段 5 唯一一次 GitHub CI run `30977572201`
+已通过。下一步恢复阶段 6 的分层 metrics 与诊断；每完成一个阶段更新“结果”列，
+阶段 7 进行最终逐文件审计。
 
 动作定义：
 
@@ -110,7 +110,7 @@
 | `tools/generation/topology/static/*` | 由同一 C++ 工具的单切片参数覆盖 | 按当前合同审计后恢复 | 已替代；不保留第二套静态拓扑算法 |
 | `tools/generation/topology/dynamic/*` | 已由共享 C++ executable 替代 | 由共享 C++ 轨道 exporter 替代传播部分 | 已完成；与平台 export-only 逐字节等价 |
 | `tools/generation/topology/orbit/hypatia/*` | 缺失 | 不迁移 | 已确定删除 |
-| `tools/analysis/topology_interval/*` | v0.3 trace 降采样、边状态与 ECMP 分析已恢复 | 恢复适用分析；C++ route gate 随阶段 5 接回 | Python 核心已迁移；旧 scenario 编排器和冻结报告不迁移 |
+| `tools/analysis/topology_interval/*` | v0.3 trace 降采样、边状态与 ECMP 分析已恢复 | 恢复适用分析；C++ route gate 随阶段 5 接回 | 已完成；Python trace/edge/ECMP 分析与 C++ routing 门禁共同覆盖 |
 | `tools/validation/*` | 已恢复 legacy 检查器 | 恢复并对齐 metrics 输出 | 入口和 CLI 已恢复；阶段 6 随分层 metrics 接回黄金输出 |
 | `tools/visualization/orbit/*` | 已恢复为 v0.3 trace/XYZ 消费者 | 恢复为切片消费者，不计算轨道 | 已完成；旧 Hypatia PNG 不迁移，显示间隔采用上一切片 |
 
@@ -120,12 +120,12 @@
 |---|---|---|---|
 | `tests/fixtures/topology/snapshots/*` | legacy 文件已按原路径和哈希恢复 | 恢复黄金 fixtures | 已迁移，规则 cadence 由 current 动态 fixture 回归 |
 | `tests/fixtures/topology/compute-profiles/*` | legacy 文件已按原路径和哈希恢复 | 恢复 | 已迁移，旧速率黄金值进入 parity test |
-| `tests/fixtures/traffic/transfers/*` | legacy 文件已按原路径和哈希恢复 | 保留并运行黄金兼容测试 | 已迁移，待阶段 5 回归 |
-| `tests/fixtures/traffic/tasks/*` | legacy 文件已按原路径和哈希恢复 | 保留并运行黄金兼容测试 | 已迁移，待阶段 5 回归 |
+| `tests/fixtures/traffic/transfers/*` | legacy 文件已按原路径和哈希恢复 | 保留并运行黄金兼容测试 | 已完成；12-transfer 动态 parity 与五模式 engine 回归通过 |
+| `tests/fixtures/traffic/tasks/*` | legacy 文件已按原路径和哈希恢复 | 保留并运行黄金兼容测试 | 已完成；单任务、FCFS、异构和 canonical parity 通过 |
 | `tests/support/*` | 已恢复并适配 `ns3` 根标记 | 恢复 | 已迁移 |
-| legacy Python generation/analysis/visualization tests | 适用于 v0.3 的核心测试已恢复 | 随 tools 恢复 | 已完成阶段 4 范围；61 个项目 Python 测试通过 |
+| legacy Python generation/analysis/visualization tests | 适用于 v0.3 的核心测试已恢复 | 随 tools 恢复 | 已完成阶段 5 范围；62 个项目 Python 测试通过 |
 | legacy smoke/regression scripts | 被两个 `run-all.sh` 替代 | 恢复分层脚本并保留统一入口 | 待迁移 |
-| current C++ unit executables | 新增 | 保留并按最终接口适配 | 待审计 |
+| current C++ unit executables | 新增 | 保留并按最终接口适配 | 阶段 5 的 25 组全部通过；阶段 7 做最终清单审计 |
 
 ## 文档与 CI
 
