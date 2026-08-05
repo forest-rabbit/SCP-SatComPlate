@@ -15,7 +15,7 @@ run_platform() {
   ./ns3 run --no-build "satcompute --outputDir=$output_directory $*"
 }
 
-constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
+constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
 topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
 transfer_inputs="contrib/satcompute/tests/fixtures/traffic/transfers"
 task_inputs="contrib/satcompute/tests/fixtures/task"

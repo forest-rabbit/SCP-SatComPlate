@@ -15,9 +15,9 @@ run_platform() {
   ./ns3 run --no-build "satcompute --outputDir=$output_directory $*"
 }
 
-constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.json"
-constellation_4="contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
-constellation_2="contrib/satcompute/tests/fixtures/constellation/delay-only-2.json"
+constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.csv"
+constellation_4="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
+constellation_2="contrib/satcompute/tests/fixtures/constellation/delay-only-2.csv"
 dynamic_topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
 static_topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static"
 capacity_topology="contrib/satcompute/tests/fixtures/topology/snapshots/capacity-pending"

@@ -101,7 +101,7 @@ GetDefaultSatComputeConfig()
 
     // 拓扑来源：默认由 ns-3.48 原生圆轨道模型在线计算。
     config.constellationConfig =
-        "contrib/satcompute/input/topology/constellations/synthetic-66.json";
+        "contrib/satcompute/input/topology/constellations/synthetic-66.csv";
     config.topologySource = "online";
     config.topologyDirectory = "";
 
@@ -163,7 +163,7 @@ AddSatComputeCommandLineOptions(CommandLine& commandLine, SatComputeConfig& conf
                          config.simulationDurationSeconds);
 
     commandLine.AddValue("constellationConfig",
-                         "Path to the constellation-only JSON",
+                         "Path to the native LEO shell CSV",
                          config.constellationConfig);
     commandLine.AddValue("topologySource",
                          "Topology source: online or replay",

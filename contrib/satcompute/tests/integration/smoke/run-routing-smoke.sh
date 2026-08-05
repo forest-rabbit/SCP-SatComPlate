@@ -9,8 +9,8 @@ cd "$repository_root"
 smoke_output="$(mktemp -d /tmp/satcompute-routing-smoke.XXXXXX)"
 trap 'rm -rf "$smoke_output"' EXIT
 
-constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.json"
-constellation_4="contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
+constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.csv"
+constellation_4="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
 
 validated="$(./ns3 run --no-build \
   "satcompute --constellationConfig=$constellation_66 \

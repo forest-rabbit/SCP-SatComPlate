@@ -4,17 +4,11 @@
 
 #include "constellation-definition.h"
 
-#include "../../para.h"
-#include <nlohmann/json.hpp>
+#include "ns3/csv-reader.h"
 
 #include <cmath>
-#include <fstream>
-#include <initializer_list>
 #include <limits>
-#include <regex>
-#include <set>
-#include <sstream>
-#include <string_view>
+#include <string>
 
 namespace ns3
 {
@@ -22,170 +16,70 @@ namespace ns3
 namespace
 {
 
-using Json = nlohmann::json;
-
 constexpr uint32_t MAX_SATELLITES = 99999;
 
 [[noreturn]] void
-Fail(std::string_view field, std::string_view message)
+Fail(const std::filesystem::path& path, const std::string& message)
 {
-    throw ConstellationDefinitionError(std::string(field) + " " + std::string(message));
+    throw ConstellationDefinitionError(path.string() + ": " + message);
 }
 
-const Json&
-GetField(const Json& object, std::string_view field)
+bool
+ReadShellRow(const CsvReader& csv, LeoOrbitalShell& shell)
 {
-    const auto iterator = object.find(std::string(field));
-    if (iterator == object.end())
+    if (csv.ColumnCount() < 4 || csv.ColumnCount() > 6)
     {
-        Fail(field, "is missing");
+        return false;
     }
-    return *iterator;
+    bool valid = csv.GetValue(0, shell.alt);
+    valid = csv.GetValue(1, shell.inc) && valid;
+    valid = csv.GetValue(2, shell.planes) && valid;
+    valid = csv.GetValue(3, shell.sats) && valid;
+    if (!valid)
+    {
+        return false;
+    }
+    if (csv.ColumnCount() >= 5 && !csv.GetValue(4, shell.phasing))
+    {
+        return false;
+    }
+    if (csv.ColumnCount() >= 6 && !csv.GetValue(5, shell.raanSpanDeg))
+    {
+        return false;
+    }
+    return true;
 }
 
 void
-RequireFields(const Json& root, std::initializer_list<std::string_view> fields)
+ValidateShell(const std::filesystem::path& path, const LeoOrbitalShell& shell)
 {
-    if (!root.is_object())
+    if (!std::isfinite(shell.alt) || shell.alt <= 0.0)
     {
-        Fail("constellation", "must be an object");
+        Fail(path, "altitudeKm must be finite and greater than zero");
     }
-    std::set<std::string> expected;
-    for (const std::string_view field : fields)
+    if (!std::isfinite(shell.inc) || shell.inc < 0.0 || shell.inc >= 180.0)
     {
-        expected.emplace(field);
+        Fail(path, "inclinationDegrees must be in [0, 180)");
     }
-    std::set<std::string> actual;
-    for (const auto& item : root.items())
+    if (shell.planes == 0 || shell.sats == 0)
     {
-        actual.emplace(item.key());
+        Fail(path, "plane and satellite counts must be greater than zero");
     }
-    if (actual == expected)
+    if (!std::isfinite(shell.phasing) || shell.phasing < 0.0 ||
+        std::floor(shell.phasing) != shell.phasing || shell.phasing >= shell.planes)
     {
-        return;
+        Fail(path, "phasingFactor must be an integer in [0, planes - 1]");
     }
-
-    std::ostringstream message;
-    message << "fields differ: missing=[";
-    bool first = true;
-    for (const std::string& field : expected)
+    if (!std::isfinite(shell.raanSpanDeg) || shell.raanSpanDeg <= 0.0 ||
+        shell.raanSpanDeg > 360.0)
     {
-        if (!actual.contains(field))
-        {
-            message << (first ? "" : ",") << field;
-            first = false;
-        }
+        Fail(path, "raanSpanDeg must be in (0, 360]");
     }
-    message << "], unknown=[";
-    first = true;
-    for (const std::string& field : actual)
+    if (shell.planes > std::numeric_limits<uint32_t>::max() ||
+        shell.sats > std::numeric_limits<uint32_t>::max() ||
+        shell.planes > MAX_SATELLITES / shell.sats)
     {
-        if (!expected.contains(field))
-        {
-            message << (first ? "" : ",") << field;
-            first = false;
-        }
-    }
-    message << "]";
-    Fail("constellation", message.str());
-}
-
-std::string
-RequireString(const Json& value, std::string_view field)
-{
-    if (!value.is_string())
-    {
-        Fail(field, "must be a string");
-    }
-    const std::string parsed = value.get<std::string>();
-    if (parsed.empty())
-    {
-        Fail(field, "must not be empty");
-    }
-    return parsed;
-}
-
-std::string
-RequireToken(const Json& value, std::string_view field)
-{
-    const std::string parsed = RequireString(value, field);
-    static const std::regex pattern("^[A-Za-z0-9][A-Za-z0-9._-]*$");
-    if (!std::regex_match(parsed, pattern))
-    {
-        Fail(field, "must be a filesystem-safe token");
-    }
-    return parsed;
-}
-
-uint32_t
-RequirePositiveUint32(const Json& value, std::string_view field)
-{
-    uint64_t parsed = 0;
-    if (value.is_number_unsigned())
-    {
-        parsed = value.get<uint64_t>();
-    }
-    else if (value.is_number_integer() && !value.is_boolean())
-    {
-        const int64_t signedValue = value.get<int64_t>();
-        if (signedValue <= 0)
-        {
-            Fail(field, "must be positive");
-        }
-        parsed = static_cast<uint64_t>(signedValue);
-    }
-    else
-    {
-        Fail(field, "must be an integer");
-    }
-    if (parsed == 0 || parsed > MAX_SATELLITES)
-    {
-        Fail(field, "is outside the range 1..99999");
-    }
-    return static_cast<uint32_t>(parsed);
-}
-
-long double
-RequireNumber(const Json& value,
-              std::string_view field,
-              long double minimum,
-              bool minimumExclusive,
-              long double maximum,
-              bool maximumExclusive)
-{
-    if (!value.is_number())
-    {
-        Fail(field, "must be a number");
-    }
-    const long double parsed = value.get<long double>();
-    if (!std::isfinite(parsed))
-    {
-        Fail(field, "must be finite");
-    }
-    if ((minimumExclusive && parsed <= minimum) || (!minimumExclusive && parsed < minimum) ||
-        (maximumExclusive && parsed >= maximum) || (!maximumExclusive && parsed > maximum))
-    {
-        Fail(field, "is outside its supported range");
-    }
-    return parsed;
-}
-
-Json
-ReadJson(const std::filesystem::path& path)
-{
-    std::ifstream input(path);
-    if (!input.is_open())
-    {
-        throw ConstellationDefinitionError("cannot open constellation: " + path.string());
-    }
-    try
-    {
-        return Json::parse(input, nullptr, true, false);
-    }
-    catch (const std::exception& error)
-    {
-        throw ConstellationDefinitionError("cannot parse constellation " + path.string() +
-                                           ": " + error.what());
+        Fail(path, "total satellite count must not exceed 99999");
     }
 }
 
@@ -194,7 +88,7 @@ ReadJson(const std::filesystem::path& path)
 uint32_t
 ConstellationDefinition::GetSatelliteCount() const
 {
-    return numOrbits * satellitesPerOrbit;
+    return static_cast<uint32_t>(shell.planes * shell.sats);
 }
 
 ConstellationDefinition
@@ -205,83 +99,34 @@ LoadConstellationDefinition(const std::filesystem::path& path)
     if (error || !std::filesystem::is_regular_file(sourcePath))
     {
         throw ConstellationDefinitionError(
-            "constellation must be an existing regular file: " + path.string());
+            "constellation must be an existing regular CSV file: " + path.string());
     }
 
-    const Json root = ReadJson(sourcePath);
-    RequireFields(root,
-                  {"schema_version",
-                   "constellation_name",
-                   "constellation_pattern",
-                   "num_orbits",
-                   "satellites_per_orbit",
-                   "altitude_m",
-                   "inclination_deg",
-                   "phase_diff",
-                   "orbit_epoch_offset_s"});
-
-    ConstellationDefinition definition{};
-    definition.schemaVersion = RequireString(GetField(root, "schema_version"), "schema_version");
-    if (definition.schemaVersion != "0.1")
+    CsvReader csv(sourcePath.string());
+    LeoOrbitalShell parsed;
+    uint32_t validRows = 0;
+    while (csv.FetchNextRow())
     {
-        Fail("schema_version", "must be 0.1");
+        if (csv.IsBlankRow())
+        {
+            continue;
+        }
+        LeoOrbitalShell candidate;
+        if (!ReadShellRow(csv, candidate))
+        {
+            // The native helper permits a descriptive header. Any other
+            // non-numeric row is ignored in exactly the same way.
+            continue;
+        }
+        ValidateShell(sourcePath, candidate);
+        parsed = candidate;
+        ++validRows;
     }
-    definition.sourcePath = sourcePath;
-    definition.constellationName =
-        RequireToken(GetField(root, "constellation_name"), "constellation_name");
-    definition.constellationPattern =
-        RequireString(GetField(root, "constellation_pattern"), "constellation_pattern");
-    if (definition.constellationPattern != "walker-star" &&
-        definition.constellationPattern != "walker-delta")
+    if (validRows != 1)
     {
-        Fail("constellation_pattern", "must be walker-star or walker-delta");
+        Fail(sourcePath, "SatCompute requires exactly one valid LEO shell row");
     }
-    definition.numOrbits =
-        RequirePositiveUint32(GetField(root, "num_orbits"), "num_orbits");
-    definition.satellitesPerOrbit = RequirePositiveUint32(
-        GetField(root, "satellites_per_orbit"),
-        "satellites_per_orbit");
-    if (static_cast<uint64_t>(definition.numOrbits) * definition.satellitesPerOrbit >
-        MAX_SATELLITES)
-    {
-        Fail("constellation", "total satellite count must not exceed 99999");
-    }
-    definition.altitudeM = RequireNumber(GetField(root, "altitude_m"),
-                                         "altitude_m",
-                                         0.0L,
-                                         true,
-                                         std::numeric_limits<long double>::max(),
-                                         false);
-    definition.inclinationDeg = RequireNumber(GetField(root, "inclination_deg"),
-                                              "inclination_deg",
-                                              0.0L,
-                                              false,
-                                              180.0L,
-                                              true);
-    const Json& phaseDiff = GetField(root, "phase_diff");
-    if (!phaseDiff.is_boolean())
-    {
-        Fail("phase_diff", "must be a boolean");
-    }
-    definition.phaseDiff = phaseDiff.get<bool>();
-
-    const long double epochSeconds = RequireNumber(GetField(root, "orbit_epoch_offset_s"),
-                                                   "orbit_epoch_offset_s",
-                                                   0.0L,
-                                                   false,
-                                                   std::numeric_limits<long double>::max(),
-                                                   false);
-    try
-    {
-        definition.orbitEpochOffsetNs = SatComputeSecondsToNanoseconds(
-            static_cast<double>(epochSeconds),
-            "orbit_epoch_offset_s");
-    }
-    catch (const SatComputeConfigError& error)
-    {
-        throw ConstellationDefinitionError(error.what());
-    }
-    return definition;
+    return {sourcePath, parsed};
 }
 
 } // namespace ns3

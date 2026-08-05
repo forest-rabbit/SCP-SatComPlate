@@ -26,18 +26,6 @@ class OnlineOrbitConstellationError : public std::runtime_error
     using std::runtime_error::runtime_error;
 };
 
-/** Stable plane-major identity and initial circular-orbit parameters. */
-struct SatelliteOrbitIdentity
-{
-    uint32_t satelliteId{};
-    uint32_t planeIndex{};
-    uint32_t slotIndex{};
-    double raanDeg{};
-    double baseArgumentLatitudeDeg{};
-    double initialLongitudeDeg{};
-    double initialArgumentLatitudeDeg{};
-};
-
 /** One on-demand ECEF position produced by the ns-3 mobility model. */
 struct SatelliteEcefPosition
 {
@@ -54,13 +42,11 @@ struct SatelliteEcefPosition
 class OnlineOrbitConstellation
 {
   public:
-    explicit OnlineOrbitConstellation(const ConstellationDefinition& config,
-                                      int64_t simulationStartTimeNs = 0);
+    explicit OnlineOrbitConstellation(const ConstellationDefinition& config);
 
     const ConstellationDefinition& GetConfig() const;
     const NodeContainer& GetNodes() const;
     const SatelliteIdMap& GetIdMap() const;
-    const std::vector<SatelliteOrbitIdentity>& GetOrbitIdentities() const;
     Ptr<LeoCircularOrbitMobilityModel> GetMobilityModel(uint32_t satelliteId) const;
     Vector GetPosition(uint32_t satelliteId) const;
     std::vector<SatelliteEcefPosition> GetPositions() const;
@@ -69,7 +55,6 @@ class OnlineOrbitConstellation
     ConstellationDefinition m_config;
     NodeContainer m_nodes;
     std::unique_ptr<SatelliteIdMap> m_idMap;
-    std::vector<SatelliteOrbitIdentity> m_identities;
     std::vector<Ptr<LeoCircularOrbitMobilityModel>> m_mobilityModels;
 };
 

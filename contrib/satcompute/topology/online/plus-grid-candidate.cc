@@ -15,12 +15,12 @@ namespace ns3
 std::vector<PlusGridCandidateLink>
 BuildPlusGridCandidateLinks(const ConstellationDefinition& constellation, bool seamEnabled)
 {
-    if (constellation.numOrbits == 0 || constellation.satellitesPerOrbit == 0)
+    if (constellation.shell.planes == 0 || constellation.shell.sats == 0)
     {
         throw PlusGridCandidateError("plus-grid dimensions must be positive");
     }
     const uint64_t satelliteCount64 =
-        static_cast<uint64_t>(constellation.numOrbits) * constellation.satellitesPerOrbit;
+        static_cast<uint64_t>(constellation.shell.planes) * constellation.shell.sats;
     if (satelliteCount64 > std::numeric_limits<uint32_t>::max())
     {
         throw PlusGridCandidateError("plus-grid satellite count exceeds uint32");
@@ -43,8 +43,9 @@ BuildPlusGridCandidateLinks(const ConstellationDefinition& constellation, bool s
         }
     };
 
-    const uint32_t satellitesPerOrbit = constellation.satellitesPerOrbit;
-    for (uint32_t plane = 0; plane < constellation.numOrbits; ++plane)
+    const uint32_t satellitesPerOrbit = static_cast<uint32_t>(constellation.shell.sats);
+    const uint32_t numOrbits = static_cast<uint32_t>(constellation.shell.planes);
+    for (uint32_t plane = 0; plane < numOrbits; ++plane)
     {
         const uint32_t planeStart = plane * satellitesPerOrbit;
         for (uint32_t slot = 0; slot < satellitesPerOrbit; ++slot)
@@ -55,7 +56,7 @@ BuildPlusGridCandidateLinks(const ConstellationDefinition& constellation, bool s
         }
     }
 
-    for (uint32_t plane = 0; plane + 1 < constellation.numOrbits; ++plane)
+    for (uint32_t plane = 0; plane + 1 < numOrbits; ++plane)
     {
         const uint32_t firstPlaneStart = plane * satellitesPerOrbit;
         const uint32_t secondPlaneStart = (plane + 1) * satellitesPerOrbit;
@@ -67,9 +68,9 @@ BuildPlusGridCandidateLinks(const ConstellationDefinition& constellation, bool s
         }
     }
 
-    if (seamEnabled && constellation.numOrbits > 1)
+    if (seamEnabled && numOrbits > 1)
     {
-        const uint32_t lastPlaneStart = (constellation.numOrbits - 1) * satellitesPerOrbit;
+        const uint32_t lastPlaneStart = (numOrbits - 1) * satellitesPerOrbit;
         for (uint32_t slot = 0; slot < satellitesPerOrbit; ++slot)
         {
             addCandidate(lastPlaneStart + slot,

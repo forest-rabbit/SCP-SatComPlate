@@ -26,7 +26,7 @@ class SatComputeConfigError : public std::invalid_argument
  * SatCompute 的平台运行参数。
  *
  * 人工设置的时间参数统一使用秒；解析完成后再转换为 ns-3 Time。
- * 星座 JSON 只描述星座物理结构，运行策略和数据文件路径均由本结构管理。
+ * 星座 CSV 只描述星座物理结构，运行策略和数据文件路径均由本结构管理。
  */
 struct SatComputeConfig
 {
@@ -34,7 +34,7 @@ struct SatComputeConfig
     double simulationStartSeconds;        ///< 仿真开始时刻，单位为秒。
     double simulationDurationSeconds;     ///< 仿真持续时间，单位为秒。
 
-    std::string constellationConfig;      ///< 星座物理结构 JSON 路径。
+    std::string constellationConfig;      ///< 原生 LEO shell CSV 路径。
     std::string topologySource;           ///< 拓扑来源：online 或 replay。
     std::string topologyDirectory;        ///< replay 拓扑切片目录。
     std::string islCandidateStrategy;     ///< 固定候选 ISL 生成策略。

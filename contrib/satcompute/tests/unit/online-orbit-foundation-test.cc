@@ -57,22 +57,7 @@ RunIdentityAndMotionCase()
 {
     {
         OnlineOrbitConstellation constellation(MakeTestConstellation(3, 4));
-        const auto& identities = constellation.GetOrbitIdentities();
         Check(constellation.GetNodes().GetN() == 12, "online orbit node count differs");
-        Check(identities.size() == 12, "online orbit identity count differs");
-        Check(identities.at(6).satelliteId == 6 && identities.at(6).planeIndex == 1 &&
-                  identities.at(6).slotIndex == 2,
-              "plane-major satellite identity differs");
-        CheckClose(identities.at(4).raanDeg, 60.0, 1e-12, "Walker Star RAAN differs");
-        CheckClose(identities.at(8).raanDeg, 120.0, 1e-12, "Walker Star span differs");
-        CheckClose(identities.at(4).baseArgumentLatitudeDeg,
-                   45.0,
-                   1e-12,
-                   "odd-plane half-slot phase differs");
-        CheckClose(identities.at(6).baseArgumentLatitudeDeg,
-                   225.0,
-                   1e-12,
-                   "slot argument latitude differs");
         Check(constellation.GetIdMap().GetSatelliteIdByNodeIndex(6) == 6,
               "stable ID map differs");
         Check(constellation.GetNodes().Get(6)->GetObject<LeoCircularOrbitMobilityModel>() ==
@@ -95,48 +80,6 @@ RunIdentityAndMotionCase()
         Simulator::Stop(Seconds(1));
         Simulator::Run();
         Check(movementM > 1000.0, "official mobility position did not evolve continuously");
-    }
-    Simulator::Destroy();
-}
-
-void
-RunPatternCase()
-{
-    {
-        OnlineOrbitConstellation delta(
-            MakeTestConstellation(3, 4, "walker-delta", false));
-        const auto& identities = delta.GetOrbitIdentities();
-        CheckClose(identities.at(4).raanDeg, 120.0, 1e-12, "Walker Delta RAAN differs");
-        CheckClose(identities.at(8).raanDeg, 240.0, 1e-12, "Walker Delta span differs");
-        CheckClose(identities.at(4).baseArgumentLatitudeDeg,
-                   0.0,
-                   1e-12,
-                   "disabled phase_diff changed an odd plane");
-    }
-    Simulator::Destroy();
-}
-
-void
-RunEpochOffsetCase()
-{
-    constexpr int64_t offsetNs = 100000000000LL;
-    {
-        OnlineOrbitConstellation offset(
-            MakeTestConstellation(2, 3, "walker-star", true, offsetNs));
-        OnlineOrbitConstellation started(MakeTestConstellation(2, 3), offsetNs);
-        OnlineOrbitConstellation reference(MakeTestConstellation(2, 3));
-        const Vector offsetPositionAtZero = offset.GetPosition(4);
-        const Vector startedPositionAtZero = started.GetPosition(4);
-        Vector referencePositionAtOffset;
-        Simulator::Schedule(NanoSeconds(offsetNs), [&] {
-            referencePositionAtOffset = reference.GetPosition(4);
-        });
-        Simulator::Stop(NanoSeconds(offsetNs));
-        Simulator::Run();
-        Check(Distance(offsetPositionAtZero, referencePositionAtOffset) < 0.001,
-              "orbit_epoch_offset did not include orbital progress and Earth rotation");
-        Check(Distance(startedPositionAtZero, referencePositionAtOffset) < 0.001,
-              "simulation start did not advance the initial orbit state");
     }
     Simulator::Destroy();
 }
@@ -198,7 +141,7 @@ void
 RunValidationCase()
 {
     ConstellationDefinition invalid = MakeTestConstellation(1, 1);
-    invalid.altitudeM = 0.0L;
+    invalid.shell.alt = 0.0;
     try
     {
         OnlineOrbitConstellation constellation(invalid);
@@ -222,8 +165,6 @@ main(int argc, char* argv[])
     try
     {
         RunIdentityAndMotionCase();
-        RunPatternCase();
-        RunEpochOffsetCase();
         RunCandidateCase();
         RunValidationCase();
         std::cout << "SatCompute online orbit foundation tests passed." << std::endl;

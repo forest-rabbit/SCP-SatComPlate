@@ -86,8 +86,7 @@ ExportTrace(const ResolvedSatComputeConfig& config,
     RngSeedManager::SetRun(config.randomness.run);
     RngSeedManager::ResetNextStreamIndex();
     {
-        OnlineOrbitConstellation constellation(config.constellation,
-                                               config.simulation.startTimeNs);
+        OnlineOrbitConstellation constellation(config.constellation);
         CircularOrbitTraceExporter exporter(config, outputDirectory, constellation);
         exporter.Initialize();
         Simulator::Stop(NanoSeconds(config.simulation.durationNs));

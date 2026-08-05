@@ -9,7 +9,7 @@ cd "$repository_root"
 smoke_output="$(mktemp -d /tmp/satcompute-capacity-smoke.XXXXXX)"
 trap 'rm -rf "$smoke_output"' EXIT
 
-constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
+constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
 topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
 transfers="contrib/satcompute/tests/fixtures/traffic/transfers/engine-basic.json"
 

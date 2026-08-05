@@ -96,7 +96,7 @@ struct ResolvedRandomnessConfig
 /**
  * SatCompute 唯一的内部运行配置。
  *
- * 该对象由 typed para/CLI 与一个 constellation-only JSON 一次性解析产生；
+ * 该对象由 typed para/CLI 与一个原生 LEO shell CSV 一次性解析产生；
  * 后续组件只读取本对象，不再自行解释输入参数。
  */
 struct ResolvedSatComputeConfig

@@ -74,9 +74,7 @@ OnlineTopologyController::Initialize()
             "online topology controller must be initialized at simulation time zero");
     }
 
-    m_constellation = std::make_unique<OnlineOrbitConstellation>(
-        m_config.constellation,
-        m_config.simulation.startTimeNs);
+    m_constellation = std::make_unique<OnlineOrbitConstellation>(m_config.constellation);
     const NodeContainer& nodes = m_constellation->GetNodes();
     const SatelliteIdMap& idMap = m_constellation->GetIdMap();
     if (IsReservationAwareRoutingMode(m_routingMode))

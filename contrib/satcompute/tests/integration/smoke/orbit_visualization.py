@@ -29,7 +29,7 @@ def _write_json(path: Path, payload: dict) -> None:
 def _generate_trace(output_dir: Path) -> None:
     constellation = (
         REPOSITORY_ROOT
-        / "contrib/satcompute/input/topology/constellations/synthetic-66.json"
+        / "contrib/satcompute/input/topology/constellations/synthetic-66.csv"
     )
     arguments = " ".join(
         (

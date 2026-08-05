@@ -117,7 +117,7 @@ main(int argc, char* argv[])
         Require(config.simulationStartSeconds == 0.0, "unexpected start time");
         Require(config.simulationDurationSeconds == 1000.0, "unexpected duration");
         Require(config.constellationConfig ==
-                    "contrib/satcompute/input/topology/constellations/synthetic-66.json",
+                    "contrib/satcompute/input/topology/constellations/synthetic-66.csv",
                 "unexpected constellation path");
         Require(config.topologySource == "online", "unexpected topology source");
         Require(config.topologyDirectory.empty(), "online replay directory must be empty");

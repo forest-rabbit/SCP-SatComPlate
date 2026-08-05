@@ -28,8 +28,7 @@ trap 'rm -rf "$test_output"' EXIT
 
 ./ns3 run --no-build \
   "satcompute-constellation-definition-test \
---valid=contrib/satcompute/input/topology/constellations/synthetic-66.json \
---invalidRuntime=contrib/satcompute/tests/fixtures/constellation/invalid-runtime-field.json \
+--valid=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
 --outputDir=$test_output/constellation"
 
 ./ns3 run --no-build \
@@ -51,7 +50,7 @@ input_root="contrib/satcompute/input"
 dynamic_topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
 delay_topology="contrib/satcompute/tests/fixtures/topology/snapshots/delay-only"
 capacity_topology="contrib/satcompute/tests/fixtures/topology/snapshots/capacity-pending"
-diamond_constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
+diamond_constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
 ./ns3 run --no-build \
   "satcompute-snapshot-test --topologyDir=$dynamic_topology \
 --outputDir=$test_output/snapshot"

@@ -121,7 +121,7 @@ main(int argc, char* argv[])
                 "task inputs were not resolved");
 
         auto missingConstellation = defaults;
-        missingConstellation.constellationConfig = "/tmp/no-such-constellation.json";
+        missingConstellation.constellationConfig = "/tmp/no-such-constellation.csv";
         RequireResolutionError(
             [&missingConstellation]() {
                 ns3::ResolveSatComputeConfig(missingConstellation);

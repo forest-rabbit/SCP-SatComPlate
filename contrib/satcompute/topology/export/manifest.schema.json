@@ -35,7 +35,7 @@
       "minLength": 1
     },
     "constellation_config_sha256": {
-      "description": "Lowercase SHA-256 of the exact constellation-only JSON bytes.",
+      "description": "Lowercase SHA-256 of the exact native constellation CSV bytes.",
       "$ref": "#/$defs/sha256"
     },
     "ns3_version": {

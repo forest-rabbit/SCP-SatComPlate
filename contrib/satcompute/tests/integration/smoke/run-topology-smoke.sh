@@ -9,7 +9,7 @@ cd "$repository_root"
 smoke_output="$(mktemp -d /tmp/satcompute-topology-smoke.XXXXXX)"
 trap 'rm -rf "$smoke_output"' EXIT
 
-constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
+constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
 common_arguments="--runName=smoke-trace --simulationDuration=2.5 \
 --constellationConfig=$constellation --maxIslDistance=30000000 \
 --delayMode=distance --fixedDelay=0 --networkUpdateInterval=2 \

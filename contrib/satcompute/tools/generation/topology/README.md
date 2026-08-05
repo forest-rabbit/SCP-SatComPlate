@@ -10,7 +10,7 @@ Hypatia、TLE vendor、SGP4 或任何 Python 轨道公式。
 ```bash
 ./ns3 run "satcompute-topology-generator \
   --runName=synthetic-66-distance \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.json \
+  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
   --simulationDuration=100 \
   --topologyExportInterval=1 \
   --networkUpdateInterval=20 \

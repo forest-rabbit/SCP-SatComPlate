@@ -60,8 +60,7 @@ RunExport(const ResolvedSatComputeConfig& config,
 {
     TopologyTraceExportResult result;
     {
-        OnlineOrbitConstellation constellation(config.constellation,
-                                               config.simulation.startTimeNs);
+        OnlineOrbitConstellation constellation(config.constellation);
         CircularOrbitTraceExporter exporter(config, outputDirectory, constellation);
         Check(exporter.GetScheduledTimesNs() ==
                   std::vector<int64_t>({0,
@@ -194,7 +193,7 @@ main(int argc, char* argv[])
     std::string outputDirectory;
     CommandLine command(__FILE__);
     command.AddValue("constellationConfig",
-                     "Four-satellite constellation JSON",
+                     "Four-satellite native LEO shell CSV",
                      constellationConfig);
     command.AddValue("outputDir", "Temporary test output directory", outputDirectory);
     command.Parse(argc, argv);
