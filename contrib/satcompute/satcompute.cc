@@ -7,6 +7,7 @@
 #include "ns3/constellation-definition.h"
 #include "ns3/circular-orbit-topology-policy.h"
 #include "ns3/ecmp-route-recorder.h"
+#include "ns3/fault-controller.h"
 #include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/online-orbit-constellation.h"
@@ -344,8 +345,10 @@ main(int argc, char* argv[])
 
             Ptr<NetworkTransferEngine> transferEngine;
             Ptr<TaskCoordinator> taskCoordinator;
+            Ptr<FaultController> faultController;
             std::optional<ComputeProfile> computeProfile;
             std::optional<TaskTrace> taskTrace;
+            std::optional<FaultTrace> faultTrace;
             if (!config.computeProfile.empty() && !config.taskTrace.empty())
             {
                 computeProfile = ReadComputeProfile(config.computeProfile, topology);
@@ -357,13 +360,19 @@ main(int argc, char* argv[])
             }
             if (!config.faultTrace.empty())
             {
-                const FaultTrace faultTrace =
-                    ReadFaultTrace(config.faultTrace,
-                                   simulationDurationNs,
-                                   topology,
-                                   computeProfile.has_value() ? &computeProfile.value()
-                                                              : nullptr);
-                (void)faultTrace;
+                faultTrace = ReadFaultTrace(config.faultTrace,
+                                            simulationDurationNs,
+                                            topology,
+                                            computeProfile.has_value()
+                                                ? &computeProfile.value()
+                                                : nullptr);
+                // Schedule fault batches before task arrivals so an exact-time
+                // START is applied before a task arriving at the same nanosecond.
+                faultController = CreateObject<FaultController>();
+                faultController->Configure(
+                    faultTrace.value(),
+                    topology.GetIdMap().GetCanonicalSatelliteIds(),
+                    simulationDurationNs);
             }
             if (computeProfile.has_value() && taskTrace.has_value())
             {
@@ -378,6 +387,10 @@ main(int argc, char* argv[])
                                             config.diagnosticMode == "failure",
                                             simulationDurationNs);
                 transferEngine = taskCoordinator->GetTransferEngine();
+                if (faultController != nullptr)
+                {
+                    faultController->BindTaskCoordinator(taskCoordinator);
+                }
             }
 
             const Ptr<FlowMonitor> flowMonitor = InstallSimulationFlowMonitor();

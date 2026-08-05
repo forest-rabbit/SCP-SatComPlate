@@ -71,8 +71,20 @@ service_time_ns = ceil(
 
 `ComputeService` 还提供计算可用性开关，以及精确取消 running task、移除 queued
 task 的幂等接口。被取消的运行任务不会触发原 completion event，也不会计入正常
-完成数或成功计算 busy time；节点恢复后只调度队列中仍合法的任务。故障输入与这些
-接口的调度连接在后续 N4A 小步完成。
+完成数或成功计算 busy time；节点恢复后只调度队列中仍合法的任务。
+
+compute 故障开始时，`TaskCoordinator` 按当前阶段处理目标节点任务：
+
+| 当前状态 | 处理 |
+|---|---|
+| `PENDING` 且恰在同纳秒到达 | 任务失败，INPUT/RESULT 都取消 |
+| `INPUT_TRANSFERRING` | 任务失败，活动 INPUT 与未启动 RESULT 都取消 |
+| `QUEUED` | 从 FCFS 队列精确移除，任务失败，保留已完成 INPUT，取消 RESULT |
+| `RUNNING` | 取消 completion event，任务失败，保留已完成 INPUT，取消 RESULT |
+| `RESULT_TRANSFERRING` / `COMPLETED` | 计算阶段已越过，不受 compute 故障影响 |
+
+故障期间后来到达的任务同样立即失败。有限恢复只令 service 接受新任务，既不恢复
+旧 `FAILED` 任务，也不创建迁移、重放或新的 attempt。
 
 ## 结果大小与传输 ID
 
@@ -103,6 +115,8 @@ receiver 完整接收。仿真结束时：
 - `tests/unit/task-input-test.cc`：closed-world 输入、canonical 排序和派生 ID；
 - `tests/unit/compute-service-test.cc`：服务时间、FCFS 和同刻 tie-break；
 - `tests/unit/fault-lifecycle-test.cc`：任务失败终态、传输终止和资源释放；
+- `tests/unit/compute-fault-execution-test.cc`：compute 预警/开始/恢复、各任务阶段、
+  同刻排序和两次运行确定性；
 - `tests/integration/smoke/run-task-smoke.sh`：单任务完整闭环；
 - `tests/integration/regression/run-full-workload-regression.sh`：确定性、完成策略、诊断
   和 20 任务正式示例；

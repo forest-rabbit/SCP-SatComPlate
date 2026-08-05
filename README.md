@@ -20,9 +20,11 @@ SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真�
 - 仅在有效链路集合变化时重算 hop-based IPv4 路由；
 - 支持 global-first、逐流 hash、HRW、size-aware HRW 和 capacity-aware HRW；
 - 支持输入传输、非抢占 FCFS 计算和结果传输的完整任务闭环；
+- 支持确定性 compute 故障的预警、开始、有限恢复和任务/传输终止；
 - topology-only 模式可输出每个切片的卫星 `x/y/z` 与候选链路状态。
 
-故障执行、前后端实时状态传输、IPv6、SRv6、地面站和馈电链路尚未实现。
+整星通信故障、备份恢复、前后端实时状态传输、IPv6、SRv6、地面站和馈电链路
+尚未实现。
 
 ## 仓库结构
 
@@ -96,7 +98,7 @@ Python 工具仅依赖标准库，因此仓库不维护额外的 `uv.lock`，也
 |---|---|
 | [项目里程碑](MILESTONES.md) | 已完成阶段、集成证据、验证结论与后续边界 |
 | [SatCompute 运行手册](contrib/satcompute/README.md) | 执行流程、全部参数、输入输出与运行模式 |
-| [输入说明](contrib/satcompute/input/README.md) | `para.cc`、星座、算力、任务与未来故障输入的边界 |
+| [输入说明](contrib/satcompute/input/README.md) | `para.cc`、星座、算力、任务与故障输入的边界 |
 | [拓扑模块](contrib/satcompute/topology/README.md) | 原生轨道、固定候选链路、在线更新与切片 |
 | [路由模块](contrib/satcompute/routing/README.md) | 五种 IPv4 策略、核心公式与确定性状态 |
 | [任务与传输](contrib/satcompute/task/README.md) | 任务状态机、FCFS 与结果大小 |

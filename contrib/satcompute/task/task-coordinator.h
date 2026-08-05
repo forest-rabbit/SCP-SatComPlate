@@ -34,6 +34,12 @@ struct TaskEventRecord
     std::string cause;
 };
 
+struct TaskFaultImpact
+{
+    uint64_t affectedTaskCount{};
+    uint64_t affectedTransferCount{};
+};
+
 /** Coordinate input transfer, FCFS compute, and result transfer lifecycles. */
 class TaskCoordinator : public Object
 {
@@ -59,6 +65,10 @@ class TaskCoordinator : public Object
     const std::vector<TaskRuntime>& GetTaskRuntimes() const;
     const std::vector<Ptr<ComputeService>>& GetComputeServices() const;
     const std::vector<TaskEventRecord>& GetTaskEvents() const;
+    std::map<uint32_t, TaskFaultImpact> ApplyComputeFaultBatch(
+        const std::vector<uint32_t>& recoveredNodeIds,
+        const std::vector<uint32_t>& startedNodeIds);
+    bool IsComputeAvailable(uint32_t nodeId) const;
 
   private:
     uint32_t GetTaskIndex(uint64_t taskId) const;
@@ -70,6 +80,9 @@ class TaskCoordinator : public Object
                         uint32_t nodeId,
                         int64_t eventTimeNs,
                         const std::string& cause);
+    TaskFaultImpact FailTaskForComputeNode(TaskRuntime& task,
+                                           int64_t eventTimeNs,
+                                           const std::string& cause);
     void HandleTaskArrival(uint64_t taskId);
     void HandleInputTransferComplete(uint64_t transferId, int64_t completionTimeNs);
     void HandleComputeStart(uint64_t taskId, uint32_t nodeId, int64_t startTimeNs);

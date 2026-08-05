@@ -35,6 +35,7 @@ tests/
 | `compute-service-test.cc` | 整数服务时间、非抢占 FCFS 和同刻 task ID tie-break |
 | `fault-lifecycle-test.cc` | FAILED/CANCELLED 幂等终止、迟到包隔离和 reservation 归零 |
 | `fault-trace-test.cc` | closed-world 字段、时间/概率边界、区间冲突和 canonical 排序 |
+| `compute-fault-execution-test.cc` | 计算故障批处理、任务各阶段、恢复、通信不变和重复运行顺序 |
 | `online-orbit-foundation-test.cc` | 原生 mobility、连续坐标、固定 plus-grid 候选和 canonical 顺序 |
 | `online-topology-controller-test.cc` | 距离门控、fixed/distance 时延、周期更新和按边集合重算路由 |
 
