@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forest-rabbit.github.io/SCP-SatComPlate/constellation.schema.json",
+  "title": "SatCompute constellation definition 0.1",
+  "description": "Closed-world physical constellation structure. Runtime, network, routing, workload, randomness, and output settings are forbidden.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "constellation_name",
+    "constellation_pattern",
+    "num_orbits",
+    "satellites_per_orbit",
+    "altitude_m",
+    "inclination_deg",
+    "phase_diff",
+    "orbit_epoch_offset_s"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Constellation definition schema version; must be 0.1.",
+      "const": "0.1"
+    },
+    "constellation_name": {
+      "description": "Stable filesystem-safe constellation name.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "constellation_pattern": {
+      "description": "Walker structure used to span right ascension of ascending node.",
+      "enum": ["walker-star", "walker-delta"]
+    },
+    "num_orbits": {
+      "description": "Positive number of orbital planes.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 99999
+    },
+    "satellites_per_orbit": {
+      "description": "Positive number of satellites in every orbital plane.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 99999
+    },
+    "altitude_m": {
+      "description": "Circular-orbit altitude above the reference Earth surface in meters.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "inclination_deg": {
+      "description": "Orbital inclination in degrees in the half-open range [0, 180).",
+      "type": "number",
+      "minimum": 0,
+      "exclusiveMaximum": 180
+    },
+    "phase_diff": {
+      "description": "When true, odd planes receive one half-slot argument-latitude offset.",
+      "type": "boolean"
+    },
+    "orbit_epoch_offset_s": {
+      "description": "Non-negative orbit propagation offset at simulation time zero, in seconds.",
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}

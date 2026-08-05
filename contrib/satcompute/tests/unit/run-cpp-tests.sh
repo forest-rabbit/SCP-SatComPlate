@@ -32,6 +32,12 @@ invalid="contrib/satcompute/tests/fixtures/scenario/invalid-unknown-field.json"
 --taskTrace=tasks.json"
 
 ./ns3 run --no-build \
+  "satcompute-constellation-definition-test \
+--valid=contrib/satcompute/input/topology/constellations/synthetic-66.json \
+--invalidRuntime=contrib/satcompute/tests/fixtures/constellation/invalid-runtime-field.json \
+--outputDir=$test_output/constellation"
+
+./ns3 run --no-build \
   "satcompute-config-test --fixedScenario=$fixed \
 --distanceScenario=$distance --taskScenario=$task \
 --invalidScenario=$invalid --outputDir=$test_output"

@@ -1,0 +1,12 @@
+{
+  "schema_version": "0.1",
+  "constellation_name": "invalid-runtime-field",
+  "constellation_pattern": "walker-star",
+  "num_orbits": 6,
+  "satellites_per_orbit": 11,
+  "altitude_m": 780000,
+  "inclination_deg": 86.4,
+  "phase_diff": true,
+  "orbit_epoch_offset_s": 0,
+  "simulation_duration_s": 1000
+}

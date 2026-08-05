@@ -23,6 +23,7 @@ build_lib(
     task/task-coordinator.cc
     task/task-trace.cc
     topology/export/circular-orbit-trace-exporter.cc
+    topology/orbit/constellation-definition.cc
     topology/ipv4/satellite-ipv4-addressing.cc
     topology/link/satellite-link-state.cc
     topology/online/circular-orbit-topology-policy.cc
@@ -69,6 +70,7 @@ build_lib(
     task/task-coordinator.h
     task/task-trace.h
     topology/export/circular-orbit-trace-exporter.h
+    topology/orbit/constellation-definition.h
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
     topology/online/circular-orbit-topology-policy.h
@@ -114,6 +116,15 @@ build_exec(
   EXECNAME satcompute-para-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/para-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-constellation-definition-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/constellation-definition-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
