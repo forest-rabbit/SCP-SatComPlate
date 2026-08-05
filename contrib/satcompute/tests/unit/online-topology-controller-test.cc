@@ -35,6 +35,16 @@ Check(bool condition, const std::string& message)
     }
 }
 
+CircularOrbitTopologyPolicy
+MakePolicy(const ResolvedSatComputeConfig& config)
+{
+    return {config.constellation,
+            config.network.seamEnabled,
+            config.network.maxIslDistanceM,
+            config.network.delayMode,
+            config.network.fixedDelayNs};
+}
+
 void
 IncrementCounter(uint32_t* counter)
 {
@@ -72,7 +82,7 @@ RunPolicyContractCase()
         {0, Vector(0.0, 0.0, 0.0)},
         {1, Vector(3.0, 4.0, 0.0)},
     };
-    const CircularOrbitTopologyPolicy boundaryPolicy(config);
+    const CircularOrbitTopologyPolicy boundaryPolicy = MakePolicy(config);
     const CircularOrbitTopologyState boundary = boundaryPolicy.EvaluatePositions(0, positions);
     Check(boundary.evaluatedLinks.size() == 1,
           "two-satellite policy candidate count differs");
@@ -86,7 +96,7 @@ RunPolicyContractCase()
           "one-way speed-of-light conversion differs");
 
     config.network.maxIslDistanceM = std::nextafter(5.0L, 0.0L);
-    const CircularOrbitTopologyPolicy belowBoundaryPolicy(config);
+    const CircularOrbitTopologyPolicy belowBoundaryPolicy = MakePolicy(config);
     Check(!belowBoundaryPolicy.EvaluatePositions(0, positions)
                .evaluatedLinks.front()
                .active,
@@ -207,7 +217,7 @@ FindCrossingThreshold()
     CircularOrbitTopologyState finalState;
     {
         OnlineOrbitConstellation constellation(config.constellation);
-        CircularOrbitTopologyPolicy policy(config);
+        CircularOrbitTopologyPolicy policy = MakePolicy(config);
         initial = policy.EvaluateCurrent(constellation);
         Simulator::Schedule(Seconds(60), [&] {
             finalState = policy.EvaluateCurrent(constellation);

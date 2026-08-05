@@ -24,7 +24,11 @@ namespace ns3
 
 OnlineTopologyController::OnlineTopologyController(const ResolvedSatComputeConfig& config)
     : m_config(config),
-      m_topologyPolicy(config)
+      m_topologyPolicy(config.constellation,
+                       config.network.seamEnabled,
+                       config.network.maxIslDistanceM,
+                       config.network.delayMode,
+                       config.network.fixedDelayNs)
 {
     if (m_config.network.topologySource != "online" ||
         m_config.network.replayDirectory)

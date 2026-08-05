@@ -46,6 +46,7 @@ MakeOnlineTestConfig(uint32_t numOrbits,
     ResolvedSatComputeConfig config{};
     config.schemaVersion = "0.3";
     config.runName = "online-controller-test";
+    config.topologyOnly = false;
     config.simulation = {0, durationNs};
     config.constellation = MakeTestConstellation(numOrbits, satellitesPerOrbit);
     config.network = {"online",
@@ -68,7 +69,7 @@ MakeOnlineTestConfig(uint32_t numOrbits,
                         "fixed",
                         1024,
                         "strict"};
-    config.traceExport = {false, 1000000000, true, "json-slices"};
+    config.topologySlices = {1000000000, true};
     config.logging = {"summary", "summary", "off"};
     config.randomness = {1, 1, 0};
     config.outputDirectory = "/tmp/satcompute-test";
@@ -82,7 +83,6 @@ MakeReplayTestConfig(ResolvedSatComputeConfig config,
 {
     config.network.topologySource = "replay";
     config.network.replayDirectory = replayDirectory;
-    config.traceExport.enabled = false;
     return config;
 }
 

@@ -1,57 +1,19 @@
-# Topology replay snapshots
+# 历史拓扑回放快照
 
-The replay layer accepts both legacy SatCompute pairs and the self-describing
-0.2 pairs emitted by `topology/export/`.
+本目录保存迁移回归仍使用的旧版 `nodes_<time>s.json` 与
+`topology_<time>s.json` 读取逻辑。它与 `--topologyOnly=1` 生成的
+`nodes_<time>s.json`、`links_<time>s.json` 是两个不同合同：正式在线仿真不会
+读取 topology-only 切片，未来故障模型也只从这些切片生成故障事件。
 
-For a version 0.2 directory, `manifest.json` is authoritative. Replay validates
-its closed-world root and ordered slice records, verifies every listed node and
-topology SHA-256, ignores files not listed in the manifest, and then
-down-selects the requested network cadence. This permits safe reuse of a fine
-1 s or 2 s trace at a 20 s network cadence and prevents a stale or modified
-file from silently entering a run. The generating scenario hash is retained as
-provenance; it is not required to equal the replay scenario hash because the
-replay scenario intentionally changes the topology source and may select a
-different cadence.
+旧版回放目录的每个时间点必须同时存在节点和链路文件。时间片按
+`0, networkUpdateInterval, 2 * networkUpdateInterval, ...` 选择，并严格早于仿真
+终点。节点集合必须非空、唯一且在所有时间点保持一致；链路端点必须引用节点
+集合，同一无向链路不能重复。
 
-Each 0.2 pair contains the same `simulation_time_ns` and
-`state_semantics=orbit-policy-evaluation`. Node slices contain stable IDs and
-ECEF x/y/z coordinates in metres. Topology slices contain active canonical
-plus-grid links, current distance in metres, one-way delay in integer
-nanoseconds, and bandwidth in bits per second. The reader checks the embedded
-time against the exact filename time selected by the schedule. The complete
-contracts are `topology/export/nodes-slice.schema.json`,
-`topology/export/topology-slice.schema.json`, and
-`topology/export/manifest.schema.json`.
+legacy 节点文件只含 `nodes` 数组，每项为 `node_id` 和固定值 `sat` 的
+`node_type`。legacy 链路文件只含 `links` 数组，每项为 `node1_id`、`node2_id`、
+`type`、微秒制 `delay` 和 kbps 制 `link_bandwidth`。读取时只转换一次为整数
+纳秒和 bit/s；fixed 模式仍由平台 fixed delay 覆盖。
 
-Legacy directories have no manifest and retain the original pair contract:
-
-- `nodes_<seconds>s.json` contains exactly a `nodes` array. Each item contains
-  exactly `node_id` and `node_type`; the type must be `sat`.
-- `topology_<seconds>s.json` contains exactly a `links` array. Each item
-  contains `node1_id`, `node2_id`, `type`, `delay`, and `link_bandwidth`.
-Legacy `delay` is in microseconds and `link_bandwidth` is in kilobits per
-second. The loader converts them to integer nanoseconds and bits per second
-once. A pair cannot mix legacy and 0.2 encodings.
-
-Timestamp tokens are converted exactly to integer nanoseconds. Aliases such as
-`1s` and `1.0s` are therefore duplicate timestamps, and precision finer than a
-nanosecond is rejected.
-
-The directory may contain snapshots more frequently than the current scenario
-needs. Replay selects only `0`, `network_update_interval_s`, twice that interval,
-and so on strictly before `simulation.duration_s`. A final exported state
-exactly at the duration is therefore audit output and is not applied as a live
-network update. Every selected timestamp must have a complete nodes/topology
-pair; unselected complete pairs remain available for other scenarios or future
-fault generation but are not applied.
-
-An empty `links` array is valid because a distance gate or future fault overlay
-may temporarily remove every active ISL. The satellite ID set must be non-empty,
-unique, and include every link endpoint.
-
-For both encodings, scenario bandwidth remains authoritative at replay time.
-In fixed mode the scenario fixed delay overrides every stored link delay. In
-distance mode replay consumes the legacy microsecond delay or the 0.2 integer
-nanosecond delay exactly once. Coordinates are retained by the 0.2 reader for
-audit/equivalence consumers; the current replay network controller does not
-recompute the already-recorded topology from them.
+迁移期的 0.2 manifest/切片解析暂时保留给历史 fixture，但平台不再生成这种
+格式，也不再维护对应 schema、SHA-256 或 manifest 生成工具。

@@ -83,6 +83,7 @@ ResolveSatComputeConfig(const SatComputeConfig& config)
     ResolvedSatComputeConfig resolved{};
     resolved.schemaVersion = "0.3";
     resolved.runName = config.runName;
+    resolved.topologyOnly = config.topologyOnly;
     resolved.simulation.startTimeNs =
         SatComputeSecondsToNanoseconds(config.simulationStartSeconds, "simulationStart");
     resolved.simulation.durationNs =
@@ -132,12 +133,10 @@ ResolveSatComputeConfig(const SatComputeConfig& config)
     resolved.workloads.transferPayloadBytes = config.transferPayloadBytes;
     resolved.workloads.taskCompletionPolicy = config.taskCompletionPolicy;
 
-    resolved.traceExport.enabled = config.topologyExportEnabled;
-    resolved.traceExport.intervalNs = SatComputeSecondsToNanoseconds(
-        config.topologyExportIntervalSeconds,
-        "topologyExportInterval");
-    resolved.traceExport.includeFinalState = config.includeFinalTopologyState;
-    resolved.traceExport.format = "json-slices";
+    resolved.topologySlices.intervalNs = SatComputeSecondsToNanoseconds(
+        config.topologySliceIntervalSeconds,
+        "topologySliceInterval");
+    resolved.topologySlices.includeFinalState = config.includeFinalTopologyState;
 
     resolved.logging.transferLogMode = config.transferLogMode;
     resolved.logging.taskLogMode = config.taskLogMode;

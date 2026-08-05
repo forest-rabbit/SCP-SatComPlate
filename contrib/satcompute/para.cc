@@ -135,8 +135,8 @@ GetDefaultSatComputeConfig()
     config.taskCompletionPolicy = "strict";
 
     // 拓扑切片精度独立于网络更新频率，输出默认写到工作树之外。
-    config.topologyExportEnabled = true;
-    config.topologyExportIntervalSeconds = 1.0;
+    config.topologyOnly = false;
+    config.topologySliceIntervalSeconds = 1.0;
     config.includeFinalTopologyState = true;
     config.outputDirectory = "/tmp/satcompute-output";
     config.transferLogMode = "summary";
@@ -212,12 +212,12 @@ AddSatComputeCommandLineOptions(CommandLine& commandLine, SatComputeConfig& conf
                          "Task completion policy: strict or report",
                          config.taskCompletionPolicy);
 
-    commandLine.AddValue("topologyExportEnabled",
-                         "Export position and topology slices",
-                         config.topologyExportEnabled);
-    commandLine.AddValue("topologyExportInterval",
-                         "Topology export interval in seconds",
-                         config.topologyExportIntervalSeconds);
+    commandLine.AddValue("topologyOnly",
+                         "Generate topology slices without network simulation",
+                         config.topologyOnly);
+    commandLine.AddValue("topologySliceInterval",
+                         "Topology slice interval in seconds",
+                         config.topologySliceIntervalSeconds);
     commandLine.AddValue("includeFinalTopologyState",
                          "Export the simulation end state",
                          config.includeFinalTopologyState);
@@ -328,7 +328,16 @@ ValidateSatComputeConfig(const SatComputeConfig& config)
                   "taskCompletionPolicy",
                   {"strict", "report"});
 
-    RequirePositiveSeconds(config.topologyExportIntervalSeconds, "topologyExportInterval");
+    RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
+    if (config.topologyOnly && config.topologySource != "online")
+    {
+        FailConfig("topologyOnly", "requires online topology");
+    }
+    if (config.topologyOnly &&
+        (!config.transferTrace.empty() || hasComputeProfile || hasTaskTrace))
+    {
+        FailConfig("topologyOnly", "cannot load transfer or task workloads");
+    }
     RequireNotEmpty(config.outputDirectory, "outputDir");
     RequireChoice(config.transferLogMode,
                   "transferLogMode",

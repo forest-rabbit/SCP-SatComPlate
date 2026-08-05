@@ -5,13 +5,14 @@
 #ifndef SATCOMPUTE_CIRCULAR_ORBIT_TOPOLOGY_POLICY_H
 #define SATCOMPUTE_CIRCULAR_ORBIT_TOPOLOGY_POLICY_H
 
-#include "../../resolved-config.h"
 #include "../orbit/online-orbit-constellation.h"
 #include "../snapshot/snapshot-types.h"
 #include "plus-grid-candidate.h"
 
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace ns3
@@ -59,7 +60,20 @@ int64_t DistanceToPropagationDelayNs(double distanceM);
 class CircularOrbitTopologyPolicy
 {
   public:
-    explicit CircularOrbitTopologyPolicy(const ResolvedSatComputeConfig& config);
+    /**
+     * 构造固定 plus-grid 候选策略。
+     *
+     * @param constellation 星座结构。
+     * @param seamEnabled 是否包含首尾轨道面 seam 候选。
+     * @param maxIslDistanceM 候选链路有效距离门限。
+     * @param delayMode `fixed` 或 `distance`。
+     * @param fixedDelayNs fixed 模式单向时延；distance 模式为空。
+     */
+    CircularOrbitTopologyPolicy(const ConstellationDefinition& constellation,
+                                bool seamEnabled,
+                                long double maxIslDistanceM,
+                                const std::string& delayMode,
+                                std::optional<int64_t> fixedDelayNs);
 
     const std::vector<PlusGridCandidateLink>& GetCandidates() const;
     CircularOrbitTopologyState EvaluateCurrent(
@@ -69,7 +83,10 @@ class CircularOrbitTopologyPolicy
         const std::vector<SatelliteEcefPosition>& positions) const;
 
   private:
-    ResolvedSatComputeConfig m_config;
+    uint32_t m_satelliteCount{};
+    long double m_maxIslDistanceM{};
+    std::string m_delayMode;
+    std::optional<int64_t> m_fixedDelayNs;
     std::vector<PlusGridCandidateLink> m_candidates;
 };
 

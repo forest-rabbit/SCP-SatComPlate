@@ -79,8 +79,9 @@ main(int argc, char* argv[])
         Require(!resolved.workloads.transferTrace && !resolved.workloads.computeProfile &&
                     !resolved.workloads.taskTrace,
                 "default workloads must be empty");
-        Require(resolved.traceExport.enabled && resolved.traceExport.intervalNs == 1000000000LL,
-                "trace export resolution differs");
+        Require(!resolved.topologyOnly &&
+                    resolved.topologySlices.intervalNs == 1000000000LL,
+                "topology-only resolution differs");
         Require(resolved.logging.transferLogMode == "summary" &&
                     resolved.logging.taskLogMode == "summary" &&
                     resolved.logging.diagnosticMode == "off",

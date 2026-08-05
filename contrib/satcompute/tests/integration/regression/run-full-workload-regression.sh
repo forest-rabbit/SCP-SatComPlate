@@ -21,8 +21,7 @@ transfer_inputs="contrib/satcompute/tests/fixtures/traffic/transfers"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 common="--simulationDuration=5 --constellationConfig=$constellation \
 --topologySource=replay --topologyDir=$topology --delayMode=fixed \
---fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
---topologyExportEnabled=false"
+--fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=100000000"
 
 direct_result="$(run_platform "$regression_output/direct" \
   "$common --runName=direct-replay --routingMode=global-first \
@@ -56,7 +55,7 @@ partial_common="--simulationDuration=1 --constellationConfig=$constellation \
 --topologySource=replay --topologyDir=$topology --delayMode=fixed \
 --fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=1000000 \
 --routingMode=global-first --transferTrace=$transfer_inputs/platform-partial.json \
---transferPayloadBytes=1400 --diagnosticMode=failure --topologyExportEnabled=false"
+--transferPayloadBytes=1400 --diagnosticMode=failure"
 set +e
 strict_result="$(run_platform "$regression_output/strict" \
   "$partial_common --runName=partial-strict --taskCompletionPolicy=strict")"
@@ -85,8 +84,7 @@ task_failure_common="--simulationDuration=1 --constellationConfig=$constellation
 --islQueueBytes=1 --routingMode=global-first \
 --computeProfile=$task_inputs/compute-profile-single.json \
 --taskTrace=$task_inputs/task-single.json --transferPayloadBytes=1024 \
---diagnosticMode=failure --taskCompletionPolicy=strict \
---topologyExportEnabled=false"
+--diagnosticMode=failure --taskCompletionPolicy=strict"
 set +e
 task_failure_result="$(run_platform "$regression_output/task-failure" \
   "$task_failure_common --runName=task-failure")"
