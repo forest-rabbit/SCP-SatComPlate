@@ -14,6 +14,9 @@
 namespace ns3
 {
 
+/** ISL 直线距离校验使用的最低离地高度，单位为米。 */
+inline constexpr long double SATCOMPUTE_MINIMUM_ISL_RAY_ALTITUDE_METERS = 80000.0L;
+
 /** 原生 LEO shell CSV 无法读取或不满足平台约束时抛出的异常。 */
 class ConstellationDefinitionError : public std::runtime_error
 {
@@ -47,6 +50,31 @@ struct ConstellationDefinition
  * @throws ConstellationDefinitionError 文件、数据行或取值无效时抛出。
  */
 ConstellationDefinition LoadConstellationDefinition(const std::filesystem::path& path);
+
+/**
+ * 计算给定圆轨道高度下不低于指定离地高度的最长弦长。
+ *
+ * 地球半径与 ns-3.48 LeoCircularOrbitMobilityModel 使用的球形地球一致。
+ *
+ * @param altitudeKm 轨道离地高度，单位为千米。
+ * @param minimumRayAltitudeMeters ISL 射线最低离地高度，单位为米。
+ * @return 几何允许的最长弦长，单位为米，尚未向下取整。
+ * @throws ConstellationDefinitionError 参数非有限、为负或轨道不高于射线下限时抛出。
+ */
+long double CalculateClearanceLimitedMaxIslDistanceMeters(
+    long double altitudeKm,
+    long double minimumRayAltitudeMeters);
+
+/**
+ * 校验 ISL 距离门限不超过当前 shell 的 80 km clearance 弦长上限。
+ *
+ * @param shell 已严格校验的原生 LEO shell。
+ * @param configuredMaxIslDistanceMeters 配置的 ISL 最大距离，单位为米。
+ * @throws ConstellationDefinitionError 距离或几何边界无效时抛出。
+ */
+void ValidateMaxIslDistanceAgainstOrbit(
+    const LeoOrbitalShell& shell,
+    long double configuredMaxIslDistanceMeters);
 
 } // namespace ns3
 

@@ -9,13 +9,13 @@ cd "$repository_root"
 smoke_output="$(mktemp -d /tmp/satcompute-diagnostics-smoke.XXXXXX)"
 trap 'rm -rf "$smoke_output"' EXIT
 
-constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
+constellation="contrib/satcompute/tests/fixtures/constellation/connected-16.csv"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 
 set +e
 result="$(./ns3 run --no-build \
   "satcompute --simulationDuration=1 \
---constellationConfig=$constellation --maxIslDistance=30000000 \
+--constellationConfig=$constellation --maxIslDistance=6171353 \
 --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 --islQueueBytes=1 \
 --routingMode=global-first \

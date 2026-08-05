@@ -37,6 +37,10 @@ satellite_id(plane, slot) = plane * S + slot
 因此 ID 空间固定为 `0..P*S-1`，与进程中其他 ns-3 节点的创建历史无关。
 `SatelliteIdMap` 显式保存这一映射，代码不能用 `Node::GetId()` 代替外部卫星 ID。
 
+星座解析器在创建节点前拒绝非 UTF-8、拼错的表头、多余数据行和非六列 shell；
+随后用 ns-3.48 球形地球半径校验 `maxIslDistance` 的 80 km clearance 上限。
+该跨输入校验只执行一次，不进入轨道 mobility 或周期 topology tick。
+
 `OnlineOrbitConstellation` 只封装 ns-3.48 的
 `LeoCircularOrbitMobilityModel`。坐标连续随仿真时间演化；网络更新周期和拓扑切片
 周期只决定何时采样，不改变轨道自身的演化。
