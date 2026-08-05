@@ -6,10 +6,21 @@
 #define SATCOMPUTE_PARA_H
 
 #include <cstdint>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace ns3
 {
+
+class CommandLine;
+
+/** 参数值不满足 SatCompute 平台合同时抛出的异常。 */
+class SatComputeConfigError : public std::invalid_argument
+{
+  public:
+    using std::invalid_argument::invalid_argument;
+};
 
 /**
  * SatCompute 的平台运行参数。
@@ -68,6 +79,32 @@ struct SatComputeConfig
  * @return 尚未经过命令行覆盖和语义校验的默认配置。
  */
 SatComputeConfig GetDefaultSatComputeConfig();
+
+/**
+ * 向 ns-3 命令行解析器注册全部 SatCompute 平台参数。
+ *
+ * @param commandLine 待注册选项的命令行解析器。
+ * @param config 接收命令行覆盖值的配置对象。
+ */
+void AddSatComputeCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config);
+
+/**
+ * 校验平台参数之间的基础约束，不读取输入文件。
+ *
+ * @param config 待校验的平台配置。
+ * @throws SatComputeConfigError 参数不满足平台合同时抛出。
+ */
+void ValidateSatComputeConfig(const SatComputeConfig& config);
+
+/**
+ * 将人工输入的秒数转换为整数纳秒。
+ *
+ * @param seconds 非负、有限的秒数。
+ * @param fieldName 用于错误消息的参数名。
+ * @return 四舍五入到最近纳秒的整数值。
+ * @throws SatComputeConfigError 输入无效或超过 int64 纳秒范围时抛出。
+ */
+int64_t SatComputeSecondsToNanoseconds(double seconds, std::string_view fieldName);
 
 } // namespace ns3
 
