@@ -105,7 +105,7 @@
 |---|---|---|---|
 | `tools/generation/generate-task-workload.py` | 已恢复 | 恢复并适配路径 | 已完成；只读取节点/算力并输出确定性 TaskTrace + summary |
 | `tools/generation/generate-transfer-workload.py` | 已恢复 | 恢复并适配路径 | 已完成；只读取稳定卫星 ID 并输出 NetworkTransfer |
-| `tools/generation/scenario/*` | 缺失 | 恢复非轨道场景生成边界 | 待迁移 |
+| `tools/generation/scenario/*` | 已重建独立 input bundle 组合器 | 恢复非轨道场景生成边界 | 已完成；不生成完整运行配置，fault 槽位暂为 null |
 | `tools/generation/topology/common/*` | 已重建只读 manifest checker | 恢复原子输出/schema/checker 工具 | 已完成；原子写入/schema 复用 C++ exporter，Python 只验清单与哈希 |
 | `tools/generation/topology/static/*` | 由同一 C++ 工具的单切片参数覆盖 | 按当前合同审计后恢复 | 已替代；不保留第二套静态拓扑算法 |
 | `tools/generation/topology/dynamic/*` | 已由共享 C++ executable 替代 | 由共享 C++ 轨道 exporter 替代传播部分 | 已完成；与平台 export-only 逐字节等价 |
