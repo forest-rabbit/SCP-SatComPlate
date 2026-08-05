@@ -1,7 +1,7 @@
 # 实施计划：SatCompute ns-3.48 legacy-parity 迁移
 
-状态：已批准，阶段 0 至阶段 5 已完成；阶段 5 唯一一次 GitHub CI run
-`30977572201` 已通过，下一步进入阶段 6 的 metrics 与诊断迁移。
+状态：已批准，阶段 0 至阶段 6 已完成；阶段 6 唯一一次 GitHub CI run
+`30983721371` 已通过，下一步进入阶段 7 的完整回归与收尾。
 
 依据：[平台 v0.3 规格](../specs/platform-v0.3.md)。
 
@@ -321,19 +321,19 @@ JSON 内容和稳定 ID，不把运行结果提交到仓库。
 
 ## 阶段 6：metrics 与诊断
 
-### 任务 6.1：恢复 core metrics
+### 任务 6.1：恢复 core metrics（已完成）
 
 恢复 FlowMonitor、网络汇总、transfer、task、compute node 和 run summary 文件。
 
-### 任务 6.2：恢复 routing metrics
+### 任务 6.2：恢复 routing metrics（已完成）
 
 恢复 route recorder、ECMP、size-aware 和 capacity-aware 独立输出。
 
-### 任务 6.3：恢复 diagnostics
+### 任务 6.3：恢复 diagnostics（已完成）
 
 恢复 incomplete object、drop reason、ISL queue 和 UDP socket 诊断。
 
-### 任务 6.4：移除聚合 writer
+### 任务 6.4：移除聚合 writer（已完成）
 
 所有等价输出迁入分层实现后删除 `run-output-writer.*`，由 `MetricsRecorder` 统一
 编排。
@@ -344,6 +344,22 @@ JSON 内容和稳定 ID，不把运行结果提交到仓库。
 - 新 topology/effective-config 证据仍保留；
 - 大阶段本地完整指标回归通过；
 - `main` 手动运行一次 SatCompute CI。
+
+实现结果（2026-08-05）：
+
+- PR #54 恢复真实 IPv4 FlowMonitor、legacy transfer/task/compute/run 输出，并以
+  加法兼容方式保留 effective config、拓扑来源、切片次数和路由重算次数；
+- PR #55 恢复 ECMP recorder、ECMP、size-aware 与 capacity-aware 独立指标；
+- PR #56 恢复 failure diagnostics 与 FlowMonitor DropReason，任务失败生成统一九文件
+  目录，NetworkTransfer 只生成丢包原因；
+- PR #57 恢复 `metrics/metrics.*` 和 `MetricsRecorder`，删除
+  `run-output-writer.*`；经字段审计移除无独有证据的两个过渡 routing 输出；
+- legacy task failure、DropReason 与 ECMP 校验器均直接通过 ns-3.48 输出，完整任务、
+  未完成直传和真实 ISL queue Drop 任务失败三条路径均有门禁；
+- main 上 62 个 Python 测试、全部项目 C++ 测试、smoke 和 regression 通过；
+- 阶段 6 唯一一次 GitHub CI run `30983721371` 在 main commit `bd08992c9`
+  上手动触发，2m37s 通过；工作流未启用或运行 ns-3 examples、全局 tests 或
+  `test.py`。
 
 ## 阶段 7：完整回归与收尾
 
