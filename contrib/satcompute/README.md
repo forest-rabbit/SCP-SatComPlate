@@ -158,7 +158,8 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 | `--diagnosticMode` | `off` | 枚举 | `off` 或 `failure`；后者在部分完成时写失败证据 |
 
 运行摘要会记录实际使用的关键参数和各层结果，仅作为本次仿真的输出证据，不是
-第二个配置入口。
+第二个配置入口。提供 `faultTrace` 时还会生成 `fault-events.csv` 和
+`fault-summary.json`；空路径不生成故障专用文件。
 
 ## 星座与动态拓扑
 
@@ -229,8 +230,9 @@ ceil(compute_work_units * 1,000,000,000
 ## 输出与验证
 
 正式仿真常用输出包括 `run-summary.json`、网络逐流指标、传输/任务指标、计算节点
-利用率、路由事件，以及相应 size-aware/capacity-aware 汇总。只有显式启用失败
-诊断且运行部分完成时，才保留 `diagnostics/failure/`。完整文件说明见
+利用率、路由事件，以及相应 size-aware/capacity-aware 与 fault 汇总。任务和
+transfer 汇总会保留故障终态、原因与时间。只有显式启用失败诊断且运行部分完成时，
+才保留 `diagnostics/failure/`。完整文件说明见
 [metrics README](metrics/README.md)。
 
 测试命令、覆盖范围和阶段 CI 规则统一放在

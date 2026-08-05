@@ -11,7 +11,7 @@
 | `fault-definition.h/.cc` | `compute`/`satellite` 类型、字段记录和派生预警/恢复时刻 |
 | `fault-trace.h/.cc` | closed-world JSON、节点/算力引用校验、区间冲突检测和排序 |
 | `fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
-| `fault-controller.h/.cc` | timestamp 分组、事件排序、状态变更和 TaskCoordinator 联动 |
+| `fault-controller.h/.cc` | timestamp 分组、事件排序，以及任务、传输与有效拓扑联动 |
 
 `failure_probability` 只是预警时暴露给未来决策器的风险估计。只要事件已写入 trace，
 它就一定在 `start_time_ns` 发生，平台不会再次按概率抽样。`duration_ns=null` 表示持续
@@ -67,7 +67,10 @@ transfer；随后原子关闭最终故障集合关联的 ISL。有效边集合�
 旧 `FAILED/CANCELLED` 对象。
 
 `FaultRuntimeEventRecord` 保留 notice/start/recovery 后的三类可用性、受影响任务和
-传输数及路由重算证据。持久化 `fault-events.csv` 和汇总指标在 N4A 的指标收口小步
-统一接入。
+传输数及路由重算证据。正式运行把这些记录按控制器事件顺序写入
+`fault-events.csv`；`fault-summary.json` 汇总故障类型、事件、仿真结束时活动故障、
+失败任务、FAILED/CANCELLED transfer 和故障引起的路由重算次数。未提供
+`faultTrace` 时不生成这两个文件。
 
-完整输入字段见 [`input/fault/README.md`](../input/fault/README.md)。
+完整输入字段见 [`input/fault/README.md`](../input/fault/README.md)，输出字段职责见
+[`metrics/README.md`](../metrics/README.md)。

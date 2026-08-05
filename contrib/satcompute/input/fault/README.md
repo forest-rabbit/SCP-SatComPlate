@@ -46,3 +46,7 @@
 ISL 并重算路由。有限恢复只接纳后续任务，整星恢复还会按恢复时刻的实时距离重新
 判断候选链路，不复活旧任务/transfer。`topologyOnly=1` 不接受 `faultTrace`，因为
 切片生成仍描述无故障的自然拓扑。
+
+提供该输入后，正式仿真额外生成 `fault-events.csv` 和 `fault-summary.json`；前者
+保留每个确定性事件及事件后的状态，后者汇总故障、失败对象和故障路由重算计数。
+字段说明见 [`metrics/README.md`](../../metrics/README.md)。

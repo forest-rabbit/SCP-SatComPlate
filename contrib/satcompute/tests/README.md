@@ -58,7 +58,9 @@ tests/
 - `run-full-routing-regression.sh`：运行五种 IPv4 模式、distance 时延、重复
   size-aware 仿真和 66 星在线拓扑；
 - `run-full-workload-regression.sh`：运行任务确定性、无任务模式、strict/report、
-  失败诊断，并执行正式的 100 秒/66 星/20 任务示例。
+  失败诊断，并执行正式的 100 秒/66 星/20 任务示例；
+- `run-fault-lifecycle-regression.sh`：执行 compute 与整星故障，检查精确事件、终态
+  指标、capacity 账本归零、重复运行逐字节一致和无故障目录复用。
 
 ## 本地运行
 

@@ -47,7 +47,8 @@ WriteTransferSummaries(const std::vector<TransferSummaryRecord>& summaries,
               "effective_payload_bytes,pacing_mode,derived_packet_count,"
               "final_packet_payload_bytes,arrival_time_ns,last_send_time_ns,"
               "sent_application_bytes,received_application_bytes,received_packet_count,"
-              "completion_time_ns,completion_delay_ns\n";
+              "completion_time_ns,completion_delay_ns,terminal_state,terminal_reason,"
+              "terminal_time_ns,stale_packet_count,capacity_waiting_time_ns\n";
     for (const TransferSummaryRecord& summary : summaries)
     {
         output << summary.transferId << ',' << summary.sourceSatelliteId << ','
@@ -59,7 +60,9 @@ WriteTransferSummaries(const std::vector<TransferSummaryRecord>& summaries,
                << summary.arrivalTimeNs << ',' << summary.lastSendTimeNs << ','
                << summary.sentApplicationBytes << ',' << summary.receivedApplicationBytes << ','
                << summary.receivedPacketCount << ',' << summary.completionTimeNs << ','
-               << summary.completionDelayNs << '\n';
+               << summary.completionDelayNs << ',' << summary.transferState << ','
+               << summary.terminalReason << ',' << summary.terminalTimeNs << ','
+               << summary.stalePacketCount << ',' << summary.capacityWaitingTimeNs << '\n';
     }
 }
 

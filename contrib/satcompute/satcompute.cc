@@ -414,6 +414,7 @@ main(int argc, char* argv[])
                 wallClockNs,
                 topology.GetAppliedTopologySliceCount(),
                 topology.GetRouteComputationCount(),
+                faultController,
                 topology.GetFlowRouteRegistry(),
                 capacitySummary,
                 flowMonitor,
