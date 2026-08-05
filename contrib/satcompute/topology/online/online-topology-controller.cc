@@ -48,12 +48,7 @@ OnlineTopologyController::OnlineTopologyController(
                                          "simulationDuration")),
       m_networkUpdateIntervalNs(
           SatComputeSecondsToNanoseconds(config.networkUpdateIntervalSeconds,
-                                         "networkUpdateInterval")),
-      m_topologyPolicy(constellation,
-                       config.seamEnabled,
-                       config.maxIslDistanceMeters,
-                       config.delayMode,
-                       ResolveFixedDelay(config))
+                                         "networkUpdateInterval"))
 {
     if (!TryParseRoutingMode(m_config.routingMode, m_routingMode))
     {
@@ -96,6 +91,12 @@ OnlineTopologyController::Initialize()
     }
 
     m_constellation = std::make_unique<OnlineOrbitConstellation>(m_constellationDefinition);
+    m_topologyPolicy = std::make_unique<CircularOrbitTopologyPolicy>(
+        m_constellationDefinition,
+        m_constellation->GetPositions(),
+        m_config.maxIslDistanceMeters,
+        m_config.delayMode,
+        ResolveFixedDelay(m_config));
     const NodeContainer& nodes = m_constellation->GetNodes();
     const SatelliteIdMap& idMap = m_constellation->GetIdMap();
     if (IsReservationAwareRoutingMode(m_routingMode))
@@ -124,7 +125,7 @@ OnlineTopologyController::Initialize()
                                                        m_config.islMtuBytes,
                                                        m_config.islQueueBytes,
                                                        m_config.diagnosticMode == "failure");
-    m_lastTopologyState = m_topologyPolicy.EvaluateCurrent(*m_constellation);
+    m_lastTopologyState = m_topologyPolicy->EvaluateCurrent(*m_constellation);
     m_linkState->PrepareCandidateLinks(
         m_lastTopologyState.GetCandidateLinks(m_config.islBandwidthBps));
     m_lastUpdateSummary = m_linkState->ApplyFullSnapshot(
@@ -153,7 +154,7 @@ OnlineTopologyController::Initialize()
 void
 OnlineTopologyController::ApplyScheduledUpdate()
 {
-    m_lastTopologyState = m_topologyPolicy.EvaluateCurrent(*m_constellation);
+    m_lastTopologyState = m_topologyPolicy->EvaluateCurrent(*m_constellation);
     m_lastUpdateSummary = m_linkState->ApplyFullSnapshot(
         m_lastTopologyState.GetActiveLinks(m_config.islBandwidthBps));
     ++m_appliedUpdateCount;

@@ -21,13 +21,11 @@ struct SatComputeConfig
 {
     double simulationDurationSeconds; ///< 仿真持续时间，单位为秒。
 
-    std::string constellationConfig;      ///< 原生 LEO shell CSV 路径。
-    std::string islCandidateStrategy;     ///< 固定候选 ISL 生成策略。
-    bool seamEnabled;                     ///< 是否允许跨 seam 候选链路。
-    double maxIslDistanceMeters;          ///< ISL 最大允许距离，单位为米。
-    std::string delayMode;                ///< 时延模式：fixed 或 distance。
-    double fixedDelaySeconds;             ///< fixed 模式单向链路时延，单位为秒。
-    double networkUpdateIntervalSeconds;  ///< 网络状态应用周期，单位为秒。
+    std::string constellationConfig;     ///< 原生 LEO shell CSV 路径。
+    double maxIslDistanceMeters;         ///< ISL 最大允许距离，单位为米。
+    std::string delayMode;               ///< 时延模式：fixed 或 distance。
+    double fixedDelaySeconds;            ///< fixed 模式单向链路时延，单位为秒。
+    double networkUpdateIntervalSeconds; ///< 网络状态应用周期，单位为秒。
 
     uint64_t islBandwidthBps;     ///< 每条 ISL 的数据速率，单位为 bit/s。
     uint16_t islMtuBytes;         ///< 每个 ISL 设备的 MTU，单位为字节。

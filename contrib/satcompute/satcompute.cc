@@ -132,10 +132,6 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
     commandLine.AddValue("constellationConfig",
                          "Path to the native LEO shell CSV",
                          config.constellationConfig);
-    commandLine.AddValue("islCandidateStrategy",
-                         "Fixed candidate ISL strategy",
-                         config.islCandidateStrategy);
-    commandLine.AddValue("seamEnabled", "Enable seam candidate links", config.seamEnabled);
     commandLine.AddValue("maxIslDistance",
                          "Maximum valid ISL distance in meters",
                          config.maxIslDistanceMeters);
@@ -188,7 +184,6 @@ ValidateConfig(const SatComputeConfig& config)
 {
     RequireNotEmpty(config.constellationConfig, "constellationConfig");
     RequirePositiveSeconds(config.simulationDurationSeconds, "simulationDuration");
-    RequireChoice(config.islCandidateStrategy, "islCandidateStrategy", {"plus-grid"});
     if (!std::isfinite(config.maxIslDistanceMeters) || config.maxIslDistanceMeters <= 0.0)
     {
         FailConfig("maxIslDistance", "must be a finite positive number of meters");
@@ -302,7 +297,7 @@ main(int argc, char* argv[])
             {
                 OnlineOrbitConstellation constellation(constellationDefinition);
                 CircularOrbitTopologyPolicy policy(constellationDefinition,
-                                                   config.seamEnabled,
+                                                   constellation.GetPositions(),
                                                    config.maxIslDistanceMeters,
                                                    config.delayMode,
                                                    fixedDelayNs);

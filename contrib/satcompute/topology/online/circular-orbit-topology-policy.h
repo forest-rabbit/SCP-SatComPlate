@@ -64,13 +64,13 @@ class CircularOrbitTopologyPolicy
      * 构造固定 plus-grid 候选策略。
      *
      * @param constellation 星座结构。
-     * @param seamEnabled 是否包含首尾轨道面 seam 候选。
+     * @param initialPositions 仿真零时刻的原生轨道坐标。
      * @param maxIslDistanceM 候选链路有效距离门限。
      * @param delayMode `fixed` 或 `distance`。
      * @param fixedDelayNs fixed 模式单向时延；distance 模式为空。
      */
     CircularOrbitTopologyPolicy(const ConstellationDefinition& constellation,
-                                bool seamEnabled,
+                                const std::vector<SatelliteEcefPosition>& initialPositions,
                                 long double maxIslDistanceM,
                                 const std::string& delayMode,
                                 std::optional<int64_t> fixedDelayNs);

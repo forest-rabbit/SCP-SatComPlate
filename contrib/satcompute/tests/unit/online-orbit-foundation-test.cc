@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include <vector>
 
 using namespace ns3;
 
@@ -97,44 +98,71 @@ ToSet(const std::vector<PlusGridCandidateLink>& links)
     return result;
 }
 
+std::vector<SatelliteEcefPosition>
+MakeShiftedPlanePositions(uint32_t planes, uint32_t satellitesPerOrbit)
+{
+    std::vector<SatelliteEcefPosition> positions;
+    positions.reserve(planes * satellitesPerOrbit);
+    for (uint32_t plane = 0; plane < planes; ++plane)
+    {
+        for (uint32_t slot = 0; slot < satellitesPerOrbit; ++slot)
+        {
+            const uint32_t satelliteId = plane * satellitesPerOrbit + slot;
+            const uint32_t physicalSlot =
+                (slot + satellitesPerOrbit - plane % satellitesPerOrbit) %
+                satellitesPerOrbit;
+            positions.push_back(
+                {satelliteId,
+                 Vector(static_cast<double>(physicalSlot * 100),
+                        static_cast<double>(plane),
+                        0.0)});
+        }
+    }
+    return positions;
+}
+
 void
 RunCandidateCase()
 {
     const ConstellationDefinition config = MakeTestConstellation(3, 4);
-    const auto withoutSeam = BuildPlusGridCandidateLinks(config, false);
-    const auto withSeam = BuildPlusGridCandidateLinks(config, true);
-    Check(withoutSeam.size() == 20, "plus-grid no-seam edge count differs");
-    Check(withSeam.size() == 24, "plus-grid seam edge count differs");
-    for (std::size_t index = 1; index < withSeam.size(); ++index)
+    const std::vector<SatelliteEcefPosition> initialPositions =
+        MakeShiftedPlanePositions(3, 4);
+    const auto candidates = BuildPlusGridCandidateLinks(config, initialPositions);
+    Check(candidates.size() == 20, "plus-grid edge count differs");
+    for (std::size_t index = 1; index < candidates.size(); ++index)
     {
         const auto previous =
-            std::tie(withSeam[index - 1].sourceId, withSeam[index - 1].destinationId);
-        const auto current = std::tie(withSeam[index].sourceId, withSeam[index].destinationId);
+            std::tie(candidates[index - 1].sourceId, candidates[index - 1].destinationId);
+        const auto current = std::tie(candidates[index].sourceId,
+                                      candidates[index].destinationId);
         Check(previous < current, "plus-grid candidate order is not canonical");
     }
 
-    const auto noSeamSet = ToSet(withoutSeam);
-    const auto seamSet = ToSet(withSeam);
-    Check(noSeamSet.contains({0, 1, PlusGridCandidateKind::INTRA_PLANE}),
+    const auto candidateSet = ToSet(candidates);
+    Check(candidateSet.contains({0, 1, PlusGridCandidateKind::INTRA_PLANE}),
           "same-plane ring candidate is missing");
-    Check(noSeamSet.contains({0, 3, PlusGridCandidateKind::INTRA_PLANE}),
+    Check(candidateSet.contains({0, 3, PlusGridCandidateKind::INTRA_PLANE}),
           "same-plane wrap candidate is missing");
-    Check(noSeamSet.contains({0, 4, PlusGridCandidateKind::INTER_PLANE}),
-          "adjacent-plane candidate is missing");
-    Check(!noSeamSet.contains({0, 8, PlusGridCandidateKind::INTER_PLANE}),
-          "disabled seam created a final-to-first-plane candidate");
-    Check(seamSet.contains({0, 8, PlusGridCandidateKind::INTER_PLANE}),
-          "enabled seam candidate is missing");
+    Check(candidateSet.contains({0, 5, PlusGridCandidateKind::INTER_PLANE}),
+          "first adjacent-plane initial-nearest match is missing");
+    Check(candidateSet.contains({4, 9, PlusGridCandidateKind::INTER_PLANE}),
+          "second adjacent-plane initial-nearest match is missing");
+    Check(!candidateSet.contains({0, 4, PlusGridCandidateKind::INTER_PLANE}),
+          "same-slot inter-plane link replaced the initial-nearest match");
+    Check(!candidateSet.contains({0, 8, PlusGridCandidateKind::INTER_PLANE}),
+          "final and first orbital planes were connected across the seam");
 
     const ConstellationDefinition small = MakeTestConstellation(2, 2);
-    Check(BuildPlusGridCandidateLinks(small, false).size() == 4,
+    const std::vector<SatelliteEcefPosition> smallPositions =
+        MakeShiftedPlanePositions(2, 2);
+    Check(BuildPlusGridCandidateLinks(small, smallPositions).size() == 4,
           "small plus-grid did not deduplicate two-node rings");
-    Check(BuildPlusGridCandidateLinks(small, true).size() == 4,
-          "small plus-grid did not deduplicate its seam");
-    Check(BuildPlusGridCandidateLinks(MakeTestConstellation(1, 1), true).empty(),
+    Check(BuildPlusGridCandidateLinks(MakeTestConstellation(1, 1),
+                                      MakeShiftedPlanePositions(1, 1))
+              .empty(),
           "single-satellite plus-grid created a self-loop");
-    Check(withoutSeam == BuildPlusGridCandidateLinks(config, false),
-          "fixed candidate identities changed between evaluations");
+    Check(candidates == BuildPlusGridCandidateLinks(config, initialPositions),
+          "initial-nearest candidate matching is not deterministic");
 }
 
 void

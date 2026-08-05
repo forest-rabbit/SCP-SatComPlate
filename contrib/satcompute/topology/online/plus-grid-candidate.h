@@ -6,6 +6,7 @@
 #define SATCOMPUTE_PLUS_GRID_CANDIDATE_H
 
 #include "../orbit/constellation-definition.h"
+#include "../orbit/online-orbit-constellation.h"
 
 #include <cstdint>
 #include <stdexcept>
@@ -36,10 +37,16 @@ struct PlusGridCandidateLink
     bool operator==(const PlusGridCandidateLink&) const = default;
 };
 
-/** Build the canonical plus-grid graph without consulting satellite distance. */
+/**
+ * Build the fixed plus-grid graph from the positions at simulation time zero.
+ *
+ * Every satellite keeps its two intra-plane ring neighbors. Each pair of
+ * adjacent planes uses the minimum-total-distance cyclic one-to-one offset;
+ * the resulting satellite identities remain fixed for the whole simulation.
+ */
 std::vector<PlusGridCandidateLink> BuildPlusGridCandidateLinks(
     const ConstellationDefinition& constellation,
-    bool seamEnabled);
+    const std::vector<SatelliteEcefPosition>& initialPositions);
 
 } // namespace ns3
 

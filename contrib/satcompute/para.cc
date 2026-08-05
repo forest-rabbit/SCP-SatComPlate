@@ -21,12 +21,6 @@ GetDefaultSatComputeConfig()
     config.constellationConfig =
         "contrib/satcompute/input/topology/constellations/synthetic-66.csv";
 
-    // --islCandidateStrategy：固定为 plus-grid；卫星邻居身份不随距离变化。
-    config.islCandidateStrategy = "plus-grid";
-
-    // --seamEnabled：是否建立首尾轨道面之间的固定候选链路。
-    config.seamEnabled = false;
-
     // --maxIslDistance：候选链路的最大有效距离，单位为米。
     config.maxIslDistanceMeters = 6174589.0;
 

@@ -78,7 +78,7 @@ class OnlineTopologyController : public SatelliteTopologyController
     int64_t m_simulationDurationNs{};
     int64_t m_networkUpdateIntervalNs{};
     RoutingMode m_routingMode{RoutingMode::GLOBAL_FIRST};
-    CircularOrbitTopologyPolicy m_topologyPolicy;
+    std::unique_ptr<CircularOrbitTopologyPolicy> m_topologyPolicy;
     std::unique_ptr<OnlineOrbitConstellation> m_constellation;
     std::unique_ptr<SatelliteIpv4ServiceMap> m_serviceMap;
     std::unique_ptr<SatelliteLinkState> m_linkState;
