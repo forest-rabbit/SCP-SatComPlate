@@ -12,7 +12,8 @@ tests/
 │   ├── smoke/               单能力快速闭环
 │   └── regression/          五种路由与完整任务回归
 ├── fixtures/
-│   ├── constellation/       4 星小型星座
+│   ├── constellation/       4/16 星轻量星座
+│   ├── fault/               合法故障轨迹
 │   ├── topology/            最小节点切片
 │   └── task/                合法与非法算力/任务输入
 └── support/                 C++/Python 测试公共构造
@@ -33,6 +34,7 @@ tests/
 | `task-input-test.cc` | ComputeProfile/TaskTrace closed-world 校验、canonical 排序和派生传输 ID |
 | `compute-service-test.cc` | 整数服务时间、非抢占 FCFS 和同刻 task ID tie-break |
 | `fault-lifecycle-test.cc` | FAILED/CANCELLED 幂等终止、迟到包隔离和 reservation 归零 |
+| `fault-trace-test.cc` | closed-world 字段、时间/概率边界、区间冲突和 canonical 排序 |
 | `online-orbit-foundation-test.cc` | 原生 mobility、连续坐标、固定 plus-grid 候选和 canonical 顺序 |
 | `online-topology-controller-test.cc` | 距离门控、fixed/distance 时延、周期更新和按边集合重算路由 |
 

@@ -51,6 +51,9 @@ struct SatComputeConfig
     uint32_t receiverRcvBufBytes;     ///< UDP 接收缓冲区，单位为字节。
     std::string taskCompletionPolicy; ///< 任务完成策略：strict 或 report。
 
+    // fault
+    std::string faultTrace; ///< 确定性卫星故障轨迹 JSON；空字符串表示无故障。
+
     // output
     std::string outputDirectory; ///< 结构化结果输出目录。
     std::string taskLogMode;     ///< 任务日志级别。
