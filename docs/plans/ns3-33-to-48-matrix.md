@@ -92,9 +92,9 @@
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `input/topology/examples/xw-66sat*` | 缺失 | 恢复 | 待迁移 |
-| `input/topology/resources/workload/*` | 缺失 | 恢复算力输入 | 待迁移 |
-| `input/traffic/workload/*` | 缺失 | 恢复流量输入 | 待迁移 |
+| `input/topology/examples/xw-66sat*` | 已恢复 | 恢复 | 已完成；原 66 星/132 ISL blob、12 切片与真实 replay 已验证 |
+| `input/topology/resources/workload/*` | 已恢复 | 恢复算力输入 | 已完成；22/66 节点 ComputeProfile 均通过当前解析器 |
+| `input/traffic/workload/*` | 已恢复 | 恢复流量输入 | 已完成；10/5000 条 NetworkTransfer 均通过当前解析器 |
 | 无 | `input/topology/constellations/*` | 新增精简星座结构合同 | 已完成；closed-world schema、读取器和 66 星默认输入已验证 |
 | 无 | `input/examples/synthetic-66-fixed.json` | 删除完整配置 | 已删除 |
 | 无 | `input/examples/synthetic-66-distance.json` | 删除完整配置 | 已删除 |

@@ -38,6 +38,16 @@ trap 'rm -rf "$test_output"' EXIT
 ./ns3 run --no-build \
   "satcompute-effective-config-test --outputDir=$test_output/effective"
 
+input_root="contrib/satcompute/input"
+./ns3 run --no-build \
+  "satcompute-input-contract-test \
+--dynamicTopology=$input_root/topology/examples/xw-66sat \
+--staticTopology=$input_root/topology/examples/xw-66sat-static-2g \
+--selectedComputeProfile=$input_root/topology/resources/workload/xw-66sat-static-2g-compute-profile.json \
+--allComputeProfile=$input_root/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
+--variedWorkload=$input_root/traffic/workload/workload-5000-varied.json \
+--largeWorkload=$input_root/traffic/workload/mixed-large-local.json"
+
 dynamic_topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
 delay_topology="contrib/satcompute/tests/fixtures/topology/snapshots/delay-only"
 capacity_topology="contrib/satcompute/tests/fixtures/topology/snapshots/capacity-pending"

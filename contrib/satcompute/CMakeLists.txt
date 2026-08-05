@@ -153,6 +153,15 @@ build_exec(
 )
 
 build_exec(
+  EXECNAME satcompute-input-contract-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/input-contract-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
   EXECNAME satcompute-snapshot-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/snapshot-test.cc
