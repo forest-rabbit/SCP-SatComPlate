@@ -13,6 +13,43 @@
 namespace ns3
 {
 
+/** One transfer's detailed runtime state before or after terminal cleanup. */
+enum class TransferRuntimeState
+{
+    REGISTERED,
+    WAITING_ADMISSION,
+    ACTIVE,
+    PAUSED_ROUTE,
+    SENDER_FINISHED,
+    COMPLETED,
+    FAILED,
+    CANCELLED
+};
+
+/** Terminal outcomes supported before backup/recovery attempts are introduced. */
+enum class TransferTerminalState
+{
+    COMPLETED,
+    FAILED,
+    CANCELLED
+};
+
+/** Stable reason attached to the first successful terminal transition. */
+enum class TransferTerminalReason
+{
+    RECEIVER_COMPLETED,
+    SOURCE_SATELLITE_FAILED,
+    DESTINATION_SATELLITE_FAILED,
+    TASK_FAILED,
+    TASK_NO_LONGER_REQUIRES_TRANSFER,
+    COMPUTE_NODE_FAILED,
+    SIMULATION_ENDED
+};
+
+const char* TransferRuntimeStateToString(TransferRuntimeState state);
+const char* TransferTerminalReasonToString(TransferTerminalReason reason);
+bool IsTerminalTransferState(TransferRuntimeState state);
+
 struct ApplicationMetrics
 {
     uint64_t sinkApplications{};
@@ -55,6 +92,10 @@ struct TransferSummaryRecord
     int64_t completionDelayNs;
     std::string transferState;
     uint64_t sentPacketCount;
+    int64_t terminalTimeNs;
+    std::string terminalReason;
+    uint64_t stalePacketCount;
+    int64_t capacityWaitingTimeNs;
 };
 
 } // namespace ns3

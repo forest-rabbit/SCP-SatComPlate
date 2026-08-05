@@ -32,6 +32,7 @@ tests/
 | `routing-policy-factory-test.cc` | 五种路由名到 next-hop/path policy 的映射 |
 | `task-input-test.cc` | ComputeProfile/TaskTrace closed-world 校验、canonical 排序和派生传输 ID |
 | `compute-service-test.cc` | 整数服务时间、非抢占 FCFS 和同刻 task ID tie-break |
+| `fault-lifecycle-test.cc` | FAILED/CANCELLED 幂等终止、迟到包隔离和 reservation 归零 |
 | `online-orbit-foundation-test.cc` | 原生 mobility、连续坐标、固定 plus-grid 候选和 canonical 顺序 |
 | `online-topology-controller-test.cc` | 距离门控、fixed/distance 时延、周期更新和按边集合重算路由 |
 

@@ -12,7 +12,7 @@
 | `network-transfer-application.h/.cc` | UDP sender、逐包发送与 serialization pacing |
 | `network-transfer-receiver.h/.cc` | 按稳定四元组聚合接收字节、完成回调和 socket Drop |
 | `network-transfer-engine.h/.cc` | plan 注册、应用生命周期、capacity 准入与拓扑更新 |
-| `network-transfer-records.h` | 指标层消费的应用、flow 与 transfer 记录 |
+| `network-transfer-records.h/.cc` | transfer 状态、终止原因及指标层消费的记录 |
 
 ## 稳定 flow
 
@@ -67,6 +67,19 @@ transfer 完成必须由 receiver 收齐声明字节。链路/队列丢包可能
   完整接收或路径失效时释放；
 - 没有正剩余容量的 capacity-aware transfer 保持 pending，并按确定性顺序重试。
 
+## 故障安全终态
+
+内部状态明确区分 `REGISTERED`、`WAITING_ADMISSION`、`ACTIVE`、
+`PAUSED_ROUTE`、`SENDER_FINISHED`，以及 `COMPLETED`、`FAILED`、
+`CANCELLED` 三种终态。本阶段没有 `SUPERSEDED`；该状态只应在后续确实创建备份或
+恢复实例时加入。
+
+`FinalizeTransferIfActive()` 是唯一终止入口。首次调用会停止 sender、清除正常完成
+回调、隔离接收端未完成数据、移除 pending admission，并幂等释放完整路径、逐跳
+assignment 和路由缓存；重复调用返回 `false`，不二次释放。已发送/接收字节、迟到
+包计数、容量等待时间、终止时刻和原因仍保留为实验历史。终止后的迟到包只计为
+stale，不会重新完成旧 transfer，也不会影响同一 receiver 上的其他 transfer。
+
 算法和公式见 [`routing/README.md`](../routing/README.md)。
 
 ## 对应测试与输出
@@ -74,5 +87,6 @@ transfer 完成必须由 receiver 收齐声明字节。链路/队列丢包可能
 - `tests/integration/smoke/run-task-smoke.sh` 检查两次传输的任务闭环；
 - `tests/integration/smoke/run-capacity-aware-smoke.sh` 检查完整路径准入与释放；
 - `tests/integration/smoke/run-diagnostics-smoke.sh` 检查真实 UDP/queue Drop；
+- `tests/unit/fault-lifecycle-test.cc` 直接检查终止幂等性和三类 reservation 清理；
 - `transfer-summary.csv` 记录声明大小、分包、发送/接收字节和完成时间，详见
   [`metrics/README.md`](../metrics/README.md)。

@@ -78,7 +78,7 @@ ComputeService::CalculateServiceTimeNs(uint64_t computeWorkUnits,
     return static_cast<int64_t>(duration);
 }
 
-void
+bool
 ComputeService::SubmitTask(uint64_t taskId,
                            uint64_t computeWorkUnits,
                            int64_t queueEnterTimeNs)
@@ -89,6 +89,10 @@ ComputeService::SubmitTask(uint64_t taskId,
     NS_ABORT_MSG_IF(queueEnterTimeNs < 0 ||
                         queueEnterTimeNs != Simulator::Now().GetNanoSeconds(),
                     "queue entry time must equal the current simulation time");
+    if (!m_computeAvailable)
+    {
+        return false;
+    }
     NS_ABORT_MSG_IF(!m_knownTaskIds.insert(taskId).second,
                     "ComputeService received a duplicate task ID");
 
@@ -99,6 +103,72 @@ ComputeService::SubmitTask(uint64_t taskId,
     ++m_enqueuedTaskCount;
     m_maxQueueLength = std::max(m_maxQueueLength, static_cast<uint32_t>(m_queue.size()));
     RequestDispatch();
+    return true;
+}
+
+bool
+ComputeService::SetComputeAvailable(bool available)
+{
+    NS_ABORT_MSG_IF(!m_configured, "ComputeService is not configured");
+    if (m_computeAvailable == available)
+    {
+        return false;
+    }
+    m_computeAvailable = available;
+    if (!available && m_dispatchEvent.IsPending())
+    {
+        Simulator::Cancel(m_dispatchEvent);
+    }
+    if (available)
+    {
+        RequestDispatch();
+    }
+    return true;
+}
+
+bool
+ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
+{
+    NS_ABORT_MSG_IF(taskId == 0, "ComputeService requires a positive task ID");
+    if (!m_hasCurrentTask || m_currentTask.taskId != taskId)
+    {
+        return false;
+    }
+    if (m_completionEvent.IsPending())
+    {
+        Simulator::Cancel(m_completionEvent);
+    }
+    m_hasCurrentTask = false;
+    m_currentTask = {};
+    m_currentTaskStartTimeNs = -1;
+    m_currentTaskServiceTimeNs = 0;
+    NS_ABORT_MSG_IF(m_cancelledRunningTaskCount ==
+                        std::numeric_limits<uint64_t>::max(),
+                    "ComputeService running-task cancellation counter overflow");
+    ++m_cancelledRunningTaskCount;
+    RequestDispatch();
+    return true;
+}
+
+bool
+ComputeService::RemoveQueuedTaskForFailure(uint64_t taskId)
+{
+    NS_ABORT_MSG_IF(taskId == 0, "ComputeService requires a positive task ID");
+    const auto queued = std::find_if(m_queue.begin(),
+                                     m_queue.end(),
+                                     [taskId](const WorkItem& item) {
+                                         return item.taskId == taskId;
+                                     });
+    if (queued == m_queue.end())
+    {
+        return false;
+    }
+    m_queue.erase(queued);
+    NS_ABORT_MSG_IF(m_removedQueuedTaskCount ==
+                        std::numeric_limits<uint64_t>::max(),
+                    "ComputeService queued-task removal counter overflow");
+    ++m_removedQueuedTaskCount;
+    return true;
 }
 
 void
@@ -127,7 +197,8 @@ ComputeService::StopApplication()
 void
 ComputeService::RequestDispatch()
 {
-    if (!m_isRunning || m_hasCurrentTask || m_queue.empty() || m_dispatchEvent.IsPending())
+    if (!m_isRunning || !m_computeAvailable || m_hasCurrentTask || m_queue.empty() ||
+        m_dispatchEvent.IsPending())
     {
         return;
     }
@@ -137,7 +208,7 @@ ComputeService::RequestDispatch()
 void
 ComputeService::DispatchNextTask()
 {
-    if (!m_isRunning || m_hasCurrentTask || m_queue.empty())
+    if (!m_isRunning || !m_computeAvailable || m_hasCurrentTask || m_queue.empty())
     {
         return;
     }
@@ -159,7 +230,7 @@ ComputeService::DispatchNextTask()
 void
 ComputeService::CompleteCurrentTask()
 {
-    NS_ABORT_MSG_IF(!m_isRunning || !m_hasCurrentTask,
+    NS_ABORT_MSG_IF(!m_isRunning || !m_computeAvailable || !m_hasCurrentTask,
                     "ComputeService completion has no running task");
     const int64_t completionTimeNs = Simulator::Now().GetNanoSeconds();
     NS_ABORT_MSG_IF(completionTimeNs - m_currentTaskStartTimeNs !=
@@ -226,6 +297,12 @@ ComputeService::GetQueueSize() const
 }
 
 bool
+ComputeService::IsComputeAvailable() const
+{
+    return m_computeAvailable;
+}
+
+bool
 ComputeService::HasRunningTask() const
 {
     return m_hasCurrentTask;
@@ -242,6 +319,18 @@ bool
 ComputeService::IsIdle() const
 {
     return !m_hasCurrentTask && m_queue.empty();
+}
+
+uint64_t
+ComputeService::GetCancelledRunningTaskCount() const
+{
+    return m_cancelledRunningTaskCount;
+}
+
+uint64_t
+ComputeService::GetRemovedQueuedTaskCount() const
+{
+    return m_removedQueuedTaskCount;
 }
 
 void

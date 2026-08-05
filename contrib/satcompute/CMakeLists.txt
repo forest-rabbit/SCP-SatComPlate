@@ -45,6 +45,7 @@ build_lib(
     traffic/network-transfer-config.cc
     traffic/network-transfer-engine.cc
     traffic/network-transfer-receiver.cc
+    traffic/network-transfer-records.cc
   HEADER_FILES
     para.h
     common/time-conversion.h
@@ -174,6 +175,15 @@ build_exec(
   EXECNAME satcompute-compute-service-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/compute-service-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-fault-lifecycle-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/fault-lifecycle-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

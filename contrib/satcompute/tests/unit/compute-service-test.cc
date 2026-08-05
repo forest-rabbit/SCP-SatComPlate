@@ -117,6 +117,68 @@ CheckFcfsQueue()
     Simulator::Destroy();
 }
 
+void
+CheckFaultSafeCancellation()
+{
+    Recorder recorder;
+    Ptr<Node> node = CreateObject<Node>();
+    Ptr<ComputeService> service = CreateObject<ComputeService>();
+    service->Configure(9,
+                       1000000000,
+                       MakeCallback(&Recorder::OnStart, &recorder),
+                       MakeCallback(&Recorder::OnComplete, &recorder));
+    node->AddApplication(service);
+    service->SetStartTime(NanoSeconds(0));
+    service->SetStopTime(NanoSeconds(1000));
+
+    Simulator::Schedule(NanoSeconds(10), [service] {
+        Check(service->SubmitTask(1, 100, Simulator::Now().GetNanoSeconds()),
+              "running fault-test task was rejected");
+        Check(service->SubmitTask(2, 30, Simulator::Now().GetNanoSeconds()),
+              "queued fault-test task was rejected");
+    });
+    Simulator::Schedule(NanoSeconds(20), [service] {
+        Check(service->SetComputeAvailable(false),
+              "compute service did not become unavailable");
+        Check(!service->SetComputeAvailable(false),
+              "repeated unavailability notification was not idempotent");
+        Check(service->CancelRunningTaskForFailure(1),
+              "running task was not cancelled precisely");
+        Check(!service->CancelRunningTaskForFailure(1),
+              "running task was cancelled twice");
+        Check(service->RemoveQueuedTaskForFailure(2),
+              "queued task was not removed precisely");
+        Check(!service->RemoveQueuedTaskForFailure(2),
+              "queued task was removed twice");
+        Check(!service->SubmitTask(3, 5, Simulator::Now().GetNanoSeconds()),
+              "unavailable compute service accepted new work");
+    });
+    Simulator::Schedule(NanoSeconds(30), [service] {
+        Check(service->SetComputeAvailable(true),
+              "compute service did not recover");
+        Check(service->SubmitTask(3, 5, Simulator::Now().GetNanoSeconds()),
+              "recovered compute service rejected new work");
+    });
+    Simulator::Stop(NanoSeconds(100));
+    Simulator::Run();
+
+    Check(recorder.starts.size() == 2 && recorder.starts[0].taskId == 1 &&
+              recorder.starts[0].timeNs == 10 && recorder.starts[1].taskId == 3 &&
+              recorder.starts[1].timeNs == 30,
+          "fault-safe compute dispatch history differs");
+    Check(recorder.completions.size() == 1 && recorder.completions[0].taskId == 3 &&
+              recorder.completions[0].timeNs == 35,
+          "cancelled compute task completed or recovered work did not complete");
+    Check(service->IsComputeAvailable() && service->IsIdle() &&
+              service->GetEnqueuedTaskCount() == 3 &&
+              service->GetCompletedTaskCount() == 1 &&
+              service->GetCancelledRunningTaskCount() == 1 &&
+              service->GetRemovedQueuedTaskCount() == 1 &&
+              service->GetBusyTimeNs() == 5,
+          "fault-safe compute counters or busy-time accounting differ");
+    Simulator::Destroy();
+}
+
 } // namespace
 
 int
@@ -126,6 +188,7 @@ main()
     {
         CheckExactServiceTime();
         CheckFcfsQueue();
+        CheckFaultSafeCancellation();
         std::cout << "SatCompute compute service tests passed." << std::endl;
         return 0;
     }

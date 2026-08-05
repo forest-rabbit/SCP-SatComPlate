@@ -77,7 +77,19 @@ NetworkTransferReceiver::AddExpectedTransfer(const NetworkTransfer& transfer)
                              transfer.sourcePort,
                              transfer.destinationAddress,
                              transfer.destinationPort};
-    const Reception reception = {transfer.transferId, transfer.sizeBytes, 0, 0, -1, -1};
+    const Reception reception = {
+        transfer.transferId,
+        transfer.sizeBytes,
+        0,
+        0,
+        -1,
+        -1,
+        -1,
+        0,
+        0,
+        false,
+        false,
+    };
     NS_ABORT_MSG_IF(!m_receptions.emplace(tuple, reception).second,
                     "transfer receiver has a duplicate four-tuple");
     NS_ABORT_MSG_IF(!m_transferTuples.emplace(transfer.transferId, tuple).second,
@@ -119,9 +131,26 @@ NetworkTransferReceiver::MarkTransferStarted(uint64_t transferId, int64_t startT
     NS_ABORT_MSG_IF(startTimeNs < 0, "transfer receiver start time cannot be negative");
     Reception& reception = GetReception(transferId);
     NS_ABORT_MSG_IF(reception.startTimeNs >= 0, "receiver transfer was started twice");
-    NS_ABORT_MSG_IF(reception.receivedBytes != 0 || reception.completionTimeNs >= 0,
+    NS_ABORT_MSG_IF(reception.receivedBytes != 0 || reception.completionTimeNs >= 0 ||
+                        reception.terminal,
                     "receiver observed payload before transfer start");
     reception.startTimeNs = startTimeNs;
+}
+
+bool
+NetworkTransferReceiver::DiscardIncompleteTransfer(uint64_t transferId)
+{
+    Reception& reception = GetReception(transferId);
+    if (reception.terminal)
+    {
+        return false;
+    }
+    NS_ABORT_MSG_IF(reception.completionTimeNs >= 0,
+                    "completed receiver transfer is missing terminal state");
+    reception.terminal = true;
+    reception.discarded = true;
+    reception.terminalTimeNs = Simulator::Now().GetNanoSeconds();
+    return true;
 }
 
 uint64_t
@@ -146,6 +175,18 @@ int64_t
 NetworkTransferReceiver::GetTransferCompletionTimeNs(uint64_t transferId) const
 {
     return GetReception(transferId).completionTimeNs;
+}
+
+uint64_t
+NetworkTransferReceiver::GetTransferStalePacketCount(uint64_t transferId) const
+{
+    return GetReception(transferId).stalePacketCount;
+}
+
+uint64_t
+NetworkTransferReceiver::GetTransferStaleBytes(uint64_t transferId) const
+{
+    return GetReception(transferId).staleBytes;
 }
 
 const std::vector<UdpSocketDropEvent>&
@@ -210,6 +251,17 @@ NetworkTransferReceiver::HandleRead(Ptr<Socket> socket)
         auto reception = m_receptions.find(tuple);
         NS_ABORT_MSG_IF(reception == m_receptions.end(),
                         "transfer receiver obtained an unknown four-tuple");
+        if (reception->second.terminal)
+        {
+            NS_ABORT_MSG_IF(reception->second.stalePacketCount ==
+                                std::numeric_limits<uint64_t>::max() ||
+                                reception->second.staleBytes >
+                                    std::numeric_limits<uint64_t>::max() - packet->GetSize(),
+                            "terminal transfer stale-packet counters overflow");
+            ++reception->second.stalePacketCount;
+            reception->second.staleBytes += packet->GetSize();
+            continue;
+        }
         NS_ABORT_MSG_IF(reception->second.startTimeNs < 0,
                         "transfer receiver obtained payload before start");
 
@@ -231,6 +283,8 @@ NetworkTransferReceiver::HandleRead(Ptr<Socket> socket)
             NS_ABORT_MSG_IF(reception->second.completionTimeNs <
                                 reception->second.startTimeNs,
                             "transfer completion precedes start");
+            reception->second.terminal = true;
+            reception->second.terminalTimeNs = reception->second.completionTimeNs;
             m_completionCallback(reception->second.transferId,
                                  reception->second.completionTimeNs);
         }

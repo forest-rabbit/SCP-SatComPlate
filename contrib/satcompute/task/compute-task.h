@@ -18,10 +18,25 @@ enum TaskState
     TASK_QUEUED,
     TASK_RUNNING,
     TASK_RESULT_TRANSFERRING,
-    TASK_COMPLETED
+    TASK_COMPLETED,
+    TASK_FAILED
 };
 
 const char* TaskStateToString(TaskState state);
+bool IsTerminalTaskState(TaskState state);
+
+enum class TaskFailureReason
+{
+    NONE,
+    COMPUTE_NODE_FAILURE,
+    SOURCE_SATELLITE_FAILURE,
+    COMPUTE_SATELLITE_FAILURE,
+    RESULT_SATELLITE_FAILURE,
+    INPUT_TRANSFER_FAILED,
+    RESULT_TRANSFER_FAILED
+};
+
+const char* TaskFailureReasonToString(TaskFailureReason reason);
 
 struct TaskDefinition
 {
@@ -44,6 +59,9 @@ struct TaskRuntime
     void TransitionTo(TaskState requestedState,
                       int64_t eventTimeNs,
                       const std::string& cause);
+    bool FailIfActive(int64_t eventTimeNs,
+                      TaskFailureReason reason,
+                      const std::string& cause);
 
     TaskDefinition definition;
     TaskState state{TASK_PENDING};
@@ -54,6 +72,8 @@ struct TaskRuntime
     int64_t computeCompleteTimeNs{-1};
     int64_t resultTransferStartTimeNs{-1};
     int64_t resultTransferCompleteTimeNs{-1};
+    int64_t failureTimeNs{-1};
+    TaskFailureReason failureReason{TaskFailureReason::NONE};
 };
 
 } // namespace ns3

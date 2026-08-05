@@ -74,7 +74,8 @@ void
 NetworkTransferApplication::StartTransferNow()
 {
     NS_ABORT_MSG_IF(!m_isRunning, "transfer application has not started");
-    NS_ABORT_MSG_IF(m_hasStarted, "transfer application was started more than once");
+    NS_ABORT_MSG_IF(m_hasStarted || m_isTerminal,
+                    "terminal or started transfer application cannot start");
     m_hasStarted = true;
     m_transfer.arrivalTimeNs = Simulator::Now().GetNanoSeconds();
     m_remainingBytes = m_transfer.sizeBytes;
@@ -97,7 +98,7 @@ void
 NetworkTransferApplication::PauseForRouteUpdate()
 {
     NS_ABORT_MSG_IF(!m_isRunning || !m_hasStarted || m_hasFinishedSending ||
-                        m_isPausedForRouteUpdate,
+                        m_isPausedForRouteUpdate || m_isTerminal,
                     "transfer sender cannot pause for a route update in its current state");
     if (m_sendEvent.IsPending())
     {
@@ -111,11 +112,33 @@ NetworkTransferApplication::ResumeAfterRouteUpdate(uint64_t pacingRateBps)
 {
     NS_ABORT_MSG_IF(!m_isRunning || !m_hasStarted || m_hasFinishedSending ||
                         !m_isPausedForRouteUpdate || m_remainingBytes == 0 ||
-                        pacingRateBps == 0,
+                        pacingRateBps == 0 || m_isTerminal,
                     "transfer sender cannot resume after the route update");
     m_pacingRateBps = pacingRateBps;
     m_isPausedForRouteUpdate = false;
     m_sendEvent = Simulator::ScheduleNow(&NetworkTransferApplication::SendNextPacket, this);
+}
+
+bool
+NetworkTransferApplication::FinalizeForTerminalState()
+{
+    if (m_isTerminal)
+    {
+        return false;
+    }
+    m_isTerminal = true;
+    if (m_sendEvent.IsPending())
+    {
+        Simulator::Cancel(m_sendEvent);
+    }
+    m_isPausedForRouteUpdate = false;
+    m_sendCompleteCallback = {};
+    if (m_socket != nullptr)
+    {
+        m_socket->Close();
+        m_socket = nullptr;
+    }
+    return true;
 }
 
 uint64_t
@@ -140,6 +163,12 @@ bool
 NetworkTransferApplication::IsPausedForRouteUpdate() const
 {
     return m_isPausedForRouteUpdate;
+}
+
+bool
+NetworkTransferApplication::IsTerminal() const
+{
+    return m_isTerminal;
 }
 
 uint64_t
@@ -242,6 +271,7 @@ NetworkTransferApplication::GetFirstHopSerializationTime(uint32_t payloadBytes) 
 void
 NetworkTransferApplication::SendNextPacket()
 {
+    NS_ABORT_MSG_IF(m_isTerminal, "terminal transfer attempted to send");
     NS_ABORT_MSG_IF(m_socket == nullptr, "transfer sender socket is unavailable");
     NS_ABORT_MSG_IF(m_isPausedForRouteUpdate, "paused transfer attempted to send");
     NS_ABORT_MSG_IF(m_remainingBytes == 0, "completed transfer attempted an extra send");

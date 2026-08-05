@@ -20,6 +20,14 @@
 namespace ns3
 {
 
+enum class FlowRouteFinalizationReason
+{
+    SENDER_FINISHED,
+    TRANSFER_COMPLETED,
+    TRANSFER_FAILED,
+    TRANSFER_CANCELLED
+};
+
 struct FlowRouteMetadata
 {
     uint64_t transferId;
@@ -56,6 +64,8 @@ class FlowRouteRegistry : public Object, public FlowRouteState
     void BeginSending(const EcmpFlowKey& flowKey);
     void FinishSending(const EcmpFlowKey& flowKey);
     void FinishReceiving(const EcmpFlowKey& flowKey);
+    bool FinalizeFlowIfActive(const EcmpFlowKey& flowKey,
+                              FlowRouteFinalizationReason reason);
 
     bool IsRegistered(const EcmpFlowKey& flowKey) const;
     bool IsSenderActive(const EcmpFlowKey& flowKey) const override;
@@ -101,7 +111,6 @@ class FlowRouteRegistry : public Object, public FlowRouteState
     void ReleaseAssignment(std::map<NodeFlowKey, FlowRouteAssignment>::iterator assignment,
                            const std::string& action,
                            uint64_t routeEpoch);
-    void FinishFlow(const EcmpFlowKey& flowKey, const std::string& releaseAction);
     void RecordEvent(const std::string& action,
                      const std::string& selectionReason,
                      uint64_t routeEpoch,

@@ -14,12 +14,14 @@
 #include "network-transfer-records.h"
 
 #include "ns3/callback.h"
+#include "ns3/event-id.h"
 #include "ns3/object.h"
 #include "ns3/ptr.h"
 
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -45,8 +47,17 @@ class NetworkTransferEngine : public Object
     void RegisterPlans(std::vector<NetworkTransfer> plans);
     void StartTransferNow(uint64_t transferId,
                           Callback<void, uint64_t, int64_t> completionCallback = {});
+    bool FinalizeTransferIfActive(uint64_t transferId,
+                                  TransferTerminalState state,
+                                  TransferTerminalReason reason);
 
     bool IsCompleted(uint64_t transferId) const;
+    bool IsTerminal(uint64_t transferId) const;
+    TransferRuntimeState GetTransferState(uint64_t transferId) const;
+    std::optional<TransferTerminalReason> GetTerminalReason(uint64_t transferId) const;
+    int64_t GetTerminalTimeNs(uint64_t transferId) const;
+    uint64_t GetStalePacketCount(uint64_t transferId) const;
+    int64_t GetCapacityWaitingTimeNs(uint64_t transferId) const;
     bool AreAllTransfersCompleted() const;
     const std::vector<NetworkTransfer>& GetPlans() const;
 
@@ -57,16 +68,8 @@ class NetworkTransferEngine : public Object
     CapacityAwareRuntimeSummary CollectCapacityAwareSummary() const;
 
   private:
-    enum TransferState
-    {
-        TRANSFER_REGISTERED,
-        TRANSFER_STARTED,
-        TRANSFER_COMPLETED
-    };
-
     uint32_t GetPlanIndex(uint64_t transferId) const;
     EcmpFlowKey GetFlowKey(uint32_t index) const;
-    const char* GetTransferStateName(uint32_t index) const;
     void ActivateTransfer(uint64_t transferId);
     bool TryActivateCapacityAwareTransfer(uint64_t transferId);
     void TryActivatePendingCapacityAwareTransfers();
@@ -91,7 +94,12 @@ class NetworkTransferEngine : public Object
     std::vector<Ptr<NetworkTransferApplication>> m_senders;
     std::vector<Ptr<NetworkTransferReceiver>> m_receivers;
     std::vector<Ptr<NetworkTransferReceiver>> m_transferReceivers;
-    std::vector<TransferState> m_states;
+    std::vector<TransferRuntimeState> m_states;
+    std::vector<std::optional<TransferTerminalReason>> m_terminalReasons;
+    std::vector<int64_t> m_terminalTimesNs;
+    std::vector<int64_t> m_capacityWaitStartTimesNs;
+    std::vector<int64_t> m_capacityWaitingTimesNs;
+    std::vector<EventId> m_activationEvents;
     std::vector<Callback<void, uint64_t, int64_t>> m_completionCallbacks;
     std::vector<uint64_t> m_pendingCapacityTransfers;
     std::map<uint64_t, uint32_t> m_planIndexes;

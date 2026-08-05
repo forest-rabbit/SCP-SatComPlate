@@ -30,9 +30,12 @@ class ComputeService : public Application
                    uint64_t computeRateWorkUnitsPerSecond,
                    TaskEventCallback taskStartedCallback,
                    TaskEventCallback taskCompletedCallback);
-    void SubmitTask(uint64_t taskId,
+    bool SubmitTask(uint64_t taskId,
                     uint64_t computeWorkUnits,
                     int64_t queueEnterTimeNs);
+    bool SetComputeAvailable(bool available);
+    bool CancelRunningTaskForFailure(uint64_t taskId);
+    bool RemoveQueuedTaskForFailure(uint64_t taskId);
 
     static int64_t CalculateServiceTimeNs(uint64_t computeWorkUnits,
                                           uint64_t computeRateWorkUnitsPerSecond);
@@ -44,9 +47,12 @@ class ComputeService : public Application
     uint64_t GetBusyTimeNs() const;
     uint32_t GetMaxQueueLength() const;
     uint32_t GetQueueSize() const;
+    bool IsComputeAvailable() const;
     bool HasRunningTask() const;
     uint64_t GetRunningTaskId() const;
     bool IsIdle() const;
+    uint64_t GetCancelledRunningTaskCount() const;
+    uint64_t GetRemovedQueuedTaskCount() const;
 
   private:
     struct WorkItem
@@ -72,6 +78,7 @@ class ComputeService : public Application
     uint64_t m_computeRateWorkUnitsPerSecond{};
     bool m_configured{};
     bool m_isRunning{};
+    bool m_computeAvailable{true};
     bool m_hasCurrentTask{};
     WorkItem m_currentTask;
     int64_t m_currentTaskStartTimeNs{-1};
@@ -84,6 +91,8 @@ class ComputeService : public Application
     TaskEventCallback m_taskCompletedCallback;
     uint64_t m_enqueuedTaskCount{};
     uint64_t m_completedTaskCount{};
+    uint64_t m_cancelledRunningTaskCount{};
+    uint64_t m_removedQueuedTaskCount{};
     uint64_t m_busyTimeNs{};
     uint32_t m_maxQueueLength{};
 };

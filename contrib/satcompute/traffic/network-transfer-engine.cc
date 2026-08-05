@@ -162,7 +162,12 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
     }
 
     m_plans = std::move(plans);
-    m_states.assign(m_plans.size(), TRANSFER_REGISTERED);
+    m_states.assign(m_plans.size(), TransferRuntimeState::REGISTERED);
+    m_terminalReasons.resize(m_plans.size());
+    m_terminalTimesNs.assign(m_plans.size(), -1);
+    m_capacityWaitStartTimesNs.assign(m_plans.size(), -1);
+    m_capacityWaitingTimesNs.assign(m_plans.size(), 0);
+    m_activationEvents.resize(m_plans.size());
     m_completionCallbacks.resize(m_plans.size());
     m_senders.reserve(m_plans.size());
     m_transferReceivers.reserve(m_plans.size());
@@ -222,22 +227,6 @@ NetworkTransferEngine::GetFlowKey(uint32_t index) const
     return BuildNetworkTransferFlowKey(m_plans[index]);
 }
 
-const char*
-NetworkTransferEngine::GetTransferStateName(uint32_t index) const
-{
-    NS_ABORT_MSG_IF(index >= m_states.size(), "transfer state index is out of range");
-    switch (m_states[index])
-    {
-    case TRANSFER_REGISTERED:
-        return "REGISTERED";
-    case TRANSFER_STARTED:
-        return "STARTED";
-    case TRANSFER_COMPLETED:
-        return "COMPLETED";
-    }
-    return "UNKNOWN";
-}
-
 void
 NetworkTransferEngine::StartTransferNow(
     uint64_t transferId,
@@ -245,7 +234,7 @@ NetworkTransferEngine::StartTransferNow(
 {
     NS_ABORT_MSG_IF(!m_registered, "transfer plans have not been registered");
     const uint32_t index = GetPlanIndex(transferId);
-    NS_ABORT_MSG_IF(m_states[index] != TRANSFER_REGISTERED,
+    NS_ABORT_MSG_IF(m_states[index] != TransferRuntimeState::REGISTERED,
                     "a transfer can only start once");
 
     const int64_t startTimeNs = Simulator::Now().GetNanoSeconds();
@@ -258,15 +247,18 @@ NetworkTransferEngine::StartTransferNow(
     m_plans[index].arrivalTimeNs = startTimeNs;
     m_completionCallbacks[index] = completionCallback;
     m_transferReceivers[index]->MarkTransferStarted(transferId, startTimeNs);
-    m_states[index] = TRANSFER_STARTED;
     if (m_capacityAwareRouting)
     {
+        m_states[index] = TransferRuntimeState::WAITING_ADMISSION;
+        m_capacityWaitStartTimesNs[index] = startTimeNs;
         m_pendingCapacityTransfers.push_back(transferId);
         TryActivatePendingCapacityAwareTransfers();
     }
     else
     {
-        Simulator::ScheduleNow(&NetworkTransferEngine::ActivateTransfer, this, transferId);
+        m_states[index] = TransferRuntimeState::ACTIVE;
+        m_activationEvents[index] =
+            Simulator::ScheduleNow(&NetworkTransferEngine::ActivateTransfer, this, transferId);
     }
 }
 
@@ -274,7 +266,12 @@ void
 NetworkTransferEngine::ActivateTransfer(uint64_t transferId)
 {
     const uint32_t index = GetPlanIndex(transferId);
-    NS_ABORT_MSG_IF(m_states[index] != TRANSFER_STARTED || m_senders[index]->HasStarted(),
+    if (IsTerminalTransferState(m_states[index]))
+    {
+        return;
+    }
+    NS_ABORT_MSG_IF(m_states[index] != TransferRuntimeState::ACTIVE ||
+                        m_senders[index]->HasStarted(),
                     "transfer sender activation state is invalid");
     if (m_flowRouteRegistry != nullptr)
     {
@@ -291,7 +288,8 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
                         m_flowRouteRegistry == nullptr,
                     "capacity-aware transfer activation is not configured");
     const uint32_t index = GetPlanIndex(transferId);
-    NS_ABORT_MSG_IF(m_states[index] != TRANSFER_STARTED ||
+    NS_ABORT_MSG_IF((m_states[index] != TransferRuntimeState::WAITING_ADMISSION &&
+                     m_states[index] != TransferRuntimeState::PAUSED_ROUTE) ||
                         m_capacityReservationState->HasActivePath(transferId),
                     "capacity-aware sender activation state is invalid");
     Ptr<NetworkTransferApplication> sender = m_senders[index];
@@ -329,6 +327,17 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
                                               "CAPACITY_AWARE_PATH");
     }
     m_capacityReservationState->Reserve(transferId, path);
+    const int64_t admissionTimeNs = Simulator::Now().GetNanoSeconds();
+    NS_ABORT_MSG_IF(m_capacityWaitStartTimesNs[index] < 0 ||
+                        admissionTimeNs < m_capacityWaitStartTimesNs[index] ||
+                        m_capacityWaitingTimesNs[index] >
+                            std::numeric_limits<int64_t>::max() -
+                                (admissionTimeNs - m_capacityWaitStartTimesNs[index]),
+                    "capacity-aware waiting-time state is invalid");
+    m_capacityWaitingTimesNs[index] +=
+        admissionTimeNs - m_capacityWaitStartTimesNs[index];
+    m_capacityWaitStartTimesNs[index] = -1;
+    m_states[index] = TransferRuntimeState::ACTIVE;
     if (firstAdmission)
     {
         sender->SetPacingRateBps(path.admittedRateBps);
@@ -351,6 +360,10 @@ NetworkTransferEngine::TryActivatePendingCapacityAwareTransfers()
     stillPending.reserve(m_pendingCapacityTransfers.size());
     for (const uint64_t transferId : m_pendingCapacityTransfers)
     {
+        if (IsTerminal(transferId))
+        {
+            continue;
+        }
         if (!TryActivateCapacityAwareTransfer(transferId))
         {
             stillPending.push_back(transferId);
@@ -368,7 +381,8 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
     for (uint32_t index = 0; index < m_plans.size(); ++index)
     {
         const uint64_t transferId = m_plans[index].transferId;
-        if (m_states[index] != TRANSFER_STARTED ||
+        if ((m_states[index] != TransferRuntimeState::ACTIVE &&
+             m_states[index] != TransferRuntimeState::SENDER_FINISHED) ||
             !m_capacityReservationState->HasActivePath(transferId) ||
             m_capacityReservationState->IsActivePathValid(
                 transferId,
@@ -397,6 +411,10 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
         if (!sender->HasFinishedSending())
         {
             sender->PauseForRouteUpdate();
+            m_states[index] = TransferRuntimeState::PAUSED_ROUTE;
+            NS_ABORT_MSG_IF(m_capacityWaitStartTimesNs[index] >= 0,
+                            "capacity-aware transfer already has an open wait interval");
+            m_capacityWaitStartTimesNs[index] = Simulator::Now().GetNanoSeconds();
             readmissionTransfers.push_back(transferId);
         }
         const EcmpFlowKey flowKey = GetFlowKey(index);
@@ -431,7 +449,7 @@ void
 NetworkTransferEngine::HandleSenderComplete(uint64_t transferId, int64_t sendTimeNs)
 {
     const uint32_t index = GetPlanIndex(transferId);
-    NS_ABORT_MSG_IF(m_states[index] != TRANSFER_STARTED,
+    NS_ABORT_MSG_IF(m_states[index] != TransferRuntimeState::ACTIVE,
                     "sender completion has an invalid transfer state");
     NS_ABORT_MSG_IF(sendTimeNs < m_plans[index].arrivalTimeNs ||
                         !m_senders[index]->HasFinishedSending() ||
@@ -441,6 +459,7 @@ NetworkTransferEngine::HandleSenderComplete(uint64_t transferId, int64_t sendTim
     {
         m_flowRouteRegistry->FinishSending(GetFlowKey(index));
     }
+    m_states[index] = TransferRuntimeState::SENDER_FINISHED;
 }
 
 void
@@ -448,34 +467,22 @@ NetworkTransferEngine::HandleTransferComplete(uint64_t transferId,
                                               int64_t completionTimeNs)
 {
     const uint32_t index = GetPlanIndex(transferId);
-    NS_ABORT_MSG_IF(m_states[index] != TRANSFER_STARTED,
-                    "receiver completion does not match one started transfer");
+    NS_ABORT_MSG_IF(IsTerminalTransferState(m_states[index]) ||
+                        m_states[index] == TransferRuntimeState::REGISTERED ||
+                        m_states[index] == TransferRuntimeState::WAITING_ADMISSION,
+                    "receiver completion does not match one active transfer");
     NS_ABORT_MSG_IF(completionTimeNs < m_plans[index].arrivalTimeNs,
                     "receiver completion precedes transfer start");
     NS_ABORT_MSG_IF(m_transferReceivers[index]->GetTransferReceivedBytes(transferId) !=
                         m_plans[index].sizeBytes,
                     "receiver completion payload is incomplete");
 
-    if (m_capacityAwareRouting)
-    {
-        m_flowRouteRegistry->FinishReceiving(GetFlowKey(index));
-        if (m_capacityReservationState->HasActivePath(transferId))
-        {
-            m_capacityReservationState->Release(transferId);
-        }
-        m_pendingCapacityTransfers.erase(
-            std::remove(m_pendingCapacityTransfers.begin(),
-                        m_pendingCapacityTransfers.end(),
-                        transferId),
-            m_pendingCapacityTransfers.end());
-    }
-    m_states[index] = TRANSFER_COMPLETED;
-    if (m_capacityAwareRouting)
-    {
-        TryActivatePendingCapacityAwareTransfers();
-    }
     const Callback<void, uint64_t, int64_t> callback = m_completionCallbacks[index];
-    m_completionCallbacks[index] = Callback<void, uint64_t, int64_t>();
+    NS_ABORT_MSG_IF(!FinalizeTransferIfActive(
+                        transferId,
+                        TransferTerminalState::COMPLETED,
+                        TransferTerminalReason::RECEIVER_COMPLETED),
+                    "receiver completed an already terminal transfer");
     if (!callback.IsNull())
     {
         callback(transferId, completionTimeNs);
@@ -483,17 +490,170 @@ NetworkTransferEngine::HandleTransferComplete(uint64_t transferId,
 }
 
 bool
+NetworkTransferEngine::FinalizeTransferIfActive(uint64_t transferId,
+                                                 TransferTerminalState terminalState,
+                                                 TransferTerminalReason reason)
+{
+    NS_ABORT_MSG_IF(!m_registered, "transfer plans have not been registered");
+    const uint32_t index = GetPlanIndex(transferId);
+    if (IsTerminalTransferState(m_states[index]))
+    {
+        return false;
+    }
+    NS_ABORT_MSG_IF(terminalState == TransferTerminalState::COMPLETED &&
+                        reason != TransferTerminalReason::RECEIVER_COMPLETED,
+                    "completed transfer requires RECEIVER_COMPLETED reason");
+    NS_ABORT_MSG_IF(terminalState != TransferTerminalState::COMPLETED &&
+                        reason == TransferTerminalReason::RECEIVER_COMPLETED,
+                    "failed or cancelled transfer cannot use RECEIVER_COMPLETED reason");
+
+    const int64_t terminalTimeNs = Simulator::Now().GetNanoSeconds();
+    NS_ABORT_MSG_IF(terminalTimeNs < 0,
+                    "transfer terminal time cannot be negative");
+    if (terminalState == TransferTerminalState::COMPLETED)
+    {
+        NS_ABORT_MSG_IF(m_transferReceivers[index]->GetTransferReceivedBytes(transferId) !=
+                            m_plans[index].sizeBytes ||
+                            m_transferReceivers[index]->GetTransferCompletionTimeNs(transferId) !=
+                                terminalTimeNs,
+                        "completed transfer requires exact receiver completion evidence");
+    }
+
+    if (m_activationEvents[index].IsPending())
+    {
+        Simulator::Cancel(m_activationEvents[index]);
+    }
+    NS_ABORT_MSG_IF(!m_senders[index]->FinalizeForTerminalState(),
+                    "nonterminal engine transfer has a terminal sender");
+
+    m_pendingCapacityTransfers.erase(
+        std::remove(m_pendingCapacityTransfers.begin(),
+                    m_pendingCapacityTransfers.end(),
+                    transferId),
+        m_pendingCapacityTransfers.end());
+    if (m_capacityWaitStartTimesNs[index] >= 0)
+    {
+        NS_ABORT_MSG_IF(terminalTimeNs < m_capacityWaitStartTimesNs[index] ||
+                            m_capacityWaitingTimesNs[index] >
+                                std::numeric_limits<int64_t>::max() -
+                                    (terminalTimeNs - m_capacityWaitStartTimesNs[index]),
+                        "capacity-aware terminal waiting-time state is invalid");
+        m_capacityWaitingTimesNs[index] +=
+            terminalTimeNs - m_capacityWaitStartTimesNs[index];
+        m_capacityWaitStartTimesNs[index] = -1;
+    }
+    if (m_capacityAwareRouting &&
+        m_capacityReservationState->HasActivePath(transferId))
+    {
+        m_capacityReservationState->Release(transferId);
+    }
+
+    const EcmpFlowKey flowKey = GetFlowKey(index);
+    if (m_flowRouteRegistry != nullptr && m_flowRouteRegistry->IsSenderActive(flowKey))
+    {
+        FlowRouteFinalizationReason flowReason =
+            FlowRouteFinalizationReason::TRANSFER_COMPLETED;
+        if (terminalState == TransferTerminalState::FAILED)
+        {
+            flowReason = FlowRouteFinalizationReason::TRANSFER_FAILED;
+        }
+        else if (terminalState == TransferTerminalState::CANCELLED)
+        {
+            flowReason = FlowRouteFinalizationReason::TRANSFER_CANCELLED;
+        }
+        m_flowRouteRegistry->FinalizeFlowIfActive(flowKey, flowReason);
+    }
+    m_topology->InvalidateFlowRouteDecisionCache(flowKey);
+
+    m_completionCallbacks[index] = {};
+    if (terminalState != TransferTerminalState::COMPLETED)
+    {
+        NS_ABORT_MSG_IF(!m_transferReceivers[index]->DiscardIncompleteTransfer(transferId),
+                        "nonterminal engine transfer has a terminal receiver");
+    }
+
+    switch (terminalState)
+    {
+    case TransferTerminalState::COMPLETED:
+        m_states[index] = TransferRuntimeState::COMPLETED;
+        break;
+    case TransferTerminalState::FAILED:
+        m_states[index] = TransferRuntimeState::FAILED;
+        break;
+    case TransferTerminalState::CANCELLED:
+        m_states[index] = TransferRuntimeState::CANCELLED;
+        break;
+    }
+    m_terminalReasons[index] = reason;
+    m_terminalTimesNs[index] = terminalTimeNs;
+
+    if (m_capacityAwareRouting && !m_pendingCapacityTransfers.empty())
+    {
+        TryActivatePendingCapacityAwareTransfers();
+    }
+    return true;
+}
+
+bool
 NetworkTransferEngine::IsCompleted(uint64_t transferId) const
 {
-    return m_states[GetPlanIndex(transferId)] == TRANSFER_COMPLETED;
+    return m_states[GetPlanIndex(transferId)] == TransferRuntimeState::COMPLETED;
+}
+
+bool
+NetworkTransferEngine::IsTerminal(uint64_t transferId) const
+{
+    return IsTerminalTransferState(m_states[GetPlanIndex(transferId)]);
+}
+
+TransferRuntimeState
+NetworkTransferEngine::GetTransferState(uint64_t transferId) const
+{
+    return m_states[GetPlanIndex(transferId)];
+}
+
+std::optional<TransferTerminalReason>
+NetworkTransferEngine::GetTerminalReason(uint64_t transferId) const
+{
+    return m_terminalReasons[GetPlanIndex(transferId)];
+}
+
+int64_t
+NetworkTransferEngine::GetTerminalTimeNs(uint64_t transferId) const
+{
+    return m_terminalTimesNs[GetPlanIndex(transferId)];
+}
+
+uint64_t
+NetworkTransferEngine::GetStalePacketCount(uint64_t transferId) const
+{
+    const uint32_t index = GetPlanIndex(transferId);
+    return m_transferReceivers[index]->GetTransferStalePacketCount(transferId);
+}
+
+int64_t
+NetworkTransferEngine::GetCapacityWaitingTimeNs(uint64_t transferId) const
+{
+    const uint32_t index = GetPlanIndex(transferId);
+    int64_t waitingTimeNs = m_capacityWaitingTimesNs[index];
+    if (m_capacityWaitStartTimesNs[index] >= 0)
+    {
+        const int64_t nowNs = Simulator::Now().GetNanoSeconds();
+        NS_ABORT_MSG_IF(nowNs < m_capacityWaitStartTimesNs[index] ||
+                            waitingTimeNs > std::numeric_limits<int64_t>::max() -
+                                                (nowNs - m_capacityWaitStartTimesNs[index]),
+                        "capacity-aware current waiting-time state is invalid");
+        waitingTimeNs += nowNs - m_capacityWaitStartTimesNs[index];
+    }
+    return waitingTimeNs;
 }
 
 bool
 NetworkTransferEngine::AreAllTransfersCompleted() const
 {
     return m_registered &&
-           std::all_of(m_states.begin(), m_states.end(), [](TransferState state) {
-               return state == TRANSFER_COMPLETED;
+           std::all_of(m_states.begin(), m_states.end(), [](TransferRuntimeState state) {
+               return state == TransferRuntimeState::COMPLETED;
            });
 }
 
@@ -606,8 +766,15 @@ NetworkTransferEngine::CollectSummaries() const
                              receiver->GetTransferReceivedPacketCount(plan.transferId),
                              completionTimeNs,
                              completionDelayNs,
-                             GetTransferStateName(index),
-                             sender->GetSentPacketCount()});
+                             TransferRuntimeStateToString(m_states[index]),
+                             sender->GetSentPacketCount(),
+                             m_terminalTimesNs[index],
+                             m_terminalReasons[index].has_value()
+                                 ? TransferTerminalReasonToString(
+                                       m_terminalReasons[index].value())
+                                 : "",
+                             receiver->GetTransferStalePacketCount(plan.transferId),
+                             GetCapacityWaitingTimeNs(plan.transferId)});
     }
     return summaries;
 }
