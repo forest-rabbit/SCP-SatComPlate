@@ -8,7 +8,7 @@
 #include "ns3/simulator.h"
 
 #include "../support/config-factory.h"
-#include "../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <filesystem>

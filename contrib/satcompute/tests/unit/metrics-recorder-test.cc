@@ -19,7 +19,7 @@
 #include "ns3/task-trace.h"
 
 #include "../support/config-factory.h"
-#include "../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <filesystem>

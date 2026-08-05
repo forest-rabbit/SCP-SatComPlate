@@ -10,7 +10,7 @@
 #include "ns3/rng-seed-manager.h"
 #include "ns3/simulator.h"
 
-#include "../../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <iostream>
 #include <string>

@@ -8,7 +8,7 @@
 #include "ns3/flow-route-registry.h"
 #include "ns3/size-aware-metrics.h"
 
-#include "../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <filesystem>
 #include <fstream>

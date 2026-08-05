@@ -8,7 +8,7 @@
 #include "ns3/resolved-config.h"
 #include "ns3/sha256.h"
 
-#include "../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <cstdlib>
 #include <filesystem>

@@ -5,7 +5,7 @@
 #include "ns3/command-line.h"
 #include "ns3/constellation-definition.h"
 
-#include "../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <cmath>
 #include <cstdlib>

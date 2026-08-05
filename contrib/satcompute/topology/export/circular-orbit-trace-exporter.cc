@@ -6,7 +6,7 @@
 
 #include "../../satcompute-version.h"
 #include "../../sha256.h"
-#include "../../third-party/nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include "ns3/simulator.h"
 
