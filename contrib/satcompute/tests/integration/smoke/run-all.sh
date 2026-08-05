@@ -117,4 +117,19 @@ for slice_record in manifest["slices"]:
             raise SystemExit(f"trace smoke hash differs: {slice_record[file_key]}")
 PY
 
-echo "SatCompute para validation, replay, online, and trace-export smoke passed."
+generator_output="$smoke_output/topology-generator"
+generated="$(./ns3 run --no-build \
+  "satcompute-topology-generator --runName=smoke-trace --simulationDuration=2.5 \
+--constellationConfig=$constellation_4 --maxIslDistance=30000000 \
+--delayMode=distance --fixedDelay=0 --networkUpdateInterval=2 \
+--islBandwidthBps=100000000 --topologyExportInterval=1 \
+--outputDir=$generator_output")"
+if [[ "$generated" != *'"status":"generated"'* ]]; then
+  echo "shared topology generator smoke failed: $generated" >&2
+  exit 1
+fi
+python3 contrib/satcompute/tools/generation/topology/check_export.py \
+  --trace-dir="$generator_output"
+diff -ru "$trace_output/topology-trace" "$generator_output"
+
+echo "SatCompute para, replay, online, and shared topology-generator smoke passed."
