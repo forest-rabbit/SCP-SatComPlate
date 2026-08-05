@@ -399,7 +399,7 @@ SatComputeIpv4GlobalRouting::LookupPerFlow(Ptr<const Packet> packet,
         m_selectionMode == RoutingMode::HRW_PER_FLOW || useStatefulSizeAware)
     {
         NS_ABORT_MSG_IF(m_nextHopPolicy == nullptr,
-                        "per-flow lookup requires a migrated deterministic policy");
+                        "per-flow lookup requires an installed deterministic policy");
         NextHopSelectionContext context = {m_satelliteId, m_routeEpoch, m_hashSeed, flowKey};
         const NextHopDecision decision = m_nextHopPolicy->Select(context, candidates);
         NS_ABORT_MSG_IF(decision.useNativeGlobalRouting ||

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       phase:
-        description: "Completed migration phase (for example: phase-0)"
+        description: "Completed project phase (for example: documentation-cleanup)"
         required: true
         type: string
 
