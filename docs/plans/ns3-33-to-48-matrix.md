@@ -1,8 +1,8 @@
 # SatCompute ns-3.33 到 ns-3.48 迁移矩阵
 
-状态：阶段 0 至阶段 6 已完成；阶段 6 唯一一次 GitHub CI run `30983721371`
-已通过。阶段 7 的测试层次、中文 README 和逐文件审计均已实施，待最终本地门禁和
-阶段 7 唯一一次 GitHub CI 后关闭 v0.3。
+状态：v0.3 阶段 0 至阶段 7 已全部完成。阶段 7 唯一一次 GitHub CI run
+`30986962812` 已在 `main` commit
+`9845559242fc5b1231ebd8581c7aa08e85fc8568` 上通过。
 
 动作定义：
 
@@ -135,7 +135,7 @@
 | `docs/specs/platform-v0.2.md` | 已标记为 v0.2 历史规格 | 标记为已废止 | 已迁移 |
 | `docs/plans/ns3-48-migration.md` | 已标记为 v0.2 历史计划 | 标记为已废止 | 已迁移 |
 | `docs/ns3-48-migration-status.md` | 已标记为 v0.2 历史状态 | 标记为 v0.2 历史状态 | 已迁移 |
-| `.github/workflows/per_commit.yml` | push/PR 自动运行 | 重命名为 `phase_gate.yml`，仅 `workflow_dispatch` | 已迁移 |
+| `.github/workflows/per_commit.yml` | push/PR 自动运行 | 重命名为 `phase_gate.yml`，仅 `workflow_dispatch` | 已完成；阶段 7 唯一 run `30986962812` 通过，未运行上游 examples/tests |
 
 ## 最终逐文件审计
 

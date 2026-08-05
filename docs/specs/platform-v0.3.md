@@ -1,6 +1,8 @@
 # 规格：SCP-SatComPlate ns-3.48 兼容迁移 v0.3
 
-状态：已批准，作为后续迁移的唯一有效平台规格。
+状态：已完成（2026-08-05），作为后续开发的有效平台基线。阶段 7 唯一一次
+GitHub CI run `30986962812` 已在 `main` commit
+`9845559242fc5b1231ebd8581c7aa08e85fc8568` 上通过。
 
 v0.2 以完整 scenario JSON 为唯一运行输入，并对 SatCompute 进行了较大幅度的
 目录与接口重构。该方向已经被否决。v0.3 以 ns-3.33 版本的项目形态和行为合同
@@ -35,7 +37,8 @@ v0.2 以完整 scenario JSON 为唯一运行输入，并对 SatCompute 进行了
 配置与构建不启用 ns-3 全局 examples 或 tests：
 
 ```bash
-./ns3 configure --enable-modules=satcompute -G Ninja
+./ns3 configure --enable-modules=satcompute \
+  --disable-examples --disable-tests -G Ninja
 ./ns3 build
 ```
 
