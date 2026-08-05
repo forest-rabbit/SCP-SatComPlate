@@ -32,8 +32,8 @@
 facade 内部的 `topology/orbit/`、`online/`、`replay/` 与 `export/` 保存 ns-3.48
 新增的原生轨道、在线应用、JSON 回放和切片导出实现。`topology/snapshot/` 保存
 快照数据类型、JSON 读取器和目录调度器；`topology/link/` 保存运行期 ISL 资源与
-启停状态。facade 已恢复并成为平台唯一拓扑入口；分层 `metrics/` 仍在后续迁移
-阶段恢复。
+启停状态。facade 已恢复并成为平台唯一拓扑入口；分层 `metrics/` 已按 legacy
+的 `core/`、`routing/`、`diagnostics/` 与顶层 recorder 完成恢复。
 
 `routing/common/` 保存路由模式、五元组、候选和 FNV 值类型；
 `routing/algorithm/` 分别实现 global-first、Hash、HRW、size-aware HRW 与
@@ -132,9 +132,10 @@ contrib/satcompute/tests/integration/smoke/run-all.sh
 contrib/satcompute/tests/integration/regression/run-all.sh
 ```
 
-最终回归将合并 ns-3.33 的 topology-only、Hash/HRW/size-aware、capacity-aware、
-任务、FCFS、strict/report、诊断、规模与 canonical ordering 黄金合同，以及
-ns-3.48 新增的 online、1/2 秒导出、20 秒应用和 replay 等价性测试。
+当前回归已经合并 ns-3.33 的 topology-only、Hash/HRW/size-aware、
+capacity-aware、任务、FCFS、strict/report、诊断与 canonical ordering 黄金
+合同，以及 ns-3.48 新增的 online、独立导出间隔、网络应用周期和 replay
+等价性测试。
 
 ## 参数合同
 
@@ -149,8 +150,9 @@ ns-3.48 新增的 online、1/2 秒导出、20 秒应用和 replay 等价性测�
 - `--seamEnabled`、`--maxIslDistance`：seam 候选开关和有效链路距离门限。
 - `--delayMode`：`fixed` 或 `distance`；两者使用同一星座和固定候选身份。
 - `--fixedDelay`：fixed 模式单向链路时延，单位为秒。
-- `--networkUpdateInterval`：在线网络状态更新时间，单位为秒。distance 实验可设
-  1 秒或 2 秒，fixed 实验可设 20 秒，均由输入决定。
+- `--networkUpdateInterval`：online/replay 网络状态应用周期，单位为秒。
+  distance 实验可设 1 秒或 2 秒，fixed 实验可设 20 秒，均由输入决定；replay
+  目录必须存在这些规则时刻的切片。
 - `--islBandwidthBps`：每条 ISL 的 bit/s 数据率。
 - `--islMtuBytes`：所有当前及后续 ISL 的 MTU，默认 1500。
 - `--islQueueBytes`：所有当前及后续 ISL DropTail 队列字节容量，默认 1500000。
@@ -162,7 +164,7 @@ ns-3.48 新增的 online、1/2 秒导出、20 秒应用和 replay 等价性测�
 - `--ecmpHashSeed`：逐流 Hash、HRW、size-aware 与 capacity-aware 的确定性 seed。
 - `--transferTrace`：可选 NetworkTransfer JSON。
 - `--computeProfile`：`topology/resources` 下的静态计算能力 JSON。
-- `--taskTrace`：`traffic/task` 下的任务到达 JSON。
+- `--taskTrace`：独立生成或 fixture 中的任务到达 JSON。
 - `--transferChunkMode`：`fixed` 或 `size-aware`，默认 `fixed`。
 - `--transferPayloadBytes`：`fixed` 模式的 UDP payload 上限，默认 1024。
 - `--taskCompletionPolicy`：`strict` 在任务未全部完成时写出指标后返回非零；
@@ -182,9 +184,9 @@ ns-3.48 新增的 online、1/2 秒导出、20 秒应用和 replay 等价性测�
 运行 `topology-only`，不安装 PacketSink、NetworkTransfer 或
 TaskCoordinator。
 
-下面各节保留 ns-3.33 的业务、路由、指标和验证合同，作为本轮迁移的验收基线。
-其中引用的旧 fixture、检查器和分层 metrics 会在相应迁移阶段恢复；在迁移矩阵
-标记完成前，不应假定每条长命令都已在当前 `main` 可运行。
+下面各节保留 ns-3.33 的业务、路由、指标和验证合同，并使用当前 ns-3.48
+参数补齐可执行命令。旧 fixture、检查器和分层 metrics 均已恢复；Hypatia/TLE、
+旧完整 scenario 配置和两个过渡 routing 输出按审计结论不迁移。
 
 ## NetworkTransfer
 
@@ -231,7 +233,7 @@ Task 模式保持两类输入独立：
 
 ```text
 topology/resources/...  ComputeProfile：节点静态计算能力
-traffic/task/...        TaskTrace：任务、数据量、计算量与到达时间
+独立 TaskTrace JSON     任务、数据量、计算量与到达时间
 ```
 
 `xw-66sat-static-2g-compute-profile.json` 是 22 个计算节点的受限对照；
@@ -297,7 +299,10 @@ ceil(compute_work_units × 1,000,000,000
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+  --delayMode=fixed --fixedDelay=0.001 \
+  --networkUpdateInterval=10 \
   --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
   --simulationDuration=10 \
@@ -309,6 +314,7 @@ ceil(compute_work_units × 1,000,000,000
   --transferLogMode=silent \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
+  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-task-single"
 ```
 
@@ -392,7 +398,8 @@ path_rate      = min(residual(link) for link in path)
 因此互不共享有向 ISL 的 flow 仍可并行，共享低速瓶颈的 flow 不会继续各自按
 首跳线速叠加注入。
 
-每次完整快照应用并重算 ns-3 全局路由后，传输控制器检查全部活动路径。
+每次 network tick 都应用网络状态；只有有效链路集合变化并重算 ns-3 全局路由
+后，传输控制器才检查全部活动路径。
 路径仍有效且方向总预留不超过新带宽时保持 sticky，不因其他路径更空闲而
 主动迁移。路径失效时执行：
 
@@ -418,15 +425,16 @@ UDP 包在任意时序下都不丢失。可靠恢复和节点故障属于后续�
 GlobalRouteManager、SPF 或私有 `LookupGlobal()`，也不使用随机逐包 ECMP。
 当前验证范围是未发生 IPv4 分片的 UDP NetworkTransfer。
 
-动态竞争定向回归使用 5 颗卫星和三条并行最短路径：1 秒时关闭当前
-最快路径的下游 ISL，4 秒时恢复，并让一个包在切换时保持在途。
+项目 C++ 测试覆盖并行 ECMP 准入、容量耗尽等待、完整路径失效释放和重新准入；
+平台 smoke 使用 4 星 diamond 和两条同时到达的传输，验证真实 UDP 入口、完整
+路径瓶颈 pacing、两条传输完成及结束时容量账本归零：
 
 ```bash
 bash contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
 ```
 
-检查器要求整两跳旧路径在 epoch 1 同时释放，epoch 2 恢复后重新准入，新竞争
-flow 继续等待容量，且两次重放均完成 4/4 transfers、50/50 包、零丢包。
+完整动态恢复断言位于 `capacity-aware-routing-test.cc` 与
+`network-transfer-engine-test.cc`，统一由 `tests/unit/run-cpp-tests.sh` 调用。
 
 ## Diamond 验证
 
@@ -435,7 +443,10 @@ flow 继续等待容量，且两次重放均完成 4/4 transfers、50/50 包、�
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+  --delayMode=fixed --fixedDelay=0.001 \
+  --networkUpdateInterval=3 \
   --simulationDuration=3 \
   --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
@@ -444,11 +455,15 @@ flow 继续等待容量，且两次重放均完成 4/4 transfers、50/50 包、�
   --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
+  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-ecmp-static-a"
 
 ./ns3 run "satcompute \
   --topologySource=replay \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+  --delayMode=fixed --fixedDelay=0.001 \
+  --networkUpdateInterval=3 \
   --simulationDuration=3 \
   --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-static-transfers.json \
   --transferChunkMode=fixed \
@@ -457,6 +472,7 @@ flow 继续等待容量，且两次重放均完成 4/4 transfers、50/50 包、�
   --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
+  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-ecmp-static-b"
 ```
 
@@ -465,7 +481,10 @@ flow 继续等待容量，且两次重放均完成 4/4 transfers、50/50 包、�
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic \
+  --delayMode=fixed --fixedDelay=0.001 \
+  --networkUpdateInterval=2 \
   --simulationDuration=6 \
   --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
@@ -474,6 +493,7 @@ flow 继续等待容量，且两次重放均完成 4/4 transfers、50/50 包、�
   --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
+  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-ecmp-dynamic"
 
 python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
@@ -485,15 +505,19 @@ python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
 检查器验证静态双支路覆盖、重复输出一致、每条 transfer 的精确 payload，以及
 动态 epoch 的 `2 → 1 → 2` candidates 和恢复后的确定性选择。
 
-HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序，`3s` 删除
-一条支路，`5s` 恢复。四条 flow 跨越全部 epoch：
+v0.3 平台按规则 network cadence 消费切片。下面复用 `0/2/4s` 动态 diamond，
+以 HRW 验证候选删除与恢复；旧 `1/3/5s` 非规则 fixture 继续作为解析和算法黄金
+输入，但不作为规则 cadence 的平台命令：
 
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
-  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-hrw-dynamic \
-  --simulationDuration=7 \
-  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-hrw-dynamic-transfers.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic \
+  --delayMode=fixed --fixedDelay=0.001 \
+  --networkUpdateInterval=2 \
+  --simulationDuration=6 \
+  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/diamond-4-dynamic-transfers.json \
   --transferChunkMode=fixed \
   --transferPayloadBytes=64000 \
   --islMtuBytes=65535 \
@@ -501,6 +525,7 @@ HRW 动态 fixture 在 `1s` 保持候选集合不变但打乱完整快照顺序�
   --transferLogMode=silent \
   --routingMode=global-hrw-per-flow \
   --ecmpHashSeed=1 \
+  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-hrw-seed1-a"
 ```
 
@@ -575,7 +600,10 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+  --delayMode=fixed --fixedDelay=0.001 \
+  --networkUpdateInterval=45 \
   --simulationDuration=45 \
   --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/mixed-large-ci.json \
   --transferChunkMode=size-aware \
@@ -583,6 +611,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
   --islQueueBytes=1500000 \
   --transferLogMode=summary \
   --routingMode=global-hash-per-flow \
+  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-mixed-large-ci"
 
 python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
@@ -596,7 +625,10 @@ python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+  --delayMode=fixed --fixedDelay=0.001 \
+  --networkUpdateInterval=340 \
   --simulationDuration=340 \
   --transferTrace=contrib/satcompute/input/traffic/workload/mixed-large-local.json \
   --transferChunkMode=size-aware \
@@ -604,6 +636,7 @@ python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --islQueueBytes=1500000 \
   --transferLogMode=summary \
   --routingMode=global-hash-per-flow \
+  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-mixed-large-local"
 
 python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
@@ -623,7 +656,10 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
+  --delayMode=fixed --fixedDelay=0.001 \
+  --networkUpdateInterval=2 \
   --simulationDuration=2 \
   --computeProfile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
   --taskTrace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
@@ -636,13 +672,14 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
   --taskLogMode=silent \
   --taskCompletionPolicy=strict \
   --diagnosticMode=failure \
+  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-task-failure"
 
 # 上一条命令的预期退出码为 3。
 python3 contrib/satcompute/tools/validation/check-task-output.py failure \
   --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
-  --compute-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \
-  --task-trace=contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json \
+  --compute-profile="$PWD/contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json" \
+  --task-trace="$PWD/contrib/satcompute/tests/fixtures/traffic/tasks/task-single-ecmp.json" \
   --output-dir=/tmp/satcompute-task-failure \
   --require-queue-drop
 ```
@@ -680,36 +717,17 @@ python3 contrib/satcompute/tools/validation/check-task-output.py stress \
 `UNATTRIBUTED_TIMEOUT` 只表示 `lostPackets` 没有对应显式 DropReason，
 不能据此推断具体丢弃层。
 
-四节点 fixture 使用两个 1 Gbit/s 入口汇入一个 10 Mbit/s 出口，确定性
-验证默认 FqCoDel QueueDisc：
+当前确定性门禁把 ISL device queue 缩到一个包以下，要求至少出现一个
+`QUEUE`，并交叉验证 DropReason CSV、逐流详情和 `run-summary.json`：
 
 ```bash
-./ns3 run "satcompute \
-  --topologySource=replay \
-  --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/fqcodel-bottleneck \
-  --simulationDuration=3 \
-  --transferTrace=contrib/satcompute/tests/fixtures/traffic/transfers/fqcodel-bottleneck-transfers.json \
-  --diagnosticMode=failure \
-  --transferChunkMode=fixed \
-  --transferPayloadBytes=1400 \
-  --islMtuBytes=1500 \
-  --islQueueBytes=1500000 \
-  --transferLogMode=silent \
-  --routingMode=global-hash-per-flow \
-  --ecmpHashSeed=1 \
-  --outputDir=/tmp/satcompute-fqcodel"
-
-python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
-  --output-dir=/tmp/satcompute-fqcodel \
-  --require-reason=QUEUE_DISC \
-  --forbid-reason=QUEUE \
-  --require-zero-unattributed \
-  --expected-explicit-drop-packets=6262
+contrib/satcompute/tests/integration/smoke/run-diagnostics-smoke.sh
 ```
 
-检查器交叉验证 DropReason CSV、逐流详情和 `run-summary.json`。完整 75%
-诊断及局部 replay 结果记录在
-`docs/reviews/n1-6-stress-validation-review.md`，大型输入与输出不提交仓库。
+`QUEUE_DISC` 映射和 checker 能力继续保留，但旧异构链路带宽 fixture 不再作为
+平台黄金命令：v0.3 的 ISL 带宽统一由 `para.cc`/CLI 控制，replay JSON 中的旧
+带宽值不会成为第二个运行配置源。因此 README 不冻结一个依赖旧带宽语义的
+FqCoDel 丢包数。
 
 ## 目标输出与边界
 
