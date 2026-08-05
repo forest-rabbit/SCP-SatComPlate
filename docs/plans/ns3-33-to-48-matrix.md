@@ -106,9 +106,9 @@
 | `tools/generation/generate-task-workload.py` | 已恢复 | 恢复并适配路径 | 已完成；只读取节点/算力并输出确定性 TaskTrace + summary |
 | `tools/generation/generate-transfer-workload.py` | 已恢复 | 恢复并适配路径 | 已完成；只读取稳定卫星 ID 并输出 NetworkTransfer |
 | `tools/generation/scenario/*` | 缺失 | 恢复非轨道场景生成边界 | 待迁移 |
-| `tools/generation/topology/common/*` | 缺失 | 恢复原子输出/schema/checker 工具 | 待迁移 |
-| `tools/generation/topology/static/*` | 缺失 | 按当前合同审计后恢复 | 待迁移 |
-| `tools/generation/topology/dynamic/*` | 缺失 | 由共享 C++ 轨道 exporter 替代传播部分 | 待迁移 |
+| `tools/generation/topology/common/*` | 已重建只读 manifest checker | 恢复原子输出/schema/checker 工具 | 已完成；原子写入/schema 复用 C++ exporter，Python 只验清单与哈希 |
+| `tools/generation/topology/static/*` | 由同一 C++ 工具的单切片参数覆盖 | 按当前合同审计后恢复 | 已替代；不保留第二套静态拓扑算法 |
+| `tools/generation/topology/dynamic/*` | 已由共享 C++ executable 替代 | 由共享 C++ 轨道 exporter 替代传播部分 | 已完成；与平台 export-only 逐字节等价 |
 | `tools/generation/topology/orbit/hypatia/*` | 缺失 | 不迁移 | 已确定删除 |
 | `tools/analysis/topology_interval/*` | 缺失 | 恢复并适配 CMake tool targets | 待迁移 |
 | `tools/validation/*` | 已恢复 legacy 检查器 | 恢复并对齐 metrics 输出 | 入口和 CLI 已恢复；阶段 6 随分层 metrics 接回黄金输出 |

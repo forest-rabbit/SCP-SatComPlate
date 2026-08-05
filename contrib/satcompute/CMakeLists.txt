@@ -114,6 +114,17 @@ build_exec(
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
 )
 
+# Offline topology generation is a project tool that reuses the same orbit and
+# policy library as the platform; it is not an ns-3 example.
+build_exec(
+  EXECNAME satcompute-topology-generator
+  EXECNAME_PREFIX satcompute_tool_
+  SOURCE_FILES tools/generation/topology/topology-generator.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tools
+)
+
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
 build_exec(
