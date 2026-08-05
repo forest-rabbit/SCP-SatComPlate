@@ -41,8 +41,8 @@
 `compute` 故障的节点还必须存在于本次 ComputeProfile；`satellite` 故障可引用任意
 稳定卫星 ID。同一节点的任何故障区间不得重叠，恰好在前一恢复时刻开始除外。
 
-平台在精确纳秒调度 notice、start 和仿真窗口内的 recovery。当前 `compute` 类型已
-执行：通信和路由保持不变，尚未越过计算阶段的目标任务失败，有限恢复只接纳后续
-任务。`satellite` 类型已完成字段与区间校验，但整星执行尚未接入，运行阶段会明确
-拒绝；不会静默忽略或降级。`topologyOnly=1` 不接受 `faultTrace`，因为切片生成仍
-描述无故障的自然拓扑。
+平台在精确纳秒调度 notice、start 和仿真窗口内的 recovery。`compute` 类型保持通信
+和路由不变，只禁用算力；`satellite` 类型同时覆盖通信与算力可用性，立即关闭关联
+ISL 并重算路由。有限恢复只接纳后续任务，整星恢复还会按恢复时刻的实时距离重新
+判断候选链路，不复活旧任务/transfer。`topologyOnly=1` 不接受 `faultTrace`，因为
+切片生成仍描述无故障的自然拓扑。

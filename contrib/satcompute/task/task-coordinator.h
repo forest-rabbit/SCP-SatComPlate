@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -38,6 +39,18 @@ struct TaskFaultImpact
 {
     uint64_t affectedTaskCount{};
     uint64_t affectedTransferCount{};
+};
+
+enum class TaskFaultKind
+{
+    COMPUTE,
+    SATELLITE
+};
+
+struct TaskFaultNodeChange
+{
+    uint32_t nodeId{};
+    TaskFaultKind kind{TaskFaultKind::COMPUTE};
 };
 
 /** Coordinate input transfer, FCFS compute, and result transfer lifecycles. */
@@ -68,12 +81,17 @@ class TaskCoordinator : public Object
     std::map<uint32_t, TaskFaultImpact> ApplyComputeFaultBatch(
         const std::vector<uint32_t>& recoveredNodeIds,
         const std::vector<uint32_t>& startedNodeIds);
+    std::map<uint32_t, TaskFaultImpact> ApplyFaultBatch(
+        const std::vector<TaskFaultNodeChange>& recoveredNodes,
+        const std::vector<TaskFaultNodeChange>& startedNodes);
     bool IsComputeAvailable(uint32_t nodeId) const;
+    bool IsSatelliteAvailable(uint32_t nodeId) const;
 
   private:
     uint32_t GetTaskIndex(uint64_t taskId) const;
     TaskRuntime& GetTask(uint64_t taskId);
     const TaskRuntime& GetTask(uint64_t taskId) const;
+    Ptr<ComputeService> FindComputeService(uint32_t nodeId) const;
     Ptr<ComputeService> GetComputeService(uint32_t nodeId) const;
     void TransitionTask(uint64_t taskId,
                         TaskState requestedState,
@@ -83,6 +101,10 @@ class TaskCoordinator : public Object
     TaskFaultImpact FailTaskForComputeNode(TaskRuntime& task,
                                            int64_t eventTimeNs,
                                            const std::string& cause);
+    TaskFaultImpact FailTaskForSatelliteNode(TaskRuntime& task,
+                                             uint32_t failedNodeId,
+                                             int64_t eventTimeNs,
+                                             const std::string& cause);
     void HandleTaskArrival(uint64_t taskId);
     void HandleInputTransferComplete(uint64_t transferId, int64_t completionTimeNs);
     void HandleComputeStart(uint64_t taskId, uint32_t nodeId, int64_t startTimeNs);
@@ -96,6 +118,7 @@ class TaskCoordinator : public Object
     std::map<uint32_t, Ptr<ComputeService>> m_servicesByNodeId;
     std::map<uint64_t, uint64_t> m_inputTransferTasks;
     std::map<uint64_t, uint64_t> m_resultTransferTasks;
+    std::set<uint32_t> m_unavailableSatelliteNodes;
     std::vector<TaskEventRecord> m_taskEvents;
     Ptr<NetworkTransferEngine> m_transferEngine;
 };

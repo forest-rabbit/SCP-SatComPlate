@@ -7,6 +7,7 @@
 #include "fault-controller.h"
 
 #include "../task/task-coordinator.h"
+#include "../topology/satellite-topology-controller.h"
 
 #include "ns3/abort.h"
 #include "ns3/simulator.h"
@@ -84,13 +85,10 @@ FaultController::Configure(const FaultTrace& trace,
     {
         throw FaultControllerError("FaultController simulation duration must be positive");
     }
-    for (const FaultDefinition& fault : trace.faults)
+    if (!Simulator::Now().IsZero())
     {
-        if (fault.faultType == FaultType::SATELLITE)
-        {
-            throw FaultControllerError(
-                "satellite fault execution is reserved for N4A PR 5");
-        }
+        throw FaultControllerError(
+            "FaultController must be configured at simulation time zero");
     }
 
     m_trace = trace;
@@ -135,6 +133,21 @@ FaultController::Configure(const FaultTrace& trace,
 }
 
 void
+FaultController::BindTopology(SatelliteTopologyController& topology)
+{
+    if (!m_configured)
+    {
+        throw FaultControllerError(
+            "FaultController must be configured before topology binding");
+    }
+    if (m_topology != nullptr)
+    {
+        throw FaultControllerError("FaultController topology binding can only occur once");
+    }
+    m_topology = &topology;
+}
+
+void
 FaultController::BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator)
 {
     if (!m_configured)
@@ -162,11 +175,13 @@ FaultController::ProcessBatch(int64_t simulationTimeNs)
     NS_ABORT_MSG_IF(batch == m_batches.end(),
                     "FaultController has no scheduled batch at the current time");
 
-    std::vector<uint32_t> recoveredComputeNodes;
-    std::vector<uint32_t> startedComputeNodes;
+    std::vector<TaskFaultNodeChange> recoveredNodes;
+    std::vector<TaskFaultNodeChange> startedNodes;
     std::map<uint32_t, std::size_t> startRecordIndexes;
+    std::vector<std::size_t> topologyRecordIndexes;
     std::set<uint32_t> recoveredNodeSet;
     std::set<uint32_t> startedNodeSet;
+    bool refreshNaturalState = false;
     for (const ScheduledFaultEvent& event : batch->second)
     {
         if (event.eventType == FaultEventType::RECOVERY)
@@ -174,14 +189,24 @@ FaultController::ProcessBatch(int64_t simulationTimeNs)
             m_state.RecoverFault(event.fault);
             NS_ABORT_MSG_IF(!recoveredNodeSet.insert(event.fault.nodeId).second,
                             "FaultController recovered one node twice in one batch");
-            recoveredComputeNodes.push_back(event.fault.nodeId);
+            recoveredNodes.push_back(
+                {event.fault.nodeId,
+                 event.fault.faultType == FaultType::SATELLITE
+                     ? TaskFaultKind::SATELLITE
+                     : TaskFaultKind::COMPUTE});
+            refreshNaturalState =
+                refreshNaturalState || event.fault.faultType == FaultType::SATELLITE;
         }
         else if (event.eventType == FaultEventType::START)
         {
             m_state.StartFault(event.fault);
             NS_ABORT_MSG_IF(!startedNodeSet.insert(event.fault.nodeId).second,
                             "FaultController started one node twice in one batch");
-            startedComputeNodes.push_back(event.fault.nodeId);
+            startedNodes.push_back(
+                {event.fault.nodeId,
+                 event.fault.faultType == FaultType::SATELLITE
+                     ? TaskFaultKind::SATELLITE
+                     : TaskFaultKind::COMPUTE});
         }
 
         const FaultNodeAvailability& availability =
@@ -205,23 +230,54 @@ FaultController::ProcessBatch(int64_t simulationTimeNs)
         {
             startRecordIndexes.emplace(event.fault.nodeId, m_events.size() - 1);
         }
+        if (event.fault.faultType == FaultType::SATELLITE &&
+            event.eventType != FaultEventType::NOTICE)
+        {
+            topologyRecordIndexes.push_back(m_events.size() - 1);
+        }
     }
 
-    if (!recoveredComputeNodes.empty() || !startedComputeNodes.empty())
+    if (!recoveredNodes.empty() || !startedNodes.empty())
     {
-        NS_ABORT_MSG_IF(m_taskCoordinator == nullptr,
+        const bool containsComputeChange =
+            std::any_of(recoveredNodes.begin(),
+                        recoveredNodes.end(),
+                        [](const TaskFaultNodeChange& change) {
+                            return change.kind == TaskFaultKind::COMPUTE;
+                        }) ||
+            std::any_of(startedNodes.begin(),
+                        startedNodes.end(),
+                        [](const TaskFaultNodeChange& change) {
+                            return change.kind == TaskFaultKind::COMPUTE;
+                        });
+        NS_ABORT_MSG_IF(containsComputeChange && m_taskCoordinator == nullptr,
                         "compute fault execution requires a TaskCoordinator");
-        const std::map<uint32_t, TaskFaultImpact> impacts =
-            m_taskCoordinator->ApplyComputeFaultBatch(recoveredComputeNodes,
-                                                      startedComputeNodes);
-        for (const auto& [nodeId, impact] : impacts)
+        if (m_taskCoordinator != nullptr)
         {
-            const auto record = startRecordIndexes.find(nodeId);
-            NS_ABORT_MSG_IF(record == startRecordIndexes.end(),
-                            "compute fault impact has no matching START record");
-            m_events[record->second].affectedTaskCount = impact.affectedTaskCount;
-            m_events[record->second].affectedTransferCount =
-                impact.affectedTransferCount;
+            const std::map<uint32_t, TaskFaultImpact> impacts =
+                m_taskCoordinator->ApplyFaultBatch(recoveredNodes, startedNodes);
+            for (const auto& [nodeId, impact] : impacts)
+            {
+                const auto record = startRecordIndexes.find(nodeId);
+                NS_ABORT_MSG_IF(record == startRecordIndexes.end(),
+                                "fault impact has no matching START record");
+                m_events[record->second].affectedTaskCount = impact.affectedTaskCount;
+                m_events[record->second].affectedTransferCount =
+                    impact.affectedTransferCount;
+            }
+        }
+    }
+
+    if (!topologyRecordIndexes.empty())
+    {
+        NS_ABORT_MSG_IF(m_topology == nullptr,
+                        "satellite fault execution requires a topology controller");
+        const bool routeRecomputed = m_topology->ApplyCommunicationFaultOverlay(
+            m_state.GetCommunicationUnavailableNodeIds(),
+            refreshNaturalState);
+        if (routeRecomputed)
+        {
+            m_events[topologyRecordIndexes.back()].routeRecomputed = true;
         }
     }
 }
@@ -262,6 +318,7 @@ FaultController::DoDispose()
             Simulator::Cancel(event);
         }
     }
+    m_topology = nullptr;
     m_taskCoordinator = nullptr;
     Object::DoDispose();
 }

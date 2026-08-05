@@ -42,6 +42,7 @@ class FaultState
     bool IsSatelliteAvailable(uint32_t nodeId) const;
     bool IsCommunicationAvailable(uint32_t nodeId) const;
     bool IsComputeAvailable(uint32_t nodeId) const;
+    std::set<uint32_t> GetCommunicationUnavailableNodeIds() const;
     const std::set<uint64_t>& GetActiveFaultIds() const;
 
   private:

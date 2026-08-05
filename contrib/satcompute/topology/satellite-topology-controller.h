@@ -8,6 +8,7 @@
 #include "satellite-runtime-view.h"
 
 #include <cstdint>
+#include <set>
 
 namespace ns3
 {
@@ -28,6 +29,9 @@ class SatelliteTopologyController : public SatelliteRuntimeView
     virtual const NodeContainer& GetNodes() const = 0;
     virtual const SatelliteIdMap& GetIdMap() const = 0;
     virtual const SatelliteLinkState& GetLinkState() const = 0;
+    virtual bool ApplyCommunicationFaultOverlay(
+        const std::set<uint32_t>& unavailableSatelliteIds,
+        bool refreshNaturalState) = 0;
     virtual uint32_t GetAppliedTopologySliceCount() const = 0;
     virtual uint32_t GetRouteComputationCount() const = 0;
 };

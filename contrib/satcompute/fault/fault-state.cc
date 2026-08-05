@@ -102,6 +102,20 @@ FaultState::IsComputeAvailable(uint32_t nodeId) const
     return GetNodeAvailability(nodeId).computeAvailable;
 }
 
+std::set<uint32_t>
+FaultState::GetCommunicationUnavailableNodeIds() const
+{
+    std::set<uint32_t> unavailable;
+    for (const auto& [nodeId, availability] : m_nodes)
+    {
+        if (!availability.communicationAvailable)
+        {
+            unavailable.insert(nodeId);
+        }
+    }
+    return unavailable;
+}
+
 const std::set<uint64_t>&
 FaultState::GetActiveFaultIds() const
 {

@@ -129,7 +129,7 @@ OnlineTopologyController::Initialize()
     m_linkState->PrepareCandidateLinks(
         m_lastTopologyState.GetCandidateLinks(m_config.islBandwidthBps));
     m_lastUpdateSummary = m_linkState->ApplyFullSnapshot(
-        m_lastTopologyState.GetActiveLinks(m_config.islBandwidthBps));
+        GetEffectiveActiveLinks());
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
     m_appliedUpdateCount = 1;
     m_routeComputationCount = 1;
@@ -155,20 +155,69 @@ void
 OnlineTopologyController::ApplyScheduledUpdate()
 {
     m_lastTopologyState = m_topologyPolicy->EvaluateCurrent(*m_constellation);
-    m_lastUpdateSummary = m_linkState->ApplyFullSnapshot(
-        m_lastTopologyState.GetActiveLinks(m_config.islBandwidthBps));
+    ApplyEffectiveTopology();
     ++m_appliedUpdateCount;
     m_appliedUpdateTimesNs.push_back(Simulator::Now().GetNanoSeconds());
-    if (m_lastUpdateSummary.ActiveEdgeSetChanged())
+}
+
+std::vector<SatelliteLink>
+OnlineTopologyController::GetEffectiveActiveLinks() const
+{
+    std::vector<SatelliteLink> links =
+        m_lastTopologyState.GetActiveLinks(m_config.islBandwidthBps);
+    links.erase(
+        std::remove_if(links.begin(),
+                       links.end(),
+                       [this](const SatelliteLink& link) {
+                           return m_communicationUnavailableSatelliteIds.contains(
+                                      link.sourceId) ||
+                                  m_communicationUnavailableSatelliteIds.contains(
+                                      link.destinationId);
+                       }),
+        links.end());
+    return links;
+}
+
+bool
+OnlineTopologyController::ApplyEffectiveTopology()
+{
+    m_lastUpdateSummary = m_linkState->ApplyFullSnapshot(GetEffectiveActiveLinks());
+    if (!m_lastUpdateSummary.ActiveEdgeSetChanged())
     {
-        Ipv4GlobalRoutingHelper::RecomputeRoutingTables();
-        SatComputeIpv4GlobalRoutingHelper::AdvanceRouteEpoch(GetNodes());
-        ++m_routeComputationCount;
-        for (const Callback<void>& callback : m_routeUpdateCallbacks)
+        return false;
+    }
+    Ipv4GlobalRoutingHelper::RecomputeRoutingTables();
+    SatComputeIpv4GlobalRoutingHelper::AdvanceRouteEpoch(GetNodes());
+    NS_ABORT_MSG_IF(m_routeComputationCount == std::numeric_limits<uint32_t>::max(),
+                    "online route computation count overflow");
+    ++m_routeComputationCount;
+    for (const Callback<void>& callback : m_routeUpdateCallbacks)
+    {
+        callback();
+    }
+    return true;
+}
+
+bool
+OnlineTopologyController::ApplyCommunicationFaultOverlay(
+    const std::set<uint32_t>& unavailableSatelliteIds,
+    bool refreshNaturalState)
+{
+    RequireInitialized();
+    for (const uint32_t satelliteId : unavailableSatelliteIds)
+    {
+        if (!m_constellation->GetIdMap().HasSatelliteId(satelliteId))
         {
-            callback();
+            throw OnlineTopologyControllerError(
+                "communication fault overlay references an unknown satellite");
         }
     }
+    if (refreshNaturalState)
+    {
+        m_lastTopologyState = m_topologyPolicy->EvaluateCurrent(*m_constellation);
+    }
+    m_communicationUnavailableSatelliteIds = unavailableSatelliteIds;
+    return ApplyEffectiveTopology();
 }
 
 void

@@ -22,6 +22,7 @@ namespace ns3
 {
 
 class TaskCoordinator;
+class SatelliteTopologyController;
 
 class FaultControllerError : public std::runtime_error
 {
@@ -70,6 +71,7 @@ class FaultController : public Object
     void Configure(const FaultTrace& trace,
                    const std::vector<uint32_t>& satelliteIds,
                    int64_t simulationDurationNs);
+    void BindTopology(SatelliteTopologyController& topology);
     void BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator);
 
     const FaultTrace& GetTrace() const;
@@ -93,6 +95,7 @@ class FaultController : public Object
     std::map<int64_t, std::vector<ScheduledFaultEvent>> m_batches;
     std::vector<EventId> m_batchEvents;
     std::vector<FaultRuntimeEventRecord> m_events;
+    SatelliteTopologyController* m_topology{};
     Ptr<TaskCoordinator> m_taskCoordinator;
 };
 
