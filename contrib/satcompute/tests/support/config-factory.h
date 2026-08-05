@@ -21,19 +21,17 @@ inline ConstellationDefinition
 MakeTestConstellation(uint32_t numOrbits,
                       uint32_t satellitesPerOrbit,
                       const std::string& pattern = "walker-star",
-                      bool phaseDiff = true,
-                      int64_t orbitEpochOffsetNs = 0)
+                      bool phaseDiff = true)
 {
-    return {"0.1",
-            {},
-            "unit-test",
-            pattern,
-            numOrbits,
-            satellitesPerOrbit,
-            780000.0L,
-            86.4L,
-            phaseDiff,
-            orbitEpochOffsetNs};
+    const double raanSpanDeg = pattern == "walker-star" ? 180.0 : 360.0;
+    const double phasingFactor = phaseDiff && numOrbits > 1 ? 1.0 : 0.0;
+    return {{},
+            LeoOrbitalShell(780.0,
+                            86.4,
+                            numOrbits,
+                            satellitesPerOrbit,
+                            phasingFactor,
+                            raanSpanDeg)};
 }
 
 /** 构造完整的 online 内部配置，避免单元测试依赖已废弃的 scenario 输入。 */

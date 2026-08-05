@@ -23,7 +23,7 @@ from contrib.satcompute.tools.generation.topology.common.manifest import (
 def _generate_reference(output_dir: Path) -> None:
     constellation = (
         REPOSITORY_ROOT
-        / "contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
+        / "contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
     )
     arguments = " ".join(
         (

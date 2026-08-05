@@ -5,15 +5,12 @@
 #include "ns3/command-line.h"
 #include "ns3/constellation-definition.h"
 
-#include <nlohmann/json.hpp>
-
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -43,21 +40,10 @@ RequireDefinitionError(const std::function<void()>& operation, const std::string
     throw std::runtime_error(message);
 }
 
-nlohmann::json
-ReadJson(const std::filesystem::path& path)
-{
-    std::ifstream input(path);
-    if (!input.is_open())
-    {
-        throw std::runtime_error("cannot read test constellation: " + path.string());
-    }
-    return nlohmann::json::parse(input);
-}
-
 std::filesystem::path
-WriteJson(const std::filesystem::path& directory,
-          const std::string& filename,
-          const nlohmann::json& payload)
+WriteCsv(const std::filesystem::path& directory,
+         const std::string& filename,
+         const std::string& contents)
 {
     const std::filesystem::path path = directory / filename;
     std::ofstream output(path, std::ios::trunc);
@@ -65,7 +51,7 @@ WriteJson(const std::filesystem::path& directory,
     {
         throw std::runtime_error("cannot write test constellation: " + path.string());
     }
-    output << payload.dump(2) << '\n';
+    output << contents;
     return path;
 }
 
@@ -75,90 +61,68 @@ int
 main(int argc, char* argv[])
 {
     std::string validPath;
-    std::string invalidRuntimePath;
     std::string outputDirectory;
     ns3::CommandLine command(__FILE__);
-    command.AddValue("valid", "Valid constellation-only JSON", validPath);
-    command.AddValue("invalidRuntime", "Constellation with a runtime field", invalidRuntimePath);
+    command.AddValue("valid", "Valid native ns-3 LEO shell CSV", validPath);
     command.AddValue("outputDir", "Temporary mutation directory", outputDirectory);
     command.Parse(argc, argv);
 
     try
     {
         Require(!validPath.empty(), "valid fixture is required");
-        Require(!invalidRuntimePath.empty(), "invalidRuntime fixture is required");
         Require(!outputDirectory.empty(), "outputDir is required");
         std::filesystem::create_directories(outputDirectory);
 
         const ns3::ConstellationDefinition definition =
             ns3::LoadConstellationDefinition(validPath);
-        Require(definition.schemaVersion == "0.1", "schema version differs");
         Require(definition.sourcePath.is_absolute(), "source path is not absolute");
-        Require(definition.constellationName == "synthetic-66", "name differs");
-        Require(definition.constellationPattern == "walker-star", "pattern differs");
-        Require(definition.numOrbits == 6 && definition.satellitesPerOrbit == 11,
+        Require(definition.shell.planes == 6 && definition.shell.sats == 11,
                 "Walker dimensions differ");
         Require(definition.GetSatelliteCount() == 66, "satellite count differs");
-        Require(definition.altitudeM == 780000.0L, "altitude differs");
-        Require(std::abs(definition.inclinationDeg - 86.4L) < 1e-12L,
-                "inclination differs");
-        Require(definition.phaseDiff, "phase rule differs");
-        Require(definition.orbitEpochOffsetNs == 0, "epoch offset differs");
+        Require(std::abs(definition.shell.alt - 780.0) < 1e-12, "altitude differs");
+        Require(std::abs(definition.shell.inc - 86.4) < 1e-12, "inclination differs");
+        Require(std::abs(definition.shell.phasing - 1.0) < 1e-12, "phasing differs");
+        Require(std::abs(definition.shell.raanSpanDeg - 180.0) < 1e-12,
+                "RAAN span differs");
 
+        const auto missing = WriteCsv(outputDirectory, "missing.csv", "# no shell row\n");
         RequireDefinitionError(
-            [&invalidRuntimePath]() {
-                ns3::LoadConstellationDefinition(invalidRuntimePath);
+            [&missing]() {
+                ns3::LoadConstellationDefinition(missing);
             },
-            "runtime field was accepted");
+            "missing shell row was accepted");
 
-        const nlohmann::json valid = ReadJson(validPath);
-        auto missing = valid;
-        missing.erase("phase_diff");
-        const auto missingPath = WriteJson(outputDirectory, "missing.json", missing);
+        const auto multiple =
+            WriteCsv(outputDirectory, "multiple.csv", "780,86.4,6,11,1,180\n780,86.4,6,11,1,180\n");
         RequireDefinitionError(
-            [&missingPath]() {
-                ns3::LoadConstellationDefinition(missingPath);
+            [&multiple]() {
+                ns3::LoadConstellationDefinition(multiple);
             },
-            "missing field was accepted");
+            "multiple shell rows were accepted");
 
-        auto booleanCount = valid;
-        booleanCount["num_orbits"] = true;
-        const auto booleanCountPath =
-            WriteJson(outputDirectory, "boolean-count.json", booleanCount);
+        const auto invalidAltitude =
+            WriteCsv(outputDirectory, "altitude.csv", "0,86.4,6,11,1,180\n");
         RequireDefinitionError(
-            [&booleanCountPath]() {
-                ns3::LoadConstellationDefinition(booleanCountPath);
+            [&invalidAltitude]() {
+                ns3::LoadConstellationDefinition(invalidAltitude);
             },
-            "boolean orbit count was accepted");
+            "zero altitude was accepted");
 
-        auto excessive = valid;
-        excessive["num_orbits"] = 500;
-        excessive["satellites_per_orbit"] = 500;
-        const auto excessivePath = WriteJson(outputDirectory, "excessive.json", excessive);
+        const auto invalidPhasing =
+            WriteCsv(outputDirectory, "phasing.csv", "780,86.4,6,11,6,180\n");
         RequireDefinitionError(
-            [&excessivePath]() {
-                ns3::LoadConstellationDefinition(excessivePath);
+            [&invalidPhasing]() {
+                ns3::LoadConstellationDefinition(invalidPhasing);
+            },
+            "out-of-range phasing was accepted");
+
+        const auto excessive =
+            WriteCsv(outputDirectory, "excessive.csv", "780,86.4,500,500,1,180\n");
+        RequireDefinitionError(
+            [&excessive]() {
+                ns3::LoadConstellationDefinition(excessive);
             },
             "excessive satellite count was accepted");
-
-        auto invalidInclination = valid;
-        invalidInclination["inclination_deg"] = 180;
-        const auto invalidInclinationPath =
-            WriteJson(outputDirectory, "inclination.json", invalidInclination);
-        RequireDefinitionError(
-            [&invalidInclinationPath]() {
-                ns3::LoadConstellationDefinition(invalidInclinationPath);
-            },
-            "180-degree inclination was accepted");
-
-        auto negativeEpoch = valid;
-        negativeEpoch["orbit_epoch_offset_s"] = -1;
-        const auto negativeEpochPath = WriteJson(outputDirectory, "epoch.json", negativeEpoch);
-        RequireDefinitionError(
-            [&negativeEpochPath]() {
-                ns3::LoadConstellationDefinition(negativeEpochPath);
-            },
-            "negative epoch offset was accepted");
     }
     catch (const std::exception& error)
     {

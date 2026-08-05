@@ -40,7 +40,7 @@ main(int argc, char* argv[])
                      "Positive trace duration in seconds",
                      input.simulationDurationSeconds);
     command.AddValue("constellationConfig",
-                     "Path to the constellation-only JSON",
+                     "Path to the native ns-3 LEO shell CSV",
                      input.constellationConfig);
     command.AddValue("islCandidateStrategy",
                      "Fixed candidate ISL strategy",
@@ -82,8 +82,7 @@ main(int argc, char* argv[])
 
         TopologyTraceExportResult result;
         {
-            OnlineOrbitConstellation constellation(config.constellation,
-                                                   config.simulation.startTimeNs);
+            OnlineOrbitConstellation constellation(config.constellation);
             CircularOrbitTraceExporter exporter(config, config.outputDirectory, constellation);
             exporter.Initialize();
             Simulator::Stop(NanoSeconds(config.simulation.durationNs));

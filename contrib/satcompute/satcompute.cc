@@ -84,8 +84,7 @@ main(int argc, char* argv[])
         {
             TopologyTraceExportResult traceResult;
             {
-                OnlineOrbitConstellation constellation(config.constellation,
-                                                       config.simulation.startTimeNs);
+                OnlineOrbitConstellation constellation(config.constellation);
                 CircularOrbitTraceExporter exporter(config,
                                                      config.outputDirectory /
                                                          "topology-trace",

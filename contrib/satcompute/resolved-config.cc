@@ -6,7 +6,6 @@
 
 #include "para.h"
 
-#include <limits>
 #include <string_view>
 
 namespace ns3
@@ -97,13 +96,6 @@ ResolveSatComputeConfig(const SatComputeConfig& config)
     {
         throw ResolvedSatComputeConfigError(error.what());
     }
-    const int64_t maximumTime = std::numeric_limits<int64_t>::max();
-    if (resolved.constellation.orbitEpochOffsetNs >
-        maximumTime - resolved.simulation.startTimeNs - resolved.simulation.durationNs)
-    {
-        Fail("orbit_epoch_offset_s", "plus simulation window exceeds the int64 ns range");
-    }
-
     resolved.network.topologySource = config.topologySource;
     if (config.topologySource == "replay")
     {

@@ -3,8 +3,8 @@
 > 迁移状态：v0.3 已于 2026-08-05 完成，最终阶段 7 CI run `30986962812` 通过。
 > `main` 使用官方 ns-3.48，`legacy/ns-3.33` 永久保留为只读行为基线。本文以
 > ns-3.33 中文 README 的章节和合同为主体。生产入口只接受 `para.cc` 默认值及
-> 同名 CLI 覆盖；JSON 只承担星座物理结构、拓扑回放、流量、算力和任务等相互
-> 独立的数据合同。
+> 同名 CLI 覆盖；CSV 只承担星座物理结构，JSON 承担拓扑回放、流量、算力和
+> 任务等相互独立的数据合同。
 
 最终边界见 [v0.3 平台规格](../../docs/specs/platform-v0.3.md)，逐项结果见
 [ns-3.33 到 ns-3.48 迁移矩阵](../../docs/plans/ns3-33-to-48-matrix.md)。
@@ -12,7 +12,7 @@
 ## 执行模型
 
 1. 由 `para.cc` 默认值和同名 CLI 覆盖得到平台运行参数；
-2. online 模式读取只含物理结构的星座 JSON，由 ns-3.48 原生圆轨道 mobility
+2. online 模式读取 ns-3.48 原生 LEO shell CSV，由原生圆轨道 mobility
    实时计算稳定卫星 ID 对应的 ECEF 坐标；replay 模式读取配对的
    `nodes_<time>s.json` 与 `topology_<time>s.json` 全量快照；
 3. 按外部卫星 ID 的稳定顺序创建节点和 `/32` service 地址，按无向端点 ID 的
@@ -82,7 +82,7 @@ contrib/satcompute/tests/integration/regression/run-all.sh
 runName                  = synthetic-66-fixed
 simulationStart          = 0
 simulationDuration       = 1000
-constellationConfig      = contrib/satcompute/input/topology/constellations/synthetic-66.json
+constellationConfig      = contrib/satcompute/input/topology/constellations/synthetic-66.csv
 topologySource           = online
 topologyDir              = empty
 islCandidateStrategy     = plus-grid
@@ -144,7 +144,7 @@ capacity-aware、任务、FCFS、strict/report、诊断与 canonical ordering �
 - `--runName`：本次运行写入证据文件的稳定名称。
 - `--simulationStart`、`--simulationDuration`：非负开始时刻与有限正持续时间，
   单位为秒。
-- `--constellationConfig`：只描述星座物理结构的 JSON 路径；不得包含仿真、
+- `--constellationConfig`：ns-3.48 原生 LEO shell CSV 路径；不得包含仿真、
   时延、路由、workload、随机数或输出参数。
 - `--topologySource`：`online` 或 `replay`。前者实时计算，后者读取全量切片。
 - `--topologyDir`：`replay` 模式的 JSON 全量快照目录；online 模式必须为空。
@@ -301,7 +301,7 @@ ceil(compute_work_units × 1,000,000,000
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --delayMode=fixed --fixedDelay=0.001 \
   --networkUpdateInterval=10 \
@@ -445,7 +445,7 @@ bash contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --delayMode=fixed --fixedDelay=0.001 \
   --networkUpdateInterval=3 \
@@ -462,7 +462,7 @@ bash contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
 
 ./ns3 run "satcompute \
   --topologySource=replay \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --delayMode=fixed --fixedDelay=0.001 \
   --networkUpdateInterval=3 \
@@ -483,7 +483,7 @@ bash contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic \
   --delayMode=fixed --fixedDelay=0.001 \
   --networkUpdateInterval=2 \
@@ -514,7 +514,7 @@ v0.3 平台按规则 network cadence 消费切片。下面复用 `0/2/4s` 动态
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic \
   --delayMode=fixed --fixedDelay=0.001 \
   --networkUpdateInterval=2 \
@@ -602,7 +602,7 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --delayMode=fixed --fixedDelay=0.001 \
   --networkUpdateInterval=45 \
@@ -627,7 +627,7 @@ python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --delayMode=fixed --fixedDelay=0.001 \
   --networkUpdateInterval=340 \
@@ -658,7 +658,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
 ```bash
 ./ns3 run "satcompute \
   --topologySource=replay \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
   --topologyDir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --delayMode=fixed --fixedDelay=0.001 \
   --networkUpdateInterval=2 \

@@ -1,29 +1,22 @@
 # 星座结构输入
 
-本目录只保存“这是什么星座”的物理结构 JSON，不保存一次仿真实验的运行参数。
-平台从 `para.cc` 的 `constellationConfig` 默认路径读取文件，也可以由同名 CLI
-选项覆盖。
+本目录只保存“这是什么星座”的物理结构，不保存一次仿真实验的运行参数。
+平台直接采用 ns-3.48 `LeoOrbitNodeHelper` 支持的 CSV 格式，当前 SatCompute
+一次只接受一个轨道壳层。默认文件为 `synthetic-66.csv`。
 
-`synthetic-66.json` 使用 6 个轨道面、每面 11 颗卫星、高度 780 km、倾角
-86.4 度的 Walker Star 结构。稳定卫星 ID 按 plane-major 顺序生成：
+CSV 的一行轨道参数依次为：
 
-```text
-satellite_id = plane_index * satellites_per_orbit + slot_index
-```
+1. `altitudeKm`：圆轨道高度，单位为千米；
+2. `inclinationDegrees`：轨道倾角，单位为度，范围为 `[0, 180)`；
+3. `numberOfPlanes`：轨道面数量；
+4. `numberOfSatellitesPerPlane`：每个轨道面的卫星数量；
+5. `phasingFactor`：可选的 Walker Delta 相位因子，默认值为 `0`；
+6. `raanSpanDeg`：可选的 RAAN 跨度，`180` 对应 Walker Star，`360` 对应
+   Walker Delta，默认值为 `360`。
 
-字段解释：
+文件可以包含注释和表头；平台会先校验，再把同一份文件交给 ns-3.48 原生
+轨道节点 helper。稳定卫星 ID 按原生 helper 的节点创建顺序编号为
+`0 ... N-1`，固定 plus-grid 候选链路按轨道面优先顺序解释这些 ID。
 
-- `schema_version`：closed-world 合同版本，当前固定为 `0.1`；
-- `constellation_name`：稳定且适合文件名的星座名称；
-- `constellation_pattern`：`walker-star` 或 `walker-delta`；
-- `num_orbits`：正整数轨道面数量；
-- `satellites_per_orbit`：每个轨道面的正整数卫星数量；
-- `altitude_m`：圆轨道高度，单位为米；
-- `inclination_deg`：范围为 `[0, 180)` 的轨道倾角，单位为度；
-- `phase_diff`：是否让奇数轨道面偏移半个槽位；
-- `orbit_epoch_offset_s`：仿真 `t=0` 时已经传播的非负轨道时间，单位为秒。
-
-仿真时长、网络/导出间隔、距离门限、fixed/distance 时延、带宽、路由、任务、
-随机数和输出目录都属于 `para.h/.cc`，不得出现在本目录 JSON 中。读取器会拒绝
-任何未知字段，不会用 `para.cc` 静默覆盖冲突值。完整机器可读约束位于
-`topology/orbit/constellation.schema.json`。
+仿真时长、网络更新间隔、距离门限、时延方式、带宽、路由、任务、随机数和
+输出目录仍由平台参数负责，不能写入星座 CSV，因此两类输入不会重复或冲突。

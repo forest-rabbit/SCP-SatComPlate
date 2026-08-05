@@ -106,8 +106,8 @@ RunOnlineFacadeCase()
         Check(topology.GetConfig().network.topologySource == "online",
               "facade selected the wrong online controller");
         Check(topology.GetNodeCount() == 6, "facade online node count differs");
-        Check(topology.GetOnlineConstellation().GetOrbitIdentities().size() == 6,
-              "facade online orbit view differs");
+        Check(topology.GetOnlineConstellation().GetPositions().size() == 6,
+              "facade online position view differs");
 
         Simulator::Stop(NanoSeconds(config.simulation.durationNs));
         Simulator::Run();

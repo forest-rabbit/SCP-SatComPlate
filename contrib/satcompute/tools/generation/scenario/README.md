@@ -2,7 +2,7 @@
 
 本目录保留 ns-3.33 的 `generation/scenario` 位置和主要文件名，但 v0.3 不再生成
 或读取“完整 scenario 运行配置”。平台参数仍只来自 `para.cc`/CLI，星座物理结构
-仍只来自 constellation JSON；这里仅把已经独立生成的业务输入复制成一个可校验
+仍只来自 constellation CSV；这里仅把已经独立生成的业务输入复制成一个可校验
 的证据 bundle。
 
 组合器首先校验 topology trace 的 `manifest.json` 和全部切片哈希，再从第一份

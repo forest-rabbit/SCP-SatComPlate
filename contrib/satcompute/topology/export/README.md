@@ -36,7 +36,7 @@ SatCompute 0.3 使用与在线仿真相同的 ns-3.48 圆轨道模型、固定�
 ```bash
 ./ns3 run "satcompute \
   --runName=online-trace \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
   --topologySource=online \
   --simulationDuration=2.5 \
   --delayMode=distance \
@@ -52,7 +52,7 @@ SatCompute 0.3 使用与在线仿真相同的 ns-3.48 圆轨道模型、固定�
 ```bash
 ./ns3 run "satcompute \
   --runName=online-trace \
-  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.json \
+  --constellationConfig=contrib/satcompute/tests/fixtures/constellation/diamond-4.csv \
   --topologySource=online \
   --simulationDuration=2.5 \
   --delayMode=distance \
