@@ -179,6 +179,13 @@ main(int argc, char* argv[])
         Require(ns3::SatComputeSecondsToNanoseconds(20.0, "networkUpdateInterval") ==
                     20000000000LL,
                 "whole seconds conversion failed");
+        Require(ns3::SatComputeDecimalSecondsToNanoseconds("20", "time") == 20000000000LL,
+                "decimal whole seconds conversion failed");
+        Require(ns3::SatComputeDecimalSecondsToNanoseconds("1.000000001", "time") ==
+                    1000000001,
+                "decimal nanosecond conversion failed");
+        Require(ns3::SatComputeDecimalSecondsToNanoseconds("2e-9", "time") == 2,
+                "decimal exponent conversion failed");
         RequireConfigError(
             []() {
                 ns3::SatComputeSecondsToNanoseconds(-1.0, "negative");
@@ -197,6 +204,21 @@ main(int argc, char* argv[])
                                                     "overflow");
             },
             "overflowing seconds must fail");
+        RequireConfigError(
+            []() {
+                ns3::SatComputeDecimalSecondsToNanoseconds("0.0000000001", "time");
+            },
+            "sub-nanosecond decimal seconds must fail");
+        RequireConfigError(
+            []() {
+                ns3::SatComputeDecimalSecondsToNanoseconds("0", "time", true);
+            },
+            "zero positive decimal seconds must fail");
+        RequireConfigError(
+            []() {
+                ns3::SatComputeDecimalSecondsToNanoseconds("9223372036.854775808", "time");
+            },
+            "overflowing decimal seconds must fail");
 
         RequireConfigError(
             [config]() {

@@ -106,6 +106,19 @@ void ValidateSatComputeConfig(const SatComputeConfig& config);
  */
 int64_t SatComputeSecondsToNanoseconds(double seconds, std::string_view fieldName);
 
+/**
+ * 将十进制秒字符串精确转换为整数纳秒，不经过浮点数。
+ *
+ * @param token JSON 数字形式或切片文件名中的十进制秒。
+ * @param fieldName 用于错误消息的参数名。
+ * @param positive 是否要求结果严格大于零。
+ * @return 精确的非负整数纳秒。
+ * @throws SatComputeConfigError 数字无效、精度小于 1 ns 或溢出时抛出。
+ */
+int64_t SatComputeDecimalSecondsToNanoseconds(std::string_view token,
+                                             std::string_view fieldName,
+                                             bool positive = false);
+
 } // namespace ns3
 
 #endif // SATCOMPUTE_PARA_H
