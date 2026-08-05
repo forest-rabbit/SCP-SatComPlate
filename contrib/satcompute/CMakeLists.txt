@@ -2,7 +2,7 @@ build_lib(
   LIBNAME satcompute
   SOURCE_FILES
     para.cc
-    time-conversion.cc
+    common/time-conversion.cc
     metrics/core/flow-metrics.cc
     metrics/core/run-summary.cc
     metrics/core/task-metrics.cc
@@ -47,7 +47,7 @@ build_lib(
     traffic/network-transfer-receiver.cc
   HEADER_FILES
     para.h
-    time-conversion.h
+    common/time-conversion.h
     metrics/core/flow-metrics.h
     metrics/core/run-summary.h
     metrics/core/task-metrics.h
