@@ -1,8 +1,8 @@
 # SatCompute ns-3.33 到 ns-3.48 迁移矩阵
 
-状态：阶段 0 至阶段 5 已完成；阶段 5 唯一一次 GitHub CI run `30977572201`
-已通过。下一步恢复阶段 6 的分层 metrics 与诊断；每完成一个阶段更新“结果”列，
-阶段 7 进行最终逐文件审计。
+状态：阶段 0 至阶段 6 已完成；阶段 6 唯一一次 GitHub CI run `30983721371`
+已通过。阶段 7 的测试层次、中文 README 和逐文件审计均已实施，待最终本地门禁和
+阶段 7 唯一一次 GitHub CI 后关闭 v0.3。
 
 动作定义：
 
@@ -16,12 +16,12 @@
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `README.md`（中文） | 已恢复中文 v0.3 基线 | 恢复 legacy 主体并更新 ns-3.48 | 已恢复；阶段 7 最终校对 |
+| `README.md`（中文） | 已恢复中文 v0.3 文档 | 恢复 legacy 主体并更新 ns-3.48 | 已完成；legacy 章节主线、当前命令、输入边界和延期范围均已校对 |
 | `para.h/.cc` | 已恢复并接管生产入口 | 恢复并扩展 | 已恢复；typed defaults、CLI、组合校验和精确时间转换均有独立测试 |
 | `satcompute.cc` | 已移回模块根目录 | 移回根目录并切换 para | 已恢复并只使用 `para.cc + CLI` |
 | `wscript` | `CMakeLists.txt` | 由 CMake 替代 | 已确定 |
-| 无 | `model/satcompute-version.*` | 按实际职责保留或并入运行摘要 | 待审计 |
-| 无 | `model/sha256.*` | 移入 manifest/effective-config 所属职责 | 待审计 |
+| 无 | 根目录 `satcompute-version.*` | 作为跨组件 provenance 证据保留 | 已完成；移出通用 `model/` 并由 effective config 与 metrics 共用 |
+| 无 | 根目录 `sha256.*` | 作为输入与 manifest 哈希工具保留 | 已完成；移出通用 `model/` 并由配置、切片与指标所属组件共用 |
 | 无 | `config/scenario*` | 完整 scenario 输入切换后删除 | 已删除 |
 
 ## metrics
@@ -111,7 +111,7 @@
 | `tools/generation/topology/dynamic/*` | 已由共享 C++ executable 替代 | 由共享 C++ 轨道 exporter 替代传播部分 | 已完成；与平台 export-only 逐字节等价 |
 | `tools/generation/topology/orbit/hypatia/*` | 缺失 | 不迁移 | 已确定删除 |
 | `tools/analysis/topology_interval/*` | v0.3 trace 降采样、边状态与 ECMP 分析已恢复 | 恢复适用分析；C++ route gate 随阶段 5 接回 | 已完成；Python trace/edge/ECMP 分析与 C++ routing 门禁共同覆盖 |
-| `tools/validation/*` | 已恢复 legacy 检查器 | 恢复并对齐 metrics 输出 | 入口和 CLI 已恢复；阶段 6 随分层 metrics 接回黄金输出 |
+| `tools/validation/*` | 已恢复 legacy 检查器 | 恢复并对齐 metrics 输出 | 已完成；task failure、DropReason 与 ECMP 检查器直接验证当前分层 metrics 输出 |
 | `tools/visualization/orbit/*` | 已恢复为 v0.3 trace/XYZ 消费者 | 恢复为切片消费者，不计算轨道 | 已完成；旧 Hypatia PNG 不迁移，显示间隔采用上一切片 |
 
 ## tests
@@ -123,9 +123,9 @@
 | `tests/fixtures/traffic/transfers/*` | legacy 文件已按原路径和哈希恢复 | 保留并运行黄金兼容测试 | 已完成；12-transfer 动态 parity 与五模式 engine 回归通过 |
 | `tests/fixtures/traffic/tasks/*` | legacy 文件已按原路径和哈希恢复 | 保留并运行黄金兼容测试 | 已完成；单任务、FCFS、异构和 canonical parity 通过 |
 | `tests/support/*` | 已恢复并适配 `ns3` 根标记 | 恢复 | 已迁移 |
-| legacy Python generation/analysis/visualization tests | 适用于 v0.3 的核心测试已恢复 | 随 tools 恢复 | 已完成阶段 5 范围；62 个项目 Python 测试通过 |
-| legacy smoke/regression scripts | 被两个 `run-all.sh` 替代 | 恢复分层脚本并保留统一入口 | 待迁移 |
-| current C++ unit executables | 新增 | 保留并按最终接口适配 | 阶段 5 的 25 组全部通过；阶段 7 做最终清单审计 |
+| legacy Python generation/analysis/visualization tests | 适用于 v0.3 的测试已恢复 | 随 tools 恢复 | 已完成；interval、renderer、GIF、生成、检查和逐文件审计均纳入统一发现入口 |
+| legacy smoke/regression scripts | 已恢复命名分层脚本及两个 `run-all.sh` | 恢复分层脚本并保留统一入口 | 已完成；5 个 smoke、2 个 regression 责任脚本和统一编排入口均可独立执行 |
+| current C++ unit executables | 新增 | 保留并按最终接口适配 | 已完成；26 个项目自有 executable 覆盖配置、拓扑、路由、流量、任务和 metrics |
 
 ## 文档与 CI
 
@@ -139,13 +139,17 @@
 
 ## 最终逐文件审计
 
-阶段 7 使用以下命令导出两条树，并将所有未在本矩阵中覆盖的文件补充为逐文件
-记录：
+阶段 7 已使用以下命令导出两条树，并把所有未在本矩阵中原路径保留的 legacy 文件
+写入逐文件记录：
 
 ```bash
 git ls-tree -r --name-only legacy/ns-3.33 -- contrib/satcompute
 git ls-tree -r --name-only main -- contrib/satcompute
 ```
 
-最终不允许存在“无结论”的 legacy 文件，也不允许以目录重构为理由删除可观察
-行为。
+审计基线共有 322 个 legacy 文件：252 个按原路径保留，70 个 legacy-only 文件
+全部在 [`ns3-33-to-48-file-audit.tsv`](ns3-33-to-48-file-audit.tsv) 中给出
+`replaced/removed` 结论、仍存在的证据路径和理由。最终 current 树共 388 个文件，
+其中 136 个 current-only 文件均归入 v0.3 明确职责；通用 `model/` 已移除。
+`test_legacy_file_audit.py` 机器检查清单数量、排序、路径消失和替代证据存在性。
+因此不存在“无结论”的 legacy 文件，也没有以目录重构为理由删除可观察行为。

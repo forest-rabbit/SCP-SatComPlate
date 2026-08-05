@@ -6,7 +6,7 @@
 
 #include "snapshot-reader.h"
 #include "../../para.h"
-#include "../../model/sha256.h"
+#include "../../sha256.h"
 #include "../../third-party/nlohmann/json.hpp"
 
 #include <cstdint>

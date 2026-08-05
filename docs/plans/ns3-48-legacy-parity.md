@@ -1,7 +1,8 @@
 # 实施计划：SatCompute ns-3.48 legacy-parity 迁移
 
 状态：已批准，阶段 0 至阶段 6 已完成；阶段 6 唯一一次 GitHub CI run
-`30983721371` 已通过，下一步进入阶段 7 的完整回归与收尾。
+`30983721371` 已通过。阶段 7 的实现任务已完成，待最终本地门禁和阶段 7 唯一一次
+GitHub CI 后关闭 v0.3。
 
 依据：[平台 v0.3 规格](../specs/platform-v0.3.md)。
 
@@ -363,19 +364,38 @@ JSON 内容和稳定 ID，不把运行结果提交到仓库。
 
 ## 阶段 7：完整回归与收尾
 
-### 任务 7.1：恢复完整测试层次
+### 任务 7.1：恢复完整测试层次（已完成）
 
 合并 legacy fixtures、support、unit、smoke、regression 与当前 ns-3.48 新测试，
 消除重复但不删除行为覆盖。
 
-### 任务 7.2：完成中文 README
+实现结果：
+
+- 恢复 4 个 legacy smoke 名称和 2 个 legacy regression 名称，并增加 ns-3.48
+  topology smoke；两个 `run-all.sh` 只负责编排；
+- 恢复 interval analysis、XYZ/ISL renderer 和可选 GIF 测试，可选依赖缺失时明确
+  skip，不削弱核心合同；
+- `ns3-33-to-48-test-audit.md` 逐项记录被替代旧测试及当前行为证据。
+
+### 任务 7.2：完成中文 README（已完成）
 
 以 legacy README 为主体，更新所有 ns-3.48 命令、para 参数、星座结构、在线/
 回放/导出、指标和验证说明。
 
-### 任务 7.3：完成矩阵审计
+实现结果：根 README 已完全恢复为中文，以 legacy 的平台、输入、运行、指标、
+验证和扩展边界为主线；所有公开命令均按当前 para/CLI 合同实际执行校验。
+
+### 任务 7.3：完成矩阵审计（已完成）
 
 逐项确认 legacy 文件的最终动作，更新 v0.3 状态与延期边界。
+
+实现结果：
+
+- legacy 基线 322 个文件中，252 个原路径保留，70 个 legacy-only 路径全部写入
+  `ns3-33-to-48-file-audit.tsv`，给出动作、当前证据路径和理由；
+- current 最终树 388 个文件，其中 136 个 current-only 文件全部归入明确职责；
+- 通用 `model/` 已清除，版本与 SHA-256 证据移至模块根目录；
+- 机器审计测试固定基线数量并检查所有替代证据仍存在。
 
 ### 最终检查点
 
