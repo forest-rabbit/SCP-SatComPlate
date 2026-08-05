@@ -10,6 +10,8 @@
 #include "core/run-summary.h"
 #include "core/task-metrics.h"
 #include "core/transfer-metrics.h"
+#include "diagnostics/failure-diagnostics.h"
+#include "diagnostics/flow-drop-reason-diagnostics.h"
 #include "routing/capacity-aware-metrics.h"
 #include "routing/ecmp-metrics.h"
 #include "routing/size-aware-metrics.h"
@@ -138,24 +140,6 @@ CollectTransferAggregate(const std::vector<TransferSummaryRecord>& summaries)
 }
 
 std::filesystem::path
-WriteUdpSocketDrops(const std::filesystem::path& outputDirectory,
-                    const std::vector<UdpSocketDropEvent>& events)
-{
-    std::ostringstream output;
-    output << "simulation_time_ns,destination_node_id,destination_address,destination_port,"
-              "packet_size_bytes,cumulative_drop_packets,cumulative_drop_bytes,"
-              "receiver_rcv_buf_bytes\n";
-    for (const UdpSocketDropEvent& event : events)
-    {
-        output << event.simulationTimeNs << ',' << event.destinationSatelliteId << ','
-               << event.destinationAddress << ',' << event.destinationPort << ','
-               << event.packetSizeBytes << ',' << event.cumulativeDropPackets << ','
-               << event.cumulativeDropBytes << ',' << event.receiverRcvBufBytes << '\n';
-    }
-    return WriteCsv(outputDirectory, "udp-socket-drops.csv", output.str());
-}
-
-std::filesystem::path
 WriteReservationEvents(const std::filesystem::path& outputDirectory,
                        Ptr<FlowRouteRegistry> registry)
 {
@@ -222,66 +206,6 @@ WriteRoutingSummary(const ResolvedSatComputeConfig& config,
         routing["capacity_aware"] = nullptr;
     }
     return WriteJson(outputDirectory, "routing-summary.json", routing);
-}
-
-std::filesystem::path
-WriteIncompleteTransfers(const std::filesystem::path& diagnosticsDirectory,
-                         const std::vector<TransferSummaryRecord>& summaries)
-{
-    std::ostringstream output;
-    output << "transfer_id,transfer_state,source_node_id,destination_node_id,declared_size_bytes,"
-              "sent_application_bytes,sent_packet_count,received_application_bytes,"
-              "received_packet_count,missing_application_bytes,missing_packet_count,"
-              "arrival_time_ns,last_send_time_ns,completion_time_ns\n";
-    for (const TransferSummaryRecord& summary : summaries)
-    {
-        if (summary.transferState == "COMPLETED")
-        {
-            continue;
-        }
-        if (summary.receivedApplicationBytes > summary.declaredSizeBytes ||
-            summary.receivedPacketCount > summary.derivedPacketCount)
-        {
-            throw RunOutputError("partial transfer counters exceed their declared totals");
-        }
-        output << summary.transferId << ',' << summary.transferState << ','
-               << summary.sourceSatelliteId << ',' << summary.destinationSatelliteId << ','
-               << summary.declaredSizeBytes << ',' << summary.sentApplicationBytes << ','
-               << summary.sentPacketCount << ',' << summary.receivedApplicationBytes << ','
-               << summary.receivedPacketCount << ','
-               << summary.declaredSizeBytes - summary.receivedApplicationBytes << ','
-               << summary.derivedPacketCount - summary.receivedPacketCount << ','
-               << summary.arrivalTimeNs << ',' << summary.lastSendTimeNs << ','
-               << summary.completionTimeNs << '\n';
-    }
-    return WriteCsv(diagnosticsDirectory, "incomplete-transfers.csv", output.str());
-}
-
-std::filesystem::path
-WriteIncompleteTasks(const std::filesystem::path& diagnosticsDirectory,
-                     Ptr<TaskCoordinator> coordinator)
-{
-    std::ostringstream output;
-    output << "task_id,final_state,source_node_id,compute_node_id,result_node_id,arrival_time_ns,"
-              "last_transition_time_ns,input_transfer_complete_time_ns,compute_start_time_ns,"
-              "compute_complete_time_ns,result_transfer_complete_time_ns\n";
-    if (coordinator != nullptr)
-    {
-        for (const TaskRuntime& task : coordinator->GetTaskRuntimes())
-        {
-            if (task.state == TASK_COMPLETED)
-            {
-                continue;
-            }
-            output << task.definition.taskId << ',' << TaskStateToString(task.state) << ','
-                   << task.definition.sourceNodeId << ',' << task.definition.computeNodeId << ','
-                   << task.definition.resultNodeId << ',' << task.definition.arrivalTimeNs << ','
-                   << task.lastTransitionTimeNs << ',' << task.inputTransferCompleteTimeNs << ','
-                   << task.computeStartTimeNs << ',' << task.computeCompleteTimeNs << ','
-                   << task.resultTransferCompleteTimeNs << '\n';
-        }
-    }
-    return WriteCsv(diagnosticsDirectory, "incomplete-tasks.csv", output.str());
 }
 
 void
@@ -391,6 +315,37 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
         throw RunOutputError("complete run leaked capacity-aware path state");
     }
 
+    const std::string workloadMode = taskCoordinator != nullptr
+                                         ? "task"
+                                         : (transferEngine != nullptr ? "transfer" : "none");
+    const std::string runMode = workloadMode == "transfer" ? "network-transfer" : workloadMode;
+    const std::string pacingMode = transfers.empty()
+                                       ? (transferEngine == nullptr
+                                              ? "none"
+                                              : (capacityAware
+                                                     ? "path-bottleneck-serialization"
+                                                     : "first-hop-serialization"))
+                                       : transfers.front().pacingMode;
+    const RunMetadata runMetadata = {
+        runMode,
+        config.routing.mode,
+        config.routing.hashSeed,
+        config.network.islMtuBytes,
+        config.network.islQueueBytes,
+        config.network.receiverRcvBufBytes,
+        transferEngine != nullptr && config.logging.diagnosticMode == "failure",
+        config.logging.diagnosticMode,
+        config.workloads.taskCompletionPolicy,
+        pacingMode,
+        transferEngine != nullptr ? config.workloads.transferChunkMode : "none",
+        transferEngine != nullptr && config.workloads.transferChunkMode == "fixed"
+            ? config.workloads.transferPayloadBytes
+            : 0,
+        config.workloads.computeProfile ? config.workloads.computeProfile->string() : "",
+        config.workloads.taskTrace ? config.workloads.taskTrace->string() : ""};
+
+    RemoveFailureDiagnosticOutputs(outputDirectory.string());
+
     RunOutputResult result;
     result.complete = complete;
     WriteNetworkMetrics(flowAggregate, outputDirectory.string());
@@ -406,7 +361,6 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
     {
         WriteTransferSummaries(transfers, outputDirectory.string());
         result.files.push_back(outputDirectory / "transfer-summary.csv");
-        result.files.push_back(WriteUdpSocketDrops(outputDirectory, udpDrops));
     }
     if (taskCoordinator != nullptr)
     {
@@ -440,62 +394,46 @@ WriteRunOutputs(const ResolvedSatComputeConfig& config,
     }
     result.files.push_back(WriteRoutingSummary(config, context, outputDirectory));
 
-    uint64_t udpDropBytes = 0;
-    for (const UdpSocketDropEvent& event : udpDrops)
+    const bool writeFailureDiagnostics = config.logging.diagnosticMode == "failure" &&
+                                         taskCoordinator != nullptr && !tasksComplete;
+    const bool writeFlowDropReasons = config.logging.diagnosticMode == "failure" &&
+                                      (runMode == "network-transfer" ||
+                                       (taskCoordinator != nullptr && !tasksComplete));
+    const std::filesystem::path failureDirectory =
+        outputDirectory / "diagnostics" / "failure";
+    if (writeFlowDropReasons)
     {
-        if (event.receiverRcvBufBytes != config.network.receiverRcvBufBytes)
+        WriteFlowDropReasons(context.flowMonitor, transferFlows, outputDirectory.string());
+        result.files.push_back(failureDirectory / "flow-drop-reasons.csv");
+    }
+    if (writeFailureDiagnostics)
+    {
+        WriteFailureDiagnosticsNs(flowAggregate,
+                                  config.simulation.durationNs,
+                                  runMetadata,
+                                  transferFlows,
+                                  transfers,
+                                  context.routeEvents,
+                                  context.directedLinks,
+                                  context.queueDropEvents,
+                                  udpDrops,
+                                  *taskCoordinator,
+                                  outputDirectory.string());
+        static const std::vector<std::string> fullDiagnosticFiles = {
+            "incomplete-tasks.csv",
+            "incomplete-transfers.csv",
+            "isl-queue-drops.csv",
+            "isl-queue-drop-summary.csv",
+            "udp-socket-drops.csv",
+            "udp-socket-drop-summary.csv",
+            "flow-link-concentration.csv",
+            "diagnostic-summary.json"};
+        for (const std::string& filename : fullDiagnosticFiles)
         {
-            throw RunOutputError("UDP drop receiver buffer differs from resolved config");
+            result.files.push_back(failureDirectory / filename);
         }
-        udpDropBytes = CheckedAdd(udpDropBytes, event.packetSizeBytes, "UDP drop bytes");
     }
-
-    if (!complete)
-    {
-        const std::filesystem::path diagnostics = outputDirectory / "diagnostics";
-        result.files.push_back(WriteIncompleteTransfers(diagnostics, transfers));
-        result.files.push_back(WriteIncompleteTasks(diagnostics, taskCoordinator));
-        Json diagnosticSummary = {
-            {"schema_version", "0.1"},
-            {"run_status", "PARTIAL"},
-            {"incomplete_transfer_count",
-             transferAggregate.transferCount - transferAggregate.completedTransferCount},
-            {"incomplete_task_count", taskAggregate.taskCount - taskAggregate.completedTaskCount},
-            {"udp_socket_drop_packets", udpDrops.size()},
-            {"udp_socket_drop_bytes", udpDropBytes}};
-        result.files.push_back(WriteJson(diagnostics,
-                                         "diagnostic-summary.json",
-                                         diagnosticSummary));
-        result.diagnosticsGenerated = true;
-    }
-    const std::string workloadMode = taskCoordinator != nullptr
-                                         ? "task"
-                                         : (transferEngine != nullptr ? "transfer" : "none");
-    const std::string runMode = workloadMode == "transfer" ? "network-transfer" : workloadMode;
-    const std::string pacingMode = transfers.empty()
-                                       ? (transferEngine == nullptr
-                                              ? "none"
-                                              : (capacityAware
-                                                     ? "path-bottleneck-serialization"
-                                                     : "first-hop-serialization"))
-                                       : transfers.front().pacingMode;
-    const RunMetadata runMetadata = {
-        runMode,
-        config.routing.mode,
-        config.routing.hashSeed,
-        config.network.islMtuBytes,
-        config.network.islQueueBytes,
-        config.network.receiverRcvBufBytes,
-        transferEngine != nullptr && config.logging.diagnosticMode == "failure",
-        config.logging.diagnosticMode,
-        config.workloads.taskCompletionPolicy,
-        pacingMode,
-        transferEngine != nullptr ? config.workloads.transferChunkMode : "none",
-        transferEngine != nullptr && config.workloads.transferChunkMode == "fixed"
-            ? config.workloads.transferPayloadBytes
-            : 0,
-        config.workloads.computeProfile ? config.workloads.computeProfile->string() : "",
-        config.workloads.taskTrace ? config.workloads.taskTrace->string() : ""};
+    result.diagnosticsGenerated = writeFlowDropReasons || writeFailureDiagnostics;
     const RunSummaryEvidence evidence = {config.runName,
                                          config.schemaVersion,
                                          effectiveConfig,

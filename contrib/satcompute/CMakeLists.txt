@@ -10,6 +10,8 @@ build_lib(
     metrics/core/run-summary.cc
     metrics/core/task-metrics.cc
     metrics/core/transfer-metrics.cc
+    metrics/diagnostics/failure-diagnostics.cc
+    metrics/diagnostics/flow-drop-reason-diagnostics.cc
     metrics/routing/capacity-aware-metrics.cc
     metrics/routing/ecmp-metrics.cc
     metrics/routing/ecmp-route-recorder.cc
@@ -60,6 +62,8 @@ build_lib(
     metrics/core/run-summary.h
     metrics/core/task-metrics.h
     metrics/core/transfer-metrics.h
+    metrics/diagnostics/failure-diagnostics.h
+    metrics/diagnostics/flow-drop-reason-diagnostics.h
     metrics/routing/capacity-aware-metrics.h
     metrics/routing/ecmp-metrics.h
     metrics/routing/ecmp-route-recorder.h

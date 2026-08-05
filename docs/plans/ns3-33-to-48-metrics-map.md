@@ -16,15 +16,15 @@
 | `size-aware-reservation-events.csv` | `routing/size-aware-metrics` | 恢复 reservation 生命周期 | 已接入 |
 | `size-aware-summary.json` | `routing/size-aware-metrics` | 恢复 size-aware 聚合 | 已接入 |
 | `capacity-aware-summary.json` | `routing/capacity-aware-metrics` | 恢复完整路径容量聚合 | 已接入 |
-| `diagnostics/failure/incomplete-tasks.csv` | `diagnostics/failure-diagnostics` | 恢复未完成任务对象 | 任务 6.3 |
-| `diagnostics/failure/incomplete-transfers.csv` | `diagnostics/failure-diagnostics` | 恢复未完成传输对象 | 任务 6.3 |
-| `diagnostics/failure/isl-queue-drops.csv` | `diagnostics/failure-diagnostics` | 恢复逐次 ISL 队列丢包 | 任务 6.3 |
-| `diagnostics/failure/isl-queue-drop-summary.csv` | `diagnostics/failure-diagnostics` | 恢复逐有向链路丢包聚合 | 任务 6.3 |
-| `diagnostics/failure/udp-socket-drops.csv` | `diagnostics/failure-diagnostics` | 恢复接收 socket 丢包事件 | 任务 6.3 |
-| `diagnostics/failure/udp-socket-drop-summary.csv` | `diagnostics/failure-diagnostics` | 恢复逐接收端丢包聚合 | 任务 6.3 |
-| `diagnostics/failure/flow-link-concentration.csv` | `diagnostics/failure-diagnostics` | 恢复流量与拥塞链路关联 | 任务 6.3 |
-| `diagnostics/failure/flow-drop-reasons.csv` | `diagnostics/flow-drop-reason-diagnostics` | 恢复 FlowMonitor drop reason 明细 | 任务 6.3 |
-| `diagnostics/failure/diagnostic-summary.json` | `diagnostics/failure-diagnostics` | 恢复失败诊断汇总 | 任务 6.3 |
+| `diagnostics/failure/incomplete-tasks.csv` | `diagnostics/failure-diagnostics` | 恢复未完成任务对象 | 已接入 |
+| `diagnostics/failure/incomplete-transfers.csv` | `diagnostics/failure-diagnostics` | 恢复未完成传输对象 | 已接入 |
+| `diagnostics/failure/isl-queue-drops.csv` | `diagnostics/failure-diagnostics` | 恢复逐次 ISL 队列丢包 | 已接入 |
+| `diagnostics/failure/isl-queue-drop-summary.csv` | `diagnostics/failure-diagnostics` | 恢复逐有向链路丢包聚合 | 已接入 |
+| `diagnostics/failure/udp-socket-drops.csv` | `diagnostics/failure-diagnostics` | 恢复接收 socket 丢包事件 | 已接入 |
+| `diagnostics/failure/udp-socket-drop-summary.csv` | `diagnostics/failure-diagnostics` | 恢复逐接收端丢包聚合 | 已接入 |
+| `diagnostics/failure/flow-link-concentration.csv` | `diagnostics/failure-diagnostics` | 恢复流量与拥塞链路关联 | 已接入 |
+| `diagnostics/failure/flow-drop-reasons.csv` | `diagnostics/flow-drop-reason-diagnostics` | 恢复 FlowMonitor drop reason 明细 | 已接入 |
+| `diagnostics/failure/diagnostic-summary.json` | `diagnostics/failure-diagnostics` | 恢复失败诊断汇总 | 已接入 |
 
 `run-summary.json` 必须同时保留以下 ns-3.48 新增证据：`run_name`、
 `config_schema_version`、`effective_config.path`、`effective_config.sha256`、

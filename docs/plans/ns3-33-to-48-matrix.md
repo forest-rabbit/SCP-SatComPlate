@@ -37,8 +37,8 @@
 | `metrics/routing/ecmp-metrics.*` | 已恢复独立实现 | 恢复 | 已迁移；legacy 15 列表头与事件值通过门禁 |
 | `metrics/routing/size-aware-metrics.*` | 已恢复独立实现 | 恢复 | 已迁移；reservation 生命周期和结束状态通过门禁 |
 | `metrics/routing/capacity-aware-metrics.*` | 已恢复独立实现 | 恢复 | 已迁移；容量账本结束状态通过门禁 |
-| `metrics/diagnostics/failure-diagnostics.*` | writer 中的部分诊断 | 恢复并适配当前记录类型 | 待迁移 |
-| `metrics/diagnostics/flow-drop-reason-diagnostics.*` | 无完整等价 | 恢复 | 待迁移 |
+| `metrics/diagnostics/failure-diagnostics.*` | 已恢复并接入任务失败路径 | 恢复并适配当前记录类型 | 已迁移；九文件目录、旧版表头及 ISL queue Drop 映射通过门禁 |
+| `metrics/diagnostics/flow-drop-reason-diagnostics.*` | 已恢复并接入直传/任务失败路径 | 恢复 | 已迁移；FlowMonitor reason 与逐流五元组交叉校验通过 |
 | 无 | `metrics/run-output-writer.*` | 分层迁移完成后删除 | 待迁移 |
 
 ## routing

@@ -104,7 +104,8 @@ OnlineTopologyController::Initialize()
     m_linkState = std::make_unique<SatelliteLinkState>(idMap,
                                                        m_config.network.islMtuBytes,
                                                        m_config.network.islQueueBytes,
-                                                       false);
+                                                       m_config.logging.diagnosticMode ==
+                                                           "failure");
     m_lastTopologyState = m_topologyPolicy.EvaluateCurrent(*m_constellation);
     m_linkState->PrepareCandidateLinks(
         m_lastTopologyState.GetCandidateLinks(m_config.network.linkBandwidthBps));

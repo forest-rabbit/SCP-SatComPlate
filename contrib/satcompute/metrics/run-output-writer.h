@@ -10,6 +10,7 @@
 #include "../routing/state/capacity-reservation-state.h"
 #include "../routing/state/flow-route-registry.h"
 #include "../task/task-coordinator.h"
+#include "../topology/link/satellite-link-state.h"
 #include "../traffic/network-transfer-engine.h"
 
 #include "ns3/ptr.h"
@@ -42,6 +43,8 @@ struct RunOutputContext
     std::optional<CapacityAwareRuntimeSummary> capacityAwareSummary;
     Ptr<FlowMonitor> flowMonitor;
     std::vector<EcmpRouteDecisionEvent> routeEvents;
+    std::vector<IslDirectedLink> directedLinks;
+    std::vector<IslQueueDropEvent> queueDropEvents;
 };
 
 struct RunOutputResult

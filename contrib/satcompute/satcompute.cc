@@ -189,7 +189,9 @@ main(int argc, char* argv[])
                 topology.GetFlowRouteRegistry(),
                 capacitySummary,
                 flowMonitor,
-                routeRecorder.GetEvents()};
+                routeRecorder.GetEvents(),
+                topology.GetIslDirectedLinks(),
+                topology.GetIslQueueDropEvents()};
             const RunOutputResult output = WriteRunOutputs(config,
                                                            outputContext,
                                                            transferEngine,

@@ -638,7 +638,7 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
   --diagnosticMode=failure \
   --outputDir=/tmp/satcompute-task-failure"
 
-# 上一条命令的预期退出码为 1。
+# 上一条命令的预期退出码为 3。
 python3 contrib/satcompute/tools/validation/check-task-output.py failure \
   --topology-dir=contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-static \
   --compute-profile=contrib/satcompute/tests/fixtures/topology/compute-profiles/diamond-4-compute-profile.json \

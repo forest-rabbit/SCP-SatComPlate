@@ -105,7 +105,7 @@ partial_common="--simulationDuration=1 --constellationConfig=$constellation_4 \
 --topologySource=replay --topologyDir=$dynamic_topology --delayMode=fixed \
 --fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=1000000 \
 --routingMode=global-first --transferTrace=$transfer_inputs/platform-partial.json \
---transferPayloadBytes=1400 --topologyExportEnabled=false"
+--transferPayloadBytes=1400 --diagnosticMode=failure --topologyExportEnabled=false"
 set +e
 strict_result="$(run_platform "$regression_output/strict" \
   "$partial_common --runName=partial-strict --taskCompletionPolicy=strict")"
@@ -122,6 +122,39 @@ if [[ "$report_result" != *'"status":"partial"'* ]]; then
   echo "report partial-completion policy regression failed: $report_result" >&2
   exit 1
 fi
+for directory in strict report; do
+  python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
+    --output-dir="$regression_output/$directory" \
+    --minimum-explicit-drop-packets=0
+done
+
+task_failure_common="--simulationDuration=1 --constellationConfig=$constellation_4 \
+--topologySource=replay --topologyDir=$dynamic_topology --delayMode=fixed \
+--fixedDelay=0.001 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
+--islQueueBytes=1 --routingMode=global-first \
+--computeProfile=$task_inputs/compute-profile-single.json \
+--taskTrace=$task_inputs/task-single.json --transferPayloadBytes=1024 \
+--diagnosticMode=failure --taskCompletionPolicy=strict \
+--topologyExportEnabled=false"
+set +e
+task_failure_result="$(run_platform "$regression_output/task-failure" \
+  "$task_failure_common --runName=task-failure")"
+task_failure_status=$?
+set -e
+if [[ $task_failure_status -ne 3 ||
+      "$task_failure_result" != *'"status":"partial"'* ]]; then
+  echo "task failure diagnostic regression failed: $task_failure_result" >&2
+  exit 1
+fi
+python3 contrib/satcompute/tools/validation/check-task-output.py failure \
+  --topology-dir="$dynamic_topology" \
+  --compute-profile="$repository_root/$task_inputs/compute-profile-single.json" \
+  --task-trace="$repository_root/$task_inputs/task-single.json" \
+  --output-dir="$regression_output/task-failure" \
+  --require-queue-drop
+python3 contrib/satcompute/tools/validation/check-flow-drop-reasons.py \
+  --output-dir="$regression_output/task-failure" \
+  --require-reason=QUEUE --require-zero-unattributed
 
 online_common="--simulationDuration=3 --constellationConfig=$constellation_4 \
 --topologySource=online --maxIslDistance=30000000 --delayMode=fixed \
@@ -224,7 +257,6 @@ if direct["transfer"]["received_application_bytes"] != 3074:
 
 for filename in (
     "transfer-summary.csv",
-    "udp-socket-drops.csv",
     "task-events.csv",
     "task-summary.csv",
     "compute-node-summary.csv",
@@ -259,9 +291,13 @@ if strict["task_completion_policy"] != "strict":
 if report["task_completion_policy"] != "report":
     raise SystemExit("report completion policy was not recorded")
 for directory in ("strict", "report"):
-    diagnostic = load_json(f"{directory}/diagnostics/diagnostic-summary.json")
-    if diagnostic["incomplete_transfer_count"] != 1:
-        raise SystemExit(f"{directory} incomplete transfer count differs")
+    failure = root / directory / "diagnostics/failure"
+    if not (failure / "flow-drop-reasons.csv").is_file():
+        raise SystemExit(f"{directory} flow-drop reasons are missing")
+    if (failure / "diagnostic-summary.json").exists():
+        raise SystemExit(f"{directory} direct run wrote full task diagnostics")
+    if not load_json(f"{directory}/run-summary.json")["diagnostics_generated"]:
+        raise SystemExit(f"{directory} did not report diagnostic evidence")
 
 online_modes = {
     "online-fixed": "global-first",
@@ -296,7 +332,6 @@ if load_json("online-task-first/run-summary.json")["task"][
 
 for filename in (
     "transfer-summary.csv",
-    "udp-socket-drops.csv",
     "task-events.csv",
     "task-summary.csv",
     "compute-node-summary.csv",
