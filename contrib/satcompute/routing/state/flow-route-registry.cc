@@ -17,6 +17,28 @@ namespace ns3
 
 NS_OBJECT_ENSURE_REGISTERED(FlowRouteRegistry);
 
+namespace
+{
+
+const char*
+GetReleaseAction(FlowRouteFinalizationReason reason)
+{
+    switch (reason)
+    {
+    case FlowRouteFinalizationReason::SENDER_FINISHED:
+        return "RELEASE_SENDER_FINISHED";
+    case FlowRouteFinalizationReason::TRANSFER_COMPLETED:
+        return "RELEASE_TRANSFER_COMPLETED";
+    case FlowRouteFinalizationReason::TRANSFER_FAILED:
+        return "RELEASE_TRANSFER_FAILED";
+    case FlowRouteFinalizationReason::TRANSFER_CANCELLED:
+        return "RELEASE_TRANSFER_CANCELLED";
+    }
+    return "";
+}
+
+} // namespace
+
 TypeId
 FlowRouteRegistry::GetTypeId()
 {
@@ -78,25 +100,31 @@ FlowRouteRegistry::BeginSending(const EcmpFlowKey& flowKey)
 void
 FlowRouteRegistry::FinishSending(const EcmpFlowKey& flowKey)
 {
-    FinishFlow(flowKey, "RELEASE_SENDER_FINISHED");
+    NS_ABORT_MSG_IF(!FinalizeFlowIfActive(flowKey,
+                                         FlowRouteFinalizationReason::SENDER_FINISHED),
+                    "flow route registry 重复结束 sender");
 }
 
 void
 FlowRouteRegistry::FinishReceiving(const EcmpFlowKey& flowKey)
 {
-    FinishFlow(flowKey, "RELEASE_TRANSFER_COMPLETED");
+    NS_ABORT_MSG_IF(!FinalizeFlowIfActive(flowKey,
+                                         FlowRouteFinalizationReason::TRANSFER_COMPLETED),
+                    "flow route registry 重复结束 receiver");
 }
 
-void
-FlowRouteRegistry::FinishFlow(const EcmpFlowKey& flowKey, const std::string& releaseAction)
+bool
+FlowRouteRegistry::FinalizeFlowIfActive(const EcmpFlowKey& flowKey,
+                                        FlowRouteFinalizationReason reason)
 {
-    NS_ABORT_MSG_IF(releaseAction != "RELEASE_SENDER_FINISHED" &&
-                        releaseAction != "RELEASE_TRANSFER_COMPLETED",
-                    "flow route release action 无效");
     auto flow = m_flows.find(flowKey);
     NS_ABORT_MSG_IF(flow == m_flows.end(), "flow route registry 无法结束未登记 flow");
-    NS_ABORT_MSG_IF(!flow->second.senderActive,
-                    "flow route registry 重复结束 transfer_id=" << flow->second.transferId);
+    if (!flow->second.senderActive)
+    {
+        return false;
+    }
+    const std::string releaseAction = GetReleaseAction(reason);
+    NS_ABORT_MSG_IF(releaseAction.empty(), "flow route release action 无效");
 
     for (auto assignment = m_assignments.begin(); assignment != m_assignments.end();)
     {
@@ -114,6 +142,7 @@ FlowRouteRegistry::FinishFlow(const EcmpFlowKey& flowKey, const std::string& rel
     flow->second.senderActive = false;
     NS_ABORT_MSG_IF(m_activeFlowCount == 0, "flow route active flow count 下溢");
     --m_activeFlowCount;
+    return true;
 }
 
 bool
@@ -252,8 +281,11 @@ FlowRouteRegistry::ReleaseAssignment(
     const std::string& action,
     uint64_t routeEpoch)
 {
-    NS_ABORT_MSG_IF(action != "RELEASE_CANDIDATE_INVALID" && action != "RELEASE_SENDER_FINISHED" &&
+    NS_ABORT_MSG_IF(action != "RELEASE_CANDIDATE_INVALID" &&
+                        action != "RELEASE_SENDER_FINISHED" &&
                         action != "RELEASE_TRANSFER_COMPLETED" &&
+                        action != "RELEASE_TRANSFER_FAILED" &&
+                        action != "RELEASE_TRANSFER_CANCELLED" &&
                         action != "RELEASE_ROUTE_INVALIDATED",
                     "flow route release action 无效");
     SizeAwareLoadChange loadChange = m_sizeAwareLoadState.Release(assignment->first.nodeId,

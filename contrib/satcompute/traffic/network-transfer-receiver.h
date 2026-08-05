@@ -49,11 +49,14 @@ class NetworkTransferReceiver : public Application
     void AddExpectedTransfer(const NetworkTransfer& transfer);
     void SetCompletionCallback(Callback<void, uint64_t, int64_t> callback);
     void MarkTransferStarted(uint64_t transferId, int64_t startTimeNs);
+    bool DiscardIncompleteTransfer(uint64_t transferId);
 
     uint64_t GetTotalReceivedBytes() const;
     uint64_t GetTransferReceivedBytes(uint64_t transferId) const;
     uint64_t GetTransferReceivedPacketCount(uint64_t transferId) const;
     int64_t GetTransferCompletionTimeNs(uint64_t transferId) const;
+    uint64_t GetTransferStalePacketCount(uint64_t transferId) const;
+    uint64_t GetTransferStaleBytes(uint64_t transferId) const;
     const std::vector<UdpSocketDropEvent>& GetUdpSocketDropEvents() const;
 
   private:
@@ -75,6 +78,11 @@ class NetworkTransferReceiver : public Application
         uint64_t receivedPacketCount;
         int64_t startTimeNs;
         int64_t completionTimeNs;
+        int64_t terminalTimeNs;
+        uint64_t stalePacketCount;
+        uint64_t staleBytes;
+        bool terminal;
+        bool discarded;
     };
 
     Reception& GetReception(uint64_t transferId);

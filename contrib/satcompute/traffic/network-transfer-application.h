@@ -34,11 +34,13 @@ class NetworkTransferApplication : public Application
     void StartTransferNow();
     void PauseForRouteUpdate();
     void ResumeAfterRouteUpdate(uint64_t pacingRateBps);
+    bool FinalizeForTerminalState();
 
     uint64_t GetTransferId() const;
     bool HasStarted() const;
     bool HasFinishedSending() const;
     bool IsPausedForRouteUpdate() const;
+    bool IsTerminal() const;
     uint64_t GetSentPacketCount() const;
     uint64_t GetSentBytes() const;
     int64_t GetLastSendTimeNs() const;
@@ -62,6 +64,7 @@ class NetworkTransferApplication : public Application
     bool m_hasStarted{};
     bool m_hasFinishedSending{};
     bool m_isPausedForRouteUpdate{};
+    bool m_isTerminal{};
     Callback<void, uint64_t, int64_t> m_sendCompleteCallback;
 };
 

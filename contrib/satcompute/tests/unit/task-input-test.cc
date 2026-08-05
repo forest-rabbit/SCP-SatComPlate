@@ -158,6 +158,26 @@ CheckCanonicalInputs(const std::filesystem::path& fixtureRoot)
               runtime.resultTransferCompleteTimeNs == 100000040,
           "task lifecycle timestamps differ");
 
+    TaskRuntime failedRuntime(firstTrace.tasks.front());
+    failedRuntime.TransitionTo(TASK_INPUT_TRANSFERRING,
+                               100000000,
+                               "TASK_ARRIVAL");
+    Check(failedRuntime.FailIfActive(100000015,
+                                     TaskFailureReason::COMPUTE_NODE_FAILURE,
+                                     "COMPUTE_FAULT_START"),
+          "active task did not enter its failed terminal state");
+    Check(!failedRuntime.FailIfActive(100000016,
+                                      TaskFailureReason::COMPUTE_NODE_FAILURE,
+                                      "REPEATED_COMPUTE_FAULT_START"),
+          "repeated task failure was not idempotent");
+    Check(failedRuntime.state == TASK_FAILED &&
+              failedRuntime.failureTimeNs == 100000015 &&
+              failedRuntime.failureReason == TaskFailureReason::COMPUTE_NODE_FAILURE &&
+              std::string(TaskStateToString(failedRuntime.state)) == "FAILED" &&
+              std::string(TaskFailureReasonToString(failedRuntime.failureReason)) ==
+                  "COMPUTE_NODE_FAILURE",
+          "task failure state, time, or reason differs");
+
     ExpectComputeError(fixtureRoot / "compute-profile-invalid-field.json", endpoints);
     ExpectComputeError(fixtureRoot / "compute-profile-duplicate.json", endpoints);
     ExpectComputeError(fixtureRoot / "compute-profile-unknown-satellite.json", endpoints);

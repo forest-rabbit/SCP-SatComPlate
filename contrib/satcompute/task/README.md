@@ -34,6 +34,9 @@ PENDING
   -> COMPLETED
 ```
 
+任一非终态还可以进入 `FAILED`，并固定记录失败时刻与原因。`FAILED` 和
+`COMPLETED` 都不可恢复；当前阶段不创建迁移、备份或新的执行 attempt。
+
 流程如下：
 
 1. 在 `arrival_time_ns` 启动源卫星到计算卫星的输入传输；
@@ -66,6 +69,11 @@ service_time_ns = ceil(
 实现使用 128-bit 中间值检查乘法和纳秒范围，正计算量的最短服务时间为 1 ns。
 节点利用率、busy time 和最大队长由运行时 service 统计，而不是输入估算。
 
+`ComputeService` 还提供计算可用性开关，以及精确取消 running task、移除 queued
+task 的幂等接口。被取消的运行任务不会触发原 completion event，也不会计入正常
+完成数或成功计算 busy time；节点恢复后只调度队列中仍合法的任务。故障输入与这些
+接口的调度连接在后续 N4A 小步完成。
+
 ## 结果大小与传输 ID
 
 平台不知道算法的压缩率或输出形状，因此不会用输入大小或计算量推导结果大小。
@@ -94,6 +102,7 @@ receiver 完整接收。仿真结束时：
 
 - `tests/unit/task-input-test.cc`：closed-world 输入、canonical 排序和派生 ID；
 - `tests/unit/compute-service-test.cc`：服务时间、FCFS 和同刻 tie-break；
+- `tests/unit/fault-lifecycle-test.cc`：任务失败终态、传输终止和资源释放；
 - `tests/integration/smoke/run-task-smoke.sh`：单任务完整闭环；
 - `tests/integration/regression/run-full-workload-regression.sh`：确定性、完成策略、诊断
   和 20 任务正式示例；
