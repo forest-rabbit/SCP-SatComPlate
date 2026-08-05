@@ -20,7 +20,7 @@ completed="$(./ns3 run --no-build \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --routingMode=global-size-aware-hrw \
 --computeProfile=$task_inputs/compute-profile-single.json \
---taskTrace=$task_inputs/task-single.json --topologyExportEnabled=false \
+--taskTrace=$task_inputs/task-single.json \
 --outputDir=$smoke_output/run")"
 if [[ "$completed" != *'"status":"completed"'* ]]; then
   echo "task smoke failed: $completed" >&2

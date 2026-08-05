@@ -34,7 +34,7 @@ build_lib(
     task/compute-task.cc
     task/task-coordinator.cc
     task/task-trace.cc
-    topology/export/circular-orbit-trace-exporter.cc
+    topology/export/topology-slice-exporter.cc
     topology/orbit/constellation-definition.cc
     topology/ipv4/satellite-ipv4-addressing.cc
     topology/link/satellite-link-state.cc
@@ -95,7 +95,7 @@ build_lib(
     task/compute-task.h
     task/task-coordinator.h
     task/task-trace.h
-    topology/export/circular-orbit-trace-exporter.h
+    topology/export/topology-slice-exporter.h
     topology/orbit/constellation-definition.h
     topology/ipv4/satellite-ipv4-addressing.h
     topology/link/satellite-link-state.h
@@ -144,17 +144,6 @@ build_exec(
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
-)
-
-# Offline topology generation is a project tool that reuses the same orbit and
-# policy library as the platform; it is not an ns-3 example.
-build_exec(
-  EXECNAME satcompute-topology-generator
-  EXECNAME_PREFIX satcompute_tool_
-  SOURCE_FILES tools/generation/topology/topology-generator.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tools
 )
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
@@ -376,18 +365,9 @@ build_exec(
 )
 
 build_exec(
-  EXECNAME satcompute-topology-trace-exporter-test
+  EXECNAME satcompute-topology-slice-exporter-test
   EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/topology-trace-exporter-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-topology-replay-equivalence-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/topology-replay-equivalence-test.cc
+  SOURCE_FILES tests/unit/topology-slice-exporter-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

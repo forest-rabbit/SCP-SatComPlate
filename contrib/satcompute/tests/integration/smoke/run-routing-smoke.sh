@@ -26,7 +26,7 @@ completed="$(./ns3 run --no-build \
 --constellationConfig=$constellation_4 --topologySource=online \
 --maxIslDistance=30000000 --delayMode=fixed --fixedDelay=0.008 \
 --networkUpdateInterval=1 --islBandwidthBps=100000000 \
---routingMode=global-first --topologyExportEnabled=false \
+--routingMode=global-first \
 --outputDir=$smoke_output/online")"
 if [[ "$completed" != *'"status":"completed"'* ]]; then
   echo "online routing smoke failed: $completed" >&2

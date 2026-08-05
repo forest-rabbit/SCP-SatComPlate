@@ -20,7 +20,7 @@ completed="$(./ns3 run --no-build \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --routingMode=global-capacity-aware-hrw --transferTrace=$transfers \
 --transferChunkMode=fixed --transferPayloadBytes=1024 \
---transferLogMode=silent --topologyExportEnabled=false \
+--transferLogMode=silent \
 --outputDir=$smoke_output/run")"
 if [[ "$completed" != *'"status":"completed"'* ]]; then
   echo "capacity-aware smoke failed: $completed" >&2

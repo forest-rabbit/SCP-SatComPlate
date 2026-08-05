@@ -60,8 +60,8 @@ struct SatComputeConfig
     uint32_t transferPayloadBytes;     ///< fixed 分包的 UDP payload 字节数。
     std::string taskCompletionPolicy;  ///< 任务完成策略：strict 或 report。
 
-    bool topologyExportEnabled;           ///< 是否导出坐标和拓扑切片。
-    double topologyExportIntervalSeconds; ///< 拓扑导出间隔，单位为秒。
+    bool topologyOnly;                    ///< 是否只生成轨道和拓扑切片。
+    double topologySliceIntervalSeconds;  ///< 拓扑切片间隔，单位为秒。
     bool includeFinalTopologyState;       ///< 是否额外导出仿真终点状态。
     std::string outputDirectory;          ///< 结构化结果输出目录。
     std::string transferLogMode;          ///< 传输日志级别。

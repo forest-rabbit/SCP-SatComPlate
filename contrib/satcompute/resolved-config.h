@@ -68,13 +68,11 @@ struct ResolvedWorkloadConfig
     std::string taskCompletionPolicy;                    ///< strict 或 report。
 };
 
-/** 独立于网络 tick 的拓扑状态导出参数。 */
-struct ResolvedTraceExportConfig
+/** topology-only 模式的独立切片参数。 */
+struct ResolvedTopologySliceConfig
 {
-    bool enabled;           ///< 是否输出坐标和拓扑切片。
     int64_t intervalNs;     ///< 导出间隔。
     bool includeFinalState; ///< 是否输出仿真终点状态。
-    std::string format;     ///< 当前固定为 json-slices。
 };
 
 /** 运行日志和失败诊断参数。 */
@@ -103,12 +101,13 @@ struct ResolvedSatComputeConfig
 {
     std::string schemaVersion;                 ///< effective config 合同版本。
     std::string runName;                       ///< 本次运行名称。
+    bool topologyOnly;                         ///< 是否只生成轨道和拓扑切片。
     ResolvedSimulationConfig simulation;       ///< 仿真窗口。
     ConstellationDefinition constellation;     ///< 星座物理结构。
     ResolvedNetworkConfig network;             ///< 拓扑和链路参数。
     ResolvedRoutingConfig routing;             ///< IPv4 路由参数。
     ResolvedWorkloadConfig workloads;          ///< 独立业务输入与策略。
-    ResolvedTraceExportConfig traceExport;     ///< 状态导出参数。
+    ResolvedTopologySliceConfig topologySlices; ///< topology-only 切片参数。
     ResolvedLoggingConfig logging;             ///< 日志和诊断参数。
     ResolvedRandomnessConfig randomness;       ///< 随机数配置。
     std::filesystem::path outputDirectory;     ///< 结构化输出目录。

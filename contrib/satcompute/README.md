@@ -56,7 +56,8 @@ fallback。发送暂停、恢复、pacing 和 pending admission 仍由 `traffic/
 ./ns3 configure --enable-modules=satcompute -G Ninja
 ./ns3 build
 ./ns3 run "satcompute --validateOnly=true"
-./ns3 run "satcompute --simulationDuration=2 --topologyExportEnabled=false"
+./ns3 run "satcompute --simulationDuration=2"
+./ns3 run "satcompute --simulationDuration=2 --topologyOnly=1"
 ./ns3 run "satcompute --help"
 ```
 
@@ -104,8 +105,8 @@ taskTrace                = empty
 transferChunkMode        = fixed
 transferPayloadBytes     = 1024
 taskCompletionPolicy     = strict
-topologyExportEnabled    = true
-topologyExportInterval   = 1
+topologyOnly             = false
+topologySliceInterval    = 1
 includeFinalTopologyState = true
 outputDir                = /tmp/satcompute-output
 transferLogMode          = summary
@@ -171,8 +172,9 @@ capacity-aware、任务、FCFS、strict/report、诊断与 canonical ordering �
 - `--transferPayloadBytes`：`fixed` 模式的 UDP payload 上限，默认 1024。
 - `--taskCompletionPolicy`：`strict` 在任务未全部完成时写出指标后返回非零；
   `report` 写出相同结果后正常退出。默认 `strict`。
-- `--topologyExportEnabled`、`--topologyExportInterval` 与
-  `--includeFinalTopologyState`：控制独立于网络 tick 的坐标/拓扑切片输出。
+- `--topologyOnly`：不创建网络、路由、任务和指标对象，只生成轨道/拓扑切片。
+- `--topologySliceInterval` 与 `--includeFinalTopologyState`：控制独立于网络 tick
+  的切片间隔和是否包含仿真终点。
 - `--outputDir`：结构化结果目录，默认 `/tmp/satcompute-output`；正式实验应显式
   填写仓库外的持久路径。
 - `--transferLogMode`、`--taskLogMode`：`summary`、`verbose` 或 `silent`。
@@ -316,7 +318,6 @@ ceil(compute_work_units × 1,000,000,000
   --transferLogMode=silent \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
-  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-task-single"
 ```
 
@@ -457,7 +458,6 @@ bash contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
   --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
-  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-ecmp-static-a"
 
 ./ns3 run "satcompute \
@@ -474,7 +474,6 @@ bash contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
   --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
-  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-ecmp-static-b"
 ```
 
@@ -495,7 +494,6 @@ bash contrib/satcompute/tests/integration/smoke/run-capacity-aware-smoke.sh
   --transferLogMode=verbose \
   --routingMode=global-hash-per-flow \
   --ecmpHashSeed=1 \
-  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-ecmp-dynamic"
 
 python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
@@ -527,7 +525,6 @@ v0.3 平台按规则 network cadence 消费切片。下面复用 `0/2/4s` 动态
   --transferLogMode=silent \
   --routingMode=global-hrw-per-flow \
   --ecmpHashSeed=1 \
-  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-hrw-seed1-a"
 ```
 
@@ -613,7 +610,6 @@ transfer 产生 1–20 个包，总计 53,100 个包和 207,357,501 应用字节
   --islQueueBytes=1500000 \
   --transferLogMode=summary \
   --routingMode=global-hash-per-flow \
-  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-mixed-large-ci"
 
 python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
@@ -638,7 +634,6 @@ python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
   --islQueueBytes=1500000 \
   --transferLogMode=summary \
   --routingMode=global-hash-per-flow \
-  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-mixed-large-local"
 
 python3 contrib/satcompute/tools/validation/check-ecmp-output.py \
@@ -674,7 +669,6 @@ payload 加协议头后的单包大小。它只验证“失败后先落盘、再
   --taskLogMode=silent \
   --taskCompletionPolicy=strict \
   --diagnosticMode=failure \
-  --topologyExportEnabled=false \
   --outputDir=/tmp/satcompute-task-failure"
 
 # 上一条命令的预期退出码为 3。

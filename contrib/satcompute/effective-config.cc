@@ -108,7 +108,7 @@ WriteAtomically(const std::filesystem::path& outputPath, const Json& payload)
 } // namespace
 
 std::filesystem::path
-WriteEffectiveConfig(const ResolvedSatComputeConfig& config, bool validateOnly, bool exportOnly)
+WriteEffectiveConfig(const ResolvedSatComputeConfig& config, bool validateOnly, bool topologyOnly)
 {
     std::error_code error;
     std::filesystem::create_directories(config.outputDirectory, error);
@@ -160,11 +160,9 @@ WriteEffectiveConfig(const ResolvedSatComputeConfig& config, bool validateOnly, 
           {"transfer_chunk_mode", config.workloads.transferChunkMode},
           {"transfer_payload_bytes", config.workloads.transferPayloadBytes},
           {"task_completion_policy", config.workloads.taskCompletionPolicy}}},
-        {"trace_export",
-         {{"enabled", config.traceExport.enabled},
-          {"interval_ns", config.traceExport.intervalNs},
-          {"include_final_state", config.traceExport.includeFinalState},
-          {"format", config.traceExport.format}}},
+        {"topology_slices",
+         {{"interval_ns", config.topologySlices.intervalNs},
+          {"include_final_state", config.topologySlices.includeFinalState}}},
         {"logging",
          {{"transfer_log_mode", config.logging.transferLogMode},
           {"task_log_mode", config.logging.taskLogMode},
@@ -176,7 +174,7 @@ WriteEffectiveConfig(const ResolvedSatComputeConfig& config, bool validateOnly, 
         {"operational",
          {{"output_directory", config.outputDirectory.string()},
           {"validate_only", validateOnly},
-          {"export_only", exportOnly}}}};
+          {"topology_only", topologyOnly}}}};
 
     try
     {

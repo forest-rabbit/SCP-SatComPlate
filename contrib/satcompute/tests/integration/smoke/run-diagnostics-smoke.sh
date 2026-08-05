@@ -23,7 +23,7 @@ result="$(./ns3 run --no-build \
 --computeProfile=$task_inputs/compute-profile-single.json \
 --taskTrace=$task_inputs/task-single.json --transferPayloadBytes=1024 \
 --diagnosticMode=failure --taskCompletionPolicy=strict \
---topologyExportEnabled=false --outputDir=$smoke_output/run")"
+--outputDir=$smoke_output/run")"
 status=$?
 set -e
 if [[ $status -ne 3 || "$result" != *'"status":"partial"'* ]]; then

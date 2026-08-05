@@ -56,7 +56,7 @@ main(int argc, char* argv[])
             Require(parsedConfig.runName == "cli-run", "runName override failed");
             Require(parsedConfig.simulationStartSeconds == 5.0, "start override failed");
             Require(parsedConfig.simulationDurationSeconds == 15.0, "duration override failed");
-            Require(parsedConfig.constellationConfig == "constellation.json",
+            Require(parsedConfig.constellationConfig == "constellation.csv",
                     "constellation override failed");
             Require(parsedConfig.topologySource == "replay" &&
                         parsedConfig.topologyDirectory == "slices",
@@ -85,10 +85,10 @@ main(int argc, char* argv[])
                         parsedConfig.transferPayloadBytes == 2048 &&
                         parsedConfig.taskCompletionPolicy == "report",
                     "workload policy overrides failed");
-            Require(!parsedConfig.topologyExportEnabled &&
-                        parsedConfig.topologyExportIntervalSeconds == 2.0 &&
+            Require(!parsedConfig.topologyOnly &&
+                        parsedConfig.topologySliceIntervalSeconds == 2.0 &&
                         !parsedConfig.includeFinalTopologyState,
-                    "export overrides failed");
+                    "topology-only overrides failed");
             Require(parsedConfig.outputDirectory == "/tmp/cli-output" &&
                         parsedConfig.transferLogMode == "verbose" &&
                         parsedConfig.taskLogMode == "silent" &&
@@ -142,9 +142,9 @@ main(int argc, char* argv[])
         Require(config.transferChunkMode == "fixed", "unexpected chunk mode");
         Require(config.transferPayloadBytes == 1024, "unexpected transfer payload");
         Require(config.taskCompletionPolicy == "strict", "unexpected completion policy");
-        Require(config.topologyExportEnabled, "topology export must be enabled");
-        Require(config.topologyExportIntervalSeconds == 1.0,
-                "unexpected export interval");
+        Require(!config.topologyOnly, "topology-only must be opt-in");
+        Require(config.topologySliceIntervalSeconds == 1.0,
+                "unexpected topology slice interval");
         Require(config.includeFinalTopologyState, "final topology state must be exported");
         Require(config.outputDirectory == "/tmp/satcompute-output", "unexpected output path");
         Require(config.transferLogMode == "summary", "unexpected transfer log mode");

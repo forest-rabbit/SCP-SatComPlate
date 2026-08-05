@@ -27,13 +27,13 @@ class EffectiveConfigError : public std::runtime_error
  *
  * @param config 唯一的内部运行配置。
  * @param validateOnly 是否选择只校验而不启动仿真。
- * @param exportOnly 是否选择只导出拓扑切片。
+ * @param topologyOnly 是否选择只生成拓扑切片。
  * @return 写出的 effective-config.json 绝对路径。
  * @throws EffectiveConfigError 输出或输入清单无法完成时抛出。
  */
 std::filesystem::path WriteEffectiveConfig(const ResolvedSatComputeConfig& config,
                                            bool validateOnly = false,
-                                           bool exportOnly = false);
+                                           bool topologyOnly = false);
 
 } // namespace ns3
 

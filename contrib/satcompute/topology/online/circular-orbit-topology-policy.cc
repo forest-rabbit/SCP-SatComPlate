@@ -88,36 +88,30 @@ DistanceToPropagationDelayNs(double distanceM)
 }
 
 CircularOrbitTopologyPolicy::CircularOrbitTopologyPolicy(
-    const ResolvedSatComputeConfig& config)
-    : m_config(config),
-      m_candidates(BuildPlusGridCandidateLinks(config.constellation,
-                                               config.network.seamEnabled))
+    const ConstellationDefinition& constellation,
+    bool seamEnabled,
+    long double maxIslDistanceM,
+    const std::string& delayMode,
+    std::optional<int64_t> fixedDelayNs)
+    : m_satelliteCount(constellation.GetSatelliteCount()),
+      m_maxIslDistanceM(maxIslDistanceM),
+      m_delayMode(delayMode),
+      m_fixedDelayNs(fixedDelayNs),
+      m_candidates(BuildPlusGridCandidateLinks(constellation, seamEnabled))
 {
-    if (m_config.network.topologySource != "online")
-    {
-        throw CircularOrbitTopologyPolicyError(
-            "circular-orbit topology policy requires an online topology source");
-    }
-    if (m_config.network.islCandidateStrategy != "plus-grid")
-    {
-        throw CircularOrbitTopologyPolicyError(
-            "circular-orbit topology policy requires plus-grid candidates");
-    }
-    if (m_config.network.maxIslDistanceM <= 0.0L ||
-        !std::isfinite(m_config.network.maxIslDistanceM))
+    if (m_maxIslDistanceM <= 0.0L || !std::isfinite(m_maxIslDistanceM))
     {
         throw CircularOrbitTopologyPolicyError("maximum ISL distance must be positive");
     }
-    if (m_config.network.delayMode == "fixed")
+    if (m_delayMode == "fixed")
     {
-        if (!m_config.network.fixedDelayNs || *m_config.network.fixedDelayNs <= 0)
+        if (!m_fixedDelayNs || *m_fixedDelayNs <= 0)
         {
             throw CircularOrbitTopologyPolicyError(
                 "fixed topology policy requires a positive fixed delay");
         }
     }
-    else if (m_config.network.delayMode != "distance" ||
-             m_config.network.fixedDelayNs)
+    else if (m_delayMode != "distance" || m_fixedDelayNs)
     {
         throw CircularOrbitTopologyPolicyError(
             "distance topology policy cannot contain a fixed delay");
@@ -146,7 +140,7 @@ CircularOrbitTopologyPolicy::EvaluatePositions(
     {
         throw CircularOrbitTopologyPolicyError("topology evaluation time must be non-negative");
     }
-    if (positions.size() != m_config.constellation.GetSatelliteCount())
+    if (positions.size() != m_satelliteCount)
     {
         throw CircularOrbitTopologyPolicyError(
             "topology position count differs from the constellation");
@@ -176,8 +170,8 @@ CircularOrbitTopologyPolicy::EvaluatePositions(
         const double distanceM = CalculateEcefDistance(
             positions[candidate.sourceId].positionM,
             positions[candidate.destinationId].positionM);
-        const int64_t delayNs = m_config.network.delayMode == "fixed"
-                                    ? *m_config.network.fixedDelayNs
+        const int64_t delayNs = m_delayMode == "fixed"
+                                    ? *m_fixedDelayNs
                                     : DistanceToPropagationDelayNs(distanceM);
         state.evaluatedLinks.push_back(
             {candidate.sourceId,
@@ -185,7 +179,7 @@ CircularOrbitTopologyPolicy::EvaluatePositions(
              candidate.kind,
              distanceM,
              delayNs,
-             static_cast<long double>(distanceM) <= m_config.network.maxIslDistanceM});
+             static_cast<long double>(distanceM) <= m_maxIslDistanceM});
     }
     return state;
 }
