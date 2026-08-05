@@ -4,8 +4,58 @@
 
 #include "para.h"
 
+#include "ns3/command-line.h"
+
+#include <cmath>
+#include <initializer_list>
+#include <limits>
+
 namespace ns3
 {
+
+namespace
+{
+
+[[noreturn]] void
+FailConfig(std::string_view fieldName, std::string_view message)
+{
+    throw SatComputeConfigError(std::string(fieldName) + " " + std::string(message));
+}
+
+void
+RequireNotEmpty(const std::string& value, std::string_view fieldName)
+{
+    if (value.empty())
+    {
+        FailConfig(fieldName, "must not be empty");
+    }
+}
+
+void
+RequireChoice(const std::string& value,
+              std::string_view fieldName,
+              std::initializer_list<std::string_view> choices)
+{
+    for (const std::string_view choice : choices)
+    {
+        if (value == choice)
+        {
+            return;
+        }
+    }
+    FailConfig(fieldName, "has an unsupported value: " + value);
+}
+
+void
+RequirePositiveSeconds(double value, std::string_view fieldName)
+{
+    if (SatComputeSecondsToNanoseconds(value, fieldName) <= 0)
+    {
+        FailConfig(fieldName, "must be greater than zero");
+    }
+}
+
+} // namespace
 
 SatComputeConfig
 GetDefaultSatComputeConfig()
@@ -67,6 +117,221 @@ GetDefaultSatComputeConfig()
     config.randomStreamStart = 0;
 
     return config;
+}
+
+void
+AddSatComputeCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
+{
+    commandLine.AddValue("runName", "Stable name recorded for this run", config.runName);
+    commandLine.AddValue("simulationStart",
+                         "Simulation start time in seconds",
+                         config.simulationStartSeconds);
+    commandLine.AddValue("simulationDuration",
+                         "Simulation duration in seconds",
+                         config.simulationDurationSeconds);
+
+    commandLine.AddValue("constellationConfig",
+                         "Path to the constellation-only JSON",
+                         config.constellationConfig);
+    commandLine.AddValue("topologySource",
+                         "Topology source: online or replay",
+                         config.topologySource);
+    commandLine.AddValue("topologyDir",
+                         "Topology slice directory for replay",
+                         config.topologyDirectory);
+    commandLine.AddValue("islCandidateStrategy",
+                         "Fixed candidate ISL strategy",
+                         config.islCandidateStrategy);
+    commandLine.AddValue("seamEnabled", "Enable seam candidate links", config.seamEnabled);
+    commandLine.AddValue("maxIslDistance",
+                         "Maximum valid ISL distance in meters",
+                         config.maxIslDistanceMeters);
+    commandLine.AddValue("delayMode", "Link delay mode: fixed or distance", config.delayMode);
+    commandLine.AddValue("fixedDelay",
+                         "Fixed one-way link delay in seconds",
+                         config.fixedDelaySeconds);
+    commandLine.AddValue("networkUpdateInterval",
+                         "Online network update interval in seconds",
+                         config.networkUpdateIntervalSeconds);
+
+    commandLine.AddValue("islBandwidthBps", "ISL data rate in bit/s", config.islBandwidthBps);
+    commandLine.AddValue("islMtuBytes", "ISL MTU in bytes", config.islMtuBytes);
+    commandLine.AddValue("islQueueBytes", "ISL queue capacity in bytes", config.islQueueBytes);
+    commandLine.AddValue("receiverRcvBufBytes",
+                         "UDP receive buffer in bytes",
+                         config.receiverRcvBufBytes);
+
+    commandLine.AddValue("routingMode", "IPv4 routing policy", config.routingMode);
+    commandLine.AddValue("routingRecomputePolicy",
+                         "Route recomputation policy",
+                         config.routingRecomputePolicy);
+    commandLine.AddValue("ecmpHashSeed", "Per-flow ECMP and HRW hash seed", config.ecmpHashSeed);
+
+    commandLine.AddValue("transferTrace", "NetworkTransfer JSON path", config.transferTrace);
+    commandLine.AddValue("computeProfile",
+                         "Satellite compute profile JSON path",
+                         config.computeProfile);
+    commandLine.AddValue("taskTrace", "Task trace JSON path", config.taskTrace);
+    commandLine.AddValue("transferChunkMode", "Transfer chunking policy", config.transferChunkMode);
+    commandLine.AddValue("transferPayloadBytes",
+                         "Fixed UDP payload size in bytes",
+                         config.transferPayloadBytes);
+    commandLine.AddValue("taskCompletionPolicy",
+                         "Task completion policy: strict or report",
+                         config.taskCompletionPolicy);
+
+    commandLine.AddValue("topologyExportEnabled",
+                         "Export position and topology slices",
+                         config.topologyExportEnabled);
+    commandLine.AddValue("topologyExportInterval",
+                         "Topology export interval in seconds",
+                         config.topologyExportIntervalSeconds);
+    commandLine.AddValue("includeFinalTopologyState",
+                         "Export the simulation end state",
+                         config.includeFinalTopologyState);
+    commandLine.AddValue("outputDir", "Structured output directory", config.outputDirectory);
+    commandLine.AddValue("transferLogMode", "Transfer log mode", config.transferLogMode);
+    commandLine.AddValue("taskLogMode", "Task log mode", config.taskLogMode);
+    commandLine.AddValue("diagnosticMode", "Failure diagnostic mode", config.diagnosticMode);
+
+    commandLine.AddValue("randomSeed", "ns-3 global random seed", config.randomSeed);
+    commandLine.AddValue("randomRun", "ns-3 independent run number", config.randomRun);
+    commandLine.AddValue("randomStreamStart",
+                         "First random stream reserved by SatCompute",
+                         config.randomStreamStart);
+}
+
+void
+ValidateSatComputeConfig(const SatComputeConfig& config)
+{
+    RequireNotEmpty(config.runName, "runName");
+    RequireNotEmpty(config.constellationConfig, "constellationConfig");
+
+    const int64_t startNs =
+        SatComputeSecondsToNanoseconds(config.simulationStartSeconds, "simulationStart");
+    RequirePositiveSeconds(config.simulationDurationSeconds, "simulationDuration");
+    const int64_t durationNs =
+        SatComputeSecondsToNanoseconds(config.simulationDurationSeconds, "simulationDuration");
+    if (startNs > std::numeric_limits<int64_t>::max() - durationNs)
+    {
+        FailConfig("simulation", "start plus duration exceeds the int64 nanosecond range");
+    }
+
+    RequireChoice(config.topologySource, "topologySource", {"online", "replay"});
+    if (config.topologySource == "online" && !config.topologyDirectory.empty())
+    {
+        FailConfig("topologyDir", "must be empty for online topology");
+    }
+    if (config.topologySource == "replay" && config.topologyDirectory.empty())
+    {
+        FailConfig("topologyDir", "is required for replay topology");
+    }
+    RequireChoice(config.islCandidateStrategy, "islCandidateStrategy", {"plus-grid"});
+    if (!std::isfinite(config.maxIslDistanceMeters) || config.maxIslDistanceMeters <= 0.0)
+    {
+        FailConfig("maxIslDistance", "must be a finite positive number of meters");
+    }
+    RequireChoice(config.delayMode, "delayMode", {"fixed", "distance"});
+    const int64_t fixedDelayNs =
+        SatComputeSecondsToNanoseconds(config.fixedDelaySeconds, "fixedDelay");
+    if (config.delayMode == "fixed" && fixedDelayNs <= 0)
+    {
+        FailConfig("fixedDelay", "must be greater than zero in fixed mode");
+    }
+    RequirePositiveSeconds(config.networkUpdateIntervalSeconds, "networkUpdateInterval");
+
+    if (config.islBandwidthBps == 0)
+    {
+        FailConfig("islBandwidthBps", "must be greater than zero");
+    }
+    if (config.islMtuBytes < 68)
+    {
+        FailConfig("islMtuBytes", "must be at least 68");
+    }
+    if (config.islQueueBytes == 0)
+    {
+        FailConfig("islQueueBytes", "must be greater than zero");
+    }
+    if (config.receiverRcvBufBytes == 0)
+    {
+        FailConfig("receiverRcvBufBytes", "must be greater than zero");
+    }
+
+    RequireChoice(config.routingMode,
+                  "routingMode",
+                  {"global-first",
+                   "global-hash-per-flow",
+                   "global-hrw-per-flow",
+                   "global-size-aware-hrw",
+                   "global-capacity-aware-hrw"});
+    RequireChoice(config.routingRecomputePolicy,
+                  "routingRecomputePolicy",
+                  {"on-topology-change"});
+
+    const bool hasComputeProfile = !config.computeProfile.empty();
+    const bool hasTaskTrace = !config.taskTrace.empty();
+    if (hasComputeProfile != hasTaskTrace)
+    {
+        FailConfig("workloads", "computeProfile and taskTrace must be provided together");
+    }
+    if (!config.transferTrace.empty() && hasComputeProfile)
+    {
+        FailConfig("workloads", "transferTrace cannot be mixed with task inputs");
+    }
+    RequireChoice(config.transferChunkMode, "transferChunkMode", {"fixed", "size-aware"});
+    if (config.transferPayloadBytes == 0 || config.transferPayloadBytes > 65507)
+    {
+        FailConfig("transferPayloadBytes", "must be in the range 1..65507");
+    }
+    if (config.transferChunkMode == "fixed" &&
+        config.transferPayloadBytes + 28 > config.islMtuBytes)
+    {
+        FailConfig("transferPayloadBytes", "plus UDP/IPv4 headers exceeds islMtuBytes");
+    }
+    if (config.transferChunkMode == "size-aware" && config.islMtuBytes < 64028)
+    {
+        FailConfig("islMtuBytes", "must be at least 64028 for size-aware chunking");
+    }
+    RequireChoice(config.taskCompletionPolicy,
+                  "taskCompletionPolicy",
+                  {"strict", "report"});
+
+    RequirePositiveSeconds(config.topologyExportIntervalSeconds, "topologyExportInterval");
+    RequireNotEmpty(config.outputDirectory, "outputDir");
+    RequireChoice(config.transferLogMode,
+                  "transferLogMode",
+                  {"summary", "verbose", "silent"});
+    RequireChoice(config.taskLogMode, "taskLogMode", {"summary", "verbose", "silent"});
+    RequireChoice(config.diagnosticMode, "diagnosticMode", {"off", "failure"});
+    if (config.randomSeed == 0)
+    {
+        FailConfig("randomSeed", "must be greater than zero");
+    }
+    if (config.randomStreamStart < 0)
+    {
+        FailConfig("randomStreamStart", "must be non-negative");
+    }
+}
+
+int64_t
+SatComputeSecondsToNanoseconds(double seconds, std::string_view fieldName)
+{
+    if (!std::isfinite(seconds) || seconds < 0.0)
+    {
+        throw SatComputeConfigError(std::string(fieldName) +
+                                    " must be a finite non-negative number of seconds");
+    }
+
+    constexpr long double NANOSECONDS_PER_SECOND = 1000000000.0L;
+    const long double nanoseconds =
+        static_cast<long double>(seconds) * NANOSECONDS_PER_SECOND;
+    const long double roundedNanoseconds = std::round(nanoseconds);
+    if (roundedNanoseconds > static_cast<long double>(std::numeric_limits<int64_t>::max()))
+    {
+        throw SatComputeConfigError(std::string(fieldName) +
+                                    " exceeds the int64 nanosecond range");
+    }
+    return static_cast<int64_t>(roundedNanoseconds);
 }
 
 } // namespace ns3
