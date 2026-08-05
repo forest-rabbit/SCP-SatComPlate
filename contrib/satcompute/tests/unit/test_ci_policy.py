@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import stat
 import unittest
 from pathlib import Path
 
@@ -50,6 +51,30 @@ class SatComputeCiPolicyTest(unittest.TestCase):
             "contrib/satcompute/tests/integration/regression/run-all.sh",
         ):
             self.assertIn(command, content)
+
+    def test_legacy_layered_integration_entrypoints_are_preserved(self) -> None:
+        suites = {
+            "contrib/satcompute/tests/integration/smoke/run-all.sh": (
+                "run-routing-smoke.sh",
+                "run-capacity-aware-smoke.sh",
+                "run-task-smoke.sh",
+                "run-diagnostics-smoke.sh",
+                "run-topology-smoke.sh",
+            ),
+            "contrib/satcompute/tests/integration/regression/run-all.sh": (
+                "run-full-routing-regression.sh",
+                "run-full-workload-regression.sh",
+            ),
+        }
+        for relative_runner, children in suites.items():
+            runner = REPOSITORY_ROOT / relative_runner
+            content = runner.read_text(encoding="utf-8")
+            self.assertTrue(runner.stat().st_mode & stat.S_IXUSR)
+            for child_name in children:
+                child = runner.parent / child_name
+                self.assertTrue(child.is_file(), child)
+                self.assertTrue(child.stat().st_mode & stat.S_IXUSR, child)
+                self.assertIn(child_name, content)
 
 
 if __name__ == "__main__":
