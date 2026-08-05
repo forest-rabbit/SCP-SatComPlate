@@ -29,10 +29,10 @@
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
 | `metrics/metrics.*` | `metrics/run-output-writer.*` | 恢复 MetricsRecorder 编排 | 待迁移 |
-| `metrics/core/flow-metrics.*` | 无等价分层文件 | 恢复 FlowMonitor 指标 | 待迁移 |
-| `metrics/core/run-summary.*` | writer 内部逻辑 | 恢复独立文件 | 待迁移 |
-| `metrics/core/task-metrics.*` | writer 内部逻辑 | 恢复独立文件 | 待迁移 |
-| `metrics/core/transfer-metrics.*` | writer 内部逻辑 | 恢复独立文件 | 待迁移 |
+| `metrics/core/flow-metrics.*` | 已恢复并接入真实 FlowMonitor | 恢复 FlowMonitor 指标 | 已迁移；聚合与逐流五元组输出通过门禁 |
+| `metrics/core/run-summary.*` | 已恢复独立实现 | 恢复独立文件 | 已迁移；legacy 扁平字段与 ns-3.48 provenance 加法兼容 |
+| `metrics/core/task-metrics.*` | 已恢复独立实现 | 恢复独立文件 | 已迁移；task、compute node 输出使用 resolved 纳秒时长 |
+| `metrics/core/transfer-metrics.*` | 已恢复独立实现 | 恢复独立文件 | 已迁移；legacy 19 列表头通过精确检查 |
 | `metrics/routing/ecmp-route-recorder.*` | 无等价独立文件 | 恢复 | 待迁移 |
 | `metrics/routing/ecmp-metrics.*` | writer 内部逻辑 | 恢复 | 待迁移 |
 | `metrics/routing/size-aware-metrics.*` | writer 内部逻辑 | 恢复 | 待迁移 |
