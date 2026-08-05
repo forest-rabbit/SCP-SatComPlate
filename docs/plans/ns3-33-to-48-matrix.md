@@ -1,6 +1,6 @@
 # SatCompute ns-3.33 到 ns-3.48 迁移矩阵
 
-状态：v0.3 初始基线。每完成一个阶段更新“结果”列，最终逐文件审计。
+状态：阶段 0 和阶段 1 已完成。每完成一个阶段更新“结果”列，最终逐文件审计。
 
 动作定义：
 
@@ -14,9 +14,9 @@
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `README.md`（中文） | `README.md`（英文摘要） | 恢复 legacy 主体并更新 ns-3.48 | 待迁移 |
-| `para.h/.cc` | 无；由 `model/scenario-config.*` 替代 | 恢复并扩展 | 待迁移 |
-| `satcompute.cc` | `app/satcompute.cc` | 移回根目录并切换 para | 待迁移 |
+| `README.md`（中文） | 已恢复中文 v0.3 基线 | 恢复 legacy 主体并更新 ns-3.48 | 已恢复；阶段 7 最终校对 |
+| `para.h/.cc` | 已恢复；scenario 暂未切换 | 恢复并扩展 | 已恢复并完成独立测试 |
+| `satcompute.cc` | 已移回模块根目录 | 移回根目录并切换 para | 路径已恢复；para 切换待阶段 2 |
 | `wscript` | `CMakeLists.txt` | 由 CMake 替代 | 已确定 |
 | 无 | `model/satcompute-version.*` | 按实际职责保留或并入运行摘要 | 待审计 |
 | 无 | `model/sha256.*` | 移入 manifest/effective-config 所属职责 | 待审计 |
@@ -129,10 +129,10 @@
 
 | 项目 | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `AGENTS.md` | v0.2 scenario 规则 | 改为 v0.3 para/constellation 边界 | 待迁移 |
-| `docs/specs/platform-v0.2.md` | 声明已完成 | 标记为已废止 | 待迁移 |
-| `docs/plans/ns3-48-migration.md` | 声明已完成 | 标记为已废止 | 待迁移 |
-| `docs/ns3-48-migration-status.md` | 声明迁移完成 | 标记为 v0.2 历史状态 | 待迁移 |
+| `AGENTS.md` | v0.3 para/constellation 规则 | 改为 v0.3 para/constellation 边界 | 已迁移 |
+| `docs/specs/platform-v0.2.md` | 已标记为 v0.2 历史规格 | 标记为已废止 | 已迁移 |
+| `docs/plans/ns3-48-migration.md` | 已标记为 v0.2 历史计划 | 标记为已废止 | 已迁移 |
+| `docs/ns3-48-migration-status.md` | 已标记为 v0.2 历史状态 | 标记为 v0.2 历史状态 | 已迁移 |
 | `.github/workflows/per_commit.yml` | push/PR 自动运行 | 重命名为 `phase_gate.yml`，仅 `workflow_dispatch` | 已迁移 |
 
 ## 最终逐文件审计
