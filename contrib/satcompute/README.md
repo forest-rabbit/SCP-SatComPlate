@@ -204,7 +204,7 @@ ceil(compute_work_units * 1,000,000,000
 
 ## IPv4 路由
 
-- `global-first`：选择 canonical 等价最短路中的第一条；
+- `global-first`：直接采用 ns-3 `Ipv4GlobalRouting` 的原生首条路由行为；
 - `global-hash-per-flow`：固定五元组 hash 映射等价下一跳；
 - `global-hrw-per-flow`：使用 Rendezvous/HRW hash 选择最高分候选；
 - `global-size-aware-hrw`：在两个最高 HRW 候选中选择已保留声明字节更少者；
