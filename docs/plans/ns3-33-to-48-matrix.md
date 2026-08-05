@@ -110,7 +110,7 @@
 | `tools/generation/topology/static/*` | 由同一 C++ 工具的单切片参数覆盖 | 按当前合同审计后恢复 | 已替代；不保留第二套静态拓扑算法 |
 | `tools/generation/topology/dynamic/*` | 已由共享 C++ executable 替代 | 由共享 C++ 轨道 exporter 替代传播部分 | 已完成；与平台 export-only 逐字节等价 |
 | `tools/generation/topology/orbit/hypatia/*` | 缺失 | 不迁移 | 已确定删除 |
-| `tools/analysis/topology_interval/*` | 缺失 | 恢复并适配 CMake tool targets | 待迁移 |
+| `tools/analysis/topology_interval/*` | v0.3 trace 降采样、边状态与 ECMP 分析已恢复 | 恢复适用分析；C++ route gate 随阶段 5 接回 | Python 核心已迁移；旧 scenario 编排器和冻结报告不迁移 |
 | `tools/validation/*` | 已恢复 legacy 检查器 | 恢复并对齐 metrics 输出 | 入口和 CLI 已恢复；阶段 6 随分层 metrics 接回黄金输出 |
 | `tools/visualization/orbit/*` | 缺失 | 恢复为切片消费者，不计算轨道 | 待迁移 |
 
