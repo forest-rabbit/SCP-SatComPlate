@@ -2,6 +2,7 @@ build_lib(
   LIBNAME satcompute
   SOURCE_FILES
     para.cc
+    resolved-config.cc
     model/satcompute-version.cc
     model/scenario-config.cc
     model/sha256.cc
@@ -40,6 +41,7 @@ build_lib(
     traffic/network-transfer-receiver.cc
   HEADER_FILES
     para.h
+    resolved-config.h
     model/satcompute-version.h
     model/scenario-config.h
     model/sha256.h
@@ -125,6 +127,15 @@ build_exec(
   EXECNAME satcompute-constellation-definition-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/constellation-definition-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-resolved-config-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/resolved-config-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

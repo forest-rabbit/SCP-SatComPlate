@@ -38,6 +38,9 @@ invalid="contrib/satcompute/tests/fixtures/scenario/invalid-unknown-field.json"
 --outputDir=$test_output/constellation"
 
 ./ns3 run --no-build \
+  "satcompute-resolved-config-test --outputDir=$test_output/resolved"
+
+./ns3 run --no-build \
   "satcompute-config-test --fixedScenario=$fixed \
 --distanceScenario=$distance --taskScenario=$task \
 --invalidScenario=$invalid --outputDir=$test_output"
