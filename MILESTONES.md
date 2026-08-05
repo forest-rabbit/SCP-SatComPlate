@@ -19,6 +19,7 @@ N0–N2 是 ns-3.33 版本的原始里程碑，相关 PR 位于旧 SatCompute �
 | N2B：代表性压力验证 | 已完成 | `69e845b` / `db0ea2a` | 2026-08-03 |
 | N2：动态星座与压力验证 | 已完成 | `feature/n2-integration` → `main` / `n2-complete` | 2026-08-03 |
 | N3：迁移到 ns-3.48 | 已完成 | [PR #72](https://github.com/forest-rabbit/SCP-SatComPlate/pull/72) / `n3-complete` / `b83bf646b` | 2026-08-05 |
+| N4A：确定性故障输入与执行基础 | 已完成 | PR #75–#80 / `n4a-complete` | 2026-08-05 |
 
 N2 的最终发布链固定为 `feature/n2-integration` 合入旧仓库 `main`，并以
 annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移动 N0、N1
@@ -308,6 +309,66 @@ replay 和独立 transfer 输入，均在长期接口确定后移除，不属于
 
 N3 完成的是平台迁移和当前基线，不包含故障 JSON 生成/执行、前后端状态接口、
 IPv6、SRv6、地面站、馈电链路、SGP4/TLE 或非圆轨道模型。
+
+## N4A：确定性故障输入与执行基础
+
+N4A 只建立故障输入、执行和可验证终态，不生成随机故障原因，也不实现备份策略。
+平台消费已经确定的 `compute`/`satellite` trace；`failure_probability` 是预警风险
+元数据，不参与是否发生故障的再次抽样。
+
+### 2026-08-05：加固输入并建立故障安全生命周期
+
+在接入故障前，星座 CSV 改为严格六列 closed-world 解析，并依据 ns-3.48 原生圆轨道
+地球半径与 80 km 最低射线高度校验 `maxIslDistance`。随后为任务、计算和网络传输
+建立统一终止合同：
+
+- transfer 明确区分 `COMPLETED`、`FAILED` 与 `CANCELLED`，首次终止原子取消 sender、
+  receiver 回调、pending admission、完整路径、逐跳 assignment 和路由缓存；
+- 重复终止幂等，不二次释放容量，迟到包只计 stale，不会复活终态 transfer；
+- 任务增加不可恢复的 `FAILED` 终态，ComputeService 可精确移除 queued task 和取消
+  running completion event。
+
+- 输入加固证据：[PR #75](https://github.com/forest-rabbit/SCP-SatComPlate/pull/75) / `ca72c4a85`
+- 生命周期证据：[PR #76](https://github.com/forest-rabbit/SCP-SatComPlate/pull/76) / `bd73633bb`
+
+### 2026-08-05：完成确定性 trace 与 compute/整星执行
+
+FaultTrace 使用稳定卫星 ID、整数纳秒、可选 notice/probability/duration，并拒绝同一
+节点的重叠故障区间。同一时刻按 `NOTICE -> RECOVERY -> START`、再按 `fault_id`
+批处理，得到唯一最终状态。
+
+- compute 故障只关闭算力，不修改位置、ISL 或路由；尚未越过计算阶段的任务按当前
+  状态失败，有限恢复只接纳后续任务；
+- 整星故障在自然距离门控之后叠加通信可用性，在精确时刻关闭关联 ISL、立即重算
+  IPv4 并推进 route epoch；一个故障批次最多重算一次；
+- 整星作为 transfer 端点时触发 source/destination `FAILED`，未启动的后续 transfer
+  进入 `CANCELLED`；只作为中间节点时，Capacity-aware 保留同一 transfer 并在新图
+  中重准入；
+- 有限整星恢复读取恢复时刻的原生 ECEF 位置，只启用仍满足距离门限的固定候选，
+  不恢复旧失败任务。
+
+- trace 证据：[PR #77](https://github.com/forest-rabbit/SCP-SatComPlate/pull/77) / `fe3a74745`
+- compute 执行证据：[PR #78](https://github.com/forest-rabbit/SCP-SatComPlate/pull/78) / `0f760176a`
+- 整星执行证据：[PR #79](https://github.com/forest-rabbit/SCP-SatComPlate/pull/79) / `f984880be`
+
+### 2026-08-05：完成指标、回归与阶段冻结
+
+正式故障运行新增 `fault-events.csv` 和 `fault-summary.json`；task/transfer summary
+保留最终状态、原因和终止时间。只要全部 transfer 已进入终态，即使运行因预期故障
+报告 `PARTIAL`，flow、assignment、容量路径、预留速率和 pending admission 也必须
+归零。无 `faultTrace` 时不生成故障文件，复用目录会精确清除陈旧故障指标。
+
+最终门禁包含 1 个 Python unit、11 个 C++ unit executable、5 个 smoke 和 3 个
+regression。故障回归验证 compute 不重算路由、整星精确重算、概率原值、任务/传输
+终态、容量账本归零、重复运行逐字节一致及无故障行为。
+
+- 指标与回归证据：[PR #80](https://github.com/forest-rabbit/SCP-SatComPlate/pull/80)
+- 阶段 CI：[SatCompute CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/phase_gate.yml)，`phase=n4a`
+- 阶段 tag：`n4a-complete`，指向 PR #80 的合并提交
+
+N4A 明确不包含 backup selection、主备切换、checkpoint、迁移、重放、recovery
+transfer、RTO/RPO 或 `SUPERSEDED` 运行状态。这些备份与恢复策略属于后续 N4B；
+故障原因/轨迹生成模型也不属于本阶段执行平台。
 
 ## ECMP 算法演进
 

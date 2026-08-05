@@ -1,0 +1,30 @@
+/*
+ * SPDX-License-Identifier: GPL-2.0-only
+ */
+
+#ifndef SATCOMPUTE_FAULT_METRICS_H
+#define SATCOMPUTE_FAULT_METRICS_H
+
+#include "../../traffic/network-transfer-records.h"
+
+#include <string>
+#include <vector>
+
+namespace ns3
+{
+
+class FaultController;
+class TaskCoordinator;
+
+/** Write deterministic fault events and one run-level fault summary. */
+void WriteFaultMetrics(const FaultController& controller,
+                       const TaskCoordinator* taskCoordinator,
+                       const std::vector<TransferSummaryRecord>& transferSummaries,
+                       const std::string& outputDirectory);
+
+/** Remove only the fault metric files owned by SatCompute. */
+void RemoveFaultMetrics(const std::string& outputDirectory);
+
+} // namespace ns3
+
+#endif // SATCOMPUTE_FAULT_METRICS_H

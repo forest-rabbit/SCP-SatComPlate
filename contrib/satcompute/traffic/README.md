@@ -98,5 +98,7 @@ stale，不会重新完成旧 transfer，也不会影响同一 receiver 上的�
 - `tests/integration/smoke/run-diagnostics-smoke.sh` 检查真实 UDP/queue Drop；
 - `tests/unit/fault-lifecycle-test.cc` 直接检查终止幂等性和三类 reservation 清理；
 - `tests/unit/satellite-fault-execution-test.cc` 检查端点失败与中间节点完整路径重准入；
-- `transfer-summary.csv` 记录声明大小、分包、发送/接收字节和完成时间，详见
+- `tests/integration/regression/run-fault-lifecycle-regression.sh` 检查终态持久化与账本归零；
+- `transfer-summary.csv` 记录声明大小、分包、发送/接收字节、`terminal_state`、
+  `terminal_reason`、`terminal_time_ns`、迟到包与容量等待时间，详见
   [`metrics/README.md`](../metrics/README.md)。

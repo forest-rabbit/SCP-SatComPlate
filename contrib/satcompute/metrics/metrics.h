@@ -25,6 +25,7 @@ namespace ns3
 {
 
 class FlowMonitor;
+class FaultController;
 
 class MetricsError : public std::runtime_error
 {
@@ -40,6 +41,7 @@ struct MetricsRuntimeContext
     int64_t wallClockNs{};
     uint32_t appliedTopologySliceCount{};
     uint32_t routeComputationCount{};
+    Ptr<FaultController> faultController;
     Ptr<FlowRouteRegistry> flowRouteRegistry;
     std::optional<CapacityAwareRuntimeSummary> capacityAwareSummary;
     Ptr<FlowMonitor> flowMonitor;

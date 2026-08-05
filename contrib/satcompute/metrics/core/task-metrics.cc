@@ -123,7 +123,8 @@ WriteTaskSummaries(const TaskCoordinator& coordinator, const std::string& output
               "queue_enter_time_ns,compute_start_time_ns,compute_complete_time_ns,"
               "result_transfer_start_time_ns,result_transfer_complete_time_ns,"
               "input_transfer_delay_ns,queue_delay_ns,compute_service_time_ns,"
-              "result_transfer_delay_ns,end_to_end_completion_delay_ns,final_state\n";
+              "result_transfer_delay_ns,end_to_end_completion_delay_ns,final_state,"
+              "failure_reason,failure_time_ns\n";
     for (const TaskRuntime& task : coordinator.GetTaskRuntimes())
     {
         const auto rate = ratesByNodeId.find(task.definition.computeNodeId);
@@ -165,7 +166,9 @@ WriteTaskSummaries(const TaskCoordinator& coordinator, const std::string& output
                                      task.definition.arrivalTimeNs,
                                      "end_to_end_completion_delay_ns",
                                      task.definition.taskId)
-               << ',' << TaskStateToString(task.state) << '\n';
+               << ',' << TaskStateToString(task.state) << ','
+               << TaskFailureReasonToString(task.failureReason) << ','
+               << task.failureTimeNs << '\n';
     }
 }
 

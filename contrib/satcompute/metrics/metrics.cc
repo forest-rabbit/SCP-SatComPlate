@@ -6,6 +6,8 @@
 
 #include "metrics.h"
 
+#include "../fault/fault-controller.h"
+#include "core/fault-metrics.h"
 #include "core/flow-metrics.h"
 #include "core/run-summary.h"
 #include "core/task-metrics.h"
@@ -31,6 +33,7 @@ struct TransferAggregate
 {
     uint64_t transferCount{};
     uint64_t completedTransferCount{};
+    uint64_t terminalTransferCount{};
     uint64_t declaredBytes{};
     uint64_t sentBytes{};
     uint64_t receivedBytes{};
@@ -107,15 +110,25 @@ CollectTransferAggregate(const std::vector<TransferSummaryRecord>& summaries)
         {
             ++aggregate.completedTransferCount;
         }
+        if (summary.transferState == "COMPLETED" || summary.transferState == "FAILED" ||
+            summary.transferState == "CANCELLED")
+        {
+            ++aggregate.terminalTransferCount;
+        }
     }
     return aggregate;
 }
 
 void
 ValidateInputs(const SatComputeConfig& config,
+               Ptr<FaultController> faultController,
                Ptr<NetworkTransferEngine> transferEngine,
                Ptr<TaskCoordinator> taskCoordinator)
 {
+    if (config.faultTrace.empty() != (faultController == nullptr))
+    {
+        throw MetricsError("fault config and runtime metrics disagree");
+    }
     const bool taskMode = !config.computeProfile.empty() && !config.taskTrace.empty();
     if (taskMode)
     {
@@ -151,7 +164,7 @@ MetricsRecorder::Record()
     const MetricsRuntimeContext& context = m_context;
     const Ptr<NetworkTransferEngine> transferEngine = m_transferEngine;
     const Ptr<TaskCoordinator> taskCoordinator = m_taskCoordinator;
-    ValidateInputs(config, transferEngine, taskCoordinator);
+    ValidateInputs(config, context.faultController, transferEngine, taskCoordinator);
     const bool reservationAware = config.routingMode == "global-size-aware-hrw" ||
                                   config.routingMode == "global-capacity-aware-hrw";
     const bool capacityAware = config.routingMode == "global-capacity-aware-hrw";
@@ -196,22 +209,24 @@ MetricsRecorder::Record()
 
     const bool transfersComplete =
         transferAggregate.completedTransferCount == transferAggregate.transferCount;
+    const bool transfersSettled =
+        transferAggregate.terminalTransferCount == transferAggregate.transferCount;
     const bool tasksComplete = taskAggregate.completedTaskCount == taskAggregate.taskCount;
     const bool complete = transfersComplete && tasksComplete;
-    if (complete && context.flowRouteRegistry != nullptr &&
+    if (transfersSettled && context.flowRouteRegistry != nullptr &&
         (context.flowRouteRegistry->GetActiveFlowCount() != 0 ||
          context.flowRouteRegistry->GetAssignmentCount() != 0 ||
          context.flowRouteRegistry->GetTotalReservedBytes() != 0))
     {
-        throw MetricsError("complete run leaked flow reservation state");
+        throw MetricsError("terminal transfers leaked flow reservation state");
     }
-    if (complete && context.capacityAwareSummary &&
+    if (transfersSettled && context.capacityAwareSummary &&
         (context.capacityAwareSummary->activePathCountAtEnd != 0 ||
          context.capacityAwareSummary->reservedDirectedLinkCountAtEnd != 0 ||
          context.capacityAwareSummary->totalReservedRateBpsAtEnd != 0 ||
          context.capacityAwareSummary->pendingTransferCountAtEnd != 0))
     {
-        throw MetricsError("complete run leaked capacity-aware path state");
+        throw MetricsError("terminal transfers leaked capacity-aware path state");
     }
 
     const std::string workloadMode = taskCoordinator != nullptr ? "task" : "none";
@@ -268,6 +283,19 @@ MetricsRecorder::Record()
         result.files.push_back(outputDirectory / "task-events.csv");
         result.files.push_back(outputDirectory / "task-summary.csv");
         result.files.push_back(outputDirectory / "compute-node-summary.csv");
+    }
+    if (context.faultController != nullptr)
+    {
+        WriteFaultMetrics(*context.faultController,
+                          PeekPointer(taskCoordinator),
+                          transfers,
+                          outputDirectory.string());
+        result.files.push_back(outputDirectory / "fault-events.csv");
+        result.files.push_back(outputDirectory / "fault-summary.json");
+    }
+    else
+    {
+        RemoveFaultMetrics(outputDirectory.string());
     }
     if (context.flowRouteRegistry != nullptr)
     {

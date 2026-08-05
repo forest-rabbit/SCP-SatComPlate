@@ -7,6 +7,7 @@ build_lib(
     fault/fault-definition.cc
     fault/fault-state.cc
     fault/fault-trace.cc
+    metrics/core/fault-metrics.cc
     metrics/core/flow-metrics.cc
     metrics/core/run-summary.cc
     metrics/core/task-metrics.cc
@@ -57,6 +58,7 @@ build_lib(
     fault/fault-definition.h
     fault/fault-state.h
     fault/fault-trace.h
+    metrics/core/fault-metrics.h
     metrics/core/flow-metrics.h
     metrics/core/run-summary.h
     metrics/core/task-metrics.h

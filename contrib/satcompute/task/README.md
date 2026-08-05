@@ -133,5 +133,8 @@ receiver 完整接收。仿真结束时：
 - `tests/integration/smoke/run-task-smoke.sh`：单任务完整闭环；
 - `tests/integration/regression/run-full-workload-regression.sh`：确定性、完成策略、诊断
   和 20 任务正式示例；
+- `tests/integration/regression/run-fault-lifecycle-regression.sh`：故障终态输出、重复
+  运行确定性与无故障回归；
 - `metrics/README.md`：`task-events.csv`、`task-summary.csv` 与
-  `compute-node-summary.csv`。
+  `compute-node-summary.csv`；其中 task summary 明确记录 `final_state`、
+  `failure_reason` 和 `failure_time_ns`。

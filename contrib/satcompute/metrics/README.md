@@ -10,6 +10,7 @@
 metrics/
 ├── metrics.h / metrics.cc                         统一编排、交叉校验和旧文件清理
 ├── core/
+│   ├── fault-metrics.h / fault-metrics.cc         故障事件与故障运行汇总
 │   ├── flow-metrics.h / flow-metrics.cc           FlowMonitor 汇总与逐流明细
 │   ├── transfer-metrics.h / transfer-metrics.cc   逻辑传输汇总
 │   ├── task-metrics.h / task-metrics.cc           任务事件、任务汇总和算力节点汇总
@@ -38,13 +39,36 @@ metrics/
 | 每次正式仿真 | `network-flow-details.csv` | 每个 IPv4 五元组的 FlowMonitor 明细，以及可识别的 transfer ID |
 | 每次正式仿真 | `ecmp-route-events.csv` | 逐流路由选择事件；没有相关事件时保留表头 |
 | 每次正式仿真 | `run-summary.json` | 仿真/墙钟时间、实际路由和网络参数、拓扑更新与路由计算次数、完成状态及各层总量 |
-| 任务模式 | `transfer-summary.csv` | 每个输入/结果传输的声明字节、分包、发送、接收和完成时间 |
+| 任务模式 | `transfer-summary.csv` | 每个输入/结果传输的声明字节、分包、发送/接收、终态、原因和终止时间 |
 | 任务模式 | `task-events.csv` | 任务状态转换事件 |
-| 任务模式 | `task-summary.csv` | 每个任务的输入、计算、结果和端到端完成情况 |
+| 任务模式 | `task-summary.csv` | 每个任务的输入、计算、结果、最终状态、失败原因和失败时间 |
 | 任务模式 | `compute-node-summary.csv` | 各算力节点的任务数、忙碌时间和利用率 |
+| 提供 `faultTrace` | `fault-events.csv` | canonical NOTICE/START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
+| 提供 `faultTrace` | `fault-summary.json` | 故障类型/事件/活动故障、失败任务、FAILED/CANCELLED transfer 与故障路由重算计数 |
 
 `run-summary.json` 同时保留便于脚本读取的顶层计数和按 `transfer`、`task` 分组的
 汇总。它记录实际使用的任务文件路径和关键运行参数，但不复制一份平台配置。
+
+## 故障输出
+
+`fault-events.csv` 每行对应一个已经执行的事件，列为：
+
+```text
+simulation_time_ns, fault_id, node_id, fault_type, event_type,
+notice_time_ns, start_time_ns, duration_ns, failure_probability,
+satellite_available_after, communication_available_after,
+compute_available_after, affected_task_count, affected_transfer_count,
+route_recomputed
+```
+
+可选输入为 null 时对应 CSV 单元格为空，布尔值固定写作 `true/false`。一个整星
+timestamp 批次最多令一行 `route_recomputed=true`，因此逐行求和就是故障引起的
+路由重算次数。
+
+`fault-summary.json` 固定汇总 `fault_count`、两类 fault count、三类 event count、
+`active_fault_count_at_end`、`failed_task_count`、`failed_transfer_count`、
+`cancelled_transfer_count` 和 `route_recomputation_count_due_to_fault`。失败与取消计数
+来自仿真终点的稳定终态，不把仍在运行的对象误记为故障终态。
 
 ## 路由模式输出
 
@@ -57,9 +81,10 @@ capacity-aware 也使用 `FlowRouteRegistry` 管理 flow 生命周期，所以�
 size-aware 文件；这里的文件名表示注册表使用字节预留事件格式，并不表示
 capacity-aware 退化成 size-aware 选路。
 
-完整运行结束时，注册表必须没有活动 flow、候选分配或残留字节；capacity-aware
-还必须没有活动路径、链路带宽预留或等待传输。违反这些条件会直接使运行失败，
-而不是写出看似成功的结果。
+所有 transfer 均已进入 `COMPLETED`、`FAILED` 或 `CANCELLED` 后，注册表必须没有
+活动 flow、候选分配或残留字节；capacity-aware 还必须没有活动路径、链路带宽
+预留或等待传输。这条检查同样适用于故障导致的 `PARTIAL` 运行，违反时直接失败，
+而不是写出看似正确的终态。
 
 ## 失败诊断
 
@@ -93,14 +118,16 @@ FlowMonitor 的 `lostPackets` 大于显式原因总数时，差值以
 
 - `transfer-summary.csv` 的发送/接收应用字节必须与 UDP 应用层计数一致；
 - task、transfer 的完成数必须和运行状态一致；
-- 完整运行不得残留 size-aware/capacity-aware 预留状态；
+- 全部 transfer 进入终态后不得残留 size-aware/capacity-aware 预留状态；
 - FlowMonitor 丢包总数、显式 DropReason 和未归因数量必须能够闭合。
 
 复用同一个 `outputDirectory` 时，平台只删除它自己认识的陈旧指标文件。九个失败
 诊断文件会从历史根目录、`diagnostics/` 和当前 `diagnostics/failure/` 精确清理，
 空目录随后移除；用户放入的未知文件不会被递归删除。已经停用的
 `routing-summary.json` 和 `routing-reservation-events.csv` 也只按精确文件名清理。
+无 `faultTrace` 时不会生成故障专用文件；若复用一个曾执行故障的输出目录，只精确
+删除 `fault-events.csv` 与 `fault-summary.json`，不会触碰用户文件。
 
 相关覆盖见 [测试说明](../tests/README.md)中的 task、capacity-aware、diagnostics
-smoke 与完整 workload regression；DropReason 的离线一致性检查见
+smoke、完整 workload regression 与 fault lifecycle regression；DropReason 的离线一致性检查见
 [validation 工具](../tools/validation/README.md)。
