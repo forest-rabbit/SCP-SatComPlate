@@ -103,8 +103,8 @@
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `tools/generation/generate-task-workload.py` | 缺失 | 恢复并适配路径 | 待迁移 |
-| `tools/generation/generate-transfer-workload.py` | 缺失 | 恢复并适配路径 | 待迁移 |
+| `tools/generation/generate-task-workload.py` | 已恢复 | 恢复并适配路径 | 已完成；只读取节点/算力并输出确定性 TaskTrace + summary |
+| `tools/generation/generate-transfer-workload.py` | 已恢复 | 恢复并适配路径 | 已完成；只读取稳定卫星 ID 并输出 NetworkTransfer |
 | `tools/generation/scenario/*` | 缺失 | 恢复非轨道场景生成边界 | 待迁移 |
 | `tools/generation/topology/common/*` | 缺失 | 恢复原子输出/schema/checker 工具 | 待迁移 |
 | `tools/generation/topology/static/*` | 缺失 | 按当前合同审计后恢复 | 待迁移 |
