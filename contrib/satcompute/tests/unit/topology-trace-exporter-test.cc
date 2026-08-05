@@ -5,10 +5,9 @@
 #include "ns3/circular-orbit-trace-exporter.h"
 #include "ns3/command-line.h"
 #include "ns3/online-orbit-constellation.h"
-#include "ns3/resolved-config.h"
-#include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 
+#include "../support/config-factory.h"
 #include "../../third-party/nlohmann/json.hpp"
 
 #include <algorithm>
@@ -24,6 +23,8 @@ using namespace ns3;
 
 namespace
 {
+
+using satcompute::test::MakeOnlineTestConfig;
 
 void
 Check(bool condition, const std::string& message)
@@ -54,15 +55,14 @@ ReadJson(const std::filesystem::path& path)
 }
 
 TopologyTraceExportResult
-RunExport(const ScenarioConfig& config, const std::filesystem::path& outputDirectory)
+RunExport(const ResolvedSatComputeConfig& config,
+          const std::filesystem::path& outputDirectory)
 {
-    const ResolvedSatComputeConfig resolved =
-        ResolveLegacyScenarioConfig(config, outputDirectory);
     TopologyTraceExportResult result;
     {
-        OnlineOrbitConstellation constellation(resolved.constellation,
-                                               resolved.simulation.startTimeNs);
-        CircularOrbitTraceExporter exporter(resolved, outputDirectory, constellation);
+        OnlineOrbitConstellation constellation(config.constellation,
+                                               config.simulation.startTimeNs);
+        CircularOrbitTraceExporter exporter(config, outputDirectory, constellation);
         Check(exporter.GetScheduledTimesNs() ==
                   std::vector<int64_t>({0,
                                         1000000000LL,
@@ -118,7 +118,7 @@ GetFilenames(const std::filesystem::path& directory)
 }
 
 void
-CheckExportContent(const ScenarioConfig& config,
+CheckExportContent(const ResolvedSatComputeConfig& config,
                    const std::filesystem::path& firstDirectory,
                    const std::filesystem::path& secondDirectory)
 {
@@ -129,7 +129,7 @@ CheckExportContent(const ScenarioConfig& config,
 
     const nlohmann::json manifest = ReadJson(first.manifestPath);
     Check(manifest.at("schema_version") == "0.3", "trace manifest version differs");
-    Check(manifest.at("run_name") == config.scenarioName,
+    Check(manifest.at("run_name") == config.runName,
           "trace manifest run name differs");
     Check(manifest.contains("constellation_config_sha256") &&
               !manifest.contains("scenario_config_sha256"),
@@ -190,18 +190,29 @@ CheckExportContent(const ScenarioConfig& config,
 int
 main(int argc, char* argv[])
 {
-    std::string scenarioFilename;
+    std::string constellationConfig;
     std::string outputDirectory;
     CommandLine command(__FILE__);
-    command.AddValue("scenario", "Trace-enabled online scenario", scenarioFilename);
+    command.AddValue("constellationConfig",
+                     "Four-satellite constellation JSON",
+                     constellationConfig);
     command.AddValue("outputDir", "Temporary test output directory", outputDirectory);
     command.Parse(argc, argv);
     try
     {
-        Check(!scenarioFilename.empty(), "scenario is required");
+        Check(!constellationConfig.empty(), "constellationConfig is required");
         Check(!outputDirectory.empty(), "outputDir is required");
         CheckScheduleAndFilenameContracts();
-        const ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
+        ResolvedSatComputeConfig config = MakeOnlineTestConfig(
+            2,
+            2,
+            "distance",
+            2500000000LL,
+            2000000000LL,
+            30000000.0L);
+        config.runName = "online-trace-fixture";
+        config.constellation = LoadConstellationDefinition(constellationConfig);
+        config.traceExport = {true, 1000000000LL, true, "json-slices"};
         CheckExportContent(config,
                            std::filesystem::path(outputDirectory) / "first",
                            std::filesystem::path(outputDirectory) / "second");

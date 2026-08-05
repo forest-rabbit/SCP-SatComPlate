@@ -10,10 +10,11 @@
 #include "ns3/nstime.h"
 #include "ns3/point-to-point-net-device.h"
 #include "ns3/replay-topology-controller.h"
-#include "ns3/resolved-config.h"
-#include "ns3/scenario-config.h"
 #include "ns3/simulator.h"
 
+#include "../support/config-factory.h"
+
+#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <stdexcept>
@@ -23,6 +24,9 @@ using namespace ns3;
 
 namespace
 {
+
+using satcompute::test::MakeDiamondReplayTestConfig;
+using satcompute::test::MakeReplayTestConfig;
 
 void
 Check(bool condition, const std::string& message)
@@ -84,15 +88,23 @@ ResetSimulationGlobals()
 }
 
 void
-RunDelayCase(const std::string& scenarioFilename,
+RunDelayCase(const std::filesystem::path& topologyDirectory,
+             const std::string& delayMode,
              int64_t expectedInitialDelayNs,
              int64_t expectedFinalDelayNs,
              uint32_t expectedReconfiguredLinks)
 {
     {
-        const ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
-        ReplayTopologyController controller(
-            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
+        const ResolvedSatComputeConfig config = MakeReplayTestConfig(
+            topologyDirectory,
+            1,
+            2,
+            2000000000LL,
+            1000000000LL,
+            delayMode,
+            delayMode == "fixed" ? std::optional<int64_t>(8000000) : std::nullopt,
+            200000000);
+        ReplayTopologyController controller(config);
         ExpectControllerError(
             [&controller] { controller.GetNodes(); },
             "uninitialized replay controller exposed nodes");
@@ -107,7 +119,7 @@ RunDelayCase(const std::string& scenarioFilename,
         Check(GetDelayNs(controller) == expectedInitialDelayNs,
               "initial replay delay differs");
         Check(GetDataRateBps(controller) == config.network.linkBandwidthBps,
-              "scenario link bandwidth did not override replay metadata");
+              "configured link bandwidth did not override replay metadata");
 
         Simulator::Stop(NanoSeconds(config.simulation.durationNs));
         Simulator::Run();
@@ -128,12 +140,12 @@ RunDelayCase(const std::string& scenarioFilename,
 }
 
 void
-RunDynamicCase(const std::string& scenarioFilename)
+RunDynamicCase(const std::filesystem::path& topologyDirectory)
 {
     {
-        const ScenarioConfig config = LoadScenarioConfig(scenarioFilename);
-        ReplayTopologyController controller(
-            ResolveLegacyScenarioConfig(config, "/tmp/satcompute-test"));
+        const ResolvedSatComputeConfig config =
+            MakeDiamondReplayTestConfig(topologyDirectory);
+        ReplayTopologyController controller(config);
         controller.Initialize();
         Check(controller.GetRouteComputationCount() == 1,
               "dynamic replay initial route count differs");
@@ -156,24 +168,25 @@ RunDynamicCase(const std::string& scenarioFilename)
 int
 main(int argc, char* argv[])
 {
-    std::string fixedScenario;
-    std::string distanceScenario;
-    std::string dynamicScenario;
+    std::string delayTopologyDirectory;
+    std::string dynamicTopologyDirectory;
     CommandLine command(__FILE__);
-    command.AddValue("fixedScenario", "Fixed-delay replay scenario", fixedScenario);
-    command.AddValue("distanceScenario", "Distance-delay replay scenario", distanceScenario);
-    command.AddValue("dynamicScenario", "Dynamic-edge replay scenario", dynamicScenario);
+    command.AddValue("delayTopologyDir",
+                     "Two-node delay-only topology slices",
+                     delayTopologyDirectory);
+    command.AddValue("dynamicTopologyDir",
+                     "Four-node dynamic topology slices",
+                     dynamicTopologyDirectory);
     command.Parse(argc, argv);
 
     try
     {
-        Check(!fixedScenario.empty(), "fixedScenario is required");
-        Check(!distanceScenario.empty(), "distanceScenario is required");
-        Check(!dynamicScenario.empty(), "dynamicScenario is required");
+        Check(!delayTopologyDirectory.empty(), "delayTopologyDir is required");
+        Check(!dynamicTopologyDirectory.empty(), "dynamicTopologyDir is required");
 
-        RunDelayCase(fixedScenario, 8000000, 8000000, 0);
-        RunDelayCase(distanceScenario, 1000000, 1500000, 1);
-        RunDynamicCase(dynamicScenario);
+        RunDelayCase(delayTopologyDirectory, "fixed", 8000000, 8000000, 0);
+        RunDelayCase(delayTopologyDirectory, "distance", 1000000, 1500000, 1);
+        RunDynamicCase(dynamicTopologyDirectory);
 
         std::cout << "SatCompute replay topology controller tests passed."
                   << std::endl;

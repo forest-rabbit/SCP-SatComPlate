@@ -48,27 +48,28 @@ invalid="contrib/satcompute/tests/fixtures/scenario/invalid-unknown-field.json"
 --distanceScenario=$distance --taskScenario=$task \
 --invalidScenario=$invalid --outputDir=$test_output"
 
-replay_scenario="contrib/satcompute/tests/fixtures/scenario/replay-dynamic.json"
+dynamic_topology="contrib/satcompute/tests/fixtures/topology/snapshots/diamond-4-dynamic"
+delay_topology="contrib/satcompute/tests/fixtures/topology/snapshots/delay-only"
+capacity_topology="contrib/satcompute/tests/fixtures/topology/snapshots/capacity-pending"
+diamond_constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.json"
 ./ns3 run --no-build \
-  "satcompute-snapshot-test --scenario=$replay_scenario --outputDir=$test_output/snapshot"
+  "satcompute-snapshot-test --topologyDir=$dynamic_topology \
+--outputDir=$test_output/snapshot"
 
 ./ns3 run --no-build "satcompute-link-state-test"
 
-replay_fixed="contrib/satcompute/tests/fixtures/scenario/replay-delay-fixed.json"
-replay_distance="contrib/satcompute/tests/fixtures/scenario/replay-delay-distance.json"
-replay_dynamic="contrib/satcompute/tests/fixtures/scenario/replay-dynamic.json"
 ./ns3 run --no-build \
-  "satcompute-replay-controller-test --fixedScenario=$replay_fixed \
---distanceScenario=$replay_distance --dynamicScenario=$replay_dynamic"
+  "satcompute-replay-controller-test --delayTopologyDir=$delay_topology \
+--dynamicTopologyDir=$dynamic_topology"
 
 ./ns3 run --no-build \
-  "satcompute-routing-compatibility-test --scenario=$replay_dynamic"
+  "satcompute-routing-compatibility-test --topologyDir=$dynamic_topology"
 
 ./ns3 run --no-build \
-  "satcompute-size-aware-routing-test --scenario=$replay_dynamic"
+  "satcompute-size-aware-routing-test --topologyDir=$dynamic_topology"
 
 ./ns3 run --no-build \
-  "satcompute-capacity-aware-routing-test --scenario=$replay_dynamic"
+  "satcompute-capacity-aware-routing-test --topologyDir=$dynamic_topology"
 
 transfer_fixtures="contrib/satcompute/tests/fixtures/traffic/transfers"
 ./ns3 run --no-build \
@@ -81,8 +82,8 @@ transfer_fixtures="contrib/satcompute/tests/fixtures/traffic/transfers"
 --invalidStopTime=$transfer_fixtures/invalid-stop-time.json"
 
 ./ns3 run --no-build \
-  "satcompute-network-transfer-engine-test --scenario=$replay_dynamic \
---capacityScenario=contrib/satcompute/tests/fixtures/scenario/capacity-pending.json \
+  "satcompute-network-transfer-engine-test --topologyDir=$dynamic_topology \
+--capacityTopologyDir=$capacity_topology \
 --basicTransfers=$transfer_fixtures/engine-basic.json \
 --capacityTransfers=$transfer_fixtures/capacity-pending.json"
 
@@ -93,13 +94,13 @@ task_fixtures="contrib/satcompute/tests/fixtures/task"
 ./ns3 run --no-build "satcompute-compute-service-test"
 
 ./ns3 run --no-build \
-  "satcompute-task-coordinator-test --scenario=$replay_dynamic \
+  "satcompute-task-coordinator-test --topologyDir=$dynamic_topology \
 --fixtureRoot=$task_fixtures"
 
 ./ns3 run --no-build \
   "satcompute-run-output-writer-test \
---taskScenario=contrib/satcompute/tests/fixtures/scenario/task-replay.json \
---transferScenario=contrib/satcompute/tests/fixtures/scenario/transfer-replay.json \
+--constellationConfig=$diamond_constellation --topologyDir=$dynamic_topology \
+--fixtureRoot=contrib/satcompute/tests/fixtures \
 --outputDir=$test_output/run-output"
 
 ./ns3 run --no-build "satcompute-online-orbit-foundation-test"
@@ -108,11 +109,10 @@ task_fixtures="contrib/satcompute/tests/fixtures/task"
 
 ./ns3 run --no-build \
   "satcompute-topology-trace-exporter-test \
---scenario=contrib/satcompute/tests/fixtures/scenario/online-trace.json \
+--constellationConfig=$diamond_constellation \
 --outputDir=$test_output/topology-trace"
 
 ./ns3 run --no-build \
   "satcompute-topology-replay-equivalence-test \
---oneSecondScenario=contrib/satcompute/tests/fixtures/scenario/online-equivalence-1s.json \
---twoSecondScenario=contrib/satcompute/tests/fixtures/scenario/online-equivalence-2s.json \
+--constellationConfig=$diamond_constellation \
 --outputDir=$test_output/topology-equivalence"
