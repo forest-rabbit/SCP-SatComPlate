@@ -44,7 +44,6 @@ build_lib(
     traffic/network-transfer-application.cc
     traffic/network-transfer-config.cc
     traffic/network-transfer-engine.cc
-    traffic/network-transfer.cc
     traffic/network-transfer-receiver.cc
   HEADER_FILES
     para.h
@@ -103,7 +102,6 @@ build_lib(
     traffic/network-transfer-application.h
     traffic/network-transfer-config.h
     traffic/network-transfer-engine.h
-    traffic/network-transfer.h
     traffic/network-transfer-receiver.h
     traffic/network-transfer-records.h
   LIBRARIES_TO_LINK
@@ -155,36 +153,9 @@ build_exec(
 )
 
 build_exec(
-  EXECNAME satcompute-link-state-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/link-state-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
   EXECNAME satcompute-routing-policy-factory-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/routing-policy-factory-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-routing-metrics-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/routing-metrics-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-transfer-trace-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/transfer-trace-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
@@ -221,15 +192,6 @@ build_exec(
   EXECNAME satcompute-online-topology-controller-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/online-topology-controller-test.cc
-  LIBRARIES_TO_LINK ${libsatcompute}
-  EXECUTABLE_DIRECTORY_PATH
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
-)
-
-build_exec(
-  EXECNAME satcompute-topology-slice-exporter-test
-  EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/topology-slice-exporter-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

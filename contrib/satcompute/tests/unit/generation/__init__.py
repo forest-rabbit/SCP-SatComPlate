@@ -1,1 +1,0 @@
-"""SatCompute input-generation tests."""

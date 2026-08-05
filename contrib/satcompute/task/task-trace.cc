@@ -143,12 +143,7 @@ ReadTaskTrace(const std::filesystem::path& filename,
     }
 
     const Json root = ReadJson(filename);
-    RequireObjectFields(root, filename, "root", {"schema_version", "tasks"});
-    const Json& schemaVersion = GetField(root, filename, "schema_version");
-    if (!schemaVersion.is_string() || schemaVersion.get<std::string>() != "0.1")
-    {
-        Fail(filename, "schema_version", "must equal 0.1");
-    }
+    RequireObjectFields(root, filename, "root", {"tasks"});
     const Json& items = GetField(root, filename, "tasks");
     if (!items.is_array() || items.empty())
     {

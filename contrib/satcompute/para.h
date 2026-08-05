@@ -37,10 +37,9 @@ struct SatComputeConfig
     std::string routingMode; ///< IPv4 路由模式。
     uint64_t ecmpHashSeed;   ///< 逐流 ECMP 与 HRW 的 hash seed。
 
-    std::string transferTrace;        ///< 迁移期独立 NetworkTransfer 输入路径。
     std::string computeProfile;       ///< 卫星算力资源 JSON 路径。
     std::string taskTrace;            ///< 任务输入 JSON 路径。
-    std::string transferChunkMode;    ///< 传输分包策略。
+    std::string transferChunkMode;    ///< 任务输入/结果传输的分包策略。
     uint32_t transferPayloadBytes;    ///< fixed 分包的 UDP payload 字节数。
     std::string taskCompletionPolicy; ///< 任务完成策略：strict 或 report。
 
@@ -48,7 +47,6 @@ struct SatComputeConfig
     double topologySliceIntervalSeconds; ///< 拓扑切片间隔，单位为秒。
     bool includeFinalTopologyState;      ///< 是否额外导出仿真终点状态。
     std::string outputDirectory;         ///< 结构化结果输出目录。
-    std::string transferLogMode;         ///< 传输日志级别。
     std::string taskLogMode;             ///< 任务日志级别。
     std::string diagnosticMode;          ///< 失败诊断模式。
 

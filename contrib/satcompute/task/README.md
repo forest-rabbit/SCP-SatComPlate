@@ -1,53 +1,36 @@
-# ComputeProfile and TaskTrace 0.1
+# 任务与算力模型
 
-`compute-profile.schema.json` and `task-trace.schema.json` are the complete
-field references for compute capacity and task workloads. Both inputs are
-closed-world JSON: every property is documented, unknown properties are
-rejected, referenced satellite IDs must exist, and input array order has no
-semantic effect.
+平台使用两个相互独立的 JSON 输入：ComputeProfile 描述静态算力，TaskTrace
+描述任务到达。两者都采用 closed-world 合同，不接受未知字段，也不包含
+`schema_version`。
 
-Compute capacity remains scenario input rather than orbit state. A profile
-maps each compute-capable satellite to a positive constant rate in abstract
-work units per second. The loader sorts nodes by stable external `node_id`, so
-the same profile is deterministic even when its JSON array is reordered.
+ComputeProfile 的根对象只包含 `compute_nodes`。每个计算节点显式给出稳定
+`node_id` 和正整数 `compute_rate_work_units_per_second`，平台按 `node_id`
+排序，因此数组顺序不影响结果。
 
-A task moves through this fixed lifecycle:
+TaskTrace 的根对象只包含 `tasks`。每项显式给出：
 
-`PENDING -> INPUT_TRANSFERRING -> QUEUED -> RUNNING -> RESULT_TRANSFERRING -> COMPLETED`
+- `task_id`、源卫星、计算卫星和结果卫星 ID；
+- `input_bytes`、`compute_work_units` 和 `output_bytes`；
+- 整数纳秒 `arrival_time_ns`。
 
-The input transfer runs from `source_node_id` to `compute_node_id`; the result
-transfer runs from `compute_node_id` to `result_node_id`. The source and result
-may be the same satellite, but each network transfer must have distinct
-endpoints. For task ID `T`, the platform derives stable transfer IDs `2*T-1`
-and `2*T`; these IDs and all UDP fields remain runtime state and must not be
-duplicated in the JSON.
+平台不执行真实业务算法，计算结束后的结果传输大小严格使用该任务的
+`output_bytes`，不会根据输入大小或计算量再次推导。
 
-`arrival_time_ns` preserves the legacy sub-second workload contract. All
-platform-facing scenario intervals remain seconds in `scenario.schema.json`,
-and the C++ runtime represents both as exact integer nanoseconds.
+任务状态固定为：
 
-## Compute semantics
+```text
+PENDING -> INPUT_TRANSFERRING -> QUEUED -> RUNNING
+        -> RESULT_TRANSFERRING -> COMPLETED
+```
 
-Each compute node is a single-server, non-preemptive FCFS queue. Service time
-is calculated without floating point as:
+每个计算节点是单服务台、非抢占 FCFS 队列，排序键为
+`(queue_enter_time_ns, task_id)`。服务时间使用整数计算：
 
-`ceil(compute_work_units * 1,000,000,000 / compute_rate_work_units_per_second)`
+```text
+ceil(compute_work_units * 1,000,000,000
+     / compute_rate_work_units_per_second) ns
+```
 
-Tasks are ordered by `(queue_enter_time_ns, task_id)`. Dispatch is deferred to
-the end of the current ns-3 event batch, so tasks whose input transfers finish
-in the same nanosecond are ordered by task ID regardless of callback order.
-There is no random compute scheduling state.
-
-## Runtime coordination
-
-`TaskCoordinator` creates one `ComputeService` for each profile entry and two
-real UDP transfer plans for each task. Task arrival starts the input transfer;
-receiver completion atomically queues compute work; exact compute completion
-starts the result transfer; and result receiver completion marks the task
-complete. The result transfer therefore has no independent input timestamp.
-
-All five IPv4 routing modes consume the same derived stable transfer IDs and
-five-tuples. Size-aware state follows sender lifetime, while capacity-aware
-complete-path state remains reserved through receiver completion. A completed
-task must have exactly five recorded state transitions, two completed network
-transfers, and no remaining compute work.
+任务 ID `T` 在运行时派生输入传输 ID `2*T-1` 和结果传输 ID `2*T`。端口、
+地址、分包和路由同样属于运行时状态，不写入任务 JSON。

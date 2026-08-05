@@ -2,14 +2,12 @@
 """Generate deterministic synthetic stress TaskTrace inputs for SatCompute."""
 
 import argparse
-import hashlib
 import json
 import math
 from collections import defaultdict
 from pathlib import Path
 
 
-GENERATOR_VERSION = "1.0.0"
 UINT32_MAX = (1 << 32) - 1
 UINT64_MAX = (1 << 64) - 1
 INT64_MAX = (1 << 63) - 1
@@ -78,14 +76,20 @@ def require_integer(value, name, minimum, maximum):
 
 def read_satellite_ids(path):
     root = read_json(path)
-    if not isinstance(root, dict) or set(root) != {"nodes"}:
-        raise ValueError("nodes file must contain only a nodes array")
+    if not isinstance(root, dict) or set(root) not in (
+        {"nodes"},
+        {"simulation_time_ns", "nodes"},
+    ):
+        raise ValueError("nodes file must be a topology node slice")
     if not isinstance(root["nodes"], list) or len(root["nodes"]) < 3:
         raise ValueError("nodes file must contain at least three satellites")
 
     satellite_ids = []
     for node in root["nodes"]:
-        if not isinstance(node, dict) or set(node) != {"node_id", "node_type"}:
+        if not isinstance(node, dict) or set(node) not in (
+            {"node_id", "node_type"},
+            {"node_id", "node_type", "x", "y", "z"},
+        ):
             raise ValueError("invalid satellite node object")
         require_integer(node["node_id"], "node_id", 0, UINT32_MAX)
         if node["node_type"] != "sat":
@@ -98,12 +102,8 @@ def read_satellite_ids(path):
 
 def read_compute_profile(path, satellite_ids):
     root = read_json(path)
-    if (
-        not isinstance(root, dict)
-        or set(root) != {"schema_version", "compute_nodes"}
-        or root["schema_version"] != "0.1"
-    ):
-        raise ValueError("ComputeProfile root violates schema 0.1")
+    if not isinstance(root, dict) or set(root) != {"compute_nodes"}:
+        raise ValueError("ComputeProfile root must contain only compute_nodes")
     if not isinstance(root["compute_nodes"], list) or not root["compute_nodes"]:
         raise ValueError("ComputeProfile compute_nodes must be non-empty")
 
@@ -132,11 +132,12 @@ def read_compute_profile(path, satellite_ids):
     return sorted(compute_nodes, key=lambda item: item["node_id"])
 
 
-def hash_value(seed, rules_version, task_id, field_name):
-    encoded = (
-        f"{seed}\0{rules_version}\0{task_id}\0{field_name}".encode("utf-8")
-    )
-    return int.from_bytes(hashlib.sha256(encoded).digest(), "big")
+def deterministic_value(seed, task_id, field_name):
+    value = 14695981039346656037
+    for byte in f"{seed}\0{task_id}\0{field_name}".encode("utf-8"):
+        value ^= byte
+        value = (value * 1099511628211) & UINT64_MAX
+    return value
 
 
 def largest_remainder(total, shares, order, denominator=BASIS_POINTS):
@@ -280,11 +281,11 @@ def scaled_tail_count(maximum_count, scale_bp):
     )["selected"]
 
 
-def assign_classes(task_ids, class_counts, seed, rules_version):
+def assign_classes(task_ids, class_counts, seed):
     ordered_ids = sorted(
         task_ids,
         key=lambda task_id: (
-            hash_value(seed, rules_version, task_id, "class-permutation"),
+            deterministic_value(seed, task_id, "class-permutation"),
             task_id,
         ),
     )
@@ -306,7 +307,6 @@ def assign_tail_tasks(
     five_hundred_mb_count,
     tail_shares,
     seed,
-    rules_version,
 ):
     tail_order = ("preprocess-compress", "image-enhancement")
     counts_by_size = {
@@ -332,9 +332,8 @@ def assign_tail_tasks(
             candidates = sorted(
                 available[class_name],
                 key=lambda task_id: (
-                    hash_value(
+                    deterministic_value(
                         seed,
-                        rules_version,
                         task_id,
                         f"tail-{size_name}-{class_name}",
                     ),
@@ -361,7 +360,6 @@ def assign_balanced_nodes(
     task_ids,
     node_ids,
     seed,
-    rules_version,
     field_name,
     forbidden=None,
 ):
@@ -371,11 +369,11 @@ def assign_balanced_nodes(
     ordered_tasks = sorted(
         task_ids,
         key=lambda task_id: (
-            hash_value(seed, rules_version, task_id, f"{field_name}-permutation"),
+            deterministic_value(seed, task_id, f"{field_name}-permutation"),
             task_id,
         ),
     )
-    offset = hash_value(seed, rules_version, 0, f"{field_name}-offset") % len(
+    offset = deterministic_value(seed, 0, f"{field_name}-offset") % len(
         node_ids
     )
     assignments = {}
@@ -384,7 +382,7 @@ def assign_balanced_nodes(
         candidate = node_ids[candidate_index]
         if candidate == forbidden.get(task_id):
             shift = 1 + (
-                hash_value(seed, rules_version, task_id, f"{field_name}-shift")
+                deterministic_value(seed, task_id, f"{field_name}-shift")
                 % (len(node_ids) - 1)
             )
             candidate = node_ids[(candidate_index + shift) % len(node_ids)]
@@ -402,7 +400,6 @@ def generate_arrivals(
     end_ns,
     mode,
     seed,
-    rules_version,
 ):
     if end_ns < start_ns:
         raise ValueError("arrival end must not precede arrival start")
@@ -413,9 +410,8 @@ def generate_arrivals(
         ordered_tasks = sorted(
             task_ids,
             key=lambda task_id: (
-                hash_value(
+                deterministic_value(
                     seed,
-                    rules_version,
                     task_id,
                     "arrival-permutation",
                 ),
@@ -427,7 +423,7 @@ def generate_arrivals(
             lower = start_ns + span * stratum // len(task_ids)
             upper = start_ns + span * (stratum + 1) // len(task_ids) - 1
             jitter = (
-                hash_value(seed, rules_version, task_id, "arrival-jitter")
+                deterministic_value(seed, task_id, "arrival-jitter")
                 % (upper - lower + 1)
             )
             arrivals[task_id] = lower + jitter
@@ -436,7 +432,7 @@ def generate_arrivals(
     burst_span = max(1, (span + 9) // 10)
     return {
         task_id: start_ns
-        + hash_value(seed, rules_version, task_id, "arrival-burst")
+        + deterministic_value(seed, task_id, "arrival-burst")
         % burst_span
         for task_id in task_ids
     }
@@ -450,7 +446,6 @@ def allocate_input_bytes(
     minimum,
     maximum,
     seed,
-    rules_version,
 ):
     sizes = {}
     for task_id, size_name in tail_assignments.items():
@@ -469,14 +464,14 @@ def allocate_input_bytes(
         INPUT_WEIGHT_MULTIPLIERS[class_assignments[task_id]]
         * (
             1
-            + hash_value(seed, rules_version, task_id, "input-weight")
+            + deterministic_value(seed, task_id, "input-weight")
             % 1_000_000
         )
         for task_id in non_tail_ids
     ]
     tie_keys = [
         (
-            hash_value(seed, rules_version, task_id, "input-remainder"),
+            deterministic_value(seed, task_id, "input-remainder"),
             task_id,
         )
         for task_id in non_tail_ids
@@ -498,13 +493,11 @@ def inclusive_hash_range(
     minimum,
     maximum,
     seed,
-    rules_version,
     task_id,
     field_name,
 ):
-    return minimum + hash_value(
+    return minimum + deterministic_value(
         seed,
-        rules_version,
         task_id,
         field_name,
     ) % (maximum - minimum + 1)
@@ -515,7 +508,6 @@ def generate_output_bytes(
     class_assignments,
     input_sizes,
     seed,
-    rules_version,
 ):
     outputs = {}
     for task_id in task_ids:
@@ -525,7 +517,6 @@ def generate_output_bytes(
                 8000,
                 10000,
                 seed,
-                rules_version,
                 task_id,
                 "output-ratio-bp",
             )
@@ -535,7 +526,6 @@ def generate_output_bytes(
                 50,
                 500,
                 seed,
-                rules_version,
                 task_id,
                 "output-ratio-bp",
             )
@@ -545,7 +535,6 @@ def generate_output_bytes(
                 4096,
                 262144,
                 seed,
-                rules_version,
                 task_id,
                 "output-bytes",
             )
@@ -554,7 +543,6 @@ def generate_output_bytes(
                 1000,
                 4000,
                 seed,
-                rules_version,
                 task_id,
                 "output-ratio-bp",
             )
@@ -570,7 +558,6 @@ def generate_work_units(
     class_assignments,
     input_sizes,
     seed,
-    rules_version,
 ):
     work = {}
     for class_name in CLASS_ORDER:
@@ -582,7 +569,7 @@ def generate_work_units(
             ),
             key=lambda task_id: (
                 input_sizes[task_id],
-                hash_value(seed, rules_version, task_id, "work-tie"),
+                deterministic_value(seed, task_id, "work-tie"),
                 task_id,
             ),
         )
@@ -598,7 +585,6 @@ def generate_work_units(
                 -jitter_limit,
                 jitter_limit,
                 seed,
-                rules_version,
                 task_id,
                 "work-jitter",
             )
@@ -678,7 +664,6 @@ def main():
     parser.add_argument("--task-count", required=True, type=positive_int)
     parser.add_argument("--total-input-bytes", required=True, type=positive_int)
     parser.add_argument("--seed", required=True)
-    parser.add_argument("--rules-version", required=True)
     parser.add_argument(
         "--arrival-start-ns",
         required=True,
@@ -762,8 +747,6 @@ def main():
 
     if "\0" in args.seed or not args.seed:
         raise ValueError("seed must be a non-empty string without NUL")
-    if "\0" in args.rules_version or not args.rules_version:
-        raise ValueError("rules-version must be a non-empty string without NUL")
     if args.task_count > UINT64_MAX // 2:
         raise ValueError("task-count cannot produce safe INPUT/RESULT transfer IDs")
     if args.total_input_bytes > UINT64_MAX:
@@ -806,7 +789,6 @@ def main():
         task_ids,
         class_counts,
         args.seed,
-        args.rules_version,
     )
     one_gb_count = scaled_tail_count(
         args.large_1gb_count,
@@ -824,7 +806,6 @@ def main():
         five_hundred_mb_count,
         tail_shares,
         args.seed,
-        args.rules_version,
     )
     input_sizes = allocate_input_bytes(
         task_ids,
@@ -834,35 +815,30 @@ def main():
         args.non_tail_min_input_bytes,
         args.non_tail_max_input_bytes,
         args.seed,
-        args.rules_version,
     )
     output_sizes = generate_output_bytes(
         task_ids,
         class_assignments,
         input_sizes,
         args.seed,
-        args.rules_version,
     )
     work_units = generate_work_units(
         task_ids,
         class_assignments,
         input_sizes,
         args.seed,
-        args.rules_version,
     )
 
     compute_assignments = assign_balanced_nodes(
         task_ids,
         compute_ids,
         args.seed,
-        args.rules_version,
         "compute-node",
     )
     source_assignments = assign_balanced_nodes(
         task_ids,
         satellite_ids,
         args.seed,
-        args.rules_version,
         "source-node",
         compute_assignments,
     )
@@ -870,7 +846,6 @@ def main():
         task_ids,
         satellite_ids,
         args.seed,
-        args.rules_version,
         "result-node",
         compute_assignments,
     )
@@ -880,7 +855,6 @@ def main():
         args.arrival_end_ns,
         args.arrival_mode,
         args.seed,
-        args.rules_version,
     )
 
     tasks = [
@@ -896,9 +870,8 @@ def main():
         }
         for task_id in task_ids
     ]
-    trace = {"schema_version": "0.1", "tasks": tasks}
+    trace = {"tasks": tasks}
     write_json(args.output_task_trace, trace)
-    trace_hash = hashlib.sha256(args.output_task_trace.read_bytes()).hexdigest()
 
     correlations, largest_means, smallest_means = class_correlation_metrics(
         task_ids,
@@ -942,12 +915,7 @@ def main():
     output_stats = distribution(list(output_sizes.values()))
     work_stats = distribution(list(work_units.values()))
     summary = {
-        "generator_version": GENERATOR_VERSION,
-        "rules_version": args.rules_version,
         "seed": args.seed,
-        "deterministic_method": (
-            "SHA-256(seed, rules_version, task_id, field_name)"
-        ),
         "task_count": args.task_count,
         "total_input_bytes": sum(input_sizes.values()),
         "total_output_bytes": sum(output_sizes.values()),
@@ -988,7 +956,6 @@ def main():
         "per_class_spearman_input_work": correlations,
         "per_class_largest_quartile_mean_work": largest_means,
         "per_class_smallest_quartile_mean_work": smallest_means,
-        "task_trace_sha256": trace_hash,
     }
     write_json(args.output_workload_summary, summary)
     print(

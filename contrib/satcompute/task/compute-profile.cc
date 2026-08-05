@@ -133,12 +133,7 @@ ReadComputeProfile(const std::filesystem::path& filename,
     }
 
     const Json root = ReadJson(filename);
-    RequireObjectFields(root, filename, "root", {"schema_version", "compute_nodes"});
-    const Json& schemaVersion = GetField(root, filename, "schema_version");
-    if (!schemaVersion.is_string() || schemaVersion.get<std::string>() != "0.1")
-    {
-        Fail(filename, "schema_version", "must equal 0.1");
-    }
+    RequireObjectFields(root, filename, "root", {"compute_nodes"});
     const Json& items = GetField(root, filename, "compute_nodes");
     if (!items.is_array() || items.empty())
     {

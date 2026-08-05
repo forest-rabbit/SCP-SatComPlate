@@ -1,1 +1,0 @@
-"""SatCompute visualization tests."""

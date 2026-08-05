@@ -1,80 +1,17 @@
-# 分离式卫星 JSON 全量快照
+# 星座与算力输入
 
-SatCompute 只接受分离式 JSON 卫星全量快照。每个时间片必须同时提供节点文件
-和链路文件：
+`constellations/` 保存 ns-3.48 原生 LEO shell CSV，只描述星座物理结构；
+`resources/` 保存与轨道状态分离的静态算力 JSON。仿真时长、拓扑更新、时延、
+路由和输出目录都由 `para.cc`/CLI 控制，不写入这两类文件。
 
-```text
-nodes_<time>s.json
-topology_<time>s.json
-```
+正式仿真根据星座 CSV 在线计算坐标和链路。`topologyOnly=1` 时，平台把每个采样
+点的 `nodes_<time>s.json` 与 `links_<time>s.json` 写入输出目录；这些切片用于
+可视化和未来故障建模，不作为正常网络仿真的回放输入。
 
-`<time>` 是相对仿真起点的非负十进制秒数。`nodes_0s.json` 与
-`topology_0s.json` 必须存在。目录可以比网络更新周期更细；程序只选择
-`0, networkUpdateInterval, 2 × networkUpdateInterval, ...` 中严格早于
-`simulationDuration` 的完整快照。存在 `manifest.json` 时，其有序清单和
-SHA-256 是权威输入；没有 manifest 的 legacy 目录按文件名发现。
-
-所有节点快照必须列出完全相同的卫星集合。所有链路快照都是完整活跃 ISL
-集合：上一时间片存在、本时间片缺失的链路会被关闭。CSV 建图、增量 patch、
-地面站和 cluster 格式均不属于项目输入契约。
-
-## 节点文件
+ComputeProfile 示例：
 
 ```json
 {
-  "nodes": [
-    {
-      "node_id": 0,
-      "node_type": "sat"
-    }
-  ]
-}
-```
-
-- `node_id`：唯一的非负卫星 ID；
-- `node_type`：必须为 `sat`。
-
-## 链路文件
-
-```json
-{
-  "links": [
-    {
-      "node1_id": 0,
-      "node2_id": 1,
-      "type": "sat",
-      "delay": 8000,
-      "link_bandwidth": 10000000
-    }
-  ]
-}
-```
-
-- `node1_id`、`node2_id`：配对节点快照中的卫星 ID，不能相同；
-- `type`：必须为 `sat`；
-- `delay`：单向传播时延，单位 µs；
-- `link_bandwidth`：链路带宽，单位 kbps，必须大于 0。
-
-legacy 回放中，distance 模式使用切片时延；fixed 模式由 `--fixedDelay` 覆盖。
-链路带宽始终由 `--islBandwidthBps` 统一覆盖，避免拓扑切片与 `para.cc` 形成
-重复运行参数。业务到达不写入拓扑文件，而由独立的 NetworkTransfer 或
-TaskTrace JSON 提供。
-
-同一链路文件中不能重复声明同一条无向 ISL。仓库样例位于
-[`examples/xw-66sat/`](examples/xw-66sat/)。
-小型测试拓扑集中位于
-[`tests/fixtures/topology/snapshots/`](../../tests/fixtures/topology/snapshots/)，
-包括动态 diamond、delay-only 和 capacity-pending 合同。
-
-## ComputeProfile 静态资源
-
-节点的静态计算能力属于 topology side，放在 `resources/`，不写入
-`nodes_<time>s.json`，也不与任务到达混合。任务模式通过
-`--computeProfile=<file>` 显式读取一个文件：
-
-```json
-{
-  "schema_version": "0.1",
   "compute_nodes": [
     {
       "node_id": 3,
@@ -84,15 +21,6 @@ TaskTrace JSON 提供。
 }
 ```
 
-根对象只允许 `schema_version` 和 `compute_nodes`；每项只允许 `node_id` 和
-`compute_rate_work_units_per_second`。`node_id` 必须引用拓扑中存在的卫星且
-不能重复，速率是正整数，单位为 work units/s。数组按 `node_id` canonical
-sort，因此 JSON 中的排列不影响运行与结构化输出。
-
-测试资源集中位于 [`tests/fixtures/task/`](../../tests/fixtures/task/)。
-正式 2 Gbit/s 静态
-66 星压力配置位于 [`resources/workload/`](resources/workload/)：不带
-`all` 的文件保留 22 个计算节点对照，带 `all` 的文件覆盖节点 0–65。
-与之配对的任务到达属于 traffic side，其格式见
-[`../traffic/README.md`](../traffic/README.md)；任务生成器恢复后仍将任务与
-ComputeProfile 分开输出。
+根对象只允许 `compute_nodes`。节点 ID 必须属于当前星座且不能重复，算力速率是
+正整数 work units/s。`resources/workload/` 中分别提供 22 个计算节点和全部
+66 个计算节点的示例配置。
