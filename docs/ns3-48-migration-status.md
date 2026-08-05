@@ -5,7 +5,10 @@ Status: historical v0.2 closeout, superseded on 2026-08-05 by the approved
 [implementation plan](plans/ns3-48-legacy-parity.md).
 
 The results below describe the rejected v0.2 architecture and remain only as
-an audit record. The active v0.3 migration is not complete.
+an audit record. The later v0.3 migration is complete; its authoritative
+closeout is recorded in the
+[v0.3 implementation plan](plans/ns3-48-legacy-parity.md) and
+[file migration matrix](plans/ns3-33-to-48-matrix.md).
 
 ## Repository baseline
 

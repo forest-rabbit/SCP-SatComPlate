@@ -1,8 +1,8 @@
 # 实施计划：SatCompute ns-3.48 legacy-parity 迁移
 
-状态：已批准，阶段 0 至阶段 6 已完成；阶段 6 唯一一次 GitHub CI run
-`30983721371` 已通过。阶段 7 的实现任务已完成，待最终本地门禁和阶段 7 唯一一次
-GitHub CI 后关闭 v0.3。
+状态：已完成（2026-08-05）。阶段 7 唯一一次 GitHub CI run `30986962812`
+已在 `main` commit `9845559242fc5b1231ebd8581c7aa08e85fc8568` 上通过，v0.3
+兼容迁移关闭。
 
 依据：[平台 v0.3 规格](../specs/platform-v0.3.md)。
 
@@ -397,10 +397,11 @@ JSON 内容和稳定 ID，不把运行结果提交到仓库。
 - 通用 `model/` 已清除，版本与 SHA-256 证据移至模块根目录；
 - 机器审计测试固定基线数量并检查所有替代证据仍存在。
 
-### 最终检查点
+### 最终检查点（已完成）
 
 ```bash
-./ns3 configure --enable-modules=satcompute -G Ninja
+./ns3 configure --enable-modules=satcompute \
+  --disable-examples --disable-tests -G Ninja
 ./ns3 build
 python3 -m unittest discover \
   -s contrib/satcompute/tests/unit -p 'test_*.py' -v
@@ -411,8 +412,18 @@ git diff --check
 git status --short --branch
 ```
 
-随后在 `main` 手动运行一次 SatCompute CI，确认成功后标记 v0.3 完成并清理所有
-非永久开发分支。
+实现结果（2026-08-05）：
+
+- PR #59 恢复分层测试入口，PR #60 完成中文 README，PR #61 关闭逐文件审计；
+- main 上完整配置和构建通过，明确 `Examples: OFF`、`Tests: OFF`；
+- 69 个 Python 项目测试、26 个 C++ 项目 executable、5 个 smoke runner 和
+  2 个完整 regression runner 全部通过；
+- interval analysis 的 1 秒参考/2 秒保持切片比较通过，66 星 ECEF XYZ、121 条
+  活动 ISL 和三帧 GIF 的 headless 可视化通过；
+- 阶段 7 唯一一次 GitHub CI run `30986962812` 在 commit
+  `9845559242fc5b1231ebd8581c7aa08e85fc8568` 上用时 1m21s 通过，未启用或运行
+  ns-3 examples、全局 tests 或 `test.py`；
+- 本地与远端短期分支均已清理，只保留 `main` 和永久 `legacy/ns-3.33`。
 
 ## 主要风险与控制
 
@@ -428,5 +439,5 @@ git status --short --branch
 
 ## 开放问题
 
-当前没有阻塞实施的开放问题。故障、前端、IPv6/SRv6 和非圆轨道需要未来独立
-规格，不属于本计划。
+本迁移没有未关闭问题。故障、前端、IPv6/SRv6 和非圆轨道需要未来独立规格，
+不属于本计划。

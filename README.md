@@ -8,8 +8,11 @@ SatCompute 是基于官方 ns-3.48 的纯星上动态网络与计算仿真平台
 和前端可视化使用。最短路和路由表重算仍由 ns-3 原生
 `GlobalRouteManager` 完成。
 
-仓库的 `main` 是 ns-3.48 开发主线；`legacy/ns-3.33` 永久保留原实现，作为目录、
-输入、行为、指标和测试的只读基线。当前迁移规格见
+v0.3 兼容迁移已于 2026-08-05 完成；最终
+[阶段 7 CI run 30986962812](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/30986962812)
+在 `main` commit `9845559242fc5b1231ebd8581c7aa08e85fc8568` 上通过。仓库的
+`main` 是 ns-3.48 开发主线；`legacy/ns-3.33` 永久保留原实现，作为目录、输入、
+行为、指标和测试的只读基线。最终合同见
 [平台 v0.3 规格](docs/specs/platform-v0.3.md)，逐文件结论见
 [迁移矩阵](docs/plans/ns3-33-to-48-matrix.md)。
 
