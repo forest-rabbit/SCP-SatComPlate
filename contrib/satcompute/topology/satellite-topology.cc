@@ -57,6 +57,15 @@ SatelliteTopology::GetLinkState() const
     return m_controller->GetLinkState();
 }
 
+bool
+SatelliteTopology::ApplyCommunicationFaultOverlay(
+    const std::set<uint32_t>& unavailableSatelliteIds,
+    bool refreshNaturalState)
+{
+    return m_controller->ApplyCommunicationFaultOverlay(unavailableSatelliteIds,
+                                                        refreshNaturalState);
+}
+
 const OnlineOrbitConstellation&
 SatelliteTopology::GetOnlineConstellation() const
 {

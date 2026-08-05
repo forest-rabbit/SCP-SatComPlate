@@ -181,33 +181,6 @@ CheckFaultStateOverlay()
           "satellite fault recovery overlay differs");
 }
 
-void
-CheckComputeOnlyControllerBoundary()
-{
-    FaultDefinition satellite;
-    satellite.faultId = 1;
-    satellite.nodeId = 0;
-    satellite.faultType = FaultType::SATELLITE;
-    satellite.startTimeNs = 1;
-    FaultTrace trace;
-    trace.faults = {satellite};
-    Ptr<FaultController> controller = CreateObject<FaultController>();
-    try
-    {
-        controller->Configure(trace, {0}, 10);
-    }
-    catch (const FaultControllerError& error)
-    {
-        Check(std::string(error.what()).find("satellite fault execution") !=
-                  std::string::npos,
-              "satellite execution boundary error differs");
-        controller = nullptr;
-        Simulator::Destroy();
-        return;
-    }
-    throw std::runtime_error("compute-only controller accepted a satellite fault");
-}
-
 ExecutionSignature
 RunComputeFaultScenario()
 {
@@ -420,7 +393,6 @@ main()
     try
     {
         CheckFaultStateOverlay();
-        CheckComputeOnlyControllerBoundary();
         const ExecutionSignature first = RunComputeFaultScenario();
         const ExecutionSignature second = RunComputeFaultScenario();
         Check(first == second,

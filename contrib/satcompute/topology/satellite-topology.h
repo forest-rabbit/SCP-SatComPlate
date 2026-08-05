@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <vector>
 
@@ -51,6 +52,9 @@ class SatelliteTopology : public SatelliteTopologyController
     const NodeContainer& GetNodes() const override;
     const SatelliteIdMap& GetIdMap() const override;
     const SatelliteLinkState& GetLinkState() const override;
+    bool ApplyCommunicationFaultOverlay(
+        const std::set<uint32_t>& unavailableSatelliteIds,
+        bool refreshNaturalState) override;
     const OnlineOrbitConstellation& GetOnlineConstellation() const;
 
     uint32_t GetNodeCount() const;

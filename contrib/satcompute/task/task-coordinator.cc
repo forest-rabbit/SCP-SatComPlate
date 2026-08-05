@@ -10,6 +10,7 @@
 #include "ns3/simulator.h"
 
 #include <algorithm>
+#include <optional>
 #include <set>
 #include <utility>
 
@@ -142,12 +143,19 @@ TaskCoordinator::GetTask(uint64_t taskId) const
 }
 
 Ptr<ComputeService>
-TaskCoordinator::GetComputeService(uint32_t nodeId) const
+TaskCoordinator::FindComputeService(uint32_t nodeId) const
 {
     const auto service = m_servicesByNodeId.find(nodeId);
-    NS_ABORT_MSG_IF(service == m_servicesByNodeId.end(),
+    return service == m_servicesByNodeId.end() ? nullptr : service->second;
+}
+
+Ptr<ComputeService>
+TaskCoordinator::GetComputeService(uint32_t nodeId) const
+{
+    Ptr<ComputeService> service = FindComputeService(nodeId);
+    NS_ABORT_MSG_IF(service == nullptr,
                     "TaskCoordinator has no compute service for the requested node");
-    return service->second;
+    return service;
 }
 
 void
@@ -174,6 +182,30 @@ TaskCoordinator::HandleTaskArrival(uint64_t taskId)
         return;
     }
     const int64_t timeNs = Simulator::Now().GetNanoSeconds();
+    if (!IsSatelliteAvailable(task.definition.sourceNodeId))
+    {
+        FailTaskForSatelliteNode(task,
+                                 task.definition.sourceNodeId,
+                                 timeNs,
+                                 "SOURCE_SATELLITE_UNAVAILABLE_AT_ARRIVAL");
+        return;
+    }
+    if (!IsSatelliteAvailable(task.definition.computeNodeId))
+    {
+        FailTaskForSatelliteNode(task,
+                                 task.definition.computeNodeId,
+                                 timeNs,
+                                 "COMPUTE_SATELLITE_UNAVAILABLE_AT_ARRIVAL");
+        return;
+    }
+    if (!IsSatelliteAvailable(task.definition.resultNodeId))
+    {
+        FailTaskForSatelliteNode(task,
+                                 task.definition.resultNodeId,
+                                 timeNs,
+                                 "RESULT_SATELLITE_UNAVAILABLE_AT_ARRIVAL");
+        return;
+    }
     if (!GetComputeService(task.definition.computeNodeId)->IsComputeAvailable())
     {
         FailTaskForComputeNode(task, timeNs, "COMPUTE_NODE_UNAVAILABLE_AT_ARRIVAL");
@@ -200,6 +232,14 @@ TaskCoordinator::HandleInputTransferComplete(uint64_t transferId, int64_t comple
                     "TaskCoordinator input-transfer mapping is inconsistent");
     if (IsTerminalTaskState(task.state))
     {
+        return;
+    }
+    if (!IsSatelliteAvailable(task.definition.computeNodeId))
+    {
+        FailTaskForSatelliteNode(task,
+                                 task.definition.computeNodeId,
+                                 completionTimeNs,
+                                 "COMPUTE_SATELLITE_UNAVAILABLE_AFTER_INPUT");
         return;
     }
     if (!GetComputeService(task.definition.computeNodeId)->IsComputeAvailable())
@@ -396,47 +436,309 @@ TaskCoordinator::FailTaskForComputeNode(TaskRuntime& task,
     return impact;
 }
 
+TaskFaultImpact
+TaskCoordinator::FailTaskForSatelliteNode(TaskRuntime& task,
+                                          uint32_t failedNodeId,
+                                          int64_t eventTimeNs,
+                                          const std::string& cause)
+{
+    TaskFaultImpact impact;
+    if (IsTerminalTaskState(task.state))
+    {
+        return impact;
+    }
+
+    const bool isSource = task.definition.sourceNodeId == failedNodeId;
+    const bool isCompute = task.definition.computeNodeId == failedNodeId;
+    const bool isResult = task.definition.resultNodeId == failedNodeId;
+    const TaskState fromState = task.state;
+    bool affected = false;
+    switch (fromState)
+    {
+    case TASK_PENDING:
+    case TASK_INPUT_TRANSFERRING:
+        affected = isSource || isCompute || isResult;
+        break;
+    case TASK_QUEUED:
+    case TASK_RUNNING:
+    case TASK_RESULT_TRANSFERRING:
+        affected = isCompute || isResult;
+        break;
+    case TASK_COMPLETED:
+    case TASK_FAILED:
+        break;
+    }
+    if (!affected)
+    {
+        return impact;
+    }
+
+    if (fromState == TASK_QUEUED)
+    {
+        NS_ABORT_MSG_IF(
+            !GetComputeService(task.definition.computeNodeId)
+                 ->RemoveQueuedTaskForFailure(task.definition.taskId),
+            "satellite fault queued task was absent from ComputeService");
+    }
+    else if (fromState == TASK_RUNNING)
+    {
+        NS_ABORT_MSG_IF(
+            !GetComputeService(task.definition.computeNodeId)
+                 ->CancelRunningTaskForFailure(task.definition.taskId),
+            "satellite fault running task was absent from ComputeService");
+    }
+
+    TaskFailureReason failureReason = TaskFailureReason::RESULT_SATELLITE_FAILURE;
+    if ((fromState == TASK_PENDING || fromState == TASK_INPUT_TRANSFERRING) && isSource)
+    {
+        failureReason = TaskFailureReason::SOURCE_SATELLITE_FAILURE;
+    }
+    else if (isCompute)
+    {
+        failureReason = TaskFailureReason::COMPUTE_SATELLITE_FAILURE;
+    }
+    NS_ABORT_MSG_IF(!task.FailIfActive(eventTimeNs, failureReason, cause),
+                    "active task could not enter satellite TASK_FAILED");
+    m_taskEvents.push_back({eventTimeNs,
+                            task.definition.taskId,
+                            fromState,
+                            TASK_FAILED,
+                            failedNodeId,
+                            cause});
+    impact.affectedTaskCount = 1;
+
+    const auto finalize = [this, &impact](uint64_t transferId,
+                                          TransferTerminalState state,
+                                          TransferTerminalReason reason) {
+        if (m_transferEngine->FinalizeTransferIfActive(transferId, state, reason))
+        {
+            ++impact.affectedTransferCount;
+        }
+    };
+    switch (fromState)
+    {
+    case TASK_PENDING:
+        finalize(task.definition.inputTransferId,
+                 TransferTerminalState::CANCELLED,
+                 TransferTerminalReason::TASK_FAILED);
+        finalize(task.definition.resultTransferId,
+                 TransferTerminalState::CANCELLED,
+                 TransferTerminalReason::TASK_FAILED);
+        break;
+    case TASK_INPUT_TRANSFERRING:
+        if (isSource)
+        {
+            finalize(task.definition.inputTransferId,
+                     TransferTerminalState::FAILED,
+                     TransferTerminalReason::SOURCE_SATELLITE_FAILED);
+        }
+        else if (isCompute)
+        {
+            finalize(task.definition.inputTransferId,
+                     TransferTerminalState::FAILED,
+                     TransferTerminalReason::DESTINATION_SATELLITE_FAILED);
+        }
+        else
+        {
+            finalize(task.definition.inputTransferId,
+                     TransferTerminalState::CANCELLED,
+                     TransferTerminalReason::TASK_FAILED);
+        }
+        finalize(task.definition.resultTransferId,
+                 TransferTerminalState::CANCELLED,
+                 TransferTerminalReason::TASK_FAILED);
+        break;
+    case TASK_QUEUED:
+    case TASK_RUNNING:
+        finalize(task.definition.resultTransferId,
+                 TransferTerminalState::CANCELLED,
+                 TransferTerminalReason::TASK_FAILED);
+        break;
+    case TASK_RESULT_TRANSFERRING:
+        finalize(task.definition.resultTransferId,
+                 TransferTerminalState::FAILED,
+                 isCompute ? TransferTerminalReason::SOURCE_SATELLITE_FAILED
+                           : TransferTerminalReason::DESTINATION_SATELLITE_FAILED);
+        break;
+    case TASK_COMPLETED:
+    case TASK_FAILED:
+        NS_ABORT_MSG("terminal task reached satellite failure cleanup");
+    }
+    return impact;
+}
+
 std::map<uint32_t, TaskFaultImpact>
 TaskCoordinator::ApplyComputeFaultBatch(
     const std::vector<uint32_t>& recoveredNodeIds,
     const std::vector<uint32_t>& startedNodeIds)
 {
-    NS_ABORT_MSG_IF(!m_initialized,
-                    "TaskCoordinator is not initialized for compute faults");
-    std::set<uint32_t> recovered;
+    std::vector<TaskFaultNodeChange> recovered;
+    recovered.reserve(recoveredNodeIds.size());
     for (const uint32_t nodeId : recoveredNodeIds)
     {
-        NS_ABORT_MSG_IF(!recovered.insert(nodeId).second,
-                        "compute recovery batch contains a duplicate node");
-        GetComputeService(nodeId)->SetComputeAvailable(true);
+        recovered.push_back({nodeId, TaskFaultKind::COMPUTE});
     }
-
-    std::set<uint32_t> started;
-    std::map<uint32_t, TaskFaultImpact> impacts;
+    std::vector<TaskFaultNodeChange> started;
+    started.reserve(startedNodeIds.size());
     for (const uint32_t nodeId : startedNodeIds)
     {
-        NS_ABORT_MSG_IF(!started.insert(nodeId).second,
-                        "compute start batch contains a duplicate node");
-        GetComputeService(nodeId)->SetComputeAvailable(false);
-        impacts.emplace(nodeId, TaskFaultImpact{});
+        started.push_back({nodeId, TaskFaultKind::COMPUTE});
+    }
+    return ApplyFaultBatch(recovered, started);
+}
+
+std::map<uint32_t, TaskFaultImpact>
+TaskCoordinator::ApplyFaultBatch(
+    const std::vector<TaskFaultNodeChange>& recoveredNodes,
+    const std::vector<TaskFaultNodeChange>& startedNodes)
+{
+    NS_ABORT_MSG_IF(!m_initialized,
+                    "TaskCoordinator is not initialized for fault execution");
+    std::set<std::pair<uint32_t, TaskFaultKind>> recoveredKeys;
+    for (const TaskFaultNodeChange& change : recoveredNodes)
+    {
+        NS_ABORT_MSG_IF(!recoveredKeys.emplace(change.nodeId, change.kind).second,
+                        "fault recovery batch contains a duplicate node and kind");
+        if (change.kind == TaskFaultKind::SATELLITE)
+        {
+            NS_ABORT_MSG_IF(m_unavailableSatelliteNodes.erase(change.nodeId) != 1,
+                            "satellite recovery did not match task availability state");
+            Ptr<ComputeService> service = FindComputeService(change.nodeId);
+            if (service != nullptr)
+            {
+                service->SetComputeAvailable(true);
+            }
+        }
+        else
+        {
+            GetComputeService(change.nodeId)->SetComputeAvailable(true);
+        }
+    }
+
+    std::set<std::pair<uint32_t, TaskFaultKind>> startedKeys;
+    std::map<uint32_t, TaskFaultImpact> impacts;
+    for (const TaskFaultNodeChange& change : startedNodes)
+    {
+        NS_ABORT_MSG_IF(!startedKeys.emplace(change.nodeId, change.kind).second,
+                        "fault start batch contains a duplicate node and kind");
+        NS_ABORT_MSG_IF(impacts.contains(change.nodeId),
+                        "fault start batch contains two types on one node");
+        impacts.emplace(change.nodeId, TaskFaultImpact{});
+        if (change.kind == TaskFaultKind::SATELLITE)
+        {
+            NS_ABORT_MSG_IF(!m_unavailableSatelliteNodes.insert(change.nodeId).second,
+                            "satellite start overlaps task availability state");
+            Ptr<ComputeService> service = FindComputeService(change.nodeId);
+            if (service != nullptr)
+            {
+                service->SetComputeAvailable(false);
+            }
+        }
+        else
+        {
+            GetComputeService(change.nodeId)->SetComputeAvailable(false);
+        }
     }
 
     const int64_t eventTimeNs = Simulator::Now().GetNanoSeconds();
+    std::set<uint32_t> satelliteStarts;
+    for (const TaskFaultNodeChange& change : startedNodes)
+    {
+        if (change.kind == TaskFaultKind::SATELLITE)
+        {
+            satelliteStarts.insert(change.nodeId);
+        }
+    }
     for (TaskRuntime& task : m_tasks)
     {
-        if (!started.contains(task.definition.computeNodeId) ||
-            IsTerminalTaskState(task.state) ||
-            task.state == TASK_RESULT_TRANSFERRING ||
+        if (IsTerminalTaskState(task.state) ||
             (task.state == TASK_PENDING &&
              task.definition.arrivalTimeNs != eventTimeNs))
         {
             continue;
         }
-        TaskFaultImpact taskImpact =
-            FailTaskForComputeNode(task, eventTimeNs, "COMPUTE_FAULT_START");
-        TaskFaultImpact& nodeImpact = impacts.at(task.definition.computeNodeId);
-        nodeImpact.affectedTaskCount += taskImpact.affectedTaskCount;
-        nodeImpact.affectedTransferCount += taskImpact.affectedTransferCount;
+        std::optional<uint32_t> failedNodeId;
+        switch (task.state)
+        {
+        case TASK_PENDING:
+            if (satelliteStarts.contains(task.definition.sourceNodeId))
+            {
+                failedNodeId = task.definition.sourceNodeId;
+            }
+            else if (satelliteStarts.contains(task.definition.computeNodeId))
+            {
+                failedNodeId = task.definition.computeNodeId;
+            }
+            else if (satelliteStarts.contains(task.definition.resultNodeId))
+            {
+                failedNodeId = task.definition.resultNodeId;
+            }
+            break;
+        case TASK_INPUT_TRANSFERRING:
+            if (satelliteStarts.contains(task.definition.sourceNodeId))
+            {
+                failedNodeId = task.definition.sourceNodeId;
+            }
+            else if (satelliteStarts.contains(task.definition.computeNodeId))
+            {
+                failedNodeId = task.definition.computeNodeId;
+            }
+            else if (satelliteStarts.contains(task.definition.resultNodeId))
+            {
+                failedNodeId = task.definition.resultNodeId;
+            }
+            break;
+        case TASK_QUEUED:
+        case TASK_RUNNING:
+        case TASK_RESULT_TRANSFERRING:
+            if (satelliteStarts.contains(task.definition.computeNodeId))
+            {
+                failedNodeId = task.definition.computeNodeId;
+            }
+            else if (satelliteStarts.contains(task.definition.resultNodeId))
+            {
+                failedNodeId = task.definition.resultNodeId;
+            }
+            break;
+        case TASK_COMPLETED:
+        case TASK_FAILED:
+            break;
+        }
+        if (failedNodeId.has_value())
+        {
+            const TaskFaultImpact taskImpact =
+                FailTaskForSatelliteNode(task,
+                                         failedNodeId.value(),
+                                         eventTimeNs,
+                                         "SATELLITE_FAULT_START");
+            TaskFaultImpact& nodeImpact = impacts.at(failedNodeId.value());
+            nodeImpact.affectedTaskCount += taskImpact.affectedTaskCount;
+            nodeImpact.affectedTransferCount += taskImpact.affectedTransferCount;
+        }
+    }
+
+    for (const TaskFaultNodeChange& change : startedNodes)
+    {
+        if (change.kind != TaskFaultKind::COMPUTE)
+        {
+            continue;
+        }
+        TaskFaultImpact& nodeImpact = impacts.at(change.nodeId);
+        for (TaskRuntime& task : m_tasks)
+        {
+            if (IsTerminalTaskState(task.state) ||
+                task.definition.computeNodeId != change.nodeId ||
+                task.state == TASK_RESULT_TRANSFERRING ||
+                (task.state == TASK_PENDING &&
+                 task.definition.arrivalTimeNs != eventTimeNs))
+            {
+                continue;
+            }
+            const TaskFaultImpact taskImpact =
+                FailTaskForComputeNode(task, eventTimeNs, "COMPUTE_FAULT_START");
+            nodeImpact.affectedTaskCount += taskImpact.affectedTaskCount;
+            nodeImpact.affectedTransferCount += taskImpact.affectedTransferCount;
+        }
     }
     return impacts;
 }
@@ -447,6 +749,14 @@ TaskCoordinator::IsComputeAvailable(uint32_t nodeId) const
     NS_ABORT_MSG_IF(!m_initialized,
                     "TaskCoordinator is not initialized for compute availability");
     return GetComputeService(nodeId)->IsComputeAvailable();
+}
+
+bool
+TaskCoordinator::IsSatelliteAvailable(uint32_t nodeId) const
+{
+    NS_ABORT_MSG_IF(!m_initialized,
+                    "TaskCoordinator is not initialized for satellite availability");
+    return !m_unavailableSatelliteNodes.contains(nodeId);
 }
 
 } // namespace ns3

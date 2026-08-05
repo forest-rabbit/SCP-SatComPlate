@@ -86,6 +86,18 @@ compute 故障开始时，`TaskCoordinator` 按当前阶段处理目标节点任
 故障期间后来到达的任务同样立即失败。有限恢复只令 service 接受新任务，既不恢复
 旧 `FAILED` 任务，也不创建迁移、重放或新的 attempt。
 
+整星故障还检查任务当前仍需要的三个端点：
+
+- INPUT 未完成时，source/compute 故障令活动 INPUT 分别以 source/destination 原因
+  `FAILED`；result 故障令不再需要的 INPUT `CANCELLED`；
+- INPUT 完成后，原 source 不再是必要资源，单独故障不影响 QUEUED/RUNNING/RESULT；
+- compute 卫星故障会终止 QUEUED/RUNNING，RESULT 已开始时则使其 source 失败；
+- result 卫星故障会终止尚未完成的任务，活动 RESULT 以 destination 原因失败；
+- 已完成任务不受影响，故障期间到达的任务立即失败，恢复后只有新任务可运行。
+
+同一时刻多个整星端点同时故障时，活动网络阶段优先保留真实 source/destination
+失败证据；任务和 transfer 仍只终止一次。
+
 ## 结果大小与传输 ID
 
 平台不知道算法的压缩率或输出形状，因此不会用输入大小或计算量推导结果大小。
@@ -117,6 +129,7 @@ receiver 完整接收。仿真结束时：
 - `tests/unit/fault-lifecycle-test.cc`：任务失败终态、传输终止和资源释放；
 - `tests/unit/compute-fault-execution-test.cc`：compute 预警/开始/恢复、各任务阶段、
   同刻排序和两次运行确定性；
+- `tests/unit/satellite-fault-execution-test.cc`：整星端点语义、恢复与中间路径重准入；
 - `tests/integration/smoke/run-task-smoke.sh`：单任务完整闭环；
 - `tests/integration/regression/run-full-workload-regression.sh`：确定性、完成策略、诊断
   和 20 任务正式示例；

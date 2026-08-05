@@ -55,6 +55,10 @@ serialization_time = wire_bits / pacing_rate
 - capacity 路径在拓扑更新后失效时，sender 立即暂停，释放旧路径并在重新准入后
   使用新瓶颈速率继续发送。
 
+整星故障只命中中间节点时，capacity-aware 也走这条路径失效流程：保留 transfer
+ID，释放旧路径后在新路由图中进入 `ACTIVE` 或 `WAITING_ADMISSION`，不会把它标成
+FAILED/CANCELLED。普通四种路由直接使用即时重算后的 IPv4 表。
+
 UDP 模型不虚构 ACK、重传或可靠恢复。sender 完成只表示全部 payload 已交给 socket；
 transfer 完成必须由 receiver 收齐声明字节。链路/队列丢包可能使任务在仿真终点仍
 未完成，此时由完成策略和失败诊断如实报告。
@@ -80,6 +84,11 @@ assignment 和路由缓存；重复调用返回 `false`，不二次释放。已�
 包计数、容量等待时间、终止时刻和原因仍保留为实验历史。终止后的迟到包只计为
 stale，不会重新完成旧 transfer，也不会影响同一 receiver 上的其他 transfer。
 
+活动/等待准入 transfer 的 source 或 destination 发生整星故障时，以对应的
+`SOURCE_SATELLITE_FAILED` / `DESTINATION_SATELLITE_FAILED` 进入 FAILED。父任务已经
+失败且后续 transfer 尚未启动时则使用 `CANCELLED/TASK_FAILED`。这些终态同样经过
+统一 finalizer，完整释放 capacity path、pending admission 和 assignment。
+
 算法和公式见 [`routing/README.md`](../routing/README.md)。
 
 ## 对应测试与输出
@@ -88,5 +97,6 @@ stale，不会重新完成旧 transfer，也不会影响同一 receiver 上的�
 - `tests/integration/smoke/run-capacity-aware-smoke.sh` 检查完整路径准入与释放；
 - `tests/integration/smoke/run-diagnostics-smoke.sh` 检查真实 UDP/queue Drop；
 - `tests/unit/fault-lifecycle-test.cc` 直接检查终止幂等性和三类 reservation 清理；
+- `tests/unit/satellite-fault-execution-test.cc` 检查端点失败与中间节点完整路径重准入；
 - `transfer-summary.csv` 记录声明大小、分包、发送/接收字节和完成时间，详见
   [`metrics/README.md`](../metrics/README.md)。

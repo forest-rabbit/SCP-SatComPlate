@@ -1,7 +1,8 @@
 # 故障模块
 
 `fault/` 负责确定性故障输入、可用性覆盖和运行期批处理。reader 只做解析与校验；
-`FaultController` 再把已验证的 compute trace 调度到精确 ns-3 时刻，不按概率抽样。
+`FaultController` 再把已验证的 compute/satellite trace 调度到精确 ns-3 时刻，不按
+概率抽样。
 
 ## 文件与职责
 
@@ -38,12 +39,35 @@ NOTICE -> RECOVERY -> START
 `RESULT_TRANSFERRING` 的任务继续通信，`COMPLETED` 不受影响。故障期间到达的任务
 立即失败，并取消两条尚未启动的传输。
 
-`FaultRuntimeEventRecord` 保留 notice/start/recovery 后的三类可用性、受影响任务和
-传输数，以及 `route_recomputed=false` 证据。持久化 `fault-events.csv` 和汇总指标
-在 N4A 的指标收口小步统一接入。
+## 整星故障执行
 
-当前执行器只接受 `compute`。`satellite` 已可解析且 `FaultState` 已定义覆盖语义，
-但在整星链路关闭、原子路由更新与活动传输处理接入前，控制器会明确拒绝运行，避免
-把整星故障静默降级为仅计算故障。
+自然轨道和故障覆盖分层，候选身份与圆轨道公式不因故障改变：
+
+```text
+natural_active = distance <= maxIslDistance
+effective_active = natural_active
+                   && communication_available[source]
+                   && communication_available[destination]
+```
+
+satellite START 先令三类 availability 都为 false，并按任务当前阶段终止计算和端点
+transfer；随后原子关闭最终故障集合关联的 ISL。有效边集合变化时立即重算 IPv4、
+推进一次 route epoch，并在路由稳定后通知 capacity-aware engine。一个 timestamp
+批次只应用一次有效拓扑，因此最多重算一次；若同批次含多个整星事件，
+`route_recomputed=true` 归属于该批次最后一个确定性状态事件。
+
+整星只作为中间转发节点时，普通路由立即使用新表；capacity-aware sender 暂停、
+释放旧完整路径，并以同一 transfer ID 在新图中重准入。故障卫星是活动 transfer
+源/目的时分别进入 `FAILED/SOURCE_SATELLITE_FAILED` 或
+`FAILED/DESTINATION_SATELLITE_FAILED`；父任务失败后未启动的 transfer 进入
+`CANCELLED/TASK_FAILED`。
+
+有限 RECOVERY 在精确恢复时刻重新读取原生 mobility 坐标并计算 natural topology，
+只恢复当时仍在距离门限内的候选。卫星在整个故障期间继续沿轨道运动，恢复不会复活
+旧 `FAILED/CANCELLED` 对象。
+
+`FaultRuntimeEventRecord` 保留 notice/start/recovery 后的三类可用性、受影响任务和
+传输数及路由重算证据。持久化 `fault-events.csv` 和汇总指标在 N4A 的指标收口小步
+统一接入。
 
 完整输入字段见 [`input/fault/README.md`](../input/fault/README.md)。

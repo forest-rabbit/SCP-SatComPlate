@@ -20,11 +20,10 @@ SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真�
 - 仅在有效链路集合变化时重算 hop-based IPv4 路由；
 - 支持 global-first、逐流 hash、HRW、size-aware HRW 和 capacity-aware HRW；
 - 支持输入传输、非抢占 FCFS 计算和结果传输的完整任务闭环；
-- 支持确定性 compute 故障的预警、开始、有限恢复和任务/传输终止；
+- 支持确定性 compute/整星故障的预警、开始、有限恢复、任务/传输终止与即时重路由；
 - topology-only 模式可输出每个切片的卫星 `x/y/z` 与候选链路状态。
 
-整星通信故障、备份恢复、前后端实时状态传输、IPv6、SRv6、地面站和馈电链路
-尚未实现。
+备份恢复、前后端实时状态传输、IPv6、SRv6、地面站和馈电链路尚未实现。
 
 ## 仓库结构
 

@@ -216,6 +216,15 @@ build_exec(
 )
 
 build_exec(
+  EXECNAME satcompute-satellite-fault-execution-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/satellite-fault-execution-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
   EXECNAME satcompute-online-orbit-foundation-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/online-orbit-foundation-test.cc

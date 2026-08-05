@@ -373,6 +373,7 @@ main(int argc, char* argv[])
                     faultTrace.value(),
                     topology.GetIdMap().GetCanonicalSatelliteIds(),
                     simulationDurationNs);
+                faultController->BindTopology(topology);
             }
             if (computeProfile.has_value() && taskTrace.has_value())
             {

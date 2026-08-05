@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <vector>
 
@@ -46,6 +47,9 @@ class OnlineTopologyController : public SatelliteTopologyController
     const NodeContainer& GetNodes() const override;
     const SatelliteIdMap& GetIdMap() const override;
     const SatelliteLinkState& GetLinkState() const override;
+    bool ApplyCommunicationFaultOverlay(
+        const std::set<uint32_t>& unavailableSatelliteIds,
+        bool refreshNaturalState) override;
     const OnlineOrbitConstellation& GetConstellation() const;
     const CircularOrbitTopologyState& GetLastTopologyState() const;
     Ptr<Node> GetNodeBySatelliteId(uint32_t satelliteId) const override;
@@ -71,6 +75,8 @@ class OnlineTopologyController : public SatelliteTopologyController
 
   private:
     void ApplyScheduledUpdate();
+    std::vector<SatelliteLink> GetEffectiveActiveLinks() const;
+    bool ApplyEffectiveTopology();
     void RequireInitialized() const;
 
     SatComputeConfig m_config;
@@ -84,6 +90,7 @@ class OnlineTopologyController : public SatelliteTopologyController
     std::unique_ptr<SatelliteLinkState> m_linkState;
     Ptr<FlowRouteRegistry> m_flowRouteRegistry;
     std::vector<Callback<void>> m_routeUpdateCallbacks;
+    std::set<uint32_t> m_communicationUnavailableSatelliteIds;
     CircularOrbitTopologyState m_lastTopologyState;
     TopologyLinkUpdateSummary m_lastUpdateSummary;
     std::vector<int64_t> m_appliedUpdateTimesNs;

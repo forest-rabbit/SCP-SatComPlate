@@ -78,6 +78,17 @@ distance: delay_ns = round(d * 1e9 / 299792458)
 超过门限的候选不会被替换或删除，只暂时变为 inactive。恢复到门限内时重新启用
 相同的设备、IPv4 地址和 output interface。
 
+整星故障不改写这份 natural 状态，而是在其后叠加通信可用性：
+
+```text
+effective_active = natural_active
+                   && communication_available[source]
+                   && communication_available[destination]
+```
+
+故障卫星的 mobility 继续演化。恢复时控制器在该精确时刻重新读取 ECEF 坐标，因此
+故障前曾 active、但恢复时已经超过门限的链路不会被错误恢复。
+
 `SatelliteLinkState` 在初始化时为全部候选建立 PointToPoint 设备上界，随后以完整
 快照原子应用 active 状态。它分别报告边集合变化与 delay/data-rate 属性变化，
 从而避免仅因 distance 时延更新就重算 hop-based 路由。
@@ -92,6 +103,10 @@ distance: delay_ns = round(d * 1e9 / 299792458)
 3. 原子应用链路快照；
 4. 若 active 边集合改变，调用 ns-3 全局路由重算并推进一次 route epoch；
 5. 路由表稳定后通知 capacity-aware transfer engine 处理失效路径。
+
+整星 START/RECOVERY 使用同一快照与路由更新入口，但不计作周期 topology slice。
+一个故障 timestamp 批次只应用一次最终 availability 集合，若有效边变化则立即重算
+一次路由并推进 epoch，不等待 `networkUpdateInterval`。
 
 因此 fixed 模式可使用较大的更新周期，例如 20 秒；distance 模式通常使用 1 秒或
 2 秒刷新传播时延。两者都是 `para.cc`/CLI 输入。
@@ -111,4 +126,5 @@ service address 用于任务端点和 host route。当前拓扑模块只提供 I
 - topology-only JSON 见 [`export/README.md`](export/README.md)；
 - `tests/unit/online-orbit-foundation-test.cc` 检查原生位置和固定候选；
 - `tests/unit/online-topology-controller-test.cc` 检查门控、时延、tick 与路由重算；
+- `tests/unit/satellite-fault-execution-test.cc` 检查故障覆盖、即时路由和实时距离恢复；
 - `tests/integration/smoke/run-topology-smoke.sh` 检查切片合同和重复运行确定性。
