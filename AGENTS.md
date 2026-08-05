@@ -28,14 +28,21 @@ Configure project work with
 Do not enable ns-3's global examples or test suites in SatCompute configuration
 or GitHub CI, and do not run `test.py` or upstream example tests there. Project
 verification consists of the targeted module build plus the maintained tests
-under `contrib/satcompute/tests/`.
+under `contrib/satcompute/tests/`. GitHub CI is a manual phase gate: run it once
+after all pull requests for a major migration phase have merged to `main`, not
+for every commit or pull request. Focused local builds and tests remain required
+for every increment.
 
-The versioned scenario JSON is the sole source of simulation semantics. Every
-schema property must have a useful JSON Schema `description`, explicit units,
-and closed-world validation. Human-facing durations use seconds; loaders must
-convert them once to exact integer nanoseconds before scheduling events.
-Relative input paths resolve from the scenario file, never from the shell
-working directory. Every run writes its resolved effective configuration.
+The authoritative migration contract is `docs/specs/platform-v0.3.md`.
+Platform execution uses typed defaults in `para.h`/`para.cc` with optional CLI
+overrides. A separate closed-world constellation JSON describes only orbital
+structure. Topology slices, transfers, compute profiles, tasks, and future
+fault events remain independent data JSON files. Do not reintroduce a complete
+scenario JSON or duplicate a parameter across `para.cc` and the constellation
+file. Human-facing simulation durations and cadences use seconds and are
+converted once to ns-3 `Time` or integer nanoseconds before scheduling. Every
+run writes its resolved effective configuration and input hashes as output
+evidence, never as a second input format.
 
 The online simulator and offline trace generator must share orbit, candidate
 link, distance-gate, and delay implementations. Stable external satellite IDs
@@ -44,9 +51,10 @@ distance-mode delays, but global routes are recomputed only when the effective
 active-link set changes. A future fault event is an asynchronous nanosecond
 event and will bypass the periodic cadence.
 
-Use small `feature/*` or `docs/*` branches and pull requests. After a PR is
-merged and its head is confirmed reachable from `main`, delete the
-corresponding local and remote branch. Never delete `legacy/ns-3.33`.
+Use small `feature/*`, `refactor/*`, `migration/*`, or `docs/*` branches and
+pull requests. After a PR is merged and its head is confirmed reachable from
+`main`, delete the corresponding local and remote branch. Never delete
+`legacy/ns-3.33`.
 
 ## Project Overview
 

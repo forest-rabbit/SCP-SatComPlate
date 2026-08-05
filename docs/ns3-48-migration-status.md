@@ -1,6 +1,11 @@
 # SatCompute ns-3.48 migration status
 
-Status: agreed ns-3.48 migration scope complete.
+Status: historical v0.2 closeout, superseded on 2026-08-05 by the approved
+[v0.3 legacy-parity specification](specs/platform-v0.3.md) and
+[implementation plan](plans/ns3-48-legacy-parity.md).
+
+The results below describe the rejected v0.2 architecture and remain only as
+an audit record. The active v0.3 migration is not complete.
 
 ## Repository baseline
 

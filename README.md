@@ -1,6 +1,6 @@
 # SCP-SatComPlate
 
-[![SatCompute CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/per_commit.yml/badge.svg)](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/per_commit.yml)
+[![SatCompute CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/phase_gate.yml/badge.svg)](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/phase_gate.yml)
 
 SCP-SatComPlate is the ns-3.48 mainline of SatCompute. The repository retains
 the official ns-3.48 history on `main`, implements the platform as
@@ -27,8 +27,8 @@ contrib/satcompute/tests/integration/regression/run-all.sh
 ```
 
 Start with [the SatCompute module guide](contrib/satcompute/README.md),
-[scenario 0.2 specification](docs/specs/platform-v0.2.md), and
-[migration status](docs/ns3-48-migration-status.md). The current scope covers
+[platform v0.3 specification](docs/specs/platform-v0.3.md), and
+[legacy-parity plan](docs/plans/ns3-48-legacy-parity.md). The current scope covers
 deterministic IPv4 satellite networking, online circular orbits, offline
 topology traces, transfer/task/compute workloads, and metrics. Fault execution,
 frontend transport, IPv6, and SRv6 are explicitly deferred.

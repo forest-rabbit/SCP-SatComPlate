@@ -1,6 +1,11 @@
 # Spec: SCP-SatComPlate on ns-3.48
 
-Status: implemented and verified on 2026-08-05.
+Status: superseded on 2026-08-05 by
+[`platform-v0.3.md`](platform-v0.3.md).
+
+This file records the rejected v0.2 rearchitecture for audit only. Its complete
+scenario JSON input and reorganized module structure are not normative for new
+work.
 
 ## Objective
 

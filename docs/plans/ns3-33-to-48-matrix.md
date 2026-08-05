@@ -133,7 +133,7 @@
 | `docs/specs/platform-v0.2.md` | 声明已完成 | 标记为已废止 | 待迁移 |
 | `docs/plans/ns3-48-migration.md` | 声明已完成 | 标记为已废止 | 待迁移 |
 | `docs/ns3-48-migration-status.md` | 声明迁移完成 | 标记为 v0.2 历史状态 | 待迁移 |
-| `.github/workflows/per_commit.yml` | push/PR 自动运行 | 改为仅 `workflow_dispatch` | 待迁移 |
+| `.github/workflows/per_commit.yml` | push/PR 自动运行 | 重命名为 `phase_gate.yml`，仅 `workflow_dispatch` | 已迁移 |
 
 ## 最终逐文件审计
 
