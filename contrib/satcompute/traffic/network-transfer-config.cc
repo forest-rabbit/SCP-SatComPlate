@@ -291,8 +291,10 @@ ReadNetworkTransferTrace(const std::filesystem::path& filename,
             Fail(filename, "source_node_id", "has exhausted the UDP source-port range");
         }
         ++nextSourceOrdinal[transfer.sourceSatelliteId];
-        transfer.sourceAddress = endpoints.GetServiceAddress(transfer.sourceSatelliteId);
-        transfer.destinationAddress = endpoints.GetServiceAddress(transfer.destinationSatelliteId);
+        transfer.sourceAddress =
+            endpoints.GetServiceAddressBySatelliteId(transfer.sourceSatelliteId);
+        transfer.destinationAddress =
+            endpoints.GetServiceAddressBySatelliteId(transfer.destinationSatelliteId);
         transfer.sourcePort =
             static_cast<uint16_t>(NETWORK_TRANSFER_FIRST_SOURCE_PORT + ordinal);
         transfer.destinationPort = NETWORK_TRANSFER_DESTINATION_PORT;

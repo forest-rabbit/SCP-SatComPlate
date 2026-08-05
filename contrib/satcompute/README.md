@@ -32,7 +32,8 @@
 facade 内部的 `topology/orbit/`、`online/`、`replay/` 与 `export/` 保存 ns-3.48
 新增的原生轨道、在线应用、JSON 回放和切片导出实现。`topology/snapshot/` 保存
 快照数据类型、JSON 读取器和目录调度器；`topology/link/` 保存运行期 ISL 资源与
-启停状态。facade 与分层 `metrics/` 仍在后续迁移阶段恢复。
+启停状态。facade 已恢复并成为平台唯一拓扑入口；分层 `metrics/` 仍在后续迁移
+阶段恢复。
 
 `routing/common/` 保存路由模式、五元组、候选和 FNV 值类型；
 `routing/algorithm/` 分别实现 global-first、Hash、HRW、size-aware HRW 与

@@ -21,7 +21,7 @@ class SatelliteEndpointView
     }
 
     virtual bool HasSatelliteId(uint32_t satelliteId) const = 0;
-    virtual Ipv4Address GetServiceAddress(uint32_t satelliteId) const = 0;
+    virtual Ipv4Address GetServiceAddressBySatelliteId(uint32_t satelliteId) const = 0;
 };
 
 } // namespace ns3

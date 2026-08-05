@@ -77,7 +77,7 @@
 
 | legacy | current main | 最终动作 | 结果 |
 |---|---|---|---|
-| `topology/satellite-topology.*` | 被多个 controller 取代 | 恢复 facade，内部委托 current | 待迁移 |
+| `topology/satellite-topology.*` | 已恢复 facade | 恢复 facade，内部委托 current | 已完成；平台入口只使用 facade，内部选择 online/replay controller |
 | `topology/snapshot/*` | 同路径并扩展 | 保留 legacy replay + manifest 扩展 | 待审计 |
 | `topology/link/satellite-link-state.*` | 同路径并适配 | 保留路径与设备/队列合同 | 待审计 |
 | 无 | `topology/orbit/*` | 保留 ns-3.48 原生轨道核心 | 已确定 |

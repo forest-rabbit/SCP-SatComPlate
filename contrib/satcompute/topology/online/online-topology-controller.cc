@@ -246,6 +246,12 @@ OnlineTopologyController::GetServiceAddress(uint32_t satelliteId) const
     return m_serviceMap->GetServiceAddress(satelliteId);
 }
 
+Ipv4Address
+OnlineTopologyController::GetServiceAddressBySatelliteId(uint32_t satelliteId) const
+{
+    return GetServiceAddress(satelliteId);
+}
+
 std::vector<EcmpRouteCandidate>
 OnlineTopologyController::GetEcmpRouteCandidates(uint32_t sourceSatelliteId,
                                                  uint32_t destinationSatelliteId) const

@@ -43,7 +43,7 @@ class FakeEndpointView : public SatelliteEndpointView
     }
 
     Ipv4Address
-    GetServiceAddress(uint32_t satelliteId) const override
+    GetServiceAddressBySatelliteId(uint32_t satelliteId) const override
     {
         const auto address = m_addresses.find(satelliteId);
         if (address == m_addresses.end())

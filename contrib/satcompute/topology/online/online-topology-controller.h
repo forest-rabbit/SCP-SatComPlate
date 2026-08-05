@@ -42,16 +42,17 @@ class OnlineTopologyController : public SatelliteTopologyController
     void RegisterRouteUpdateCallback(Callback<void> callback) override;
     void InvalidateFlowRouteDecisionCache(const EcmpFlowKey& flowKey) const override;
 
-    const ResolvedSatComputeConfig& GetConfig() const;
-    const NodeContainer& GetNodes() const;
-    const SatelliteIdMap& GetIdMap() const;
-    const SatelliteLinkState& GetLinkState() const;
+    const ResolvedSatComputeConfig& GetConfig() const override;
+    const NodeContainer& GetNodes() const override;
+    const SatelliteIdMap& GetIdMap() const override;
+    const SatelliteLinkState& GetLinkState() const override;
     const OnlineOrbitConstellation& GetConstellation() const;
     const CircularOrbitTopologyState& GetLastTopologyState() const;
     Ptr<Node> GetNodeBySatelliteId(uint32_t satelliteId) const override;
     Ptr<FlowRouteRegistry> GetFlowRouteRegistry() const override;
     bool HasSatelliteId(uint32_t satelliteId) const override;
-    Ipv4Address GetServiceAddress(uint32_t satelliteId) const override;
+    Ipv4Address GetServiceAddress(uint32_t satelliteId) const;
+    Ipv4Address GetServiceAddressBySatelliteId(uint32_t satelliteId) const override;
     std::vector<EcmpRouteCandidate> GetEcmpRouteCandidates(
         uint32_t sourceSatelliteId,
         uint32_t destinationSatelliteId) const override;

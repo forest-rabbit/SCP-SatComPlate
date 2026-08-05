@@ -9,12 +9,11 @@
 #include "ns3/network-transfer-config.h"
 #include "ns3/network-transfer-engine.h"
 #include "ns3/online-orbit-constellation.h"
-#include "ns3/online-topology-controller.h"
 #include "ns3/para.h"
-#include "ns3/replay-topology-controller.h"
 #include "ns3/resolved-config.h"
 #include "ns3/rng-seed-manager.h"
 #include "ns3/run-output-writer.h"
+#include "ns3/satellite-topology.h"
 #include "ns3/simulator.h"
 #include "ns3/task-coordinator.h"
 #include "ns3/task-trace.h"
@@ -112,31 +111,16 @@ main(int argc, char* argv[])
         nlohmann::json result;
         std::optional<std::filesystem::path> topologyTraceManifest;
         {
-            std::unique_ptr<SatelliteTopologyController> controller;
-            if (config.network.topologySource == "replay")
-            {
-                controller = std::make_unique<ReplayTopologyController>(config);
-            }
-            else
-            {
-                controller = std::make_unique<OnlineTopologyController>(config);
-            }
-            controller->Initialize();
+            SatelliteTopology topology(config);
+            topology.Initialize();
 
             std::unique_ptr<CircularOrbitTraceExporter> traceExporter;
             if (config.traceExport.enabled)
             {
-                const auto onlineController =
-                    dynamic_cast<OnlineTopologyController*>(controller.get());
-                if (onlineController == nullptr)
-                {
-                    throw std::runtime_error(
-                        "online trace export could not access the orbit controller");
-                }
                 traceExporter = std::make_unique<CircularOrbitTraceExporter>(
                     config,
                     config.outputDirectory / "topology-trace",
-                    onlineController->GetConstellation());
+                    topology.GetOnlineConstellation());
                 traceExporter->Initialize();
             }
 
@@ -149,9 +133,9 @@ main(int argc, char* argv[])
                                              config.simulation.durationNs,
                                              config.workloads.transferChunkMode,
                                              config.workloads.transferPayloadBytes,
-                                             *controller);
+                                             topology);
                 transferEngine = CreateObject<NetworkTransferEngine>();
-                transferEngine->Configure(*controller,
+                transferEngine->Configure(topology,
                                           config.workloads.transferChunkMode,
                                           config.workloads.transferPayloadBytes,
                                           config.network.islMtuBytes,
@@ -164,15 +148,15 @@ main(int argc, char* argv[])
             else if (config.workloads.computeProfile && config.workloads.taskTrace)
             {
                 const ComputeProfile profile =
-                    ReadComputeProfile(*config.workloads.computeProfile, *controller);
+                    ReadComputeProfile(*config.workloads.computeProfile, topology);
                 const TaskTrace trace = ReadTaskTrace(*config.workloads.taskTrace,
                                                       config.simulation.durationNs,
-                                                      *controller,
+                                                      topology,
                                                       profile);
                 taskCoordinator = CreateObject<TaskCoordinator>();
                 taskCoordinator->Initialize(profile,
                                             trace,
-                                            *controller,
+                                            topology,
                                             config.workloads.transferChunkMode,
                                             config.workloads.transferPayloadBytes,
                                             config.network.islMtuBytes,
@@ -204,9 +188,9 @@ main(int argc, char* argv[])
                 effectiveConfig,
                 config.outputDirectory,
                 wallClockNs,
-                controller->GetAppliedTopologySliceCount(),
-                controller->GetRouteComputationCount(),
-                controller->GetFlowRouteRegistry(),
+                topology.GetAppliedTopologySliceCount(),
+                topology.GetRouteComputationCount(),
+                topology.GetFlowRouteRegistry(),
                 capacitySummary};
             const RunOutputResult output = WriteRunOutputs(config,
                                                            outputContext,
