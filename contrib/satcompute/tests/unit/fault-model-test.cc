@@ -12,6 +12,7 @@
 #include <fstream>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -148,11 +149,21 @@ CheckInvalid(const std::filesystem::path& directory)
     value["self_state"]["temperature"]["heating_tau_s"] = 0.0;
     ExpectError(directory, "heating-tau", value, "self_state.temperature");
     value = MakeValidConfig();
+    value["self_state"]["temperature"]["heating_tau_s"] =
+        std::numeric_limits<double>::infinity();
+    ExpectError(directory, "non-finite-heating-tau", value, "heating_tau_s");
+    value = MakeValidConfig();
     value["self_state"]["energy"]["initial_dod"] = 0.4;
     ExpectError(directory, "dod-order", value, "self_state.energy");
     value = MakeValidConfig();
     value["self_state"]["risk_threshold"] = 1.1;
     ExpectError(directory, "risk-threshold", value, "risk_threshold");
+    value = MakeValidConfig();
+    value["self_state"]["max_failure_intensity_per_s"] = -0.1;
+    ExpectError(directory,
+                "negative-f1-intensity",
+                value,
+                "max_failure_intensity_per_s");
     value = MakeValidConfig();
     value["radiation"]["longitude_min_deg"] = 10.0;
     ExpectError(directory, "radiation-region", value, "radiation");
@@ -163,6 +174,9 @@ CheckInvalid(const std::filesystem::path& directory)
     value["debris"]["mode"] = "fixed_k";
     value["debris"]["single_satellite_intensity_per_s"] = 0.1;
     ExpectError(directory, "debris-conflict", value, "debris");
+    value = MakeValidConfig();
+    value["debris"]["enabled"] = true;
+    ExpectError(directory, "enabled-empty-debris", value, "debris");
 }
 
 void
