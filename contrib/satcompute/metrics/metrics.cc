@@ -7,6 +7,7 @@
 #include "metrics.h"
 
 #include "ns3/fault-controller.h"
+#include "ns3/fault-prediction-engine.h"
 #include "core/fault-metrics.h"
 #include "core/flow-metrics.h"
 #include "core/run-summary.h"
@@ -122,6 +123,7 @@ CollectTransferAggregate(const std::vector<TransferSummaryRecord>& summaries)
 void
 ValidateInputs(const SatComputeConfig& config,
                Ptr<FaultController> faultController,
+               Ptr<FaultPredictionEngine> faultPredictionEngine,
                Ptr<NetworkTransferEngine> transferEngine,
                Ptr<TaskCoordinator> taskCoordinator)
 {
@@ -130,6 +132,11 @@ ValidateInputs(const SatComputeConfig& config,
         throw MetricsError("fault config and runtime metrics disagree");
     }
     const bool taskMode = !config.computeProfile.empty() && !config.taskTrace.empty();
+    if ((faultPredictionEngine != nullptr) !=
+        (faultController != nullptr && taskMode))
+    {
+        throw MetricsError("fault prediction and runtime metrics disagree");
+    }
     if (taskMode)
     {
         if (transferEngine == nullptr || taskCoordinator == nullptr ||
@@ -164,7 +171,11 @@ MetricsRecorder::Record()
     const MetricsRuntimeContext& context = m_context;
     const Ptr<NetworkTransferEngine> transferEngine = m_transferEngine;
     const Ptr<TaskCoordinator> taskCoordinator = m_taskCoordinator;
-    ValidateInputs(config, context.faultController, transferEngine, taskCoordinator);
+    ValidateInputs(config,
+                   context.faultController,
+                   context.faultPredictionEngine,
+                   transferEngine,
+                   taskCoordinator);
     const bool reservationAware = config.routingMode == "global-size-aware-hrw" ||
                                   config.routingMode == "global-capacity-aware-hrw";
     const bool capacityAware = config.routingMode == "global-capacity-aware-hrw";
@@ -287,11 +298,18 @@ MetricsRecorder::Record()
     if (context.faultController != nullptr)
     {
         WriteFaultMetrics(*context.faultController,
+                          PeekPointer(context.faultPredictionEngine),
                           PeekPointer(taskCoordinator),
                           transfers,
                           outputDirectory.string());
         result.files.push_back(outputDirectory / "fault-events.csv");
         result.files.push_back(outputDirectory / "fault-summary.json");
+        if (context.faultPredictionEngine != nullptr)
+        {
+            result.files.push_back(outputDirectory / "fault-predictions.csv");
+            result.files.push_back(outputDirectory /
+                                   "fault-prediction-summary.json");
+        }
     }
     else
     {

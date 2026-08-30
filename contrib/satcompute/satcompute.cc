@@ -10,6 +10,7 @@
 #include "ns3/fault-controller.h"
 #include "ns3/fault-para.h"
 #include "ns3/fault-model-engine.h"
+#include "ns3/fault-prediction-engine.h"
 #include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/online-orbit-constellation.h"
@@ -409,6 +410,7 @@ main(int argc, char* argv[])
             Ptr<TaskCoordinator> taskCoordinator;
             Ptr<FaultController> faultController;
             Ptr<FaultModelEngine> faultModelEngine;
+            Ptr<FaultPredictionEngine> faultPredictionEngine;
             std::optional<ComputeProfile> computeProfile;
             std::optional<TaskTrace> taskTrace;
             std::optional<FaultTrace> faultTrace;
@@ -432,6 +434,16 @@ main(int argc, char* argv[])
                 // Schedule fault batches before task arrivals so an exact-time
                 // START is applied before a task arriving at the same nanosecond.
                 faultController = CreateObject<FaultController>();
+                if (computeProfile.has_value())
+                {
+                    faultPredictionEngine = CreateObject<FaultPredictionEngine>();
+                    faultPredictionEngine->Configure(
+                        SatComputeSecondsToNanoseconds(
+                            faultParameters.checkIntervalSeconds,
+                            "fault.checkIntervalSeconds"),
+                        simulationDurationNs,
+                        faultController);
+                }
                 faultController->Configure(
                     faultTrace.value(),
                     topology.GetIdMap().GetCanonicalSatelliteIds(),
@@ -453,6 +465,16 @@ main(int argc, char* argv[])
                                "generate with enabled F1/F2 requires computeProfile and taskTrace");
                 }
                 faultController = CreateObject<FaultController>();
+                if (computeProfile.has_value())
+                {
+                    faultPredictionEngine = CreateObject<FaultPredictionEngine>();
+                    faultPredictionEngine->Configure(
+                        SatComputeSecondsToNanoseconds(
+                            faultParameters.checkIntervalSeconds,
+                            "fault.checkIntervalSeconds"),
+                        simulationDurationNs,
+                        faultController);
+                }
                 faultController->ConfigureGeneration(
                     topology.GetIdMap().GetCanonicalSatelliteIds(),
                     simulationDurationNs);
@@ -495,6 +517,10 @@ main(int argc, char* argv[])
                 {
                     faultController->BindTaskCoordinator(taskCoordinator);
                 }
+                if (faultPredictionEngine != nullptr)
+                {
+                    faultPredictionEngine->BindTaskCoordinator(taskCoordinator);
+                }
             }
             if (faultModelEngine != nullptr)
             {
@@ -527,6 +553,7 @@ main(int argc, char* argv[])
                 topology.GetAppliedTopologySliceCount(),
                 topology.GetRouteComputationCount(),
                 faultController,
+                faultPredictionEngine,
                 topology.GetFlowRouteRegistry(),
                 capacitySummary,
                 flowMonitor,
