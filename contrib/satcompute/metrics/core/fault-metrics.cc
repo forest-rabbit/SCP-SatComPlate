@@ -104,7 +104,9 @@ WriteFaultMetrics(const FaultController& controller,
                     << ',' << FaultTypeToString(event.faultType) << ','
                     << FaultEventTypeToString(event.eventType) << ',';
         WriteOptionalCsv(eventOutput, event.noticeTimeNs);
-        eventOutput << ',' << event.startTimeNs << ',';
+        eventOutput << ',';
+        WriteOptionalCsv(eventOutput, event.startTimeNs);
+        eventOutput << ',';
         WriteOptionalCsv(eventOutput, event.durationNs);
         eventOutput << ',';
         WriteOptionalCsv(eventOutput, event.failureProbability);
@@ -137,6 +139,8 @@ WriteFaultMetrics(const FaultController& controller,
         {
         case FaultEventType::NOTICE:
             ++noticeEventCount;
+            break;
+        case FaultEventType::NOTICE_CLEAR:
             break;
         case FaultEventType::START:
             ++startEventCount;

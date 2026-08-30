@@ -33,12 +33,36 @@ GetEventPriority(FaultEventType eventType)
     {
     case FaultEventType::NOTICE:
         return 0;
-    case FaultEventType::RECOVERY:
+    case FaultEventType::NOTICE_CLEAR:
         return 1;
-    case FaultEventType::START:
+    case FaultEventType::RECOVERY:
         return 2;
+    case FaultEventType::START:
+        return 3;
     }
-    return 3;
+    return 4;
+}
+
+FaultDefinition
+MakeTimeGatedEventFault(FaultEventType eventType, const FaultDefinition& source)
+{
+    FaultDefinition event = source;
+    if (eventType == FaultEventType::NOTICE)
+    {
+        event.faultOccurred = false;
+        event.startTimeNs = std::nullopt;
+        event.warningLeadTimeNs = std::nullopt;
+        event.riskDurationNs = std::nullopt;
+        event.durationNs = std::nullopt;
+    }
+    else if (eventType == FaultEventType::NOTICE_CLEAR)
+    {
+        event.faultOccurred = false;
+        event.startTimeNs = std::nullopt;
+        event.warningLeadTimeNs = std::nullopt;
+        event.durationNs = std::nullopt;
+    }
+    return event;
 }
 
 } // namespace
@@ -64,6 +88,8 @@ FaultEventTypeToString(FaultEventType eventType)
     {
     case FaultEventType::NOTICE:
         return "NOTICE";
+    case FaultEventType::NOTICE_CLEAR:
+        return "NOTICE_CLEAR";
     case FaultEventType::START:
         return "START";
     case FaultEventType::RECOVERY:
@@ -99,10 +125,24 @@ FaultController::Configure(const FaultTrace& trace,
         if (fault.noticeTimeNs.has_value())
         {
             m_batches[fault.noticeTimeNs.value()].push_back(
-                {FaultEventType::NOTICE, fault});
+                {FaultEventType::NOTICE,
+                 MakeTimeGatedEventFault(FaultEventType::NOTICE, fault)});
         }
-        NS_ABORT_MSG_IF(!fault.faultOccurred || !fault.startTimeNs.has_value(),
-                        "N4A trace contains a non-occurring fault");
+        if (!fault.faultOccurred)
+        {
+            const std::optional<int64_t> clearTimeNs = fault.GetRiskClearTimeNs();
+            NS_ABORT_MSG_IF(!clearTimeNs.has_value(),
+                            "risk-only fault has no notice clear time");
+            if (clearTimeNs.value() < m_simulationDurationNs)
+            {
+                m_batches[clearTimeNs.value()].push_back(
+                    {FaultEventType::NOTICE_CLEAR,
+                     MakeTimeGatedEventFault(FaultEventType::NOTICE_CLEAR, fault)});
+            }
+            continue;
+        }
+        NS_ABORT_MSG_IF(!fault.startTimeNs.has_value(),
+                        "occurred fault has no start time");
         m_batches[fault.startTimeNs.value()].push_back({FaultEventType::START, fault});
         const std::optional<int64_t> recoveryTimeNs = fault.GetRecoveryTimeNs();
         if (recoveryTimeNs.has_value() &&
@@ -219,9 +259,11 @@ FaultController::ProcessBatch(int64_t simulationTimeNs)
                             event.fault.faultType,
                             event.eventType,
                             event.fault.noticeTimeNs,
-                            event.fault.startTimeNs.value(),
+                            event.fault.startTimeNs,
                             event.fault.durationNs,
                             event.fault.failureProbability,
+                            event.fault.warningLeadTimeNs,
+                            event.fault.riskDurationNs,
                             availability.satelliteAvailable,
                             availability.communicationAvailable,
                             availability.computeAvailable,
@@ -233,7 +275,8 @@ FaultController::ProcessBatch(int64_t simulationTimeNs)
             startRecordIndexes.emplace(event.fault.nodeId, m_events.size() - 1);
         }
         if (event.fault.faultType == FaultType::SATELLITE &&
-            event.eventType != FaultEventType::NOTICE)
+            (event.eventType == FaultEventType::START ||
+             event.eventType == FaultEventType::RECOVERY))
         {
             topologyRecordIndexes.push_back(m_events.size() - 1);
         }

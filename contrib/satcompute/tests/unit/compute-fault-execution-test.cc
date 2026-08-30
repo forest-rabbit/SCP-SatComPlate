@@ -181,6 +181,43 @@ CheckFaultStateOverlay()
           "satellite fault recovery overlay differs");
 }
 
+void
+CheckRiskOnlyReplay()
+{
+    FaultDefinition riskOnly;
+    riskOnly.faultId = 1;
+    riskOnly.nodeId = COMPUTE_NODE_ID;
+    riskOnly.faultType = FaultType::COMPUTE;
+    riskOnly.faultOccurred = false;
+    riskOnly.noticeTimeNs = 10 * MILLISECOND_NS;
+    riskOnly.failureProbability = 0.25;
+    riskOnly.riskDurationNs = 20 * MILLISECOND_NS;
+
+    FaultTrace trace;
+    trace.faults = {riskOnly};
+    Ptr<FaultController> controller = CreateObject<FaultController>();
+    controller->Configure(trace, {COMPUTE_NODE_ID}, SIMULATION_DURATION_NS);
+    Simulator::Stop(NanoSeconds(50 * MILLISECOND_NS));
+    Simulator::Run();
+
+    const std::vector<FaultRuntimeEventRecord>& events = controller->GetEvents();
+    Check(events.size() == 2 && events[0].eventType == FaultEventType::NOTICE &&
+              events[1].eventType == FaultEventType::NOTICE_CLEAR &&
+              events[0].simulationTimeNs == 10 * MILLISECOND_NS &&
+              events[1].simulationTimeNs == 30 * MILLISECOND_NS,
+          "risk-only NOTICE/NOTICE_CLEAR sequence differs");
+    Check(!events[0].startTimeNs.has_value() && !events[0].durationNs.has_value() &&
+              !events[0].warningLeadTimeNs.has_value() &&
+              !events[0].riskDurationNs.has_value() &&
+              events[0].failureProbability == 0.25,
+          "NOTICE leaked future risk-only outcome fields");
+    Check(!events[1].startTimeNs.has_value() &&
+              events[1].riskDurationNs == 20 * MILLISECOND_NS &&
+              controller->GetState().IsComputeAvailable(COMPUTE_NODE_ID),
+          "NOTICE_CLEAR changed availability or lost observed duration");
+    ResetSimulationGlobals();
+}
+
 ExecutionSignature
 RunComputeFaultScenario()
 {
@@ -294,9 +331,18 @@ RunComputeFaultScenario()
         }
         const FaultRuntimeEventRecord& firstStart =
             FindFaultEvent(faultEvents, 1, FaultEventType::START);
+        const FaultRuntimeEventRecord& firstNotice =
+            FindFaultEvent(faultEvents, 1, FaultEventType::NOTICE);
+        Check(!firstNotice.startTimeNs.has_value() &&
+                  !firstNotice.durationNs.has_value() &&
+                  !firstNotice.warningLeadTimeNs.has_value() &&
+                  !firstNotice.riskDurationNs.has_value() &&
+                  firstNotice.failureProbability == 0.8,
+              "NOTICE leaked future occurred-fault fields");
         Check(firstStart.affectedTaskCount == 4 &&
                   firstStart.affectedTransferCount == 6 &&
-                  !firstStart.computeAvailableAfter,
+                  !firstStart.computeAvailableAfter &&
+                  firstStart.startTimeNs == 100 * MILLISECOND_NS,
               "first compute fault impact counts differ");
         const FaultRuntimeEventRecord& secondNotice =
             FindFaultEvent(faultEvents, 2, FaultEventType::NOTICE);
@@ -393,6 +439,7 @@ main()
     try
     {
         CheckFaultStateOverlay();
+        CheckRiskOnlyReplay();
         const ExecutionSignature first = RunComputeFaultScenario();
         const ExecutionSignature second = RunComputeFaultScenario();
         Check(first == second,

@@ -33,6 +33,7 @@ class FaultControllerError : public std::runtime_error
 enum class FaultEventType
 {
     NOTICE,
+    NOTICE_CLEAR,
     START,
     RECOVERY
 };
@@ -48,9 +49,11 @@ struct FaultRuntimeEventRecord
     FaultType faultType{FaultType::COMPUTE};
     FaultEventType eventType{FaultEventType::NOTICE};
     std::optional<int64_t> noticeTimeNs;
-    int64_t startTimeNs{};
+    std::optional<int64_t> startTimeNs;
     std::optional<int64_t> durationNs;
     std::optional<double> failureProbability;
+    std::optional<int64_t> warningLeadTimeNs;
+    std::optional<int64_t> riskDurationNs;
     bool satelliteAvailableAfter{true};
     bool communicationAvailableAfter{true};
     bool computeAvailableAfter{true};
