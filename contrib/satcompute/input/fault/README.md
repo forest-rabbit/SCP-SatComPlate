@@ -26,6 +26,24 @@ START，并在同节点同刻优先。
 `topologyOnly=1` 只能与 `faultMode=none` 一起使用，因为 topology-only 描述无故障的
 自然轨道和候选拓扑。
 
+## 运行期标识与 JSON 映射
+
+Fault Trace 保存的是一个完整 episode，而运行期会从记录中的时间字段派生事件。
+平台没有单独的 `COMPUTE_START` 枚举；常用的 **compute START** 表示
+`fault_type=compute` 与 `event_type=START` 的组合：
+
+| 运行期标识 | JSON 表达 | 含义 |
+|---|---|---|
+| `NOTICE` | compute 记录的 `notice_time_ns` | F1 或 F2 达到或超过各自阈值，联合风险 episode 开始；不代表已经故障 |
+| `NOTICE_CLEAR` | `fault_occurred=false` 且具有 `risk_duration_ns` | 两个来源均退出风险，或 F3 关闭该 episode；episode 内没有发生 compute 故障 |
+| compute `START` | `fault_type=compute`、`fault_occurred=true` 且具有 `start_time_ns` | F1/F2 独立抽样至少一个命中，实际计算故障开始 |
+| compute `RECOVERY` | 由 `start_time_ns + duration_ns` 派生 | 有限 compute 故障结束，只接纳后续任务 |
+| satellite `START` | `fault_type=satellite` 且具有 `start_time_ns` | 永久整星故障开始 |
+
+风险越过阈值和故障抽样是两套判定，因此 compute `START` 可以没有先行 `NOTICE`；
+两者同刻发生时 `warning_lead_time_ns=0`。这些标识只描述故障生命周期，不等同于
+未来主动备份阶段的 `BACKUP_START`、`BACKUP_READY` 或 `TAKEOVER`。
+
 ## Fault Trace v2
 
 generate 只写 schema v2。根对象和每条记录都必须包含完整字段，即使值为 `null`：

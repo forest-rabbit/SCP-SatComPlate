@@ -162,9 +162,37 @@ Delta t ~ Exponential(Lambda_F3)
 START；生成 trace 中两个区间首尾相接而不重叠，generate/replay 的事件顺序均为
 `RECOVERY -> START`。永久失效后不再更新该节点的 F1/F2 状态或消耗其抽样随机数。
 
+## 事件标识与语义
+
+平台没有名为 `COMPUTE_START` 的独立事件类型。文档中的 **compute START** 是
+`fault_type=compute` 与 `event_type=START` 的组合，用于区别整星故障的
+**satellite START**。各标识的含义为：
+
+| 标识 | 产生条件 | 是否改变节点状态 |
+|---|---|---|
+| `NOTICE` | F1 或 F2 的风险首次达到或超过各自阈值，使联合风险从无效变为有效 | 否，仅开始记录风险 episode |
+| `NOTICE_CLEAR` | F1、F2 均回到各自阈值以下，或 F3 即将永久关闭卫星，且该 episode 未发生 compute 故障 | 否，仅结束风险-only episode |
+| compute `START` | F1、F2 独立抽样中至少一个真实命中 | 是，关闭目标节点的计算能力 |
+| compute `RECOVERY` | 可恢复 compute 故障到达结束时刻 | 是，重新允许后续任务使用计算能力 |
+| satellite `START` | F3 命中目标卫星 | 是，永久关闭整星、通信和计算能力 |
+
+因此，可以把 `NOTICE` 理解为“达到或超过任一 F1/F2 风险阈值”，把 compute `START` 理解为
+“实际触发计算故障”，但两者不是必然的先后关系。抽样命中可能早于阈值，因而允许
+没有 `NOTICE` 的 compute `START`；同一检查时刻既越过阈值又命中时，预警提前量为
+0。compute `START` 也不是主动备份开关；后续备份策略只会把风险与预测概率作为
+决策输入，再单独产生 `BACKUP_START`、`BACKUP_READY` 和 `TAKEOVER` 等事件。
+
 ## 风险 episode
 
-节点第一次满足当前来源的风险阈值时产生 NOTICE，并保存当时的单步概率：
+F1、F2 各自判断风险阈值，再合并为节点级风险 episode：
+
+```text
+risk_active = (R_F1 >= theta_F1) OR (R_F2 >= theta_F2)
+```
+
+联合风险第一次由无效变为有效时产生一次 NOTICE，并保存当时的单步联合概率
+`q_comp`。若 F1 已经令 episode 有效，F2 随后越过阈值不会产生第二次 NOTICE；只有
+两个来源都回到阈值以下后，下一次达到阈值才会开始新的 episode：
 
 ```text
 无风险 -> 风险有效       NOTICE
@@ -176,7 +204,9 @@ START；生成 trace 中两个区间首尾相接而不重叠，generate/replay �
 风险-only 记录只进入 trace 和事件证据，不改变节点可用性。仿真结束时仍未退出的风险
 episode 以仿真终点关闭。F1-only、F2-only 与 F1+F2 共用同一种 trace 记录，trace
 不暴露风险来源；联合模式的 `failure_probability` 保存 `q_comp`，而真实发生仍来自
-F1/F2 各自的独立随机判定。
+F1/F2 各自的独立随机判定。有预警故障记录
+`warning_lead_time_ns=start_time_ns-notice_time_ns`；未发生故障的风险-only 记录
+`risk_duration_ns=clear_time_ns-notice_time_ns`，二者不会同时出现。
 
 ## 故障执行
 
