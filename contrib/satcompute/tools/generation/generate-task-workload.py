@@ -745,11 +745,86 @@ def build_f1_validation_workload(satellite_ids, compute_nodes, seed):
     return {"tasks": tasks}, summary
 
 
+def build_f2_validation_workload(satellite_ids, compute_nodes, seed):
+    """Build the fixed 66-star, 8-task N4B F2 validation workload."""
+    if len(satellite_ids) != 66:
+        raise ValueError("f2-validation profile requires exactly 66 satellites")
+    compute_by_id = {node["node_id"]: node for node in compute_nodes}
+    required_compute_ids = (0, 11, 18, 29, 40, 51)
+    if any(node_id not in compute_by_id for node_id in required_compute_ids):
+        raise ValueError(
+            "f2-validation profile requires compute nodes 0, 11, 18, 29, 40, and 51"
+        )
+
+    tasks = []
+
+    def add_task(compute_node_id, duration_seconds, arrival_time_ns, role):
+        task_id = len(tasks) + 1
+        source_index = deterministic_value(seed, task_id, "f2-source") % 66
+        while satellite_ids[source_index] == compute_node_id:
+            source_index = (source_index + 1) % 66
+        result_index = deterministic_value(seed, task_id, "f2-result") % 66
+        while satellite_ids[result_index] in (
+            compute_node_id,
+            satellite_ids[source_index],
+        ):
+            result_index = (result_index + 1) % 66
+        compute_work_units = (
+            compute_by_id[compute_node_id]["compute_rate_work_units_per_second"]
+            * duration_seconds
+        )
+        if compute_work_units > UINT64_MAX:
+            raise ValueError("f2-validation compute work exceeds uint64")
+        tasks.append(
+            {
+                "task_id": task_id,
+                "source_node_id": satellite_ids[source_index],
+                "compute_node_id": compute_node_id,
+                "result_node_id": satellite_ids[result_index],
+                "input_bytes": 4096,
+                "output_bytes": 2048,
+                "compute_work_units": compute_work_units,
+                "arrival_time_ns": arrival_time_ns,
+            }
+        )
+        return {"task_id": task_id, "role": role}
+
+    roles = [
+        add_task(51, 60, 360_100_000_000, "fault-active"),
+        add_task(51, 10, 395_100_000_000, "post-recovery"),
+        add_task(29, 60, 600_100_000_000, "fault-active"),
+        add_task(29, 10, 635_100_000_000, "post-recovery"),
+        add_task(40, 20, 450_100_000_000, "risk-only-active"),
+        add_task(18, 20, 530_100_000_000, "truncated-risk-active"),
+        add_task(0, 5, 100_100_000_000, "sparse-control"),
+        add_task(11, 5, 800_100_000_000, "sparse-control"),
+    ]
+    summary = {
+        "profile": "f2-validation",
+        "seed": seed,
+        "task_count": len(tasks),
+        "orbit_start_offset_s": 5695,
+        "random_seed": 1,
+        "random_run": 1,
+        "roles": roles,
+        "hotspot_compute_node_ids": [51, 29],
+        "expected_failed_task_ids": [1, 3],
+        "post_recovery_task_ids": [2, 4],
+        "risk_only_task_ids": [5, 6],
+        "control_task_ids": [7, 8],
+        "expected_fault_start_time_ns": {
+            "51": 383_000_000_000,
+            "29": 621_000_000_000,
+        },
+    }
+    return {"tasks": tasks}, summary
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate one deterministic SatCompute TaskTrace.")
     parser.add_argument(
         "--profile",
-        choices=("stress", "f1-validation"),
+        choices=("stress", "f1-validation", "f2-validation"),
         default="stress",
     )
     parser.add_argument("--nodes-file", required=True, type=Path)
@@ -839,6 +914,16 @@ def main():
         write_json(args.output_task_trace, trace)
         write_json(args.output_workload_summary, summary)
         print("PASS: generated deterministic F1 validation TaskTrace (20 tasks)")
+        return
+    if args.profile == "f2-validation":
+        trace, summary = build_f2_validation_workload(
+            satellite_ids,
+            compute_nodes,
+            args.seed,
+        )
+        write_json(args.output_task_trace, trace)
+        write_json(args.output_workload_summary, summary)
+        print("PASS: generated deterministic F2 validation TaskTrace (8 tasks)")
         return
 
     required_stress_arguments = {

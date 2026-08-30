@@ -9,6 +9,7 @@
 
 #include "ns3/fault-para.h"
 #include "ns3/f1-self-state-fault-model.h"
+#include "ns3/f2-radiation-fault-model.h"
 
 #include "ns3/event-id.h"
 #include "ns3/object.h"
@@ -25,6 +26,7 @@ namespace ns3
 {
 
 class ComputeService;
+class OnlineOrbitConstellation;
 class TaskCoordinator;
 
 /** Configuration or lifecycle error raised by the online fault-model engine. */
@@ -34,11 +36,12 @@ class FaultModelEngineError : public std::runtime_error
     using std::runtime_error::runtime_error;
 };
 
-/** Observable end-of-run F1 state for one configured compute node. */
+/** Observable end-of-run fault-model state for one configured compute node. */
 struct FaultModelNodeSnapshot
 {
     uint32_t nodeId{}; ///< Stable external satellite ID.
     F1SelfStateFaultSnapshot f1State; ///< Current pure F1 state.
+    F2RadiationFaultSnapshot f2State; ///< Current pure F2 state.
     bool riskEpisodeActive{}; ///< Whether a notice episode remains open.
     bool computeAvailable{true}; ///< Final N4A compute availability.
 };
@@ -69,6 +72,9 @@ class FaultModelEngine : public Object
     /** Bind live compute services after TaskCoordinator initialization. */
     void BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator);
 
+    /** Bind and initialize the shared native orbit source required by F2. */
+    void BindOrbitConstellation(const OnlineOrbitConstellation& constellation);
+
     /** Close open risk episodes and return the canonical generated trace. */
     const FaultTrace& Finalize();
 
@@ -88,6 +94,7 @@ class FaultModelEngine : public Object
     struct NodeState
     {
         F1SelfStateFaultSnapshot f1State; ///< Current pure F1 state.
+        F2RadiationFaultSnapshot f2State; ///< Current pure F2 state.
         std::optional<RiskEpisode> riskEpisode; ///< Open combined-risk episode.
         Ptr<UniformRandomVariable> random; ///< Stable per-node sampling stream.
         Ptr<ComputeService> computeService; ///< Live busy/idle source.
@@ -118,12 +125,14 @@ class FaultModelEngine : public Object
     int64_t m_checkIntervalNs{}; ///< Converted model-check interval.
     int64_t m_recoveryDurationNs{}; ///< Converted compute outage duration.
     std::optional<F1SelfStateFaultModel> m_f1Model; ///< Active F1 pure model.
+    std::optional<F2RadiationFaultModel> m_f2Model; ///< Active F2 pure model.
     std::map<uint32_t, NodeState> m_nodes; ///< Node state in stable-ID order.
     uint64_t m_nextFaultId{1}; ///< Next trace identity.
     FaultTrace m_trace; ///< Completed canonical trace records.
     std::vector<EventId> m_tickEvents; ///< Pre-scheduled model checks.
     Ptr<FaultController> m_faultController; ///< Sole runtime fault executor.
     Ptr<TaskCoordinator> m_taskCoordinator; ///< Bound task lifecycle owner.
+    const OnlineOrbitConstellation* m_constellation{}; ///< Shared native F2 positions.
 };
 
 } // namespace ns3

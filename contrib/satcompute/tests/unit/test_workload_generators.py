@@ -13,6 +13,7 @@ GENERATION_ROOT = MODULE_ROOT / "tools" / "generation"
 NODES = MODULE_ROOT / "tests" / "fixtures" / "topology" / "nodes_0s.json"
 COMPUTE = MODULE_ROOT / "tests" / "fixtures" / "task" / "compute-profile-single.json"
 F1_EXAMPLE = MODULE_ROOT / "input" / "examples" / "leo-66-120s-f1"
+F2_EXAMPLE = MODULE_ROOT / "input" / "examples" / "leo-66-1000s-f2"
 
 
 def run_tool(*arguments):
@@ -162,6 +163,79 @@ class WorkloadGeneratorTest(unittest.TestCase):
                 for node_id in (0, 11, 22, 33, 44, 55)
             }
             self.assertEqual(counts, {0: 5, 11: 5, 22: 5, 33: 3, 44: 1, 55: 1})
+
+    def test_f2_validation_profile_has_expected_roles_and_is_deterministic(self):
+        script = GENERATION_ROOT / "generate-task-workload.py"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            nodes = root / "nodes.json"
+            compute = root / "compute.json"
+            nodes.write_text(
+                json.dumps(
+                    {
+                        "nodes": [
+                            {"node_id": node_id, "node_type": "sat"}
+                            for node_id in range(66)
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            compute.write_text(
+                json.dumps(
+                    {
+                        "compute_nodes": [
+                            {
+                                "node_id": node_id,
+                                "compute_rate_work_units_per_second": 1_500_000,
+                            }
+                            for node_id in range(66)
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            outputs = []
+            for suffix in ("first", "second"):
+                trace = root / f"tasks-{suffix}.json"
+                summary = root / f"summary-{suffix}.json"
+                result = run_tool(
+                    script,
+                    "--profile",
+                    "f2-validation",
+                    "--nodes-file",
+                    nodes,
+                    "--compute-profile",
+                    compute,
+                    "--seed",
+                    "n4b-f2-66",
+                    "--output-task-trace",
+                    trace,
+                    "--output-workload-summary",
+                    summary,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                outputs.append((trace, summary))
+            self.assertEqual(outputs[0][0].read_bytes(), outputs[1][0].read_bytes())
+            self.assertEqual(outputs[0][1].read_bytes(), outputs[1][1].read_bytes())
+            self.assertEqual(
+                outputs[0][0].read_bytes(),
+                (F2_EXAMPLE / "task-trace.json").read_bytes(),
+            )
+            self.assertEqual(
+                outputs[0][1].read_bytes(),
+                (F2_EXAMPLE / "workload-summary.json").read_bytes(),
+            )
+
+            trace = json.loads(outputs[0][0].read_text(encoding="utf-8"))
+            summary = json.loads(outputs[0][1].read_text(encoding="utf-8"))
+            self.assertEqual(len(trace["tasks"]), 8)
+            self.assertEqual(summary["profile"], "f2-validation")
+            self.assertEqual(summary["hotspot_compute_node_ids"], [51, 29])
+            self.assertEqual(summary["expected_failed_task_ids"], [1, 3])
+            self.assertEqual(summary["post_recovery_task_ids"], [2, 4])
+            self.assertEqual(summary["risk_only_task_ids"], [5, 6])
+            self.assertEqual(summary["control_task_ids"], [7, 8])
 
 
 if __name__ == "__main__":

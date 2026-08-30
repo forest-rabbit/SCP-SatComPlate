@@ -51,6 +51,17 @@ ns-3.48 原生圆轨道并统计 F2 区域暴露，不创建网络协议栈，�
 `local_candidate_failure_intensity_per_s` 只表示“若各自也强制目标为 1 次”时的反算
 诊断值，不是平台选择值；`fixed_reference_validation` 才是固定 66 星参数后的验证结果。
 
+## 实际平台 Monte Carlo
+
+冻结参数后，以相同 66 星窗口和 8 个小任务运行真实的 F2-only generate 链路，固定
+`randomSeed=1` 并依次使用 `randomRun=1..30`。30 个 run 的实际故障数均值为
+1.1667，最小值为 0，最大值为 4，10 个 run 没有实际故障。样本均值标准误约为
+0.2095，近似 95% 均值区间为 `[0.7561, 1.5772]`，包含解析目标 1。因此保留
+`lambda_F2`，不因单个 run 的 0 次、2 次或更多事件而重新调参。
+
+该验证调用真实平台和 N4A 故障执行：8 秒计算不可用期间暂停新故障采样，恢复后若
+仍在区域内则继续更新暴露和采样。它与前面的 orbit-only 暴露扫描职责不同。
+
 ## 复现
 
 在仓库根目录构建后执行：
@@ -75,12 +86,18 @@ ns-3.48 原生圆轨道并统计 F2 区域暴露，不创建网络协议栈，�
   --windowDuration=1000 \
   --referenceFailureIntensity=0.00015569048731122528 \
   --outputDir=/tmp/satcompute-n4b-f2-720"
+
+python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
+  --run-count=30 \
+  --outputDir=/tmp/satcompute-n4b-f2-monte-carlo
 ```
 
 每个星座目录包含：
 
 - `n4b-f2-exposure-calibration.csv`：按时间和稳定卫星 ID 排序的 episode；
 - `n4b-f2-exposure-summary.json`：完整/截断统计、滑动窗口、候选起点和参数结果。
+
+`monte-carlo/` 另含真实平台多 run 的逐 run CSV 和统计汇总 JSON。
 
 本目录中的三组同名文件是上述运行的阶段验收快照；正式 generate/replay 不读取这些
 校准输出。

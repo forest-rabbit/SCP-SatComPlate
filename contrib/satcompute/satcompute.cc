@@ -143,7 +143,9 @@ LogTaskInputs(const ComputeProfile& profile,
 }
 
 void
-AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
+AddCommandLineOptions(CommandLine& commandLine,
+                      SatComputeConfig& config,
+                      FaultParameters& faultParameters)
 {
     commandLine.AddValue("simulationDuration",
                          "Simulation duration in seconds",
@@ -191,6 +193,15 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
     commandLine.AddValue("faultTrace",
                          "Generated fault trace output or replay input path",
                          config.faultTrace);
+    commandLine.AddValue("faultEnableF1",
+                         "Enable the built-in F1 source in generate mode",
+                         faultParameters.f1.enabled);
+    commandLine.AddValue("faultEnableF2",
+                         "Enable the built-in F2 source in generate mode",
+                         faultParameters.f2.enabled);
+    commandLine.AddValue("faultEnableF3",
+                         "Enable the built-in F3 source in generate mode",
+                         faultParameters.f3.enabled);
     commandLine.AddValue("topologyOnly",
                          "Generate topology slices without network simulation",
                          config.topologyOnly);
@@ -310,8 +321,9 @@ int
 main(int argc, char* argv[])
 {
     SatComputeConfig inputConfig = GetDefaultSatComputeConfig();
+    FaultParameters faultParameters = GetDefaultFaultParameters();
     CommandLine command(__FILE__);
-    AddCommandLineOptions(command, inputConfig);
+    AddCommandLineOptions(command, inputConfig, faultParameters);
     command.Parse(argc, argv);
 
     try
@@ -428,11 +440,17 @@ main(int argc, char* argv[])
             }
             else if (config.faultMode == "generate")
             {
-                const FaultParameters faultParameters = GetDefaultFaultParameters();
-                if (faultParameters.f1.enabled && !computeProfile.has_value())
+                if (!faultParameters.f1.enabled && !faultParameters.f2.enabled &&
+                    !faultParameters.f3.enabled)
                 {
                     FailConfig("faultMode",
-                               "generate with enabled F1 requires computeProfile and taskTrace");
+                               "generate requires at least one enabled fault source");
+                }
+                if ((faultParameters.f1.enabled || faultParameters.f2.enabled) &&
+                    !computeProfile.has_value())
+                {
+                    FailConfig("faultMode",
+                               "generate with enabled F1/F2 requires computeProfile and taskTrace");
                 }
                 faultController = CreateObject<FaultController>();
                 faultController->ConfigureGeneration(
@@ -453,6 +471,11 @@ main(int argc, char* argv[])
                                             computeNodeIds,
                                             simulationDurationNs,
                                             faultController);
+                if (faultParameters.f2.enabled)
+                {
+                    faultModelEngine->BindOrbitConstellation(
+                        topology.GetOnlineConstellation());
+                }
             }
             if (computeProfile.has_value() && taskTrace.has_value())
             {

@@ -9,6 +9,7 @@
 #include "../../common/time-conversion.h"
 #include "../../task/compute-service.h"
 #include "../../task/task-coordinator.h"
+#include "../../topology/orbit/online-orbit-constellation.h"
 
 #include "ns3/abort.h"
 #include "ns3/simulator.h"
@@ -61,21 +62,31 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
             "FaultModelEngine requires duration and FaultController");
     }
     ValidateFaultParameters(parameters);
-    if (parameters.f2.enabled || parameters.f3.enabled)
+    if (parameters.f3.enabled)
     {
         throw FaultModelEngineError(
-            "F2/F3 cannot be enabled before their N4B increments");
+            "F3 cannot be enabled before its N4B increment");
     }
-    if (parameters.f1.enabled && computeNodeIds.empty())
+    if (!parameters.f1.enabled && !parameters.f2.enabled)
     {
         throw FaultModelEngineError(
-            "enabled F1 requires at least one compute node");
+            "FaultModelEngine requires one supported enabled fault source");
+    }
+    if (parameters.f1.enabled && parameters.f2.enabled)
+    {
+        throw FaultModelEngineError(
+            "combined F1/F2 generation belongs to the next N4B increment");
+    }
+    if ((parameters.f1.enabled || parameters.f2.enabled) && computeNodeIds.empty())
+    {
+        throw FaultModelEngineError(
+            "enabled F1/F2 requires at least one compute node");
     }
 
     std::set<uint32_t> uniqueNodeIds(computeNodeIds.begin(), computeNodeIds.end());
     if (uniqueNodeIds.size() != computeNodeIds.size())
     {
-        throw FaultModelEngineError("F1 compute node IDs must be unique");
+        throw FaultModelEngineError("fault-model compute node IDs must be unique");
     }
     m_parameters = parameters;
     m_checkIntervalNs = SatComputeSecondsToNanoseconds(
@@ -94,14 +105,25 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
     if (parameters.f1.enabled)
     {
         m_f1Model.emplace(parameters.f1);
-        for (const uint32_t nodeId : uniqueNodeIds)
+    }
+    if (parameters.f2.enabled)
+    {
+        m_f2Model.emplace(parameters.f2);
+    }
+    for (const uint32_t nodeId : uniqueNodeIds)
+    {
+        NodeState state;
+        if (m_f1Model.has_value())
         {
-            NodeState state;
             state.f1State = m_f1Model->CreateInitialSnapshot();
-            state.random = CreateObject<UniformRandomVariable>();
-            state.random->SetStream(COMPUTE_FAULT_STREAM_BASE + nodeId);
-            m_nodes.emplace(nodeId, state);
         }
+        if (m_f2Model.has_value())
+        {
+            state.f2State = m_f2Model->CreateInitialSnapshot();
+        }
+        state.random = CreateObject<UniformRandomVariable>();
+        state.random->SetStream(COMPUTE_FAULT_STREAM_BASE + nodeId);
+        m_nodes.emplace(nodeId, state);
     }
 
     const int64_t intervalNs = m_checkIntervalNs;
@@ -129,9 +151,10 @@ FaultModelEngine::BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator)
         throw FaultModelEngineError(
             "FaultModelEngine task binding is invalid");
     }
-    if (m_parameters.f1.enabled && taskCoordinator == nullptr)
+    if ((m_parameters.f1.enabled || m_parameters.f2.enabled) &&
+        taskCoordinator == nullptr)
     {
-        throw FaultModelEngineError("enabled F1 requires a TaskCoordinator");
+        throw FaultModelEngineError("enabled F1/F2 requires a TaskCoordinator");
     }
     m_taskCoordinator = taskCoordinator;
     if (taskCoordinator != nullptr)
@@ -150,10 +173,35 @@ FaultModelEngine::BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator)
         if (state.computeService == nullptr)
         {
             throw FaultModelEngineError(
-                "F1 has no ComputeService for node_id=" + std::to_string(nodeId));
+                "fault model has no ComputeService for node_id=" +
+                std::to_string(nodeId));
         }
     }
     m_bound = true;
+}
+
+void
+FaultModelEngine::BindOrbitConstellation(
+    const OnlineOrbitConstellation& constellation)
+{
+    if (!m_configured || !m_parameters.f2.enabled || m_constellation != nullptr)
+    {
+        throw FaultModelEngineError(
+            "FaultModelEngine orbit binding is invalid");
+    }
+    for (auto& [nodeId, state] : m_nodes)
+    {
+        if (!constellation.GetIdMap().HasSatelliteId(nodeId))
+        {
+            throw FaultModelEngineError(
+                "F2 compute node is absent from the orbit constellation: " +
+                std::to_string(nodeId));
+        }
+        m_f2Model->Update(state.f2State,
+                          constellation.GetPosition(nodeId),
+                          0.0);
+    }
+    m_constellation = &constellation;
 }
 
 FaultDefinition
@@ -209,6 +257,7 @@ void
 FaultModelEngine::Tick(int64_t simulationTimeNs)
 {
     NS_ABORT_MSG_IF(!m_configured || !m_bound || m_finalized ||
+                        (m_parameters.f2.enabled && m_constellation == nullptr) ||
                         simulationTimeNs != Simulator::Now().GetNanoSeconds(),
                     "FaultModelEngine tick state is invalid");
     const double intervalSeconds =
@@ -219,15 +268,30 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
     {
         const bool computeAvailable =
             m_faultController->GetState().IsComputeAvailable(nodeId);
-        const bool busy = computeAvailable && state.computeService->IsComputeAvailable() &&
-                          state.computeService->HasRunningTask();
-        m_f1Model->Update(state.f1State, busy, intervalSeconds);
+        if (m_f1Model.has_value())
+        {
+            const bool busy =
+                computeAvailable && state.computeService->IsComputeAvailable() &&
+                state.computeService->HasRunningTask();
+            m_f1Model->Update(state.f1State, busy, intervalSeconds);
+        }
+        if (m_f2Model.has_value())
+        {
+            m_f2Model->Update(state.f2State,
+                              m_constellation->GetPosition(nodeId),
+                              intervalSeconds);
+        }
         if (!computeAvailable)
         {
             continue;
         }
 
-        const bool riskActive = m_f1Model->IsRiskActive(state.f1State);
+        const bool riskActive =
+            m_f1Model.has_value() ? m_f1Model->IsRiskActive(state.f1State)
+                                  : m_f2Model->IsRiskActive(state.f2State);
+        const double stepFailureProbability =
+            m_f1Model.has_value() ? state.f1State.stepFailureProbability
+                                  : state.f2State.stepFailureProbability;
         if (riskActive && !state.riskEpisode.has_value())
         {
             NS_ABORT_MSG_IF(m_nextFaultId == std::numeric_limits<uint64_t>::max(),
@@ -235,7 +299,7 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
             state.riskEpisode =
                 RiskEpisode{m_nextFaultId++,
                             simulationTimeNs,
-                            state.f1State.stepFailureProbability};
+                            stepFailureProbability};
             events.push_back(
                 {FaultEventType::NOTICE, MakeNotice(nodeId, state.riskEpisode.value())});
         }
@@ -249,7 +313,7 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
         }
 
         const double randomValue = state.random->GetValue();
-        if (randomValue < state.f1State.stepFailureProbability)
+        if (randomValue < stepFailureProbability)
         {
             uint64_t faultId;
             if (state.riskEpisode.has_value())
@@ -266,7 +330,7 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
                 MakeComputeFault(nodeId,
                                  faultId,
                                  state.riskEpisode,
-                                 state.f1State.stepFailureProbability,
+                                 stepFailureProbability,
                                  simulationTimeNs);
             events.push_back({FaultEventType::START, fault});
             completedRecords.push_back(fault);
@@ -286,7 +350,8 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
 const FaultTrace&
 FaultModelEngine::Finalize()
 {
-    if (!m_configured || !m_bound || m_finalized)
+    if (!m_configured || !m_bound || m_finalized ||
+        (m_parameters.f2.enabled && m_constellation == nullptr))
     {
         throw FaultModelEngineError("FaultModelEngine finalization is invalid");
     }
@@ -320,6 +385,7 @@ FaultModelEngine::GetNodeSnapshots() const
         snapshots.push_back(
             {nodeId,
              state.f1State,
+             state.f2State,
              state.riskEpisode.has_value(),
              m_faultController->GetState().IsComputeAvailable(nodeId)});
     }
@@ -344,6 +410,7 @@ FaultModelEngine::DoDispose()
     }
     m_faultController = nullptr;
     m_taskCoordinator = nullptr;
+    m_constellation = nullptr;
     Object::DoDispose();
 }
 

@@ -1,0 +1,66 @@
+{
+  "profile": "f2-validation",
+  "seed": "n4b-f2-66",
+  "task_count": 8,
+  "orbit_start_offset_s": 5695,
+  "random_seed": 1,
+  "random_run": 1,
+  "roles": [
+    {
+      "task_id": 1,
+      "role": "fault-active"
+    },
+    {
+      "task_id": 2,
+      "role": "post-recovery"
+    },
+    {
+      "task_id": 3,
+      "role": "fault-active"
+    },
+    {
+      "task_id": 4,
+      "role": "post-recovery"
+    },
+    {
+      "task_id": 5,
+      "role": "risk-only-active"
+    },
+    {
+      "task_id": 6,
+      "role": "truncated-risk-active"
+    },
+    {
+      "task_id": 7,
+      "role": "sparse-control"
+    },
+    {
+      "task_id": 8,
+      "role": "sparse-control"
+    }
+  ],
+  "hotspot_compute_node_ids": [
+    51,
+    29
+  ],
+  "expected_failed_task_ids": [
+    1,
+    3
+  ],
+  "post_recovery_task_ids": [
+    2,
+    4
+  ],
+  "risk_only_task_ids": [
+    5,
+    6
+  ],
+  "control_task_ids": [
+    7,
+    8
+  ],
+  "expected_fault_start_time_ns": {
+    "51": 383000000000,
+    "29": 621000000000
+  }
+}
