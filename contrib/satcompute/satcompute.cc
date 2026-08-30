@@ -9,6 +9,7 @@
 #include "ns3/ecmp-route-recorder.h"
 #include "ns3/fault-controller.h"
 #include "ns3/fault-model-config.h"
+#include "ns3/fault-scenario-generator.h"
 #include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/online-orbit-constellation.h"
@@ -400,6 +401,7 @@ main(int argc, char* argv[])
             Ptr<NetworkTransferEngine> transferEngine;
             Ptr<TaskCoordinator> taskCoordinator;
             Ptr<FaultController> faultController;
+            Ptr<FaultScenarioGenerator> faultGenerator;
             std::optional<ComputeProfile> computeProfile;
             std::optional<TaskTrace> taskTrace;
             std::optional<FaultTrace> faultTrace;
@@ -433,18 +435,30 @@ main(int argc, char* argv[])
             else if (config.faultMode == "generate")
             {
                 faultModelConfig = ReadFaultModelConfig(config.faultModelConfig);
-                if (faultModelConfig->selfState.enabled ||
-                    faultModelConfig->radiation.enabled ||
-                    faultModelConfig->debris.enabled)
+                if (faultModelConfig->selfState.enabled && !computeProfile.has_value())
                 {
                     FailConfig("faultModelConfig",
-                               "enabled sources require the N4B generator increment");
+                               "enabled self_state requires computeProfile and taskTrace");
                 }
                 faultController = CreateObject<FaultController>();
                 faultController->ConfigureGeneration(
                     topology.GetIdMap().GetCanonicalSatelliteIds(),
                     simulationDurationNs);
                 faultController->BindTopology(topology);
+                std::vector<uint32_t> computeNodeIds;
+                if (computeProfile.has_value())
+                {
+                    computeNodeIds.reserve(computeProfile->nodes.size());
+                    for (const ComputeNodeProfile& node : computeProfile->nodes)
+                    {
+                        computeNodeIds.push_back(node.nodeId);
+                    }
+                }
+                faultGenerator = CreateObject<FaultScenarioGenerator>();
+                faultGenerator->Configure(faultModelConfig.value(),
+                                          computeNodeIds,
+                                          simulationDurationNs,
+                                          faultController);
             }
             if (computeProfile.has_value() && taskTrace.has_value())
             {
@@ -464,6 +478,10 @@ main(int argc, char* argv[])
                     faultController->BindTaskCoordinator(taskCoordinator);
                 }
             }
+            if (faultGenerator != nullptr)
+            {
+                faultGenerator->BindTaskCoordinator(taskCoordinator);
+            }
 
             const Ptr<FlowMonitor> flowMonitor = InstallSimulationFlowMonitor();
             Simulator::Stop(NanoSeconds(simulationDurationNs));
@@ -472,9 +490,7 @@ main(int argc, char* argv[])
             const auto wallStop = std::chrono::steady_clock::now();
             if (config.faultMode == "generate")
             {
-                FaultTrace generatedTrace;
-                generatedTrace.sourcePath = config.faultTrace;
-                faultController->FinalizeGeneratedTrace(generatedTrace);
+                const FaultTrace& generatedTrace = faultGenerator->Finalize();
                 WriteFaultTraceV2(config.faultTrace, generatedTrace);
             }
             const int64_t wallClockNs =

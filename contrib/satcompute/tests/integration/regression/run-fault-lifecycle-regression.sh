@@ -55,6 +55,26 @@ generate_empty_result="$(run_platform \
 replay_empty_result="$(run_platform \
   "$regression_output/replay-empty" \
   "$network_common --faultMode=replay --faultTrace=$generated_trace")"
+f1_generated_trace="$regression_output/generate-f1/fault-trace.json"
+f1_common="--simulationDuration=90 --constellationConfig=$constellation \
+--maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
+--networkUpdateInterval=20 --islBandwidthBps=100000000 \
+--routingMode=global-capacity-aware-hrw --computeProfile=$profile \
+--taskTrace=$task_inputs/task-f1-critical.json --taskCompletionPolicy=report"
+generate_f1_result="$(run_platform \
+  "$regression_output/generate-f1" \
+  "$f1_common --faultMode=generate \
+--faultModelConfig=$fault_inputs/model-f1-critical.json \
+--faultTrace=$f1_generated_trace")"
+f1_second_trace="$regression_output/generate-f1-second/fault-trace.json"
+generate_f1_second_result="$(run_platform \
+  "$regression_output/generate-f1-second" \
+  "$f1_common --faultMode=generate \
+--faultModelConfig=$fault_inputs/model-f1-critical.json \
+--faultTrace=$f1_second_trace")"
+replay_f1_result="$(run_platform \
+  "$regression_output/replay-f1" \
+  "$f1_common --faultMode=replay --faultTrace=$f1_generated_trace")"
 
 for result in "$compute_result" "$satellite_first_result" "$satellite_second_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
@@ -69,6 +89,12 @@ fi
 for result in "$generate_empty_result" "$replay_empty_result"; do
   if [[ "$result" != *'"status":"completed"'* ]]; then
     echo "empty generate/replay mode run failed: $result" >&2
+    exit 1
+  fi
+done
+for result in "$generate_f1_result" "$generate_f1_second_result" "$replay_f1_result"; do
+  if [[ "$result" != *'"status":"partial"'* ]]; then
+    echo "F1 generate/replay did not report the intentionally failed old task: $result" >&2
     exit 1
   fi
 done
@@ -97,6 +123,66 @@ if generated_trace != {"schema_version": 2, "faults": []}:
     raise SystemExit(f"empty generated trace differs: {generated_trace}")
 if load_csv("generate-empty/fault-events.csv") or load_csv("replay-empty/fault-events.csv"):
     raise SystemExit("empty generate/replay unexpectedly emitted runtime fault events")
+
+
+f1_trace = load_json("generate-f1/fault-trace.json")
+if f1_trace["schema_version"] != 2 or len(f1_trace["faults"]) != 1:
+    raise SystemExit(f"F1 generated trace shape differs: {f1_trace}")
+f1_fault = f1_trace["faults"][0]
+if (
+    f1_fault["node_id"],
+    f1_fault["fault_type"],
+    f1_fault["fault_occurred"],
+    f1_fault["notice_time_ns"],
+    f1_fault["start_time_ns"],
+    f1_fault["warning_lead_time_ns"],
+    f1_fault["duration_ns"],
+) != (3, "compute", True, 44_000_000_000, 56_000_000_000, 12_000_000_000, 10_000_000_000):
+    raise SystemExit(f"F1 generated fault differs: {f1_fault}")
+if (root / "generate-f1/fault-trace.json").read_bytes() != (
+    root / "generate-f1-second/fault-trace.json"
+).read_bytes():
+    raise SystemExit("same-seed F1 generated traces are not byte-identical")
+
+for filename in (
+    "fault-events.csv",
+    "fault-summary.json",
+    "task-events.csv",
+    "task-summary.csv",
+    "transfer-summary.csv",
+    "ecmp-route-events.csv",
+    "size-aware-reservation-events.csv",
+    "size-aware-summary.json",
+    "capacity-aware-summary.json",
+):
+    generated = (root / "generate-f1" / filename).read_bytes()
+    replayed = (root / "replay-f1" / filename).read_bytes()
+    if generated != replayed:
+        raise SystemExit(f"F1 generate/replay output differs: {filename}")
+
+f1_events = load_csv("generate-f1/fault-events.csv")
+if [row["event_type"] for row in f1_events] != ["NOTICE", "START", "RECOVERY"]:
+    raise SystemExit("F1 runtime event order differs")
+if [int(row["simulation_time_ns"]) for row in f1_events] != [
+    44_000_000_000,
+    56_000_000_000,
+    66_000_000_000,
+]:
+    raise SystemExit("F1 runtime event timestamps differ")
+if any(row["route_recomputed"] != "false" for row in f1_events):
+    raise SystemExit("F1 compute fault unexpectedly recomputed routes")
+
+f1_tasks = {int(row["task_id"]): row for row in load_csv(
+    "generate-f1/task-summary.csv"
+)}
+if (
+    f1_tasks[1]["final_state"],
+    f1_tasks[1]["failure_reason"],
+    int(f1_tasks[1]["failure_time_ns"]),
+) != ("FAILED", "COMPUTE_NODE_FAILURE", 56_000_000_000):
+    raise SystemExit("F1 did not fail the running old task at START")
+if f1_tasks[2]["final_state"] != "COMPLETED":
+    raise SystemExit("F1 recovery did not allow a later task to complete")
 
 
 compute_events = load_csv("compute/fault-events.csv")
