@@ -4,6 +4,8 @@
 
 #include "ns3/command-line.h"
 #include "ns3/fault-model-config.h"
+#include "ns3/random-variable-stream.h"
+#include "ns3/rng-seed-manager.h"
 #include "ns3/self-state-fault-model.h"
 
 #include <nlohmann/json.hpp>
@@ -16,9 +18,11 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace ns3;
@@ -30,7 +34,16 @@ using Json = nlohmann::ordered_json;
 
 constexpr std::array<double, 3> HEATING_TAU_CANDIDATES = {39.0, 43.0, 47.0};
 constexpr std::array<double, 4> COOLING_TAU_CANDIDATES = {20.0, 30.0, 40.0, 60.0};
+constexpr std::array<double, 4> FAILURE_INTENSITY_CANDIDATES = {0.005, 0.01, 0.02, 0.05};
 constexpr int64_t REPRESENTATIVE_TASK_SECONDS = 10;
+constexpr uint32_t MONTE_CARLO_NODE_COUNT = 66;
+constexpr uint32_t MONTE_CARLO_HOTSPOT_COUNT = 3;
+constexpr int64_t MONTE_CARLO_DURATION_SECONDS = 1000;
+constexpr int64_t MONTE_CARLO_BUSY_SECONDS = 50;
+constexpr int64_t MONTE_CARLO_IDLE_SECONDS = 290;
+constexpr uint32_t MONTE_CARLO_RUN_COUNT = 30;
+constexpr uint32_t MONTE_CARLO_SEED = 1;
+constexpr int64_t COMPUTE_FAULT_STREAM_BASE = 1000000;
 
 /** Threshold observations for one heating-time-constant candidate. */
 struct HeatingResult
@@ -51,6 +64,41 @@ struct CoolingResult
     double temperatureAfterOneHundredTwentySeconds{}; ///< Temperature after 120 s idle.
 };
 
+/** Per-run evidence used to choose one F1 failure-intensity candidate. */
+struct MonteCarloRunResult
+{
+    uint64_t run{};                    ///< Fixed ns-3 run number.
+    uint64_t faultCount{};             ///< Sampled recoverable compute faults.
+    uint64_t warnedFaultCount{};       ///< Faults after a risk notice.
+    uint64_t unannouncedFaultCount{};  ///< Faults before the risk threshold.
+    uint64_t riskOnlyEpisodeCount{};   ///< Risk episodes ending without a fault.
+    std::vector<double> faultTemperaturesC; ///< Temperatures at sampled faults.
+    std::vector<double> warningLeadTimesSeconds; ///< Notice-to-fault durations.
+};
+
+/** Aggregated fixed-seed evidence for one failure-intensity candidate. */
+struct MonteCarloCandidateResult
+{
+    double intensityPerSecond{}; ///< Candidate maximum F1 intensity.
+    std::vector<MonteCarloRunResult> runs; ///< All fixed run results.
+    double meanFaultCount{}; ///< Mean faults per 66 satellites and 1000 s.
+    double meanWarnedFaultCount{}; ///< Mean warned faults.
+    double meanUnannouncedFaultCount{}; ///< Mean unannounced faults.
+    double meanRiskOnlyEpisodeCount{}; ///< Mean risk-only episodes.
+    std::vector<double> faultTemperaturesC; ///< Pooled fault temperatures.
+    std::vector<double> warningLeadTimesSeconds; ///< Pooled warning lead times.
+};
+
+/** Runtime state for one pure-model Monte Carlo node. */
+struct MonteCarloNodeState
+{
+    SelfStateFaultSnapshot snapshot; ///< Current F1 physical and risk state.
+    std::optional<int64_t> noticeTimeSeconds; ///< Open risk notice time.
+    bool computeAvailable{true}; ///< Recoverable compute availability.
+    std::optional<int64_t> recoveryTimeSeconds; ///< End of current failure.
+    Ptr<UniformRandomVariable> random; ///< Stable per-node ns-3 random stream.
+};
+
 /** Stream pure-model calibration samples into the canonical CSV. */
 class CalibrationWriter
 {
@@ -66,7 +114,9 @@ class CalibrationWriter
         m_output << "section,scenario,candidate_name,candidate_value,elapsed_time_s,"
                     "task_index,busy,temperature_c,depth_of_discharge,thermal_risk,"
                     "energy_pressure,combined_risk,failure_intensity_per_s,"
-                    "step_failure_probability\n";
+                    "step_failure_probability,run,fault_count,warned_fault_count,"
+                    "unannounced_fault_count,risk_only_episode_count,"
+                    "mean_fault_temperature_c,mean_warning_lead_time_s\n";
         m_output << std::setprecision(17) << std::boolalpha;
     }
 
@@ -99,10 +149,42 @@ class CalibrationWriter
                  << snapshot.depthOfDischarge << ',' << snapshot.thermalRisk << ','
                  << snapshot.energyPressure << ',' << snapshot.combinedRisk << ','
                  << snapshot.failureIntensityPerSecond << ','
-                 << snapshot.stepFailureProbability << '\n';
+                 << snapshot.stepFailureProbability << ",,,,,,,\n";
+    }
+
+    /**
+     * Append one fixed-seed Monte Carlo result.
+     *
+     * @param candidate Failure-intensity candidate.
+     * @param result Per-run count and distribution evidence.
+     */
+    void WriteMonteCarlo(double candidate, const MonteCarloRunResult& result)
+    {
+        m_output << "failure_intensity_search,representative_66sat_1000s,"
+                    "max_failure_intensity_per_s,"
+                 << candidate << ",,,,,,,,,," << result.run << ','
+                 << result.faultCount << ',' << result.warnedFaultCount << ','
+                 << result.unannouncedFaultCount << ','
+                 << result.riskOnlyEpisodeCount << ',';
+        if (!result.faultTemperaturesC.empty())
+        {
+            m_output << Mean(result.faultTemperaturesC);
+        }
+        m_output << ',';
+        if (!result.warningLeadTimesSeconds.empty())
+        {
+            m_output << Mean(result.warningLeadTimesSeconds);
+        }
+        m_output << '\n';
     }
 
   private:
+    static double Mean(const std::vector<double>& values)
+    {
+        return std::accumulate(values.begin(), values.end(), 0.0) /
+               static_cast<double>(values.size());
+    }
+
     std::ofstream m_output; ///< Truncating CSV output stream.
 };
 
@@ -226,6 +308,185 @@ MakeCoolingJson(const CoolingResult& result)
              result.temperatureAfterOneHundredTwentySeconds}};
 }
 
+double
+MeanCounts(const std::vector<MonteCarloRunResult>& runs,
+           uint64_t MonteCarloRunResult::*member)
+{
+    uint64_t total = 0;
+    for (const MonteCarloRunResult& run : runs)
+    {
+        total += run.*member;
+    }
+    return static_cast<double>(total) / static_cast<double>(runs.size());
+}
+
+bool
+IsRepresentativeBusy(uint32_t nodeId, int64_t simulationSecond)
+{
+    if (nodeId < MONTE_CARLO_HOTSPOT_COUNT)
+    {
+        const int64_t cycleSeconds =
+            MONTE_CARLO_BUSY_SECONDS + MONTE_CARLO_IDLE_SECONDS;
+        return (simulationSecond - 1) % cycleSeconds < MONTE_CARLO_BUSY_SECONDS;
+    }
+    const int64_t sparseStart =
+        100 + static_cast<int64_t>(nodeId - MONTE_CARLO_HOTSPOT_COUNT) * 10;
+    return simulationSecond > sparseStart &&
+           simulationSecond <= sparseStart + REPRESENTATIVE_TASK_SECONDS;
+}
+
+MonteCarloRunResult
+RunMonteCarlo(const FaultModelConfig& sourceConfig,
+              double intensityPerSecond,
+              uint64_t runNumber)
+{
+    FaultModelConfig config = sourceConfig;
+    config.selfState.maxFailureIntensityPerSecond = intensityPerSecond;
+    const SelfStateFaultModel model(config.selfState);
+    const int64_t recoverySeconds =
+        config.recoverableComputeDurationNs / config.checkIntervalNs;
+    RngSeedManager::SetSeed(MONTE_CARLO_SEED);
+    RngSeedManager::SetRun(runNumber);
+
+    std::vector<MonteCarloNodeState> nodes(MONTE_CARLO_NODE_COUNT);
+    for (uint32_t nodeId = 0; nodeId < nodes.size(); ++nodeId)
+    {
+        nodes[nodeId].snapshot = model.CreateInitialSnapshot();
+        nodes[nodeId].random = CreateObject<UniformRandomVariable>();
+        nodes[nodeId].random->SetStream(COMPUTE_FAULT_STREAM_BASE + nodeId);
+    }
+
+    MonteCarloRunResult result;
+    result.run = runNumber;
+    for (int64_t second = 1; second <= MONTE_CARLO_DURATION_SECONDS; ++second)
+    {
+        for (uint32_t nodeId = 0; nodeId < nodes.size(); ++nodeId)
+        {
+            MonteCarloNodeState& node = nodes[nodeId];
+            const bool busy = node.computeAvailable &&
+                              IsRepresentativeBusy(nodeId, second);
+            model.Update(node.snapshot, busy, 1.0);
+            if (!node.computeAvailable)
+            {
+                if (node.recoveryTimeSeconds == second)
+                {
+                    node.computeAvailable = true;
+                    node.recoveryTimeSeconds = std::nullopt;
+                }
+                continue;
+            }
+
+            const bool riskActive = model.IsRiskActive(node.snapshot);
+            if (riskActive && !node.noticeTimeSeconds.has_value())
+            {
+                node.noticeTimeSeconds = second;
+            }
+            else if (!riskActive && node.noticeTimeSeconds.has_value())
+            {
+                ++result.riskOnlyEpisodeCount;
+                node.noticeTimeSeconds = std::nullopt;
+            }
+
+            const double randomValue = node.random->GetValue();
+            if (randomValue < node.snapshot.stepFailureProbability)
+            {
+                ++result.faultCount;
+                result.faultTemperaturesC.push_back(node.snapshot.temperatureC);
+                if (node.noticeTimeSeconds.has_value())
+                {
+                    ++result.warnedFaultCount;
+                    result.warningLeadTimesSeconds.push_back(
+                        static_cast<double>(second - node.noticeTimeSeconds.value()));
+                }
+                else
+                {
+                    ++result.unannouncedFaultCount;
+                }
+                node.noticeTimeSeconds = std::nullopt;
+                node.computeAvailable = false;
+                node.recoveryTimeSeconds = second + recoverySeconds;
+            }
+        }
+    }
+    for (MonteCarloNodeState& node : nodes)
+    {
+        if (node.noticeTimeSeconds.has_value())
+        {
+            ++result.riskOnlyEpisodeCount;
+        }
+        node.random = nullptr;
+    }
+    return result;
+}
+
+MonteCarloCandidateResult
+RunMonteCarloCandidate(const FaultModelConfig& config,
+                       double intensityPerSecond,
+                       CalibrationWriter& writer)
+{
+    MonteCarloCandidateResult result;
+    result.intensityPerSecond = intensityPerSecond;
+    result.runs.reserve(MONTE_CARLO_RUN_COUNT);
+    for (uint64_t run = 1; run <= MONTE_CARLO_RUN_COUNT; ++run)
+    {
+        MonteCarloRunResult runResult =
+            RunMonteCarlo(config, intensityPerSecond, run);
+        writer.WriteMonteCarlo(intensityPerSecond, runResult);
+        result.faultTemperaturesC.insert(result.faultTemperaturesC.end(),
+                                         runResult.faultTemperaturesC.begin(),
+                                         runResult.faultTemperaturesC.end());
+        result.warningLeadTimesSeconds.insert(
+            result.warningLeadTimesSeconds.end(),
+            runResult.warningLeadTimesSeconds.begin(),
+            runResult.warningLeadTimesSeconds.end());
+        result.runs.push_back(std::move(runResult));
+    }
+    result.meanFaultCount = MeanCounts(result.runs, &MonteCarloRunResult::faultCount);
+    result.meanWarnedFaultCount =
+        MeanCounts(result.runs, &MonteCarloRunResult::warnedFaultCount);
+    result.meanUnannouncedFaultCount =
+        MeanCounts(result.runs, &MonteCarloRunResult::unannouncedFaultCount);
+    result.meanRiskOnlyEpisodeCount =
+        MeanCounts(result.runs, &MonteCarloRunResult::riskOnlyEpisodeCount);
+    return result;
+}
+
+Json
+DistributionJson(std::vector<double> values)
+{
+    if (values.empty())
+    {
+        return nullptr;
+    }
+    std::sort(values.begin(), values.end());
+    const auto percentile = [&values](double probability) {
+        const std::size_t index = static_cast<std::size_t>(
+            std::floor(probability * static_cast<double>(values.size() - 1)));
+        return values[index];
+    };
+    return {{"sample_count", values.size()},
+            {"minimum", values.front()},
+            {"mean",
+             std::accumulate(values.begin(), values.end(), 0.0) /
+                 static_cast<double>(values.size())},
+            {"p50", percentile(0.50)},
+            {"p95", percentile(0.95)},
+            {"maximum", values.back()}};
+}
+
+Json
+MakeMonteCarloJson(const MonteCarloCandidateResult& result)
+{
+    return {{"max_failure_intensity_per_s", result.intensityPerSecond},
+            {"mean_fault_count", result.meanFaultCount},
+            {"mean_warned_fault_count", result.meanWarnedFaultCount},
+            {"mean_unannounced_fault_count", result.meanUnannouncedFaultCount},
+            {"mean_risk_only_episode_count", result.meanRiskOnlyEpisodeCount},
+            {"fault_temperature_c", DistributionJson(result.faultTemperaturesC)},
+            {"warning_lead_time_s",
+             DistributionJson(result.warningLeadTimesSeconds)}};
+}
+
 void
 ValidateConfig(const FaultModelConfig& config)
 {
@@ -240,6 +501,11 @@ ValidateConfig(const FaultModelConfig& config)
     if (config.checkIntervalNs != 1000000000)
     {
         throw std::runtime_error("current F1 calibration requires a 1-second check interval");
+    }
+    if (config.recoverableComputeDurationNs % config.checkIntervalNs != 0)
+    {
+        throw std::runtime_error(
+            "F1 calibration requires recovery duration aligned to the check interval");
     }
 }
 
@@ -281,6 +547,12 @@ main(int argc, char* argv[])
             coolingResults.push_back(
                 RunCoolingCandidate(config.selfState, candidate, writer));
         }
+        std::vector<MonteCarloCandidateResult> monteCarloResults;
+        for (const double candidate : FAILURE_INTENSITY_CANDIDATES)
+        {
+            monteCarloResults.push_back(
+                RunMonteCarloCandidate(config, candidate, writer));
+        }
 
         const auto selectedHeating = std::find_if(
             heatingResults.begin(),
@@ -309,6 +581,16 @@ main(int argc, char* argv[])
             throw std::runtime_error(
                 "selected heating tau misses the current 50--60 second target");
         }
+        const auto selectedIntensity = std::min_element(
+            monteCarloResults.begin(),
+            monteCarloResults.end(),
+            [](const MonteCarloCandidateResult& left,
+               const MonteCarloCandidateResult& right) {
+                return std::make_pair(std::abs(left.meanFaultCount - 1.0),
+                                      left.intensityPerSecond) <
+                       std::make_pair(std::abs(right.meanFaultCount - 1.0),
+                                      right.intensityPerSecond);
+            });
 
         Json heating = Json::array();
         for (const HeatingResult& result : heatingResults)
@@ -320,6 +602,11 @@ main(int argc, char* argv[])
         {
             cooling.push_back(MakeCoolingJson(result));
         }
+        Json monteCarlo = Json::array();
+        for (const MonteCarloCandidateResult& result : monteCarloResults)
+        {
+            monteCarlo.push_back(MakeMonteCarloJson(result));
+        }
         const int64_t tasksBeforeCritical =
             (selectedHeating->timeToCriticalSeconds.value() +
              REPRESENTATIVE_TASK_SECONDS - 1) /
@@ -327,14 +614,23 @@ main(int argc, char* argv[])
         const Json summary = {
             {"schema_version", 1},
             {"source_fault_model_config",
-             std::filesystem::absolute(faultModelConfigPath)
-                 .lexically_normal()
-                 .string()},
+             std::filesystem::path(faultModelConfigPath).lexically_normal().string()},
             {"check_interval_ns", config.checkIntervalNs},
             {"calibration_scope",
              "accelerated functional scenario; not a physical satellite failure rate"},
             {"heating_tau_candidates", heating},
             {"cooling_tau_candidates", cooling},
+            {"monte_carlo",
+             {{"random_seed", MONTE_CARLO_SEED},
+              {"run_start", 1},
+              {"run_count", MONTE_CARLO_RUN_COUNT},
+              {"satellite_count", MONTE_CARLO_NODE_COUNT},
+              {"duration_s", MONTE_CARLO_DURATION_SECONDS},
+              {"hotspot_count", MONTE_CARLO_HOTSPOT_COUNT},
+              {"hotspot_busy_s", MONTE_CARLO_BUSY_SECONDS},
+              {"hotspot_idle_s", MONTE_CARLO_IDLE_SECONDS},
+              {"functional_target_mean_fault_count", 1.0},
+              {"candidates", monteCarlo}}},
             {"selected",
              {{"heating_tau_s", config.selfState.temperature.heatingTauSeconds},
               {"cooling_tau_s", config.selfState.temperature.coolingTauSeconds},
@@ -347,7 +643,12 @@ main(int argc, char* argv[])
               {"representative_task_duration_s", REPRESENTATIVE_TASK_SECONDS},
               {"representative_tasks_before_critical", tasksBeforeCritical},
               {"max_failure_intensity_per_s",
-               config.selfState.maxFailureIntensityPerSecond}}}};
+               selectedIntensity->intensityPerSecond},
+              {"configured_max_failure_intensity_per_s",
+               config.selfState.maxFailureIntensityPerSecond},
+              {"monte_carlo_mean_fault_count", selectedIntensity->meanFaultCount},
+              {"monte_carlo_mean_risk_only_episode_count",
+               selectedIntensity->meanRiskOnlyEpisodeCount}}}};
         std::ofstream summaryOutput(outputRoot / "n4b-f1-calibration-summary.json",
                                     std::ios::out | std::ios::trunc);
         if (!summaryOutput.is_open())

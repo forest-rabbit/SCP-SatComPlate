@@ -33,7 +33,7 @@ network_common="--simulationDuration=1 --constellationConfig=$constellation \
 
 ./ns3 run --no-build \
   "satcompute-f1-calibration \
---faultModelConfig=$f1_example/fault-model.json \
+--faultModelConfig=contrib/satcompute/input/fault/n4b-f1-calibrated.json \
 --outputDir=$regression_output/f1-calibration" >/dev/null
 
 compute_result="$(run_platform \
@@ -165,7 +165,36 @@ if (
 ) != (43.0, 40.0, 8, 44, 56, 6):
     raise SystemExit(f"F1 selected thermal calibration differs: {selected}")
 calibration_rows = load_csv("f1-calibration/n4b-f1-calibration.csv")
-if len(calibration_rows) != 840:
+monte_carlo = calibration["monte_carlo"]
+candidates = monte_carlo["candidates"]
+if (
+    monte_carlo["run_count"],
+    monte_carlo["satellite_count"],
+    monte_carlo["duration_s"],
+    monte_carlo["hotspot_count"],
+) != (30, 66, 1000, 3):
+    raise SystemExit("F1 Monte Carlo dimensions differ")
+if [candidate["max_failure_intensity_per_s"] for candidate in candidates] != [
+    0.005,
+    0.01,
+    0.02,
+    0.05,
+]:
+    raise SystemExit("F1 failure-intensity candidate grid differs")
+if selected["max_failure_intensity_per_s"] != 0.005 or (
+    selected["configured_max_failure_intensity_per_s"] != 0.005
+):
+    raise SystemExit("F1 calibrated failure intensity differs")
+if not (0.8 <= selected["monte_carlo_mean_fault_count"] <= 1.2) or (
+    selected["monte_carlo_mean_risk_only_episode_count"] <= 0
+):
+    raise SystemExit("F1 Monte Carlo missed its functional selection target")
+if any(
+    candidates[index]["mean_fault_count"] >= candidates[index + 1]["mean_fault_count"]
+    for index in range(len(candidates) - 1)
+):
+    raise SystemExit("F1 sampled fault count is not monotonic across candidates")
+if len(calibration_rows) != 960:
     raise SystemExit("F1 calibration CSV candidate grid is incomplete")
 
 
