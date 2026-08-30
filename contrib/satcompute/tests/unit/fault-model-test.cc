@@ -5,12 +5,16 @@
 #include "ns3/fault-parameter-validator.h"
 #include "ns3/fault-para.h"
 #include "ns3/f1-self-state-fault-model.h"
+#include "ns3/f2-radiation-fault-model.h"
+#include "ns3/geographic-positions.h"
 
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 using namespace ns3;
 
@@ -240,6 +244,110 @@ CheckF1Model()
           "F1 W/Wh/s energy conversion differs");
 }
 
+Vector
+MakeEcef(double latitudeDegrees, double longitudeDegrees)
+{
+    return GeographicPositions::GeographicToCartesianCoordinates(
+        latitudeDegrees,
+        longitudeDegrees,
+        780000.0,
+        GeographicPositions::SPHERE);
+}
+
+void
+CheckF2Model()
+{
+    FaultParameters parameters = GetDefaultFaultParameters();
+    parameters.f2.effectiveFailureIntensityPerSecond = 0.01;
+    parameters.f2.riskThreshold = 0.05;
+    const F2RadiationFaultModel model(parameters.f2);
+
+    F2FaultParameters globalParameters = parameters.f2;
+    globalParameters.longitudeMinDegrees = -180.0;
+    globalParameters.longitudeMaxDegrees = 180.0;
+    globalParameters.latitudeMinDegrees = -90.0;
+    globalParameters.latitudeMaxDegrees = 90.0;
+    const F2RadiationFaultModel globalModel(globalParameters);
+    const double radius = GeographicPositions::EARTH_SPHERE_RADIUS;
+    const std::array<std::pair<Vector, std::pair<double, double>>, 4> axes = {{
+        {Vector(radius, 0.0, 0.0), {0.0, 0.0}},
+        {Vector(0.0, radius, 0.0), {0.0, 90.0}},
+        {Vector(-radius, 0.0, 0.0), {0.0, -180.0}},
+        {Vector(0.0, 0.0, radius), {90.0, 0.0}},
+    }};
+    for (const auto& [ecef, expected] : axes)
+    {
+        F2RadiationFaultSnapshot snapshot = globalModel.CreateInitialSnapshot();
+        globalModel.Update(snapshot, ecef, 0.0);
+        Check(std::abs(snapshot.latitudeDegrees - expected.first) < 1e-9 &&
+                  std::abs(snapshot.longitudeDegrees - expected.second) < 1e-9,
+              "F2 ECEF axis conversion differs");
+    }
+
+    const std::array<Vector, 4> boundaries = {
+        MakeEcef(0.0, parameters.f2.longitudeMinDegrees),
+        MakeEcef(0.0, parameters.f2.longitudeMaxDegrees),
+        MakeEcef(parameters.f2.latitudeMinDegrees, 0.0),
+        MakeEcef(parameters.f2.latitudeMaxDegrees, 0.0),
+    };
+    for (const Vector& boundary : boundaries)
+    {
+        F2RadiationFaultSnapshot snapshot = model.CreateInitialSnapshot();
+        model.Update(snapshot, boundary, 0.0);
+        Check(snapshot.inRegion, "F2 rectangle rejected an inclusive boundary");
+    }
+
+    constexpr double epsilon = 0.001;
+    const std::array<Vector, 4> outside = {
+        MakeEcef(0.0, parameters.f2.longitudeMinDegrees - epsilon),
+        MakeEcef(0.0, parameters.f2.longitudeMaxDegrees + epsilon),
+        MakeEcef(parameters.f2.latitudeMinDegrees - epsilon, 0.0),
+        MakeEcef(parameters.f2.latitudeMaxDegrees + epsilon, 0.0),
+    };
+    for (const Vector& position : outside)
+    {
+        F2RadiationFaultSnapshot snapshot = model.CreateInitialSnapshot();
+        model.Update(snapshot, position, 0.0);
+        Check(!snapshot.inRegion, "F2 rectangle accepted an outside position");
+    }
+
+    F2RadiationFaultSnapshot exposure = model.CreateInitialSnapshot();
+    const Vector insidePosition = MakeEcef(-25.0, -45.0);
+    model.Update(exposure, insidePosition, 0.0);
+    Check(exposure.inRegion && exposure.continuousExposureSeconds == 0.0 &&
+              exposure.cumulativeRisk == 0.0 &&
+              exposure.stepFailureProbability == 0.0,
+          "F2 entry did not begin at zero exposure");
+
+    const double expectedStepProbability = -std::expm1(-0.01);
+    for (int second = 1; second <= 10; ++second)
+    {
+        model.Update(exposure, insidePosition, 1.0);
+        Check(exposure.continuousExposureSeconds == second &&
+                  std::abs(exposure.stepFailureProbability - expectedStepProbability) <
+                      1e-15 &&
+                  std::abs(exposure.cumulativeRisk -
+                           (-std::expm1(-0.01 * second))) < 1e-15,
+              "F2 exposure risk or current-step probability differs");
+    }
+    Check(model.IsRiskActive(exposure), "F2 cumulative risk missed its threshold");
+    Check(std::abs(std::pow(1.0 - expectedStepProbability, 10.0) -
+                   std::exp(-0.01 * 10.0)) < 1e-15,
+          "F2 repeated-step survival differs from the exponential process");
+
+    model.Update(exposure, MakeEcef(25.0, 45.0), 1.0);
+    Check(!exposure.inRegion && exposure.continuousExposureSeconds == 0.0 &&
+              exposure.cumulativeRisk == 0.0 &&
+              exposure.failureIntensityPerSecond == 0.0 &&
+              exposure.stepFailureProbability == 0.0 &&
+              !model.IsRiskActive(exposure),
+          "F2 exit did not clear continuous exposure and current probability");
+    model.Update(exposure, insidePosition, 1.0);
+    Check(exposure.inRegion && exposure.continuousExposureSeconds == 0.0 &&
+              exposure.cumulativeRisk == 0.0,
+          "F2 re-entry retained exposure from the preceding episode");
+}
+
 } // namespace
 
 int
@@ -250,6 +358,7 @@ main()
         CheckDefaults();
         CheckInvalid();
         CheckF1Model();
+        CheckF2Model();
         std::cout << "SatCompute fault model tests passed." << std::endl;
         return 0;
     }

@@ -1,0 +1,4 @@
+# SatCompute 720 星单层 Walker Star 星座（OneWeb 规模）
+# 高度(km),倾角(度),轨道面数,每面卫星数,相位因子,RAAN跨度(度)
+altitudeKm,inclinationDegrees,numberOfPlanes,numberOfSatellitesPerPlane,phasingFactor,raanSpanDeg
+1200.0,87.9,18,40,1,180
