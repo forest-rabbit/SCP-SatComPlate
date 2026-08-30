@@ -35,15 +35,15 @@ tests/
 | `compute-service-test.cc` | 整数服务时间、非抢占 FCFS 和同刻 task ID tie-break |
 | `fault-lifecycle-test.cc` | FAILED/CANCELLED 幂等终止、迟到包隔离和 reservation 归零 |
 | `fault-trace-test.cc` | v1/v2 closed-world 字段、四类记录、算术/区间校验和 canonical writer |
-| `fault-model-test.cc` | 内置参数校验、F1 升降温、8 秒恢复、DoD 单位、风险边界和临界保护停机 |
+| `fault-model-test.cc` | 内置参数校验、F1 升降温/DoD/临界停机，以及 F2 ECEF 转换、闭区间、连续暴露、重置和指数生存概率 |
 | `compute-fault-execution-test.cc` | 计算故障批处理、任务各阶段、恢复、通信不变和重复运行顺序 |
 | `satellite-fault-execution-test.cc` | 整星端点语义、即时重路由、capacity 重准入和按实时距离恢复 |
 | `online-orbit-foundation-test.cc` | 原生 mobility、连续坐标、固定 plus-grid 候选和 canonical 顺序 |
 | `online-topology-controller-test.cc` | 距离门控、fixed/distance 时延、周期更新和按边集合重算路由 |
 
 `test_workload_generators.py` 检查 stress 任务生成器的确定性、总输入字节预算、
-结果大小和无版本/hash 字段合同，并检查 F1 验证档固定生成 66 星、20 任务及其热点、
-风险-only、恢复后任务和稀疏对照角色。
+结果大小和无版本/hash 字段合同；同时检查 F1 验证档的 66 星、20 任务，以及 F2
+验证档的 66 星、8 任务、热点故障、恢复后、风险-only/截断风险和稀疏对照角色。
 
 ## Smoke
 
@@ -61,10 +61,10 @@ tests/
   size-aware 仿真和 66 星在线拓扑；
 - `run-full-workload-regression.sh`：运行任务确定性、无任务模式、strict/report、
   失败诊断，并执行正式的 100 秒/66 星/20 任务示例；
-- `run-fault-lifecycle-regression.sh`：覆盖 N4A compute/整星 replay，以及 N4B F1
-  热校准、30-run 概率标定、风险-only、有/无预警实际故障、66 星热点任务、同 seed
-  trace 一致和 generate/replay 逐文件等价；同时检查路由不因 compute 故障变化、
-  三个明确失败任务、恢复后新任务、capacity 账本归零和无故障目录复用。
+- `run-fault-lifecycle-regression.sh`：覆盖 N4A compute/整星 replay、N4B F1 热校准与
+  30-run 概率标定，以及 F2 轨道偏移、真实 ECEF 暴露、风险-only、有/无预警实际
+  故障和 66 星小任务闭环；同时检查同 seed trace 一致、generate/replay 逐文件等价、
+  compute 故障不改变路由、故障中任务失败和恢复后新任务完成。
 
 ## 本地运行
 

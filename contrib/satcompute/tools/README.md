@@ -10,7 +10,9 @@ tools/
 │   └── generate-task-workload.py      从节点切片和算力配置生成确定性 TaskTrace
 └── validation/
     ├── check-flow-drop-reasons.py      检查失败运行的 FlowMonitor 丢包证据
-    └── f1-calibration.cc               调用平台纯模型生成 F1 标定证据
+    ├── f1-calibration.cc               调用平台纯模型生成 F1 标定证据
+    ├── f2-exposure-calibration.cc      用原生轨道扫描 F2 连续暴露
+    └── run-f2-monte-carlo.py           通过真实平台检查 F2 事件数分布
 ```
 
 典型准备流程是：
@@ -21,7 +23,7 @@ tools/
           ▼
  topologyOnly 节点/链路切片
           │
-          ├──► F2 轨道暴露标定（下一阶段）
+          ├──► F2 orbit-only 暴露标定（无网络、路由和任务）
           │
           ▼
 节点切片 + ComputeProfile ──► TaskTrace ──► 正式网络仿真
@@ -30,6 +32,11 @@ tools/
 F1 校准 executable 与 SatCompute 一同构建，不运行网络仿真，也不复制温度/概率
 公式。它输出候选时间常数和 30 个固定 ns-3 run 的 Monte Carlo 证据；正式
 generate/replay 不读取校准输出。
+
+F2 暴露工具直接推进同一个 ns-3.48 原生轨道实现：66 星用于选择 1000 秒窗口并冻结
+强度和预警阈值，351/720 星使用相同强度验证规模效应。随后 Monte Carlo 工具才用
+66 星、8 个小任务调用真实 F2-only generate，检查实际故障、恢复与任务执行。两种
+验证的证据见 [`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。
 
 工具的详细输入、参数和输出分别见 [任务生成器](generation/README.md)和
 [验证工具](validation/README.md)。Python 脚本只使用标准库。

@@ -3,8 +3,8 @@
 `input/fault/` 只说明平台可写出、可重放的 Fault Trace 数据合同，不存放故障模型
 配置。F1/F2/F3 的内部参数集中在 [`fault-para.cc`](../../fault/fault-para.cc)，与
 `para.cc` 一样属于编译期默认参数；修改后需要重新编译。任务输入仍由
-`tools/generation/generate-task-workload.py` 生成，任务不会预先决定在线 F1 是否
-发生故障。
+`tools/generation/generate-task-workload.py` 生成，任务只提供 F1 所需的忙闲条件或
+F2 故障发生时的执行验证对象，不会预先决定随机故障是否发生。
 
 运行模式与轨迹路径的组合规则为：
 
@@ -14,8 +14,11 @@
 | `generate` | 输出文件路径；在线判定并真实执行故障后写出 v2 trace |
 | `replay` | 已存在的 v1/v2 trace；不再抽样 |
 
-当前 F1 默认启用，因此 `generate` 还必须同时提供 ComputeProfile 与 TaskTrace；
-`replay` 是否需要任务输入取决于 trace 中的节点和要验证的执行结果。
+`--faultEnableF1/2/3` 是每次运行的来源开关，默认分别为 true/false/false；模型内部
+数值仍只位于 `fault-para.cc`。当前 `generate` 支持 F1-only 或 F2-only，两者都必须
+同时提供 ComputeProfile 与 TaskTrace；F1+F2 联合模式会被显式拒绝，F3 尚未接入。
+`replay` 不读取这些来源开关，也不重新计算模型；是否提供任务输入取决于 trace 中的
+节点和要验证的执行结果。
 
 `topologyOnly=1` 只能与 `faultMode=none` 一起使用，因为 topology-only 描述无故障的
 自然轨道和候选拓扑。

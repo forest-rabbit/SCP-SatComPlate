@@ -10,7 +10,7 @@
 fault/
 ├── fault-para.h/.cc             人工维护的 common/F1/F2/F3 参数
 ├── parameter/                   参数合法性校验
-├── model/                       无运行期副作用的 F1/F2/F3 纯模型
+├── model/                       无运行期副作用的 F1/F2 纯模型
 ├── runtime/                     在线判定、状态覆盖与故障执行
 ├── trace/                       统一记录定义、JSON 读取和写出
 └── README.md
@@ -21,6 +21,7 @@ fault/
 | `fault-para.h/.cc` | 按 common、F1、F2、F3 分组的唯一内置故障参数 |
 | `parameter/fault-parameter-validator.h/.cc` | 有限值、范围及跨字段关系的启动前校验 |
 | `model/f1-self-state-fault-model.h/.cc` | 无运行期副作用的 F1 温度、DoD、风险、强度和单步概率 |
+| `model/f2-radiation-fault-model.h/.cc` | 原生 ECEF 转经纬度、区域判定、连续暴露、累计风险与单步概率 |
 | `runtime/fault-model-engine.h/.cc` | 在线读取状态、维护风险 episode、使用 ns-3 随机流判定事件 |
 | `runtime/fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
 | `runtime/fault-controller.h/.cc` | replay/在线事件批处理，以及任务、传输和有效拓扑联动 |
@@ -34,7 +35,9 @@ none
   不创建 FaultController 或模型 tick，也不产生故障专用输出
 
 generate
-  当前 ComputeService 状态 -> F1 模型 -> 一次概率采样
+  当前 ComputeService 状态 -> F1 模型 ┐
+                                       ├-> 选择一个来源 -> 每步一次条件概率采样
+  当前原生 ECEF 坐标       -> F2 模型 ┘
   -> FaultController 精确执行 -> 写出 Fault Trace v2
 
 replay
@@ -45,7 +48,8 @@ replay
 `generate` 中确实会发生故障，并同时写出本轮实际执行的 trace。随后使用相同星座、
 任务和该 trace 进入 `replay`，应得到相同的 NOTICE、NOTICE_CLEAR、START、RECOVERY、
 任务终态、transfer 终态和路由变化。失败的旧任务不会在恢复时复活；恢复只允许后来
-到达的任务继续使用节点。
+到达的任务继续使用节点。当前一次 generate 只允许 F1-only 或 F2-only，联合来源的
+竞争风险将在下一增量定义；F3 尚未接入。
 
 ## F1 自身状态计算故障
 
@@ -67,8 +71,8 @@ q_F1 = 1 - exp(-lambda_F1 * dt)
 ```
 
 达到 `T_crit` 时保留确定性保护停机，即当前步 `q_F1=1`。其他时间每个可计算节点
-每个 tick 只从按稳定卫星 ID 分配的 ns-3 stream 取一个随机数；禁用 F2/F3 不会改变
-F1 随机序列。
+每个可计算 tick 只从按稳定卫星 ID 分配的 ns-3 stream 取一个随机数；来源开关不会
+改变节点间的随机流分配。
 
 当前唯一参数入口是 [`fault-para.cc`](fault-para.cc)，修改后需要重新编译。公共参数
 使用秒，进入运行期后才严格换算为整数 ns；当前检查周期为 1 秒，可恢复计算故障
@@ -77,13 +81,45 @@ F1 随机序列。
 [`docs/calibration/n4b-f1`](../../../docs/calibration/n4b-f1/README.md)。这些数值面向
 1000 秒加速实验，不表示现实卫星热常数或故障率。
 
-F2/F3 参数也已按独立分组保留在同一文件中，但当前默认关闭。其中
+## F2 连续辐射暴露故障
+
+F2 直接读取正式平台共享的 `OnlineOrbitConstellation` ECEF 坐标，再调用 ns-3.48
+`GeographicPositions` 转为经纬度。当前闭区间为：
+
+```text
+-90 deg <= longitude <= 5 deg
+-50 deg <= latitude  <= 5 deg
+```
+
+进入区域时连续暴露 `tau` 从 0 开始，留在区域内按 1 秒检查周期累加，离开区域则
+关闭风险 episode 并清零；下一次进入是一个新 episode。累计风险只用于预警：
+
+```text
+R_F2(tau) = 1 - exp(-lambda_F2 * tau)
+q_F2(dt)  = 1 - exp(-lambda_F2 * dt)
+NOTICE when R_F2 >= theta_F2
+```
+
+实际故障每步只按条件概率 `q_F2` 抽样，绝不会把不断增大的累计风险 `R_F2` 当成本步
+概率重复抽样。因此故障可能发生在 NOTICE 之前，也可能先预警后故障，或者只形成
+风险-only 记录。8 秒算力停机期间轨道和暴露仍继续演化，但暂停新的故障抽样；恢复
+只接纳后续任务。
+
+当前 66 星、1000 秒功能窗口冻结
+`lambda_F2=0.00015569048731122528 s^-1`、`theta_F2=0.06925814255738115`。
+orbit-only 工具先用 66 星冻结参数，再以相同参数验证 351/720 星的规模效应；它不
+创建网络、路由、任务或故障执行。正式 F2-only 验证使用 `--orbitStartOffset=5695`
+对齐选定窗口，并通过真实平台 Monte Carlo 检查事件数。完整证据见
+[`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。这些数值是
+有限窗口内的系统级有效计算故障强度，不是原始 SEU 计数或现实卫星绝对失效率。
+
+F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中，默认关闭。
 `f3.fixedCount` 是未来 `fixed_k` 模式下人工指定的永久撞击卫星数量，不属于任务
-输入；对应模型接入后再完成参数标定。
+输入；F3 接入后再完成其参数标定。
 
 ## 风险 episode
 
-节点第一次满足 F1 风险阈值时产生 NOTICE，并保存当时的联合单步概率：
+节点第一次满足当前来源的风险阈值时产生 NOTICE，并保存当时的单步概率：
 
 ```text
 无风险 -> 风险有效       NOTICE
@@ -93,8 +129,8 @@ F2/F3 参数也已按独立分组保留在同一文件中，但当前默认关�
 ```
 
 风险-only 记录只进入 trace 和事件证据，不改变节点可用性。仿真结束时仍未退出的风险
-episode 以仿真终点关闭。未来 F2 会与 F1 共享同一个节点风险 episode；当前 trace
-不暴露风险来源。
+episode 以仿真终点关闭。当前 F1-only 与 F2-only 共用同一种 trace 记录，trace 不
+暴露风险来源；未来联合模式会在不改变 N4A 执行入口的前提下定义竞争风险。
 
 ## 故障执行
 
@@ -113,4 +149,5 @@ satellite START 同时关闭整星、通信和计算，在精确时刻更新有�
 
 完整 JSON 合同见 [`input/fault/README.md`](../input/fault/README.md)，运行指标见
 [`metrics/README.md`](../metrics/README.md)，可执行闭环见
-[`66 星 F1 示例`](../input/examples/leo-66-120s-f1/README.md)。
+[`66 星 F1 示例`](../input/examples/leo-66-120s-f1/README.md)与
+[`66 星 F2 示例`](../input/examples/leo-66-1000s-f2/README.md)。

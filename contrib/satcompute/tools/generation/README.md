@@ -4,9 +4,10 @@
 ComputeProfile 生成 TaskTrace。它不生成星座、坐标、链路或完整平台配置，也不在
 Python 中复制 ns-3.48 的轨道计算。
 
-脚本包含两个明确的生成档：默认 `stress` 用于可调规模压力任务；
-`f1-validation` 固定生成 N4B 第一阶段的 66 星、20 任务小规模验证输入。两者共用
-同一套输入闭集校验、稳定 ID 和 JSON writer，不再维护独立的故障场景生成器。
+脚本包含三个明确的生成档：默认 `stress` 用于可调规模压力任务；
+`f1-validation` 固定生成 N4B 第一阶段的 66 星、20 任务输入；`f2-validation` 固定
+生成第二阶段的 66 星、8 任务输入。三者共用同一套输入闭集校验、稳定 ID 和 JSON
+writer，不再维护独立的故障场景生成器。
 
 ## 输入与输出
 
@@ -17,13 +18,15 @@ Python 中复制 ns-3.48 的轨道计算。
 - `--compute-profile` 是平台可直接读取的 ComputeProfile，其中所有算力节点都必须
   出现在节点切片中；
 - `stress` 档的字节、任务数量和时间边界均使用整数，时间参数单位为 ns；
-- `f1-validation` 要求节点切片恰好包含 66 星、ComputeProfile 至少包含 6 个节点。
+- `f1-validation` 要求节点切片恰好包含 66 星、ComputeProfile 至少包含 6 个节点；
+- `f2-validation` 要求节点切片恰好包含 66 星，并包含固定验证节点
+  `0/11/18/29/40/51` 的算力配置。
 
 脚本写出两个 JSON：
 
 - `--output-task-trace`：平台可直接读取的 `{"tasks": [...]}`；
-- `--output-workload-summary`：stress 档记录分布与预算，F1 验证档记录任务角色；仅
-  用于检查生成结果，不是平台输入。
+- `--output-workload-summary`：stress 档记录分布与预算，F1/F2 验证档记录任务角色；
+  仅用于检查生成结果，不是平台输入。
 
 ## stress 快速示例
 
@@ -59,13 +62,34 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 形成风险 episode，2 个节点承载稀疏短任务。它只构造任务忙闲条件，不预先写故障；
 是否发生故障仍由正式仿真中的 `FaultModelEngine` 根据实时状态判定。
 
+## F2 验证档
+
+先用 `--orbitStartOffset=5695 --topologyOnly=1` 导出 66 星选定窗口的 0 秒节点切片，
+再运行：
+
+```bash
+python3 contrib/satcompute/tools/generation/generate-task-workload.py \
+  --profile=f2-validation \
+  --nodes-file=/tmp/satcompute-n4b-f2-topology/topology/nodes_0s.json \
+  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
+  --seed=n4b-f2-66 \
+  --output-task-trace=/tmp/f2-task-trace.json \
+  --output-workload-summary=/tmp/f2-workload-summary.json
+```
+
+该档固定产生 8 个任务：两个长热点任务覆盖固定 seed/run 下的实际故障，两个任务
+验证恢复后新任务可继续运行，两个任务覆盖风险-only/终点截断 episode，另有两个
+稀疏对照任务。完整命令和预期结果见
+[`leo-66-1000s-f2`](../../input/examples/leo-66-1000s-f2/README.md)。任务仍只用于
+验证执行生命周期，F2 是否发生由正式平台的实时 ECEF 暴露和 ns-3 随机流决定。
+
 ## 参数
 
 ### 基本任务与到达过程
 
 | 参数 | 含义 |
 |---|---|
-| `--profile` | `stress`（默认）或 `f1-validation` |
+| `--profile` | `stress`（默认）、`f1-validation` 或 `f2-validation` |
 | `--nodes-file` | topology-only 节点切片 |
 | `--compute-profile` | 算力节点及其处理速率 |
 | `--task-count` | stress 必填；任务总数，任务 ID 固定为 `1..N` |
@@ -122,7 +146,8 @@ stress 档的生成过程还保证：
 - 到达时刻、任务数组和 summary 中按稳定 task ID 输出。
 
 F1 验证档额外把热点节点、预期临界故障任务、恢复后任务、风险-only 节点及对照
-节点写入 summary，供测试精确断言；summary 仍不是平台运行输入。
+节点写入 summary。F2 验证档记录轨道起始偏移、固定 seed/run、热点、预期故障时刻、
+恢复后、风险-only 与对照任务。两种 summary 都只供测试精确断言，不是平台输入。
 
 主要函数按职责分为：输入闭集校验（`read_satellite_ids`、
 `read_compute_profile`）、整数预算分配（`largest_remainder`、

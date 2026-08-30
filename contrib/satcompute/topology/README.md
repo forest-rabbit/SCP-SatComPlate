@@ -43,7 +43,10 @@ satellite_id(plane, slot) = plane * S + slot
 
 `OnlineOrbitConstellation` 只封装 ns-3.48 的
 `LeoCircularOrbitMobilityModel`。坐标连续随仿真时间演化；网络更新周期和拓扑切片
-周期只决定何时采样，不改变轨道自身的演化。
+周期只决定何时采样，不改变轨道自身的演化。`orbitStartOffset` 默认为 0；设为非负
+秒数时，仿真 `t=0` 的位置等于同一星座从原始 epoch 推进该时长的位置，但仿真时钟
+仍从 0 开始。正式仿真与 topology-only 使用同一偏移实现，因此可直接对齐某个标定
+窗口，而不需要先空跑数千秒。
 
 ## 固定 plus-grid 候选
 
@@ -124,7 +127,7 @@ service address 用于任务端点和 host route。当前拓扑模块只提供 I
 
 - 星座与算力输入见 [`input/topology/`](../input/topology/README.md)；
 - topology-only JSON 见 [`export/README.md`](export/README.md)；
-- `tests/unit/online-orbit-foundation-test.cc` 检查原生位置和固定候选；
+- `tests/unit/online-orbit-foundation-test.cc` 检查原生位置、轨道起始偏移和固定候选；
 - `tests/unit/online-topology-controller-test.cc` 检查门控、时延、tick 与路由重算；
 - `tests/unit/satellite-fault-execution-test.cc` 检查故障覆盖、即时路由和实时距离恢复；
 - `tests/integration/smoke/run-topology-smoke.sh` 检查切片合同和重复运行确定性。

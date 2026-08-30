@@ -29,6 +29,50 @@
 [`docs/calibration/n4b-f1`](../../../../docs/calibration/n4b-f1/README.md)。这些结果
 属于 66 星/1000 秒功能场景标定，不代表客观航天器失效率。
 
+## F2 轨道暴露标定
+
+`f2-exposure-calibration.cc` 构建为 `satcompute-f2-exposure-calibration`，只推进
+ns-3.48 原生圆轨道并按 1 秒读取 ECEF 坐标。它不创建 InternetStack、NetDevice、
+路由、任务、F1/F3 或故障执行，因此 1000 秒暴露窗口的选择不受网络负载影响。
+
+```bash
+./ns3 run "satcompute-f2-exposure-calibration \
+  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --calibrationDuration=7200 \
+  --windowDuration=1000 \
+  --outputDir=/tmp/satcompute-f2-66"
+```
+
+| 参数 | 含义 |
+|---|---|
+| `--constellationConfig` | 必填；一个原生 LEO shell CSV |
+| `--calibrationDuration` | 轨道扫描时长，默认 7200 秒 |
+| `--windowDuration` | 滑动功能窗口，默认 1000 秒 |
+| `--referenceFailureIntensity` | 可选；以 66 星冻结强度验证更大星座，不参与重新标定 |
+| `--outputDir` | 必填；episode CSV 和 summary 的输出目录 |
+
+工具输出 `n4b-f2-exposure-calibration.csv` 与
+`n4b-f2-exposure-summary.json`。66 星负责选择窗口并冻结 `lambda_F2/theta_F2`；
+351/720 星必须复用 66 星强度，只检查总暴露和期望事件数是否随规模增长，不能各自
+重新调成平均一次故障。冻结证据和三组复现命令见
+[`docs/calibration/n4b-f2`](../../../../docs/calibration/n4b-f2/README.md)。
+
+## F2 真实平台 Monte Carlo
+
+orbit-only 标定完成后，`run-f2-monte-carlo.py` 才调用 66 星、1000 秒、8 任务的真实
+F2-only generate；它覆盖概率抽样、N4A compute 故障、8 秒恢复和任务执行，不重复
+实现 F2 公式。
+
+```bash
+python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
+  --run-count=30 \
+  --outputDir=/tmp/satcompute-f2-monte-carlo
+```
+
+脚本固定 `randomSeed=1`，依次使用 `randomRun=1..N`，输出逐 run CSV 和统计 JSON。
+当前 30-run 实际故障均值为 1.1667，近似 95% 均值区间包含解析目标 1，因此没有因
+单次运行的随机计数重新调整强度。
+
 ## 失败输出一致性检查
 
 `check-flow-drop-reasons.py` 检查一次失败任务运行中的 FlowMonitor DropReason 证据。

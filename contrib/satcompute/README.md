@@ -75,6 +75,8 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 [100 秒、66 星、20 任务示例](input/examples/leo-66-100s-20tasks/README.md)。
 F1 在线生成与重放见
 [120 秒、66 星 F1 示例](input/examples/leo-66-120s-f1/README.md)。
+F2 在线生成与重放见
+[1000 秒、66 星 F2 示例](input/examples/leo-66-1000s-f2/README.md)。
 
 ## 参数边界
 
@@ -95,6 +97,7 @@ F1 在线生成与重放见
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
 | `--constellationConfig` | `input/topology/constellations/synthetic-66.csv` | 路径 | 一个原生 LEO shell CSV；不能为空且必须通过星座校验 |
+| `--orbitStartOffset` | `0` | 秒 | 仿真 `t=0` 相对星座轨道 epoch 的确定性偏移；必须为有限非负值 |
 | `--maxIslDistance` | `6171353` | 米 | 候选 ISL 最大有效距离；不得超过对应轨道高度的 80 km clearance 上限 |
 | `--networkUpdateInterval` | `20` | 秒 | 正式仿真的链路状态/时延更新周期；必须大于 0 |
 | `--topologyOnly` | `false` | bool | 只输出轨道和拓扑切片；启用时禁止任务和故障输入 |
@@ -148,14 +151,20 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 |---|---:|---|---|
 | `--faultMode` | `none` | 枚举 | `none`、`generate` 或 `replay` |
 | `--faultTrace` | 空 | 路径 | generate 输出或 replay 输入的统一 Fault Trace |
+| `--faultEnableF1` | `true` | bool | generate 是否启用内置 F1 来源 |
+| `--faultEnableF2` | `false` | bool | generate 是否启用内置 F2 来源 |
+| `--faultEnableF3` | `false` | bool | F3 接入前必须保持关闭 |
 
 `none` 要求 `faultTrace` 为空；`generate` 将它作为输出路径，`replay` 将它作为
 已有输入路径。故障内部参数集中在 `fault/fault-para.cc`，不再使用模型配置 JSON。
-当前 generate 已完成 F1 自身状态计算故障，F2 辐射暴露和 F3 永久整星生成将在
-后续阶段接入。`compute` 故障只改变算力可用性；`satellite` 故障还会
+三个 `faultEnable*` 只选择本次 generate 的来源，不复制经纬度、强度、阈值或恢复
+时间等内部参数。当前 generate 支持 F1-only 和 F2-only；F1 与 F2 同时启用会被
+显式拒绝，待下一增量定义联合风险后再开放，F3 永久整星生成也尚未接入。
+`compute` 故障只改变算力可用性；`satellite` 故障还会
 在精确纳秒关闭关联 ISL、立即重算 IPv4 路由，并按任务阶段终止端点 transfer。
 有限恢复重新读取当时的原生轨道坐标，只恢复仍满足距离门限的候选链路。两类故障
-都不复活旧任务。generate 中概率只采样一次并记录；replay 不会再次抽样。
+都不复活旧任务。generate 的每个检查步只按当步条件概率采样一次；replay 只执行已
+确定的 trace，不会再次抽样。
 
 ### output
 
@@ -202,11 +211,12 @@ plane-major 顺序编号为 `0..65`，不直接使用全局 `Node::GetId()`。
 固定候选并记录 `active`、距离、时延和带宽。详细合同见
 [topology/export](topology/export/README.md)。
 
-topology-only 切片仍用于可视化和后续依赖位置的 F2/F3 标定，但 F1 正式运行不需要
-预先跑一遍平台：generate 直接读取本轮 ComputeService 忙闲状态，在线产生并执行
-风险/故障，同时输出可 replay 的 trace。replay 使用相同星座和任务输入重放已经
-确定的事件。compute 与整星故障都按精确时刻执行；整星通信资源禁用、恢复和
-重路由不会等待网络周期 tick。
+topology-only 切片仍用于可视化和后续故障研究。F2 暴露参数的 orbit-only 标定只
+推进与正式平台相同的原生轨道，不创建网络、路由或任务；正式 F2 generate 则直接
+读取本轮 `OnlineOrbitConstellation` 的实时 ECEF 坐标，不回读这些切片。F1 同样
+直接读取本轮 ComputeService 忙闲状态。两者都会在线产生并执行风险/故障，同时输出
+可 replay 的 trace。replay 使用相同星座和任务输入重放已经确定的事件。compute 与
+整星故障都按精确时刻执行；整星通信资源禁用、恢复和重路由不会等待网络周期 tick。
 
 ## 任务与计算
 
