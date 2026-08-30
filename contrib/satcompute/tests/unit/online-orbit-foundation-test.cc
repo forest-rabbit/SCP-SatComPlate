@@ -74,13 +74,20 @@ RunIdentityAndMotionCase()
                    0.001,
                    "online orbit ECEF radius differs");
 
+        const Vector predictedOneSecond =
+            constellation.GetPositionAt(0, Seconds(1));
         double movementM = 0.0;
+        double predictionErrorM = 0.0;
         Simulator::Schedule(Seconds(1), [&] {
-            movementM = Distance(initial, constellation.GetPosition(0));
+            const Vector actualOneSecond = constellation.GetPosition(0);
+            movementM = Distance(initial, actualOneSecond);
+            predictionErrorM = Distance(predictedOneSecond, actualOneSecond);
         });
         Simulator::Stop(Seconds(1));
         Simulator::Run();
         Check(movementM > 1000.0, "official mobility position did not evolve continuously");
+        Check(predictionErrorM < 0.001,
+              "time-indexed native orbit query differs from runtime position");
     }
     Simulator::Destroy();
 }

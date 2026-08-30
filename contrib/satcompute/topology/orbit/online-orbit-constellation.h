@@ -51,6 +51,14 @@ class OnlineOrbitConstellation
     const SatelliteIdMap& GetIdMap() const;
     Ptr<LeoCircularOrbitMobilityModel> GetMobilityModel(uint32_t satelliteId) const;
     Vector GetPosition(uint32_t satelliteId) const;
+    /**
+     * Return one deterministic native-orbit position without advancing simulation time.
+     *
+     * @param satelliteId Stable external satellite ID.
+     * @param simulationTime Absolute ns-3 simulation time.
+     * @return ECEF position in meters at simulationTime.
+     */
+    Vector GetPositionAt(uint32_t satelliteId, Time simulationTime) const;
     std::vector<SatelliteEcefPosition> GetPositions() const;
 
   private:

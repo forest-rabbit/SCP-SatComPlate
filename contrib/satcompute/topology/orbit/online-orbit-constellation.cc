@@ -138,6 +138,13 @@ OnlineOrbitConstellation::GetPosition(uint32_t satelliteId) const
     return GetMobilityModel(satelliteId)->GetPosition();
 }
 
+Vector
+OnlineOrbitConstellation::GetPositionAt(uint32_t satelliteId,
+                                        Time simulationTime) const
+{
+    return GetMobilityModel(satelliteId)->GetPositionAt(simulationTime);
+}
+
 std::vector<SatelliteEcefPosition>
 OnlineOrbitConstellation::GetPositions() const
 {
