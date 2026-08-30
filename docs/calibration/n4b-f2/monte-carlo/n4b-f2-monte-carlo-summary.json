@@ -2,21 +2,21 @@
   "calibration_scope": "real F2-only platform runs with 66 satellites, 1000 seconds, 8 validation tasks, and no F1/F3",
   "random_seed": 1,
   "random_run_first": 1,
-  "random_run_last": 30,
-  "run_count": 30,
+  "random_run_last": 100,
+  "run_count": 100,
   "orbit_start_offset_s": 5695,
   "effective_failure_intensity_per_s": 0.00015569048731122528,
   "analytical_target_mean_fault_count": 1.0,
   "observed_fault_count": {
     "min": 0,
-    "mean": 1.1666666666666667,
-    "population_variance": 1.2722222222222221,
+    "mean": 1.02,
+    "population_variance": 0.9196,
     "max": 4
   },
-  "observed_mean_standard_error": 0.20945102482624972,
+  "observed_mean_standard_error": 0.09637888196533974,
   "approximate_95_percent_mean_interval": [
-    0.7561426580072172,
-    1.5771906753261162
+    0.8310973913479341,
+    1.2089026086520658
   ],
   "observed_risk_only_episode_count": {
     "min": 7,
@@ -24,6 +24,6 @@
     "population_variance": 0,
     "max": 7
   },
-  "zero_fault_run_count": 10,
-  "relative_mean_error": 0.16666666666666674
+  "zero_fault_run_count": 36,
+  "relative_mean_error": 0.020000000000000018
 }

@@ -8,6 +8,7 @@
 #include "fault-controller.h"
 
 #include "ns3/fault-para.h"
+#include "ns3/compute-fault-combination.h"
 #include "ns3/f1-self-state-fault-model.h"
 #include "ns3/f2-radiation-fault-model.h"
 
@@ -42,6 +43,12 @@ struct FaultModelNodeSnapshot
     uint32_t nodeId{}; ///< Stable external satellite ID.
     F1SelfStateFaultSnapshot f1State; ///< Current pure F1 state.
     F2RadiationFaultSnapshot f2State; ///< Current pure F2 state.
+    double combinedStepFailureProbability{}; ///< Current q_comp output.
+    uint64_t f1SampleCount{}; ///< Number of independent F1 random draws.
+    uint64_t f2SampleCount{}; ///< Number of independent F2 random draws.
+    uint64_t f1OccurrenceCount{}; ///< Number of F1 source hits.
+    uint64_t f2OccurrenceCount{}; ///< Number of F2 source hits.
+    uint64_t computeFaultCount{}; ///< Number of coalesced compute faults.
     bool riskEpisodeActive{}; ///< Whether a notice episode remains open.
     bool computeAvailable{true}; ///< Final N4A compute availability.
 };
@@ -96,7 +103,13 @@ class FaultModelEngine : public Object
         F1SelfStateFaultSnapshot f1State; ///< Current pure F1 state.
         F2RadiationFaultSnapshot f2State; ///< Current pure F2 state.
         std::optional<RiskEpisode> riskEpisode; ///< Open combined-risk episode.
-        Ptr<UniformRandomVariable> random; ///< Stable per-node sampling stream.
+        Ptr<UniformRandomVariable> f1Random; ///< Stable per-node F1 sampling stream.
+        Ptr<UniformRandomVariable> f2Random; ///< Stable per-node F2 sampling stream.
+        uint64_t f1SampleCount{}; ///< Independent F1 draws consumed.
+        uint64_t f2SampleCount{}; ///< Independent F2 draws consumed.
+        uint64_t f1OccurrenceCount{}; ///< F1 source hits before coalescing.
+        uint64_t f2OccurrenceCount{}; ///< F2 source hits before coalescing.
+        uint64_t computeFaultCount{}; ///< Coalesced compute-fault starts.
         Ptr<ComputeService> computeService; ///< Live busy/idle source.
     };
 

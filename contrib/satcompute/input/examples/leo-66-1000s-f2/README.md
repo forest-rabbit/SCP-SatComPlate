@@ -7,9 +7,10 @@ SEU 或计算失效率。轨道使用 `synthetic-66.csv`，仿真 0 秒通过
 
 任务由统一的 `generate-task-workload.py --profile=f2-validation` 生成，共 8 个：
 
-- 节点 51 和 29 各有一个长任务覆盖固定 seed 下的 383 秒和 621 秒 F2 故障；
-- 两个旧任务在故障开始时失败，不会在恢复后复活；
-- 两节点各有一个 8 秒恢复后到达的新任务，均正常完成；
+- 节点 51 的长任务覆盖固定 seed/run 下的 386 秒 F2 故障；
+- 该旧任务在故障开始时失败，不会在恢复后复活；
+- 节点 51 的后续任务在 8 秒恢复后到达并正常完成；
+- 节点 29 的两个任务作为未命中故障的长任务对照；
 - 节点 40 和 18 各有一个任务覆盖风险-only 或终点截断风险；
 - 节点 0 和 11 各有一个稀疏对照任务。
 
@@ -51,7 +52,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 ./ns3 run "satcompute \
   --simulationDuration=1000 \
   --randomSeed=1 \
-  --randomRun=1 \
+  --randomRun=16 \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
   --orbitStartOffset=5695 \
   --maxIslDistance=6171353 \
@@ -71,8 +72,8 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --outputDir=/tmp/satcompute-f2-generate"
 ```
 
-固定 seed/run 下，预期产生节点 51（383 秒）和节点 29（621 秒）的两次实际 compute
-故障，并保留 7 条风险-only 记录。第 1、3 号任务失败，第 2、4–8 号任务完成；F2
+固定 seed/run 下，预期产生节点 51（386 秒）的一次实际 compute 故障，并保留 7 条
+风险-only 记录。第 1 号任务失败，第 2–8 号任务完成；F2
 计算故障不改变 ISL，也不触发路由重算。
 
 ## Replay
@@ -83,7 +84,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 ./ns3 run "satcompute \
   --simulationDuration=1000 \
   --randomSeed=1 \
-  --randomRun=1 \
+  --randomRun=16 \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
   --orbitStartOffset=5695 \
   --maxIslDistance=6171353 \

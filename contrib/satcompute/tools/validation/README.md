@@ -65,12 +65,13 @@ F2-only generate；它覆盖概率抽样、N4A compute 故障、8 秒恢复和�
 
 ```bash
 python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
-  --run-count=30 \
+  --run-count=100 \
   --outputDir=/tmp/satcompute-f2-monte-carlo
 ```
 
 脚本固定 `randomSeed=1`，依次使用 `randomRun=1..N`，输出逐 run CSV 和统计 JSON。
-当前 30-run 实际故障均值为 1.1667，近似 95% 均值区间包含解析目标 1，因此没有因
+当前 100-run 实际故障均值为 1.02，近似 95% 均值区间为
+`[0.8311, 1.2089]`，包含解析目标 1，因此没有因
 单次运行的随机计数重新调整强度。
 
 ## 失败输出一致性检查

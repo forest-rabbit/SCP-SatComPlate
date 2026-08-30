@@ -20,6 +20,7 @@ fault/
 |---|---|
 | `fault-para.h/.cc` | 按 common、F1、F2、F3 分组的唯一内置故障参数 |
 | `parameter/fault-parameter-validator.h/.cc` | 有限值、范围及跨字段关系的启动前校验 |
+| `model/compute-fault-combination.h/.cc` | 计算 `q_comp`，并将独立 F1/F2 抽样折叠为一次平台结果 |
 | `model/f1-self-state-fault-model.h/.cc` | 无运行期副作用的 F1 温度、DoD、风险、强度和单步概率 |
 | `model/f2-radiation-fault-model.h/.cc` | 原生 ECEF 转经纬度、区域判定、连续暴露、累计风险与单步概率 |
 | `runtime/fault-model-engine.h/.cc` | 在线读取状态、维护风险 episode、使用 ns-3 随机流判定事件 |
@@ -36,7 +37,7 @@ none
 
 generate
   当前 ComputeService 状态 -> F1 模型 ┐
-                                       ├-> 选择一个来源 -> 每步一次条件概率采样
+                                       ├-> 各来源独立抽样 -> 同刻命中合并为一次 START
   当前原生 ECEF 坐标       -> F2 模型 ┘
   -> FaultController 精确执行 -> 写出 Fault Trace v2
 
@@ -48,8 +49,8 @@ replay
 `generate` 中确实会发生故障，并同时写出本轮实际执行的 trace。随后使用相同星座、
 任务和该 trace 进入 `replay`，应得到相同的 NOTICE、NOTICE_CLEAR、START、RECOVERY、
 任务终态、transfer 终态和路由变化。失败的旧任务不会在恢复时复活；恢复只允许后来
-到达的任务继续使用节点。当前一次 generate 只允许 F1-only 或 F2-only，联合来源的
-竞争风险将在下一增量定义；F3 尚未接入。
+到达的任务继续使用节点。generate 可启用 F1-only、F2-only 或 F1+F2；联合来源按
+独立竞争风险处理：F1/F2 分别抽样，平台只执行二者结果的逻辑或。F3 尚未接入。
 
 ## F1 自身状态计算故障
 
@@ -105,6 +106,18 @@ NOTICE when R_F2 >= theta_F2
 风险-only 记录。8 秒算力停机期间轨道和暴露仍继续演化，但暂停新的故障抽样；恢复
 只接纳后续任务。
 
+F1 与 F2 同时启用时，两者使用互不共享状态的 ns-3 随机流分别抽样：
+
+```text
+X_F1 ~ Bernoulli(q_F1)
+X_F2 ~ Bernoulli(q_F2)
+compute START = X_F1 OR X_F2
+q_comp = 1 - (1 - q_F1) * (1 - q_F2)
+```
+
+`q_comp` 是 trace、观测和后续预测使用的联合概率，不替代两个来源的真实抽样。同一
+节点同一检查时刻即使两个来源同时命中，也只提交一次可恢复 compute 故障。
+
 当前 66 星、1000 秒功能窗口冻结
 `lambda_F2=0.00015569048731122528 s^-1`、`theta_F2=0.06925814255738115`。
 orbit-only 工具先用 66 星冻结参数，再以相同参数验证 351/720 星的规模效应；它不
@@ -129,8 +142,9 @@ F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中
 ```
 
 风险-only 记录只进入 trace 和事件证据，不改变节点可用性。仿真结束时仍未退出的风险
-episode 以仿真终点关闭。当前 F1-only 与 F2-only 共用同一种 trace 记录，trace 不
-暴露风险来源；未来联合模式会在不改变 N4A 执行入口的前提下定义竞争风险。
+episode 以仿真终点关闭。F1-only、F2-only 与 F1+F2 共用同一种 trace 记录，trace
+不暴露风险来源；联合模式的 `failure_probability` 保存 `q_comp`，而真实发生仍来自
+F1/F2 各自的独立随机判定。
 
 ## 故障执行
 

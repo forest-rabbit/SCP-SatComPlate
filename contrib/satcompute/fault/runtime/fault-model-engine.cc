@@ -27,7 +27,8 @@ NS_OBJECT_ENSURE_REGISTERED(FaultModelEngine);
 namespace
 {
 
-constexpr int64_t COMPUTE_FAULT_STREAM_BASE = 1000000;
+constexpr int64_t F1_COMPUTE_FAULT_STREAM_BASE = 1000000;
+constexpr int64_t F2_COMPUTE_FAULT_STREAM_BASE = 2000000;
 
 } // namespace
 
@@ -71,11 +72,6 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
     {
         throw FaultModelEngineError(
             "FaultModelEngine requires one supported enabled fault source");
-    }
-    if (parameters.f1.enabled && parameters.f2.enabled)
-    {
-        throw FaultModelEngineError(
-            "combined F1/F2 generation belongs to the next N4B increment");
     }
     if ((parameters.f1.enabled || parameters.f2.enabled) && computeNodeIds.empty())
     {
@@ -121,8 +117,16 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
         {
             state.f2State = m_f2Model->CreateInitialSnapshot();
         }
-        state.random = CreateObject<UniformRandomVariable>();
-        state.random->SetStream(COMPUTE_FAULT_STREAM_BASE + nodeId);
+        if (m_f1Model.has_value())
+        {
+            state.f1Random = CreateObject<UniformRandomVariable>();
+            state.f1Random->SetStream(F1_COMPUTE_FAULT_STREAM_BASE + nodeId);
+        }
+        if (m_f2Model.has_value())
+        {
+            state.f2Random = CreateObject<UniformRandomVariable>();
+            state.f2Random->SetStream(F2_COMPUTE_FAULT_STREAM_BASE + nodeId);
+        }
         m_nodes.emplace(nodeId, state);
     }
 
@@ -286,12 +290,18 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
             continue;
         }
 
-        const bool riskActive =
-            m_f1Model.has_value() ? m_f1Model->IsRiskActive(state.f1State)
-                                  : m_f2Model->IsRiskActive(state.f2State);
+        const bool f1RiskActive =
+            m_f1Model.has_value() && m_f1Model->IsRiskActive(state.f1State);
+        const bool f2RiskActive =
+            m_f2Model.has_value() && m_f2Model->IsRiskActive(state.f2State);
+        const bool riskActive = f1RiskActive || f2RiskActive;
+        const double f1StepFailureProbability =
+            m_f1Model.has_value() ? state.f1State.stepFailureProbability : 0.0;
+        const double f2StepFailureProbability =
+            m_f2Model.has_value() ? state.f2State.stepFailureProbability : 0.0;
         const double stepFailureProbability =
-            m_f1Model.has_value() ? state.f1State.stepFailureProbability
-                                  : state.f2State.stepFailureProbability;
+            CombineComputeFaultProbabilities(f1StepFailureProbability,
+                                             f2StepFailureProbability);
         if (riskActive && !state.riskEpisode.has_value())
         {
             NS_ABORT_MSG_IF(m_nextFaultId == std::numeric_limits<uint64_t>::max(),
@@ -312,9 +322,34 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
             state.riskEpisode = std::nullopt;
         }
 
-        const double randomValue = state.random->GetValue();
-        if (randomValue < stepFailureProbability)
+        double f1RandomValue = 0.0;
+        double f2RandomValue = 0.0;
+        if (m_f1Model.has_value())
         {
+            f1RandomValue = state.f1Random->GetValue();
+            ++state.f1SampleCount;
+        }
+        if (m_f2Model.has_value())
+        {
+            f2RandomValue = state.f2Random->GetValue();
+            ++state.f2SampleCount;
+        }
+        const ComputeFaultSourceOutcome outcome =
+            EvaluateComputeFaultSources(f1StepFailureProbability,
+                                        f1RandomValue,
+                                        f2StepFailureProbability,
+                                        f2RandomValue);
+        if (outcome.f1Occurred)
+        {
+            ++state.f1OccurrenceCount;
+        }
+        if (outcome.f2Occurred)
+        {
+            ++state.f2OccurrenceCount;
+        }
+        if (outcome.computeFaultOccurred)
+        {
+            ++state.computeFaultCount;
             uint64_t faultId;
             if (state.riskEpisode.has_value())
             {
@@ -386,6 +421,14 @@ FaultModelEngine::GetNodeSnapshots() const
             {nodeId,
              state.f1State,
              state.f2State,
+             CombineComputeFaultProbabilities(
+                 m_f1Model.has_value() ? state.f1State.stepFailureProbability : 0.0,
+                 m_f2Model.has_value() ? state.f2State.stepFailureProbability : 0.0),
+             state.f1SampleCount,
+             state.f2SampleCount,
+             state.f1OccurrenceCount,
+             state.f2OccurrenceCount,
+             state.computeFaultCount,
              state.riskEpisode.has_value(),
              m_faultController->GetState().IsComputeAvailable(nodeId)});
     }
@@ -405,7 +448,8 @@ FaultModelEngine::DoDispose()
     for (auto& [nodeId, state] : m_nodes)
     {
         static_cast<void>(nodeId);
-        state.random = nullptr;
+        state.f1Random = nullptr;
+        state.f2Random = nullptr;
         state.computeService = nullptr;
     }
     m_faultController = nullptr;

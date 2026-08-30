@@ -54,9 +54,9 @@ ns-3.48 原生圆轨道并统计 F2 区域暴露，不创建网络协议栈，�
 ## 实际平台 Monte Carlo
 
 冻结参数后，以相同 66 星窗口和 8 个小任务运行真实的 F2-only generate 链路，固定
-`randomSeed=1` 并依次使用 `randomRun=1..30`。30 个 run 的实际故障数均值为
-1.1667，最小值为 0，最大值为 4，10 个 run 没有实际故障。样本均值标准误约为
-0.2095，近似 95% 均值区间为 `[0.7561, 1.5772]`，包含解析目标 1。因此保留
+`randomSeed=1` 并依次使用 `randomRun=1..100`。100 个 run 的实际故障数均值为
+1.02，最小值为 0，最大值为 4，36 个 run 没有实际故障。样本均值标准误约为
+0.0964，近似 95% 均值区间为 `[0.8311, 1.2089]`，包含解析目标 1。因此保留
 `lambda_F2`，不因单个 run 的 0 次、2 次或更多事件而重新调参。
 
 该验证调用真实平台和 N4A 故障执行：8 秒计算不可用期间暂停新故障采样，恢复后若
@@ -88,7 +88,7 @@ ns-3.48 原生圆轨道并统计 F2 区域暴露，不创建网络协议栈，�
   --outputDir=/tmp/satcompute-n4b-f2-720"
 
 python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
-  --run-count=30 \
+  --run-count=100 \
   --outputDir=/tmp/satcompute-n4b-f2-monte-carlo
 ```
 

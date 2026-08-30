@@ -101,7 +101,7 @@ replay_f1_66_result="$(run_platform \
   "$regression_output/replay-f1-66" \
   "$f1_66_common --faultMode=replay --faultTrace=$f1_66_trace")"
 f2_trace="$regression_output/generate-f2-66/fault-trace.json"
-f2_common="--simulationDuration=1000 --randomSeed=1 --randomRun=1 \
+f2_common="--simulationDuration=1000 --randomSeed=1 --randomRun=16 \
 --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
 --orbitStartOffset=5695 --maxIslDistance=6171353 --delayMode=fixed \
 --fixedDelay=0.008 --networkUpdateInterval=20 --islBandwidthBps=2000000000 \
@@ -119,6 +119,19 @@ generate_f2_second_result="$(run_platform \
 replay_f2_result="$(run_platform \
   "$regression_output/replay-f2-66" \
   "$f2_common --faultMode=replay --faultTrace=$f2_trace")"
+combined_trace="$regression_output/generate-combined-66/fault-trace.json"
+generate_combined_result="$(run_platform \
+  "$regression_output/generate-combined-66" \
+  "$f2_common --faultMode=generate --faultEnableF1=1 --faultEnableF2=1 \
+--faultEnableF3=0 --faultTrace=$combined_trace")"
+combined_second_trace="$regression_output/generate-combined-66-second/fault-trace.json"
+generate_combined_second_result="$(run_platform \
+  "$regression_output/generate-combined-66-second" \
+  "$f2_common --faultMode=generate --faultEnableF1=1 --faultEnableF2=1 \
+--faultEnableF3=0 --faultTrace=$combined_second_trace")"
+replay_combined_result="$(run_platform \
+  "$regression_output/replay-combined-66" \
+  "$f2_common --faultMode=replay --faultTrace=$combined_trace")"
 
 for result in "$compute_result" "$satellite_first_result" "$satellite_second_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
@@ -153,6 +166,14 @@ for result in "$generate_f2_result" "$generate_f2_second_result" "$replay_f2_res
   if [[ "$result" != *'"status":"partial"'* ||
         "$result" != *'"satellite_count":66'* ]]; then
     echo "66-star F2 generate/replay result differs: $result" >&2
+    exit 1
+  fi
+done
+for result in "$generate_combined_result" "$generate_combined_second_result" \
+  "$replay_combined_result"; do
+  if [[ "$result" != *'"status":"partial"'* ||
+        "$result" != *'"satellite_count":66'* ]]; then
+    echo "66-star combined F1/F2 generate/replay result differs: $result" >&2
     exit 1
   fi
 done
@@ -392,7 +413,7 @@ if (
 
 f2_trace = load_json("generate-f2-66/fault-trace.json")
 f2_faults = f2_trace["faults"]
-if f2_trace["schema_version"] != 2 or len(f2_faults) != 9:
+if f2_trace["schema_version"] != 2 or len(f2_faults) != 8:
     raise SystemExit(f"66-star F2 trace shape differs: {f2_faults}")
 f2_occurred = [fault for fault in f2_faults if fault["fault_occurred"]]
 f2_risk_only = [fault for fault in f2_faults if not fault["fault_occurred"]]
@@ -406,8 +427,7 @@ if [
     )
     for fault in f2_occurred
 ] != [
-    (51, None, 383_000_000_000, None, 8_000_000_000),
-    (29, 461_000_000_000, 621_000_000_000, 160_000_000_000, 8_000_000_000),
+    (51, None, 386_000_000_000, None, 8_000_000_000),
 ]:
     raise SystemExit(f"66-star F2 occurred faults differ: {f2_occurred}")
 if len(f2_risk_only) != 7 or any(
@@ -442,11 +462,10 @@ f2_recovery_events = [row for row in f2_events if row["event_type"] == "RECOVERY
 if [
     (int(row["node_id"]), int(row["simulation_time_ns"]))
     for row in f2_start_events
-] != [(51, 383_000_000_000), (29, 621_000_000_000)]:
+] != [(51, 386_000_000_000)]:
     raise SystemExit("F2 START events differ")
 if [int(row["simulation_time_ns"]) for row in f2_recovery_events] != [
-    391_000_000_000,
-    629_000_000_000,
+    394_000_000_000,
 ]:
     raise SystemExit("F2 recovery duration differs")
 if any(row["route_recomputed"] != "false" for row in f2_events):
@@ -460,9 +479,9 @@ if sorted(
     task_id
     for task_id, row in f2_tasks.items()
     if row["final_state"] == "FAILED"
-) != [1, 3]:
-    raise SystemExit("F2 did not fail the two active hotspot tasks")
-if any(f2_tasks[task_id]["final_state"] != "COMPLETED" for task_id in (2, 4, 5, 6, 7, 8)):
+) != [1]:
+    raise SystemExit("F2 did not fail the active hotspot task")
+if any(f2_tasks[task_id]["final_state"] != "COMPLETED" for task_id in (2, 3, 4, 5, 6, 7, 8)):
     raise SystemExit("F2 post-recovery, risk-only, or sparse task did not complete")
 f2_run = load_json("generate-f2-66/run-summary.json")
 if (
@@ -470,8 +489,49 @@ if (
     f2_run["applied_topology_slice_count"],
     f2_run["task_count"],
     f2_run["completed_task_count"],
-) != (1, 50, 8, 6):
+) != (1, 50, 8, 7):
     raise SystemExit("66-star F2 changed topology, routing, or task counts")
+
+
+combined_trace = load_json("generate-combined-66/fault-trace.json")
+combined_faults = combined_trace["faults"]
+combined_occurred = [
+    fault for fault in combined_faults if fault["fault_occurred"]
+]
+if len(combined_faults) != 9 or [
+    (fault["node_id"], fault["start_time_ns"])
+    for fault in combined_occurred
+] != [
+    (51, 386_000_000_000),
+    (29, 656_000_000_000),
+]:
+    raise SystemExit(f"combined F1/F2 fault trace differs: {combined_faults}")
+if combined_occurred[0]["failure_probability"] <= f2_occurred[0]["failure_probability"]:
+    raise SystemExit("combined trace did not expose q_comp")
+if len({
+    (fault["node_id"], fault["start_time_ns"])
+    for fault in combined_occurred
+}) != len(combined_occurred):
+    raise SystemExit("combined F1/F2 source hits were not coalesced")
+if (root / "generate-combined-66/fault-trace.json").read_bytes() != (
+    root / "generate-combined-66-second/fault-trace.json"
+).read_bytes():
+    raise SystemExit("same-seed combined F1/F2 traces are not byte-identical")
+for filename in (
+    "fault-events.csv",
+    "fault-summary.json",
+    "task-events.csv",
+    "task-summary.csv",
+    "transfer-summary.csv",
+    "ecmp-route-events.csv",
+    "size-aware-reservation-events.csv",
+    "size-aware-summary.json",
+    "capacity-aware-summary.json",
+):
+    generated = (root / "generate-combined-66" / filename).read_bytes()
+    replayed = (root / "replay-combined-66" / filename).read_bytes()
+    if generated != replayed:
+        raise SystemExit(f"combined F1/F2 generate/replay output differs: {filename}")
 
 
 compute_events = load_csv("compute/fault-events.csv")

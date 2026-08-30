@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
+#include "ns3/compute-fault-combination.h"
 #include "ns3/fault-parameter-validator.h"
 #include "ns3/fault-para.h"
 #include "ns3/f1-self-state-fault-model.h"
@@ -351,6 +352,48 @@ CheckF2Model()
           "F2 re-entry retained exposure from the preceding episode");
 }
 
+void
+CheckComputeFaultCombination()
+{
+    const double combined = CombineComputeFaultProbabilities(0.2, 0.3);
+    Check(std::abs(combined - 0.44) < 1e-15,
+          "F1/F2 union probability differs");
+    Check(CombineComputeFaultProbabilities(0.0, 0.0) == 0.0 &&
+              CombineComputeFaultProbabilities(1.0, 0.3) == 1.0 &&
+              CombineComputeFaultProbabilities(0.2, 1.0) == 1.0,
+          "F1/F2 union probability boundaries differ");
+
+    const ComputeFaultSourceOutcome both =
+        EvaluateComputeFaultSources(0.6, 0.2, 0.7, 0.3);
+    Check(both.f1Occurred && both.f2Occurred && both.computeFaultOccurred &&
+              std::abs(both.combinedProbability - 0.88) < 1e-15,
+          "simultaneous F1/F2 hits were not coalesced");
+
+    const ComputeFaultSourceOutcome f1Only =
+        EvaluateComputeFaultSources(0.6, 0.2, 0.7, 0.9);
+    const ComputeFaultSourceOutcome f2Only =
+        EvaluateComputeFaultSources(0.6, 0.9, 0.7, 0.3);
+    const ComputeFaultSourceOutcome neither =
+        EvaluateComputeFaultSources(0.6, 0.9, 0.7, 0.9);
+    Check(f1Only.f1Occurred && !f1Only.f2Occurred &&
+              f1Only.computeFaultOccurred && !f2Only.f1Occurred &&
+              f2Only.f2Occurred && f2Only.computeFaultOccurred &&
+              !neither.f1Occurred && !neither.f2Occurred &&
+              !neither.computeFaultOccurred,
+          "independent F1/F2 source outcomes differ");
+
+    bool invalidRejected = false;
+    try
+    {
+        EvaluateComputeFaultSources(-0.1, 0.0, 0.0, 0.0);
+    }
+    catch (const std::invalid_argument&)
+    {
+        invalidRejected = true;
+    }
+    Check(invalidRejected, "invalid compute-fault probability was accepted");
+}
+
 } // namespace
 
 int
@@ -362,6 +405,7 @@ main()
         CheckInvalid();
         CheckF1Model();
         CheckF2Model();
+        CheckComputeFaultCombination();
         std::cout << "SatCompute fault model tests passed." << std::endl;
         return 0;
     }

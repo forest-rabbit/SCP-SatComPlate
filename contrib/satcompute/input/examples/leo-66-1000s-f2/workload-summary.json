@@ -4,7 +4,7 @@
   "task_count": 8,
   "orbit_start_offset_s": 5695,
   "random_seed": 1,
-  "random_run": 1,
+  "random_run": 16,
   "roles": [
     {
       "task_id": 1,
@@ -16,11 +16,11 @@
     },
     {
       "task_id": 3,
-      "role": "fault-active"
+      "role": "unaffected-long-task"
     },
     {
       "task_id": 4,
-      "role": "post-recovery"
+      "role": "unaffected-follow-up"
     },
     {
       "task_id": 5,
@@ -44,11 +44,13 @@
     29
   ],
   "expected_failed_task_ids": [
-    1,
-    3
+    1
   ],
   "post_recovery_task_ids": [
-    2,
+    2
+  ],
+  "unaffected_hotspot_task_ids": [
+    3,
     4
   ],
   "risk_only_task_ids": [
@@ -60,7 +62,6 @@
     8
   ],
   "expected_fault_start_time_ns": {
-    "51": 383000000000,
-    "29": 621000000000
+    "51": 386000000000
   }
 }
