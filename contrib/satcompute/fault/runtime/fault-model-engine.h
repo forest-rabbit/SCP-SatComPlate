@@ -6,8 +6,9 @@
 #define SATCOMPUTE_FAULT_MODEL_ENGINE_H
 
 #include "fault-controller.h"
-#include "fault-para.h"
-#include "self-state-fault-model.h"
+
+#include "ns3/fault-para.h"
+#include "ns3/self-state-fault-model.h"
 
 #include "ns3/event-id.h"
 #include "ns3/object.h"

@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_SELF_STATE_FAULT_MODEL_H
 #define SATCOMPUTE_SELF_STATE_FAULT_MODEL_H
 
-#include "fault-para.h"
+#include "ns3/fault-para.h"
 
 namespace ns3
 {

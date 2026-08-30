@@ -6,8 +6,8 @@
 
 #include "fault-trace.h"
 
-#include "../task/compute-profile.h"
-#include "../topology/satellite-endpoint-view.h"
+#include "../../task/compute-profile.h"
+#include "../../topology/satellite-endpoint-view.h"
 
 #include <nlohmann/json.hpp>
 

@@ -6,7 +6,7 @@
 
 #include "metrics.h"
 
-#include "../fault/fault-controller.h"
+#include "ns3/fault-controller.h"
 #include "core/fault-metrics.h"
 #include "core/flow-metrics.h"
 #include "core/run-summary.h"

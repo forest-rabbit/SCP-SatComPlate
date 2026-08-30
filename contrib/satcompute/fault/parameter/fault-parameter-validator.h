@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_FAULT_PARAMETER_VALIDATOR_H
 #define SATCOMPUTE_FAULT_PARAMETER_VALIDATOR_H
 
-#include "fault-para.h"
+#include "ns3/fault-para.h"
 
 #include <stdexcept>
 

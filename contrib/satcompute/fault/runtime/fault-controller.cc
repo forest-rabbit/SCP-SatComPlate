@@ -6,8 +6,8 @@
 
 #include "fault-controller.h"
 
-#include "../task/task-coordinator.h"
-#include "../topology/satellite-topology-controller.h"
+#include "../../task/task-coordinator.h"
+#include "../../topology/satellite-topology-controller.h"
 
 #include "ns3/abort.h"
 #include "ns3/simulator.h"

@@ -3,14 +3,14 @@ build_lib(
   SOURCE_FILES
     para.cc
     common/time-conversion.cc
-    fault/fault-controller.cc
-    fault/fault-definition.cc
-    fault/fault-model-engine.cc
     fault/fault-para.cc
-    fault/fault-parameter-validator.cc
-    fault/self-state-fault-model.cc
-    fault/fault-state.cc
-    fault/fault-trace.cc
+    fault/model/self-state-fault-model.cc
+    fault/parameter/fault-parameter-validator.cc
+    fault/runtime/fault-controller.cc
+    fault/runtime/fault-model-engine.cc
+    fault/runtime/fault-state.cc
+    fault/trace/fault-definition.cc
+    fault/trace/fault-trace.cc
     metrics/core/fault-metrics.cc
     metrics/core/flow-metrics.cc
     metrics/core/run-summary.cc
@@ -58,14 +58,14 @@ build_lib(
   HEADER_FILES
     para.h
     common/time-conversion.h
-    fault/fault-controller.h
-    fault/fault-definition.h
-    fault/fault-model-engine.h
     fault/fault-para.h
-    fault/fault-parameter-validator.h
-    fault/self-state-fault-model.h
-    fault/fault-state.h
-    fault/fault-trace.h
+    fault/model/self-state-fault-model.h
+    fault/parameter/fault-parameter-validator.h
+    fault/runtime/fault-controller.h
+    fault/runtime/fault-model-engine.h
+    fault/runtime/fault-state.h
+    fault/trace/fault-definition.h
+    fault/trace/fault-trace.h
     metrics/core/fault-metrics.h
     metrics/core/flow-metrics.h
     metrics/core/run-summary.h

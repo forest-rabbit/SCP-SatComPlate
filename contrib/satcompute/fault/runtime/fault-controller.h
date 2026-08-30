@@ -6,7 +6,8 @@
 #define SATCOMPUTE_FAULT_CONTROLLER_H
 
 #include "fault-state.h"
-#include "fault-trace.h"
+
+#include "ns3/fault-trace.h"
 
 #include "ns3/event-id.h"
 #include "ns3/object.h"

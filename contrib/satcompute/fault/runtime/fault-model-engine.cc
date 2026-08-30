@@ -4,11 +4,11 @@
 
 #include "fault-model-engine.h"
 
-#include "fault-parameter-validator.h"
+#include "ns3/fault-parameter-validator.h"
 
-#include "../common/time-conversion.h"
-#include "../task/compute-service.h"
-#include "../task/task-coordinator.h"
+#include "../../common/time-conversion.h"
+#include "../../task/compute-service.h"
+#include "../../task/task-coordinator.h"
 
 #include "ns3/abort.h"
 #include "ns3/simulator.h"

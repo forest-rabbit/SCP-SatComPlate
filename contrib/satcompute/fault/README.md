@@ -6,16 +6,26 @@
 
 ## 文件与职责
 
+```text
+fault/
+├── fault-para.h/.cc             人工维护的 common/F1/F2/F3 参数
+├── parameter/                   参数合法性校验
+├── model/                       无运行期副作用的 F1/F2/F3 纯模型
+├── runtime/                     在线判定、状态覆盖与故障执行
+├── trace/                       统一记录定义、JSON 读取和写出
+└── README.md
+```
+
 | 文件 | 职责 |
 |---|---|
-| `fault-definition.h/.cc` | compute/satellite 记录以及预警、恢复、风险结束和排序时间 |
-| `fault-trace.h/.cc` | v1 兼容读取、v2 closed-world 校验、canonical writer |
 | `fault-para.h/.cc` | 按 common、F1、F2、F3 分组的唯一内置故障参数 |
-| `fault-parameter-validator.h/.cc` | 有限值、范围及跨字段关系的启动前校验 |
-| `self-state-fault-model.h/.cc` | 无运行期副作用的 F1 温度、DoD、风险、强度和单步概率 |
-| `fault-model-engine.h/.cc` | 在线读取计算忙闲状态、维护风险 episode、使用 ns-3 随机流判定 F1 事件 |
-| `fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
-| `fault-controller.h/.cc` | replay/在线事件批处理，以及任务、传输和有效拓扑联动 |
+| `parameter/fault-parameter-validator.h/.cc` | 有限值、范围及跨字段关系的启动前校验 |
+| `model/self-state-fault-model.h/.cc` | 无运行期副作用的 F1 温度、DoD、风险、强度和单步概率 |
+| `runtime/fault-model-engine.h/.cc` | 在线读取状态、维护风险 episode、使用 ns-3 随机流判定事件 |
+| `runtime/fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
+| `runtime/fault-controller.h/.cc` | replay/在线事件批处理，以及任务、传输和有效拓扑联动 |
+| `trace/fault-definition.h/.cc` | compute/satellite 记录以及预警、恢复、风险结束和排序时间 |
+| `trace/fault-trace.h/.cc` | v1 兼容读取、v2 closed-world 校验、canonical writer |
 
 ## 三种运行模式
 

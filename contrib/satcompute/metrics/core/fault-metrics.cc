@@ -6,7 +6,7 @@
 
 #include "fault-metrics.h"
 
-#include "../../fault/fault-controller.h"
+#include "ns3/fault-controller.h"
 #include "../../task/task-coordinator.h"
 
 #include <nlohmann/json.hpp>
