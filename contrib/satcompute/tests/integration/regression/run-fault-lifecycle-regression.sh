@@ -81,6 +81,21 @@ generate_f1_second_result="$(run_platform \
 replay_f1_result="$(run_platform \
   "$regression_output/replay-f1" \
   "$f1_common --faultMode=replay --faultTrace=$f1_generated_trace")"
+f1_sampled_trace="$regression_output/generate-f1-sampled/fault-trace.json"
+f1_sampled_common="--simulationDuration=80 --randomRun=64 \
+--constellationConfig=$constellation --maxIslDistance=6171353 \
+--delayMode=fixed --fixedDelay=0.001 --networkUpdateInterval=20 \
+--islBandwidthBps=100000000 --routingMode=global-capacity-aware-hrw \
+--computeProfile=$profile --taskTrace=$task_inputs/task-f1-risk-window.json \
+--taskCompletionPolicy=report"
+generate_f1_sampled_result="$(run_platform \
+  "$regression_output/generate-f1-sampled" \
+  "$f1_sampled_common --faultMode=generate \
+--faultModelConfig=contrib/satcompute/input/fault/n4b-f1-calibrated.json \
+--faultTrace=$f1_sampled_trace")"
+replay_f1_sampled_result="$(run_platform \
+  "$regression_output/replay-f1-sampled" \
+  "$f1_sampled_common --faultMode=replay --faultTrace=$f1_sampled_trace")"
 f1_66_trace="$regression_output/generate-f1-66/fault-trace.json"
 f1_66_common="--simulationDuration=120 \
 --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
@@ -116,6 +131,12 @@ done
 for result in "$generate_f1_result" "$generate_f1_second_result" "$replay_f1_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
     echo "F1 generate/replay did not report the intentionally failed old task: $result" >&2
+    exit 1
+  fi
+done
+for result in "$generate_f1_sampled_result" "$replay_f1_sampled_result"; do
+  if [[ "$result" != *'"status":"partial"'* ]]; then
+    echo "sampled F1 generate/replay missed its controlled branch: $result" >&2
     exit 1
   fi
 done
@@ -256,6 +277,42 @@ if (
     raise SystemExit("F1 did not fail the running old task at START")
 if f1_tasks[2]["final_state"] != "COMPLETED":
     raise SystemExit("F1 recovery did not allow a later task to complete")
+
+
+sampled_trace = load_json("generate-f1-sampled/fault-trace.json")
+if len(sampled_trace["faults"]) != 1:
+    raise SystemExit("sampled F1 trace count differs")
+sampled_fault = sampled_trace["faults"][0]
+if (
+    sampled_fault["node_id"],
+    sampled_fault["fault_occurred"],
+    sampled_fault["notice_time_ns"],
+    sampled_fault["start_time_ns"],
+    sampled_fault["warning_lead_time_ns"],
+) != (3, True, None, 36_000_000_000, None):
+    raise SystemExit(f"sampled unannounced F1 fault differs: {sampled_fault}")
+if not (0.0 < sampled_fault["failure_probability"] < 1.0):
+    raise SystemExit("sampled F1 branch did not use a fractional probability")
+for filename in (
+    "fault-events.csv",
+    "fault-summary.json",
+    "task-events.csv",
+    "task-summary.csv",
+    "transfer-summary.csv",
+    "ecmp-route-events.csv",
+    "size-aware-reservation-events.csv",
+    "size-aware-summary.json",
+    "capacity-aware-summary.json",
+):
+    generated = (root / "generate-f1-sampled" / filename).read_bytes()
+    replayed = (root / "replay-f1-sampled" / filename).read_bytes()
+    if generated != replayed:
+        raise SystemExit(f"sampled F1 generate/replay output differs: {filename}")
+sampled_events = load_csv("generate-f1-sampled/fault-events.csv")
+if [row["event_type"] for row in sampled_events] != ["START", "RECOVERY"] or (
+    any(row["route_recomputed"] != "false" for row in sampled_events)
+):
+    raise SystemExit("sampled F1 runtime lifecycle differs")
 
 
 f1_66_trace = load_json("generate-f1-66/fault-trace.json")
