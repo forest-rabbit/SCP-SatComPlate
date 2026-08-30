@@ -102,35 +102,4 @@ PredictComputeFailureBeforeFinish(const ComputeFailurePredictionInput& input)
     return prediction;
 }
 
-ComputeFailurePrediction
-PredictComputeFailureBeforeFinish(double combinedStepFailureProbability,
-                                  int64_t remainingComputeTimeNs,
-                                  int64_t checkIntervalNs)
-{
-    const double probability =
-        CombineComputeFaultProbabilities(combinedStepFailureProbability, 0.0);
-    if (remainingComputeTimeNs < 0 || checkIntervalNs <= 0)
-    {
-        throw std::invalid_argument("stationary compatibility horizon is invalid");
-    }
-    const uint64_t horizonStepCount =
-        static_cast<uint64_t>(remainingComputeTimeNs) /
-            static_cast<uint64_t>(checkIntervalNs) +
-        1;
-    ComputeFailurePrediction prediction;
-    prediction.combinedStepFailureProbability = probability;
-    prediction.horizonStepCount = horizonStepCount;
-    if (probability == 1.0)
-    {
-        prediction.predictedFailureProbability = 1.0;
-    }
-    else
-    {
-        prediction.predictedFailureProbability =
-            -std::expm1(static_cast<double>(horizonStepCount) *
-                        std::log1p(-probability));
-    }
-    return prediction;
-}
-
 } // namespace ns3

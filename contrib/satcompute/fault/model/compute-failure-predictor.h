@@ -67,22 +67,6 @@ struct ComputeFailurePrediction
 ComputeFailurePrediction PredictComputeFailureBeforeFinish(
     const ComputeFailurePredictionInput& input);
 
-/**
- * Transitional stationary-probability overload used by the old runtime slice.
- *
- * This overload is removed when the runtime engine starts passing shared F1/F2
- * model state. New code must use ComputeFailurePredictionInput.
- *
- * @param combinedStepFailureProbability Current one-step union probability.
- * @param remainingComputeTimeNs Time until current task completion.
- * @param checkIntervalNs Positive model check interval.
- * @return A stationary compatibility forecast.
- */
-ComputeFailurePrediction PredictComputeFailureBeforeFinish(
-    double combinedStepFailureProbability,
-    int64_t remainingComputeTimeNs,
-    int64_t checkIntervalNs);
-
 } // namespace ns3
 
 #endif // SATCOMPUTE_COMPUTE_FAILURE_PREDICTOR_H

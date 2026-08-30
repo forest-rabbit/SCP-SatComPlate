@@ -3,6 +3,7 @@
  */
 
 #include "ns3/fault-controller.h"
+#include "ns3/fault-para.h"
 #include "ns3/fault-prediction-engine.h"
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
@@ -14,6 +15,7 @@
 #include "../support/config-factory.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <optional>
@@ -148,6 +150,8 @@ EncodePrediction(const ComputeFailurePredictionRecord& prediction)
            << prediction.noticeTimeNs << ':' << prediction.riskElapsedTimeNs << ':'
            << prediction.remainingComputeTimeNs << ':'
            << prediction.horizonStepCount << ':'
+           << prediction.f1StepFailureProbability << ':'
+           << prediction.f2StepFailureProbability << ':'
            << prediction.combinedStepFailureProbability << ':'
            << prediction.predictedFailureProbability;
     return output.str();
@@ -296,7 +300,17 @@ RunComputeFaultScenario(bool generateOnline)
         Ptr<FaultController> controller = CreateObject<FaultController>();
         Ptr<FaultPredictionEngine> predictionEngine =
             CreateObject<FaultPredictionEngine>();
-        predictionEngine->Configure(10 * MILLISECOND_NS,
+        FaultParameters predictionParameters = GetDefaultFaultParameters();
+        predictionParameters.checkIntervalSeconds = 0.01;
+        predictionParameters.f1.temperature.riskC = 18.0;
+        predictionParameters.f1.temperature.heatingTauSeconds = 0.43;
+        predictionParameters.f1.temperature.coolingTauSeconds = 0.4;
+        predictionParameters.f1.maxFailureIntensityPerSecond = 0.5;
+        predictionParameters.f1.enabled = true;
+        predictionParameters.f2.enabled = false;
+        predictionParameters.f3.enabled = false;
+        predictionEngine->Configure(predictionParameters,
+                                    {COMPUTE_NODE_ID},
                                     SIMULATION_DURATION_NS,
                                     controller);
         if (generateOnline)
@@ -486,25 +500,41 @@ RunComputeFaultScenario(bool generateOnline)
 
         const std::vector<ComputeFailurePredictionRecord>& predictions =
             predictionEngine->GetPredictionRecords();
-        Check(predictions.size() == 1 &&
-                  predictions[0].simulationTimeNs == 100 * MILLISECOND_NS &&
-                  predictions[0].faultId == 1 &&
-                  predictions[0].nodeId == COMPUTE_NODE_ID &&
-                  predictions[0].taskId == 3 &&
-                  predictions[0].noticeTimeNs == 90 * MILLISECOND_NS &&
-                  predictions[0].riskElapsedTimeNs == 10 * MILLISECOND_NS &&
-                  predictions[0].remainingComputeTimeNs > 0 &&
-                  predictions[0].completionRatio > 0.0 &&
-                  predictions[0].completionRatio < 1.0 &&
-                  predictions[0].combinedStepFailureProbability == 0.8 &&
-                  predictions[0].horizonStepCount > 0 &&
-                  predictions[0].predictedFailureProbability >= 0.8 &&
-                  predictions[0].predictedFailureProbability <= 1.0,
+        Check(predictions.size() == 2 &&
+                  predictions[0].simulationTimeNs == 90 * MILLISECOND_NS &&
+                  predictions[0].riskElapsedTimeNs == 0 &&
+                  predictions[1].simulationTimeNs == 100 * MILLISECOND_NS &&
+                  predictions[1].riskElapsedTimeNs == 10 * MILLISECOND_NS,
               "causal compute failure prediction record differs");
         for (const ComputeFailurePredictionRecord& prediction : predictions)
         {
+            Check(prediction.faultId == 1 &&
+                      prediction.nodeId == COMPUTE_NODE_ID &&
+                      prediction.taskId == 3 &&
+                      prediction.noticeTimeNs == 90 * MILLISECOND_NS &&
+                      prediction.remainingComputeTimeNs > 0 &&
+                      prediction.completionRatio > 0.0 &&
+                      prediction.completionRatio < 1.0 &&
+                      prediction.f1StepFailureProbability > 0.0 &&
+                      prediction.f2StepFailureProbability == 0.0 &&
+                      std::abs(prediction.combinedStepFailureProbability -
+                               prediction.f1StepFailureProbability) < 1e-15 &&
+                      prediction.horizonStepCount > 0 &&
+                      prediction.predictedFailureProbability >=
+                          prediction.combinedStepFailureProbability &&
+                      prediction.predictedFailureProbability <= 1.0 &&
+                      prediction.expectedComputeCompletionTimeNs ==
+                          prediction.simulationTimeNs +
+                              prediction.remainingComputeTimeNs,
+                  "model-driven prediction fields differ: " +
+                      EncodePrediction(prediction));
             signature.predictions.push_back(EncodePrediction(prediction));
         }
+        Check(predictions[1].f1StepFailureProbability >
+                  predictions[0].f1StepFailureProbability &&
+                  predictions[1].horizonStepCount + 1 ==
+                      predictions[0].horizonStepCount,
+              "rolling F1 forecast did not advance with task progress");
 
         for (const TaskEventRecord& event : coordinator->GetTaskEvents())
         {

@@ -195,10 +195,10 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Generated fault trace output or replay input path",
                          config.faultTrace);
     commandLine.AddValue("faultEnableF1",
-                         "Enable the built-in F1 source in generate mode",
+                         "Enable F1 generation and replay prediction",
                          faultParameters.f1.enabled);
     commandLine.AddValue("faultEnableF2",
-                         "Enable the built-in F2 source in generate mode",
+                         "Enable F2 generation and replay prediction",
                          faultParameters.f2.enabled);
     commandLine.AddValue("faultEnableF3",
                          "Enable the built-in F3 source in generate mode",
@@ -423,6 +423,15 @@ main(int argc, char* argv[])
                                           computeProfile.value());
                 LogTaskInputs(computeProfile.value(), taskTrace.value(), config.taskLogMode);
             }
+            std::vector<uint32_t> computeNodeIds;
+            if (computeProfile.has_value())
+            {
+                computeNodeIds.reserve(computeProfile->nodes.size());
+                for (const ComputeNodeProfile& node : computeProfile->nodes)
+                {
+                    computeNodeIds.push_back(node.nodeId);
+                }
+            }
             if (config.faultMode == "replay")
             {
                 faultTrace = ReadFaultTrace(config.faultTrace,
@@ -434,15 +443,19 @@ main(int argc, char* argv[])
                 // Schedule fault batches before task arrivals so an exact-time
                 // START is applied before a task arriving at the same nanosecond.
                 faultController = CreateObject<FaultController>();
-                if (computeProfile.has_value())
+                if (computeProfile.has_value() &&
+                    (faultParameters.f1.enabled || faultParameters.f2.enabled))
                 {
                     faultPredictionEngine = CreateObject<FaultPredictionEngine>();
-                    faultPredictionEngine->Configure(
-                        SatComputeSecondsToNanoseconds(
-                            faultParameters.checkIntervalSeconds,
-                            "fault.checkIntervalSeconds"),
+                    faultPredictionEngine->Configure(faultParameters,
+                        computeNodeIds,
                         simulationDurationNs,
                         faultController);
+                    if (faultParameters.f2.enabled)
+                    {
+                        faultPredictionEngine->BindOrbitConstellation(
+                            topology.GetOnlineConstellation());
+                    }
                 }
                 faultController->Configure(
                     faultTrace.value(),
@@ -465,29 +478,24 @@ main(int argc, char* argv[])
                                "generate with enabled F1/F2 requires computeProfile and taskTrace");
                 }
                 faultController = CreateObject<FaultController>();
-                if (computeProfile.has_value())
+                if (computeProfile.has_value() &&
+                    (faultParameters.f1.enabled || faultParameters.f2.enabled))
                 {
                     faultPredictionEngine = CreateObject<FaultPredictionEngine>();
-                    faultPredictionEngine->Configure(
-                        SatComputeSecondsToNanoseconds(
-                            faultParameters.checkIntervalSeconds,
-                            "fault.checkIntervalSeconds"),
+                    faultPredictionEngine->Configure(faultParameters,
+                        computeNodeIds,
                         simulationDurationNs,
                         faultController);
+                    if (faultParameters.f2.enabled)
+                    {
+                        faultPredictionEngine->BindOrbitConstellation(
+                            topology.GetOnlineConstellation());
+                    }
                 }
                 faultController->ConfigureGeneration(
                     topology.GetIdMap().GetCanonicalSatelliteIds(),
                     simulationDurationNs);
                 faultController->BindTopology(topology);
-                std::vector<uint32_t> computeNodeIds;
-                if (computeProfile.has_value())
-                {
-                    computeNodeIds.reserve(computeProfile->nodes.size());
-                    for (const ComputeNodeProfile& node : computeProfile->nodes)
-                    {
-                        computeNodeIds.push_back(node.nodeId);
-                    }
-                }
                 faultModelEngine = CreateObject<FaultModelEngine>();
                 faultModelEngine->Configure(faultParameters,
                                             topology.GetIdMap().GetCanonicalSatelliteIds(),

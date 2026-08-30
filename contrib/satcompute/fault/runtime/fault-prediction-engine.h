@@ -5,13 +5,16 @@
 #ifndef SATCOMPUTE_FAULT_PREDICTION_ENGINE_H
 #define SATCOMPUTE_FAULT_PREDICTION_ENGINE_H
 
+#include "ns3/compute-failure-predictor.h"
 #include "ns3/event-id.h"
+#include "ns3/fault-para.h"
 #include "ns3/object.h"
 #include "ns3/ptr.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -20,6 +23,7 @@ namespace ns3
 
 class ComputeService;
 class FaultController;
+class OnlineOrbitConstellation;
 class TaskCoordinator;
 
 /** Configuration or lifecycle error raised by the online prediction engine. */
@@ -29,7 +33,7 @@ class FaultPredictionEngineError : public std::runtime_error
     using std::runtime_error::runtime_error;
 };
 
-/** One causal F1/F2 probability forecast for a currently running task. */
+/** One NOTICE-gated, model-driven forecast for a currently running task. */
 struct ComputeFailurePredictionRecord
 {
     int64_t simulationTimeNs{}; ///< Time at which this forecast became visible.
@@ -44,17 +48,21 @@ struct ComputeFailurePredictionRecord
     int64_t remainingComputeTimeNs{}; ///< Known time to scheduled completion.
     int64_t expectedComputeCompletionTimeNs{}; ///< Known scheduled completion time.
     double completionRatio{}; ///< Known task completion ratio in [0, 1].
-    double combinedStepFailureProbability{}; ///< q_comp exposed by NOTICE.
-    uint64_t horizonStepCount{}; ///< Fault checks through compute completion.
-    double predictedFailureProbability{}; ///< P(compute failure before completion).
+    double f1StepFailureProbability{}; ///< Current conditional F1 probability.
+    double f2StepFailureProbability{}; ///< Current conditional F2 probability.
+    double combinedStepFailureProbability{}; ///< Current q_comp union probability.
+    uint64_t horizonStepCount{}; ///< Current/future checks through completion.
+    double predictedFailureProbability{}; ///< P(F1 or F2 before completion).
 };
 
 /**
- * Convert time-gated NOTICE state and live task progress into probability forecasts.
+ * Maintain deterministic F1/F2 shadow state and emit NOTICE-gated forecasts.
  *
- * The engine reads only FaultController events that have already executed. It
- * never receives fault_occurred, a future START time, warning lead time, or the
- * realized risk duration before those facts become observable.
+ * Generate and replay use the same pure model kernels and parameters. The
+ * engine never consumes a random stream and never mutates the live fault-model
+ * state. It prepares a causal forecast before a fault check, then observes the
+ * events that actually executed at that timestamp. A formal record is emitted
+ * only while a compute NOTICE is active, including its NOTICE and START ticks.
  */
 class FaultPredictionEngine : public Object
 {
@@ -66,51 +74,80 @@ class FaultPredictionEngine : public Object
     ~FaultPredictionEngine() override;
 
     /**
-     * Schedule causal prediction checks from time zero.
+     * Configure shadow models and pre-schedule prediction checks at time zero.
      *
-     * Call this before scheduling FaultController/model events so a forecast
-     * from an already active risk episode is recorded before a same-time START.
+     * Call this before FaultController and FaultModelEngine configuration so
+     * PrepareTime executes before their events at the same timestamp.
      *
-     * @param checkIntervalNs Positive prediction/fault check interval.
+     * @param parameters Same built-in F1/F2 parameters used by fault generation.
+     * @param computeNodeIds Stable compute-node IDs whose state is shadowed.
      * @param simulationDurationNs Exclusive simulation end.
      * @param faultController Runtime source of already executed fault events.
      */
-    void Configure(int64_t checkIntervalNs,
+    void Configure(const FaultParameters& parameters,
+                   const std::vector<uint32_t>& computeNodeIds,
                    int64_t simulationDurationNs,
                    Ptr<FaultController> faultController);
 
     /** Bind live compute services after TaskCoordinator initialization. */
     void BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator);
 
-    /** @return Forecast records accumulated up to the current simulation time. */
+    /** Bind and initialize native future positions required by F2. */
+    void BindOrbitConstellation(const OnlineOrbitConstellation& constellation);
+
+    /** @return Formal prediction records accumulated so far. */
     const std::vector<ComputeFailurePredictionRecord>& GetPredictionRecords() const;
 
   private:
-    /** Minimal causal state retained from one executed NOTICE. */
+    /** Minimal causal state retained from one executed compute NOTICE. */
     struct ActiveRisk
     {
         uint64_t faultId{}; ///< Risk-episode identity.
         int64_t noticeTimeNs{}; ///< Observed risk-entry time.
-        double combinedStepFailureProbability{}; ///< q_comp visible at NOTICE.
     };
 
-    /** Consume only runtime fault events visible by the current time. */
-    void RefreshActiveRisks(int64_t simulationTimeNs);
-    /** Record forecasts for active risks and currently running tasks. */
-    void ProcessTime(int64_t simulationTimeNs);
+    /** Independent, deterministic model state for one compute node. */
+    struct NodeState
+    {
+        F1SelfStateFaultSnapshot f1State; ///< Current F1 shadow state.
+        F2RadiationFaultSnapshot f2State; ///< Current F2 shadow state.
+        Ptr<ComputeService> computeService; ///< Live task-state source.
+    };
+
+    /** Forecast prepared before same-time fault and task events execute. */
+    struct PreparedPrediction
+    {
+        uint64_t taskId{};
+        int64_t taskStartTimeNs{};
+        int64_t taskServiceTimeNs{};
+        int64_t taskElapsedTimeNs{};
+        int64_t remainingTimeNs{};
+        double completionRatio{};
+        ComputeFailurePrediction prediction;
+    };
+
+    /** Advance shadow state and prepare forecasts before same-time model events. */
+    void PrepareTime(int64_t simulationTimeNs);
+    /** Consume same-time events and emit only NOTICE-gated formal records. */
+    void FinalizeTime(int64_t simulationTimeNs);
     void DoDispose() override;
 
     bool m_configured{}; ///< Whether Configure completed.
     bool m_bound{}; ///< Whether live compute services were bound.
-    int64_t m_checkIntervalNs{}; ///< Shared prediction/fault cadence.
+    int64_t m_checkIntervalNs{}; ///< Shared F1/F2 cadence.
     int64_t m_simulationDurationNs{}; ///< Exclusive simulation end.
+    FaultParameters m_parameters; ///< Shared immutable prediction parameters.
+    std::optional<F1SelfStateFaultModel> m_f1Model; ///< Active F1 kernel.
+    std::optional<F2RadiationFaultModel> m_f2Model; ///< Active F2 kernel.
+    std::map<uint32_t, NodeState> m_nodes; ///< Shadow state by stable node ID.
     std::size_t m_consumedFaultEventCount{}; ///< Visible controller-event prefix.
-    std::map<uint32_t, ActiveRisk> m_activeRisks; ///< Active risk by stable node ID.
-    std::map<uint32_t, Ptr<ComputeService>> m_computeServices; ///< Live service by node.
-    std::vector<ComputeFailurePredictionRecord> m_predictionRecords; ///< Past forecasts.
-    std::vector<EventId> m_predictionEvents; ///< Pre-scheduled causal checks.
-    Ptr<FaultController> m_faultController; ///< Time-gated risk event source.
+    std::map<uint32_t, ActiveRisk> m_activeRisks; ///< Active NOTICE by node.
+    std::map<uint32_t, PreparedPrediction> m_preparedPredictions; ///< Current tick.
+    std::vector<ComputeFailurePredictionRecord> m_predictionRecords; ///< Past output.
+    std::vector<EventId> m_predictionEvents; ///< Pre-scheduled prepare checks.
+    Ptr<FaultController> m_faultController; ///< Time-gated event source.
     Ptr<TaskCoordinator> m_taskCoordinator; ///< Compute-service lifecycle owner.
+    const OnlineOrbitConstellation* m_constellation{}; ///< Native F2 positions.
 };
 
 } // namespace ns3
