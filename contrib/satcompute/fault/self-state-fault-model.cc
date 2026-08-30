@@ -42,8 +42,12 @@ SelfStateFaultModel::Update(SelfStateFaultSnapshot& snapshot,
                             bool busy,
                             double intervalSeconds) const
 {
-    NS_ABORT_MSG_IF(!std::isfinite(intervalSeconds) || intervalSeconds <= 0.0,
-                    "F1 update interval must be finite and positive");
+    NS_ABORT_MSG_IF(!std::isfinite(intervalSeconds) || intervalSeconds < 0.0,
+                    "F1 update interval must be finite and non-negative");
+    if (intervalSeconds == 0.0)
+    {
+        return;
+    }
     const FaultTemperatureConfig& temperature = m_config.temperature;
     if (busy)
     {

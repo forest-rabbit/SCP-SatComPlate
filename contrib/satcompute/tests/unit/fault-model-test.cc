@@ -172,6 +172,21 @@ CheckF1Model(const std::filesystem::path& directory)
         ReadFaultModelConfig(WriteConfig(directory, "f1-model", MakeValidConfig()));
     const SelfStateFaultModel model(config.selfState);
 
+    SelfStateFaultSnapshot unchanged = model.CreateInitialSnapshot();
+    const SelfStateFaultSnapshot initial = unchanged;
+    model.Update(unchanged, true, 0.0);
+    Check(unchanged.temperatureC == initial.temperatureC &&
+              unchanged.depthOfDischarge == initial.depthOfDischarge &&
+              unchanged.thermalRisk == initial.thermalRisk &&
+              unchanged.energyPressure == initial.energyPressure &&
+              unchanged.combinedRisk == initial.combinedRisk &&
+              unchanged.failureIntensityPerSecond ==
+                  initial.failureIntensityPerSecond &&
+              unchanged.stepFailureProbability ==
+                  initial.stepFailureProbability &&
+              unchanged.busy == initial.busy,
+          "zero-duration F1 update changed state");
+
     SelfStateFaultSnapshot idle = model.CreateInitialSnapshot();
     model.Update(idle, false, 120.0);
     Check(idle.temperatureC == config.selfState.temperature.baseC &&
@@ -187,6 +202,11 @@ CheckF1Model(const std::filesystem::path& directory)
               !model.IsRiskActive(singleTask) &&
               singleTask.stepFailureProbability < singleTask.combinedRisk,
           "one representative task produced an invalid F1 state");
+    const double taskEndTemperature = singleTask.temperatureC;
+    model.Update(singleTask, false, 1.0);
+    Check(singleTask.temperatureC < taskEndTemperature &&
+              singleTask.temperatureC > config.selfState.temperature.baseC,
+          "task completion reset F1 temperature instead of cooling continuously");
 
     SelfStateFaultSnapshot continuous = model.CreateInitialSnapshot();
     for (int second = 0; second < 55; ++second)
@@ -217,6 +237,45 @@ CheckF1Model(const std::filesystem::path& directory)
               !model.IsRiskActive(continuous) &&
               continuous.stepFailureProbability == 0.0,
           "F1 cooling did not leave the risk region");
+
+    SelfStateFaultSnapshot monotonic = model.CreateInitialSnapshot();
+    double previousTemperature = monotonic.temperatureC;
+    double previousRisk = monotonic.thermalRisk;
+    for (int second = 0; second < 60; ++second)
+    {
+        model.Update(monotonic, true, 1.0);
+        Check(monotonic.temperatureC >= previousTemperature &&
+                  monotonic.temperatureC <=
+                      config.selfState.temperature.saturationC &&
+                  monotonic.thermalRisk >= previousRisk &&
+                  monotonic.thermalRisk >= 0.0 && monotonic.thermalRisk <= 1.0 &&
+                  monotonic.combinedRisk >= 0.0 && monotonic.combinedRisk <= 1.0,
+              "F1 heating or risk is not bounded and monotonic");
+        previousTemperature = monotonic.temperatureC;
+        previousRisk = monotonic.thermalRisk;
+    }
+
+    FaultModelConfig noEnergyConfig = config;
+    noEnergyConfig.selfState.energy.enabled = false;
+    const SelfStateFaultModel noEnergyModel(noEnergyConfig.selfState);
+    SelfStateFaultSnapshot noEnergy = noEnergyModel.CreateInitialSnapshot();
+    noEnergyModel.Update(noEnergy, true, 30.0);
+    Check(noEnergy.energyPressure == 0.0 &&
+              std::abs(noEnergy.combinedRisk - noEnergy.thermalRisk) < 1e-15,
+          "disabled F1 energy term changed thermal risk");
+
+    FaultModelConfig energyConfig = config;
+    energyConfig.selfState.energy.initialDod = 0.30;
+    energyConfig.selfState.energy.riskDod = 0.30;
+    const SelfStateFaultModel energyModel(energyConfig.selfState);
+    SelfStateFaultSnapshot energy = energyModel.CreateInitialSnapshot();
+    energyModel.Update(energy, true, 3600.0);
+    const double expectedDod =
+        energyConfig.selfState.energy.initialDod +
+        energyConfig.selfState.energy.incrementalComputePowerW /
+            energyConfig.selfState.energy.batteryWh;
+    Check(std::abs(energy.depthOfDischarge - expectedDod) < 1e-12,
+          "F1 W/Wh/s energy conversion differs");
 }
 
 } // namespace
