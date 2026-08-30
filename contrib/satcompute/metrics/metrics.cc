@@ -132,8 +132,8 @@ ValidateInputs(const SatComputeConfig& config,
         throw MetricsError("fault config and runtime metrics disagree");
     }
     const bool taskMode = !config.computeProfile.empty() && !config.taskTrace.empty();
-    if ((faultPredictionEngine != nullptr) !=
-        (faultController != nullptr && taskMode))
+    if (faultPredictionEngine != nullptr &&
+        (faultController == nullptr || !taskMode))
     {
         throw MetricsError("fault prediction and runtime metrics disagree");
     }
@@ -301,6 +301,7 @@ MetricsRecorder::Record()
                           PeekPointer(context.faultPredictionEngine),
                           PeekPointer(taskCoordinator),
                           transfers,
+                          context.simulationDurationNs,
                           outputDirectory.string());
         result.files.push_back(outputDirectory / "fault-events.csv");
         result.files.push_back(outputDirectory / "fault-summary.json");

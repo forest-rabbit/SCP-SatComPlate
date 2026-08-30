@@ -82,23 +82,32 @@ RemoveOwnedFile(const std::filesystem::path& path)
 void
 WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
                        const std::vector<FaultRuntimeEventRecord>& events,
+                       const TaskCoordinator& taskCoordinator,
+                       int64_t simulationDurationNs,
                        const std::string& outputDirectory)
 {
+    if (simulationDurationNs <= 0)
+    {
+        throw std::runtime_error(
+            "prediction metrics require a positive simulation duration");
+    }
     const std::vector<ComputeFailurePredictionRecord>& predictions =
         predictionEngine.GetPredictionRecords();
-    std::map<uint64_t, int64_t> computeStartTimes;
+    std::map<uint32_t, std::vector<int64_t>> computeStartTimesByNode;
     for (const FaultRuntimeEventRecord& event : events)
     {
         if (event.faultType == FaultType::COMPUTE &&
             event.eventType == FaultEventType::START)
         {
-            if (!computeStartTimes.emplace(event.faultId,
-                                           event.simulationTimeNs)
-                     .second)
-            {
-                throw std::runtime_error(
-                    "one compute fault has multiple START events");
-            }
+            computeStartTimesByNode[event.nodeId].push_back(event.simulationTimeNs);
+        }
+    }
+    std::map<uint64_t, const TaskRuntime*> tasksById;
+    for (const TaskRuntime& task : taskCoordinator.GetTaskRuntimes())
+    {
+        if (!tasksById.emplace(task.definition.taskId, &task).second)
+        {
+            throw std::runtime_error("prediction metrics found a duplicate task ID");
         }
     }
 
@@ -112,11 +121,14 @@ WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
               "risk_elapsed_time_ns,task_compute_start_time_ns,task_service_time_ns,"
               "task_elapsed_time_ns,remaining_compute_time_ns,"
               "expected_compute_completion_time_ns,completion_ratio,"
+              "f1_step_failure_probability,f2_step_failure_probability,"
               "combined_step_failure_probability,horizon_step_count,"
               "predicted_failure_probability,observed_compute_failure_before_finish\n";
     output << std::setprecision(17) << std::boolalpha;
 
     uint64_t observedFailureCount = 0;
+    uint64_t evaluatedPredictionCount = 0;
+    uint64_t censoredPredictionCount = 0;
     double predictedProbabilitySum = 0.0;
     double brierScoreSum = 0.0;
     double minimumProbability = 1.0;
@@ -125,20 +137,68 @@ WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
     std::set<uint64_t> taskIds;
     for (const ComputeFailurePredictionRecord& prediction : predictions)
     {
-        const auto start = computeStartTimes.find(prediction.faultId);
-        const bool observedFailure =
-            start != computeStartTimes.end() &&
-            start->second >= prediction.simulationTimeNs &&
-            start->second <= prediction.expectedComputeCompletionTimeNs;
-        observedFailureCount += observedFailure ? 1 : 0;
-        predictedProbabilitySum += prediction.predictedFailureProbability;
-        const double error = prediction.predictedFailureProbability -
-                             (observedFailure ? 1.0 : 0.0);
-        brierScoreSum += error * error;
-        minimumProbability =
-            std::min(minimumProbability, prediction.predictedFailureProbability);
-        maximumProbability =
-            std::max(maximumProbability, prediction.predictedFailureProbability);
+        const auto task = tasksById.find(prediction.taskId);
+        if (task == tasksById.end() ||
+            task->second->definition.computeNodeId != prediction.nodeId)
+        {
+            throw std::runtime_error(
+                "prediction metrics cannot identify the running task");
+        }
+        const auto nodeStarts = computeStartTimesByNode.find(prediction.nodeId);
+        std::optional<int64_t> targetFailureTimeNs;
+        if (nodeStarts != computeStartTimesByNode.end())
+        {
+            const auto start = std::lower_bound(nodeStarts->second.begin(),
+                                                nodeStarts->second.end(),
+                                                prediction.simulationTimeNs);
+            if (start != nodeStarts->second.end() &&
+                *start <= prediction.expectedComputeCompletionTimeNs)
+            {
+                targetFailureTimeNs = *start;
+            }
+        }
+        const TaskRuntime& runtime = *task->second;
+        const std::optional<int64_t> competingFailureTimeNs =
+            runtime.failureTimeNs >= prediction.simulationTimeNs &&
+                    runtime.failureReason != TaskFailureReason::COMPUTE_NODE_FAILURE
+                ? std::optional<int64_t>(runtime.failureTimeNs)
+                : std::nullopt;
+        const bool failureObserved =
+            targetFailureTimeNs.has_value() &&
+            (!competingFailureTimeNs.has_value() ||
+             targetFailureTimeNs.value() <= competingFailureTimeNs.value());
+        const bool fullyObservedWithoutFailure =
+            !failureObserved && runtime.computeCompleteTimeNs >= prediction.simulationTimeNs &&
+            runtime.computeCompleteTimeNs <=
+                prediction.expectedComputeCompletionTimeNs;
+        std::optional<bool> observedFailure;
+        if (failureObserved)
+        {
+            observedFailure = true;
+        }
+        else if (fullyObservedWithoutFailure)
+        {
+            observedFailure = false;
+        }
+        if (observedFailure.has_value())
+        {
+            ++evaluatedPredictionCount;
+            observedFailureCount += observedFailure.value() ? 1 : 0;
+            predictedProbabilitySum += prediction.predictedFailureProbability;
+            const double error = prediction.predictedFailureProbability -
+                                 (observedFailure.value() ? 1.0 : 0.0);
+            brierScoreSum += error * error;
+            minimumProbability =
+                std::min(minimumProbability,
+                         prediction.predictedFailureProbability);
+            maximumProbability =
+                std::max(maximumProbability,
+                         prediction.predictedFailureProbability);
+        }
+        else
+        {
+            ++censoredPredictionCount;
+        }
         episodeIds.insert(prediction.faultId);
         taskIds.insert(prediction.taskId);
 
@@ -151,34 +211,40 @@ WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
                << prediction.remainingComputeTimeNs << ','
                << prediction.expectedComputeCompletionTimeNs << ','
                << prediction.completionRatio << ','
+               << prediction.f1StepFailureProbability << ','
+               << prediction.f2StepFailureProbability << ','
                << prediction.combinedStepFailureProbability << ','
                << prediction.horizonStepCount << ','
-               << prediction.predictedFailureProbability << ','
-               << observedFailure << '\n';
+               << prediction.predictedFailureProbability << ',';
+        WriteOptionalCsv(output, observedFailure);
+        output << '\n';
     }
 
-    const bool hasPredictions = !predictions.empty();
+    const bool hasEvaluatedPredictions = evaluatedPredictionCount > 0;
     const Json summary = {
         {"prediction_count", predictions.size()},
+        {"evaluated_prediction_count", evaluatedPredictionCount},
+        {"censored_prediction_count", censoredPredictionCount},
         {"risk_episode_count", episodeIds.size()},
         {"task_count", taskIds.size()},
         {"observed_failure_prediction_count", observedFailureCount},
         {"mean_predicted_failure_probability",
-         hasPredictions
-             ? Json(predictedProbabilitySum / predictions.size())
+         hasEvaluatedPredictions
+             ? Json(predictedProbabilitySum / evaluatedPredictionCount)
              : Json(nullptr)},
         {"observed_failure_rate",
-         hasPredictions
+         hasEvaluatedPredictions
              ? Json(static_cast<double>(observedFailureCount) /
-                    predictions.size())
+                    evaluatedPredictionCount)
              : Json(nullptr)},
         {"brier_score",
-         hasPredictions ? Json(brierScoreSum / predictions.size())
-                        : Json(nullptr)},
+         hasEvaluatedPredictions
+             ? Json(brierScoreSum / evaluatedPredictionCount)
+             : Json(nullptr)},
         {"minimum_predicted_failure_probability",
-         hasPredictions ? Json(minimumProbability) : Json(nullptr)},
+         hasEvaluatedPredictions ? Json(minimumProbability) : Json(nullptr)},
         {"maximum_predicted_failure_probability",
-         hasPredictions ? Json(maximumProbability) : Json(nullptr)}};
+         hasEvaluatedPredictions ? Json(maximumProbability) : Json(nullptr)}};
     std::ofstream summaryOutput(
         OutputPath(outputDirectory, "fault-prediction-summary.json"),
         std::ios::out | std::ios::trunc);
@@ -197,6 +263,7 @@ WriteFaultMetrics(const FaultController& controller,
                   const FaultPredictionEngine* predictionEngine,
                   const TaskCoordinator* taskCoordinator,
                   const std::vector<TransferSummaryRecord>& transferSummaries,
+                  int64_t simulationDurationNs,
                   const std::string& outputDirectory)
 {
     const FaultTrace& trace = controller.GetTrace();
@@ -318,7 +385,16 @@ WriteFaultMetrics(const FaultController& controller,
 
     if (predictionEngine != nullptr)
     {
-        WritePredictionMetrics(*predictionEngine, events, outputDirectory);
+        if (taskCoordinator == nullptr)
+        {
+            throw std::runtime_error(
+                "prediction metrics require a TaskCoordinator");
+        }
+        WritePredictionMetrics(*predictionEngine,
+                               events,
+                               *taskCoordinator,
+                               simulationDurationNs,
+                               outputDirectory);
     }
     else
     {

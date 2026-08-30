@@ -1,0 +1,17 @@
+{
+  "schema_version": 2,
+  "faults": [
+    {
+      "fault_id": 1,
+      "node_id": 3,
+      "fault_type": "compute",
+      "fault_occurred": false,
+      "notice_time_ns": 1000000000,
+      "start_time_ns": null,
+      "failure_probability": 0.25,
+      "warning_lead_time_ns": null,
+      "risk_duration_ns": 1000000000,
+      "duration_ns": null
+    }
+  ]
+}

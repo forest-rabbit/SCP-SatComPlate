@@ -53,6 +53,15 @@ satellite_only_result="$(run_platform \
   "$regression_output/satellite-only" \
   "$network_common --faultMode=replay \
 --faultTrace=$fault_inputs/satellite-finite.json")"
+censored_prediction_result="$(run_platform \
+  "$regression_output/prediction-censored" \
+  "--simulationDuration=3 --constellationConfig=$constellation \
+--maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
+--networkUpdateInterval=5 --islBandwidthBps=100000000 \
+--routingMode=global-capacity-aware-hrw --computeProfile=$profile \
+--taskTrace=$task_inputs/task-prediction-censored.json --taskCompletionPolicy=report \
+--faultMode=replay --faultEnableF1=1 --faultEnableF2=0 --faultEnableF3=0 \
+--faultTrace=$fault_inputs/compute-risk-censored.json")"
 f1_generated_trace="$regression_output/generate-f1/fault-trace.json"
 f1_common="--simulationDuration=90 --constellationConfig=$constellation \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
@@ -118,7 +127,8 @@ generate_f2_second_result="$(run_platform \
 --faultEnableF3=0 --faultTrace=$f2_second_trace")"
 replay_f2_result="$(run_platform \
   "$regression_output/replay-f2-66" \
-  "$f2_common --faultMode=replay --faultTrace=$f2_trace")"
+  "$f2_common --faultMode=replay --faultEnableF1=0 --faultEnableF2=1 \
+--faultEnableF3=0 --faultTrace=$f2_trace")"
 combined_trace="$regression_output/generate-combined-66/fault-trace.json"
 generate_combined_result="$(run_platform \
   "$regression_output/generate-combined-66" \
@@ -131,7 +141,8 @@ generate_combined_second_result="$(run_platform \
 --faultEnableF3=0 --faultTrace=$combined_second_trace")"
 replay_combined_result="$(run_platform \
   "$regression_output/replay-combined-66" \
-  "$f2_common --faultMode=replay --faultTrace=$combined_trace")"
+  "$f2_common --faultMode=replay --faultEnableF1=1 --faultEnableF2=1 \
+--faultEnableF3=0 --faultTrace=$combined_trace")"
 f3_trace="$regression_output/generate-f3-66/fault-trace.json"
 f3_common="--simulationDuration=1000 --randomSeed=1 --randomRun=1 \
 --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
@@ -166,7 +177,8 @@ generate_all_faults_result="$(run_platform \
 --faultEnableF3=1 --faultTrace=$all_faults_trace")"
 replay_all_faults_result="$(run_platform \
   "$regression_output/replay-all-faults" \
-  "$f2_common --faultMode=replay --faultTrace=$all_faults_trace")"
+  "$f2_common --faultMode=replay --faultEnableF1=1 --faultEnableF2=1 \
+--faultEnableF3=1 --faultTrace=$all_faults_trace")"
 
 for result in "$compute_result" "$satellite_first_result" "$satellite_second_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
@@ -176,6 +188,10 @@ for result in "$compute_result" "$satellite_first_result" "$satellite_second_res
 done
 if [[ "$satellite_only_result" != *'"status":"completed"'* ]]; then
   echo "workload-free satellite fault run failed: $satellite_only_result" >&2
+  exit 1
+fi
+if [[ "$censored_prediction_result" != *'"status":"partial"'* ]]; then
+  echo "censored prediction fixture did not preserve its running task" >&2
   exit 1
 fi
 for result in "$generate_f1_result" "$generate_f1_second_result" "$replay_f1_result"; do
@@ -261,6 +277,8 @@ PREDICTION_FIELDS = [
     "remaining_compute_time_ns",
     "expected_compute_completion_time_ns",
     "completion_ratio",
+    "f1_step_failure_probability",
+    "f2_step_failure_probability",
     "combined_step_failure_probability",
     "horizon_step_count",
     "predicted_failure_probability",
@@ -268,6 +286,8 @@ PREDICTION_FIELDS = [
 ]
 PREDICTION_SUMMARY_FIELDS = {
     "prediction_count",
+    "evaluated_prediction_count",
+    "censored_prediction_count",
     "risk_episode_count",
     "task_count",
     "observed_failure_prediction_count",
@@ -296,9 +316,8 @@ def validate_prediction_outputs(directory: str, require_predictions: bool):
 
     episode_ids = set()
     task_ids = set()
-    probabilities = []
+    evaluated_probabilities = []
     observations = []
-    q_by_episode = {}
     for row in rows:
         simulation_time_ns = int(row["simulation_time_ns"])
         fault_id = int(row["fault_id"])
@@ -311,12 +330,14 @@ def validate_prediction_outputs(directory: str, require_predictions: bool):
         remaining_time_ns = int(row["remaining_compute_time_ns"])
         completion_time_ns = int(row["expected_compute_completion_time_ns"])
         completion_ratio = float(row["completion_ratio"])
+        q_f1 = float(row["f1_step_failure_probability"])
+        q_f2 = float(row["f2_step_failure_probability"])
         q_comp = float(row["combined_step_failure_probability"])
         horizon_step_count = int(row["horizon_step_count"])
         predicted_probability = float(row["predicted_failure_probability"])
         observed = row["observed_compute_failure_before_finish"]
 
-        if simulation_time_ns <= notice_time_ns or (
+        if simulation_time_ns < notice_time_ns or (
             risk_elapsed_time_ns != simulation_time_ns - notice_time_ns
         ):
             raise SystemExit(f"{directory} used a non-causal NOTICE window: {row}")
@@ -331,36 +352,40 @@ def validate_prediction_outputs(directory: str, require_predictions: bool):
             completion_ratio, expected_ratio, rel_tol=1e-12, abs_tol=1e-12
         ):
             raise SystemExit(f"{directory} completion ratio differs: {row}")
-        if not (0.0 <= q_comp <= 1.0) or horizon_step_count < 1:
+        if not all(0.0 <= probability <= 1.0 for probability in (q_f1, q_f2, q_comp)) or (
+            horizon_step_count < 1
+        ):
             raise SystemExit(f"{directory} predictor input differs: {row}")
-        expected_probability = 1.0 - (1.0 - q_comp) ** horizon_step_count
+        expected_q_comp = 1.0 - (1.0 - q_f1) * (1.0 - q_f2)
         if not math.isclose(
-            predicted_probability,
-            expected_probability,
+            q_comp,
+            expected_q_comp,
             rel_tol=1e-12,
             abs_tol=1e-12,
         ):
-            raise SystemExit(f"{directory} probability formula differs: {row}")
-        if observed not in ("true", "false"):
+            raise SystemExit(f"{directory} combined probability differs: {row}")
+        if horizon_step_count != remaining_time_ns // 1_000_000_000 + 1:
+            raise SystemExit(f"{directory} prediction horizon differs: {row}")
+        if not (q_comp <= predicted_probability <= 1.0):
+            raise SystemExit(f"{directory} cumulative probability differs: {row}")
+        if observed not in ("", "true", "false"):
             raise SystemExit(f"{directory} observed label differs: {row}")
-        if fault_id in q_by_episode and not math.isclose(
-            q_by_episode[fault_id], q_comp, rel_tol=0.0, abs_tol=0.0
-        ):
-            raise SystemExit(f"{directory} changed q_comp within one NOTICE: {row}")
-        q_by_episode[fault_id] = q_comp
         episode_ids.add(fault_id)
         task_ids.add(task_id)
-        probabilities.append(predicted_probability)
-        observations.append(1.0 if observed == "true" else 0.0)
+        if observed:
+            evaluated_probabilities.append(predicted_probability)
+            observations.append(1.0 if observed == "true" else 0.0)
 
     if (
         summary["prediction_count"] != len(rows)
+        or summary["evaluated_prediction_count"] != len(observations)
+        or summary["censored_prediction_count"] != len(rows) - len(observations)
         or summary["risk_episode_count"] != len(episode_ids)
         or summary["task_count"] != len(task_ids)
         or summary["observed_failure_prediction_count"] != int(sum(observations))
     ):
         raise SystemExit(f"{directory} prediction summary counts differ: {summary}")
-    if not rows:
+    if not observations:
         if any(summary[key] is not None for key in (
             "mean_predicted_failure_probability",
             "observed_failure_rate",
@@ -372,14 +397,14 @@ def validate_prediction_outputs(directory: str, require_predictions: bool):
         return rows, summary
 
     expected_metrics = {
-        "mean_predicted_failure_probability": sum(probabilities) / len(rows),
-        "observed_failure_rate": sum(observations) / len(rows),
+        "mean_predicted_failure_probability": sum(evaluated_probabilities) / len(observations),
+        "observed_failure_rate": sum(observations) / len(observations),
         "brier_score": sum(
             (probability - observation) ** 2
-            for probability, observation in zip(probabilities, observations)
-        ) / len(rows),
-        "minimum_predicted_failure_probability": min(probabilities),
-        "maximum_predicted_failure_probability": max(probabilities),
+            for probability, observation in zip(evaluated_probabilities, observations)
+        ) / len(observations),
+        "minimum_predicted_failure_probability": min(evaluated_probabilities),
+        "maximum_predicted_failure_probability": max(evaluated_probabilities),
     }
     if any(
         not math.isclose(
@@ -389,6 +414,20 @@ def validate_prediction_outputs(directory: str, require_predictions: bool):
     ):
         raise SystemExit(f"{directory} prediction summary metrics differ: {summary}")
     return rows, summary
+
+
+censored_rows, censored_summary = validate_prediction_outputs(
+    "prediction-censored", True
+)
+if (
+    len(censored_rows) != 1
+    or censored_rows[0]["observed_compute_failure_before_finish"] != ""
+    or censored_summary["evaluated_prediction_count"] != 0
+    or censored_summary["censored_prediction_count"] != 1
+):
+    raise SystemExit(
+        f"right-censored prediction evidence differs: {censored_summary}"
+    )
 
 
 calibration = load_json("f1-calibration/n4b-f1-calibration-summary.json")
@@ -598,7 +637,7 @@ if (
     prediction_summary_66["risk_episode_count"],
     prediction_summary_66["task_count"],
     prediction_summary_66["observed_failure_prediction_count"],
-) != (37, 4, 7, 33):
+) != (41, 4, 7, 33):
     raise SystemExit(
         f"66-star F1 prediction evidence differs: {prediction_summary_66}"
     )
@@ -607,6 +646,15 @@ if not any(
     for row in predictions_66
 ):
     raise SystemExit("66-star F1 predictions have no non-failure control")
+if not any(int(row["risk_elapsed_time_ns"]) == 0 for row in predictions_66):
+    raise SystemExit("66-star F1 predictions omitted the NOTICE boundary")
+if not any(
+    predictions_66[index]["combined_step_failure_probability"]
+    != predictions_66[index - 1]["combined_step_failure_probability"]
+    and predictions_66[index]["fault_id"] == predictions_66[index - 1]["fault_id"]
+    for index in range(1, len(predictions_66))
+):
+    raise SystemExit("66-star F1 predictions froze q_comp within an episode")
 
 tasks_66 = {int(row["task_id"]): row for row in load_csv(
     "generate-f1-66/task-summary.csv"
