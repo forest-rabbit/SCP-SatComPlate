@@ -7,68 +7,130 @@
 #include "compute-fault-combination.h"
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace ns3
 {
 
 ComputeFailurePrediction
+PredictComputeFailureBeforeFinish(const ComputeFailurePredictionInput& input)
+{
+    if (input.f1Model == nullptr && input.f2Model == nullptr)
+    {
+        throw std::invalid_argument(
+            "compute failure prediction requires F1 or F2");
+    }
+    if (input.predictionTimeNs < 0 || input.remainingComputeTimeNs < 0)
+    {
+        throw std::invalid_argument(
+            "compute failure prediction times must be non-negative");
+    }
+    if (input.checkIntervalNs <= 0)
+    {
+        throw std::invalid_argument("fault check interval must be positive");
+    }
+    if (input.remainingComputeTimeNs >
+        std::numeric_limits<int64_t>::max() - input.predictionTimeNs)
+    {
+        throw std::invalid_argument(
+            "compute failure prediction horizon overflows int64");
+    }
+    if (input.f2Model != nullptr && !input.f2PositionAtTime)
+    {
+        throw std::invalid_argument(
+            "F2 compute failure prediction requires future positions");
+    }
+
+    const double intervalSeconds =
+        static_cast<double>(input.checkIntervalNs) / 1000000000.0;
+    F1SelfStateFaultSnapshot f1State = input.f1State;
+    F2RadiationFaultSnapshot f2State = input.f2State;
+    const uint64_t futureStepCount =
+        static_cast<uint64_t>(input.remainingComputeTimeNs) /
+        static_cast<uint64_t>(input.checkIntervalNs);
+
+    ComputeFailurePrediction prediction;
+    prediction.steps.reserve(static_cast<std::size_t>(futureStepCount + 1));
+    double logSurvivalProbability = 0.0;
+    bool certainFailure = false;
+    for (uint64_t stepIndex = 0; stepIndex <= futureStepCount; ++stepIndex)
+    {
+        const int64_t targetTimeNs =
+            input.predictionTimeNs +
+            static_cast<int64_t>(stepIndex *
+                                 static_cast<uint64_t>(input.checkIntervalNs));
+        if (stepIndex > 0)
+        {
+            if (input.f1Model != nullptr)
+            {
+                input.f1Model->Update(f1State, true, intervalSeconds);
+            }
+            if (input.f2Model != nullptr)
+            {
+                input.f2Model->Update(f2State,
+                                      input.f2PositionAtTime(targetTimeNs),
+                                      intervalSeconds);
+            }
+        }
+        const double f1Probability =
+            input.f1Model != nullptr ? f1State.stepFailureProbability : 0.0;
+        const double f2Probability =
+            input.f2Model != nullptr ? f2State.stepFailureProbability : 0.0;
+        const double combinedProbability =
+            CombineComputeFaultProbabilities(f1Probability, f2Probability);
+        prediction.steps.push_back(
+            {targetTimeNs, f1Probability, f2Probability, combinedProbability});
+        if (combinedProbability == 1.0)
+        {
+            certainFailure = true;
+        }
+        else if (!certainFailure)
+        {
+            logSurvivalProbability += std::log1p(-combinedProbability);
+        }
+    }
+    prediction.f1StepFailureProbability =
+        prediction.steps.front().f1StepFailureProbability;
+    prediction.f2StepFailureProbability =
+        prediction.steps.front().f2StepFailureProbability;
+    prediction.combinedStepFailureProbability =
+        prediction.steps.front().combinedStepFailureProbability;
+    prediction.horizonStepCount = prediction.steps.size();
+    prediction.predictedFailureProbability =
+        certainFailure ? 1.0 : -std::expm1(logSurvivalProbability);
+    return prediction;
+}
+
+ComputeFailurePrediction
 PredictComputeFailureBeforeFinish(double combinedStepFailureProbability,
                                   int64_t remainingComputeTimeNs,
                                   int64_t checkIntervalNs)
 {
-    // Reuse the shared probability validation without duplicating its contract.
-    const double validatedProbability =
+    const double probability =
         CombineComputeFaultProbabilities(combinedStepFailureProbability, 0.0);
-    if (remainingComputeTimeNs < 0)
+    if (remainingComputeTimeNs < 0 || checkIntervalNs <= 0)
     {
-        throw std::invalid_argument(
-            "remaining compute time must be non-negative");
+        throw std::invalid_argument("stationary compatibility horizon is invalid");
     }
-    if (checkIntervalNs <= 0)
+    const uint64_t horizonStepCount =
+        static_cast<uint64_t>(remainingComputeTimeNs) /
+            static_cast<uint64_t>(checkIntervalNs) +
+        1;
+    ComputeFailurePrediction prediction;
+    prediction.combinedStepFailureProbability = probability;
+    prediction.horizonStepCount = horizonStepCount;
+    if (probability == 1.0)
     {
-        throw std::invalid_argument("fault check interval must be positive");
+        prediction.predictedFailureProbability = 1.0;
     }
-
-    const uint64_t remaining = static_cast<uint64_t>(remainingComputeTimeNs);
-    const uint64_t interval = static_cast<uint64_t>(checkIntervalNs);
-    uint64_t horizonStepCount = remaining / interval;
-    if (remaining % interval != 0)
+    else
     {
-        ++horizonStepCount;
-    }
-    if (horizonStepCount == 0)
-    {
-        horizonStepCount = 1;
-    }
-
-    double predictedFailureProbability = 0.0;
-    if (horizonStepCount == 1 || validatedProbability == 1.0)
-    {
-        predictedFailureProbability = validatedProbability;
-    }
-    else if (validatedProbability > 0.0)
-    {
-        predictedFailureProbability =
+        prediction.predictedFailureProbability =
             -std::expm1(static_cast<double>(horizonStepCount) *
-                        std::log1p(-validatedProbability));
+                        std::log1p(-probability));
     }
-    return {validatedProbability,
-            horizonStepCount,
-            predictedFailureProbability};
-}
-
-ComputeFailurePrediction
-PredictComputeFailureBeforeFinish(double f1StepFailureProbability,
-                                  double f2StepFailureProbability,
-                                  int64_t remainingComputeTimeNs,
-                                  int64_t checkIntervalNs)
-{
-    return PredictComputeFailureBeforeFinish(
-        CombineComputeFaultProbabilities(f1StepFailureProbability,
-                                         f2StepFailureProbability),
-        remainingComputeTimeNs,
-        checkIntervalNs);
+    return prediction;
 }
 
 } // namespace ns3

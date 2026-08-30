@@ -401,46 +401,113 @@ void
 CheckComputeFailurePrediction()
 {
     constexpr int64_t secondNs = 1000000000;
+    FaultParameters parameters = GetDefaultFaultParameters();
+    const F1SelfStateFaultModel f1Model(parameters.f1);
+    F1SelfStateFaultSnapshot f1State = f1Model.CreateInitialSnapshot();
+    for (uint32_t second = 0; second < 44; ++second)
+    {
+        f1Model.Update(f1State, true, 1.0);
+    }
+    Check(f1Model.IsRiskActive(f1State),
+          "F1 forecast fixture did not reach NOTICE state");
+    const double currentTemperatureC = f1State.temperatureC;
+    const ComputeFailurePrediction f1Prediction =
+        PredictComputeFailureBeforeFinish(
+            {&f1Model,
+             f1State,
+             nullptr,
+             {},
+             {},
+             44 * secondNs,
+             12 * secondNs,
+             secondNs});
+    Check(f1Prediction.horizonStepCount == 13 &&
+              f1Prediction.steps.size() == 13 &&
+              f1Prediction.steps.front().targetTimeNs == 44 * secondNs &&
+              f1Prediction.steps.back().targetTimeNs == 56 * secondNs,
+          "F1 forecast horizon omitted a scheduled fault check");
+    Check(f1Prediction.f1StepFailureProbability ==
+                  f1State.stepFailureProbability &&
+              f1Prediction.f2StepFailureProbability == 0.0 &&
+              f1Prediction.steps.back().f1StepFailureProbability == 1.0 &&
+              f1Prediction.predictedFailureProbability == 1.0,
+          "F1 forward model did not predict deterministic critical shutdown");
+    for (std::size_t index = 1; index < f1Prediction.steps.size(); ++index)
+    {
+        Check(f1Prediction.steps[index - 1].f1StepFailureProbability <=
+                      f1Prediction.steps[index].f1StepFailureProbability &&
+                  std::abs(
+                      f1Prediction.steps[index].combinedStepFailureProbability -
+                      f1Prediction.steps[index].f1StepFailureProbability) < 1e-15,
+              "F1 forecast probability trajectory differs");
+    }
+    Check(f1State.temperatureC == currentTemperatureC,
+          "F1 forecast mutated the live input snapshot");
+
+    parameters.f2.effectiveFailureIntensityPerSecond = 0.01;
+    const F2RadiationFaultModel f2Model(parameters.f2);
+    F2RadiationFaultSnapshot f2State = f2Model.CreateInitialSnapshot();
+    const Vector insidePosition = MakeEcef(-25.0, -45.0);
+    const Vector outsidePosition = MakeEcef(25.0, 45.0);
+    f2Model.Update(f2State, insidePosition, 0.0);
+    f2Model.Update(f2State, insidePosition, 1.0);
+    const double currentExposureSeconds = f2State.continuousExposureSeconds;
+    const ComputeFailurePrediction f2Prediction =
+        PredictComputeFailureBeforeFinish(
+            {nullptr,
+             {},
+             &f2Model,
+             f2State,
+             [insidePosition, outsidePosition](int64_t targetTimeNs) {
+                 return targetTimeNs < 12 * secondNs ? insidePosition
+                                                     : outsidePosition;
+             },
+             10 * secondNs,
+             3 * secondNs,
+             secondNs});
+    const double expectedF2StepProbability = -std::expm1(-0.01);
+    const double expectedF2WindowProbability =
+        1.0 - std::pow(1.0 - expectedF2StepProbability, 2.0);
+    Check(f2Prediction.horizonStepCount == 4 &&
+              f2Prediction.steps[0].f2StepFailureProbability ==
+                  expectedF2StepProbability &&
+              f2Prediction.steps[1].f2StepFailureProbability ==
+                  expectedF2StepProbability &&
+              f2Prediction.steps[2].f2StepFailureProbability == 0.0 &&
+              f2Prediction.steps[3].f2StepFailureProbability == 0.0 &&
+              std::abs(f2Prediction.predictedFailureProbability -
+                       expectedF2WindowProbability) < 1e-15,
+          "F2 forward model did not predict exposure exit");
+    Check(f2State.continuousExposureSeconds == currentExposureSeconds,
+          "F2 forecast mutated the live input snapshot");
+
+    F1SelfStateFaultSnapshot combinedF1;
+    combinedF1.stepFailureProbability = 0.2;
+    F2RadiationFaultSnapshot combinedF2;
+    combinedF2.stepFailureProbability = 0.3;
     const ComputeFailurePrediction combined =
-        PredictComputeFailureBeforeFinish(0.2,
-                                          0.3,
-                                          2500000000,
-                                          secondNs);
-    const double expectedStepProbability = 0.44;
-    const double expectedWindowProbability =
-        1.0 - std::pow(1.0 - expectedStepProbability, 3.0);
-    Check(std::abs(combined.combinedStepFailureProbability -
-                   expectedStepProbability) < 1e-15 &&
-              combined.horizonStepCount == 3 &&
-              std::abs(combined.predictedFailureProbability -
-                       expectedWindowProbability) < 1e-15,
-          "compute failure task-window prediction differs");
-
-    const ComputeFailurePrediction sameTimestamp =
-        PredictComputeFailureBeforeFinish(0.25, 0, secondNs);
-    Check(sameTimestamp.horizonStepCount == 1 &&
-              sameTimestamp.predictedFailureProbability == 0.25,
-          "same-timestamp running task omitted the current fault check");
-    Check(PredictComputeFailureBeforeFinish(0.0, 10 * secondNs, secondNs)
-                  .predictedFailureProbability == 0.0 &&
-              PredictComputeFailureBeforeFinish(1.0, 10 * secondNs, secondNs)
-                  .predictedFailureProbability == 1.0,
-          "compute failure prediction probability boundaries differ");
-
-    const double shortWindow =
-        PredictComputeFailureBeforeFinish(0.1, secondNs, secondNs)
-            .predictedFailureProbability;
-    const double longWindow =
-        PredictComputeFailureBeforeFinish(0.1, 5 * secondNs, secondNs)
-            .predictedFailureProbability;
-    Check(shortWindow < longWindow && longWindow < 1.0,
-          "compute failure prediction is not monotonic in remaining time");
+        PredictComputeFailureBeforeFinish(
+            {&f1Model,
+             combinedF1,
+             &f2Model,
+             combinedF2,
+             [insidePosition](int64_t) { return insidePosition; },
+             0,
+             0,
+             secondNs});
+    Check(combined.horizonStepCount == 1 &&
+              std::abs(combined.combinedStepFailureProbability - 0.44) < 1e-15 &&
+              std::abs(combined.predictedFailureProbability - 0.44) < 1e-15,
+          "current F1/F2 union probability differs in the forecast");
 
     bool negativeRemainingRejected = false;
     try
     {
-        static_cast<void>(
-            PredictComputeFailureBeforeFinish(0.1, -1, secondNs));
+        ComputeFailurePredictionInput invalid;
+        invalid.f1Model = &f1Model;
+        invalid.remainingComputeTimeNs = -1;
+        invalid.checkIntervalNs = secondNs;
+        static_cast<void>(PredictComputeFailureBeforeFinish(invalid));
     }
     catch (const std::invalid_argument&)
     {
@@ -449,14 +516,30 @@ CheckComputeFailurePrediction()
     bool zeroIntervalRejected = false;
     try
     {
-        static_cast<void>(
-            PredictComputeFailureBeforeFinish(0.1, secondNs, 0));
+        ComputeFailurePredictionInput invalid;
+        invalid.f1Model = &f1Model;
+        invalid.remainingComputeTimeNs = secondNs;
+        static_cast<void>(PredictComputeFailureBeforeFinish(invalid));
     }
     catch (const std::invalid_argument&)
     {
         zeroIntervalRejected = true;
     }
-    Check(negativeRemainingRejected && zeroIntervalRejected,
+    bool missingPositionRejected = false;
+    try
+    {
+        ComputeFailurePredictionInput invalid;
+        invalid.f2Model = &f2Model;
+        invalid.remainingComputeTimeNs = secondNs;
+        invalid.checkIntervalNs = secondNs;
+        static_cast<void>(PredictComputeFailureBeforeFinish(invalid));
+    }
+    catch (const std::invalid_argument&)
+    {
+        missingPositionRejected = true;
+    }
+    Check(negativeRemainingRejected && zeroIntervalRejected &&
+              missingPositionRejected,
           "invalid compute failure prediction horizon was accepted");
 }
 
