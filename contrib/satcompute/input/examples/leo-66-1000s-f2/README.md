@@ -97,9 +97,14 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --taskTrace=contrib/satcompute/input/examples/leo-66-1000s-f2/task-trace.json \
   --taskCompletionPolicy=report \
   --faultMode=replay \
+  --faultEnableF1=0 \
+  --faultEnableF2=1 \
+  --faultEnableF3=0 \
   --faultTrace=/tmp/satcompute-f2-generate/fault-trace.json \
   --outputDir=/tmp/satcompute-f2-replay"
 ```
 
-回归逐文件比较 generate/replay 的故障事件、任务、传输和路由证据，并验证相同
-seed/run 再次 generate 会产生逐字节相同的 `fault-trace.json`。
+replay 中的 F1/F2 开关不重新生成故障，而是选择预测器重建的影子模型；这里必须与
+generate 的 F2-only 配置一致。回归逐文件比较 generate/replay 的故障事件、滚动
+预测、任务、传输和路由证据，并验证相同 seed/run 再次 generate 会产生逐字节相同
+的 `fault-trace.json`。

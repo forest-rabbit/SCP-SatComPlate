@@ -14,14 +14,17 @@ F2 故障发生时的执行验证对象，不会预先决定随机故障是否�
 | `generate` | 输出文件路径；在线判定并真实执行故障后写出 v2 trace |
 | `replay` | 已存在的 v1/v2 trace；不再抽样 |
 
-`--faultEnableF1/2/3` 是每次运行的来源开关，默认分别为 true/false/false；模型内部
-数值仍只位于 `fault-para.cc`。当前 `generate` 支持 F1-only、F2-only 或二者同时
+`--faultEnableF1/2/3` 默认分别为 true/false/false；模型内部数值仍只位于
+`fault-para.cc`。当前 `generate` 支持 F1-only、F2-only 或二者同时
 启用，它们都必须同时提供 ComputeProfile 与 TaskTrace；F1/F2 使用独立随机流分别
 判定，同刻命中合并为一次 compute START，trace 概率为 `q_comp`。F3 可单独运行且
 不要求任务输入，也可与 F1/F2 同时启用；它产生无预警、无恢复的永久 satellite
 START，并在同节点同刻优先。
-`replay` 不读取这些来源开关，也不重新计算模型；是否提供任务输入取决于 trace 中的
-节点和要验证的执行结果。
+
+`replay` 不会使用这些开关重新决定 trace 中的故障。若同时提供任务输入，
+`faultEnableF1/F2` 会选择完成前故障概率预测器需要重建的无随机数影子模型，应与
+generate 该 trace 时的 F1/F2 开关一致；`faultEnableF3` 不进入 compute 概率预测。
+是否提供任务输入仍取决于 trace 中的节点和要验证的执行结果。
 
 `topologyOnly=1` 只能与 `faultMode=none` 一起使用，因为 topology-only 描述无故障的
 自然轨道和候选拓扑。

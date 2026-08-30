@@ -87,9 +87,13 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --taskTrace=contrib/satcompute/input/examples/leo-66-120s-f1/task-trace.json \
   --taskCompletionPolicy=report \
   --faultMode=replay \
+  --faultEnableF1=1 \
+  --faultEnableF2=0 \
+  --faultEnableF3=0 \
   --faultTrace=/tmp/satcompute-f1-generate/fault-trace.json \
   --outputDir=/tmp/satcompute-f1-replay"
 ```
 
-回归会逐文件比较两轮的故障事件、任务、传输和路由证据，确保 generate 与 replay
-执行结果一致。
+回归会逐文件比较两轮的故障事件、滚动预测、任务、传输和路由证据，确保 generate
+与 replay 执行结果一致。replay 的 F1/F2 开关用于重建预测影子模型，不重新抽样
+trace 中已经确定的故障。

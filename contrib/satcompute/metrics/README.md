@@ -45,8 +45,8 @@ metrics/
 | 任务模式 | `compute-node-summary.csv` | 各算力节点的任务数、忙碌时间和利用率 |
 | 提供 `faultTrace` | `fault-events.csv` | canonical NOTICE/START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
 | 提供 `faultTrace` | `fault-summary.json` | 故障类型/事件/活动故障、失败任务、FAILED/CANCELLED transfer 与故障路由重算计数 |
-| generate/replay 且有任务 | `fault-predictions.csv` | 活动风险中运行任务的逐检查点因果概率、任务进度和事后观测标签 |
-| generate/replay 且有任务 | `fault-prediction-summary.json` | 预测/episode/任务数量、均值、观测率、范围和 Brier score |
+| generate/replay、有任务且启用 F1/F2 | `fault-predictions.csv` | 活动风险中运行任务的逐检查点 F1/F2/联合因果概率、任务进度和事后观测标签 |
+| generate/replay、有任务且启用 F1/F2 | `fault-prediction-summary.json` | 预测/episode/任务/删失数量、均值、观测率、范围和 Brier score |
 
 `run-summary.json` 同时保留便于脚本读取的顶层计数和按 `transfer`、`task` 分组的
 汇总。它记录实际使用的任务文件路径和关键运行参数，但不复制一份平台配置。
@@ -82,35 +82,47 @@ simulation_time_ns, fault_id, node_id, task_id, notice_time_ns,
 risk_elapsed_time_ns, task_compute_start_time_ns, task_service_time_ns,
 task_elapsed_time_ns, remaining_compute_time_ns,
 expected_compute_completion_time_ns, completion_ratio,
+f1_step_failure_probability, f2_step_failure_probability,
 combined_step_failure_probability, horizon_step_count,
 predicted_failure_probability, observed_compute_failure_before_finish
 ```
 
-前十五列均来自预测时刻已经可见的 NOTICE 与任务快照。其中
-`combined_step_failure_probability` 是该 episode 进入 NOTICE 时冻结的 `q_comp`，
-`predicted_failure_probability` 使用：
+除最后一列外，所有字段均来自预测时刻已经可见的 NOTICE、任务快照和无随机数
+F1/F2 影子模型。三个单步字段满足：
 
 ```text
-1 - (1 - q_comp)^horizon_step_count
+q_comp,k = 1 - (1 - q_F1,k) * (1 - q_F2,k)
+P_fail_before_finish = 1 - product(k, 1 - q_comp,k)
 ```
 
-最后一列不是预测输入。metrics 在仿真结束后检查同一 `fault_id` 的 compute START
+CSV 中的三个单步字段对应当前 `k=0`；累计概率还包含任务预计完成前的未来检查点。
+未来 F1 按任务在无故障条件下继续忙碌推进，未来 F2 使用 ns-3.48 原生轨道的按时刻
+ECEF 坐标，因此同一 episode 内的 `q_comp` 可以随温度、能源或空间区域变化，不是
+NOTICE 时冻结的常数。
+
+最后一列不是预测输入。metrics 在仿真结束后检查同一计算节点的任意 compute START
 是否落在 `[simulation_time_ns, expected_compute_completion_time_ns]` 内，再写入
 `true/false` 标签；因此它只能用于离线评估，不能作为运行期备份决策的未来信息。
+如果预计完成前任务被 F3/其他非 compute 原因终止，或预计完成时刻达到/超过仿真
+终点且窗口内没有 START，观测窗口并不完整，单元格留空，作为右删失样本排除出
+评分。目标事件按同一计算节点在窗口内的任意 compute START 判定，不局限于开始
+NOTICE 时的 `fault_id`。
 
 `fault-prediction-summary.json` 固定包含：
 
-- `prediction_count`、`risk_episode_count`、`task_count`；
+- `prediction_count`、`evaluated_prediction_count`、`censored_prediction_count`；
+- `risk_episode_count`、`task_count`；
 - `observed_failure_prediction_count`；
 - `mean_predicted_failure_probability` 与 `observed_failure_rate`；
 - `brier_score`；
 - `minimum_predicted_failure_probability` 与
   `maximum_predicted_failure_probability`。
 
-没有满足条件的风险/任务重叠时，CSV 仍保留表头，四个计数字段为 0，五个概率/评分
-字段为 `null`。单次轨迹中的逐时刻预测彼此相关，Brier score 只提供可复算的评分，
-不能单独证明概率已经校准；可靠性曲线和阈值选择需要在固定配置的多 seed/run 实验
-中完成。
+均值、观测率、Brier score 和概率范围只对 `evaluated_prediction_count` 计算，删失行
+不把未知结局错误记成未故障。没有可评分预测时，这五个字段为 `null`；CSV 即使没有
+正式预测也保留表头。单次轨迹中的逐时刻预测彼此相关，Brier score 只提供可复算的
+评分，不能单独证明概率已经校准；可靠性曲线和阈值选择需要在固定配置的多 seed/run
+实验中完成。
 
 ## 路由模式输出
 
