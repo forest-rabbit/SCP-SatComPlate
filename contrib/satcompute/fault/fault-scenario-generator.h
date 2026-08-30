@@ -36,16 +36,17 @@ class FaultScenarioGeneratorError : public std::runtime_error
 /** Observable end-of-run F1 state for one configured compute node. */
 struct FaultGeneratorNodeSnapshot
 {
-    uint32_t nodeId{};
-    SelfStateFaultSnapshot selfState;
-    bool riskEpisodeActive{};
-    bool computeAvailable{true};
+    uint32_t nodeId{}; ///< Stable external satellite ID.
+    SelfStateFaultSnapshot selfState; ///< Current pure F1 state.
+    bool riskEpisodeActive{}; ///< Whether a notice episode remains open.
+    bool computeAvailable{true}; ///< Final N4A compute availability.
 };
 
 /** Generate unified fault events online while reusing the N4A controller. */
 class FaultScenarioGenerator : public Object
 {
   public:
+    /** @return ns-3 runtime type information. */
     static TypeId GetTypeId();
 
     FaultScenarioGenerator();
@@ -74,46 +75,52 @@ class FaultScenarioGenerator : public Object
     std::vector<FaultGeneratorNodeSnapshot> GetNodeSnapshots() const;
 
   private:
+    /** Notice metadata retained until risk exit or compute failure. */
     struct RiskEpisode
     {
-        uint64_t faultId{};
-        int64_t noticeTimeNs{};
-        double noticeProbability{};
+        uint64_t faultId{}; ///< Stable ID shared by notice and completion record.
+        int64_t noticeTimeNs{}; ///< Absolute risk-entry time.
+        double noticeProbability{}; ///< Single-step probability visible at notice.
     };
 
+    /** Online model, random stream, and compute-service binding for one node. */
     struct NodeState
     {
-        SelfStateFaultSnapshot selfState;
-        std::optional<RiskEpisode> riskEpisode;
-        Ptr<UniformRandomVariable> random;
-        Ptr<ComputeService> computeService;
+        SelfStateFaultSnapshot selfState; ///< Current pure F1 state.
+        std::optional<RiskEpisode> riskEpisode; ///< Open combined-risk episode.
+        Ptr<UniformRandomVariable> random; ///< Stable per-node sampling stream.
+        Ptr<ComputeService> computeService; ///< Live busy/idle source.
     };
 
+    /** Build a time-gated risk notice. */
     FaultDefinition MakeNotice(uint32_t nodeId,
                                const RiskEpisode& episode) const;
+    /** Build a completed risk-only trace record. */
     FaultDefinition MakeRiskOnly(uint32_t nodeId,
                                  const RiskEpisode& episode,
                                  int64_t clearTimeNs) const;
+    /** Build one occurred recoverable compute-fault record. */
     FaultDefinition MakeComputeFault(uint32_t nodeId,
                                      uint64_t faultId,
                                      const std::optional<RiskEpisode>& episode,
                                      double currentProbability,
                                      int64_t startTimeNs) const;
+    /** Update every F1 node and submit one same-time event batch. */
     void Tick(int64_t simulationTimeNs);
     void DoDispose() override;
 
-    bool m_configured{};
-    bool m_bound{};
-    bool m_finalized{};
-    int64_t m_simulationDurationNs{};
-    FaultModelConfig m_config;
-    std::optional<SelfStateFaultModel> m_selfStateModel;
-    std::map<uint32_t, NodeState> m_nodes;
-    uint64_t m_nextFaultId{1};
-    FaultTrace m_trace;
-    std::vector<EventId> m_tickEvents;
-    Ptr<FaultController> m_faultController;
-    Ptr<TaskCoordinator> m_taskCoordinator;
+    bool m_configured{}; ///< Whether Configure completed.
+    bool m_bound{}; ///< Whether compute services were bound.
+    bool m_finalized{}; ///< Whether the trace was closed.
+    int64_t m_simulationDurationNs{}; ///< Exclusive simulation end.
+    FaultModelConfig m_config; ///< Unified model parameters.
+    std::optional<SelfStateFaultModel> m_selfStateModel; ///< Active F1 pure model.
+    std::map<uint32_t, NodeState> m_nodes; ///< Node state in stable-ID order.
+    uint64_t m_nextFaultId{1}; ///< Next trace identity.
+    FaultTrace m_trace; ///< Completed canonical trace records.
+    std::vector<EventId> m_tickEvents; ///< Pre-scheduled model checks.
+    Ptr<FaultController> m_faultController; ///< Sole runtime fault executor.
+    Ptr<TaskCoordinator> m_taskCoordinator; ///< Bound task lifecycle owner.
 };
 
 } // namespace ns3

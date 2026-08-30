@@ -31,8 +31,9 @@ topologyOnly                正式仿真
 5. 后续只更新候选链路距离、active 状态和 distance 时延，不更换异轨对端；
 6. 只有 active 边集合变化时才重算 hop-based IPv4 路由；
 7. 同时提供 ComputeProfile 与 TaskTrace 时，执行输入传输、FCFS 计算和结果传输；
-8. 提供 FaultTrace 时先完成字段、引用、时间区间和顺序校验；
-9. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
+8. `faultMode=generate` 时在线更新模型、实际执行故障并写 v2 trace；
+9. `faultMode=replay` 时校验 v1/v2 trace，并在精确纳秒确定性重放；
+10. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
 
 `topologyOnly=1` 使用相同轨道和候选链路实现，但不会创建 InternetStack、
 NetDevice、路由、FlowMonitor 或任务对象。
@@ -48,7 +49,7 @@ NetDevice、路由、FlowMonitor 或任务对象。
 | [`routing/`](routing/README.md) | 五种 IPv4 策略、hash、HRW 和 reservation 状态 |
 | [`task/`](task/README.md) | ComputeProfile、TaskTrace、FCFS 服务和任务协调 |
 | [`traffic/`](traffic/README.md) | 任务内部的 UDP 输入/结果传输 |
-| [`fault/`](fault/README.md) | 确定性故障定义、状态覆盖与批处理执行控制 |
+| [`fault/`](fault/README.md) | 统一故障模型、trace、在线生成、状态覆盖与批处理执行 |
 | [`metrics/`](metrics/README.md) | 网络、路由、任务和失败诊断输出 |
 | [`input/`](input/README.md) | 星座、算力、任务、故障与组合示例 |
 | [`tools/`](tools/README.md) | 任务生成与输出校验工具 |
@@ -71,6 +72,8 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 不带参数时，平台使用下表中的默认值运行 1000 秒。日常开发建议显式指定较短的
 `simulationDuration` 和独立的 `outputDir`。完整任务运行见
 [100 秒、66 星、20 任务示例](input/examples/leo-66-100s-20tasks/README.md)。
+F1 在线生成与重放见
+[120 秒、66 星 F1 示例](input/examples/leo-66-120s-f1/README.md)。
 
 ## 参数边界
 
@@ -142,12 +145,16 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
-| `--faultTrace` | 空 | 路径 | 确定性故障 JSON；字段合同见 `input/fault/README.md` |
+| `--faultMode` | `none` | 枚举 | `none`、`generate` 或 `replay` |
+| `--faultTrace` | 空 | 路径 | generate 输出或 replay 输入的统一 Fault Trace |
+| `--faultModelConfig` | 空 | 路径 | generate 使用的 F1/F2/F3 模型配置；其他模式必须为空 |
 
-空路径完全保持无故障行为。`compute` 故障只改变算力可用性；`satellite` 故障还会
+`none` 要求两个路径均为空；`generate` 要求两个路径均提供；`replay` 只允许
+`faultTrace`。当前 generate 已完成 F1 自身状态计算故障，F2 辐射暴露和 F3 永久
+整星生成将在后续阶段接入。`compute` 故障只改变算力可用性；`satellite` 故障还会
 在精确纳秒关闭关联 ISL、立即重算 IPv4 路由，并按任务阶段终止端点 transfer。
 有限恢复重新读取当时的原生轨道坐标，只恢复仍满足距离门限的候选链路。两类故障
-都不复活旧任务，`failure_probability` 只作为风险元数据保留，不参与重新抽样。
+都不复活旧任务。generate 中概率只采样一次并记录；replay 不会再次抽样。
 
 ### output
 
@@ -158,8 +165,8 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 | `--diagnosticMode` | `off` | 枚举 | `off` 或 `failure`；后者在部分完成时写失败证据 |
 
 运行摘要会记录实际使用的关键参数和各层结果，仅作为本次仿真的输出证据，不是
-第二个配置入口。提供 `faultTrace` 时还会生成 `fault-events.csv` 和
-`fault-summary.json`；空路径不生成故障专用文件。
+第二个配置入口。generate/replay 会生成 `fault-events.csv` 和 `fault-summary.json`；
+none 不生成故障专用文件。
 
 ## 星座与动态拓扑
 
@@ -194,9 +201,11 @@ plane-major 顺序编号为 `0..65`，不直接使用全局 `Node::GetId()`。
 固定候选并记录 `active`、距离、时延和带宽。详细合同见
 [topology/export](topology/export/README.md)。
 
-故障工作流是：先生成整个周期的拓扑切片，再据此生成故障 JSON，最后让正式平台
-在线计算同一自然拓扑并读取故障事件。compute 与整星故障都按精确时刻执行；整星
-通信资源禁用、恢复和重路由不会等待网络周期 tick。
+topology-only 切片仍用于可视化和后续依赖位置的 F2/F3 标定，但 F1 正式运行不需要
+预先跑一遍平台：generate 直接读取本轮 ComputeService 忙闲状态，在线产生并执行
+风险/故障，同时输出可 replay 的 trace。replay 使用相同星座和任务输入重放已经
+确定的事件。compute 与整星故障都按精确时刻执行；整星通信资源禁用、恢复和
+重路由不会等待网络周期 tick。
 
 ## 任务与计算
 

@@ -1,4 +1,34 @@
-# 失败输出一致性检查
+# 验证与标定工具
+
+## F1 参数标定
+
+`f1-calibration.cc` 构建为 `satcompute-f1-calibration`，直接调用
+`SelfStateFaultModel` 比较 `tau_h`、`tau_c` 和 `lambda_F1_max` 候选。它不建立
+卫星网络，不生成正式 Fault Trace，也不在 Python 中重新实现风险公式。
+
+```bash
+./ns3 run "satcompute-f1-calibration \
+  --faultModelConfig=contrib/satcompute/input/fault/n4b-f1-calibrated.json \
+  --outputDir=/tmp/satcompute-f1-calibration"
+```
+
+| 参数 | 含义 |
+|---|---|
+| `--faultModelConfig` | 必填；启用 F1、关闭 F2/F3、1 秒检查周期的统一模型配置 |
+| `--outputDir` | 必填；标定 CSV 和 summary 的输出目录 |
+
+输出为：
+
+- `n4b-f1-calibration.csv`：升降温候选逐秒状态，以及四个强度候选各 30 个固定
+  run 的计数和分布；
+- `n4b-f1-calibration-summary.json`：候选汇总、选择参数、热时间、任务数量、平均
+  故障数、风险-only 数、故障温度和预警提前量。
+
+当前冻结输出与解释见
+[`docs/calibration/n4b-f1`](../../../../docs/calibration/n4b-f1/README.md)。这些结果
+属于 66 星/1000 秒功能场景标定，不代表客观航天器失效率。
+
+## 失败输出一致性检查
 
 `check-flow-drop-reasons.py` 检查一次失败任务运行中的 FlowMonitor DropReason 证据。
 它不会修改输出，也不重复验证路由、任务或拓扑合同；这些断言由对应的 C++、smoke

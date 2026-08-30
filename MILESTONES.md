@@ -366,9 +366,9 @@ regression。故障回归验证 compute 不重算路由、整星精确重算、�
 - 阶段 CI：[SatCompute CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/phase_gate.yml)，`phase=n4a`
 - 阶段 tag：`n4a-complete`，指向 PR #80 的合并提交
 
-N4A 明确不包含 backup selection、主备切换、checkpoint、迁移、重放、recovery
-transfer、RTO/RPO 或 `SUPERSEDED` 运行状态。这些备份与恢复策略属于后续 N4B；
-故障原因/轨迹生成模型也不属于本阶段执行平台。
+N4A 明确不包含故障原因/轨迹生成模型，也不包含 backup selection、主备切换、
+checkpoint、迁移、recovery transfer、RTO/RPO 或 `SUPERSEDED` 运行状态。这些能力
+不属于本阶段执行平台；其后续里程碑只在对应实现合入并通过验收后记录。
 
 ## ECMP 算法演进
 

@@ -9,12 +9,15 @@ SatCompute 不使用一个完整 JSON 同时控制星座、运行参数和任务
 | Constellation | `topology/constellations/*.csv` | 轨道高度、倾角、轨道面和每面卫星数 | 仿真时长、链路策略和任务 |
 | ComputeProfile | `topology/resources/workload/*.json` | 稳定卫星 ID 对应的静态算力 | 轨道位置和任务到达 |
 | TaskTrace | `traffic/workload/*.json` | 任务端点、输入/输出大小、计算量和到达时刻 | 网络与星座参数 |
-| FaultTrace | `fault/*.json` | 精确 notice/start/duration 与风险元数据 | 拓扑切片回放和运行时概率抽样 |
+| Fault Model | `fault/*.json` | F1/F2/F3 风险参数和检查/恢复周期 | 星座、任务和已经发生的事件 |
+| FaultTrace | generate 输出或 replay fixture | 已确定的风险/故障 episode | 拓扑回放和 replay 时再次抽样 |
 
 `topologyOnly` 生成的节点和链路 JSON 是输出，不是正式仿真的拓扑输入。正式仿真
-使用相同星座和参数在线计算确定性拓扑，正式故障运行只额外叠加确定性事件。字段
-合同见 [`fault/README.md`](fault/README.md)。
+使用相同星座和参数在线计算确定性拓扑。`faultMode=generate` 根据实时平台状态生成
+并执行故障，同时写出 v2 trace；`faultMode=replay` 只叠加该确定性 trace。字段合同
+见 [`fault/README.md`](fault/README.md)。
 
 可直接运行的组合示例见
 [`examples/leo-66-100s-20tasks/`](examples/leo-66-100s-20tasks/README.md)：
-100 秒、66 颗卫星、22 个计算节点和 20 个任务。
+100 秒、66 颗卫星、22 个计算节点和 20 个无故障任务；F1 generate/replay 闭环见
+[`examples/leo-66-120s-f1/`](examples/leo-66-120s-f1/README.md)。
