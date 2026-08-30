@@ -18,6 +18,8 @@ namespace ns3
 class ComputeProfile;
 class SatelliteEndpointView;
 
+constexpr uint32_t FAULT_TRACE_SCHEMA_VERSION = 2;
+
 class FaultTraceError : public std::runtime_error
 {
   public:
@@ -26,6 +28,7 @@ class FaultTraceError : public std::runtime_error
 
 struct FaultTrace
 {
+    uint32_t schemaVersion{FAULT_TRACE_SCHEMA_VERSION};
     std::filesystem::path sourcePath;
     std::vector<FaultDefinition> faults;
 };
@@ -35,6 +38,9 @@ FaultTrace ReadFaultTrace(const std::filesystem::path& filename,
                           int64_t simulationDurationNs,
                           const SatelliteEndpointView& endpoints,
                           const ComputeProfile* computeProfile);
+
+/** Write a canonical unified Fault Trace v2 file. */
+void WriteFaultTraceV2(const std::filesystem::path& filename, const FaultTrace& trace);
 
 } // namespace ns3
 
