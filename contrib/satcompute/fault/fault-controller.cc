@@ -13,6 +13,8 @@
 #include "ns3/simulator.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <set>
 #include <string>
 #include <tuple>
@@ -65,6 +67,110 @@ MakeTimeGatedEventFault(FaultEventType eventType, const FaultDefinition& source)
     return event;
 }
 
+void
+ValidateGeneratedEvent(const GeneratedFaultEvent& event,
+                       int64_t nowNs,
+                       int64_t simulationDurationNs,
+                       const std::set<uint32_t>& satelliteIds)
+{
+    const FaultDefinition& fault = event.fault;
+    if (event.eventType == FaultEventType::RECOVERY)
+    {
+        throw FaultControllerError("generated RECOVERY events are scheduled by FaultController");
+    }
+    if (fault.faultId == 0)
+    {
+        throw FaultControllerError("generated fault_id must be positive");
+    }
+    if (!satelliteIds.contains(fault.nodeId))
+    {
+        throw FaultControllerError("generated fault references an unknown satellite ID");
+    }
+    if (fault.failureProbability.has_value() &&
+        (!std::isfinite(fault.failureProbability.value()) ||
+         fault.failureProbability.value() < 0.0 ||
+         fault.failureProbability.value() > 1.0))
+    {
+        throw FaultControllerError(
+            "generated failure_probability must be finite and in [0, 1]");
+    }
+
+    if (event.eventType == FaultEventType::NOTICE)
+    {
+        if (fault.faultType != FaultType::COMPUTE || fault.faultOccurred ||
+            fault.noticeTimeNs != nowNs || fault.startTimeNs.has_value() ||
+            !fault.failureProbability.has_value() ||
+            fault.warningLeadTimeNs.has_value() || fault.riskDurationNs.has_value() ||
+            fault.durationNs.has_value())
+        {
+            throw FaultControllerError(
+                "generated NOTICE must contain only current compute risk information");
+        }
+        return;
+    }
+
+    if (event.eventType == FaultEventType::NOTICE_CLEAR)
+    {
+        if (fault.faultType != FaultType::COMPUTE || fault.faultOccurred ||
+            !fault.noticeTimeNs.has_value() || fault.startTimeNs.has_value() ||
+            !fault.failureProbability.has_value() ||
+            fault.warningLeadTimeNs.has_value() ||
+            !fault.riskDurationNs.has_value() || fault.riskDurationNs.value() <= 0 ||
+            fault.durationNs.has_value() ||
+            fault.noticeTimeNs.value() >
+                std::numeric_limits<int64_t>::max() - fault.riskDurationNs.value() ||
+            fault.noticeTimeNs.value() + fault.riskDurationNs.value() != nowNs)
+        {
+            throw FaultControllerError(
+                "generated NOTICE_CLEAR must close one current risk-only episode");
+        }
+        return;
+    }
+
+    if (!fault.faultOccurred || fault.startTimeNs != nowNs ||
+        fault.riskDurationNs.has_value())
+    {
+        throw FaultControllerError("generated START fields do not match the current time");
+    }
+    if (fault.faultType == FaultType::SATELLITE)
+    {
+        if (fault.noticeTimeNs.has_value() || fault.failureProbability.has_value() ||
+            fault.warningLeadTimeNs.has_value() || fault.durationNs.has_value())
+        {
+            throw FaultControllerError(
+                "generated satellite START must be permanent and unannounced");
+        }
+        return;
+    }
+
+    if (!fault.failureProbability.has_value() || !fault.durationNs.has_value() ||
+        fault.durationNs.value() <= 0 ||
+        fault.startTimeNs.value() >
+            std::numeric_limits<int64_t>::max() - fault.durationNs.value())
+    {
+        throw FaultControllerError(
+            "generated compute START requires probability and positive duration");
+    }
+    if (fault.noticeTimeNs.has_value())
+    {
+        if (fault.noticeTimeNs.value() > nowNs ||
+            fault.warningLeadTimeNs != nowNs - fault.noticeTimeNs.value())
+        {
+            throw FaultControllerError(
+                "generated compute START warning lead time is inconsistent");
+        }
+    }
+    else if (fault.warningLeadTimeNs.has_value())
+    {
+        throw FaultControllerError(
+            "generated compute START cannot contain lead time without notice");
+    }
+    if (nowNs < 0 || nowNs >= simulationDurationNs)
+    {
+        throw FaultControllerError("generated START is outside the simulation window");
+    }
+}
+
 } // namespace
 
 TypeId
@@ -99,9 +205,8 @@ FaultEventTypeToString(FaultEventType eventType)
 }
 
 void
-FaultController::Configure(const FaultTrace& trace,
-                           const std::vector<uint32_t>& satelliteIds,
-                           int64_t simulationDurationNs)
+FaultController::Initialize(const std::vector<uint32_t>& satelliteIds,
+                            int64_t simulationDurationNs)
 {
     if (m_configured)
     {
@@ -117,9 +222,53 @@ FaultController::Configure(const FaultTrace& trace,
             "FaultController must be configured at simulation time zero");
     }
 
-    m_trace = trace;
     m_simulationDurationNs = simulationDurationNs;
+    m_satelliteIds.insert(satelliteIds.begin(), satelliteIds.end());
+    if (m_satelliteIds.size() != satelliteIds.size())
+    {
+        throw FaultControllerError("FaultController satellite IDs must be unique");
+    }
     m_state.Initialize(satelliteIds);
+    m_configured = true;
+}
+
+void
+FaultController::ScheduleBatch(int64_t simulationTimeNs)
+{
+    if (m_batchEvents.contains(simulationTimeNs))
+    {
+        return;
+    }
+    const int64_t nowNs = Simulator::Now().GetNanoSeconds();
+    NS_ABORT_MSG_IF(simulationTimeNs < nowNs,
+                    "FaultController cannot schedule a batch in the past");
+    m_batchEvents.emplace(
+        simulationTimeNs,
+        Simulator::Schedule(NanoSeconds(simulationTimeNs - nowNs),
+                            &FaultController::ProcessBatch,
+                            this,
+                            simulationTimeNs));
+}
+
+void
+FaultController::ScheduleRecovery(const FaultDefinition& fault)
+{
+    const std::optional<int64_t> recoveryTimeNs = fault.GetRecoveryTimeNs();
+    if (recoveryTimeNs.has_value() && recoveryTimeNs.value() < m_simulationDurationNs)
+    {
+        m_batches[recoveryTimeNs.value()].push_back(
+            {FaultEventType::RECOVERY, fault});
+        ScheduleBatch(recoveryTimeNs.value());
+    }
+}
+
+void
+FaultController::Configure(const FaultTrace& trace,
+                           const std::vector<uint32_t>& satelliteIds,
+                           int64_t simulationDurationNs)
+{
+    Initialize(satelliteIds, simulationDurationNs);
+    m_trace = trace;
     for (const FaultDefinition& fault : m_trace.faults)
     {
         if (fault.noticeTimeNs.has_value())
@@ -144,34 +293,103 @@ FaultController::Configure(const FaultTrace& trace,
         NS_ABORT_MSG_IF(!fault.startTimeNs.has_value(),
                         "occurred fault has no start time");
         m_batches[fault.startTimeNs.value()].push_back({FaultEventType::START, fault});
-        const std::optional<int64_t> recoveryTimeNs = fault.GetRecoveryTimeNs();
-        if (recoveryTimeNs.has_value() &&
-            recoveryTimeNs.value() < m_simulationDurationNs)
+        ScheduleRecovery(fault);
+    }
+
+    for (const auto& [simulationTimeNs, events] : m_batches)
+    {
+        static_cast<void>(events);
+        ScheduleBatch(simulationTimeNs);
+    }
+}
+
+void
+FaultController::ConfigureGeneration(const std::vector<uint32_t>& satelliteIds,
+                                     int64_t simulationDurationNs)
+{
+    Initialize(satelliteIds, simulationDurationNs);
+    m_generationMode = true;
+    m_trace.schemaVersion = FAULT_TRACE_SCHEMA_VERSION;
+}
+
+void
+FaultController::SubmitGeneratedBatch(const std::vector<GeneratedFaultEvent>& events)
+{
+    if (!m_configured || !m_generationMode)
+    {
+        throw FaultControllerError(
+            "generated events require ConfigureGeneration");
+    }
+    if (events.empty())
+    {
+        throw FaultControllerError("generated event batch must not be empty");
+    }
+    const int64_t nowNs = Simulator::Now().GetNanoSeconds();
+    if (nowNs < 0 || nowNs >= m_simulationDurationNs)
+    {
+        throw FaultControllerError("generated event batch is outside the simulation window");
+    }
+    if (m_processedBatchTimes.contains(nowNs))
+    {
+        throw FaultControllerError(
+            "generated events for one timestamp must be submitted in one batch");
+    }
+
+    std::set<std::pair<FaultEventType, uint64_t>> batchKeys;
+    for (const GeneratedFaultEvent& event : events)
+    {
+        ValidateGeneratedEvent(event,
+                               nowNs,
+                               m_simulationDurationNs,
+                               m_satelliteIds);
+        const auto key = std::make_pair(event.eventType, event.fault.faultId);
+        if (!batchKeys.insert(key).second || m_generatedEventKeys.contains(key))
         {
-            m_batches[recoveryTimeNs.value()].push_back(
-                {FaultEventType::RECOVERY, fault});
+            throw FaultControllerError("generated fault event was submitted twice");
         }
     }
 
-    m_batchEvents.reserve(m_batches.size());
-    for (auto& [simulationTimeNs, events] : m_batches)
+    const auto scheduled = m_batchEvents.find(nowNs);
+    if (scheduled != m_batchEvents.end())
     {
-        std::sort(events.begin(),
-                  events.end(),
-                  [](const ScheduledFaultEvent& left,
-                     const ScheduledFaultEvent& right) {
-                      return std::make_tuple(GetEventPriority(left.eventType),
-                                             left.fault.faultId) <
-                             std::make_tuple(GetEventPriority(right.eventType),
-                                             right.fault.faultId);
-                  });
-        m_batchEvents.push_back(
-            Simulator::Schedule(NanoSeconds(simulationTimeNs),
-                                &FaultController::ProcessBatch,
-                                this,
-                                simulationTimeNs));
+        if (scheduled->second.IsPending())
+        {
+            Simulator::Cancel(scheduled->second);
+        }
+        m_batchEvents.erase(scheduled);
     }
-    m_configured = true;
+    for (const GeneratedFaultEvent& event : events)
+    {
+        m_generatedEventKeys.emplace(event.eventType, event.fault.faultId);
+        m_batches[nowNs].push_back(
+            {event.eventType,
+             MakeTimeGatedEventFault(event.eventType, event.fault)});
+        if (event.eventType == FaultEventType::START)
+        {
+            ScheduleRecovery(event.fault);
+        }
+    }
+    ProcessBatch(nowNs);
+}
+
+void
+FaultController::FinalizeGeneratedTrace(const FaultTrace& trace)
+{
+    if (!m_configured || !m_generationMode)
+    {
+        throw FaultControllerError(
+            "generated trace finalization requires ConfigureGeneration");
+    }
+    if (m_generatedTraceFinalized)
+    {
+        throw FaultControllerError("generated trace can only be finalized once");
+    }
+    if (trace.schemaVersion != FAULT_TRACE_SCHEMA_VERSION)
+    {
+        throw FaultControllerError("generated trace must use schema version 2");
+    }
+    m_trace = trace;
+    m_generatedTraceFinalized = true;
 }
 
 void
@@ -216,6 +434,17 @@ FaultController::ProcessBatch(int64_t simulationTimeNs)
     const auto batch = m_batches.find(simulationTimeNs);
     NS_ABORT_MSG_IF(batch == m_batches.end(),
                     "FaultController has no scheduled batch at the current time");
+    NS_ABORT_MSG_IF(!m_processedBatchTimes.insert(simulationTimeNs).second,
+                    "FaultController processed one timestamp twice");
+    std::sort(batch->second.begin(),
+              batch->second.end(),
+              [](const ScheduledFaultEvent& left,
+                 const ScheduledFaultEvent& right) {
+                  return std::make_tuple(GetEventPriority(left.eventType),
+                                         left.fault.faultId) <
+                         std::make_tuple(GetEventPriority(right.eventType),
+                                         right.fault.faultId);
+              });
 
     std::vector<TaskFaultNodeChange> recoveredNodes;
     std::vector<TaskFaultNodeChange> startedNodes;
@@ -356,8 +585,9 @@ FaultController::GetEvents() const
 void
 FaultController::DoDispose()
 {
-    for (EventId& event : m_batchEvents)
+    for (auto& [simulationTimeNs, event] : m_batchEvents)
     {
+        static_cast<void>(simulationTimeNs);
         if (event.IsPending())
         {
             Simulator::Cancel(event);

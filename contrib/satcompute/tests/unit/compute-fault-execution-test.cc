@@ -83,8 +83,20 @@ MakeComputeFault(uint64_t faultId,
     fault.startTimeNs = startTimeNs;
     fault.noticeTimeNs = noticeTimeNs;
     fault.failureProbability = failureProbability;
+    fault.warningLeadTimeNs = fault.GetWarningLeadTimeNs();
     fault.durationNs = durationNs;
     return fault;
+}
+
+GeneratedFaultEvent
+MakeGeneratedNotice(const FaultDefinition& occurredFault)
+{
+    FaultDefinition notice = occurredFault;
+    notice.faultOccurred = false;
+    notice.startTimeNs = std::nullopt;
+    notice.warningLeadTimeNs = std::nullopt;
+    notice.durationNs = std::nullopt;
+    return {FaultEventType::NOTICE, notice};
 }
 
 const TaskRuntime&
@@ -219,7 +231,7 @@ CheckRiskOnlyReplay()
 }
 
 ExecutionSignature
-RunComputeFaultScenario()
+RunComputeFaultScenario(bool generateOnline)
 {
     OnlineTestConfiguration config = MakeOnlineTestConfig(2,
                                                            8,
@@ -266,9 +278,39 @@ RunComputeFaultScenario()
                              50 * MILLISECOND_NS),
         };
         Ptr<FaultController> controller = CreateObject<FaultController>();
-        controller->Configure(trace,
-                              topology.GetIdMap().GetCanonicalSatelliteIds(),
-                              SIMULATION_DURATION_NS);
+        if (generateOnline)
+        {
+            controller->ConfigureGeneration(
+                topology.GetIdMap().GetCanonicalSatelliteIds(),
+                SIMULATION_DURATION_NS);
+            const FaultDefinition firstFault = trace.faults[0];
+            const FaultDefinition secondFault = trace.faults[1];
+            Simulator::Schedule(
+                NanoSeconds(firstFault.noticeTimeNs.value()),
+                [controller, firstFault] {
+                    controller->SubmitGeneratedBatch(
+                        {MakeGeneratedNotice(firstFault)});
+                });
+            Simulator::Schedule(
+                NanoSeconds(firstFault.startTimeNs.value()),
+                [controller, firstFault] {
+                    controller->SubmitGeneratedBatch(
+                        {{FaultEventType::START, firstFault}});
+                });
+            Simulator::Schedule(
+                NanoSeconds(secondFault.startTimeNs.value()),
+                [controller, secondFault] {
+                    controller->SubmitGeneratedBatch(
+                        {MakeGeneratedNotice(secondFault),
+                         {FaultEventType::START, secondFault}});
+                });
+        }
+        else
+        {
+            controller->Configure(trace,
+                                  topology.GetIdMap().GetCanonicalSatelliteIds(),
+                                  SIMULATION_DURATION_NS);
+        }
 
         Ptr<TaskCoordinator> coordinator = CreateObject<TaskCoordinator>();
         coordinator->Initialize(profile,
@@ -302,6 +344,10 @@ RunComputeFaultScenario()
 
         Simulator::Stop(NanoSeconds(SIMULATION_DURATION_NS));
         Simulator::Run();
+        if (generateOnline)
+        {
+            controller->FinalizeGeneratedTrace(trace);
+        }
         Check(phasesChecked, "pre-fault phase observer did not run");
 
         const std::vector<FaultRuntimeEventRecord>& faultEvents =
@@ -440,10 +486,13 @@ main()
     {
         CheckFaultStateOverlay();
         CheckRiskOnlyReplay();
-        const ExecutionSignature first = RunComputeFaultScenario();
-        const ExecutionSignature second = RunComputeFaultScenario();
+        const ExecutionSignature first = RunComputeFaultScenario(false);
+        const ExecutionSignature second = RunComputeFaultScenario(false);
         Check(first == second,
               "identical compute fault runs produced different lifecycle ordering");
+        const ExecutionSignature generated = RunComputeFaultScenario(true);
+        Check(first == generated,
+              "online generated compute faults differ from deterministic replay");
         std::cout << "SatCompute compute fault execution tests passed." << std::endl;
         return 0;
     }
