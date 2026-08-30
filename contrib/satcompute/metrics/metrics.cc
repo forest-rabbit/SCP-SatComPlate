@@ -125,7 +125,7 @@ ValidateInputs(const SatComputeConfig& config,
                Ptr<NetworkTransferEngine> transferEngine,
                Ptr<TaskCoordinator> taskCoordinator)
 {
-    if (config.faultTrace.empty() != (faultController == nullptr))
+    if ((config.faultMode == "none") != (faultController == nullptr))
     {
         throw MetricsError("fault config and runtime metrics disagree");
     }

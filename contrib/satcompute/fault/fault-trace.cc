@@ -699,6 +699,12 @@ WriteFaultTraceV2(const std::filesystem::path& filename, const FaultTrace& trace
         root["faults"].push_back(std::move(item));
     }
 
+    std::error_code directoryError;
+    std::filesystem::create_directories(outputPath.parent_path(), directoryError);
+    if (directoryError)
+    {
+        Fail(outputPath, "file", "parent directory cannot be created");
+    }
     std::ofstream output(outputPath, std::ios::out | std::ios::trunc);
     if (!output.is_open())
     {

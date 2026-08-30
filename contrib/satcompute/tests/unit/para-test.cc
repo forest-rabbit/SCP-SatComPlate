@@ -51,7 +51,9 @@ main()
                     config.transferPayloadBytes == 1'024 &&
                     config.taskCompletionPolicy == "strict",
                 "unexpected workload defaults");
-        Require(config.faultTrace.empty(), "fault trace must default to disabled");
+        Require(config.faultMode == "none" && config.faultTrace.empty() &&
+                    config.faultModelConfig.empty(),
+                "fault inputs must default to none");
         Require(!config.topologyOnly && config.topologySliceIntervalSeconds == 1.0 &&
                     config.includeFinalTopologyState,
                 "unexpected topology-only defaults");

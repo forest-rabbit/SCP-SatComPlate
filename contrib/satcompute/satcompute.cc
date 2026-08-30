@@ -8,6 +8,7 @@
 #include "ns3/circular-orbit-topology-policy.h"
 #include "ns3/ecmp-route-recorder.h"
 #include "ns3/fault-controller.h"
+#include "ns3/fault-model-config.h"
 #include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/online-orbit-constellation.h"
@@ -94,6 +95,21 @@ ResolveOptionalInputFile(const std::string& value, std::string_view fieldName)
     return resolved.string();
 }
 
+std::string
+ResolveOutputFile(const std::string& value, std::string_view fieldName)
+{
+    RequireNotEmpty(value, fieldName);
+    const std::filesystem::path resolved =
+        std::filesystem::absolute(value).lexically_normal();
+    std::error_code error;
+    const bool exists = std::filesystem::exists(resolved, error);
+    if (error || (exists && !std::filesystem::is_regular_file(resolved)))
+    {
+        FailConfig(fieldName, "must be a writable file path: " + value);
+    }
+    return resolved.string();
+}
+
 void
 LogTaskInputs(const ComputeProfile& profile,
               const TaskTrace& trace,
@@ -165,9 +181,15 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
     commandLine.AddValue("taskCompletionPolicy",
                          "Task completion policy: strict or report",
                          config.taskCompletionPolicy);
+    commandLine.AddValue("faultMode",
+                         "Fault mode: none, generate, or replay",
+                         config.faultMode);
     commandLine.AddValue("faultTrace",
-                         "Deterministic satellite fault trace JSON path",
+                         "Generated fault trace output or replay input path",
                          config.faultTrace);
+    commandLine.AddValue("faultModelConfig",
+                         "Fault model JSON path used only in generate mode",
+                         config.faultModelConfig);
     commandLine.AddValue("topologyOnly",
                          "Generate topology slices without network simulation",
                          config.topologyOnly);
@@ -245,14 +267,33 @@ ValidateConfig(const SatComputeConfig& config)
         FailConfig("islMtuBytes", "must be at least 64028 for size-aware chunking");
     }
     RequireChoice(config.taskCompletionPolicy, "taskCompletionPolicy", {"strict", "report"});
+    RequireChoice(config.faultMode, "faultMode", {"none", "generate", "replay"});
+    if (config.faultMode == "none" &&
+        (!config.faultTrace.empty() || !config.faultModelConfig.empty()))
+    {
+        FailConfig("faultMode", "none cannot use faultTrace or faultModelConfig");
+    }
+    if (config.faultMode == "generate" &&
+        (config.faultTrace.empty() || config.faultModelConfig.empty()))
+    {
+        FailConfig("faultMode", "generate requires faultTrace and faultModelConfig");
+    }
+    if (config.faultMode == "replay" && config.faultTrace.empty())
+    {
+        FailConfig("faultMode", "replay requires faultTrace");
+    }
+    if (config.faultMode == "replay" && !config.faultModelConfig.empty())
+    {
+        FailConfig("faultMode", "replay cannot use faultModelConfig");
+    }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
     if (config.topologyOnly && hasComputeProfile)
     {
         FailConfig("topologyOnly", "cannot load task inputs");
     }
-    if (config.topologyOnly && !config.faultTrace.empty())
+    if (config.topologyOnly && config.faultMode != "none")
     {
-        FailConfig("topologyOnly", "cannot load a fault trace");
+        FailConfig("topologyOnly", "requires faultMode=none");
     }
     RequireNotEmpty(config.outputDirectory, "outputDir");
     RequireChoice(config.taskLogMode, "taskLogMode", {"summary", "verbose", "silent"});
@@ -280,7 +321,20 @@ main(int argc, char* argv[])
         config.computeProfile =
             ResolveOptionalInputFile(config.computeProfile, "computeProfile");
         config.taskTrace = ResolveOptionalInputFile(config.taskTrace, "taskTrace");
-        config.faultTrace = ResolveOptionalInputFile(config.faultTrace, "faultTrace");
+        if (config.faultMode == "replay")
+        {
+            config.faultTrace = ResolveOptionalInputFile(config.faultTrace, "faultTrace");
+        }
+        else if (config.faultMode == "generate")
+        {
+            config.faultModelConfig =
+                ResolveOptionalInputFile(config.faultModelConfig, "faultModelConfig");
+            config.faultTrace = ResolveOutputFile(config.faultTrace, "faultTrace");
+            if (config.faultTrace == config.faultModelConfig)
+            {
+                FailConfig("faultTrace", "must differ from faultModelConfig");
+            }
+        }
         const int64_t simulationDurationNs =
             SatComputeSecondsToNanoseconds(config.simulationDurationSeconds,
                                            "simulationDuration");
@@ -349,6 +403,7 @@ main(int argc, char* argv[])
             std::optional<ComputeProfile> computeProfile;
             std::optional<TaskTrace> taskTrace;
             std::optional<FaultTrace> faultTrace;
+            std::optional<FaultModelConfig> faultModelConfig;
             if (!config.computeProfile.empty() && !config.taskTrace.empty())
             {
                 computeProfile = ReadComputeProfile(config.computeProfile, topology);
@@ -358,7 +413,7 @@ main(int argc, char* argv[])
                                           computeProfile.value());
                 LogTaskInputs(computeProfile.value(), taskTrace.value(), config.taskLogMode);
             }
-            if (!config.faultTrace.empty())
+            if (config.faultMode == "replay")
             {
                 faultTrace = ReadFaultTrace(config.faultTrace,
                                             simulationDurationNs,
@@ -371,6 +426,22 @@ main(int argc, char* argv[])
                 faultController = CreateObject<FaultController>();
                 faultController->Configure(
                     faultTrace.value(),
+                    topology.GetIdMap().GetCanonicalSatelliteIds(),
+                    simulationDurationNs);
+                faultController->BindTopology(topology);
+            }
+            else if (config.faultMode == "generate")
+            {
+                faultModelConfig = ReadFaultModelConfig(config.faultModelConfig);
+                if (faultModelConfig->selfState.enabled ||
+                    faultModelConfig->radiation.enabled ||
+                    faultModelConfig->debris.enabled)
+                {
+                    FailConfig("faultModelConfig",
+                               "enabled sources require the N4B generator increment");
+                }
+                faultController = CreateObject<FaultController>();
+                faultController->ConfigureGeneration(
                     topology.GetIdMap().GetCanonicalSatelliteIds(),
                     simulationDurationNs);
                 faultController->BindTopology(topology);
@@ -399,6 +470,13 @@ main(int argc, char* argv[])
             const auto wallStart = std::chrono::steady_clock::now();
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
+            if (config.faultMode == "generate")
+            {
+                FaultTrace generatedTrace;
+                generatedTrace.sourcePath = config.faultTrace;
+                faultController->FinalizeGeneratedTrace(generatedTrace);
+                WriteFaultTraceV2(config.faultTrace, generatedTrace);
+            }
             const int64_t wallClockNs =
                 std::chrono::duration_cast<std::chrono::nanoseconds>(wallStop - wallStart).count();
             std::optional<CapacityAwareRuntimeSummary> capacitySummary;

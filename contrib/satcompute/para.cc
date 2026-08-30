@@ -92,8 +92,14 @@ GetDefaultSatComputeConfig()
 
     // fault
 
-    // --faultTrace：确定性故障轨迹 JSON；空路径完全保持无故障行为。
+    // --faultMode：none 不创建故障模块，generate 在线生成，replay 确定性重放。
+    config.faultMode = "none";
+
+    // --faultTrace：generate 的输出路径或 replay 的输入路径。
     config.faultTrace = "";
+
+    // --faultModelConfig：generate 使用的模型参数；其他模式必须为空。
+    config.faultModelConfig = "";
 
     // output
 

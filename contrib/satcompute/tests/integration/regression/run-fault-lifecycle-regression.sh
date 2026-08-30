@@ -32,18 +32,29 @@ network_common="--simulationDuration=1 --constellationConfig=$constellation \
 
 compute_result="$(run_platform \
   "$regression_output/compute" \
-  "$common --taskTrace=$fault_task --faultTrace=$fault_inputs/compute-finite.json")"
+  "$common --taskTrace=$fault_task --faultMode=replay \
+--faultTrace=$fault_inputs/compute-finite.json")"
 satellite_first_result="$(run_platform \
   "$regression_output/satellite-first" \
-  "$common --taskTrace=$fault_task \
+  "$common --taskTrace=$fault_task --faultMode=replay \
 --faultTrace=$fault_inputs/satellite-input-finite.json")"
 satellite_second_result="$(run_platform \
   "$regression_output/satellite-second" \
-  "$common --taskTrace=$fault_task \
+  "$common --taskTrace=$fault_task --faultMode=replay \
 --faultTrace=$fault_inputs/satellite-input-finite.json")"
 satellite_only_result="$(run_platform \
   "$regression_output/satellite-only" \
-  "$network_common --faultTrace=$fault_inputs/satellite-finite.json")"
+  "$network_common --faultMode=replay \
+--faultTrace=$fault_inputs/satellite-finite.json")"
+generated_trace="$regression_output/generate-empty/fault-trace.json"
+generate_empty_result="$(run_platform \
+  "$regression_output/generate-empty" \
+  "$network_common --faultMode=generate \
+--faultModelConfig=$fault_inputs/model-all-disabled.json \
+--faultTrace=$generated_trace")"
+replay_empty_result="$(run_platform \
+  "$regression_output/replay-empty" \
+  "$network_common --faultMode=replay --faultTrace=$generated_trace")"
 
 for result in "$compute_result" "$satellite_first_result" "$satellite_second_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
@@ -55,6 +66,12 @@ if [[ "$satellite_only_result" != *'"status":"completed"'* ]]; then
   echo "workload-free satellite fault run failed: $satellite_only_result" >&2
   exit 1
 fi
+for result in "$generate_empty_result" "$replay_empty_result"; do
+  if [[ "$result" != *'"status":"completed"'* ]]; then
+    echo "empty generate/replay mode run failed: $result" >&2
+    exit 1
+  fi
+done
 
 python3 - "$regression_output" <<'PY'
 import csv
@@ -73,6 +90,13 @@ def load_json(relative: str):
 def load_csv(relative: str):
     with (root / relative).open(newline="", encoding="utf-8") as source:
         return list(csv.DictReader(source))
+
+
+generated_trace = load_json("generate-empty/fault-trace.json")
+if generated_trace != {"schema_version": 2, "faults": []}:
+    raise SystemExit(f"empty generated trace differs: {generated_trace}")
+if load_csv("generate-empty/fault-events.csv") or load_csv("replay-empty/fault-events.csv"):
+    raise SystemExit("empty generate/replay unexpectedly emitted runtime fault events")
 
 
 compute_events = load_csv("compute/fault-events.csv")

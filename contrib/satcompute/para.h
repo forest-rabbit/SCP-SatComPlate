@@ -52,7 +52,9 @@ struct SatComputeConfig
     std::string taskCompletionPolicy; ///< 任务完成策略：strict 或 report。
 
     // fault
-    std::string faultTrace; ///< 确定性卫星故障轨迹 JSON；空字符串表示无故障。
+    std::string faultMode;        ///< none、generate 或 replay。
+    std::string faultTrace;       ///< generate 输出或 replay 输入的统一故障轨迹。
+    std::string faultModelConfig; ///< generate 使用的故障模型 JSON。
 
     // output
     std::string outputDirectory; ///< 结构化结果输出目录。
