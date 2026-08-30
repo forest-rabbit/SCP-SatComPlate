@@ -27,27 +27,54 @@ FaultTypeToString(FaultType type)
 std::optional<int64_t>
 FaultDefinition::GetRecoveryTimeNs() const
 {
-    if (!durationNs.has_value())
+    if (!startTimeNs.has_value() || !durationNs.has_value())
     {
         return std::nullopt;
     }
-    NS_ABORT_MSG_IF(startTimeNs < 0 || durationNs.value() <= 0 ||
-                        startTimeNs >
+    NS_ABORT_MSG_IF(startTimeNs.value() < 0 || durationNs.value() <= 0 ||
+                        startTimeNs.value() >
                             std::numeric_limits<int64_t>::max() - durationNs.value(),
                     "validated fault has an invalid recovery time");
-    return startTimeNs + durationNs.value();
+    return startTimeNs.value() + durationNs.value();
 }
 
 std::optional<int64_t>
 FaultDefinition::GetWarningLeadTimeNs() const
 {
-    if (!noticeTimeNs.has_value())
+    if (!noticeTimeNs.has_value() || !startTimeNs.has_value())
     {
         return std::nullopt;
     }
-    NS_ABORT_MSG_IF(noticeTimeNs.value() < 0 || noticeTimeNs.value() > startTimeNs,
+    NS_ABORT_MSG_IF(noticeTimeNs.value() < 0 ||
+                        noticeTimeNs.value() > startTimeNs.value(),
                     "validated fault has an invalid notice time");
-    return startTimeNs - noticeTimeNs.value();
+    return startTimeNs.value() - noticeTimeNs.value();
+}
+
+std::optional<int64_t>
+FaultDefinition::GetRiskClearTimeNs() const
+{
+    if (!noticeTimeNs.has_value() || !riskDurationNs.has_value())
+    {
+        return std::nullopt;
+    }
+    NS_ABORT_MSG_IF(noticeTimeNs.value() < 0 || riskDurationNs.value() <= 0 ||
+                        noticeTimeNs.value() >
+                            std::numeric_limits<int64_t>::max() - riskDurationNs.value(),
+                    "validated fault has an invalid risk clear time");
+    return noticeTimeNs.value() + riskDurationNs.value();
+}
+
+int64_t
+FaultDefinition::GetAnchorTimeNs() const
+{
+    if (noticeTimeNs.has_value())
+    {
+        return noticeTimeNs.value();
+    }
+    NS_ABORT_MSG_IF(!startTimeNs.has_value(),
+                    "validated fault has neither notice nor start time");
+    return startTimeNs.value();
 }
 
 } // namespace ns3

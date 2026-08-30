@@ -101,7 +101,9 @@ FaultController::Configure(const FaultTrace& trace,
             m_batches[fault.noticeTimeNs.value()].push_back(
                 {FaultEventType::NOTICE, fault});
         }
-        m_batches[fault.startTimeNs].push_back({FaultEventType::START, fault});
+        NS_ABORT_MSG_IF(!fault.faultOccurred || !fault.startTimeNs.has_value(),
+                        "N4A trace contains a non-occurring fault");
+        m_batches[fault.startTimeNs.value()].push_back({FaultEventType::START, fault});
         const std::optional<int64_t> recoveryTimeNs = fault.GetRecoveryTimeNs();
         if (recoveryTimeNs.has_value() &&
             recoveryTimeNs.value() < m_simulationDurationNs)
@@ -217,7 +219,7 @@ FaultController::ProcessBatch(int64_t simulationTimeNs)
                             event.fault.faultType,
                             event.eventType,
                             event.fault.noticeTimeNs,
-                            event.fault.startTimeNs,
+                            event.fault.startTimeNs.value(),
                             event.fault.durationNs,
                             event.fault.failureProbability,
                             availability.satelliteAvailable,

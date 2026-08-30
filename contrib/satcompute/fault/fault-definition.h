@@ -25,13 +25,18 @@ struct FaultDefinition
     uint64_t faultId{};
     uint32_t nodeId{};
     FaultType faultType{FaultType::COMPUTE};
-    int64_t startTimeNs{};
+    bool faultOccurred{true};
     std::optional<int64_t> noticeTimeNs;
+    std::optional<int64_t> startTimeNs;
     std::optional<double> failureProbability;
+    std::optional<int64_t> warningLeadTimeNs;
+    std::optional<int64_t> riskDurationNs;
     std::optional<int64_t> durationNs;
 
     std::optional<int64_t> GetRecoveryTimeNs() const;
     std::optional<int64_t> GetWarningLeadTimeNs() const;
+    std::optional<int64_t> GetRiskClearTimeNs() const;
+    int64_t GetAnchorTimeNs() const;
 };
 
 } // namespace ns3

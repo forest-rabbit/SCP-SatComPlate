@@ -215,8 +215,8 @@ RejectOverlappingFaults(const std::filesystem::path& filename,
         std::sort(nodeFaults.begin(),
                   nodeFaults.end(),
                   [](const FaultDefinition* left, const FaultDefinition* right) {
-                      return std::make_pair(left->startTimeNs, left->faultId) <
-                             std::make_pair(right->startTimeNs, right->faultId);
+                      return std::make_pair(left->startTimeNs.value(), left->faultId) <
+                             std::make_pair(right->startTimeNs.value(), right->faultId);
                   });
         for (std::size_t index = 1; index < nodeFaults.size(); ++index)
         {
@@ -225,7 +225,7 @@ RejectOverlappingFaults(const std::filesystem::path& filename,
             const std::optional<int64_t> previousRecovery =
                 previous.GetRecoveryTimeNs();
             if (!previousRecovery.has_value() ||
-                current.startTimeNs < previousRecovery.value())
+                current.startTimeNs.value() < previousRecovery.value())
             {
                 Fail(filename,
                      "faults",
@@ -319,7 +319,7 @@ ReadFaultTrace(const std::filesystem::path& filename,
             GetField(item, sourcePath, "start_time_ns"),
             sourcePath,
             "start_time_ns");
-        if (fault.startTimeNs >= simulationDurationNs)
+        if (fault.startTimeNs.value() >= simulationDurationNs)
         {
             Fail(sourcePath, "start_time_ns", "must be earlier than simulation stop");
         }
@@ -337,7 +337,7 @@ ReadFaultTrace(const std::filesystem::path& filename,
                  "notice_time_ns and failure_probability must both be null or non-null");
         }
         if (fault.noticeTimeNs.has_value() &&
-            fault.noticeTimeNs.value() > fault.startTimeNs)
+            fault.noticeTimeNs.value() > fault.startTimeNs.value())
         {
             Fail(sourcePath, "notice_time_ns", "must not be later than start_time_ns");
         }
@@ -352,7 +352,7 @@ ReadFaultTrace(const std::filesystem::path& filename,
             {
                 Fail(sourcePath, "duration_ns", "must be null or a positive integer");
             }
-            if (fault.startTimeNs >
+            if (fault.startTimeNs.value() >
                 std::numeric_limits<int64_t>::max() - fault.durationNs.value())
             {
                 Fail(sourcePath, "duration_ns", "overflows recovery_time_ns");
