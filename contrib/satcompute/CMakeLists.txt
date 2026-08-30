@@ -149,6 +149,17 @@ build_exec(
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
 )
 
+# Pure-model calibration tool. It does not run the network simulator or create
+# an ns-3 example target.
+build_exec(
+  EXECNAME satcompute-f1-calibration
+  EXECNAME_PREFIX satcompute_tool_
+  SOURCE_FILES tools/validation/f1-calibration.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tools
+)
+
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
 build_exec(

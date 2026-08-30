@@ -20,6 +20,7 @@ task_inputs="contrib/satcompute/tests/fixtures/task"
 fault_inputs="contrib/satcompute/tests/fixtures/fault"
 profile="$task_inputs/compute-profile-single.json"
 fault_task="$task_inputs/task-fault-running.json"
+f1_example="contrib/satcompute/input/examples/leo-66-120s-f1"
 common="--simulationDuration=1 --constellationConfig=$constellation \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
@@ -29,6 +30,11 @@ network_common="--simulationDuration=1 --constellationConfig=$constellation \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --routingMode=global-first"
+
+./ns3 run --no-build \
+  "satcompute-f1-calibration \
+--faultModelConfig=$f1_example/fault-model.json \
+--outputDir=$regression_output/f1-calibration" >/dev/null
 
 compute_result="$(run_platform \
   "$regression_output/compute" \
@@ -75,7 +81,6 @@ generate_f1_second_result="$(run_platform \
 replay_f1_result="$(run_platform \
   "$regression_output/replay-f1" \
   "$f1_common --faultMode=replay --faultTrace=$f1_generated_trace")"
-f1_example="contrib/satcompute/input/examples/leo-66-120s-f1"
 f1_66_trace="$regression_output/generate-f1-66/fault-trace.json"
 f1_66_common="--simulationDuration=120 \
 --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
@@ -146,6 +151,22 @@ if generated_trace != {"schema_version": 2, "faults": []}:
     raise SystemExit(f"empty generated trace differs: {generated_trace}")
 if load_csv("generate-empty/fault-events.csv") or load_csv("replay-empty/fault-events.csv"):
     raise SystemExit("empty generate/replay unexpectedly emitted runtime fault events")
+
+
+calibration = load_json("f1-calibration/n4b-f1-calibration-summary.json")
+selected = calibration["selected"]
+if (
+    selected["heating_tau_s"],
+    selected["cooling_tau_s"],
+    selected["time_to_temperature_risk_s"],
+    selected["time_to_risk_threshold_s"],
+    selected["time_to_critical_s"],
+    selected["representative_tasks_before_critical"],
+) != (43.0, 40.0, 8, 44, 56, 6):
+    raise SystemExit(f"F1 selected thermal calibration differs: {selected}")
+calibration_rows = load_csv("f1-calibration/n4b-f1-calibration.csv")
+if len(calibration_rows) != 840:
+    raise SystemExit("F1 calibration CSV candidate grid is incomplete")
 
 
 f1_trace = load_json("generate-f1/fault-trace.json")
