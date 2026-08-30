@@ -85,6 +85,32 @@ RunIdentityAndMotionCase()
     Simulator::Destroy();
 }
 
+void
+RunStartOffsetCase()
+{
+    constexpr double startOffsetSeconds = 5695.0;
+    const ConstellationDefinition config = MakeTestConstellation(3, 4);
+    Vector expected;
+    {
+        OnlineOrbitConstellation baseline(config);
+        Simulator::Schedule(Seconds(startOffsetSeconds), [&] {
+            expected = baseline.GetPosition(7);
+        });
+        Simulator::Stop(Seconds(startOffsetSeconds));
+        Simulator::Run();
+    }
+    Simulator::Destroy();
+
+    {
+        OnlineOrbitConstellation shifted(config, startOffsetSeconds);
+        Check(shifted.GetStartOffsetSeconds() == startOffsetSeconds,
+              "online orbit lost its start offset");
+        Check(Distance(expected, shifted.GetPosition(7)) < 0.001,
+              "shifted orbit time zero differs from the baseline future position");
+    }
+    Simulator::Destroy();
+}
+
 std::set<std::tuple<uint32_t, uint32_t, PlusGridCandidateKind>>
 ToSet(const std::vector<PlusGridCandidateLink>& links)
 {
@@ -193,6 +219,7 @@ main(int argc, char* argv[])
     try
     {
         RunIdentityAndMotionCase();
+        RunStartOffsetCase();
         RunCandidateCase();
         RunValidationCase();
         std::cout << "SatCompute online orbit foundation tests passed." << std::endl;

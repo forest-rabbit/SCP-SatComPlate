@@ -90,7 +90,9 @@ OnlineTopologyController::Initialize()
             "online topology controller must be initialized at simulation time zero");
     }
 
-    m_constellation = std::make_unique<OnlineOrbitConstellation>(m_constellationDefinition);
+    m_constellation = std::make_unique<OnlineOrbitConstellation>(
+        m_constellationDefinition,
+        m_config.orbitStartOffsetSeconds);
     m_topologyPolicy = std::make_unique<CircularOrbitTopologyPolicy>(
         m_constellationDefinition,
         m_constellation->GetPositions(),

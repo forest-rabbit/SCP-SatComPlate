@@ -26,6 +26,7 @@ struct SatComputeConfig
 
     // topology
     std::string constellationConfig;        ///< 原生 LEO shell CSV 路径。
+    double orbitStartOffsetSeconds;         ///< 轨道 epoch 相对偏移，单位为秒。
     double maxIslDistanceMeters;            ///< ISL 最大允许距离，单位为米。
     double networkUpdateIntervalSeconds;    ///< 网络状态应用周期，单位为秒。
     bool topologyOnly;                      ///< 是否只生成轨道和拓扑切片。

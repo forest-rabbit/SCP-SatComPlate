@@ -32,6 +32,8 @@ main()
         Require(config.constellationConfig ==
                     "contrib/satcompute/input/topology/constellations/synthetic-66.csv",
                 "unexpected constellation path");
+        Require(config.orbitStartOffsetSeconds == 0.0,
+                "unexpected orbit start offset");
         Require(config.maxIslDistanceMeters == 6171353.0, "unexpected ISL distance");
         Require(config.delayMode == "fixed" && config.fixedDelaySeconds == 0.008,
                 "unexpected delay defaults");

@@ -29,6 +29,9 @@ GetDefaultSatComputeConfig()
     config.constellationConfig =
         "contrib/satcompute/input/topology/constellations/synthetic-66.csv";
 
+    // --orbitStartOffset：仿真 0 秒对应的轨道 epoch 偏移，单位为秒。
+    config.orbitStartOffsetSeconds = 0.0;
+
     // --maxIslDistance：候选链路的最大有效距离，单位为米。
     config.maxIslDistanceMeters = 6'171'353.0;
 

@@ -151,6 +151,9 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
     commandLine.AddValue("constellationConfig",
                          "Path to the native LEO shell CSV",
                          config.constellationConfig);
+    commandLine.AddValue("orbitStartOffset",
+                         "Orbit epoch offset represented by simulation time zero in seconds",
+                         config.orbitStartOffsetSeconds);
     commandLine.AddValue("maxIslDistance",
                          "Maximum valid ISL distance in meters",
                          config.maxIslDistanceMeters);
@@ -209,6 +212,11 @@ ValidateConfig(const SatComputeConfig& config)
 {
     RequireNotEmpty(config.constellationConfig, "constellationConfig");
     RequirePositiveSeconds(config.simulationDurationSeconds, "simulationDuration");
+    if (!std::isfinite(config.orbitStartOffsetSeconds) ||
+        config.orbitStartOffsetSeconds < 0.0)
+    {
+        FailConfig("orbitStartOffset", "must be a finite non-negative number of seconds");
+    }
     if (!std::isfinite(config.maxIslDistanceMeters) || config.maxIslDistanceMeters <= 0.0)
     {
         FailConfig("maxIslDistance", "must be a finite positive number of meters");
@@ -347,7 +355,9 @@ main(int argc, char* argv[])
         {
             TopologySliceExportResult sliceResult;
             {
-                OnlineOrbitConstellation constellation(constellationDefinition);
+                OnlineOrbitConstellation constellation(
+                    constellationDefinition,
+                    config.orbitStartOffsetSeconds);
                 CircularOrbitTopologyPolicy policy(constellationDefinition,
                                                    constellation.GetPositions(),
                                                    config.maxIslDistanceMeters,
