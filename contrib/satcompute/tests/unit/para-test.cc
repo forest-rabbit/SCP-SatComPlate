@@ -51,8 +51,7 @@ main()
                     config.transferPayloadBytes == 1'024 &&
                     config.taskCompletionPolicy == "strict",
                 "unexpected workload defaults");
-        Require(config.faultMode == "none" && config.faultTrace.empty() &&
-                    config.faultModelConfig.empty(),
+        Require(config.faultMode == "none" && config.faultTrace.empty(),
                 "fault inputs must default to none");
         Require(!config.topologyOnly && config.topologySliceIntervalSeconds == 1.0 &&
                     config.includeFinalTopologyState,

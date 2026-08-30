@@ -2,11 +2,11 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
-#ifndef SATCOMPUTE_FAULT_SCENARIO_GENERATOR_H
-#define SATCOMPUTE_FAULT_SCENARIO_GENERATOR_H
+#ifndef SATCOMPUTE_FAULT_MODEL_ENGINE_H
+#define SATCOMPUTE_FAULT_MODEL_ENGINE_H
 
 #include "fault-controller.h"
-#include "fault-model-config.h"
+#include "fault-para.h"
 #include "self-state-fault-model.h"
 
 #include "ns3/event-id.h"
@@ -26,15 +26,15 @@ namespace ns3
 class ComputeService;
 class TaskCoordinator;
 
-/** Configuration or lifecycle error raised by the online fault generator. */
-class FaultScenarioGeneratorError : public std::runtime_error
+/** Configuration or lifecycle error raised by the online fault-model engine. */
+class FaultModelEngineError : public std::runtime_error
 {
   public:
     using std::runtime_error::runtime_error;
 };
 
 /** Observable end-of-run F1 state for one configured compute node. */
-struct FaultGeneratorNodeSnapshot
+struct FaultModelNodeSnapshot
 {
     uint32_t nodeId{}; ///< Stable external satellite ID.
     SelfStateFaultSnapshot selfState; ///< Current pure F1 state.
@@ -42,25 +42,25 @@ struct FaultGeneratorNodeSnapshot
     bool computeAvailable{true}; ///< Final N4A compute availability.
 };
 
-/** Generate unified fault events online while reusing the N4A controller. */
-class FaultScenarioGenerator : public Object
+/** Evaluate fault models online and submit events to the N4A controller. */
+class FaultModelEngine : public Object
 {
   public:
     /** @return ns-3 runtime type information. */
     static TypeId GetTypeId();
 
-    FaultScenarioGenerator();
-    ~FaultScenarioGenerator() override;
+    FaultModelEngine();
+    ~FaultModelEngine() override;
 
     /**
      * Configure model state and deterministic per-node random streams at time zero.
      *
-     * @param config Strictly validated unified fault-model configuration.
+     * @param parameters Strictly validated built-in fault parameters.
      * @param computeNodeIds Stable IDs present in the compute profile.
      * @param simulationDurationNs Exclusive simulation end in nanoseconds.
      * @param faultController N4A controller configured for online generation.
      */
-    void Configure(const FaultModelConfig& config,
+    void Configure(const FaultParameters& parameters,
                    const std::vector<uint32_t>& computeNodeIds,
                    int64_t simulationDurationNs,
                    Ptr<FaultController> faultController);
@@ -72,7 +72,7 @@ class FaultScenarioGenerator : public Object
     const FaultTrace& Finalize();
 
     /** Return node snapshots in ascending stable-node-ID order. */
-    std::vector<FaultGeneratorNodeSnapshot> GetNodeSnapshots() const;
+    std::vector<FaultModelNodeSnapshot> GetNodeSnapshots() const;
 
   private:
     /** Notice metadata retained until risk exit or compute failure. */
@@ -113,7 +113,9 @@ class FaultScenarioGenerator : public Object
     bool m_bound{}; ///< Whether compute services were bound.
     bool m_finalized{}; ///< Whether the trace was closed.
     int64_t m_simulationDurationNs{}; ///< Exclusive simulation end.
-    FaultModelConfig m_config; ///< Unified model parameters.
+    FaultParameters m_parameters; ///< Unified model parameters.
+    int64_t m_checkIntervalNs{}; ///< Converted model-check interval.
+    int64_t m_recoveryDurationNs{}; ///< Converted compute outage duration.
     std::optional<SelfStateFaultModel> m_selfStateModel; ///< Active F1 pure model.
     std::map<uint32_t, NodeState> m_nodes; ///< Node state in stable-ID order.
     uint64_t m_nextFaultId{1}; ///< Next trace identity.
@@ -125,4 +127,4 @@ class FaultScenarioGenerator : public Object
 
 } // namespace ns3
 
-#endif // SATCOMPUTE_FAULT_SCENARIO_GENERATOR_H
+#endif // SATCOMPUTE_FAULT_MODEL_ENGINE_H

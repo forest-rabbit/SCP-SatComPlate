@@ -98,9 +98,6 @@ GetDefaultSatComputeConfig()
     // --faultTrace：generate 的输出路径或 replay 的输入路径。
     config.faultTrace = "";
 
-    // --faultModelConfig：generate 使用的模型参数；其他模式必须为空。
-    config.faultModelConfig = "";
-
     // output
 
     // --outputDir：结构化结果输出目录；默认写入 /tmp，避免污染工作树。

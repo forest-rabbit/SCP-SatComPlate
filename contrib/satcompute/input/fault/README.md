@@ -1,95 +1,24 @@
-# 故障输入
+# 故障轨迹输入与输出
 
-故障输入分为两类，不能合并成完整 scenario JSON：
+`input/fault/` 只说明平台可写出、可重放的 Fault Trace 数据合同，不存放故障模型
+配置。F1/F2/F3 的内部参数集中在 [`fault-para.cc`](../../fault/fault-para.cc)，与
+`para.cc` 一样属于编译期默认参数；修改后需要重新编译。任务输入仍由
+`tools/generation/generate-task-workload.py` 生成，任务不会预先决定在线 F1 是否
+发生故障。
 
-- Fault Model 配置只在 `faultMode=generate` 中读取，负责风险模型和生成参数；
-- Fault Trace 是本轮已经确定的风险/故障 episode，generate 写出、replay 读取。
+运行模式与轨迹路径的组合规则为：
 
-组合规则为：
+| `faultMode` | `faultTrace` |
+|---|---|
+| `none` | 必须为空 |
+| `generate` | 输出文件路径；在线判定并真实执行故障后写出 v2 trace |
+| `replay` | 已存在的 v1/v2 trace；不再抽样 |
 
-| `faultMode` | `faultModelConfig` | `faultTrace` |
-|---|---|---|
-| `none` | 必须为空 | 必须为空 |
-| `generate` | 必须是现有配置文件 | 必须是输出文件路径 |
-| `replay` | 必须为空 | 必须是现有 v1/v2 trace |
+当前 F1 默认启用，因此 `generate` 还必须同时提供 ComputeProfile 与 TaskTrace；
+`replay` 是否需要任务输入取决于 trace 中的节点和要验证的执行结果。
 
 `topologyOnly=1` 只能与 `faultMode=none` 一起使用，因为 topology-only 描述无故障的
 自然轨道和候选拓扑。
-
-## Fault Model 配置
-
-根对象为严格 closed-world schema；缺字段、未知字段、非有限数值或非法组合都会在
-仿真开始前失败。当前可直接使用
-[`n4b-f1-calibrated.json`](n4b-f1-calibrated.json)：它启用 F1，关闭尚未接入在线
-生成器的 F2/F3。
-
-### 根字段
-
-| 字段 | 单位/范围 | 含义 |
-|---|---|---|
-| `schema_version` | 固定 `1` | Fault Model 配置 schema |
-| `check_interval_ns` | 正整数 ns | F1/F2 风险更新和计算故障采样周期；当前标定值为 1 s |
-| `recoverable_compute_duration_ns` | 正整数 ns | F1/F2 compute 故障的系统恢复时间；不是热模型推导值 |
-| `self_state` | object | F1 自身状态模型 |
-| `radiation` | object | F2 辐射暴露模型配置；下一阶段启用 |
-| `debris` | object | F3 永久整星故障配置；后续阶段启用 |
-
-### `self_state.temperature`
-
-| 字段 | 单位/范围 | 含义 |
-|---|---|---|
-| `base_c` | ℃ | 空闲状态趋近的基础温度 |
-| `saturation_c` | ℃ | 持续计算时趋近的热平衡温度 |
-| `risk_c` | ℃ | 温度风险曲线起点 |
-| `critical_c` | ℃ | 确定性保护停机温度 |
-| `heating_tau_s` | 正数 s | 指数升温时间常数，不是“升温完成时间” |
-| `cooling_tau_s` | 正数 s | 指数降温时间常数，不是“降温完成时间” |
-| `growth_factor` | 正数 | `risk_c..critical_c` 内指数风险曲线形状 |
-
-必须满足：
-
-```text
-base_c < risk_c < critical_c < saturation_c
-```
-
-### `self_state.energy`
-
-| 字段 | 单位/范围 | 含义 |
-|---|---|---|
-| `enabled` | bool | 是否把能源压力作为 F1 小权重修正 |
-| `initial_dod` | `[0,1]` | 初始放电深度 |
-| `risk_dod` | `[0,1]` | 能源压力起点 |
-| `critical_dod` | `[0,1]` | 能源压力归一化上界 |
-| `battery_wh` | 正数 Wh | 电池容量 |
-| `incremental_compute_power_w` | 非负 W | 忙碌计算相对空闲的增量功率 |
-| `correction_weight` | `[0,1]` | 能源压力进入综合风险的权重 |
-
-必须满足 `initial_dod <= risk_dod < critical_dod`。DoD 使用 W、Wh 和秒进行单位
-换算；本阶段不模拟充电，空闲时不会重置 DoD。
-
-### `self_state` 其余字段
-
-| 字段 | 范围 | 含义 |
-|---|---|---|
-| `enabled` | bool | 是否启用 F1 在线生成；启用时必须提供 ComputeProfile 和 TaskTrace |
-| `risk_threshold` | `[0,1]` | 综合风险达到该值时开启节点风险 episode |
-| `max_failure_intensity_per_s` | 非负 `s^-1` | `lambda_F1 = max * R_F1` 的最大强度 |
-
-`risk_threshold` 是风险通知阈值，不是每秒故障概率。每个检查区间实际使用：
-
-```text
-q_F1 = 1 - exp(-lambda_F1 * dt)
-```
-
-达到 `critical_c` 时 `q_F1=1`。当前 `0.005 s^-1` 来自 66 星、1000 秒、30 个固定
-run 的功能标定，只用于当前实验尺度；证据见
-[`docs/calibration/n4b-f1`](../../../../docs/calibration/n4b-f1/README.md)。
-
-### `radiation` 与 `debris`
-
-F2 字段预先冻结为经纬度矩形、区域内有效故障强度、风险阈值和离开区域是否重置
-连续暴露；F3 字段预先冻结为 `fixed_k`/`poisson` 模式、固定数量和单星强度。它们
-当前必须保持 `enabled=false`，在线含义与最终参数将在对应阶段完成并更新本文档。
 
 ## Fault Trace v2
 
@@ -106,21 +35,21 @@ generate 只写 schema v2。根对象和每条记录都必须包含完整字段�
       "fault_occurred": true,
       "notice_time_ns": 44000000000,
       "start_time_ns": 56000000000,
-      "failure_probability": 0.0,
+      "failure_probability": 0.003119061056128215,
       "warning_lead_time_ns": 12000000000,
       "risk_duration_ns": null,
-      "duration_ns": 10000000000
+      "duration_ns": 8000000000
     },
     {
       "fault_id": 2,
-      "node_id": 11,
+      "node_id": 33,
       "fault_type": "compute",
       "fault_occurred": false,
       "notice_time_ns": 44000000000,
       "start_time_ns": null,
-      "failure_probability": 0.0,
+      "failure_probability": 0.003119061056128215,
       "warning_lead_time_ns": null,
-      "risk_duration_ns": 10000000000,
+      "risk_duration_ns": 2000000000,
       "duration_ns": null
     }
   ]

@@ -5,8 +5,9 @@ build_lib(
     common/time-conversion.cc
     fault/fault-controller.cc
     fault/fault-definition.cc
-    fault/fault-model-config.cc
-    fault/fault-scenario-generator.cc
+    fault/fault-model-engine.cc
+    fault/fault-para.cc
+    fault/fault-parameter-validator.cc
     fault/self-state-fault-model.cc
     fault/fault-state.cc
     fault/fault-trace.cc
@@ -59,8 +60,9 @@ build_lib(
     common/time-conversion.h
     fault/fault-controller.h
     fault/fault-definition.h
-    fault/fault-model-config.h
-    fault/fault-scenario-generator.h
+    fault/fault-model-engine.h
+    fault/fault-para.h
+    fault/fault-parameter-validator.h
     fault/self-state-fault-model.h
     fault/fault-state.h
     fault/fault-trace.h

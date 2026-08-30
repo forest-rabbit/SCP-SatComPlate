@@ -1,54 +1,87 @@
-# 120 秒、66 星、F1 小规模验证
+# 120 秒、66 星、20 任务 F1 验证
 
-本场景用于验证 N4B 第一阶段的自身状态计算故障闭环，不用于宣称现实卫星故障率。
-它沿用当前 50--60 秒连续计算达到临界温度的候选参数，并刻意把随机故障强度设为
-0，从而分别稳定构造两类证据：
+本场景验证 N4B 第一阶段的自身状态计算故障闭环，不用于宣称现实卫星故障率。
+星座使用 `synthetic-66.csv`，全部 66 颗卫星都具有 1,500,000 work-unit/s 算力。
+任务由统一的 `generate-task-workload.py --profile=f1-validation` 生成：
 
-- 节点 0 连续处理 6 个约 10 秒任务，先产生风险通知，再在临界温度触发一次可恢复
-  compute 故障；
-- 节点 11 连续处理 5 个约 10 秒任务，进入风险后正常降温，产生一条未故障的风险
-  episode；
-- 其余 9 个短任务分散在不同计算节点，作为不会过热的对照组。
+- 节点 0、11、22 各连续处理 4 个 15 秒任务，分别在 56、66、76 秒达到临界温度；
+- 第 4、9、14 号任务正在计算时发生故障并失败，恢复时间均为 8 秒；
+- 第 5、10、15 号任务在各自恢复后到达并完成，证明失败的旧任务不会复活，但新任务
+  可以继续运行；
+- 节点 33 连续处理 3 个 15 秒任务，只形成风险 episode，不发生故障；
+- 第 19、20 号短任务分散到节点 44、55，作为不会过热的稀疏对照。
 
-星座使用 `input/topology/constellations/synthetic-66.csv`，算力使用全部 66 个计算节点
-的 `xw-66sat-static-2g-all-compute-profile.json`。`fault-model.json` 是功能验证配置，
-其中 10 秒恢复时间是平台场景参数，不是实测卫星恢复时间。
+`task-trace.json` 是平台输入，`workload-summary.json` 只记录生成角色和预期验证点。
+故障内部参数来自 [`fault-para.cc`](../../../fault/fault-para.cc)，本目录不再保存第二份
+故障模型 JSON。
+
+## 重新生成任务输入
+
+先让平台导出同一星座的 0 秒节点切片：
+
+```bash
+./ns3 run "satcompute \
+  --simulationDuration=1 \
+  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --topologyOnly=1 \
+  --topologySliceInterval=1 \
+  --outputDir=/tmp/satcompute-n4b-f1-topology"
+```
+
+再使用统一任务生成器：
+
+```bash
+python3 contrib/satcompute/tools/generation/generate-task-workload.py \
+  --profile=f1-validation \
+  --nodes-file=/tmp/satcompute-n4b-f1-topology/topology/nodes_0s.json \
+  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
+  --seed=n4b-f1-66 \
+  --output-task-trace=contrib/satcompute/input/examples/leo-66-120s-f1/task-trace.json \
+  --output-workload-summary=contrib/satcompute/input/examples/leo-66-120s-f1/workload-summary.json
+```
+
+相同节点切片、ComputeProfile 和 seed 会生成逐字节相同的两个文件。
 
 ## Generate
-
-在仓库根目录执行：
 
 ```bash
 ./ns3 run "satcompute \
   --simulationDuration=120 \
+  --randomSeed=1 \
+  --randomRun=1 \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --maxIslDistance=6171353 \
   --delayMode=fixed \
   --fixedDelay=0.008 \
   --networkUpdateInterval=20 \
+  --islBandwidthBps=2000000000 \
   --routingMode=global-capacity-aware-hrw \
   --computeProfile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
   --taskTrace=contrib/satcompute/input/examples/leo-66-120s-f1/task-trace.json \
   --taskCompletionPolicy=report \
   --faultMode=generate \
-  --faultModelConfig=contrib/satcompute/input/examples/leo-66-120s-f1/fault-model.json \
   --faultTrace=/tmp/satcompute-f1-generate/fault-trace.json \
   --outputDir=/tmp/satcompute-f1-generate"
 ```
 
-预期生成一个节点 0 的实际故障和一个节点 11 的风险-only episode。计算故障不会改变
-ISL 或触发路由重算；节点 0 上已经失败的旧任务不会在恢复后复活。
+预期 trace 包含节点 0、11、22 的三次实际 compute 故障和节点 33 的一条风险-only
+记录。计算故障不会改变 ISL，也不会触发路由重算。
 
 ## Replay
 
-将上一轮生成的 trace 作为确定性输入：
+将上一轮已经确定的 trace 作为输入：
 
 ```bash
 ./ns3 run "satcompute \
   --simulationDuration=120 \
+  --randomSeed=1 \
+  --randomRun=1 \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --maxIslDistance=6171353 \
   --delayMode=fixed \
   --fixedDelay=0.008 \
   --networkUpdateInterval=20 \
+  --islBandwidthBps=2000000000 \
   --routingMode=global-capacity-aware-hrw \
   --computeProfile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
   --taskTrace=contrib/satcompute/input/examples/leo-66-120s-f1/task-trace.json \
@@ -58,5 +91,5 @@ ISL 或触发路由重算；节点 0 上已经失败的旧任务不会在恢复�
   --outputDir=/tmp/satcompute-f1-replay"
 ```
 
-项目回归会比较两轮的故障事件、任务、传输和路由证据，确保 generate 与 replay
+回归会逐文件比较两轮的故障事件、任务、传输和路由证据，确保 generate 与 replay
 执行结果一致。

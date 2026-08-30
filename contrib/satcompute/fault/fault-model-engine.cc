@@ -2,8 +2,11 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
-#include "fault-scenario-generator.h"
+#include "fault-model-engine.h"
 
+#include "fault-parameter-validator.h"
+
+#include "../common/time-conversion.h"
 #include "../task/compute-service.h"
 #include "../task/task-coordinator.h"
 
@@ -18,69 +21,79 @@
 namespace ns3
 {
 
-NS_OBJECT_ENSURE_REGISTERED(FaultScenarioGenerator);
+NS_OBJECT_ENSURE_REGISTERED(FaultModelEngine);
 
 namespace
 {
 
 constexpr int64_t COMPUTE_FAULT_STREAM_BASE = 1000000;
-constexpr double NANOSECONDS_PER_SECOND = 1000000000.0;
 
 } // namespace
 
 TypeId
-FaultScenarioGenerator::GetTypeId()
+FaultModelEngine::GetTypeId()
 {
-    static TypeId typeId = TypeId("ns3::FaultScenarioGenerator")
+    static TypeId typeId = TypeId("ns3::FaultModelEngine")
                                .SetParent<Object>()
                                .SetGroupName("SatCompute")
-                               .AddConstructor<FaultScenarioGenerator>();
+                               .AddConstructor<FaultModelEngine>();
     return typeId;
 }
 
-FaultScenarioGenerator::FaultScenarioGenerator() = default;
+FaultModelEngine::FaultModelEngine() = default;
 
-FaultScenarioGenerator::~FaultScenarioGenerator() = default;
+FaultModelEngine::~FaultModelEngine() = default;
 
 void
-FaultScenarioGenerator::Configure(const FaultModelConfig& config,
-                                  const std::vector<uint32_t>& computeNodeIds,
-                                  int64_t simulationDurationNs,
-                                  Ptr<FaultController> faultController)
+FaultModelEngine::Configure(const FaultParameters& parameters,
+                            const std::vector<uint32_t>& computeNodeIds,
+                            int64_t simulationDurationNs,
+                            Ptr<FaultController> faultController)
 {
     if (m_configured || !Simulator::Now().IsZero())
     {
-        throw FaultScenarioGeneratorError(
-            "FaultScenarioGenerator must be configured once at time zero");
+        throw FaultModelEngineError(
+            "FaultModelEngine must be configured once at time zero");
     }
     if (simulationDurationNs <= 0 || faultController == nullptr)
     {
-        throw FaultScenarioGeneratorError(
-            "FaultScenarioGenerator requires duration and FaultController");
+        throw FaultModelEngineError(
+            "FaultModelEngine requires duration and FaultController");
     }
-    if (config.radiation.enabled || config.debris.enabled)
+    ValidateFaultParameters(parameters);
+    if (parameters.f2.enabled || parameters.f3.enabled)
     {
-        throw FaultScenarioGeneratorError(
+        throw FaultModelEngineError(
             "F2/F3 cannot be enabled before their N4B increments");
     }
-    if (config.selfState.enabled && computeNodeIds.empty())
+    if (parameters.f1.enabled && computeNodeIds.empty())
     {
-        throw FaultScenarioGeneratorError(
+        throw FaultModelEngineError(
             "enabled F1 requires at least one compute node");
     }
 
     std::set<uint32_t> uniqueNodeIds(computeNodeIds.begin(), computeNodeIds.end());
     if (uniqueNodeIds.size() != computeNodeIds.size())
     {
-        throw FaultScenarioGeneratorError("F1 compute node IDs must be unique");
+        throw FaultModelEngineError("F1 compute node IDs must be unique");
     }
-    m_config = config;
+    m_parameters = parameters;
+    m_checkIntervalNs = SatComputeSecondsToNanoseconds(
+        parameters.checkIntervalSeconds,
+        "fault.checkIntervalSeconds");
+    m_recoveryDurationNs = SatComputeSecondsToNanoseconds(
+        parameters.recoverableComputeDurationSeconds,
+        "fault.recoverableComputeDurationSeconds");
+    if (m_checkIntervalNs <= 0 || m_recoveryDurationNs <= 0)
+    {
+        throw FaultModelEngineError("fault intervals must convert to positive nanoseconds");
+    }
     m_simulationDurationNs = simulationDurationNs;
     m_faultController = faultController;
     m_trace.schemaVersion = FAULT_TRACE_SCHEMA_VERSION;
-    if (config.selfState.enabled)
+    if (parameters.f1.enabled)
     {
-        m_selfStateModel.emplace(config.selfState);
+        m_selfStateModel.emplace(parameters.f1);
         for (const uint32_t nodeId : uniqueNodeIds)
         {
             NodeState state;
@@ -91,12 +104,12 @@ FaultScenarioGenerator::Configure(const FaultModelConfig& config,
         }
     }
 
-    const int64_t intervalNs = config.checkIntervalNs;
+    const int64_t intervalNs = m_checkIntervalNs;
     for (int64_t timeNs = intervalNs; timeNs < simulationDurationNs;)
     {
         m_tickEvents.push_back(
             Simulator::Schedule(NanoSeconds(timeNs),
-                                &FaultScenarioGenerator::Tick,
+                                &FaultModelEngine::Tick,
                                 this,
                                 timeNs));
         if (timeNs > std::numeric_limits<int64_t>::max() - intervalNs)
@@ -109,16 +122,16 @@ FaultScenarioGenerator::Configure(const FaultModelConfig& config,
 }
 
 void
-FaultScenarioGenerator::BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator)
+FaultModelEngine::BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator)
 {
     if (!m_configured || m_bound)
     {
-        throw FaultScenarioGeneratorError(
-            "FaultScenarioGenerator task binding is invalid");
+        throw FaultModelEngineError(
+            "FaultModelEngine task binding is invalid");
     }
-    if (m_config.selfState.enabled && taskCoordinator == nullptr)
+    if (m_parameters.f1.enabled && taskCoordinator == nullptr)
     {
-        throw FaultScenarioGeneratorError("enabled F1 requires a TaskCoordinator");
+        throw FaultModelEngineError("enabled F1 requires a TaskCoordinator");
     }
     m_taskCoordinator = taskCoordinator;
     if (taskCoordinator != nullptr)
@@ -136,7 +149,7 @@ FaultScenarioGenerator::BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator
     {
         if (state.computeService == nullptr)
         {
-            throw FaultScenarioGeneratorError(
+            throw FaultModelEngineError(
                 "F1 has no ComputeService for node_id=" + std::to_string(nodeId));
         }
     }
@@ -144,7 +157,7 @@ FaultScenarioGenerator::BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator
 }
 
 FaultDefinition
-FaultScenarioGenerator::MakeNotice(uint32_t nodeId,
+FaultModelEngine::MakeNotice(uint32_t nodeId,
                                    const RiskEpisode& episode) const
 {
     FaultDefinition notice;
@@ -158,7 +171,7 @@ FaultScenarioGenerator::MakeNotice(uint32_t nodeId,
 }
 
 FaultDefinition
-FaultScenarioGenerator::MakeRiskOnly(uint32_t nodeId,
+FaultModelEngine::MakeRiskOnly(uint32_t nodeId,
                                      const RiskEpisode& episode,
                                      int64_t clearTimeNs) const
 {
@@ -168,7 +181,7 @@ FaultScenarioGenerator::MakeRiskOnly(uint32_t nodeId,
 }
 
 FaultDefinition
-FaultScenarioGenerator::MakeComputeFault(
+FaultModelEngine::MakeComputeFault(
     uint32_t nodeId,
     uint64_t faultId,
     const std::optional<RiskEpisode>& episode,
@@ -182,7 +195,7 @@ FaultScenarioGenerator::MakeComputeFault(
     fault.faultOccurred = true;
     fault.startTimeNs = startTimeNs;
     fault.failureProbability = currentProbability;
-    fault.durationNs = m_config.recoverableComputeDurationNs;
+    fault.durationNs = m_recoveryDurationNs;
     if (episode.has_value())
     {
         fault.noticeTimeNs = episode->noticeTimeNs;
@@ -193,13 +206,13 @@ FaultScenarioGenerator::MakeComputeFault(
 }
 
 void
-FaultScenarioGenerator::Tick(int64_t simulationTimeNs)
+FaultModelEngine::Tick(int64_t simulationTimeNs)
 {
     NS_ABORT_MSG_IF(!m_configured || !m_bound || m_finalized ||
                         simulationTimeNs != Simulator::Now().GetNanoSeconds(),
-                    "FaultScenarioGenerator tick state is invalid");
+                    "FaultModelEngine tick state is invalid");
     const double intervalSeconds =
-        static_cast<double>(m_config.checkIntervalNs) / NANOSECONDS_PER_SECOND;
+        m_parameters.checkIntervalSeconds;
     std::vector<GeneratedFaultEvent> events;
     std::vector<FaultDefinition> completedRecords;
     for (auto& [nodeId, state] : m_nodes)
@@ -271,11 +284,11 @@ FaultScenarioGenerator::Tick(int64_t simulationTimeNs)
 }
 
 const FaultTrace&
-FaultScenarioGenerator::Finalize()
+FaultModelEngine::Finalize()
 {
     if (!m_configured || !m_bound || m_finalized)
     {
-        throw FaultScenarioGeneratorError("FaultScenarioGenerator finalization is invalid");
+        throw FaultModelEngineError("FaultModelEngine finalization is invalid");
     }
     for (auto& [nodeId, state] : m_nodes)
     {
@@ -293,14 +306,14 @@ FaultScenarioGenerator::Finalize()
     return m_trace;
 }
 
-std::vector<FaultGeneratorNodeSnapshot>
-FaultScenarioGenerator::GetNodeSnapshots() const
+std::vector<FaultModelNodeSnapshot>
+FaultModelEngine::GetNodeSnapshots() const
 {
     if (!m_configured)
     {
-        throw FaultScenarioGeneratorError("FaultScenarioGenerator is not configured");
+        throw FaultModelEngineError("FaultModelEngine is not configured");
     }
-    std::vector<FaultGeneratorNodeSnapshot> snapshots;
+    std::vector<FaultModelNodeSnapshot> snapshots;
     snapshots.reserve(m_nodes.size());
     for (const auto& [nodeId, state] : m_nodes)
     {
@@ -314,7 +327,7 @@ FaultScenarioGenerator::GetNodeSnapshots() const
 }
 
 void
-FaultScenarioGenerator::DoDispose()
+FaultModelEngine::DoDispose()
 {
     for (EventId& event : m_tickEvents)
     {

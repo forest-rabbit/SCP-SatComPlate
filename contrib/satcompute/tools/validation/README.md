@@ -8,14 +8,15 @@
 
 ```bash
 ./ns3 run "satcompute-f1-calibration \
-  --faultModelConfig=contrib/satcompute/input/fault/n4b-f1-calibrated.json \
   --outputDir=/tmp/satcompute-f1-calibration"
 ```
 
 | 参数 | 含义 |
 |---|---|
-| `--faultModelConfig` | 必填；启用 F1、关闭 F2/F3、1 秒检查周期的统一模型配置 |
 | `--outputDir` | 必填；标定 CSV 和 summary 的输出目录 |
+
+工具直接读取并校验 `fault/fault-para.cc` 中的内置参数，避免平台运行和标定工具出现
+两套配置来源。若修改故障参数，必须重新编译后再运行标定。
 
 输出为：
 

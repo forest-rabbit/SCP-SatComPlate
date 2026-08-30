@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_SELF_STATE_FAULT_MODEL_H
 #define SATCOMPUTE_SELF_STATE_FAULT_MODEL_H
 
-#include "fault-model-config.h"
+#include "fault-para.h"
 
 namespace ns3
 {
@@ -28,7 +28,7 @@ class SelfStateFaultModel
 {
   public:
     /** Construct a pure model from a strictly validated F1 configuration. */
-    explicit SelfStateFaultModel(const SelfStateFaultConfig& config);
+    explicit SelfStateFaultModel(const F1FaultParameters& parameters);
 
     /** @return Baseline temperature and configured initial depth of discharge. */
     SelfStateFaultSnapshot CreateInitialSnapshot() const;
@@ -53,7 +53,7 @@ class SelfStateFaultModel
     bool IsRiskActive(const SelfStateFaultSnapshot& snapshot) const;
 
   private:
-    SelfStateFaultConfig m_config; ///< Immutable validated F1 parameters.
+    F1FaultParameters m_parameters; ///< Immutable validated F1 parameters.
 };
 
 } // namespace ns3

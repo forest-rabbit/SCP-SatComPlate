@@ -33,7 +33,6 @@ network_common="--simulationDuration=1 --constellationConfig=$constellation \
 
 ./ns3 run --no-build \
   "satcompute-f1-calibration \
---faultModelConfig=contrib/satcompute/input/fault/n4b-f1-calibrated.json \
 --outputDir=$regression_output/f1-calibration" >/dev/null
 
 compute_result="$(run_platform \
@@ -52,15 +51,6 @@ satellite_only_result="$(run_platform \
   "$regression_output/satellite-only" \
   "$network_common --faultMode=replay \
 --faultTrace=$fault_inputs/satellite-finite.json")"
-generated_trace="$regression_output/generate-empty/fault-trace.json"
-generate_empty_result="$(run_platform \
-  "$regression_output/generate-empty" \
-  "$network_common --faultMode=generate \
---faultModelConfig=$fault_inputs/model-all-disabled.json \
---faultTrace=$generated_trace")"
-replay_empty_result="$(run_platform \
-  "$regression_output/replay-empty" \
-  "$network_common --faultMode=replay --faultTrace=$generated_trace")"
 f1_generated_trace="$regression_output/generate-f1/fault-trace.json"
 f1_common="--simulationDuration=90 --constellationConfig=$constellation \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
@@ -70,13 +60,11 @@ f1_common="--simulationDuration=90 --constellationConfig=$constellation \
 generate_f1_result="$(run_platform \
   "$regression_output/generate-f1" \
   "$f1_common --faultMode=generate \
---faultModelConfig=$fault_inputs/model-f1-critical.json \
 --faultTrace=$f1_generated_trace")"
 f1_second_trace="$regression_output/generate-f1-second/fault-trace.json"
 generate_f1_second_result="$(run_platform \
   "$regression_output/generate-f1-second" \
   "$f1_common --faultMode=generate \
---faultModelConfig=$fault_inputs/model-f1-critical.json \
 --faultTrace=$f1_second_trace")"
 replay_f1_result="$(run_platform \
   "$regression_output/replay-f1" \
@@ -91,7 +79,6 @@ f1_sampled_common="--simulationDuration=80 --randomRun=64 \
 generate_f1_sampled_result="$(run_platform \
   "$regression_output/generate-f1-sampled" \
   "$f1_sampled_common --faultMode=generate \
---faultModelConfig=contrib/satcompute/input/fault/n4b-f1-calibrated.json \
 --faultTrace=$f1_sampled_trace")"
 replay_f1_sampled_result="$(run_platform \
   "$regression_output/replay-f1-sampled" \
@@ -107,7 +94,7 @@ f1_66_common="--simulationDuration=120 \
 generate_f1_66_result="$(run_platform \
   "$regression_output/generate-f1-66" \
   "$f1_66_common --faultMode=generate \
---faultModelConfig=$f1_example/fault-model.json --faultTrace=$f1_66_trace")"
+--faultTrace=$f1_66_trace")"
 replay_f1_66_result="$(run_platform \
   "$regression_output/replay-f1-66" \
   "$f1_66_common --faultMode=replay --faultTrace=$f1_66_trace")"
@@ -122,12 +109,6 @@ if [[ "$satellite_only_result" != *'"status":"completed"'* ]]; then
   echo "workload-free satellite fault run failed: $satellite_only_result" >&2
   exit 1
 fi
-for result in "$generate_empty_result" "$replay_empty_result"; do
-  if [[ "$result" != *'"status":"completed"'* ]]; then
-    echo "empty generate/replay mode run failed: $result" >&2
-    exit 1
-  fi
-done
 for result in "$generate_f1_result" "$generate_f1_second_result" "$replay_f1_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
     echo "F1 generate/replay did not report the intentionally failed old task: $result" >&2
@@ -167,15 +148,12 @@ def load_csv(relative: str):
         return list(csv.DictReader(source))
 
 
-generated_trace = load_json("generate-empty/fault-trace.json")
-if generated_trace != {"schema_version": 2, "faults": []}:
-    raise SystemExit(f"empty generated trace differs: {generated_trace}")
-if load_csv("generate-empty/fault-events.csv") or load_csv("replay-empty/fault-events.csv"):
-    raise SystemExit("empty generate/replay unexpectedly emitted runtime fault events")
-
-
 calibration = load_json("f1-calibration/n4b-f1-calibration-summary.json")
 selected = calibration["selected"]
+if calibration["recoverable_compute_duration_s"] != 8.0 or not (
+    27.6 <= selected["temperature_after_recovery_from_critical_c"] <= 27.7
+):
+    raise SystemExit(f"F1 recovery calibration differs: {selected}")
 if (
     selected["heating_tau_s"],
     selected["cooling_tau_s"],
@@ -231,7 +209,7 @@ if (
     f1_fault["start_time_ns"],
     f1_fault["warning_lead_time_ns"],
     f1_fault["duration_ns"],
-) != (3, "compute", True, 44_000_000_000, 56_000_000_000, 12_000_000_000, 10_000_000_000):
+) != (3, "compute", True, 44_000_000_000, 56_000_000_000, 12_000_000_000, 8_000_000_000):
     raise SystemExit(f"F1 generated fault differs: {f1_fault}")
 if (root / "generate-f1/fault-trace.json").read_bytes() != (
     root / "generate-f1-second/fault-trace.json"
@@ -260,7 +238,7 @@ if [row["event_type"] for row in f1_events] != ["NOTICE", "START", "RECOVERY"]:
 if [int(row["simulation_time_ns"]) for row in f1_events] != [
     44_000_000_000,
     56_000_000_000,
-    66_000_000_000,
+    64_000_000_000,
 ]:
     raise SystemExit("F1 runtime event timestamps differ")
 if any(row["route_recomputed"] != "false" for row in f1_events):
@@ -317,22 +295,31 @@ if [row["event_type"] for row in sampled_events] != ["START", "RECOVERY"] or (
 
 f1_66_trace = load_json("generate-f1-66/fault-trace.json")
 faults_66 = f1_66_trace["faults"]
-if len(faults_66) != 2:
+if len(faults_66) != 4:
     raise SystemExit(f"66-star F1 trace count differs: {faults_66}")
 occurred_66 = [fault for fault in faults_66 if fault["fault_occurred"]]
 risk_only_66 = [fault for fault in faults_66 if not fault["fault_occurred"]]
-if len(occurred_66) != 1 or (
-    occurred_66[0]["node_id"],
-    occurred_66[0]["notice_time_ns"],
-    occurred_66[0]["start_time_ns"],
-    occurred_66[0]["warning_lead_time_ns"],
-) != (0, 44_000_000_000, 56_000_000_000, 12_000_000_000):
+occurred_evidence = [
+    (
+        fault["node_id"],
+        fault["notice_time_ns"],
+        fault["start_time_ns"],
+        fault["warning_lead_time_ns"],
+        fault["duration_ns"],
+    )
+    for fault in occurred_66
+]
+if occurred_evidence != [
+    (0, 44_000_000_000, 56_000_000_000, 12_000_000_000, 8_000_000_000),
+    (11, 54_000_000_000, 66_000_000_000, 12_000_000_000, 8_000_000_000),
+    (22, 64_000_000_000, 76_000_000_000, 12_000_000_000, 8_000_000_000),
+]:
     raise SystemExit(f"66-star F1 occurred fault differs: {occurred_66}")
 if len(risk_only_66) != 1 or (
     risk_only_66[0]["node_id"],
     risk_only_66[0]["notice_time_ns"],
     risk_only_66[0]["risk_duration_ns"],
-) != (11, 44_000_000_000, 10_000_000_000):
+) != (33, 44_000_000_000, 2_000_000_000):
     raise SystemExit(f"66-star F1 risk-only episode differs: {risk_only_66}")
 
 for filename in (
@@ -354,18 +341,24 @@ for filename in (
 tasks_66 = {int(row["task_id"]): row for row in load_csv(
     "generate-f1-66/task-summary.csv"
 )}
-if len(tasks_66) != 20 or sum(
-    row["final_state"] == "FAILED" for row in tasks_66.values()
-) != 1:
+failed_task_ids = sorted(
+    task_id
+    for task_id, row in tasks_66.items()
+    if row["final_state"] == "FAILED"
+)
+if len(tasks_66) != 20 or failed_task_ids != [4, 9, 14]:
     raise SystemExit("66-star F1 task terminal counts differ")
-if any(tasks_66[task_id]["final_state"] != "COMPLETED" for task_id in range(12, 21)):
-    raise SystemExit("66-star F1 sparse control task did not complete")
+if any(
+    tasks_66[task_id]["final_state"] != "COMPLETED"
+    for task_id in (5, 10, 15, 16, 17, 18, 19, 20)
+):
+    raise SystemExit("66-star F1 recovery, risk-only, or control task did not complete")
 run_66 = load_json("generate-f1-66/run-summary.json")
 if (
     run_66["route_computation_count"],
     run_66["applied_topology_slice_count"],
     run_66["completed_task_count"],
-) != (1, 6, 19):
+) != (1, 6, 17):
     raise SystemExit("66-star F1 changed topology, routing, or task counts")
 
 

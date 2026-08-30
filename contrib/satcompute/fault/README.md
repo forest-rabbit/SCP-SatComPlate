@@ -1,8 +1,8 @@
 # 故障模块
 
-`fault/` 负责统一故障模型、Fault Trace 以及运行期执行。在线生成器只计算风险和产生
-事件；所有 compute/整星状态变化仍统一交给 N4A `FaultController`，不会由模型直接
-修改任务、transfer、链路或路由。
+`fault/` 负责统一故障参数、Fault Trace、在线模型以及运行期执行。
+`FaultModelEngine` 只读取实时状态并判定风险/故障；所有 compute/整星状态变化仍
+统一交给 N4A `FaultController`，模型不会直接修改任务、transfer、链路或路由。
 
 ## 文件与职责
 
@@ -10,9 +10,10 @@
 |---|---|
 | `fault-definition.h/.cc` | compute/satellite 记录以及预警、恢复、风险结束和排序时间 |
 | `fault-trace.h/.cc` | v1 兼容读取、v2 closed-world 校验、canonical writer |
-| `fault-model-config.h/.cc` | F1/F2/F3 统一模型配置的严格解析；当前已执行 F1 |
+| `fault-para.h/.cc` | 按 common、F1、F2、F3 分组的唯一内置故障参数 |
+| `fault-parameter-validator.h/.cc` | 有限值、范围及跨字段关系的启动前校验 |
 | `self-state-fault-model.h/.cc` | 无运行期副作用的 F1 温度、DoD、风险、强度和单步概率 |
-| `fault-scenario-generator.h/.cc` | 在线读取计算忙闲状态、维护风险 episode、使用 ns-3 随机流产生 F1 事件 |
+| `fault-model-engine.h/.cc` | 在线读取计算忙闲状态、维护风险 episode、使用 ns-3 随机流判定 F1 事件 |
 | `fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
 | `fault-controller.h/.cc` | replay/在线事件批处理，以及任务、传输和有效拓扑联动 |
 
@@ -59,10 +60,16 @@ q_F1 = 1 - exp(-lambda_F1 * dt)
 每个 tick 只从按稳定卫星 ID 分配的 ns-3 stream 取一个随机数；禁用 F2/F3 不会改变
 F1 随机序列。
 
-当前冻结的功能参数见
-[`input/fault/n4b-f1-calibrated.json`](../input/fault/n4b-f1-calibrated.json)，
-校准证据见 [`docs/calibration/n4b-f1`](../../../docs/calibration/n4b-f1/README.md)。
-它们面向 1000 秒加速实验，不表示现实卫星热常数或故障率。
+当前唯一参数入口是 [`fault-para.cc`](fault-para.cc)，修改后需要重新编译。公共参数
+使用秒，进入运行期后才严格换算为整数 ns；当前检查周期为 1 秒，可恢复计算故障
+持续 8 秒。`coolingTauSeconds=40` 是降温曲线的时间常数，8 秒则是保护停机时长，
+二者含义不同。F1 参数的校准证据见
+[`docs/calibration/n4b-f1`](../../../docs/calibration/n4b-f1/README.md)。这些数值面向
+1000 秒加速实验，不表示现实卫星热常数或故障率。
+
+F2/F3 参数也已按独立分组保留在同一文件中，但当前默认关闭。其中
+`f3.fixedCount` 是未来 `fixed_k` 模式下人工指定的永久撞击卫星数量，不属于任务
+输入；对应模型接入后再完成参数标定。
 
 ## 风险 episode
 

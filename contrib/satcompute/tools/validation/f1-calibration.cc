@@ -3,7 +3,8 @@
  */
 
 #include "ns3/command-line.h"
-#include "ns3/fault-model-config.h"
+#include "ns3/fault-parameter-validator.h"
+#include "ns3/fault-para.h"
 #include "ns3/random-variable-stream.h"
 #include "ns3/rng-seed-manager.h"
 #include "ns3/self-state-fault-model.h"
@@ -195,14 +196,14 @@ OptionalTime(const std::optional<int64_t>& value)
 }
 
 void
-UpdateThresholdTimes(const SelfStateFaultConfig& config,
+UpdateThresholdTimes(const F1FaultParameters& parameters,
                      const SelfStateFaultModel& model,
                      const SelfStateFaultSnapshot& snapshot,
                      int64_t elapsedTimeSeconds,
                      HeatingResult& result)
 {
     if (!result.timeToTemperatureRiskSeconds.has_value() &&
-        snapshot.temperatureC >= config.temperature.riskC)
+        snapshot.temperatureC >= parameters.temperature.riskC)
     {
         result.timeToTemperatureRiskSeconds = elapsedTimeSeconds;
     }
@@ -212,20 +213,20 @@ UpdateThresholdTimes(const SelfStateFaultConfig& config,
         result.timeToRiskThresholdSeconds = elapsedTimeSeconds;
     }
     if (!result.timeToCriticalSeconds.has_value() &&
-        snapshot.temperatureC >= config.temperature.criticalC)
+        snapshot.temperatureC >= parameters.temperature.criticalC)
     {
         result.timeToCriticalSeconds = elapsedTimeSeconds;
     }
 }
 
 HeatingResult
-RunHeatingCandidate(const SelfStateFaultConfig& selectedConfig,
+RunHeatingCandidate(const F1FaultParameters& selectedParameters,
                     double tauSeconds,
                     CalibrationWriter& writer)
 {
-    SelfStateFaultConfig config = selectedConfig;
-    config.temperature.heatingTauSeconds = tauSeconds;
-    const SelfStateFaultModel model(config);
+    F1FaultParameters parameters = selectedParameters;
+    parameters.temperature.heatingTauSeconds = tauSeconds;
+    const SelfStateFaultModel model(parameters);
     SelfStateFaultSnapshot snapshot = model.CreateInitialSnapshot();
     HeatingResult result;
     result.tauSeconds = tauSeconds;
@@ -239,7 +240,7 @@ RunHeatingCandidate(const SelfStateFaultConfig& selectedConfig,
                      second,
                      (second - 1) / REPRESENTATIVE_TASK_SECONDS + 1,
                      snapshot);
-        UpdateThresholdTimes(config, model, snapshot, second, result);
+        UpdateThresholdTimes(parameters, model, snapshot, second, result);
         if (second == 10)
         {
             result.temperatureAfterTenSeconds = snapshot.temperatureC;
@@ -249,15 +250,15 @@ RunHeatingCandidate(const SelfStateFaultConfig& selectedConfig,
 }
 
 CoolingResult
-RunCoolingCandidate(const SelfStateFaultConfig& selectedConfig,
+RunCoolingCandidate(const F1FaultParameters& selectedParameters,
                     double tauSeconds,
                     CalibrationWriter& writer)
 {
-    SelfStateFaultConfig config = selectedConfig;
-    config.temperature.coolingTauSeconds = tauSeconds;
-    const SelfStateFaultModel model(config);
+    F1FaultParameters parameters = selectedParameters;
+    parameters.temperature.coolingTauSeconds = tauSeconds;
+    const SelfStateFaultModel model(parameters);
     SelfStateFaultSnapshot snapshot = model.CreateInitialSnapshot();
-    snapshot.temperatureC = config.temperature.criticalC;
+    snapshot.temperatureC = parameters.temperature.criticalC;
     CoolingResult result;
     result.tauSeconds = tauSeconds;
     for (int64_t second = 1; second <= 120; ++second)
@@ -336,15 +337,16 @@ IsRepresentativeBusy(uint32_t nodeId, int64_t simulationSecond)
 }
 
 MonteCarloRunResult
-RunMonteCarlo(const FaultModelConfig& sourceConfig,
+RunMonteCarlo(const FaultParameters& sourceParameters,
               double intensityPerSecond,
               uint64_t runNumber)
 {
-    FaultModelConfig config = sourceConfig;
-    config.selfState.maxFailureIntensityPerSecond = intensityPerSecond;
-    const SelfStateFaultModel model(config.selfState);
-    const int64_t recoverySeconds =
-        config.recoverableComputeDurationNs / config.checkIntervalNs;
+    FaultParameters parameters = sourceParameters;
+    parameters.f1.maxFailureIntensityPerSecond = intensityPerSecond;
+    const SelfStateFaultModel model(parameters.f1);
+    const int64_t recoverySeconds = static_cast<int64_t>(
+        parameters.recoverableComputeDurationSeconds /
+        parameters.checkIntervalSeconds);
     RngSeedManager::SetSeed(MONTE_CARLO_SEED);
     RngSeedManager::SetRun(runNumber);
 
@@ -420,7 +422,7 @@ RunMonteCarlo(const FaultModelConfig& sourceConfig,
 }
 
 MonteCarloCandidateResult
-RunMonteCarloCandidate(const FaultModelConfig& config,
+RunMonteCarloCandidate(const FaultParameters& parameters,
                        double intensityPerSecond,
                        CalibrationWriter& writer)
 {
@@ -430,7 +432,7 @@ RunMonteCarloCandidate(const FaultModelConfig& config,
     for (uint64_t run = 1; run <= MONTE_CARLO_RUN_COUNT; ++run)
     {
         MonteCarloRunResult runResult =
-            RunMonteCarlo(config, intensityPerSecond, run);
+            RunMonteCarlo(parameters, intensityPerSecond, run);
         writer.WriteMonteCarlo(intensityPerSecond, runResult);
         result.faultTemperaturesC.insert(result.faultTemperaturesC.end(),
                                          runResult.faultTemperaturesC.begin(),
@@ -488,21 +490,23 @@ MakeMonteCarloJson(const MonteCarloCandidateResult& result)
 }
 
 void
-ValidateConfig(const FaultModelConfig& config)
+ValidateConfig(const FaultParameters& parameters)
 {
-    if (!config.selfState.enabled)
+    ValidateFaultParameters(parameters);
+    if (!parameters.f1.enabled)
     {
         throw std::runtime_error("F1 calibration requires self_state.enabled=true");
     }
-    if (config.radiation.enabled || config.debris.enabled)
+    if (parameters.f2.enabled || parameters.f3.enabled)
     {
         throw std::runtime_error("F1 calibration requires F2 and F3 to be disabled");
     }
-    if (config.checkIntervalNs != 1000000000)
+    if (parameters.checkIntervalSeconds != 1.0)
     {
         throw std::runtime_error("current F1 calibration requires a 1-second check interval");
     }
-    if (config.recoverableComputeDurationNs % config.checkIntervalNs != 0)
+    if (std::fmod(parameters.recoverableComputeDurationSeconds,
+                  parameters.checkIntervalSeconds) != 0.0)
     {
         throw std::runtime_error(
             "F1 calibration requires recovery duration aligned to the check interval");
@@ -514,23 +518,19 @@ ValidateConfig(const FaultModelConfig& config)
 int
 main(int argc, char* argv[])
 {
-    std::string faultModelConfigPath;
     std::string outputDirectory;
     CommandLine command(__FILE__);
-    command.AddValue("faultModelConfig",
-                     "F1-only unified fault-model configuration",
-                     faultModelConfigPath);
     command.AddValue("outputDir", "Calibration output directory", outputDirectory);
     command.Parse(argc, argv);
 
     try
     {
-        if (faultModelConfigPath.empty() || outputDirectory.empty())
+        if (outputDirectory.empty())
         {
-            throw std::runtime_error("faultModelConfig and outputDir are required");
+            throw std::runtime_error("outputDir is required");
         }
-        const FaultModelConfig config = ReadFaultModelConfig(faultModelConfigPath);
-        ValidateConfig(config);
+        const FaultParameters parameters = GetDefaultFaultParameters();
+        ValidateConfig(parameters);
         const std::filesystem::path outputRoot(outputDirectory);
         std::filesystem::create_directories(outputRoot);
         CalibrationWriter writer(outputRoot / "n4b-f1-calibration.csv");
@@ -539,34 +539,34 @@ main(int argc, char* argv[])
         for (const double candidate : HEATING_TAU_CANDIDATES)
         {
             heatingResults.push_back(
-                RunHeatingCandidate(config.selfState, candidate, writer));
+                RunHeatingCandidate(parameters.f1, candidate, writer));
         }
         std::vector<CoolingResult> coolingResults;
         for (const double candidate : COOLING_TAU_CANDIDATES)
         {
             coolingResults.push_back(
-                RunCoolingCandidate(config.selfState, candidate, writer));
+                RunCoolingCandidate(parameters.f1, candidate, writer));
         }
         std::vector<MonteCarloCandidateResult> monteCarloResults;
         for (const double candidate : FAILURE_INTENSITY_CANDIDATES)
         {
             monteCarloResults.push_back(
-                RunMonteCarloCandidate(config, candidate, writer));
+                RunMonteCarloCandidate(parameters, candidate, writer));
         }
 
         const auto selectedHeating = std::find_if(
             heatingResults.begin(),
             heatingResults.end(),
-            [&config](const HeatingResult& result) {
+            [&parameters](const HeatingResult& result) {
                 return result.tauSeconds ==
-                       config.selfState.temperature.heatingTauSeconds;
+                       parameters.f1.temperature.heatingTauSeconds;
             });
         const auto selectedCooling = std::find_if(
             coolingResults.begin(),
             coolingResults.end(),
-            [&config](const CoolingResult& result) {
+            [&parameters](const CoolingResult& result) {
                 return result.tauSeconds ==
-                       config.selfState.temperature.coolingTauSeconds;
+                       parameters.f1.temperature.coolingTauSeconds;
             });
         if (selectedHeating == heatingResults.end() ||
             selectedCooling == coolingResults.end())
@@ -611,11 +611,16 @@ main(int argc, char* argv[])
             (selectedHeating->timeToCriticalSeconds.value() +
              REPRESENTATIVE_TASK_SECONDS - 1) /
             REPRESENTATIVE_TASK_SECONDS;
+        const SelfStateFaultModel selectedModel(parameters.f1);
+        SelfStateFaultSnapshot recovery = selectedModel.CreateInitialSnapshot();
+        recovery.temperatureC = parameters.f1.temperature.criticalC;
+        selectedModel.Update(recovery,
+                             false,
+                             parameters.recoverableComputeDurationSeconds);
         const Json summary = {
-            {"schema_version", 1},
-            {"source_fault_model_config",
-             std::filesystem::path(faultModelConfigPath).lexically_normal().string()},
-            {"check_interval_ns", config.checkIntervalNs},
+            {"check_interval_s", parameters.checkIntervalSeconds},
+            {"recoverable_compute_duration_s",
+             parameters.recoverableComputeDurationSeconds},
             {"calibration_scope",
              "accelerated functional scenario; not a physical satellite failure rate"},
             {"heating_tau_candidates", heating},
@@ -632,8 +637,10 @@ main(int argc, char* argv[])
               {"functional_target_mean_fault_count", 1.0},
               {"candidates", monteCarlo}}},
             {"selected",
-             {{"heating_tau_s", config.selfState.temperature.heatingTauSeconds},
-              {"cooling_tau_s", config.selfState.temperature.coolingTauSeconds},
+             {{"heating_tau_s", parameters.f1.temperature.heatingTauSeconds},
+              {"cooling_tau_s", parameters.f1.temperature.coolingTauSeconds},
+              {"temperature_after_recovery_from_critical_c",
+               recovery.temperatureC},
               {"time_to_temperature_risk_s",
                OptionalTime(selectedHeating->timeToTemperatureRiskSeconds)},
               {"time_to_risk_threshold_s",
@@ -645,7 +652,7 @@ main(int argc, char* argv[])
               {"max_failure_intensity_per_s",
                selectedIntensity->intensityPerSecond},
               {"configured_max_failure_intensity_per_s",
-               config.selfState.maxFailureIntensityPerSecond},
+               parameters.f1.maxFailureIntensityPerSecond},
               {"monte_carlo_mean_fault_count", selectedIntensity->meanFaultCount},
               {"monte_carlo_mean_risk_only_episode_count",
                selectedIntensity->meanRiskOnlyEpisodeCount}}}};

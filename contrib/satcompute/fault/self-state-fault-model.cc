@@ -23,8 +23,8 @@ ClampUnit(double value)
 
 } // namespace
 
-SelfStateFaultModel::SelfStateFaultModel(const SelfStateFaultConfig& config)
-    : m_config(config)
+SelfStateFaultModel::SelfStateFaultModel(const F1FaultParameters& parameters)
+    : m_parameters(parameters)
 {
 }
 
@@ -32,8 +32,8 @@ SelfStateFaultSnapshot
 SelfStateFaultModel::CreateInitialSnapshot() const
 {
     SelfStateFaultSnapshot snapshot;
-    snapshot.temperatureC = m_config.temperature.baseC;
-    snapshot.depthOfDischarge = m_config.energy.initialDod;
+    snapshot.temperatureC = m_parameters.temperature.baseC;
+    snapshot.depthOfDischarge = m_parameters.energy.initialDod;
     return snapshot;
 }
 
@@ -48,7 +48,7 @@ SelfStateFaultModel::Update(SelfStateFaultSnapshot& snapshot,
     {
         return;
     }
-    const FaultTemperatureConfig& temperature = m_config.temperature;
+    const F1TemperatureParameters& temperature = m_parameters.temperature;
     if (busy)
     {
         snapshot.temperatureC =
@@ -64,11 +64,11 @@ SelfStateFaultModel::Update(SelfStateFaultSnapshot& snapshot,
                 std::exp(-intervalSeconds / temperature.coolingTauSeconds);
     }
 
-    if (m_config.energy.enabled && busy)
+    if (m_parameters.energy.enabled && busy)
     {
         snapshot.depthOfDischarge +=
-            m_config.energy.incrementalComputePowerW * intervalSeconds /
-            (3600.0 * m_config.energy.batteryWh);
+            m_parameters.energy.incrementalComputePowerW * intervalSeconds /
+            (3600.0 * m_parameters.energy.batteryWh);
     }
 
     const double thermalPosition = ClampUnit(
@@ -90,16 +90,16 @@ SelfStateFaultModel::Update(SelfStateFaultSnapshot& snapshot,
     }
 
     snapshot.energyPressure =
-        m_config.energy.enabled
-            ? ClampUnit((snapshot.depthOfDischarge - m_config.energy.riskDod) /
-                        (m_config.energy.criticalDod - m_config.energy.riskDod))
+        m_parameters.energy.enabled
+            ? ClampUnit((snapshot.depthOfDischarge - m_parameters.energy.riskDod) /
+                        (m_parameters.energy.criticalDod - m_parameters.energy.riskDod))
             : 0.0;
     snapshot.combinedRisk =
         1.0 - (1.0 - snapshot.thermalRisk) *
-                  (1.0 - m_config.energy.correctionWeight * snapshot.energyPressure);
+                  (1.0 - m_parameters.energy.correctionWeight * snapshot.energyPressure);
     snapshot.combinedRisk = ClampUnit(snapshot.combinedRisk);
     snapshot.failureIntensityPerSecond =
-        m_config.maxFailureIntensityPerSecond * snapshot.combinedRisk;
+        m_parameters.maxFailureIntensityPerSecond * snapshot.combinedRisk;
     snapshot.stepFailureProbability =
         -std::expm1(-snapshot.failureIntensityPerSecond * intervalSeconds);
     if (snapshot.temperatureC >= temperature.criticalC)
@@ -112,7 +112,7 @@ SelfStateFaultModel::Update(SelfStateFaultSnapshot& snapshot,
 bool
 SelfStateFaultModel::IsRiskActive(const SelfStateFaultSnapshot& snapshot) const
 {
-    return snapshot.combinedRisk >= m_config.riskThreshold;
+    return snapshot.combinedRisk >= m_parameters.riskThreshold;
 }
 
 } // namespace ns3

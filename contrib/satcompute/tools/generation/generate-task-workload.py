@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate deterministic synthetic stress TaskTrace inputs for SatCompute."""
+"""Generate deterministic TaskTrace inputs for SatCompute."""
 
 import argparse
 import json
@@ -655,30 +655,111 @@ def distribution(values):
     }
 
 
+def build_f1_validation_workload(satellite_ids, compute_nodes, seed):
+    """Build the fixed 66-star, 20-task N4B F1 validation workload."""
+    if len(satellite_ids) != 66:
+        raise ValueError("f1-validation profile requires exactly 66 satellites")
+    if len(compute_nodes) < 6:
+        raise ValueError("f1-validation profile requires at least six compute nodes")
+
+    role_nodes = [compute_nodes[index * len(compute_nodes) // 6] for index in range(6)]
+    hotspot_nodes = role_nodes[:3]
+    risk_only_node = role_nodes[3]
+    control_nodes = role_nodes[4:]
+    tasks = []
+    hotspot_task_ids = {}
+    post_recovery_task_ids = []
+    expected_critical_failure_task_ids = []
+
+    def add_task(compute_node, duration_seconds, arrival_time_ns):
+        task_id = len(tasks) + 1
+        compute_node_id = compute_node["node_id"]
+        source_index = deterministic_value(seed, task_id, "f1-source") % 66
+        while satellite_ids[source_index] == compute_node_id:
+            source_index = (source_index + 1) % 66
+        result_index = deterministic_value(seed, task_id, "f1-result") % 66
+        while satellite_ids[result_index] in (
+            compute_node_id,
+            satellite_ids[source_index],
+        ):
+            result_index = (result_index + 1) % 66
+        compute_work_units = (
+            compute_node["compute_rate_work_units_per_second"] * duration_seconds
+        )
+        if compute_work_units > UINT64_MAX:
+            raise ValueError("f1-validation compute work exceeds uint64")
+        tasks.append(
+            {
+                "task_id": task_id,
+                "source_node_id": satellite_ids[source_index],
+                "compute_node_id": compute_node_id,
+                "result_node_id": satellite_ids[result_index],
+                "input_bytes": 4096,
+                "output_bytes": 2048,
+                "compute_work_units": compute_work_units,
+                "arrival_time_ns": arrival_time_ns,
+            }
+        )
+        return task_id
+
+    for hotspot_index, node in enumerate(hotspot_nodes):
+        start_time_ns = 100_000_000 + hotspot_index * 10_000_000_000
+        task_ids = [
+            add_task(node, 15, start_time_ns + task_index * 1_000_000_000)
+            for task_index in range(4)
+        ]
+        hotspot_task_ids[str(node["node_id"])] = task_ids
+        expected_critical_failure_task_ids.append(task_ids[-1])
+        post_recovery_task_ids.append(
+            add_task(node, 2, 67_000_000_000 + hotspot_index * 10_000_000_000)
+        )
+
+    risk_only_task_ids = [
+        add_task(risk_only_node, 15, 100_000_000 + task_index * 1_000_000_000)
+        for task_index in range(3)
+    ]
+    control_task_ids = [
+        add_task(node, 2, 1_000_000_000 + index * 1_000_000_000)
+        for index, node in enumerate(control_nodes)
+    ]
+    if len(tasks) != 20:
+        raise AssertionError("f1-validation profile must contain exactly 20 tasks")
+
+    summary = {
+        "profile": "f1-validation",
+        "seed": seed,
+        "task_count": len(tasks),
+        "hotspot_compute_node_ids": [node["node_id"] for node in hotspot_nodes],
+        "hotspot_task_ids": hotspot_task_ids,
+        "expected_critical_failure_task_ids": expected_critical_failure_task_ids,
+        "post_recovery_task_ids": post_recovery_task_ids,
+        "risk_only_compute_node_id": risk_only_node["node_id"],
+        "risk_only_task_ids": risk_only_task_ids,
+        "control_compute_node_ids": [node["node_id"] for node in control_nodes],
+        "control_task_ids": control_task_ids,
+        "hotspot_task_duration_s": 15,
+        "risk_only_task_duration_s": 15,
+        "post_recovery_task_duration_s": 2,
+        "control_task_duration_s": 2,
+    }
+    return {"tasks": tasks}, summary
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate one deterministic SatCompute stress TaskTrace."
+    parser = argparse.ArgumentParser(description="Generate one deterministic SatCompute TaskTrace.")
+    parser.add_argument(
+        "--profile",
+        choices=("stress", "f1-validation"),
+        default="stress",
     )
     parser.add_argument("--nodes-file", required=True, type=Path)
     parser.add_argument("--compute-profile", required=True, type=Path)
-    parser.add_argument("--task-count", required=True, type=positive_int)
-    parser.add_argument("--total-input-bytes", required=True, type=positive_int)
+    parser.add_argument("--task-count", type=positive_int)
+    parser.add_argument("--total-input-bytes", type=positive_int)
     parser.add_argument("--seed", required=True)
-    parser.add_argument(
-        "--arrival-start-ns",
-        required=True,
-        type=non_negative_int,
-    )
-    parser.add_argument(
-        "--arrival-end-ns",
-        required=True,
-        type=non_negative_int,
-    )
-    parser.add_argument(
-        "--arrival-mode",
-        required=True,
-        choices=("uniform", "burst"),
-    )
+    parser.add_argument("--arrival-start-ns", type=non_negative_int)
+    parser.add_argument("--arrival-end-ns", type=non_negative_int)
+    parser.add_argument("--arrival-mode", choices=("uniform", "burst"))
     parser.add_argument(
         "--enhancement-share-bp",
         type=non_negative_int,
@@ -747,6 +828,31 @@ def main():
 
     if "\0" in args.seed or not args.seed:
         raise ValueError("seed must be a non-empty string without NUL")
+    satellite_ids = read_satellite_ids(args.nodes_file)
+    compute_nodes = read_compute_profile(args.compute_profile, satellite_ids)
+    if args.profile == "f1-validation":
+        trace, summary = build_f1_validation_workload(
+            satellite_ids,
+            compute_nodes,
+            args.seed,
+        )
+        write_json(args.output_task_trace, trace)
+        write_json(args.output_workload_summary, summary)
+        print("PASS: generated deterministic F1 validation TaskTrace (20 tasks)")
+        return
+
+    required_stress_arguments = {
+        "task-count": args.task_count,
+        "total-input-bytes": args.total_input_bytes,
+        "arrival-start-ns": args.arrival_start_ns,
+        "arrival-end-ns": args.arrival_end_ns,
+        "arrival-mode": args.arrival_mode,
+    }
+    missing = [name for name, value in required_stress_arguments.items() if value is None]
+    if missing:
+        raise ValueError(
+            "stress profile requires " + ", ".join(f"--{name}" for name in missing)
+        )
     if args.task_count > UINT64_MAX // 2:
         raise ValueError("task-count cannot produce safe INPUT/RESULT transfer IDs")
     if args.total_input_bytes > UINT64_MAX:
@@ -755,10 +861,7 @@ def main():
         raise ValueError("arrival-end-ns exceeds int64")
     if args.scenario_scale_bp > BASIS_POINTS:
         raise ValueError("scenario-scale-bp must be in [0, 10000]")
-    if (
-        args.non_tail_min_input_bytes
-        > args.non_tail_max_input_bytes
-    ):
+    if args.non_tail_min_input_bytes > args.non_tail_max_input_bytes:
         raise ValueError("non-tail minimum exceeds non-tail maximum")
 
     class_shares = {
@@ -776,8 +879,6 @@ def main():
     if sum(tail_shares.values()) != BASIS_POINTS:
         raise ValueError("tail class share basis points must sum to 10000")
 
-    satellite_ids = read_satellite_ids(args.nodes_file)
-    compute_nodes = read_compute_profile(args.compute_profile, satellite_ids)
     compute_ids = [item["node_id"] for item in compute_nodes]
     task_ids = list(range(1, args.task_count + 1))
     class_counts = largest_remainder(

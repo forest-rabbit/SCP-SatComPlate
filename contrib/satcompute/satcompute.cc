@@ -8,8 +8,8 @@
 #include "ns3/circular-orbit-topology-policy.h"
 #include "ns3/ecmp-route-recorder.h"
 #include "ns3/fault-controller.h"
-#include "ns3/fault-model-config.h"
-#include "ns3/fault-scenario-generator.h"
+#include "ns3/fault-para.h"
+#include "ns3/fault-model-engine.h"
 #include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/online-orbit-constellation.h"
@@ -188,9 +188,6 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
     commandLine.AddValue("faultTrace",
                          "Generated fault trace output or replay input path",
                          config.faultTrace);
-    commandLine.AddValue("faultModelConfig",
-                         "Fault model JSON path used only in generate mode",
-                         config.faultModelConfig);
     commandLine.AddValue("topologyOnly",
                          "Generate topology slices without network simulation",
                          config.topologyOnly);
@@ -269,23 +266,17 @@ ValidateConfig(const SatComputeConfig& config)
     }
     RequireChoice(config.taskCompletionPolicy, "taskCompletionPolicy", {"strict", "report"});
     RequireChoice(config.faultMode, "faultMode", {"none", "generate", "replay"});
-    if (config.faultMode == "none" &&
-        (!config.faultTrace.empty() || !config.faultModelConfig.empty()))
+    if (config.faultMode == "none" && !config.faultTrace.empty())
     {
-        FailConfig("faultMode", "none cannot use faultTrace or faultModelConfig");
+        FailConfig("faultMode", "none cannot use faultTrace");
     }
-    if (config.faultMode == "generate" &&
-        (config.faultTrace.empty() || config.faultModelConfig.empty()))
+    if (config.faultMode == "generate" && config.faultTrace.empty())
     {
-        FailConfig("faultMode", "generate requires faultTrace and faultModelConfig");
+        FailConfig("faultMode", "generate requires faultTrace");
     }
     if (config.faultMode == "replay" && config.faultTrace.empty())
     {
         FailConfig("faultMode", "replay requires faultTrace");
-    }
-    if (config.faultMode == "replay" && !config.faultModelConfig.empty())
-    {
-        FailConfig("faultMode", "replay cannot use faultModelConfig");
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
     if (config.topologyOnly && hasComputeProfile)
@@ -328,13 +319,7 @@ main(int argc, char* argv[])
         }
         else if (config.faultMode == "generate")
         {
-            config.faultModelConfig =
-                ResolveOptionalInputFile(config.faultModelConfig, "faultModelConfig");
             config.faultTrace = ResolveOutputFile(config.faultTrace, "faultTrace");
-            if (config.faultTrace == config.faultModelConfig)
-            {
-                FailConfig("faultTrace", "must differ from faultModelConfig");
-            }
         }
         const int64_t simulationDurationNs =
             SatComputeSecondsToNanoseconds(config.simulationDurationSeconds,
@@ -401,11 +386,10 @@ main(int argc, char* argv[])
             Ptr<NetworkTransferEngine> transferEngine;
             Ptr<TaskCoordinator> taskCoordinator;
             Ptr<FaultController> faultController;
-            Ptr<FaultScenarioGenerator> faultGenerator;
+            Ptr<FaultModelEngine> faultModelEngine;
             std::optional<ComputeProfile> computeProfile;
             std::optional<TaskTrace> taskTrace;
             std::optional<FaultTrace> faultTrace;
-            std::optional<FaultModelConfig> faultModelConfig;
             if (!config.computeProfile.empty() && !config.taskTrace.empty())
             {
                 computeProfile = ReadComputeProfile(config.computeProfile, topology);
@@ -434,11 +418,11 @@ main(int argc, char* argv[])
             }
             else if (config.faultMode == "generate")
             {
-                faultModelConfig = ReadFaultModelConfig(config.faultModelConfig);
-                if (faultModelConfig->selfState.enabled && !computeProfile.has_value())
+                const FaultParameters faultParameters = GetDefaultFaultParameters();
+                if (faultParameters.f1.enabled && !computeProfile.has_value())
                 {
-                    FailConfig("faultModelConfig",
-                               "enabled self_state requires computeProfile and taskTrace");
+                    FailConfig("faultMode",
+                               "generate with enabled F1 requires computeProfile and taskTrace");
                 }
                 faultController = CreateObject<FaultController>();
                 faultController->ConfigureGeneration(
@@ -454,11 +438,11 @@ main(int argc, char* argv[])
                         computeNodeIds.push_back(node.nodeId);
                     }
                 }
-                faultGenerator = CreateObject<FaultScenarioGenerator>();
-                faultGenerator->Configure(faultModelConfig.value(),
-                                          computeNodeIds,
-                                          simulationDurationNs,
-                                          faultController);
+                faultModelEngine = CreateObject<FaultModelEngine>();
+                faultModelEngine->Configure(faultParameters,
+                                            computeNodeIds,
+                                            simulationDurationNs,
+                                            faultController);
             }
             if (computeProfile.has_value() && taskTrace.has_value())
             {
@@ -478,9 +462,9 @@ main(int argc, char* argv[])
                     faultController->BindTaskCoordinator(taskCoordinator);
                 }
             }
-            if (faultGenerator != nullptr)
+            if (faultModelEngine != nullptr)
             {
-                faultGenerator->BindTaskCoordinator(taskCoordinator);
+                faultModelEngine->BindTaskCoordinator(taskCoordinator);
             }
 
             const Ptr<FlowMonitor> flowMonitor = InstallSimulationFlowMonitor();
@@ -490,7 +474,7 @@ main(int argc, char* argv[])
             const auto wallStop = std::chrono::steady_clock::now();
             if (config.faultMode == "generate")
             {
-                const FaultTrace& generatedTrace = faultGenerator->Finalize();
+                const FaultTrace& generatedTrace = faultModelEngine->Finalize();
                 WriteFaultTraceV2(config.faultTrace, generatedTrace);
             }
             const int64_t wallClockNs =

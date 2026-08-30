@@ -1,8 +1,9 @@
 # SatCompute 运行手册
 
 SatCompute 是 SCP-SatComPlate 在 ns-3.48 上的项目模块，只模拟卫星、星间链路、
-IPv4 路由、任务传输和星上计算。平台入口为 `satcompute.cc`；`para.h/.cc` 保存唯一
-一组类型化运行参数和默认值，星座、算力、任务与故障则使用彼此独立的数据文件。
+IPv4 路由、任务传输和星上计算。平台入口为 `satcompute.cc`；`para.h/.cc` 保存运行
+参数，`fault/fault-para.h/.cc` 保存故障内部参数，星座、算力、任务与 Fault Trace
+使用彼此独立的数据文件。
 
 ## 执行流程
 
@@ -49,7 +50,7 @@ NetDevice、路由、FlowMonitor 或任务对象。
 | [`routing/`](routing/README.md) | 五种 IPv4 策略、hash、HRW 和 reservation 状态 |
 | [`task/`](task/README.md) | ComputeProfile、TaskTrace、FCFS 服务和任务协调 |
 | [`traffic/`](traffic/README.md) | 任务内部的 UDP 输入/结果传输 |
-| [`fault/`](fault/README.md) | 统一故障模型、trace、在线生成、状态覆盖与批处理执行 |
+| [`fault/`](fault/README.md) | 故障参数、统一 trace、在线判定、状态覆盖与批处理执行 |
 | [`metrics/`](metrics/README.md) | 网络、路由、任务和失败诊断输出 |
 | [`input/`](input/README.md) | 星座、算力、任务、故障与组合示例 |
 | [`tools/`](tools/README.md) | 任务生成与输出校验工具 |
@@ -78,8 +79,8 @@ F1 在线生成与重放见
 ## 参数边界
 
 人工设置的时长和间隔统一以秒传入，平台在组件边界转换为 ns-3 `Time` 或有符号
-整数纳秒。星座 CSV 只描述轨道结构，算力、任务和故障分别位于独立输入文件；这些
-数据与 `para.cc` 不重复。
+整数纳秒。星座 CSV 只描述轨道结构，算力、任务和 Fault Trace 位于独立数据文件，
+故障内部参数位于 `fault-para.cc`；它们与 `para.cc` 不重复。
 
 ### simulation
 
@@ -147,11 +148,11 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 |---|---:|---|---|
 | `--faultMode` | `none` | 枚举 | `none`、`generate` 或 `replay` |
 | `--faultTrace` | 空 | 路径 | generate 输出或 replay 输入的统一 Fault Trace |
-| `--faultModelConfig` | 空 | 路径 | generate 使用的 F1/F2/F3 模型配置；其他模式必须为空 |
 
-`none` 要求两个路径均为空；`generate` 要求两个路径均提供；`replay` 只允许
-`faultTrace`。当前 generate 已完成 F1 自身状态计算故障，F2 辐射暴露和 F3 永久
-整星生成将在后续阶段接入。`compute` 故障只改变算力可用性；`satellite` 故障还会
+`none` 要求 `faultTrace` 为空；`generate` 将它作为输出路径，`replay` 将它作为
+已有输入路径。故障内部参数集中在 `fault/fault-para.cc`，不再使用模型配置 JSON。
+当前 generate 已完成 F1 自身状态计算故障，F2 辐射暴露和 F3 永久整星生成将在
+后续阶段接入。`compute` 故障只改变算力可用性；`satellite` 故障还会
 在精确纳秒关闭关联 ISL、立即重算 IPv4 路由，并按任务阶段终止端点 transfer。
 有限恢复重新读取当时的原生轨道坐标，只恢复仍满足距离门限的候选链路。两类故障
 都不复活旧任务。generate 中概率只采样一次并记录；replay 不会再次抽样。

@@ -22,8 +22,10 @@ SatCompute 1000 秒实验窗口的功能场景参数，不是现实卫星热常�
   30 ℃，对应第 6 个连续的约 10 秒任务；
 - `cooling_tau_s=40`：沿用当前版本的候选值，本阶段暂不采纳后续讨论的快速降温或
   100 秒过热调整；
-- `max_failure_intensity_per_s=0.005`：30 个 run 平均约 0.93 次 F1 故障，并保留
-  平均约 8.2 个风险-only episode。
+- `recoverable_compute_duration_s=8`：这是故障后的保护停机时长，不改变 40 秒降温
+  时间常数；从 30 ℃ 开始停机 8 秒后约为 27.64 ℃；
+- `max_failure_intensity_per_s=0.005`：30 个 run 平均约 0.87 次 F1 故障，并保留
+  平均约 8.27 个风险-only episode。
 
 故障次数目标仅用于避免 1000 秒功能场景“几乎永不发生”或“过度频繁发生”，不构成
 客观航天器失效率结论。若后续改变任务时长、热点数量、升降温时间或仿真窗口，必须
@@ -35,9 +37,11 @@ SatCompute 1000 秒实验窗口的功能场景参数，不是现实卫星热常�
 
 ```bash
 ./ns3 run "satcompute-f1-calibration \
-  --faultModelConfig=contrib/satcompute/input/fault/n4b-f1-calibrated.json \
   --outputDir=/tmp/satcompute-n4b-f1-calibration"
 ```
+
+工具使用 [`fault-para.cc`](../../../contrib/satcompute/fault/fault-para.cc) 的内置参数；
+不存在单独的故障模型配置 JSON。
 
 生成：
 
