@@ -5,6 +5,7 @@ build_lib(
     common/time-conversion.cc
     fault/fault-controller.cc
     fault/fault-definition.cc
+    fault/fault-model-config.cc
     fault/fault-state.cc
     fault/fault-trace.cc
     metrics/core/fault-metrics.cc
@@ -56,6 +57,7 @@ build_lib(
     common/time-conversion.h
     fault/fault-controller.h
     fault/fault-definition.h
+    fault/fault-model-config.h
     fault/fault-state.h
     fault/fault-trace.h
     metrics/core/fault-metrics.h
@@ -203,6 +205,15 @@ build_exec(
   EXECNAME satcompute-fault-trace-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/fault-trace-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-fault-model-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/fault-model-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

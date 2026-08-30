@@ -1,0 +1,190 @@
+/*
+ * SPDX-License-Identifier: GPL-2.0-only
+ */
+
+#include "ns3/command-line.h"
+#include "ns3/fault-model-config.h"
+
+#include <nlohmann/json.hpp>
+
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+
+using namespace ns3;
+
+namespace
+{
+
+using Json = nlohmann::json;
+
+void
+Check(bool condition, const std::string& message)
+{
+    if (!condition)
+    {
+        throw std::runtime_error(message);
+    }
+}
+
+Json
+MakeValidConfig()
+{
+    return {
+        {"schema_version", 1},
+        {"check_interval_ns", 1000000000},
+        {"recoverable_compute_duration_ns", 10000000000},
+        {"self_state",
+         {{"enabled", true},
+          {"temperature",
+           {{"base_c", 17.0},
+            {"saturation_c", 35.0},
+            {"risk_c", 20.0},
+            {"critical_c", 30.0},
+            {"heating_tau_s", 43.0},
+            {"cooling_tau_s", 40.0},
+            {"growth_factor", 3.0}}},
+          {"energy",
+           {{"enabled", true},
+            {"initial_dod", 0.25},
+            {"risk_dod", 0.30},
+            {"critical_dod", 0.50},
+            {"battery_wh", 230.0},
+            {"incremental_compute_power_w", 2.44},
+            {"correction_weight", 0.10}}},
+          {"risk_threshold", 0.60},
+          {"max_failure_intensity_per_s", 0.01}}},
+        {"radiation",
+         {{"enabled", false},
+          {"longitude_min_deg", -90.0},
+          {"longitude_max_deg", 5.0},
+          {"latitude_min_deg", -50.0},
+          {"latitude_max_deg", 5.0},
+          {"effective_failure_intensity_per_s", 0.0},
+          {"risk_threshold", 0.01},
+          {"reset_exposure_on_exit", true}}},
+        {"debris",
+         {{"enabled", false},
+          {"mode", "fixed_k"},
+          {"fixed_count", 0},
+          {"single_satellite_intensity_per_s", 0.0}}}};
+}
+
+std::filesystem::path
+WriteConfig(const std::filesystem::path& directory,
+            const std::string& name,
+            const Json& config)
+{
+    const std::filesystem::path path = directory / (name + ".json");
+    std::ofstream output(path, std::ios::out | std::ios::trunc);
+    Check(output.is_open(), "cannot create fault-model test config");
+    output << config.dump(2) << '\n';
+    return path;
+}
+
+void
+ExpectError(const std::filesystem::path& directory,
+            const std::string& name,
+            const Json& config,
+            const std::string& expectedField)
+{
+    const std::filesystem::path path = WriteConfig(directory, name, config);
+    try
+    {
+        ReadFaultModelConfig(path);
+    }
+    catch (const FaultModelConfigError& error)
+    {
+        const std::string message = error.what();
+        Check(message.find(std::filesystem::absolute(path).lexically_normal().string()) !=
+                      std::string::npos &&
+                  message.find(expectedField) != std::string::npos,
+              "fault-model error omitted path or field: " + message);
+        return;
+    }
+    throw std::runtime_error("invalid fault-model config was accepted: " + name);
+}
+
+void
+CheckValid(const std::filesystem::path& directory)
+{
+    const FaultModelConfig config =
+        ReadFaultModelConfig(WriteConfig(directory, "valid", MakeValidConfig()));
+    Check(config.schemaVersion == 1 && config.checkIntervalNs == 1000000000 &&
+              config.recoverableComputeDurationNs == 10000000000,
+          "fault-model root fields differ");
+    Check(config.selfState.enabled && config.selfState.temperature.baseC == 17.0 &&
+              config.selfState.temperature.heatingTauSeconds == 43.0 &&
+              config.selfState.energy.initialDod == 0.25 &&
+              config.selfState.maxFailureIntensityPerSecond == 0.01,
+          "self-state config fields differ");
+    Check(!config.radiation.enabled &&
+              config.radiation.longitudeMinDegrees == -90.0 &&
+              config.radiation.resetExposureOnExit && !config.debris.enabled &&
+              config.debris.mode == "fixed_k",
+          "F2/F3 config fields differ");
+}
+
+void
+CheckInvalid(const std::filesystem::path& directory)
+{
+    Json value = MakeValidConfig();
+    value["unknown"] = true;
+    ExpectError(directory, "unknown-root", value, "root");
+    value = MakeValidConfig();
+    value["schema_version"] = 2;
+    ExpectError(directory, "schema", value, "schema_version");
+    value = MakeValidConfig();
+    value["check_interval_ns"] = 0;
+    ExpectError(directory, "zero-check", value, "check_interval_ns");
+    value = MakeValidConfig();
+    value["self_state"]["temperature"]["risk_c"] = 31.0;
+    ExpectError(directory, "temperature-order", value, "self_state.temperature");
+    value = MakeValidConfig();
+    value["self_state"]["temperature"]["heating_tau_s"] = 0.0;
+    ExpectError(directory, "heating-tau", value, "self_state.temperature");
+    value = MakeValidConfig();
+    value["self_state"]["energy"]["initial_dod"] = 0.4;
+    ExpectError(directory, "dod-order", value, "self_state.energy");
+    value = MakeValidConfig();
+    value["self_state"]["risk_threshold"] = 1.1;
+    ExpectError(directory, "risk-threshold", value, "risk_threshold");
+    value = MakeValidConfig();
+    value["radiation"]["longitude_min_deg"] = 10.0;
+    ExpectError(directory, "radiation-region", value, "radiation");
+    value = MakeValidConfig();
+    value["radiation"]["reset_exposure_on_exit"] = false;
+    ExpectError(directory, "radiation-reset", value, "reset_exposure_on_exit");
+    value = MakeValidConfig();
+    value["debris"]["mode"] = "fixed_k";
+    value["debris"]["single_satellite_intensity_per_s"] = 0.1;
+    ExpectError(directory, "debris-conflict", value, "debris");
+}
+
+} // namespace
+
+int
+main(int argc, char* argv[])
+{
+    std::string outputDirectory;
+    CommandLine command(__FILE__);
+    command.AddValue("outputDir", "Temporary fault-model test directory", outputDirectory);
+    command.Parse(argc, argv);
+
+    try
+    {
+        Check(!outputDirectory.empty(), "outputDir is required");
+        std::filesystem::create_directories(outputDirectory);
+        CheckValid(outputDirectory);
+        CheckInvalid(outputDirectory);
+        std::cout << "SatCompute fault model tests passed." << std::endl;
+        return 0;
+    }
+    catch (const std::exception& error)
+    {
+        std::cerr << "ERROR: " << error.what() << std::endl;
+        return 1;
+    }
+}
