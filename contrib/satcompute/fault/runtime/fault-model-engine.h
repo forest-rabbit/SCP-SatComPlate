@@ -11,6 +11,7 @@
 #include "ns3/compute-fault-combination.h"
 #include "ns3/f1-self-state-fault-model.h"
 #include "ns3/f2-radiation-fault-model.h"
+#include "ns3/f3-debris-fault-model.h"
 
 #include "ns3/event-id.h"
 #include "ns3/object.h"
@@ -67,11 +68,13 @@ class FaultModelEngine : public Object
      * Configure model state and deterministic per-node random streams at time zero.
      *
      * @param parameters Strictly validated built-in fault parameters.
+     * @param satelliteIds Complete stable-ID constellation universe.
      * @param computeNodeIds Stable IDs present in the compute profile.
      * @param simulationDurationNs Exclusive simulation end in nanoseconds.
      * @param faultController N4A controller configured for online generation.
      */
     void Configure(const FaultParameters& parameters,
+                   const std::vector<uint32_t>& satelliteIds,
                    const std::vector<uint32_t>& computeNodeIds,
                    int64_t simulationDurationNs,
                    Ptr<FaultController> faultController);
@@ -110,6 +113,7 @@ class FaultModelEngine : public Object
         uint64_t f1OccurrenceCount{}; ///< F1 source hits before coalescing.
         uint64_t f2OccurrenceCount{}; ///< F2 source hits before coalescing.
         uint64_t computeFaultCount{}; ///< Coalesced compute-fault starts.
+        std::optional<FaultDefinition> activeComputeFault; ///< Recoverable fault in flight.
         Ptr<ComputeService> computeService; ///< Live busy/idle source.
     };
 
@@ -126,8 +130,15 @@ class FaultModelEngine : public Object
                                      const std::optional<RiskEpisode>& episode,
                                      double currentProbability,
                                      int64_t startTimeNs) const;
-    /** Update every F1 node and submit one same-time event batch. */
-    void Tick(int64_t simulationTimeNs);
+    /** Build one permanent, unannounced F3 satellite fault. */
+    FaultDefinition MakeSatelliteFault(uint32_t nodeId,
+                                       uint64_t faultId,
+                                       int64_t startTimeNs) const;
+    /** End an active compute outage at a superseding F3 timestamp. */
+    void ShortenActiveComputeFault(NodeState& state,
+                                   int64_t simulationTimeNs);
+    /** Update periodic models and/or execute F3 events in one timestamp batch. */
+    void ProcessTime(int64_t simulationTimeNs, bool updateComputeModels);
     void DoDispose() override;
 
     bool m_configured{}; ///< Whether Configure completed.
@@ -139,10 +150,12 @@ class FaultModelEngine : public Object
     int64_t m_recoveryDurationNs{}; ///< Converted compute outage duration.
     std::optional<F1SelfStateFaultModel> m_f1Model; ///< Active F1 pure model.
     std::optional<F2RadiationFaultModel> m_f2Model; ///< Active F2 pure model.
+    std::optional<F3DebrisFaultModel> m_f3Model; ///< Active F3 schedule model.
     std::map<uint32_t, NodeState> m_nodes; ///< Node state in stable-ID order.
+    std::map<int64_t, std::vector<uint32_t>> m_f3EventsByTime; ///< F3 schedule.
     uint64_t m_nextFaultId{1}; ///< Next trace identity.
     FaultTrace m_trace; ///< Completed canonical trace records.
-    std::vector<EventId> m_tickEvents; ///< Pre-scheduled model checks.
+    std::vector<EventId> m_modelEvents; ///< Pre-scheduled model/F3 checks.
     Ptr<FaultController> m_faultController; ///< Sole runtime fault executor.
     Ptr<TaskCoordinator> m_taskCoordinator; ///< Bound task lifecycle owner.
     const OnlineOrbitConstellation* m_constellation{}; ///< Shared native F2 positions.

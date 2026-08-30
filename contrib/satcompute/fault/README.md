@@ -10,7 +10,7 @@
 fault/
 ├── fault-para.h/.cc             人工维护的 common/F1/F2/F3 参数
 ├── parameter/                   参数合法性校验
-├── model/                       无运行期副作用的 F1/F2 纯模型
+├── model/                       F1/F2 状态模型、概率组合与 F3 调度模型
 ├── runtime/                     在线判定、状态覆盖与故障执行
 ├── trace/                       统一记录定义、JSON 读取和写出
 └── README.md
@@ -23,6 +23,7 @@ fault/
 | `model/compute-fault-combination.h/.cc` | 计算 `q_comp`，并将独立 F1/F2 抽样折叠为一次平台结果 |
 | `model/f1-self-state-fault-model.h/.cc` | 无运行期副作用的 F1 温度、DoD、风险、强度和单步概率 |
 | `model/f2-radiation-fault-model.h/.cc` | 原生 ECEF 转经纬度、区域判定、连续暴露、累计风险与单步概率 |
+| `model/f3-debris-fault-model.h/.cc` | 以独立 ns-3 随机流生成 fixed-K 或 Poisson 永久整星事件 |
 | `runtime/fault-model-engine.h/.cc` | 在线读取状态、维护风险 episode、使用 ns-3 随机流判定事件 |
 | `runtime/fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
 | `runtime/fault-controller.h/.cc` | replay/在线事件批处理，以及任务、传输和有效拓扑联动 |
@@ -39,6 +40,7 @@ generate
   当前 ComputeService 状态 -> F1 模型 ┐
                                        ├-> 各来源独立抽样 -> 同刻命中合并为一次 START
   当前原生 ECEF 坐标       -> F2 模型 ┘
+  完整存活卫星集合          -> F3 模型 -> 永久 satellite START
   -> FaultController 精确执行 -> 写出 Fault Trace v2
 
 replay
@@ -50,7 +52,8 @@ replay
 任务和该 trace 进入 `replay`，应得到相同的 NOTICE、NOTICE_CLEAR、START、RECOVERY、
 任务终态、transfer 终态和路由变化。失败的旧任务不会在恢复时复活；恢复只允许后来
 到达的任务继续使用节点。generate 可启用 F1-only、F2-only 或 F1+F2；联合来源按
-独立竞争风险处理：F1/F2 分别抽样，平台只执行二者结果的逻辑或。F3 尚未接入。
+独立竞争风险处理：F1/F2 分别抽样，平台只执行二者结果的逻辑或。F3 可单独运行，
+也可与两个计算来源共同运行。
 
 ## F1 自身状态计算故障
 
@@ -127,8 +130,37 @@ orbit-only 工具先用 66 星冻结参数，再以相同参数验证 351/720 �
 有限窗口内的系统级有效计算故障强度，不是原始 SEU 计数或现实卫星绝对失效率。
 
 F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中，默认关闭。
-`f3.fixedCount` 是未来 `fixed_k` 模式下人工指定的永久撞击卫星数量，不属于任务
-输入；F3 接入后再完成其参数标定。
+`f3.fixedCount` 是 `fixed_k` 压力测试中人工指定的永久撞击卫星数量，不属于任务
+输入，也不代表现实碰撞频率。
+
+## F3 致命碎片整星故障
+
+F3 不依赖任务，只从完整的稳定卫星 ID 集合选择节点，并为每次事件写出：
+
+```text
+fault_type = satellite
+fault_occurred = true
+notice_time_ns = null
+failure_probability = null
+duration_ns = null
+```
+
+`fixed_k` 在 `[0,T)` 独立均匀采样 K 个时刻并排序，再从卫星集合无放回选择 K 个
+节点；默认功能场景使用 `K=1`。`poisson` 在每个事件后按当前存活卫星数更新星座级
+强度：
+
+```text
+Lambda_F3 = N_alive * lambda_F3
+Delta t ~ Exponential(Lambda_F3)
+```
+
+每次到达再从存活集合均匀选择一个节点并移除，因此两种模式都不会重复选择已永久
+失效的卫星。事件时间流与节点选择流彼此分离，也不改变 F1/F2 的随机序列。
+
+同节点同刻同时命中 F3 与 compute 故障时，只生成 F3。若 F3 到来时该节点正处于
+8 秒 compute 停机区间，平台会把 compute 恢复提前到 F3 时刻，再立即执行永久整星
+START；生成 trace 中两个区间首尾相接而不重叠，generate/replay 的事件顺序均为
+`RECOVERY -> START`。永久失效后不再更新该节点的 F1/F2 状态或消耗其抽样随机数。
 
 ## 风险 episode
 
@@ -164,4 +196,6 @@ satellite START 同时关闭整星、通信和计算，在精确时刻更新有�
 完整 JSON 合同见 [`input/fault/README.md`](../input/fault/README.md)，运行指标见
 [`metrics/README.md`](../metrics/README.md)，可执行闭环见
 [`66 星 F1 示例`](../input/examples/leo-66-120s-f1/README.md)与
-[`66 星 F2 示例`](../input/examples/leo-66-1000s-f2/README.md)。
+[`66 星 F2 示例`](../input/examples/leo-66-1000s-f2/README.md)；不需要任务输入的
+F3 fixed-K 流程见
+[`66 星 F3 示例`](../input/examples/leo-66-1000s-f3/README.md)。

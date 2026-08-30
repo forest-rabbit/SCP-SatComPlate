@@ -88,6 +88,8 @@ F1 在线故障闭环见
 F2 的纯轨道暴露标定和真实平台闭环分别见
 [F2 标定证据](docs/calibration/n4b-f2/README.md)与
 [1000 秒、66 星、8 任务示例](contrib/satcompute/input/examples/leo-66-1000s-f2/README.md)。
+F3 无任务永久整星闭环见
+[1000 秒、66 星 fixed-K 示例](contrib/satcompute/input/examples/leo-66-1000s-f3/README.md)。
 
 只生成 0–20 秒、每秒一个拓扑切片：
 
@@ -110,7 +112,7 @@ F2 的纯轨道暴露标定和真实平台闭环分别见
 | [路由模块](contrib/satcompute/routing/README.md) | 五种 IPv4 策略、核心公式与确定性状态 |
 | [任务与传输](contrib/satcompute/task/README.md) | 任务状态机、FCFS 与结果大小 |
 | [指标模块](contrib/satcompute/metrics/README.md) | 输出文件、字段职责与失败诊断 |
-| [故障模块](contrib/satcompute/fault/README.md) | 统一 trace、F1/F2 在线模型与 N4A 执行边界 |
+| [故障模块](contrib/satcompute/fault/README.md) | 统一 trace、F1/F2/F3 在线模型与 N4A 执行边界 |
 | [F1 标定证据](docs/calibration/n4b-f1/README.md) | 热时间常数、30-run 概率候选与选择边界 |
 | [F2 标定证据](docs/calibration/n4b-f2/README.md) | 66/351/720 星轨道暴露、冻结参数与真实平台 Monte Carlo |
 | [辅助工具](contrib/satcompute/tools/README.md) | TaskTrace 生成、F1/F2 标定与失败输出检查 |

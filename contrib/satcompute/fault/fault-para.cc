@@ -103,7 +103,7 @@ GetDefaultFaultParameters()
 
     // F3: fatal debris impact
 
-    // N4B 第三阶段接入前保持关闭。
+    // 默认运行保持关闭；F3 功能场景由平台运行参数显式启用。
     parameters.f3.enabled = false;
 
     // fixed_k 为人工指定数量，poisson 为按强度抽样。

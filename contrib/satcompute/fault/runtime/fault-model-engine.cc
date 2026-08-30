@@ -29,6 +29,8 @@ namespace
 
 constexpr int64_t F1_COMPUTE_FAULT_STREAM_BASE = 1000000;
 constexpr int64_t F2_COMPUTE_FAULT_STREAM_BASE = 2000000;
+constexpr int64_t F3_EVENT_TIME_STREAM = 3000000;
+constexpr int64_t F3_NODE_SELECTION_STREAM = 3000001;
 
 } // namespace
 
@@ -48,6 +50,7 @@ FaultModelEngine::~FaultModelEngine() = default;
 
 void
 FaultModelEngine::Configure(const FaultParameters& parameters,
+                            const std::vector<uint32_t>& satelliteIds,
                             const std::vector<uint32_t>& computeNodeIds,
                             int64_t simulationDurationNs,
                             Ptr<FaultController> faultController)
@@ -63,12 +66,7 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
             "FaultModelEngine requires duration and FaultController");
     }
     ValidateFaultParameters(parameters);
-    if (parameters.f3.enabled)
-    {
-        throw FaultModelEngineError(
-            "F3 cannot be enabled before its N4B increment");
-    }
-    if (!parameters.f1.enabled && !parameters.f2.enabled)
+    if (!parameters.f1.enabled && !parameters.f2.enabled && !parameters.f3.enabled)
     {
         throw FaultModelEngineError(
             "FaultModelEngine requires one supported enabled fault source");
@@ -79,10 +77,24 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
             "enabled F1/F2 requires at least one compute node");
     }
 
+    std::set<uint32_t> uniqueSatelliteIds(satelliteIds.begin(), satelliteIds.end());
+    if (uniqueSatelliteIds.empty() || uniqueSatelliteIds.size() != satelliteIds.size())
+    {
+        throw FaultModelEngineError(
+            "fault-model satellite IDs must be non-empty and unique");
+    }
     std::set<uint32_t> uniqueNodeIds(computeNodeIds.begin(), computeNodeIds.end());
     if (uniqueNodeIds.size() != computeNodeIds.size())
     {
         throw FaultModelEngineError("fault-model compute node IDs must be unique");
+    }
+    if (!std::includes(uniqueSatelliteIds.begin(),
+                       uniqueSatelliteIds.end(),
+                       uniqueNodeIds.begin(),
+                       uniqueNodeIds.end()))
+    {
+        throw FaultModelEngineError(
+            "fault-model compute nodes must belong to the constellation");
     }
     m_parameters = parameters;
     m_checkIntervalNs = SatComputeSecondsToNanoseconds(
@@ -105,6 +117,10 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
     if (parameters.f2.enabled)
     {
         m_f2Model.emplace(parameters.f2);
+    }
+    if (parameters.f3.enabled)
+    {
+        m_f3Model.emplace(parameters.f3);
     }
     for (const uint32_t nodeId : uniqueNodeIds)
     {
@@ -130,19 +146,43 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
         m_nodes.emplace(nodeId, state);
     }
 
-    const int64_t intervalNs = m_checkIntervalNs;
-    for (int64_t timeNs = intervalNs; timeNs < simulationDurationNs;)
+    std::map<int64_t, bool> processTimes;
+    if (m_f1Model.has_value() || m_f2Model.has_value())
     {
-        m_tickEvents.push_back(
-            Simulator::Schedule(NanoSeconds(timeNs),
-                                &FaultModelEngine::Tick,
-                                this,
-                                timeNs));
-        if (timeNs > std::numeric_limits<int64_t>::max() - intervalNs)
+        const int64_t intervalNs = m_checkIntervalNs;
+        for (int64_t timeNs = intervalNs; timeNs < simulationDurationNs;)
         {
-            break;
+            processTimes[timeNs] = true;
+            if (timeNs > std::numeric_limits<int64_t>::max() - intervalNs)
+            {
+                break;
+            }
+            timeNs += intervalNs;
         }
-        timeNs += intervalNs;
+    }
+    if (m_f3Model.has_value())
+    {
+        const std::vector<uint32_t> canonicalSatelliteIds(uniqueSatelliteIds.begin(),
+                                                          uniqueSatelliteIds.end());
+        const std::vector<F3DebrisFaultEvent> f3Schedule =
+            m_f3Model->GenerateSchedule(canonicalSatelliteIds,
+                                        simulationDurationNs,
+                                        F3_EVENT_TIME_STREAM,
+                                        F3_NODE_SELECTION_STREAM);
+        for (const F3DebrisFaultEvent& event : f3Schedule)
+        {
+            m_f3EventsByTime[event.startTimeNs].push_back(event.nodeId);
+            processTimes.try_emplace(event.startTimeNs, false);
+        }
+    }
+    for (const auto& [timeNs, updateComputeModels] : processTimes)
+    {
+        m_modelEvents.push_back(
+            Simulator::Schedule(NanoSeconds(timeNs),
+                                &FaultModelEngine::ProcessTime,
+                                this,
+                                timeNs,
+                                updateComputeModels));
     }
     m_configured = true;
 }
@@ -257,19 +297,87 @@ FaultModelEngine::MakeComputeFault(
     return fault;
 }
 
+FaultDefinition
+FaultModelEngine::MakeSatelliteFault(uint32_t nodeId,
+                                     uint64_t faultId,
+                                     int64_t startTimeNs) const
+{
+    FaultDefinition fault;
+    fault.faultId = faultId;
+    fault.nodeId = nodeId;
+    fault.faultType = FaultType::SATELLITE;
+    fault.faultOccurred = true;
+    fault.startTimeNs = startTimeNs;
+    return fault;
+}
+
 void
-FaultModelEngine::Tick(int64_t simulationTimeNs)
+FaultModelEngine::ShortenActiveComputeFault(NodeState& state,
+                                            int64_t simulationTimeNs)
+{
+    if (!state.activeComputeFault.has_value())
+    {
+        return;
+    }
+    const FaultDefinition original = state.activeComputeFault.value();
+    const int64_t originalRecoveryTimeNs = original.GetRecoveryTimeNs().value();
+    if (originalRecoveryTimeNs <= simulationTimeNs)
+    {
+        state.activeComputeFault = std::nullopt;
+        return;
+    }
+    NS_ABORT_MSG_IF(!original.startTimeNs.has_value() ||
+                        original.startTimeNs.value() >= simulationTimeNs,
+                    "F3 cannot shorten a non-positive compute-fault interval");
+    FaultDefinition shortened = original;
+    shortened.durationNs = simulationTimeNs - original.startTimeNs.value();
+    const auto traceRecord = std::find_if(
+        m_trace.faults.begin(),
+        m_trace.faults.end(),
+        [&original](const FaultDefinition& fault) {
+            return fault.faultId == original.faultId;
+        });
+    NS_ABORT_MSG_IF(traceRecord == m_trace.faults.end() ||
+                        traceRecord->faultType != FaultType::COMPUTE ||
+                        !traceRecord->faultOccurred,
+                    "active compute fault has no generated trace record");
+    traceRecord->durationNs = shortened.durationNs;
+    m_faultController->ShortenGeneratedComputeFault(shortened,
+                                                    originalRecoveryTimeNs);
+    state.activeComputeFault = std::nullopt;
+}
+
+void
+FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
+                              bool updateComputeModels)
 {
     NS_ABORT_MSG_IF(!m_configured || !m_bound || m_finalized ||
                         (m_parameters.f2.enabled && m_constellation == nullptr) ||
                         simulationTimeNs != Simulator::Now().GetNanoSeconds(),
-                    "FaultModelEngine tick state is invalid");
-    const double intervalSeconds =
-        m_parameters.checkIntervalSeconds;
+                    "FaultModelEngine scheduled state is invalid");
+    std::set<uint32_t> f3NodeIds;
+    const auto f3Events = m_f3EventsByTime.find(simulationTimeNs);
+    if (f3Events != m_f3EventsByTime.end())
+    {
+        f3NodeIds.insert(f3Events->second.begin(), f3Events->second.end());
+        NS_ABORT_MSG_IF(f3NodeIds.size() != f3Events->second.size(),
+                        "F3 selected one node twice at one timestamp");
+    }
+
     std::vector<GeneratedFaultEvent> events;
     std::vector<FaultDefinition> completedRecords;
     for (auto& [nodeId, state] : m_nodes)
     {
+        if (state.activeComputeFault.has_value() &&
+            state.activeComputeFault->GetRecoveryTimeNs().value() <= simulationTimeNs)
+        {
+            state.activeComputeFault = std::nullopt;
+        }
+        if (!updateComputeModels ||
+            !m_faultController->GetState().IsSatelliteAvailable(nodeId))
+        {
+            continue;
+        }
         const bool computeAvailable =
             m_faultController->GetState().IsComputeAvailable(nodeId);
         if (m_f1Model.has_value())
@@ -277,15 +385,17 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
             const bool busy =
                 computeAvailable && state.computeService->IsComputeAvailable() &&
                 state.computeService->HasRunningTask();
-            m_f1Model->Update(state.f1State, busy, intervalSeconds);
+            m_f1Model->Update(state.f1State,
+                              busy,
+                              m_parameters.checkIntervalSeconds);
         }
         if (m_f2Model.has_value())
         {
             m_f2Model->Update(state.f2State,
                               m_constellation->GetPosition(nodeId),
-                              intervalSeconds);
+                              m_parameters.checkIntervalSeconds);
         }
-        if (!computeAvailable)
+        if (f3NodeIds.contains(nodeId) || !computeAvailable)
         {
             continue;
         }
@@ -369,8 +479,37 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
                                  simulationTimeNs);
             events.push_back({FaultEventType::START, fault});
             completedRecords.push_back(fault);
+            state.activeComputeFault = fault;
             state.riskEpisode = std::nullopt;
         }
+    }
+
+    for (const uint32_t nodeId : f3NodeIds)
+    {
+        NS_ABORT_MSG_IF(!m_faultController->GetState().IsSatelliteAvailable(nodeId),
+                        "F3 selected an already permanently failed node");
+        const auto node = m_nodes.find(nodeId);
+        if (node != m_nodes.end())
+        {
+            ShortenActiveComputeFault(node->second, simulationTimeNs);
+            if (node->second.riskEpisode.has_value())
+            {
+                const RiskEpisode episode = node->second.riskEpisode.value();
+                NS_ABORT_MSG_IF(episode.noticeTimeNs >= simulationTimeNs,
+                                "F3 cannot close a zero-duration risk episode");
+                FaultDefinition riskOnly =
+                    MakeRiskOnly(nodeId, episode, simulationTimeNs);
+                events.push_back({FaultEventType::NOTICE_CLEAR, riskOnly});
+                completedRecords.push_back(riskOnly);
+                node->second.riskEpisode = std::nullopt;
+            }
+        }
+        NS_ABORT_MSG_IF(m_nextFaultId == std::numeric_limits<uint64_t>::max(),
+                        "generated fault ID overflow");
+        FaultDefinition fault =
+            MakeSatelliteFault(nodeId, m_nextFaultId++, simulationTimeNs);
+        events.push_back({FaultEventType::START, fault});
+        completedRecords.push_back(fault);
     }
 
     if (!events.empty())
@@ -438,7 +577,7 @@ FaultModelEngine::GetNodeSnapshots() const
 void
 FaultModelEngine::DoDispose()
 {
-    for (EventId& event : m_tickEvents)
+    for (EventId& event : m_modelEvents)
     {
         if (event.IsPending())
         {

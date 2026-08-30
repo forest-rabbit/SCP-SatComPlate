@@ -86,6 +86,18 @@ class FaultController : public Object
                    int64_t simulationDurationNs);
     void ConfigureGeneration(const std::vector<uint32_t>& satelliteIds,
                              int64_t simulationDurationNs);
+    /**
+     * Move an active generated compute recovery to the current time.
+     *
+     * This is used when a permanent F3 satellite fault supersedes a still
+     * active recoverable compute fault. The caller must submit the F3 START in
+     * the same timestamp batch immediately afterward.
+     *
+     * @param shortenedFault Same compute fault with duration ending now.
+     * @param originalRecoveryTimeNs Previously scheduled recovery time.
+     */
+    void ShortenGeneratedComputeFault(const FaultDefinition& shortenedFault,
+                                      int64_t originalRecoveryTimeNs);
     void SubmitGeneratedBatch(const std::vector<GeneratedFaultEvent>& events);
     void FinalizeGeneratedTrace(const FaultTrace& trace);
     void BindTopology(SatelliteTopologyController& topology);

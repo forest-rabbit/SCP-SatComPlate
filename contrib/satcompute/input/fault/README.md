@@ -17,7 +17,9 @@ F2 故障发生时的执行验证对象，不会预先决定随机故障是否�
 `--faultEnableF1/2/3` 是每次运行的来源开关，默认分别为 true/false/false；模型内部
 数值仍只位于 `fault-para.cc`。当前 `generate` 支持 F1-only、F2-only 或二者同时
 启用，它们都必须同时提供 ComputeProfile 与 TaskTrace；F1/F2 使用独立随机流分别
-判定，同刻命中合并为一次 compute START，trace 概率为 `q_comp`。F3 尚未接入。
+判定，同刻命中合并为一次 compute START，trace 概率为 `q_comp`。F3 可单独运行且
+不要求任务输入，也可与 F1/F2 同时启用；它产生无预警、无恢复的永久 satellite
+START，并在同节点同刻优先。
 `replay` 不读取这些来源开关，也不重新计算模型；是否提供任务输入取决于 trace 中的
 节点和要验证的执行结果。
 

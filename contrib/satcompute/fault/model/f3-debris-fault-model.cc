@@ -31,9 +31,9 @@ int64_t
 SampleFixedTime(const Ptr<UniformRandomVariable>& random,
                 int64_t simulationDurationNs)
 {
-    const double sampled = random->GetValue(
-        0.0,
-        static_cast<double>(simulationDurationNs));
+    const long double sampled =
+        static_cast<long double>(random->GetValue()) *
+        static_cast<long double>(simulationDurationNs);
     const int64_t timeNs = static_cast<int64_t>(std::floor(sampled));
     return std::min(timeNs, simulationDurationNs - 1);
 }
@@ -133,6 +133,11 @@ F3DebrisFaultModel::GenerateSchedule(
         const double constellationIntensity =
             static_cast<double>(remaining.size()) *
             m_parameters.singleSatelliteIntensityPerSecond;
+        if (!std::isfinite(constellationIntensity) || constellationIntensity <= 0.0)
+        {
+            throw F3DebrisFaultModelError(
+                "F3 poisson constellation intensity is invalid");
+        }
         const double deltaSeconds =
             timeRandom->GetValue(1.0 / constellationIntensity, 0.0);
         if (!std::isfinite(deltaSeconds) || deltaSeconds < 0.0)

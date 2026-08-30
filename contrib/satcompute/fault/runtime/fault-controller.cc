@@ -313,6 +313,80 @@ FaultController::ConfigureGeneration(const std::vector<uint32_t>& satelliteIds,
 }
 
 void
+FaultController::ShortenGeneratedComputeFault(
+    const FaultDefinition& shortenedFault,
+    int64_t originalRecoveryTimeNs)
+{
+    const int64_t nowNs = Simulator::Now().GetNanoSeconds();
+    const std::optional<int64_t> shortenedRecovery =
+        shortenedFault.GetRecoveryTimeNs();
+    if (!m_configured || !m_generationMode || m_generatedTraceFinalized ||
+        shortenedFault.faultType != FaultType::COMPUTE ||
+        !shortenedFault.faultOccurred || !shortenedFault.startTimeNs.has_value() ||
+        shortenedFault.startTimeNs.value() >= nowNs ||
+        shortenedRecovery != nowNs || originalRecoveryTimeNs <= nowNs ||
+        m_processedBatchTimes.contains(nowNs) ||
+        !m_state.IsSatelliteAvailable(shortenedFault.nodeId) ||
+        m_state.IsComputeAvailable(shortenedFault.nodeId))
+    {
+        throw FaultControllerError(
+            "shortened generated compute fault does not match active runtime state");
+    }
+
+    if (originalRecoveryTimeNs < m_simulationDurationNs)
+    {
+        auto originalBatch = m_batches.find(originalRecoveryTimeNs);
+        if (originalBatch == m_batches.end())
+        {
+            throw FaultControllerError(
+                "active generated compute recovery is not scheduled");
+        }
+        auto recovery = std::find_if(
+            originalBatch->second.begin(),
+            originalBatch->second.end(),
+            [&shortenedFault](const ScheduledFaultEvent& event) {
+                return event.eventType == FaultEventType::RECOVERY &&
+                       event.fault.faultId == shortenedFault.faultId;
+            });
+        if (recovery == originalBatch->second.end())
+        {
+            throw FaultControllerError(
+                "active generated compute recovery cannot be identified");
+        }
+        originalBatch->second.erase(recovery);
+        if (originalBatch->second.empty())
+        {
+            const auto scheduled = m_batchEvents.find(originalRecoveryTimeNs);
+            if (scheduled != m_batchEvents.end())
+            {
+                if (scheduled->second.IsPending())
+                {
+                    Simulator::Cancel(scheduled->second);
+                }
+                m_batchEvents.erase(scheduled);
+            }
+            m_batches.erase(originalBatch);
+        }
+    }
+
+    const auto startRecord = std::find_if(
+        m_events.rbegin(),
+        m_events.rend(),
+        [&shortenedFault](const FaultRuntimeEventRecord& record) {
+            return record.eventType == FaultEventType::START &&
+                   record.faultId == shortenedFault.faultId;
+        });
+    if (startRecord == m_events.rend())
+    {
+        throw FaultControllerError(
+            "active generated compute START evidence cannot be identified");
+    }
+    startRecord->durationNs = shortenedFault.durationNs;
+    m_batches[nowNs].push_back(
+        {FaultEventType::RECOVERY, shortenedFault});
+}
+
+void
 FaultController::SubmitGeneratedBatch(const std::vector<GeneratedFaultEvent>& events)
 {
     if (!m_configured || !m_generationMode)

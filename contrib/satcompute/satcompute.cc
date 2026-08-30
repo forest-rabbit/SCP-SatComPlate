@@ -468,6 +468,7 @@ main(int argc, char* argv[])
                 }
                 faultModelEngine = CreateObject<FaultModelEngine>();
                 faultModelEngine->Configure(faultParameters,
+                                            topology.GetIdMap().GetCanonicalSatelliteIds(),
                                             computeNodeIds,
                                             simulationDurationNs,
                                             faultController);

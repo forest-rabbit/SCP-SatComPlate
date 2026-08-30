@@ -77,6 +77,8 @@ F1 在线生成与重放见
 [120 秒、66 星 F1 示例](input/examples/leo-66-120s-f1/README.md)。
 F2 在线生成与重放见
 [1000 秒、66 星 F2 示例](input/examples/leo-66-1000s-f2/README.md)。
+F3 无任务永久整星生成与重放见
+[1000 秒、66 星 F3 示例](input/examples/leo-66-1000s-f3/README.md)。
 
 ## 参数边界
 
@@ -153,19 +155,21 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 | `--faultTrace` | 空 | 路径 | generate 输出或 replay 输入的统一 Fault Trace |
 | `--faultEnableF1` | `true` | bool | generate 是否启用内置 F1 来源 |
 | `--faultEnableF2` | `false` | bool | generate 是否启用内置 F2 来源 |
-| `--faultEnableF3` | `false` | bool | F3 接入前必须保持关闭 |
+| `--faultEnableF3` | `false` | bool | generate 是否启用内置 F3 永久整星来源 |
 
 `none` 要求 `faultTrace` 为空；`generate` 将它作为输出路径，`replay` 将它作为
 已有输入路径。故障内部参数集中在 `fault/fault-para.cc`，不再使用模型配置 JSON。
 三个 `faultEnable*` 只选择本次 generate 的来源，不复制经纬度、强度、阈值或恢复
 时间等内部参数。当前 generate 支持 F1-only、F2-only 和 F1+F2；联合模式为两个
 来源分别使用独立随机流抽样，同刻命中只向平台提交一次 compute START，且对外输出
-`q_comp = 1 - (1 - q_F1)(1 - q_F2)`。F3 永久整星生成尚未接入。
+`q_comp = 1 - (1 - q_F1)(1 - q_F2)`。F3 使用独立的事件时间与节点选择随机流，
+支持 `fixed_k` 和 `poisson`；其模式、数量或强度在 `fault-para.cc` 中维护。
 `compute` 故障只改变算力可用性；`satellite` 故障还会
 在精确纳秒关闭关联 ISL、立即重算 IPv4 路由，并按任务阶段终止端点 transfer。
 有限恢复重新读取当时的原生轨道坐标，只恢复仍满足距离门限的候选链路。两类故障
-都不复活旧任务。generate 的每个检查步按各启用来源的当步条件概率分别抽样；replay
-只执行已确定的 trace，不会再次抽样。
+都不复活旧任务。generate 的每个检查步按各启用来源的当步条件概率分别抽样；F3
+无预警、无恢复，并在同节点同刻优先于 compute 故障。replay 只执行已确定的 trace，
+不会再次抽样。
 
 ### output
 

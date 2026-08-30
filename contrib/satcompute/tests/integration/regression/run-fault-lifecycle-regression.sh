@@ -132,6 +132,41 @@ generate_combined_second_result="$(run_platform \
 replay_combined_result="$(run_platform \
   "$regression_output/replay-combined-66" \
   "$f2_common --faultMode=replay --faultTrace=$combined_trace")"
+f3_trace="$regression_output/generate-f3-66/fault-trace.json"
+f3_common="--simulationDuration=1000 --randomSeed=1 --randomRun=1 \
+--constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+--maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.008 \
+--networkUpdateInterval=20 --islBandwidthBps=2000000000 \
+--routingMode=global-first"
+generate_f3_result="$(run_platform \
+  "$regression_output/generate-f3-66" \
+  "$f3_common --faultMode=generate --faultEnableF1=0 --faultEnableF2=0 \
+--faultEnableF3=1 --faultTrace=$f3_trace")"
+f3_second_trace="$regression_output/generate-f3-66-second/fault-trace.json"
+generate_f3_second_result="$(run_platform \
+  "$regression_output/generate-f3-66-second" \
+  "$f3_common --faultMode=generate --faultEnableF1=0 --faultEnableF2=0 \
+--faultEnableF3=1 --faultTrace=$f3_second_trace")"
+replay_f3_result="$(run_platform \
+  "$regression_output/replay-f3-66" \
+  "$f3_common --faultMode=replay --faultTrace=$f3_trace")"
+f3_priority_trace="$regression_output/generate-f3-priority/fault-trace.json"
+f3_priority_common="$f1_66_common --randomSeed=1 --randomRun=106"
+generate_f3_priority_result="$(run_platform \
+  "$regression_output/generate-f3-priority" \
+  "$f3_priority_common --faultMode=generate --faultEnableF1=1 \
+--faultEnableF2=0 --faultEnableF3=1 --faultTrace=$f3_priority_trace")"
+replay_f3_priority_result="$(run_platform \
+  "$regression_output/replay-f3-priority" \
+  "$f3_priority_common --faultMode=replay --faultTrace=$f3_priority_trace")"
+all_faults_trace="$regression_output/generate-all-faults/fault-trace.json"
+generate_all_faults_result="$(run_platform \
+  "$regression_output/generate-all-faults" \
+  "$f2_common --faultMode=generate --faultEnableF1=1 --faultEnableF2=1 \
+--faultEnableF3=1 --faultTrace=$all_faults_trace")"
+replay_all_faults_result="$(run_platform \
+  "$regression_output/replay-all-faults" \
+  "$f2_common --faultMode=replay --faultTrace=$all_faults_trace")"
 
 for result in "$compute_result" "$satellite_first_result" "$satellite_second_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
@@ -174,6 +209,21 @@ for result in "$generate_combined_result" "$generate_combined_second_result" \
   if [[ "$result" != *'"status":"partial"'* ||
         "$result" != *'"satellite_count":66'* ]]; then
     echo "66-star combined F1/F2 generate/replay result differs: $result" >&2
+    exit 1
+  fi
+done
+for result in "$generate_f3_result" "$generate_f3_second_result" "$replay_f3_result"; do
+  if [[ "$result" != *'"status":"completed"'* ||
+        "$result" != *'"satellite_count":66'* ]]; then
+    echo "66-star F3-only generate/replay result differs: $result" >&2
+    exit 1
+  fi
+done
+for result in "$generate_f3_priority_result" "$replay_f3_priority_result" \
+  "$generate_all_faults_result" "$replay_all_faults_result"; do
+  if [[ "$result" != *'"status":"partial"'* ||
+        "$result" != *'"satellite_count":66'* ]]; then
+    echo "66-star combined F3 generate/replay result differs: $result" >&2
     exit 1
   fi
 done
@@ -532,6 +582,121 @@ for filename in (
     replayed = (root / "replay-combined-66" / filename).read_bytes()
     if generated != replayed:
         raise SystemExit(f"combined F1/F2 generate/replay output differs: {filename}")
+
+
+f3_trace = load_json("generate-f3-66/fault-trace.json")
+if f3_trace["schema_version"] != 2 or len(f3_trace["faults"]) != 1:
+    raise SystemExit(f"F3-only trace shape differs: {f3_trace}")
+f3_fault = f3_trace["faults"][0]
+if (
+    f3_fault["node_id"],
+    f3_fault["fault_type"],
+    f3_fault["fault_occurred"],
+    f3_fault["start_time_ns"],
+    f3_fault["notice_time_ns"],
+    f3_fault["failure_probability"],
+    f3_fault["duration_ns"],
+) != (62, "satellite", True, 33_469_258_100, None, None, None):
+    raise SystemExit(f"F3-only permanent fault differs: {f3_fault}")
+if (root / "generate-f3-66/fault-trace.json").read_bytes() != (
+    root / "generate-f3-66-second/fault-trace.json"
+).read_bytes():
+    raise SystemExit("same-seed F3 generated traces are not byte-identical")
+for filename in ("fault-events.csv", "fault-summary.json", "ecmp-route-events.csv"):
+    generated = (root / "generate-f3-66" / filename).read_bytes()
+    replayed = (root / "replay-f3-66" / filename).read_bytes()
+    if generated != replayed:
+        raise SystemExit(f"F3-only generate/replay output differs: {filename}")
+f3_events = load_csv("generate-f3-66/fault-events.csv")
+if len(f3_events) != 1 or (
+    f3_events[0]["event_type"],
+    f3_events[0]["route_recomputed"],
+    f3_events[0]["satellite_available_after"],
+    f3_events[0]["communication_available_after"],
+    f3_events[0]["compute_available_after"],
+) != ("START", "true", "false", "false", "false"):
+    raise SystemExit(f"F3-only runtime event differs: {f3_events}")
+f3_summary = load_json("generate-f3-66/fault-summary.json")
+if (
+    f3_summary["satellite_fault_count"],
+    f3_summary["compute_fault_count"],
+    f3_summary["start_event_count"],
+    f3_summary["recovery_event_count"],
+    f3_summary["active_fault_count_at_end"],
+) != (1, 0, 1, 0, 1):
+    raise SystemExit(f"F3-only summary differs: {f3_summary}")
+
+
+priority_trace = load_json("generate-f3-priority/fault-trace.json")
+priority_compute = next(
+    fault
+    for fault in priority_trace["faults"]
+    if fault["fault_id"] == 3
+)
+priority_satellite = next(
+    fault
+    for fault in priority_trace["faults"]
+    if fault["fault_type"] == "satellite"
+)
+if (
+    priority_compute["node_id"],
+    priority_compute["start_time_ns"],
+    priority_compute["duration_ns"],
+) != (11, 66_000_000_000, 7_070_766_227):
+    raise SystemExit(f"F3 did not shorten the active compute interval: {priority_compute}")
+if (
+    priority_satellite["node_id"],
+    priority_satellite["start_time_ns"],
+) != (11, 73_070_766_227):
+    raise SystemExit(f"F3 priority target differs: {priority_satellite}")
+priority_events = load_csv("generate-f3-priority/fault-events.csv")
+priority_same_time = [
+    row["event_type"]
+    for row in priority_events
+    if int(row["simulation_time_ns"]) == 73_070_766_227
+]
+if priority_same_time != ["RECOVERY", "START"]:
+    raise SystemExit(f"F3 priority event order differs: {priority_same_time}")
+for filename in (
+    "fault-events.csv",
+    "fault-summary.json",
+    "task-events.csv",
+    "task-summary.csv",
+    "transfer-summary.csv",
+    "ecmp-route-events.csv",
+    "size-aware-reservation-events.csv",
+    "size-aware-summary.json",
+    "capacity-aware-summary.json",
+):
+    generated = (root / "generate-f3-priority" / filename).read_bytes()
+    replayed = (root / "replay-f3-priority" / filename).read_bytes()
+    if generated != replayed:
+        raise SystemExit(f"F3 priority generate/replay output differs: {filename}")
+
+
+all_faults_trace = load_json("generate-all-faults/fault-trace.json")
+if not any(fault["fault_type"] == "satellite" for fault in all_faults_trace["faults"]):
+    raise SystemExit("combined F1/F2/F3 trace has no F3 event")
+if not any(
+    fault["fault_type"] == "compute" and fault["fault_occurred"]
+    for fault in all_faults_trace["faults"]
+):
+    raise SystemExit("combined F1/F2/F3 trace has no compute event")
+for filename in (
+    "fault-events.csv",
+    "fault-summary.json",
+    "task-events.csv",
+    "task-summary.csv",
+    "transfer-summary.csv",
+    "ecmp-route-events.csv",
+    "size-aware-reservation-events.csv",
+    "size-aware-summary.json",
+    "capacity-aware-summary.json",
+):
+    generated = (root / "generate-all-faults" / filename).read_bytes()
+    replayed = (root / "replay-all-faults" / filename).read_bytes()
+    if generated != replayed:
+        raise SystemExit(f"combined F1/F2/F3 generate/replay output differs: {filename}")
 
 
 compute_events = load_csv("compute/fault-events.csv")

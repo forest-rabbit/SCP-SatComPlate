@@ -23,4 +23,6 @@ SatCompute 不使用一个完整 JSON 同时控制星座、运行参数、任务
 100 秒、66 颗卫星、22 个计算节点和 20 个无故障任务；F1 generate/replay 闭环见
 [`examples/leo-66-120s-f1/`](examples/leo-66-120s-f1/README.md)，F2 的 1000 秒
 小任务闭环见
-[`examples/leo-66-1000s-f2/`](examples/leo-66-1000s-f2/README.md)。
+[`examples/leo-66-1000s-f2/`](examples/leo-66-1000s-f2/README.md)，无需任务输入的
+F3 永久整星闭环见
+[`examples/leo-66-1000s-f3/`](examples/leo-66-1000s-f3/README.md)。
