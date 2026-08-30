@@ -34,7 +34,8 @@ topologyOnly                正式仿真
 7. 同时提供 ComputeProfile 与 TaskTrace 时，执行输入传输、FCFS 计算和结果传输；
 8. `faultMode=generate` 时在线更新模型、实际执行故障并写 v2 trace；
 9. `faultMode=replay` 时校验 v1/v2 trace，并在精确纳秒确定性重放；
-10. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
+10. 有任务与故障时，在 NOTICE 后按当前任务剩余时间在线计算完成前故障概率；
+11. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
 
 `topologyOnly=1` 使用相同轨道和候选链路实现，但不会创建 InternetStack、
 NetDevice、路由、FlowMonitor 或任务对象。
@@ -171,6 +172,12 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 无预警、无恢复，并在同节点同刻优先于 compute 故障。replay 只执行已确定的 trace，
 不会再次抽样。
 
+generate/replay 在有任务输入时共用同一个因果预测器。它只在 NOTICE 后读取当前任务
+进度，以 NOTICE 时的 `q_comp` 和剩余计算检查步数 `K` 计算
+`P_fail_before_finish = 1 - (1 - q_comp)^K`。预测不读取未来 START、最终
+`risk_duration_ns` 或 `fault_occurred`，也不会在本阶段触发主动备份。完整边界见
+[fault README](fault/README.md)。
+
 ### output
 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
@@ -181,7 +188,8 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 
 运行摘要会记录实际使用的关键参数和各层结果，仅作为本次仿真的输出证据，不是
 第二个配置入口。generate/replay 会生成 `fault-events.csv` 和 `fault-summary.json`；
-none 不生成故障专用文件。
+同时存在任务输入时，还会生成 `fault-predictions.csv` 与
+`fault-prediction-summary.json`。none 不生成故障专用文件。
 
 ## 星座与动态拓扑
 
@@ -255,9 +263,9 @@ ceil(compute_work_units * 1,000,000,000
 ## 输出与验证
 
 正式仿真常用输出包括 `run-summary.json`、网络逐流指标、传输/任务指标、计算节点
-利用率、路由事件，以及相应 size-aware/capacity-aware 与 fault 汇总。任务和
-transfer 汇总会保留故障终态、原因与时间。只有显式启用失败诊断且运行部分完成时，
-才保留 `diagnostics/failure/`。完整文件说明见
+利用率、路由事件，以及相应 size-aware/capacity-aware、fault 和完成前故障概率
+汇总。任务和 transfer 汇总会保留故障终态、原因与时间。只有显式启用失败诊断且
+运行部分完成时，才保留 `diagnostics/failure/`。完整文件说明见
 [metrics README](metrics/README.md)。
 
 测试命令、覆盖范围和阶段 CI 规则统一放在

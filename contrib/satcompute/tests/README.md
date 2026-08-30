@@ -32,11 +32,11 @@ tests/
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
 | `routing-policy-factory-test.cc` | 五种路由名到 next-hop/path policy 的映射 |
 | `task-input-test.cc` | ComputeProfile/TaskTrace closed-world 校验、canonical 排序和派生传输 ID |
-| `compute-service-test.cc` | 整数服务时间、非抢占 FCFS 和同刻 task ID tie-break |
+| `compute-service-test.cc` | 整数服务时间、非抢占 FCFS、同刻 task ID tie-break 和因果运行任务快照 |
 | `fault-lifecycle-test.cc` | FAILED/CANCELLED 幂等终止、迟到包隔离和 reservation 归零 |
 | `fault-trace-test.cc` | v1/v2 closed-world 字段、四类记录、算术/区间校验和 canonical writer |
-| `fault-model-test.cc` | 内置参数、F1/F2 状态、独立抽样与 `q_comp`，以及 F3 fixed-K/Poisson 数量、范围、无放回和确定性 |
-| `compute-fault-execution-test.cc` | 计算故障批处理、任务各阶段、恢复、通信不变和重复运行顺序 |
+| `fault-model-test.cc` | 内置参数、F1/F2 状态、独立抽样、`q_comp` 与完成前概率纯函数，以及 F3 fixed-K/Poisson 数量、范围、无放回和确定性 |
+| `compute-fault-execution-test.cc` | 计算故障批处理、任务各阶段、恢复、通信不变、在线因果预测和 generate/replay 预测一致性 |
 | `satellite-fault-execution-test.cc` | 整星端点语义、即时重路由、capacity 重准入和按实时距离恢复 |
 | `online-orbit-foundation-test.cc` | 原生 mobility、连续坐标、固定 plus-grid 候选和 canonical 顺序 |
 | `online-topology-controller-test.cc` | 距离门控、fixed/distance 时延、周期更新和按边集合重算路由 |
@@ -64,8 +64,10 @@ tests/
 - `run-fault-lifecycle-regression.sh`：覆盖 N4A compute/整星 replay、N4B F1 热校准，
   以及 F2 轨道偏移、真实 ECEF 暴露、100-run 概率标定、风险-only、有/无预警实际
   故障和 66 星小任务闭环；同时检查同 seed trace 一致、generate/replay 逐文件等价、
-  compute 故障不改变路由、故障中任务失败和恢复后新任务完成；F3 部分覆盖无任务
-  fixed-K 永久整星故障、即时重路由、F3 抢占活动 compute 区间以及 F1/F2/F3 同开。
+  compute 故障不改变路由、故障中任务失败和恢复后新任务完成；预测部分逐行复算
+  `P_fail_before_finish`、任务剩余时间、风险已持续时间、事后标签和 Brier 汇总，并
+  检查无风险预测输出和 none 模式陈旧文件清理；F3 部分覆盖无任务 fixed-K 永久
+  整星故障、即时重路由、F3 抢占活动 compute 区间以及 F1/F2/F3 同开。
 
 ## 本地运行
 

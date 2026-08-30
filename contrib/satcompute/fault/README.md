@@ -1,8 +1,9 @@
 # 故障模块
 
-`fault/` 负责统一故障参数、Fault Trace、在线模型以及运行期执行。
+`fault/` 负责统一故障参数、Fault Trace、在线模型、因果概率预测以及运行期执行。
 `FaultModelEngine` 只读取实时状态并判定风险/故障；所有 compute/整星状态变化仍
-统一交给 N4A `FaultController`，模型不会直接修改任务、transfer、链路或路由。
+统一交给 N4A `FaultController`，模型和预测器都不会直接修改任务、transfer、链路
+或路由。
 
 ## 文件与职责
 
@@ -10,8 +11,8 @@
 fault/
 ├── fault-para.h/.cc             人工维护的 common/F1/F2/F3 参数
 ├── parameter/                   参数合法性校验
-├── model/                       F1/F2 状态模型、概率组合与 F3 调度模型
-├── runtime/                     在线判定、状态覆盖与故障执行
+├── model/                       F1/F2 状态模型、概率组合/预测与 F3 调度模型
+├── runtime/                     在线判定、因果预测、状态覆盖与故障执行
 ├── trace/                       统一记录定义、JSON 读取和写出
 └── README.md
 ```
@@ -21,10 +22,12 @@ fault/
 | `fault-para.h/.cc` | 按 common、F1、F2、F3 分组的唯一内置故障参数 |
 | `parameter/fault-parameter-validator.h/.cc` | 有限值、范围及跨字段关系的启动前校验 |
 | `model/compute-fault-combination.h/.cc` | 计算 `q_comp`，并将独立 F1/F2 抽样折叠为一次平台结果 |
+| `model/compute-failure-predictor.h/.cc` | 由联合单步概率、任务剩余时间和检查周期计算完成前故障概率的纯函数 |
 | `model/f1-self-state-fault-model.h/.cc` | 无运行期副作用的 F1 温度、DoD、风险、强度和单步概率 |
 | `model/f2-radiation-fault-model.h/.cc` | 原生 ECEF 转经纬度、区域判定、连续暴露、累计风险与单步概率 |
 | `model/f3-debris-fault-model.h/.cc` | 以独立 ns-3 随机流生成 fixed-K 或 Poisson 永久整星事件 |
 | `runtime/fault-model-engine.h/.cc` | 在线读取状态、维护风险 episode、使用 ns-3 随机流判定事件 |
+| `runtime/fault-prediction-engine.h/.cc` | 从已执行 NOTICE 和当前任务快照生成在线、无未来信息的概率记录 |
 | `runtime/fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
 | `runtime/fault-controller.h/.cc` | replay/在线事件批处理，以及任务、传输和有效拓扑联动 |
 | `trace/fault-definition.h/.cc` | compute/satellite 记录以及预警、恢复、风险结束和排序时间 |
@@ -54,6 +57,10 @@ replay
 到达的任务继续使用节点。generate 可启用 F1-only、F2-only 或 F1+F2；联合来源按
 独立竞争风险处理：F1/F2 分别抽样，平台只执行二者结果的逻辑或。F3 可单独运行，
 也可与两个计算来源共同运行。
+
+当任务输入存在时，generate 和 replay 都启用同一个因果预测器；它只观察已经由
+`FaultController` 执行的事件和当前 `ComputeService` 快照。none 不创建预测器，也
+不生成预测文件。
 
 ## F1 自身状态计算故障
 
@@ -208,6 +215,36 @@ F1/F2 各自的独立随机判定。有预警故障记录
 `warning_lead_time_ns=start_time_ns-notice_time_ns`；未发生故障的风险-only 记录
 `risk_duration_ns=clear_time_ns-notice_time_ns`，二者不会同时出现。
 
+## 任务完成前的因果故障概率预测
+
+预测只在以下两个条件同时满足时产生：目标节点已有一个尚未结束的 compute 风险
+episode，且该节点当前正在计算任务。一次 NOTICE 执行后，预测器保存当时对外可见的
+联合单步概率 `q_notice`；每个后续检查点重新读取任务进度和剩余计算时间：
+
+```text
+q_notice = q_comp at NOTICE
+K = max(1, ceil(remaining_compute_time / check_interval))
+P_fail_before_finish = 1 - (1 - q_notice)^K
+```
+
+`K` 包含当前检查点尚未执行的故障判定；即使任务恰好计划在当前时刻结束，也保留
+一次当前检查。当前实现是平稳条件概率基线：一个风险 episode 内冻结 `q_notice`，
+但任务完成度、剩余时间、预计完成时刻和 `K` 每步更新。它预测的是“当前计算任务
+完成前至少发生一次 compute 故障”的概率，不预测精确故障时刻或剩余寿命，也不把
+F3 整星撞击纳入该概率。
+
+预测记录中的 `risk_elapsed_time_ns=now-notice_time_ns` 是当前时刻已经观察到的风险
+持续时间；它不是 trace 在 episode 结束后才能确定的 `risk_duration_ns`。运行期还
+明确禁止读取未来的 compute START、`fault_occurred`、`warning_lead_time_ns` 或最终
+风险时长。generate 和 replay 因此使用同一条因果路径；使用相同任务和已生成 trace
+时，预测输出应逐字节一致。
+
+`observed_compute_failure_before_finish` 只在仿真结束后由 metrics 根据实际 START
+补充，用于 Brier score 和后续 Monte Carlo 校准，不会反馈给预测器。当前基线输出
+只是后续主动备份的候选输入；本阶段不启动副本、不选择备份节点，也不产生
+`BACKUP_START`、`BACKUP_READY` 或 `TAKEOVER`。F1/F2 单步概率随状态变化的预测扩展
+以及阈值/收益最优点，必须以后续多次运行的校准证据为准，不能从单次轨迹推断。
+
 ## 故障执行
 
 同一纳秒的事件固定按下列顺序、再按 `fault_id` 升序执行：
@@ -215,6 +252,10 @@ F1/F2 各自的独立随机判定。有预警故障记录
 ```text
 NOTICE -> NOTICE_CLEAR -> RECOVERY -> START
 ```
+
+预测检查在同一检查时刻先于模型/控制器事件运行，所以它只能看到此前已经执行的
+事件。NOTICE 通常在本检查时刻后半段产生，首条预测因而出现在下一检查点；若活动
+风险即将在当前检查点触发 START，预测会先记录当前可见概率，再由 START 关闭风险。
 
 compute START 只令目标节点 `compute_available=false`，不会关闭 ISL 或重算路由。
 目标节点上尚未越过计算阶段的任务按 N4A 合同失败；有限恢复只接纳新任务。
