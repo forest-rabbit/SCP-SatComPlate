@@ -12,6 +12,7 @@ build_lib(
     fault/parameter/fault-parameter-validator.cc
     fault/runtime/fault-controller.cc
     fault/runtime/fault-model-engine.cc
+    fault/runtime/fault-prediction-engine.cc
     fault/runtime/fault-state.cc
     fault/trace/fault-definition.cc
     fault/trace/fault-trace.cc
@@ -71,6 +72,7 @@ build_lib(
     fault/parameter/fault-parameter-validator.h
     fault/runtime/fault-controller.h
     fault/runtime/fault-model-engine.h
+    fault/runtime/fault-prediction-engine.h
     fault/runtime/fault-state.h
     fault/trace/fault-definition.h
     fault/trace/fault-trace.h

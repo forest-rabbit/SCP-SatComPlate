@@ -3,6 +3,7 @@
  */
 
 #include "ns3/fault-controller.h"
+#include "ns3/fault-prediction-engine.h"
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
 #include "ns3/online-topology-controller.h"
@@ -131,11 +132,26 @@ FindFaultEvent(const std::vector<FaultRuntimeEventRecord>& events,
 struct ExecutionSignature
 {
     std::vector<std::string> faultEvents;
+    std::vector<std::string> predictions;
     std::vector<std::string> taskEvents;
     std::vector<std::string> transferTerminals;
 
     bool operator==(const ExecutionSignature&) const = default;
 };
+
+std::string
+EncodePrediction(const ComputeFailurePredictionRecord& prediction)
+{
+    std::ostringstream output;
+    output << prediction.simulationTimeNs << ':' << prediction.faultId << ':'
+           << prediction.nodeId << ':' << prediction.taskId << ':'
+           << prediction.noticeTimeNs << ':' << prediction.riskElapsedTimeNs << ':'
+           << prediction.remainingComputeTimeNs << ':'
+           << prediction.horizonStepCount << ':'
+           << prediction.combinedStepFailureProbability << ':'
+           << prediction.predictedFailureProbability;
+    return output.str();
+}
 
 std::string
 EncodeFaultEvent(const FaultRuntimeEventRecord& event)
@@ -278,6 +294,11 @@ RunComputeFaultScenario(bool generateOnline)
                              50 * MILLISECOND_NS),
         };
         Ptr<FaultController> controller = CreateObject<FaultController>();
+        Ptr<FaultPredictionEngine> predictionEngine =
+            CreateObject<FaultPredictionEngine>();
+        predictionEngine->Configure(10 * MILLISECOND_NS,
+                                    SIMULATION_DURATION_NS,
+                                    controller);
         if (generateOnline)
         {
             controller->ConfigureGeneration(
@@ -323,6 +344,7 @@ RunComputeFaultScenario(bool generateOnline)
                                 false,
                                 SIMULATION_DURATION_NS);
         controller->BindTaskCoordinator(coordinator);
+        predictionEngine->BindTaskCoordinator(coordinator);
 
         bool phasesChecked = false;
         Simulator::Schedule(NanoSeconds(99 * MILLISECOND_NS),
@@ -461,6 +483,28 @@ RunComputeFaultScenario(bool generateOnline)
         Check(topology.GetRouteComputationCount() == routeComputationsBefore &&
                   topology.GetLinkState().GetActiveLinks() == activeLinksBefore,
               "compute fault modified ISLs or recomputed routes");
+
+        const std::vector<ComputeFailurePredictionRecord>& predictions =
+            predictionEngine->GetPredictionRecords();
+        Check(predictions.size() == 1 &&
+                  predictions[0].simulationTimeNs == 100 * MILLISECOND_NS &&
+                  predictions[0].faultId == 1 &&
+                  predictions[0].nodeId == COMPUTE_NODE_ID &&
+                  predictions[0].taskId == 3 &&
+                  predictions[0].noticeTimeNs == 90 * MILLISECOND_NS &&
+                  predictions[0].riskElapsedTimeNs == 10 * MILLISECOND_NS &&
+                  predictions[0].remainingComputeTimeNs > 0 &&
+                  predictions[0].completionRatio > 0.0 &&
+                  predictions[0].completionRatio < 1.0 &&
+                  predictions[0].combinedStepFailureProbability == 0.8 &&
+                  predictions[0].horizonStepCount > 0 &&
+                  predictions[0].predictedFailureProbability >= 0.8 &&
+                  predictions[0].predictedFailureProbability <= 1.0,
+              "causal compute failure prediction record differs");
+        for (const ComputeFailurePredictionRecord& prediction : predictions)
+        {
+            signature.predictions.push_back(EncodePrediction(prediction));
+        }
 
         for (const TaskEventRecord& event : coordinator->GetTaskEvents())
         {
