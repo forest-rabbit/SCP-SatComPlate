@@ -7,6 +7,7 @@ build_lib(
     fault/model/compute-fault-combination.cc
     fault/model/f1-self-state-fault-model.cc
     fault/model/f2-radiation-fault-model.cc
+    fault/model/f3-debris-fault-model.cc
     fault/parameter/fault-parameter-validator.cc
     fault/runtime/fault-controller.cc
     fault/runtime/fault-model-engine.cc
@@ -64,6 +65,7 @@ build_lib(
     fault/model/compute-fault-combination.h
     fault/model/f1-self-state-fault-model.h
     fault/model/f2-radiation-fault-model.h
+    fault/model/f3-debris-fault-model.h
     fault/parameter/fault-parameter-validator.h
     fault/runtime/fault-controller.h
     fault/runtime/fault-model-engine.h

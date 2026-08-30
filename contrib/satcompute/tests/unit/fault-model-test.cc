@@ -7,12 +7,14 @@
 #include "ns3/fault-para.h"
 #include "ns3/f1-self-state-fault-model.h"
 #include "ns3/f2-radiation-fault-model.h"
+#include "ns3/f3-debris-fault-model.h"
 #include "ns3/geographic-positions.h"
 
 #include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -394,6 +396,75 @@ CheckComputeFaultCombination()
     Check(invalidRejected, "invalid compute-fault probability was accepted");
 }
 
+void
+CheckF3Model()
+{
+    FaultParameters parameters = GetDefaultFaultParameters();
+    parameters.f3.enabled = true;
+    parameters.f3.mode = "fixed_k";
+    parameters.f3.fixedCount = 3;
+    parameters.f3.singleSatelliteIntensityPerSecond = 0.0;
+    const F3DebrisFaultModel fixedModel(parameters.f3);
+    const std::vector<uint32_t> satelliteIds = {9, 1, 5, 3};
+    const std::vector<F3DebrisFaultEvent> first =
+        fixedModel.GenerateSchedule(satelliteIds, 1000000000000LL, 3000000, 3000001);
+    const std::vector<F3DebrisFaultEvent> second =
+        fixedModel.GenerateSchedule(satelliteIds, 1000000000000LL, 3000000, 3000001);
+    Check(first.size() == 3 && second.size() == first.size(),
+          "F3 fixed_k did not generate exactly K events");
+    std::set<uint32_t> selectedNodes;
+    for (std::size_t index = 0; index < first.size(); ++index)
+    {
+        Check(first[index].startTimeNs >= 0 &&
+                  first[index].startTimeNs < 1000000000000LL,
+              "F3 fixed_k generated a time outside [0, T)");
+        Check(index == 0 ||
+                  first[index - 1].startTimeNs <= first[index].startTimeNs,
+              "F3 fixed_k times are not sorted");
+        Check(selectedNodes.insert(first[index].nodeId).second,
+              "F3 fixed_k selected one node twice");
+        Check(first[index].startTimeNs == second[index].startTimeNs &&
+                  first[index].nodeId == second[index].nodeId,
+              "F3 fixed_k schedule is not deterministic");
+    }
+
+    bool excessiveCountRejected = false;
+    try
+    {
+        fixedModel.GenerateSchedule({1, 2}, 1000, 3000000, 3000001);
+    }
+    catch (const F3DebrisFaultModelError&)
+    {
+        excessiveCountRejected = true;
+    }
+    Check(excessiveCountRejected,
+          "F3 fixed_count larger than the constellation was accepted");
+
+    parameters.f3.mode = "poisson";
+    parameters.f3.fixedCount = 0;
+    parameters.f3.singleSatelliteIntensityPerSecond = 0.01;
+    const F3DebrisFaultModel poissonModel(parameters.f3);
+    const std::vector<F3DebrisFaultEvent> poissonFirst =
+        poissonModel.GenerateSchedule(satelliteIds, 1000000000000LL, 3000000, 3000001);
+    const std::vector<F3DebrisFaultEvent> poissonSecond =
+        poissonModel.GenerateSchedule(satelliteIds, 1000000000000LL, 3000000, 3000001);
+    Check(!poissonFirst.empty() && poissonFirst.size() <= satelliteIds.size() &&
+              poissonFirst.size() == poissonSecond.size(),
+          "F3 poisson event count is invalid");
+    selectedNodes.clear();
+    for (std::size_t index = 0; index < poissonFirst.size(); ++index)
+    {
+        Check(poissonFirst[index].startTimeNs >= 0 &&
+                  poissonFirst[index].startTimeNs < 1000000000000LL,
+              "F3 poisson generated a time outside [0, T)");
+        Check(selectedNodes.insert(poissonFirst[index].nodeId).second,
+              "F3 poisson selected one node twice");
+        Check(poissonFirst[index].startTimeNs == poissonSecond[index].startTimeNs &&
+                  poissonFirst[index].nodeId == poissonSecond[index].nodeId,
+              "F3 poisson schedule is not deterministic");
+    }
+}
+
 } // namespace
 
 int
@@ -406,6 +477,7 @@ main()
         CheckF1Model();
         CheckF2Model();
         CheckComputeFaultCombination();
+        CheckF3Model();
         std::cout << "SatCompute fault model tests passed." << std::endl;
         return 0;
     }
