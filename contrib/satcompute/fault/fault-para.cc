@@ -77,7 +77,7 @@ GetDefaultFaultParameters()
 
     // F2: radiation exposure compute fault
 
-    // N4B 第二阶段接入和标定前保持关闭。
+    // 默认运行仍保持 F2 关闭；F2-only 功能场景由平台运行参数显式启用。
     parameters.f2.enabled = false;
 
     // 辐射区域西侧经度边界，单位为度。
@@ -92,11 +92,11 @@ GetDefaultFaultParameters()
     // 辐射区域北侧纬度边界，单位为度。
     parameters.f2.latitudeMaxDegrees = 5.0;
 
-    // 区域内每秒有效故障强度；F2 标定前为 0。
-    parameters.f2.effectiveFailureIntensityPerSecond = 0.0;
+    // 66 星、1000 秒功能窗口标定的区域内每秒有效故障强度。
+    parameters.f2.effectiveFailureIntensityPerSecond = 0.00015569048731122528;
 
-    // 累计辐射风险通知阈值。
-    parameters.f2.riskThreshold = 0.01;
+    // 典型完整穿越进行到一半（461 秒）时的累计风险通知阈值。
+    parameters.f2.riskThreshold = 0.06925814255738115;
 
     // 离开辐射区域后关闭 episode 并清零连续暴露。
     parameters.f2.resetExposureOnExit = true;

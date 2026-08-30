@@ -63,6 +63,9 @@ CheckDefaults()
           "F1 defaults differ");
     Check(!parameters.f2.enabled &&
               parameters.f2.longitudeMinDegrees == -90.0 &&
+              parameters.f2.effectiveFailureIntensityPerSecond ==
+                  0.00015569048731122528 &&
+              parameters.f2.riskThreshold == 0.06925814255738115 &&
               parameters.f2.resetExposureOnExit && !parameters.f3.enabled &&
               parameters.f3.mode == "fixed_k" && parameters.f3.fixedCount == 1,
           "F2/F3 defaults differ");
