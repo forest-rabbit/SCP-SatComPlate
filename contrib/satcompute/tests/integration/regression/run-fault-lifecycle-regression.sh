@@ -231,6 +231,7 @@ done
 python3 - "$regression_output" <<'PY'
 import csv
 import json
+import math
 import pathlib
 import sys
 
@@ -245,6 +246,149 @@ def load_json(relative: str):
 def load_csv(relative: str):
     with (root / relative).open(newline="", encoding="utf-8") as source:
         return list(csv.DictReader(source))
+
+
+PREDICTION_FIELDS = [
+    "simulation_time_ns",
+    "fault_id",
+    "node_id",
+    "task_id",
+    "notice_time_ns",
+    "risk_elapsed_time_ns",
+    "task_compute_start_time_ns",
+    "task_service_time_ns",
+    "task_elapsed_time_ns",
+    "remaining_compute_time_ns",
+    "expected_compute_completion_time_ns",
+    "completion_ratio",
+    "combined_step_failure_probability",
+    "horizon_step_count",
+    "predicted_failure_probability",
+    "observed_compute_failure_before_finish",
+]
+PREDICTION_SUMMARY_FIELDS = {
+    "prediction_count",
+    "risk_episode_count",
+    "task_count",
+    "observed_failure_prediction_count",
+    "mean_predicted_failure_probability",
+    "observed_failure_rate",
+    "brier_score",
+    "minimum_predicted_failure_probability",
+    "maximum_predicted_failure_probability",
+}
+
+
+def validate_prediction_outputs(directory: str, require_predictions: bool):
+    prediction_path = root / directory / "fault-predictions.csv"
+    with prediction_path.open(newline="", encoding="utf-8") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames != PREDICTION_FIELDS:
+            raise SystemExit(
+                f"{directory} prediction schema differs: {reader.fieldnames}"
+            )
+        rows = list(reader)
+    summary = load_json(f"{directory}/fault-prediction-summary.json")
+    if set(summary) != PREDICTION_SUMMARY_FIELDS:
+        raise SystemExit(f"{directory} prediction summary schema differs: {summary}")
+    if require_predictions and not rows:
+        raise SystemExit(f"{directory} produced no causal predictions")
+
+    episode_ids = set()
+    task_ids = set()
+    probabilities = []
+    observations = []
+    q_by_episode = {}
+    for row in rows:
+        simulation_time_ns = int(row["simulation_time_ns"])
+        fault_id = int(row["fault_id"])
+        task_id = int(row["task_id"])
+        notice_time_ns = int(row["notice_time_ns"])
+        risk_elapsed_time_ns = int(row["risk_elapsed_time_ns"])
+        task_start_time_ns = int(row["task_compute_start_time_ns"])
+        service_time_ns = int(row["task_service_time_ns"])
+        elapsed_time_ns = int(row["task_elapsed_time_ns"])
+        remaining_time_ns = int(row["remaining_compute_time_ns"])
+        completion_time_ns = int(row["expected_compute_completion_time_ns"])
+        completion_ratio = float(row["completion_ratio"])
+        q_comp = float(row["combined_step_failure_probability"])
+        horizon_step_count = int(row["horizon_step_count"])
+        predicted_probability = float(row["predicted_failure_probability"])
+        observed = row["observed_compute_failure_before_finish"]
+
+        if simulation_time_ns <= notice_time_ns or (
+            risk_elapsed_time_ns != simulation_time_ns - notice_time_ns
+        ):
+            raise SystemExit(f"{directory} used a non-causal NOTICE window: {row}")
+        if task_start_time_ns > simulation_time_ns or service_time_ns <= 0 or (
+            elapsed_time_ns < 0 or remaining_time_ns < 0
+        ) or elapsed_time_ns + remaining_time_ns != service_time_ns or (
+            completion_time_ns != simulation_time_ns + remaining_time_ns
+        ):
+            raise SystemExit(f"{directory} task snapshot differs: {row}")
+        expected_ratio = elapsed_time_ns / service_time_ns
+        if not (0.0 <= completion_ratio <= 1.0) or not math.isclose(
+            completion_ratio, expected_ratio, rel_tol=1e-12, abs_tol=1e-12
+        ):
+            raise SystemExit(f"{directory} completion ratio differs: {row}")
+        if not (0.0 <= q_comp <= 1.0) or horizon_step_count < 1:
+            raise SystemExit(f"{directory} predictor input differs: {row}")
+        expected_probability = 1.0 - (1.0 - q_comp) ** horizon_step_count
+        if not math.isclose(
+            predicted_probability,
+            expected_probability,
+            rel_tol=1e-12,
+            abs_tol=1e-12,
+        ):
+            raise SystemExit(f"{directory} probability formula differs: {row}")
+        if observed not in ("true", "false"):
+            raise SystemExit(f"{directory} observed label differs: {row}")
+        if fault_id in q_by_episode and not math.isclose(
+            q_by_episode[fault_id], q_comp, rel_tol=0.0, abs_tol=0.0
+        ):
+            raise SystemExit(f"{directory} changed q_comp within one NOTICE: {row}")
+        q_by_episode[fault_id] = q_comp
+        episode_ids.add(fault_id)
+        task_ids.add(task_id)
+        probabilities.append(predicted_probability)
+        observations.append(1.0 if observed == "true" else 0.0)
+
+    if (
+        summary["prediction_count"] != len(rows)
+        or summary["risk_episode_count"] != len(episode_ids)
+        or summary["task_count"] != len(task_ids)
+        or summary["observed_failure_prediction_count"] != int(sum(observations))
+    ):
+        raise SystemExit(f"{directory} prediction summary counts differ: {summary}")
+    if not rows:
+        if any(summary[key] is not None for key in (
+            "mean_predicted_failure_probability",
+            "observed_failure_rate",
+            "brier_score",
+            "minimum_predicted_failure_probability",
+            "maximum_predicted_failure_probability",
+        )):
+            raise SystemExit(f"{directory} empty prediction summary differs: {summary}")
+        return rows, summary
+
+    expected_metrics = {
+        "mean_predicted_failure_probability": sum(probabilities) / len(rows),
+        "observed_failure_rate": sum(observations) / len(rows),
+        "brier_score": sum(
+            (probability - observation) ** 2
+            for probability, observation in zip(probabilities, observations)
+        ) / len(rows),
+        "minimum_predicted_failure_probability": min(probabilities),
+        "maximum_predicted_failure_probability": max(probabilities),
+    }
+    if any(
+        not math.isclose(
+            summary[key], expected, rel_tol=1e-12, abs_tol=1e-12
+        )
+        for key, expected in expected_metrics.items()
+    ):
+        raise SystemExit(f"{directory} prediction summary metrics differ: {summary}")
+    return rows, summary
 
 
 calibration = load_json("f1-calibration/n4b-f1-calibration-summary.json")
@@ -325,11 +469,15 @@ for filename in (
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
     "capacity-aware-summary.json",
+    "fault-predictions.csv",
+    "fault-prediction-summary.json",
 ):
     generated = (root / "generate-f1" / filename).read_bytes()
     replayed = (root / "replay-f1" / filename).read_bytes()
     if generated != replayed:
         raise SystemExit(f"F1 generate/replay output differs: {filename}")
+
+validate_prediction_outputs("generate-f1", True)
 
 f1_events = load_csv("generate-f1/fault-events.csv")
 if [row["event_type"] for row in f1_events] != ["NOTICE", "START", "RECOVERY"]:
@@ -380,11 +528,14 @@ for filename in (
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
     "capacity-aware-summary.json",
+    "fault-predictions.csv",
+    "fault-prediction-summary.json",
 ):
     generated = (root / "generate-f1-sampled" / filename).read_bytes()
     replayed = (root / "replay-f1-sampled" / filename).read_bytes()
     if generated != replayed:
         raise SystemExit(f"sampled F1 generate/replay output differs: {filename}")
+validate_prediction_outputs("generate-f1-sampled", False)
 sampled_events = load_csv("generate-f1-sampled/fault-events.csv")
 if [row["event_type"] for row in sampled_events] != ["START", "RECOVERY"] or (
     any(row["route_recomputed"] != "false" for row in sampled_events)
@@ -431,11 +582,31 @@ for filename in (
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
     "capacity-aware-summary.json",
+    "fault-predictions.csv",
+    "fault-prediction-summary.json",
 ):
     generated = (root / "generate-f1-66" / filename).read_bytes()
     replayed = (root / "replay-f1-66" / filename).read_bytes()
     if generated != replayed:
         raise SystemExit(f"66-star F1 generate/replay output differs: {filename}")
+
+predictions_66, prediction_summary_66 = validate_prediction_outputs(
+    "generate-f1-66", True
+)
+if (
+    len(predictions_66),
+    prediction_summary_66["risk_episode_count"],
+    prediction_summary_66["task_count"],
+    prediction_summary_66["observed_failure_prediction_count"],
+) != (37, 4, 7, 33):
+    raise SystemExit(
+        f"66-star F1 prediction evidence differs: {prediction_summary_66}"
+    )
+if not any(
+    row["observed_compute_failure_before_finish"] == "false"
+    for row in predictions_66
+):
+    raise SystemExit("66-star F1 predictions have no non-failure control")
 
 tasks_66 = {int(row["task_id"]): row for row in load_csv(
     "generate-f1-66/task-summary.csv"
@@ -500,11 +671,15 @@ for filename in (
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
     "capacity-aware-summary.json",
+    "fault-predictions.csv",
+    "fault-prediction-summary.json",
 ):
     generated = (root / "generate-f2-66" / filename).read_bytes()
     replayed = (root / "replay-f2-66" / filename).read_bytes()
     if generated != replayed:
         raise SystemExit(f"F2 generate/replay output differs: {filename}")
+
+validate_prediction_outputs("generate-f2-66", True)
 
 f2_events = load_csv("generate-f2-66/fault-events.csv")
 f2_start_events = [row for row in f2_events if row["event_type"] == "START"]
@@ -577,11 +752,15 @@ for filename in (
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
     "capacity-aware-summary.json",
+    "fault-predictions.csv",
+    "fault-prediction-summary.json",
 ):
     generated = (root / "generate-combined-66" / filename).read_bytes()
     replayed = (root / "replay-combined-66" / filename).read_bytes()
     if generated != replayed:
         raise SystemExit(f"combined F1/F2 generate/replay output differs: {filename}")
+
+validate_prediction_outputs("generate-combined-66", True)
 
 
 f3_trace = load_json("generate-f3-66/fault-trace.json")
@@ -667,11 +846,15 @@ for filename in (
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
     "capacity-aware-summary.json",
+    "fault-predictions.csv",
+    "fault-prediction-summary.json",
 ):
     generated = (root / "generate-f3-priority" / filename).read_bytes()
     replayed = (root / "replay-f3-priority" / filename).read_bytes()
     if generated != replayed:
         raise SystemExit(f"F3 priority generate/replay output differs: {filename}")
+
+validate_prediction_outputs("generate-f3-priority", True)
 
 
 all_faults_trace = load_json("generate-all-faults/fault-trace.json")
@@ -692,11 +875,15 @@ for filename in (
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
     "capacity-aware-summary.json",
+    "fault-predictions.csv",
+    "fault-prediction-summary.json",
 ):
     generated = (root / "generate-all-faults" / filename).read_bytes()
     replayed = (root / "replay-all-faults" / filename).read_bytes()
     if generated != replayed:
         raise SystemExit(f"combined F1/F2/F3 generate/replay output differs: {filename}")
+
+validate_prediction_outputs("generate-all-faults", True)
 
 
 compute_events = load_csv("compute/fault-events.csv")
@@ -862,11 +1049,16 @@ for filename in (
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
     "capacity-aware-summary.json",
+    "fault-predictions.csv",
+    "fault-prediction-summary.json",
 ):
     first = (root / "satellite-first" / filename).read_bytes()
     second = (root / "satellite-second" / filename).read_bytes()
     if first != second:
         raise SystemExit(f"repeated satellite fault output differs: {filename}")
+
+validate_prediction_outputs("compute", False)
+validate_prediction_outputs("satellite-first", False)
 PY
 
 no_fault_result="$(run_platform \
@@ -877,7 +1069,9 @@ if [[ "$no_fault_result" != *'"status":"completed"'* ]]; then
   exit 1
 fi
 if [[ -e "$regression_output/satellite-first/fault-events.csv" ||
-      -e "$regression_output/satellite-first/fault-summary.json" ]]; then
+      -e "$regression_output/satellite-first/fault-summary.json" ||
+      -e "$regression_output/satellite-first/fault-predictions.csv" ||
+      -e "$regression_output/satellite-first/fault-prediction-summary.json" ]]; then
   echo "no-fault run retained stale fault metrics" >&2
   exit 1
 fi
