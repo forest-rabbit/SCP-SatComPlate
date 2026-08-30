@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
+#include "ns3/compute-failure-predictor.h"
 #include "ns3/compute-fault-combination.h"
 #include "ns3/fault-parameter-validator.h"
 #include "ns3/fault-para.h"
@@ -397,6 +398,69 @@ CheckComputeFaultCombination()
 }
 
 void
+CheckComputeFailurePrediction()
+{
+    constexpr int64_t secondNs = 1000000000;
+    const ComputeFailurePrediction combined =
+        PredictComputeFailureBeforeFinish(0.2,
+                                          0.3,
+                                          2500000000,
+                                          secondNs);
+    const double expectedStepProbability = 0.44;
+    const double expectedWindowProbability =
+        1.0 - std::pow(1.0 - expectedStepProbability, 3.0);
+    Check(std::abs(combined.combinedStepFailureProbability -
+                   expectedStepProbability) < 1e-15 &&
+              combined.horizonStepCount == 3 &&
+              std::abs(combined.predictedFailureProbability -
+                       expectedWindowProbability) < 1e-15,
+          "compute failure task-window prediction differs");
+
+    const ComputeFailurePrediction sameTimestamp =
+        PredictComputeFailureBeforeFinish(0.25, 0, secondNs);
+    Check(sameTimestamp.horizonStepCount == 1 &&
+              sameTimestamp.predictedFailureProbability == 0.25,
+          "same-timestamp running task omitted the current fault check");
+    Check(PredictComputeFailureBeforeFinish(0.0, 10 * secondNs, secondNs)
+                  .predictedFailureProbability == 0.0 &&
+              PredictComputeFailureBeforeFinish(1.0, 10 * secondNs, secondNs)
+                  .predictedFailureProbability == 1.0,
+          "compute failure prediction probability boundaries differ");
+
+    const double shortWindow =
+        PredictComputeFailureBeforeFinish(0.1, secondNs, secondNs)
+            .predictedFailureProbability;
+    const double longWindow =
+        PredictComputeFailureBeforeFinish(0.1, 5 * secondNs, secondNs)
+            .predictedFailureProbability;
+    Check(shortWindow < longWindow && longWindow < 1.0,
+          "compute failure prediction is not monotonic in remaining time");
+
+    bool negativeRemainingRejected = false;
+    try
+    {
+        static_cast<void>(
+            PredictComputeFailureBeforeFinish(0.1, -1, secondNs));
+    }
+    catch (const std::invalid_argument&)
+    {
+        negativeRemainingRejected = true;
+    }
+    bool zeroIntervalRejected = false;
+    try
+    {
+        static_cast<void>(
+            PredictComputeFailureBeforeFinish(0.1, secondNs, 0));
+    }
+    catch (const std::invalid_argument&)
+    {
+        zeroIntervalRejected = true;
+    }
+    Check(negativeRemainingRejected && zeroIntervalRejected,
+          "invalid compute failure prediction horizon was accepted");
+}
+
+void
 CheckF3Model()
 {
     FaultParameters parameters = GetDefaultFaultParameters();
@@ -477,6 +541,7 @@ main()
         CheckF1Model();
         CheckF2Model();
         CheckComputeFaultCombination();
+        CheckComputeFailurePrediction();
         CheckF3Model();
         std::cout << "SatCompute fault model tests passed." << std::endl;
         return 0;
