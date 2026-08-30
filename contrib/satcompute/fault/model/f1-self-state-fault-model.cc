@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
-#include "self-state-fault-model.h"
+#include "f1-self-state-fault-model.h"
 
 #include "ns3/abort.h"
 
@@ -23,22 +23,22 @@ ClampUnit(double value)
 
 } // namespace
 
-SelfStateFaultModel::SelfStateFaultModel(const F1FaultParameters& parameters)
+F1SelfStateFaultModel::F1SelfStateFaultModel(const F1FaultParameters& parameters)
     : m_parameters(parameters)
 {
 }
 
-SelfStateFaultSnapshot
-SelfStateFaultModel::CreateInitialSnapshot() const
+F1SelfStateFaultSnapshot
+F1SelfStateFaultModel::CreateInitialSnapshot() const
 {
-    SelfStateFaultSnapshot snapshot;
+    F1SelfStateFaultSnapshot snapshot;
     snapshot.temperatureC = m_parameters.temperature.baseC;
     snapshot.depthOfDischarge = m_parameters.energy.initialDod;
     return snapshot;
 }
 
 void
-SelfStateFaultModel::Update(SelfStateFaultSnapshot& snapshot,
+F1SelfStateFaultModel::Update(F1SelfStateFaultSnapshot& snapshot,
                             bool busy,
                             double intervalSeconds) const
 {
@@ -110,7 +110,7 @@ SelfStateFaultModel::Update(SelfStateFaultSnapshot& snapshot,
 }
 
 bool
-SelfStateFaultModel::IsRiskActive(const SelfStateFaultSnapshot& snapshot) const
+F1SelfStateFaultModel::IsRiskActive(const F1SelfStateFaultSnapshot& snapshot) const
 {
     return snapshot.combinedRisk >= m_parameters.riskThreshold;
 }

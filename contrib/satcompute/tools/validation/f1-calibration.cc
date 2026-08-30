@@ -7,7 +7,7 @@
 #include "ns3/fault-para.h"
 #include "ns3/random-variable-stream.h"
 #include "ns3/rng-seed-manager.h"
-#include "ns3/self-state-fault-model.h"
+#include "ns3/f1-self-state-fault-model.h"
 
 #include <nlohmann/json.hpp>
 
@@ -93,7 +93,7 @@ struct MonteCarloCandidateResult
 /** Runtime state for one pure-model Monte Carlo node. */
 struct MonteCarloNodeState
 {
-    SelfStateFaultSnapshot snapshot; ///< Current F1 physical and risk state.
+    F1SelfStateFaultSnapshot snapshot; ///< Current F1 physical and risk state.
     std::optional<int64_t> noticeTimeSeconds; ///< Open risk notice time.
     bool computeAvailable{true}; ///< Recoverable compute availability.
     std::optional<int64_t> recoveryTimeSeconds; ///< End of current failure.
@@ -138,7 +138,7 @@ class CalibrationWriter
                double candidateValue,
                int64_t elapsedTimeSeconds,
                int64_t taskIndex,
-               const SelfStateFaultSnapshot& snapshot)
+               const F1SelfStateFaultSnapshot& snapshot)
     {
         m_output << section << ',' << scenario << ',' << candidateName << ','
                  << candidateValue << ',' << elapsedTimeSeconds << ',';
@@ -197,8 +197,8 @@ OptionalTime(const std::optional<int64_t>& value)
 
 void
 UpdateThresholdTimes(const F1FaultParameters& parameters,
-                     const SelfStateFaultModel& model,
-                     const SelfStateFaultSnapshot& snapshot,
+                     const F1SelfStateFaultModel& model,
+                     const F1SelfStateFaultSnapshot& snapshot,
                      int64_t elapsedTimeSeconds,
                      HeatingResult& result)
 {
@@ -226,8 +226,8 @@ RunHeatingCandidate(const F1FaultParameters& selectedParameters,
 {
     F1FaultParameters parameters = selectedParameters;
     parameters.temperature.heatingTauSeconds = tauSeconds;
-    const SelfStateFaultModel model(parameters);
-    SelfStateFaultSnapshot snapshot = model.CreateInitialSnapshot();
+    const F1SelfStateFaultModel model(parameters);
+    F1SelfStateFaultSnapshot snapshot = model.CreateInitialSnapshot();
     HeatingResult result;
     result.tauSeconds = tauSeconds;
     for (int64_t second = 1; second <= 120; ++second)
@@ -256,8 +256,8 @@ RunCoolingCandidate(const F1FaultParameters& selectedParameters,
 {
     F1FaultParameters parameters = selectedParameters;
     parameters.temperature.coolingTauSeconds = tauSeconds;
-    const SelfStateFaultModel model(parameters);
-    SelfStateFaultSnapshot snapshot = model.CreateInitialSnapshot();
+    const F1SelfStateFaultModel model(parameters);
+    F1SelfStateFaultSnapshot snapshot = model.CreateInitialSnapshot();
     snapshot.temperatureC = parameters.temperature.criticalC;
     CoolingResult result;
     result.tauSeconds = tauSeconds;
@@ -343,7 +343,7 @@ RunMonteCarlo(const FaultParameters& sourceParameters,
 {
     FaultParameters parameters = sourceParameters;
     parameters.f1.maxFailureIntensityPerSecond = intensityPerSecond;
-    const SelfStateFaultModel model(parameters.f1);
+    const F1SelfStateFaultModel model(parameters.f1);
     const int64_t recoverySeconds = static_cast<int64_t>(
         parameters.recoverableComputeDurationSeconds /
         parameters.checkIntervalSeconds);
@@ -611,8 +611,8 @@ main(int argc, char* argv[])
             (selectedHeating->timeToCriticalSeconds.value() +
              REPRESENTATIVE_TASK_SECONDS - 1) /
             REPRESENTATIVE_TASK_SECONDS;
-        const SelfStateFaultModel selectedModel(parameters.f1);
-        SelfStateFaultSnapshot recovery = selectedModel.CreateInitialSnapshot();
+        const F1SelfStateFaultModel selectedModel(parameters.f1);
+        F1SelfStateFaultSnapshot recovery = selectedModel.CreateInitialSnapshot();
         recovery.temperatureC = parameters.f1.temperature.criticalC;
         selectedModel.Update(recovery,
                              false,

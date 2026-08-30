@@ -8,7 +8,7 @@
 #include "fault-controller.h"
 
 #include "ns3/fault-para.h"
-#include "ns3/self-state-fault-model.h"
+#include "ns3/f1-self-state-fault-model.h"
 
 #include "ns3/event-id.h"
 #include "ns3/object.h"
@@ -38,7 +38,7 @@ class FaultModelEngineError : public std::runtime_error
 struct FaultModelNodeSnapshot
 {
     uint32_t nodeId{}; ///< Stable external satellite ID.
-    SelfStateFaultSnapshot selfState; ///< Current pure F1 state.
+    F1SelfStateFaultSnapshot f1State; ///< Current pure F1 state.
     bool riskEpisodeActive{}; ///< Whether a notice episode remains open.
     bool computeAvailable{true}; ///< Final N4A compute availability.
 };
@@ -87,7 +87,7 @@ class FaultModelEngine : public Object
     /** Online model, random stream, and compute-service binding for one node. */
     struct NodeState
     {
-        SelfStateFaultSnapshot selfState; ///< Current pure F1 state.
+        F1SelfStateFaultSnapshot f1State; ///< Current pure F1 state.
         std::optional<RiskEpisode> riskEpisode; ///< Open combined-risk episode.
         Ptr<UniformRandomVariable> random; ///< Stable per-node sampling stream.
         Ptr<ComputeService> computeService; ///< Live busy/idle source.
@@ -117,7 +117,7 @@ class FaultModelEngine : public Object
     FaultParameters m_parameters; ///< Unified model parameters.
     int64_t m_checkIntervalNs{}; ///< Converted model-check interval.
     int64_t m_recoveryDurationNs{}; ///< Converted compute outage duration.
-    std::optional<SelfStateFaultModel> m_selfStateModel; ///< Active F1 pure model.
+    std::optional<F1SelfStateFaultModel> m_f1Model; ///< Active F1 pure model.
     std::map<uint32_t, NodeState> m_nodes; ///< Node state in stable-ID order.
     uint64_t m_nextFaultId{1}; ///< Next trace identity.
     FaultTrace m_trace; ///< Completed canonical trace records.

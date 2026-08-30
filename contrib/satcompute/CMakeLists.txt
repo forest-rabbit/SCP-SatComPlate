@@ -4,7 +4,7 @@ build_lib(
     para.cc
     common/time-conversion.cc
     fault/fault-para.cc
-    fault/model/self-state-fault-model.cc
+    fault/model/f1-self-state-fault-model.cc
     fault/parameter/fault-parameter-validator.cc
     fault/runtime/fault-controller.cc
     fault/runtime/fault-model-engine.cc
@@ -59,7 +59,7 @@ build_lib(
     para.h
     common/time-conversion.h
     fault/fault-para.h
-    fault/model/self-state-fault-model.h
+    fault/model/f1-self-state-fault-model.h
     fault/parameter/fault-parameter-validator.h
     fault/runtime/fault-controller.h
     fault/runtime/fault-model-engine.h

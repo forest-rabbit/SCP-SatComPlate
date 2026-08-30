@@ -3,7 +3,7 @@
 ## F1 参数标定
 
 `f1-calibration.cc` 构建为 `satcompute-f1-calibration`，直接调用
-`SelfStateFaultModel` 比较 `tau_h`、`tau_c` 和 `lambda_F1_max` 候选。它不建立
+`F1SelfStateFaultModel` 比较 `tau_h`、`tau_c` 和 `lambda_F1_max` 候选。它不建立
 卫星网络，不生成正式 Fault Trace，也不在 Python 中重新实现风险公式。
 
 ```bash

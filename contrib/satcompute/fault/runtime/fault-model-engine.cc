@@ -93,11 +93,11 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
     m_trace.schemaVersion = FAULT_TRACE_SCHEMA_VERSION;
     if (parameters.f1.enabled)
     {
-        m_selfStateModel.emplace(parameters.f1);
+        m_f1Model.emplace(parameters.f1);
         for (const uint32_t nodeId : uniqueNodeIds)
         {
             NodeState state;
-            state.selfState = m_selfStateModel->CreateInitialSnapshot();
+            state.f1State = m_f1Model->CreateInitialSnapshot();
             state.random = CreateObject<UniformRandomVariable>();
             state.random->SetStream(COMPUTE_FAULT_STREAM_BASE + nodeId);
             m_nodes.emplace(nodeId, state);
@@ -221,13 +221,13 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
             m_faultController->GetState().IsComputeAvailable(nodeId);
         const bool busy = computeAvailable && state.computeService->IsComputeAvailable() &&
                           state.computeService->HasRunningTask();
-        m_selfStateModel->Update(state.selfState, busy, intervalSeconds);
+        m_f1Model->Update(state.f1State, busy, intervalSeconds);
         if (!computeAvailable)
         {
             continue;
         }
 
-        const bool riskActive = m_selfStateModel->IsRiskActive(state.selfState);
+        const bool riskActive = m_f1Model->IsRiskActive(state.f1State);
         if (riskActive && !state.riskEpisode.has_value())
         {
             NS_ABORT_MSG_IF(m_nextFaultId == std::numeric_limits<uint64_t>::max(),
@@ -235,7 +235,7 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
             state.riskEpisode =
                 RiskEpisode{m_nextFaultId++,
                             simulationTimeNs,
-                            state.selfState.stepFailureProbability};
+                            state.f1State.stepFailureProbability};
             events.push_back(
                 {FaultEventType::NOTICE, MakeNotice(nodeId, state.riskEpisode.value())});
         }
@@ -249,7 +249,7 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
         }
 
         const double randomValue = state.random->GetValue();
-        if (randomValue < state.selfState.stepFailureProbability)
+        if (randomValue < state.f1State.stepFailureProbability)
         {
             uint64_t faultId;
             if (state.riskEpisode.has_value())
@@ -266,7 +266,7 @@ FaultModelEngine::Tick(int64_t simulationTimeNs)
                 MakeComputeFault(nodeId,
                                  faultId,
                                  state.riskEpisode,
-                                 state.selfState.stepFailureProbability,
+                                 state.f1State.stepFailureProbability,
                                  simulationTimeNs);
             events.push_back({FaultEventType::START, fault});
             completedRecords.push_back(fault);
@@ -319,7 +319,7 @@ FaultModelEngine::GetNodeSnapshots() const
     {
         snapshots.push_back(
             {nodeId,
-             state.selfState,
+             state.f1State,
              state.riskEpisode.has_value(),
              m_faultController->GetState().IsComputeAvailable(nodeId)});
     }

@@ -4,7 +4,7 @@
 
 #include "ns3/fault-parameter-validator.h"
 #include "ns3/fault-para.h"
-#include "ns3/self-state-fault-model.h"
+#include "ns3/f1-self-state-fault-model.h"
 
 #include <cmath>
 #include <iostream>
@@ -123,10 +123,10 @@ void
 CheckF1Model()
 {
     const FaultParameters parameters = GetDefaultFaultParameters();
-    const SelfStateFaultModel model(parameters.f1);
+    const F1SelfStateFaultModel model(parameters.f1);
 
-    SelfStateFaultSnapshot unchanged = model.CreateInitialSnapshot();
-    const SelfStateFaultSnapshot initial = unchanged;
+    F1SelfStateFaultSnapshot unchanged = model.CreateInitialSnapshot();
+    const F1SelfStateFaultSnapshot initial = unchanged;
     model.Update(unchanged, true, 0.0);
     Check(unchanged.temperatureC == initial.temperatureC &&
               unchanged.depthOfDischarge == initial.depthOfDischarge &&
@@ -140,7 +140,7 @@ CheckF1Model()
               unchanged.busy == initial.busy,
           "zero-duration F1 update changed state");
 
-    SelfStateFaultSnapshot idle = model.CreateInitialSnapshot();
+    F1SelfStateFaultSnapshot idle = model.CreateInitialSnapshot();
     model.Update(idle, false, 120.0);
     Check(idle.temperatureC == parameters.f1.temperature.baseC &&
               idle.depthOfDischarge == parameters.f1.energy.initialDod &&
@@ -148,7 +148,7 @@ CheckF1Model()
               !model.IsRiskActive(idle),
           "idle F1 state changed from its baseline");
 
-    SelfStateFaultSnapshot singleTask = model.CreateInitialSnapshot();
+    F1SelfStateFaultSnapshot singleTask = model.CreateInitialSnapshot();
     model.Update(singleTask, true, 10.0);
     Check(singleTask.temperatureC > 20.0 && singleTask.temperatureC < 21.0 &&
               singleTask.temperatureC < parameters.f1.temperature.criticalC &&
@@ -161,7 +161,7 @@ CheckF1Model()
               singleTask.temperatureC > parameters.f1.temperature.baseC,
           "task completion reset F1 temperature instead of cooling continuously");
 
-    SelfStateFaultSnapshot continuous = model.CreateInitialSnapshot();
+    F1SelfStateFaultSnapshot continuous = model.CreateInitialSnapshot();
     for (int second = 0; second < 55; ++second)
     {
         model.Update(continuous, true, 1.0);
@@ -186,7 +186,7 @@ CheckF1Model()
               continuous.stepFailureProbability == 1.0,
           "critical F1 temperature did not force deterministic shutdown");
 
-    SelfStateFaultSnapshot recovery = model.CreateInitialSnapshot();
+    F1SelfStateFaultSnapshot recovery = model.CreateInitialSnapshot();
     recovery.temperatureC = parameters.f1.temperature.criticalC;
     model.Update(recovery, false, parameters.recoverableComputeDurationSeconds);
     Check(recovery.temperatureC > 27.6 && recovery.temperatureC < 27.7 &&
@@ -200,7 +200,7 @@ CheckF1Model()
               continuous.stepFailureProbability == 0.0,
           "F1 cooling did not leave the risk region");
 
-    SelfStateFaultSnapshot monotonic = model.CreateInitialSnapshot();
+    F1SelfStateFaultSnapshot monotonic = model.CreateInitialSnapshot();
     double previousTemperature = monotonic.temperatureC;
     double previousRisk = monotonic.thermalRisk;
     for (int second = 0; second < 60; ++second)
@@ -219,8 +219,8 @@ CheckF1Model()
 
     FaultParameters noEnergyParameters = parameters;
     noEnergyParameters.f1.energy.enabled = false;
-    const SelfStateFaultModel noEnergyModel(noEnergyParameters.f1);
-    SelfStateFaultSnapshot noEnergy = noEnergyModel.CreateInitialSnapshot();
+    const F1SelfStateFaultModel noEnergyModel(noEnergyParameters.f1);
+    F1SelfStateFaultSnapshot noEnergy = noEnergyModel.CreateInitialSnapshot();
     noEnergyModel.Update(noEnergy, true, 30.0);
     Check(noEnergy.energyPressure == 0.0 &&
               std::abs(noEnergy.combinedRisk - noEnergy.thermalRisk) < 1e-15,
@@ -229,8 +229,8 @@ CheckF1Model()
     FaultParameters energyParameters = parameters;
     energyParameters.f1.energy.initialDod = 0.30;
     energyParameters.f1.energy.riskDod = 0.30;
-    const SelfStateFaultModel energyModel(energyParameters.f1);
-    SelfStateFaultSnapshot energy = energyModel.CreateInitialSnapshot();
+    const F1SelfStateFaultModel energyModel(energyParameters.f1);
+    F1SelfStateFaultSnapshot energy = energyModel.CreateInitialSnapshot();
     energyModel.Update(energy, true, 3600.0);
     const double expectedDod =
         energyParameters.f1.energy.initialDod +
