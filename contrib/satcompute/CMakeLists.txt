@@ -164,6 +164,17 @@ build_exec(
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tools
 )
 
+# Orbit-only F2 exposure calibration. It creates native mobility nodes but no
+# network stack, routing, task, fault-execution, or ns-3 example target.
+build_exec(
+  EXECNAME satcompute-f2-exposure-calibration
+  EXECNAME_PREFIX satcompute_tool_
+  SOURCE_FILES tools/validation/f2-exposure-calibration.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tools
+)
+
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
 build_exec(
