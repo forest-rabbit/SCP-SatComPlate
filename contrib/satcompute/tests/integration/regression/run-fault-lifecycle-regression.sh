@@ -75,6 +75,22 @@ generate_f1_second_result="$(run_platform \
 replay_f1_result="$(run_platform \
   "$regression_output/replay-f1" \
   "$f1_common --faultMode=replay --faultTrace=$f1_generated_trace")"
+f1_example="contrib/satcompute/input/examples/leo-66-120s-f1"
+f1_66_trace="$regression_output/generate-f1-66/fault-trace.json"
+f1_66_common="--simulationDuration=120 \
+--constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+--maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.008 \
+--networkUpdateInterval=20 --islBandwidthBps=2000000000 \
+--routingMode=global-capacity-aware-hrw \
+--computeProfile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
+--taskTrace=$f1_example/task-trace.json --taskCompletionPolicy=report"
+generate_f1_66_result="$(run_platform \
+  "$regression_output/generate-f1-66" \
+  "$f1_66_common --faultMode=generate \
+--faultModelConfig=$f1_example/fault-model.json --faultTrace=$f1_66_trace")"
+replay_f1_66_result="$(run_platform \
+  "$regression_output/replay-f1-66" \
+  "$f1_66_common --faultMode=replay --faultTrace=$f1_66_trace")"
 
 for result in "$compute_result" "$satellite_first_result" "$satellite_second_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
@@ -95,6 +111,13 @@ done
 for result in "$generate_f1_result" "$generate_f1_second_result" "$replay_f1_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
     echo "F1 generate/replay did not report the intentionally failed old task: $result" >&2
+    exit 1
+  fi
+done
+for result in "$generate_f1_66_result" "$replay_f1_66_result"; do
+  if [[ "$result" != *'"status":"partial"'* ||
+        "$result" != *'"satellite_count":66'* ]]; then
+    echo "66-star F1 generate/replay result differs: $result" >&2
     exit 1
   fi
 done
@@ -183,6 +206,60 @@ if (
     raise SystemExit("F1 did not fail the running old task at START")
 if f1_tasks[2]["final_state"] != "COMPLETED":
     raise SystemExit("F1 recovery did not allow a later task to complete")
+
+
+f1_66_trace = load_json("generate-f1-66/fault-trace.json")
+faults_66 = f1_66_trace["faults"]
+if len(faults_66) != 2:
+    raise SystemExit(f"66-star F1 trace count differs: {faults_66}")
+occurred_66 = [fault for fault in faults_66 if fault["fault_occurred"]]
+risk_only_66 = [fault for fault in faults_66 if not fault["fault_occurred"]]
+if len(occurred_66) != 1 or (
+    occurred_66[0]["node_id"],
+    occurred_66[0]["notice_time_ns"],
+    occurred_66[0]["start_time_ns"],
+    occurred_66[0]["warning_lead_time_ns"],
+) != (0, 44_000_000_000, 56_000_000_000, 12_000_000_000):
+    raise SystemExit(f"66-star F1 occurred fault differs: {occurred_66}")
+if len(risk_only_66) != 1 or (
+    risk_only_66[0]["node_id"],
+    risk_only_66[0]["notice_time_ns"],
+    risk_only_66[0]["risk_duration_ns"],
+) != (11, 44_000_000_000, 10_000_000_000):
+    raise SystemExit(f"66-star F1 risk-only episode differs: {risk_only_66}")
+
+for filename in (
+    "fault-events.csv",
+    "fault-summary.json",
+    "task-events.csv",
+    "task-summary.csv",
+    "transfer-summary.csv",
+    "ecmp-route-events.csv",
+    "size-aware-reservation-events.csv",
+    "size-aware-summary.json",
+    "capacity-aware-summary.json",
+):
+    generated = (root / "generate-f1-66" / filename).read_bytes()
+    replayed = (root / "replay-f1-66" / filename).read_bytes()
+    if generated != replayed:
+        raise SystemExit(f"66-star F1 generate/replay output differs: {filename}")
+
+tasks_66 = {int(row["task_id"]): row for row in load_csv(
+    "generate-f1-66/task-summary.csv"
+)}
+if len(tasks_66) != 20 or sum(
+    row["final_state"] == "FAILED" for row in tasks_66.values()
+) != 1:
+    raise SystemExit("66-star F1 task terminal counts differ")
+if any(tasks_66[task_id]["final_state"] != "COMPLETED" for task_id in range(12, 21)):
+    raise SystemExit("66-star F1 sparse control task did not complete")
+run_66 = load_json("generate-f1-66/run-summary.json")
+if (
+    run_66["route_computation_count"],
+    run_66["applied_topology_slice_count"],
+    run_66["completed_task_count"],
+) != (1, 6, 19):
+    raise SystemExit("66-star F1 changed topology, routing, or task counts")
 
 
 compute_events = load_csv("compute/fault-events.csv")
