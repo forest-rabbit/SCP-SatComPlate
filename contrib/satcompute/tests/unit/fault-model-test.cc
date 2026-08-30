@@ -4,11 +4,13 @@
 
 #include "ns3/command-line.h"
 #include "ns3/fault-model-config.h"
+#include "ns3/self-state-fault-model.h"
 
 #include <nlohmann/json.hpp>
 
 #include <filesystem>
 #include <fstream>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -163,6 +165,60 @@ CheckInvalid(const std::filesystem::path& directory)
     ExpectError(directory, "debris-conflict", value, "debris");
 }
 
+void
+CheckF1Model(const std::filesystem::path& directory)
+{
+    const FaultModelConfig config =
+        ReadFaultModelConfig(WriteConfig(directory, "f1-model", MakeValidConfig()));
+    const SelfStateFaultModel model(config.selfState);
+
+    SelfStateFaultSnapshot idle = model.CreateInitialSnapshot();
+    model.Update(idle, false, 120.0);
+    Check(idle.temperatureC == config.selfState.temperature.baseC &&
+              idle.depthOfDischarge == config.selfState.energy.initialDod &&
+              idle.combinedRisk == 0.0 && idle.stepFailureProbability == 0.0 &&
+              !model.IsRiskActive(idle),
+          "idle F1 state changed from its baseline");
+
+    SelfStateFaultSnapshot singleTask = model.CreateInitialSnapshot();
+    model.Update(singleTask, true, 10.0);
+    Check(singleTask.temperatureC > 20.0 && singleTask.temperatureC < 21.0 &&
+              singleTask.temperatureC < config.selfState.temperature.criticalC &&
+              !model.IsRiskActive(singleTask) &&
+              singleTask.stepFailureProbability < singleTask.combinedRisk,
+          "one representative task produced an invalid F1 state");
+
+    SelfStateFaultSnapshot continuous = model.CreateInitialSnapshot();
+    for (int second = 0; second < 55; ++second)
+    {
+        model.Update(continuous, true, 1.0);
+    }
+    const double expectedTemperature =
+        config.selfState.temperature.saturationC -
+        (config.selfState.temperature.saturationC -
+         config.selfState.temperature.baseC) *
+            std::exp(-55.0 / config.selfState.temperature.heatingTauSeconds);
+    Check(std::abs(continuous.temperatureC - expectedTemperature) < 1e-12 &&
+              continuous.temperatureC > 29.8 && continuous.temperatureC < 30.1 &&
+              model.IsRiskActive(continuous) &&
+              continuous.stepFailureProbability > 0.0 &&
+              continuous.stepFailureProbability <= 1.0,
+          "55-second continuous load missed the calibrated F1 target");
+    Check(continuous.depthOfDischarge > config.selfState.energy.initialDod &&
+              continuous.energyPressure == 0.0,
+          "small F1 energy correction changed too quickly");
+
+    model.Update(continuous, true, 5.0);
+    Check(continuous.temperatureC >= config.selfState.temperature.criticalC &&
+              continuous.stepFailureProbability == 1.0,
+          "critical F1 temperature did not force deterministic shutdown");
+    model.Update(continuous, false, 120.0);
+    Check(continuous.temperatureC < config.selfState.temperature.riskC &&
+              !model.IsRiskActive(continuous) &&
+              continuous.stepFailureProbability == 0.0,
+          "F1 cooling did not leave the risk region");
+}
+
 } // namespace
 
 int
@@ -179,6 +235,7 @@ main(int argc, char* argv[])
         std::filesystem::create_directories(outputDirectory);
         CheckValid(outputDirectory);
         CheckInvalid(outputDirectory);
+        CheckF1Model(outputDirectory);
         std::cout << "SatCompute fault model tests passed." << std::endl;
         return 0;
     }

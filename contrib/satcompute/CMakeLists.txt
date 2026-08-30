@@ -6,6 +6,7 @@ build_lib(
     fault/fault-controller.cc
     fault/fault-definition.cc
     fault/fault-model-config.cc
+    fault/self-state-fault-model.cc
     fault/fault-state.cc
     fault/fault-trace.cc
     metrics/core/fault-metrics.cc
@@ -58,6 +59,7 @@ build_lib(
     fault/fault-controller.h
     fault/fault-definition.h
     fault/fault-model-config.h
+    fault/self-state-fault-model.h
     fault/fault-state.h
     fault/fault-trace.h
     metrics/core/fault-metrics.h
