@@ -73,7 +73,7 @@ CheckDefaults()
               parameters.f2.sigmaLatitudeDegrees == 12.0 &&
               parameters.f2.spatialRiskThreshold == 0.5 &&
               parameters.f2.referenceSeuIntensityPerSecond ==
-                  0.00031138097462245056 &&
+                  0.0014955477356134454 &&
               parameters.f2.seuToComputeFailureProbability == 0.5 &&
               !parameters.f3.enabled &&
               parameters.f3.mode == "fixed_k" && parameters.f3.fixedCount == 1,
@@ -142,6 +142,12 @@ CheckInvalid()
     ExpectError(value,
                 "F2.seu_to_compute_failure_probability",
                 "invalid-SEU-failure-mapping");
+
+    value = GetDefaultFaultParameters();
+    value.f2.seuToComputeFailureProbability = -0.1;
+    ExpectError(value,
+                "F2.seu_to_compute_failure_probability",
+                "negative-SEU-failure-mapping");
 
     value = GetDefaultFaultParameters();
     value.f3.singleSatelliteIntensityPerSecond = 0.1;
@@ -344,6 +350,32 @@ CheckF2Model()
         Check(!snapshot.inRegion, "F2 rectangle accepted an outside position");
     }
 
+    const std::array<double, 6> sampleLongitudes = {-90.0,
+                                                    -75.0,
+                                                    -60.0,
+                                                    -40.0,
+                                                    0.0,
+                                                    5.0};
+    const std::array<double, 5> sampleLatitudes = {-50.0,
+                                                   -40.0,
+                                                   -28.0,
+                                                   -10.0,
+                                                   5.0};
+    for (const double longitude : sampleLongitudes)
+    {
+        for (const double latitude : sampleLatitudes)
+        {
+            F2RadiationFaultSnapshot snapshot = model.CreateInitialSnapshot();
+            model.Update(snapshot, MakeEcef(latitude, longitude), 1.0);
+            Check(std::isfinite(snapshot.spatialRisk) &&
+                      snapshot.spatialRisk >= 0.0 && snapshot.spatialRisk <= 1.0 &&
+                      std::isfinite(snapshot.stepFailureProbability) &&
+                      snapshot.stepFailureProbability >= 0.0 &&
+                      snapshot.stepFailureProbability <= 1.0,
+                  "F2 spatial field produced a non-finite or invalid probability");
+        }
+    }
+
     F2RadiationFaultSnapshot hotspot = model.CreateInitialSnapshot();
     const Vector hotspotPosition =
         MakeEcef(parameters.f2.hotspotLatitudeDegrees,
@@ -378,6 +410,30 @@ CheckF2Model()
     Check(latitudeNear.spatialRisk < hotspot.spatialRisk &&
               latitudeNear.spatialRisk > latitudeFar.spatialRisk,
           "F2 latitude risk is not monotonic away from the hotspot");
+
+    F2RadiationFaultSnapshot noticeState = model.CreateInitialSnapshot();
+    uint32_t noticeTransitions = 0;
+    uint32_t noticeClearTransitions = 0;
+    bool previousRiskActive = model.IsRiskActive(noticeState);
+    const auto updateNoticeState = [&](const Vector& position) {
+        model.Update(noticeState, position, 1.0);
+        const bool currentRiskActive = model.IsRiskActive(noticeState);
+        noticeTransitions += !previousRiskActive && currentRiskActive ? 1 : 0;
+        noticeClearTransitions += previousRiskActive && !currentRiskActive ? 1 : 0;
+        previousRiskActive = currentRiskActive;
+    };
+    updateNoticeState(MakeEcef(-50.0, -60.0));
+    const double peripheralStepProbability = noticeState.stepFailureProbability;
+    Check(!previousRiskActive && peripheralStepProbability > 0.0,
+          "F2 periphery cannot represent an unannounced fault probability");
+    updateNoticeState(MakeEcef(-35.0, -60.0));
+    const double highRiskStepProbability = noticeState.stepFailureProbability;
+    updateNoticeState(MakeEcef(-35.0, -60.0));
+    updateNoticeState(MakeEcef(-50.0, -60.0));
+    Check(noticeTransitions == 1 && noticeClearTransitions == 1 &&
+              !previousRiskActive &&
+              highRiskStepProbability > peripheralStepProbability,
+          "F2 spatial NOTICE crossing semantics differ");
 
     F2RadiationFaultSnapshot northbound = model.CreateInitialSnapshot();
     F2RadiationFaultSnapshot southbound = model.CreateInitialSnapshot();

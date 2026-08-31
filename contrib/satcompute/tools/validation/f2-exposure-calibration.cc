@@ -52,6 +52,8 @@ struct NodeExposureState
     F2RadiationFaultSnapshot snapshot; ///< Current pure F2 state.
     std::optional<int64_t> entryTimeNs; ///< Open episode entry boundary.
     bool leftCensored{}; ///< Open episode started before the calibration window.
+    std::optional<int64_t> highRiskEntryTimeNs; ///< Open NOTICE-region entry.
+    bool highRiskLeftCensored{}; ///< High-risk episode started before the window.
 };
 
 /** One fixed-length constellation exposure window. */
@@ -59,6 +61,8 @@ struct ExposureWindow
 {
     int64_t startOffsetSeconds{}; ///< Window start relative to orbit time zero.
     int64_t totalExposureSeconds{}; ///< Sum of satellite-seconds inside the region.
+    double weightedExposureSeconds{}; ///< Spatial-risk-weighted satellite-seconds.
+    int64_t highRiskExposureSeconds{}; ///< Satellite-seconds at or above notice risk.
     uint64_t overlappingEpisodeCount{}; ///< Episodes with any exposure in the window.
     uint64_t completeEpisodeCount{}; ///< Episodes entering and exiting within the window.
     uint64_t leftCensoredEpisodeCount{}; ///< Episodes already active at window start.
@@ -131,7 +135,9 @@ class ExposureCalibration
           m_calibrationDurationSeconds(calibrationDurationSeconds),
           m_windowDurationSeconds(windowDurationSeconds),
           m_nodes(constellation.GetIdMap().GetNodeCount()),
-          m_insideCounts(static_cast<std::size_t>(calibrationDurationSeconds), 0)
+          m_insideCounts(static_cast<std::size_t>(calibrationDurationSeconds), 0),
+          m_weightedRiskSums(static_cast<std::size_t>(calibrationDurationSeconds), 0.0),
+          m_highRiskCounts(static_cast<std::size_t>(calibrationDurationSeconds), 0)
     {
         for (NodeExposureState& state : m_nodes)
         {
@@ -139,15 +145,12 @@ class ExposureCalibration
         }
     }
 
-    /** Schedule all one-second observations before the simulator stop event. */
-    void Schedule()
+    /** Run all one-second observations through the native arbitrary-time query. */
+    void Run()
     {
         for (int64_t second = 0; second <= m_calibrationDurationSeconds; ++second)
         {
-            Simulator::Schedule(Seconds(second),
-                                &ExposureCalibration::Sample,
-                                this,
-                                second);
+            Sample(second);
         }
     }
 
@@ -156,13 +159,13 @@ class ExposureCalibration
      *
      * @param outputDirectory Existing or creatable calibration output directory.
      * @param constellationConfig User-provided constellation path for provenance.
-     * @param referenceFailureIntensity Optional fixed 66-satellite intensity used only
-     *        to validate scaling on a different constellation.
+     * @param referenceMaximumFailureIntensity Optional fixed hotspot effective
+     *        intensity used to validate scaling on a different constellation.
      * @return Complete ordered JSON summary.
      */
     Json Finalize(const std::filesystem::path& outputDirectory,
                   const std::filesystem::path& constellationConfig,
-                  const std::optional<double>& referenceFailureIntensity)
+                  const std::optional<double>& referenceMaximumFailureIntensity)
     {
         const int64_t endTimeNs = Seconds(m_calibrationDurationSeconds).GetNanoSeconds();
         for (std::size_t nodeIndex = 0; nodeIndex < m_nodes.size(); ++nodeIndex)
@@ -180,6 +183,18 @@ class ExposureCalibration
                                       true});
                 state.entryTimeNs.reset();
             }
+            if (state.highRiskEntryTimeNs.has_value())
+            {
+                m_highRiskEpisodes.push_back(
+                    {0,
+                     nodeId,
+                     state.highRiskEntryTimeNs.value(),
+                     std::nullopt,
+                     endTimeNs - state.highRiskEntryTimeNs.value(),
+                     state.highRiskLeftCensored,
+                     true});
+                state.highRiskEntryTimeNs.reset();
+            }
         }
         std::sort(m_episodes.begin(),
                   m_episodes.end(),
@@ -190,6 +205,16 @@ class ExposureCalibration
         for (std::size_t index = 0; index < m_episodes.size(); ++index)
         {
             m_episodes[index].episodeId = index + 1;
+        }
+        std::sort(m_highRiskEpisodes.begin(),
+                  m_highRiskEpisodes.end(),
+                  [](const ExposureEpisode& left, const ExposureEpisode& right) {
+                      return std::tie(left.entryTimeNs, left.nodeId) <
+                             std::tie(right.entryTimeNs, right.nodeId);
+                  });
+        for (std::size_t index = 0; index < m_highRiskEpisodes.size(); ++index)
+        {
+            m_highRiskEpisodes[index].episodeId = index + 1;
         }
 
         const std::vector<ExposureWindow> windows = BuildWindows();
@@ -203,20 +228,28 @@ class ExposureCalibration
                       {
                           return leftPreferred;
                       }
+                      if (left.weightedExposureSeconds != right.weightedExposureSeconds)
+                      {
+                          return left.weightedExposureSeconds >
+                                 right.weightedExposureSeconds;
+                      }
                       if (left.totalExposureSeconds != right.totalExposureSeconds)
                       {
                           return left.totalExposureSeconds > right.totalExposureSeconds;
                       }
                       return left.startOffsetSeconds < right.startOffsetSeconds;
                   });
-        if (candidates.empty() || candidates.front().totalExposureSeconds <= 0)
+        if (candidates.empty() || candidates.front().weightedExposureSeconds <= 0.0)
         {
             throw std::runtime_error("calibration found no non-zero F2 exposure window");
         }
 
         std::vector<double> completeDurationsSeconds;
+        std::vector<double> completeHighRiskDurationsSeconds;
         uint64_t leftCensoredCount = 0;
         uint64_t rightCensoredCount = 0;
+        uint64_t highRiskLeftCensoredCount = 0;
+        uint64_t highRiskRightCensoredCount = 0;
         for (const ExposureEpisode& episode : m_episodes)
         {
             leftCensoredCount += episode.leftCensored ? 1 : 0;
@@ -227,6 +260,16 @@ class ExposureCalibration
                     static_cast<double>(episode.exposureDurationNs) / 1e9);
             }
         }
+        for (const ExposureEpisode& episode : m_highRiskEpisodes)
+        {
+            highRiskLeftCensoredCount += episode.leftCensored ? 1 : 0;
+            highRiskRightCensoredCount += episode.rightCensored ? 1 : 0;
+            if (!episode.leftCensored && !episode.rightCensored)
+            {
+                completeHighRiskDurationsSeconds.push_back(
+                    static_cast<double>(episode.exposureDurationNs) / 1e9);
+            }
+        }
         if (completeDurationsSeconds.size() < 5)
         {
             throw std::runtime_error(
@@ -234,18 +277,28 @@ class ExposureCalibration
         }
 
         std::vector<double> windowExposureSeconds;
+        std::vector<double> windowWeightedExposureSeconds;
+        std::vector<double> windowHighRiskExposureSeconds;
         windowExposureSeconds.reserve(windows.size());
+        windowWeightedExposureSeconds.reserve(windows.size());
+        windowHighRiskExposureSeconds.reserve(windows.size());
         for (const ExposureWindow& window : windows)
         {
             windowExposureSeconds.push_back(window.totalExposureSeconds);
+            windowWeightedExposureSeconds.push_back(window.weightedExposureSeconds);
+            windowHighRiskExposureSeconds.push_back(window.highRiskExposureSeconds);
         }
         const ExposureWindow selectedWindow = candidates.front();
-        const double baselineIntensity =
-            1.0 / static_cast<double>(selectedWindow.totalExposureSeconds);
-        const double medianCompleteExposure = Median(completeDurationsSeconds);
-        const double thresholdExposureSeconds = 0.5 * medianCompleteExposure;
-        const double riskThreshold =
-            -std::expm1(-baselineIntensity * thresholdExposureSeconds);
+        const double candidateMaximumFailureIntensity =
+            1.0 / selectedWindow.weightedExposureSeconds;
+        if (m_parameters.seuToComputeFailureProbability <= 0.0)
+        {
+            throw std::runtime_error(
+                "F2 spatial calibration requires a positive SEU mapping probability");
+        }
+        const double candidateReferenceSeuIntensity =
+            candidateMaximumFailureIntensity /
+            m_parameters.seuToComputeFailureProbability;
 
         Json candidateJson = Json::array();
         const std::size_t candidateCount = std::min<std::size_t>(10, candidates.size());
@@ -254,6 +307,8 @@ class ExposureCalibration
             candidateJson.push_back(
                 {{"start_offset_s", candidates[index].startOffsetSeconds},
                  {"total_exposure_s", candidates[index].totalExposureSeconds},
+                 {"weighted_exposure_s", candidates[index].weightedExposureSeconds},
+                 {"high_risk_exposure_s", candidates[index].highRiskExposureSeconds},
                  {"overlapping_episode_count",
                   candidates[index].overlappingEpisodeCount},
                  {"complete_episode_count", candidates[index].completeEpisodeCount},
@@ -264,19 +319,28 @@ class ExposureCalibration
         }
         const int64_t totalExposureSeconds =
             std::accumulate(m_insideCounts.begin(), m_insideCounts.end(), int64_t{0});
+        const double totalWeightedExposureSeconds =
+            std::accumulate(m_weightedRiskSums.begin(),
+                            m_weightedRiskSums.end(),
+                            0.0);
+        const int64_t totalHighRiskExposureSeconds =
+            std::accumulate(m_highRiskCounts.begin(),
+                            m_highRiskCounts.end(),
+                            int64_t{0});
         const ConstellationDefinition& definition = m_constellation.GetConfig();
         Json referenceValidation = nullptr;
-        if (referenceFailureIntensity.has_value())
+        if (referenceMaximumFailureIntensity.has_value())
         {
             referenceValidation = {
-                {"effective_failure_intensity_per_s",
-                 referenceFailureIntensity.value()},
+                {"maximum_effective_failure_intensity_per_s",
+                 referenceMaximumFailureIntensity.value()},
                 {"expected_fault_count",
-                 referenceFailureIntensity.value() *
-                     static_cast<double>(selectedWindow.totalExposureSeconds)}};
+                 referenceMaximumFailureIntensity.value() *
+                     selectedWindow.weightedExposureSeconds}};
         }
         const Json summary = {
-            {"calibration_scope", "orbit-only F2 exposure; no network, tasks, F1, or F3"},
+            {"calibration_scope",
+             "orbit-only F2 spatial risk; no network, tasks, F1, F3, or fault sampling"},
             {"constellation_config", constellationConfig.filename().string()},
             {"satellite_count", definition.GetSatelliteCount()},
             {"altitude_km", definition.shell.alt},
@@ -287,7 +351,19 @@ class ExposureCalibration
              {{"longitude_min_deg", m_parameters.longitudeMinDegrees},
               {"longitude_max_deg", m_parameters.longitudeMaxDegrees},
               {"latitude_min_deg", m_parameters.latitudeMinDegrees},
-              {"latitude_max_deg", m_parameters.latitudeMaxDegrees}}},
+              {"latitude_max_deg", m_parameters.latitudeMaxDegrees},
+              {"hotspot_longitude_deg", m_parameters.hotspotLongitudeDegrees},
+              {"hotspot_latitude_deg", m_parameters.hotspotLatitudeDegrees},
+              {"sigma_longitude_deg", m_parameters.sigmaLongitudeDegrees},
+              {"sigma_latitude_deg", m_parameters.sigmaLatitudeDegrees},
+              {"spatial_risk_threshold", m_parameters.spatialRiskThreshold}}},
+            {"seu_mapping",
+             {{"seu_to_compute_failure_probability",
+               m_parameters.seuToComputeFailureProbability},
+              {"configured_reference_seu_intensity_per_s",
+               m_parameters.referenceSeuIntensityPerSecond},
+              {"configured_maximum_effective_failure_intensity_per_s",
+               m_model.GetMaximumFailureIntensityPerSecond()}}},
             {"episode_statistics",
              {{"entering_satellite_count", m_enteringNodeIds.size()},
               {"complete_episode_count", completeDurationsSeconds.size()},
@@ -295,14 +371,32 @@ class ExposureCalibration
               {"right_censored_episode_count", rightCensoredCount},
               {"complete_exposure_duration_s",
                DistributionJson(completeDurationsSeconds)},
-              {"total_constellation_exposure_s", totalExposureSeconds}}},
+              {"total_constellation_exposure_s", totalExposureSeconds},
+              {"total_weighted_exposure_s", totalWeightedExposureSeconds},
+              {"total_high_risk_exposure_s", totalHighRiskExposureSeconds}}},
+            {"high_risk_episode_statistics",
+             {{"episode_count", m_highRiskEpisodes.size()},
+              {"complete_episode_count",
+               completeHighRiskDurationsSeconds.size()},
+              {"left_censored_episode_count", highRiskLeftCensoredCount},
+              {"right_censored_episode_count", highRiskRightCensoredCount},
+              {"complete_duration_s",
+               DistributionJson(completeHighRiskDurationsSeconds)}}},
             {"sliding_window",
              {{"duration_s", m_windowDurationSeconds},
               {"exposure_s", DistributionJson(windowExposureSeconds)},
+              {"weighted_exposure_s",
+               DistributionJson(windowWeightedExposureSeconds)},
+              {"high_risk_exposure_s",
+               DistributionJson(windowHighRiskExposureSeconds)},
               {"candidate_start_offsets", candidateJson}}},
             {"selected",
              {{"start_offset_s", selectedWindow.startOffsetSeconds},
               {"window_total_exposure_s", selectedWindow.totalExposureSeconds},
+              {"window_weighted_exposure_s",
+               selectedWindow.weightedExposureSeconds},
+              {"window_high_risk_exposure_s",
+               selectedWindow.highRiskExposureSeconds},
               {"overlapping_episode_count", selectedWindow.overlappingEpisodeCount},
               {"complete_episode_count", selectedWindow.completeEpisodeCount},
               {"left_censored_episode_count",
@@ -310,19 +404,16 @@ class ExposureCalibration
               {"right_censored_episode_count",
                selectedWindow.rightCensoredEpisodeCount},
               {"functional_target_mean_fault_count", 1.0},
-              {"local_candidate_failure_intensity_per_s", baselineIntensity},
-              {"stress_target_mean_fault_count_3_intensity_per_s",
-               3.0 * baselineIntensity},
-              {"stress_target_mean_fault_count_4_intensity_per_s",
-               4.0 * baselineIntensity},
-              {"threshold_exposure_s", thresholdExposureSeconds},
-              {"local_candidate_risk_threshold", riskThreshold}}},
+              {"candidate_maximum_effective_failure_intensity_per_s",
+               candidateMaximumFailureIntensity},
+              {"candidate_reference_seu_intensity_per_s",
+               candidateReferenceSeuIntensity}}},
             {"fixed_reference_validation", referenceValidation}};
 
         std::filesystem::create_directories(outputDirectory);
-        WriteEpisodes(outputDirectory / "n4b-f2-exposure-calibration.csv");
+        WriteEpisodes(outputDirectory / "n4b-f2-spatial-exposure-episodes.csv");
         std::ofstream summaryOutput(
-            outputDirectory / "n4b-f2-exposure-summary.json",
+            outputDirectory / "n4b-f2-spatial-calibration-summary.json",
             std::ios::out | std::ios::trunc);
         if (!summaryOutput.is_open())
         {
@@ -338,14 +429,18 @@ class ExposureCalibration
     {
         const int64_t nowNs = Seconds(second).GetNanoSeconds();
         uint32_t insideCount = 0;
+        uint32_t highRiskCount = 0;
+        double weightedRiskSum = 0.0;
         for (std::size_t nodeIndex = 0; nodeIndex < m_nodes.size(); ++nodeIndex)
         {
             const uint32_t nodeId = static_cast<uint32_t>(nodeIndex);
             NodeExposureState& state = m_nodes[nodeId];
             const bool wasInRegion = state.snapshot.inRegion;
+            const bool wasHighRisk = m_model.IsRiskActive(state.snapshot);
             m_model.Update(state.snapshot,
-                           m_constellation.GetPosition(nodeId),
+                           m_constellation.GetPositionAt(nodeId, Seconds(second)),
                            second == 0 ? 0.0 : 1.0);
+            const bool isHighRisk = m_model.IsRiskActive(state.snapshot);
             if (!wasInRegion && state.snapshot.inRegion)
             {
                 state.entryTimeNs = nowNs;
@@ -371,14 +466,41 @@ class ExposureCalibration
                 state.entryTimeNs.reset();
                 state.leftCensored = false;
             }
+            if (!wasHighRisk && isHighRisk)
+            {
+                state.highRiskEntryTimeNs = nowNs;
+                state.highRiskLeftCensored = second == 0;
+            }
+            else if (wasHighRisk && !isHighRisk)
+            {
+                if (!state.highRiskEntryTimeNs.has_value())
+                {
+                    throw std::runtime_error(
+                        "F2 high-risk exit has no open episode");
+                }
+                m_highRiskEpisodes.push_back(
+                    {0,
+                     nodeId,
+                     state.highRiskEntryTimeNs.value(),
+                     nowNs,
+                     nowNs - state.highRiskEntryTimeNs.value(),
+                     state.highRiskLeftCensored,
+                     false});
+                state.highRiskEntryTimeNs.reset();
+                state.highRiskLeftCensored = false;
+            }
             if (state.snapshot.inRegion)
             {
                 ++insideCount;
+                weightedRiskSum += state.snapshot.spatialRisk;
+                highRiskCount += isHighRisk ? 1 : 0;
             }
         }
         if (second < m_calibrationDurationSeconds)
         {
             m_insideCounts[static_cast<std::size_t>(second)] = insideCount;
+            m_weightedRiskSums[static_cast<std::size_t>(second)] = weightedRiskSum;
+            m_highRiskCounts[static_cast<std::size_t>(second)] = highRiskCount;
         }
     }
 
@@ -386,9 +508,15 @@ class ExposureCalibration
     std::vector<ExposureWindow> BuildWindows() const
     {
         std::vector<int64_t> prefix(m_insideCounts.size() + 1, 0);
+        std::vector<double> weightedPrefix(m_weightedRiskSums.size() + 1, 0.0);
+        std::vector<int64_t> highRiskPrefix(m_highRiskCounts.size() + 1, 0);
         for (std::size_t index = 0; index < m_insideCounts.size(); ++index)
         {
             prefix[index + 1] = prefix[index] + m_insideCounts[index];
+            weightedPrefix[index + 1] =
+                weightedPrefix[index] + m_weightedRiskSums[index];
+            highRiskPrefix[index + 1] =
+                highRiskPrefix[index] + m_highRiskCounts[index];
         }
         std::vector<ExposureWindow> windows;
         for (int64_t start = 0;
@@ -401,6 +529,12 @@ class ExposureCalibration
             window.totalExposureSeconds =
                 prefix[static_cast<std::size_t>(end)] -
                 prefix[static_cast<std::size_t>(start)];
+            window.weightedExposureSeconds =
+                weightedPrefix[static_cast<std::size_t>(end)] -
+                weightedPrefix[static_cast<std::size_t>(start)];
+            window.highRiskExposureSeconds =
+                highRiskPrefix[static_cast<std::size_t>(end)] -
+                highRiskPrefix[static_cast<std::size_t>(start)];
             const int64_t startNs = Seconds(start).GetNanoSeconds();
             const int64_t endNs = Seconds(end).GetNanoSeconds();
             for (const ExposureEpisode& episode : m_episodes)
@@ -461,7 +595,10 @@ class ExposureCalibration
     int64_t m_windowDurationSeconds{}; ///< Sliding functional-window duration.
     std::vector<NodeExposureState> m_nodes; ///< Stable-ID node states.
     std::vector<uint32_t> m_insideCounts; ///< In-region node count for each second.
+    std::vector<double> m_weightedRiskSums; ///< Spatial-risk sum for each second.
+    std::vector<uint32_t> m_highRiskCounts; ///< Notice-active node count per second.
     std::vector<ExposureEpisode> m_episodes; ///< Complete and censored episodes.
+    std::vector<ExposureEpisode> m_highRiskEpisodes; ///< Spatial NOTICE episodes.
     std::set<uint32_t> m_enteringNodeIds; ///< Nodes observed entering after time zero.
 };
 
@@ -470,11 +607,15 @@ class ExposureCalibration
 int
 main(int argc, char* argv[])
 {
+    FaultParameters parameters = GetDefaultFaultParameters();
     std::string constellationConfig;
     std::string outputDirectory;
     int64_t calibrationDurationSeconds = 7200;
     int64_t windowDurationSeconds = 1000;
-    double referenceFailureIntensity = -1.0;
+    double sigmaLongitudeDegrees = parameters.f2.sigmaLongitudeDegrees;
+    double sigmaLatitudeDegrees = parameters.f2.sigmaLatitudeDegrees;
+    double spatialRiskThreshold = parameters.f2.spatialRiskThreshold;
+    double referenceMaximumFailureIntensity = -1.0;
     CommandLine command(__FILE__);
     command.AddValue("constellationConfig",
                      "Native ns-3.48 constellation CSV",
@@ -485,9 +626,19 @@ main(int argc, char* argv[])
     command.AddValue("windowDuration",
                      "Sliding functional-window duration in seconds",
                      windowDurationSeconds);
-    command.AddValue("referenceFailureIntensity",
-                     "Fixed 66-satellite intensity for scale validation; negative disables",
-                     referenceFailureIntensity);
+    command.AddValue("sigmaLongitude",
+                     "Candidate Gaussian longitude sigma in degrees",
+                     sigmaLongitudeDegrees);
+    command.AddValue("sigmaLatitude",
+                     "Candidate Gaussian latitude sigma in degrees",
+                     sigmaLatitudeDegrees);
+    command.AddValue("spatialRiskThreshold",
+                     "Candidate spatial NOTICE threshold",
+                     spatialRiskThreshold);
+    command.AddValue("referenceMaximumFailureIntensity",
+                     "Fixed hotspot effective failure intensity for scale validation; "
+                     "negative disables",
+                     referenceMaximumFailureIntensity);
     command.AddValue("outputDir", "Calibration output directory", outputDirectory);
     command.Parse(argc, argv);
 
@@ -502,11 +653,14 @@ main(int argc, char* argv[])
         {
             throw std::runtime_error("calibration and window durations are invalid");
         }
-        if (!std::isfinite(referenceFailureIntensity))
+        if (!std::isfinite(referenceMaximumFailureIntensity))
         {
-            throw std::runtime_error("reference failure intensity must be finite");
+            throw std::runtime_error(
+                "reference maximum failure intensity must be finite");
         }
-        const FaultParameters parameters = GetDefaultFaultParameters();
+        parameters.f2.sigmaLongitudeDegrees = sigmaLongitudeDegrees;
+        parameters.f2.sigmaLatitudeDegrees = sigmaLatitudeDegrees;
+        parameters.f2.spatialRiskThreshold = spatialRiskThreshold;
         ValidateFaultParameters(parameters);
         if (parameters.checkIntervalSeconds != 1.0)
         {
@@ -519,12 +673,10 @@ main(int argc, char* argv[])
                                         parameters.f2,
                                         calibrationDurationSeconds,
                                         windowDurationSeconds);
-        calibration.Schedule();
-        Simulator::Stop(Seconds(calibrationDurationSeconds));
-        Simulator::Run();
+        calibration.Run();
         const std::optional<double> reference =
-            referenceFailureIntensity >= 0.0
-                ? std::optional<double>(referenceFailureIntensity)
+            referenceMaximumFailureIntensity >= 0.0
+                ? std::optional<double>(referenceMaximumFailureIntensity)
                 : std::nullopt;
         const Json summary =
             calibration.Finalize(outputDirectory, constellationConfig, reference);

@@ -98,19 +98,19 @@ GetDefaultFaultParameters()
     // 文献观测到的 SAA 内 SEU 热点中心纬度，单位为度。
     parameters.f2.hotspotLatitudeDegrees = -28.0;
 
-    // 第一版高斯空间风险场的经度标准差，单位为度；后续由轨道标定冻结。
+    // 66 星轨道候选扫描冻结的高斯空间风险场经度标准差，单位为度。
     parameters.f2.sigmaLongitudeDegrees = 18.0;
 
-    // 第一版高斯空间风险场的纬度标准差，单位为度；后续由轨道标定冻结。
+    // 66 星轨道候选扫描冻结的高斯空间风险场纬度标准差，单位为度。
     parameters.f2.sigmaLatitudeDegrees = 12.0;
 
-    // 当前空间风险达到该值时开启 F2 风险通知。
+    // 候选阈值扫描冻结的 F2 空间风险通知阈值。
     parameters.f2.spatialRiskThreshold = 0.50;
 
-    // 热点中心参考 SEU 强度；暂保持旧最大有效强度对应的初始值。
-    parameters.f2.referenceSeuIntensityPerSecond = 0.00031138097462245056;
+    // 66 星选定 1000 秒窗口目标均值为 1 时反标定的热点参考 SEU 强度。
+    parameters.f2.referenceSeuIntensityPerSecond = 0.0014955477356134454;
 
-    // 基准场景中一次模型化 SEU 映射为计算服务故障的概率。
+    // 冻结的场景级 SEU 到计算服务故障映射系数，不解释为实测概率。
     parameters.f2.seuToComputeFailureProbability = 0.50;
 
     // F3: fatal debris impact
