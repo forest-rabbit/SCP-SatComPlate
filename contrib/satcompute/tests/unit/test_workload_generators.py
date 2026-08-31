@@ -232,11 +232,11 @@ class WorkloadGeneratorTest(unittest.TestCase):
             summary = json.loads(outputs[0][1].read_text(encoding="utf-8"))
             self.assertEqual(len(trace["tasks"]), 8)
             self.assertEqual(summary["profile"], "f2-validation")
-            self.assertEqual(summary["hotspot_compute_node_ids"], [51, 29])
-            self.assertEqual(summary["expected_failed_task_ids"], [1])
-            self.assertEqual(summary["post_recovery_task_ids"], [2])
-            self.assertEqual(summary["unaffected_hotspot_task_ids"], [3, 4])
-            self.assertEqual(summary["risk_only_task_ids"], [5, 6])
+            self.assertEqual(summary["orbit_start_offset_s"], 5210)
+            self.assertEqual(summary["long_task_compute_node_ids"], [51, 29])
+            self.assertEqual(summary["long_task_ids"], [1, 3])
+            self.assertEqual(summary["follow_up_task_ids"], [2, 4])
+            self.assertEqual(summary["medium_task_ids"], [5, 6])
             self.assertEqual(summary["control_task_ids"], [7, 8])
 
     def test_n4b_joint_profile_has_bounded_hotspots_and_is_deterministic(self):

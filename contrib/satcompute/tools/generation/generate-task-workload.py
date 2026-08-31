@@ -790,32 +790,28 @@ def build_f2_validation_workload(satellite_ids, compute_nodes, seed):
         return {"task_id": task_id, "role": role}
 
     roles = [
-        add_task(51, 60, 360_100_000_000, "fault-active"),
-        add_task(51, 10, 395_100_000_000, "post-recovery"),
-        add_task(29, 60, 600_100_000_000, "unaffected-long-task"),
-        add_task(29, 10, 635_100_000_000, "unaffected-follow-up"),
-        add_task(40, 20, 450_100_000_000, "risk-only-active"),
-        add_task(18, 20, 530_100_000_000, "truncated-risk-active"),
-        add_task(0, 5, 100_100_000_000, "sparse-control"),
-        add_task(11, 5, 800_100_000_000, "sparse-control"),
+        add_task(51, 60, 360_100_000_000, "long-window-a"),
+        add_task(51, 10, 395_100_000_000, "follow-up-a"),
+        add_task(29, 60, 600_100_000_000, "long-window-b"),
+        add_task(29, 10, 635_100_000_000, "follow-up-b"),
+        add_task(40, 20, 450_100_000_000, "medium-window-a"),
+        add_task(18, 20, 530_100_000_000, "medium-window-b"),
+        add_task(0, 5, 100_100_000_000, "short-control"),
+        add_task(11, 5, 800_100_000_000, "short-control"),
     ]
     summary = {
         "profile": "f2-validation",
         "seed": seed,
         "task_count": len(tasks),
-        "orbit_start_offset_s": 5695,
+        "orbit_start_offset_s": 5210,
         "random_seed": 1,
         "random_run": 16,
         "roles": roles,
-        "hotspot_compute_node_ids": [51, 29],
-        "expected_failed_task_ids": [1],
-        "post_recovery_task_ids": [2],
-        "unaffected_hotspot_task_ids": [3, 4],
-        "risk_only_task_ids": [5, 6],
+        "long_task_compute_node_ids": [51, 29],
+        "long_task_ids": [1, 3],
+        "follow_up_task_ids": [2, 4],
+        "medium_task_ids": [5, 6],
         "control_task_ids": [7, 8],
-        "expected_fault_start_time_ns": {
-            "51": 386_000_000_000,
-        },
     }
     return {"tasks": tasks}, summary
 

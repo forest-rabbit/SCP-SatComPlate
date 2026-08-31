@@ -1,22 +1,20 @@
-# 1000 秒、66 星、8 任务 F2 验证
+# 1000 秒、66 星、8 任务 F2 空间风险验证
 
-本场景验证 N4B 第二阶段的空间辐射连续暴露计算故障闭环，不用于宣称现实卫星的
-SEU 或计算失效率。轨道使用 `synthetic-66.csv`，仿真 0 秒通过
-`--orbitStartOffset=5695` 对齐 F2 标定选出的 5695–6695 秒窗口；全部 66 颗卫星都
-具有 1,500,000 work-unit/s 算力。
+本场景为真实 F2-only generate/replay 和 Monte Carlo 提供轻量任务环境，不用于声明
+现实卫星的 SEU 或计算失效率，也不预先规定某个随机 run 必须恰好发生几次故障。
+轨道使用 `synthetic-66.csv`，仿真 0 秒通过 `--orbitStartOffset=5210` 对齐空间加权
+标定选择的 `5210--6210s` 窗口；全部 66 颗卫星都具有
+1,500,000 work-unit/s 算力。
 
-任务由统一的 `generate-task-workload.py --profile=f2-validation` 生成，共 8 个：
+任务由统一生成器的 `f2-validation` profile 产生：
 
-- 节点 51 的长任务覆盖固定 seed/run 下的 386 秒 F2 故障；
-- 该旧任务在故障开始时失败，不会在恢复后复活；
-- 节点 51 的后续任务在 8 秒恢复后到达并正常完成；
-- 节点 29 的两个任务作为未命中故障的长任务对照；
-- 节点 40 和 18 各有一个任务覆盖风险-only 或终点截断风险；
-- 节点 0 和 11 各有一个稀疏对照任务。
+- 节点 51 和 29 各有一个 60 秒长任务及一个 10 秒后续任务；
+- 节点 40 和 18 各有一个 20 秒中等任务；
+- 节点 0 和 11 各有一个 5 秒短对照任务。
 
-`task-trace.json` 是平台输入，`workload-summary.json` 只记录生成角色和固定验证条件。
-故障区域、强度、阈值和恢复时间来自
-[`fault-para.cc`](../../../fault/fault-para.cc)，不存在第二份故障模型 JSON。
+这些角色只描述负载形状。F2 故障由每秒实时位置、空间风险和独立 ns-3 随机流
+决定；解析目标是多个 run 的平均故障数约为 2，不要求单个 run 等于 2。
+`task-trace.json` 是平台输入，`workload-summary.json` 只保存生成元数据。
 
 ## 重新生成任务输入
 
@@ -26,7 +24,7 @@ SEU 或计算失效率。轨道使用 `synthetic-66.csv`，仿真 0 秒通过
 ./ns3 run "satcompute \
   --simulationDuration=1 \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --orbitStartOffset=5695 \
+  --orbitStartOffset=5210 \
   --topologyOnly=1 \
   --topologySliceInterval=1 \
   --outputDir=/tmp/satcompute-n4b-f2-topology"
@@ -44,7 +42,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --output-workload-summary=contrib/satcompute/input/examples/leo-66-1000s-f2/workload-summary.json
 ```
 
-相同节点切片、ComputeProfile 和 seed 会生成逐字节相同的两个文件。
+相同节点集合、ComputeProfile 和 seed 会生成逐字节相同的两个文件。
 
 ## Generate
 
@@ -54,7 +52,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --randomSeed=1 \
   --randomRun=16 \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --orbitStartOffset=5695 \
+  --orbitStartOffset=5210 \
   --maxIslDistance=6171353 \
   --delayMode=fixed \
   --fixedDelay=0.008 \
@@ -72,21 +70,18 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --outputDir=/tmp/satcompute-f2-generate"
 ```
 
-固定 seed/run 下，预期产生节点 51（386 秒）的一次实际 compute 故障，并保留 7 条
-风险-only 记录。第 1 号任务失败，第 2–8 号任务完成；F2
-计算故障不改变 ISL，也不触发路由重算。
+`randomRun=16` 只提供可复现示例，当前恰好产生 3 次故障，不能用来替代多 run
+均值标定。F2 compute 故障只关闭算力 8 秒，不改变 ISL，也不触发路由重算。
 
 ## Replay
 
-将 generate 已确定的 trace 作为输入：
+将 generate 已冻结的 trace 作为输入，并保持相同轨道、任务和 F2 开关：
 
 ```bash
 ./ns3 run "satcompute \
   --simulationDuration=1000 \
-  --randomSeed=1 \
-  --randomRun=16 \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --orbitStartOffset=5695 \
+  --orbitStartOffset=5210 \
   --maxIslDistance=6171353 \
   --delayMode=fixed \
   --fixedDelay=0.008 \
@@ -104,7 +99,5 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --outputDir=/tmp/satcompute-f2-replay"
 ```
 
-replay 中的 F1/F2 开关不重新生成故障，而是选择预测器重建的影子模型；这里必须与
-generate 的 F2-only 配置一致。回归逐文件比较 generate/replay 的故障事件、滚动
-预测、任务、传输和路由证据，并验证相同 seed/run 再次 generate 会产生逐字节相同
-的 `fault-trace.json`。
+replay 不重新计算空间风险或抽样，只执行 trace 中已经确定的 NOTICE、START、
+RECOVERY 和 NOTICE_CLEAR。概率审计仍为按需开关，正常运行默认关闭。
