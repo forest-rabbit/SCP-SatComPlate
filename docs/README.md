@@ -13,5 +13,5 @@
   输入输出；
 - [模块文档](../contrib/satcompute/)：拓扑、路由、任务、传输、指标、工具与测试；
 - [N4B F1 标定](calibration/n4b-f1/README.md)：热模型与概率候选；
-- [N4B F2 标定](calibration/n4b-f2/README.md)：66/351/720 星轨道暴露与真实平台
-  Monte Carlo。
+- [N4B F2 标定](calibration/n4b-f2/README.md)：66/351/720 星空间加权暴露与真实
+  平台 Monte Carlo。

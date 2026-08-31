@@ -1,103 +1,123 @@
-# N4B F2 轨道暴露与参数标定
+# N4B F2 空间辐射风险标定
 
-本目录保存 N4B 第二阶段空间辐射连续暴露故障的可复现标定证据。校准只推进
-ns-3.48 原生圆轨道并统计 F2 区域暴露，不创建网络协议栈，不计算路由，也不运行
-任务、F1、F3 或故障执行。
+本目录记录修订后的 F2 空间风险模型。旧的“连续暴露时间提高当前风险、累计概率
+触发 NOTICE”模型及其标定文件已经移除，避免与当前实现混用。连续暴露时间现在
+只用于 episode 统计，不参与当前故障强度、单步概率、NOTICE 或随机采样。
 
-## 方法
+## 模型
 
-三组星座都从各自 CSV 的轨道 epoch 0 开始运行 7200 秒，每 1 秒读取一次同一个
-`LeoCircularOrbitMobilityModel` 的 ECEF 坐标。F2 区域固定为：
+F2 使用 ns-3.48 原生圆轨道的实时 ECEF 坐标，经官方地理坐标转换后判断 SAA：
 
 ```text
 -90 deg <= longitude <= 5 deg
 -50 deg <= latitude  <= 5 deg
 ```
 
-校准工具统计完整、左截断和右截断 exposure episode，并扫描所有 1000 秒窗口。
-窗口优先同时包含完整和截断 episode，再按星座总暴露时间降序选择。完整 episode
-少于 5 个时工具会直接失败，不会用截断样本计算典型暴露时间。
+SAA 内以 `(-60 deg, -28 deg)` 为热点中心，采用系统级二维高斯近似：
 
-## 66 星参数选择
+```text
+w_F2(t) = exp(-0.5 * ((lon-lon_c)/sigma_lon)^2
+                   -0.5 * ((lat-lat_c)/sigma_lat)^2)
+lambda_SEU(t) = lambda_SEU_max * w_F2(t)
+lambda_F2(t) = rho_SF * lambda_SEU(t)
+q_F2(t) = 1 - exp(-lambda_F2(t) * dt)
+```
 
-`synthetic-66.csv` 在 7200 秒内得到 37 个完整 episode，完整暴露时长为
-921–922 秒，中位数为 922 秒。选定窗口为原始轨道的 5695–6695 秒：
+`w_F2 >= theta_F2` 只负责开启 NOTICE；`0 < w_F2 < theta_F2` 时仍允许出现未预警
+故障。高斯函数是以文献观测热点为锚点的平滑工程近似，不是文献直接给出的公式。
+`rho_SF` 是场景级 SEU 到计算服务故障映射系数，也不解释为实测条件概率。
 
-- 星座总暴露量 `A_F2 = 6423 satellite-seconds`；
-- 包含 13 个相交 episode：1 个完整、6 个左截断、6 个右截断；
-- 功能目标为平均约 1 个 F2 可恢复计算故障；
-- `lambda_F2 = 1 / 6423 = 0.00015569048731122528 s^-1`；
-- 典型完整穿越的一半为 `0.5 * 922 = 461 s`；
-- `theta_F2 = 1 - exp(-lambda_F2 * 461) = 0.06925814255738115`。
+## 参数选择
 
-平台通过 `--orbitStartOffset=5695` 令仿真 0 秒直接对应上述窗口起点，不先空跑
-5695 秒。因此任务、故障和指标时间仍位于 0–1000 秒，实时轨道坐标则与原轨道
-5695–6695 秒严格一致。
+66 星从轨道 epoch 0 扫描 7200 秒，每秒查询一次位置。sigma 候选为
+`{12,18,24} deg x {8,12,16} deg`；阈值候选为 `{0.4,0.5,0.6}`。最终保留中间尺度：
 
-这里的 `lambda_F2` 是为了在有限仿真窗口内得到可观测事件而标定的系统级有效计算
-故障强度，不是原始 SEU 发生率，也不表示现实中每颗卫星的绝对失效率。
+```text
+sigma_lon = 18 deg
+sigma_lat = 12 deg
+theta_F2 = 0.5
+rho_SF = 0.5
+```
 
-## 351/720 星规模验证
+该组合在 7200 秒内得到 38324 satellite-seconds 的 SAA 暴露，其中加权暴露为
+9207.6502、高风险暴露为 6952，后者约占前者对应原始 SAA 暴露的 18.1%。共观察到
+20 个高风险 episode，18 个完整 episode 的 dwell 中位数为 393.5 秒。因此高风险
+区域既未覆盖整个 SAA，也没有缩小到典型轨道难以穿越。
 
-351 星和 720 星使用同一 F2 区域与 66 星冻结的 `lambda_F2`，不分别重新调参：
+阈值扫描结果为：
 
-| 星座 | 完整 episode | 选定 1000 秒窗口暴露量 | 固定 66 星强度下的期望事件数 |
-|---|---:|---:|---:|
-| 66 星 | 37 | 6423 | 1.0000 |
-| 351 星 | 202 | 28961 | 4.5090 |
-| 720 星 | 368 | 60845 | 9.4730 |
+| `theta_F2` | 高风险 satellite-seconds | episode 数 | 完整 dwell 中位数（秒） |
+|---:|---:|---:|---:|
+| 0.4 | 9164 | 22 | 461.0 |
+| 0.5 | 6952 | 20 | 393.5 |
+| 0.6 | 5108 | 16 | 347.0 |
 
-总暴露量和期望事件数随星座规模合理增加。351/720 汇总中的
-`local_candidate_failure_intensity_per_s` 只表示“若各自也强制目标为 1 次”时的反算
-诊断值，不是平台选择值；`fixed_reference_validation` 才是固定 66 星参数后的验证结果。
+## 66 星目标与规模外推
 
-## 实际平台 Monte Carlo
+加权暴露最大的合格 1000 秒窗口从轨道 epoch `5210s` 开始：
 
-冻结参数后，以相同 66 星窗口和 8 个小任务运行真实的 F2-only generate 链路，固定
-`randomSeed=1` 并依次使用 `randomRun=1..100`。100 个 run 的实际故障数均值为
-1.02，最小值为 0，最大值为 4，36 个 run 没有实际故障。样本均值标准误约为
-0.0964，近似 95% 均值区间为 `[0.8311, 1.2089]`，包含解析目标 1。因此保留
-`lambda_F2`，不因单个 run 的 0 次、2 次或更多事件而重新调参。
+```text
+A_F2^w = 1337.3026834075863 satellite-seconds
+target E[K_F2] = 2
+kappa_F2 = 2 / A_F2^w = 0.0014955477356134454 s^-1
+rho_SF = 0.5
+lambda_SEU_max = kappa_F2 / rho_SF
+               = 0.0029910954712268908 s^-1
+```
 
-该验证调用真实平台和 N4A 故障执行：8 秒计算不可用期间暂停新故障采样，恢复后若
-仍在区域内则继续更新暴露和采样。它与前面的 orbit-only 暴露扫描职责不同。
+这里的目标是多随机 run 的平均值约为 2，不要求每个 run 恰好发生两次。冻结 66 星
+参数后，351/720 星不再分别调参：
+
+| 星座 | 选定窗口加权暴露量 | 固定参数下的解析期望故障数 |
+|---|---:|---:|
+| 66 星 | 1337.3027 | 2.0000 |
+| 351 星 | 6888.1284 | 10.3015 |
+| 720 星 | 14051.9769 | 21.0154 |
+
+100 个固定 `randomRun=1..100` 的真实 66 星平台运行得到平均 2.24 次故障，最小 0、
+最大 7，近似 95% 均值区间为 `[1.9683,2.5117]`，包含解析目标 2。单个 run 的
+0、1、3 次或更多故障都属于随机过程的正常结果。
 
 ## 复现
-
-在仓库根目录构建后执行：
 
 ```bash
 ./ns3 run "satcompute-f2-exposure-calibration \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
   --calibrationDuration=7200 \
   --windowDuration=1000 \
-  --outputDir=/tmp/satcompute-n4b-f2-66"
+  --targetMeanFaultCount=2 \
+  --outputDir=/tmp/satcompute-f2-66"
 
 ./ns3 run "satcompute-f2-exposure-calibration \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-351.csv \
   --calibrationDuration=7200 \
   --windowDuration=1000 \
-  --referenceFailureIntensity=0.00015569048731122528 \
-  --outputDir=/tmp/satcompute-n4b-f2-351"
+  --targetMeanFaultCount=2 \
+  --referenceMaximumFailureIntensity=0.0014955477356134454 \
+  --outputDir=/tmp/satcompute-f2-351"
 
 ./ns3 run "satcompute-f2-exposure-calibration \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-720.csv \
   --calibrationDuration=7200 \
   --windowDuration=1000 \
-  --referenceFailureIntensity=0.00015569048731122528 \
-  --outputDir=/tmp/satcompute-n4b-f2-720"
+  --targetMeanFaultCount=2 \
+  --referenceMaximumFailureIntensity=0.0014955477356134454 \
+  --outputDir=/tmp/satcompute-f2-720"
 
 python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
   --run-count=100 \
-  --outputDir=/tmp/satcompute-n4b-f2-monte-carlo
+  --calibration-summary=/tmp/satcompute-f2-66/n4b-f2-spatial-calibration-summary.json \
+  --outputDir=/tmp/satcompute-f2-monte-carlo
 ```
 
-每个星座目录包含：
+orbit-only 工具输出：
 
-- `n4b-f2-exposure-calibration.csv`：按时间和稳定卫星 ID 排序的 episode；
-- `n4b-f2-exposure-summary.json`：完整/截断统计、滑动窗口、候选起点和参数结果。
+- `n4b-f2-spatial-exposure-episodes.csv`：SAA exposure episode；
+- `n4b-f2-spatial-calibration-summary.json`：空间场、加权暴露、高风险 dwell、窗口和
+  强度标定结果。
 
-`monte-carlo/` 另含真实平台多 run 的逐 run CSV 和统计汇总 JSON。
+这些标定输出不是平台输入。正式 generate 仍从实时轨道位置计算 `w_F2`；replay
+仍只执行冻结的 Fault Trace，不读取或重新计算空间风险。
 
-本目录中的三组同名文件是上述运行的阶段验收快照；正式 generate/replay 不读取这些
-校准输出。
+100 万秒空间故障分布图和对应的大规模事件证据将在下一阶段通过同一原生轨道与
+F2 模型生成；旧模型的 CSV/JSON 不再作为当前证据保留。

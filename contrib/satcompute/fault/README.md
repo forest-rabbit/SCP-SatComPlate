@@ -24,7 +24,7 @@ fault/
 | `model/compute-fault-combination.h/.cc` | 计算 `q_comp`，并将独立 F1/F2 抽样折叠为一次平台结果 |
 | `model/compute-failure-predictor.h/.cc` | 复制当前 F1/F2 状态，沿任务剩余窗口滚动模型并计算完成前联合故障概率的纯函数 |
 | `model/f1-self-state-fault-model.h/.cc` | 无运行期副作用的 F1 温度、DoD、风险、强度和单步概率 |
-| `model/f2-radiation-fault-model.h/.cc` | 原生 ECEF 转经纬度、区域判定、连续暴露、累计风险与单步概率 |
+| `model/f2-radiation-fault-model.h/.cc` | 原生 ECEF 转经纬度、SAA 空间风险、SEU 映射、穿越统计与单步概率 |
 | `model/f3-debris-fault-model.h/.cc` | 以独立 ns-3 随机流生成 fixed-K 或 Poisson 永久整星事件 |
 | `runtime/compute-failure-probability-record.h` | generate 真值与 replay 预测共用的逐时刻概率字段合同 |
 | `runtime/fault-model-engine.h/.cc` | 在线读取状态、维护风险 episode、使用 ns-3 随机流判定事件 |
@@ -97,7 +97,7 @@ q_F1 = 1 - exp(-lambda_F1 * dt)
 [`docs/calibration/n4b-f1`](../../../docs/calibration/n4b-f1/README.md)。这些数值面向
 1000 秒加速实验，不表示现实卫星热常数或故障率。
 
-## F2 连续辐射暴露故障
+## F2 空间辐射故障
 
 F2 直接读取正式平台共享的 `OnlineOrbitConstellation` ECEF 坐标，再调用 ns-3.48
 `GeographicPositions` 转为经纬度。当前闭区间为：
@@ -107,19 +107,27 @@ F2 直接读取正式平台共享的 `OnlineOrbitConstellation` ECEF 坐标，�
 -50 deg <= latitude  <= 5 deg
 ```
 
-进入区域时连续暴露 `tau` 从 0 开始，留在区域内按 1 秒检查周期累加，离开区域则
-关闭风险 episode 并清零；下一次进入是一个新 episode。累计风险只用于预警：
+SAA 内部以文献观测热点 `(-60 deg, -28 deg)` 为中心，使用二维高斯作为系统级
+平滑空间近似：
 
 ```text
-R_F2(tau) = 1 - exp(-lambda_F2 * tau)
-q_F2(dt)  = 1 - exp(-lambda_F2 * dt)
-NOTICE when R_F2 >= theta_F2
+w_F2 = exp(-0.5 * ((lon-lon_c)/sigma_lon)^2
+                 -0.5 * ((lat-lat_c)/sigma_lat)^2)
+lambda_SEU(t) = lambda_SEU_max * w_F2(t)
+lambda_F2(t) = rho_SF * lambda_SEU(t)
+q_F2(t) = 1 - exp(-lambda_F2(t) * dt)
+NOTICE when w_F2(t) >= theta_F2
 ```
 
-实际故障每步只按条件概率 `q_F2` 抽样，绝不会把不断增大的累计风险 `R_F2` 当成本步
-概率重复抽样。因此故障可能发生在 NOTICE 之前，也可能先预警后故障，或者只形成
-风险-only 记录。8 秒算力停机期间轨道和暴露仍继续演化，但暂停新的故障抽样；恢复
-只接纳后续任务。
+`sigma_lon/sigma_lat` 决定热点宽度，`theta_F2` 只决定 NOTICE 边界，`rho_SF` 表示
+模型化 SEU 到计算服务中断的场景级映射系数；它不是实测条件概率。SAA 外第一版令
+`w_F2=0`。SAA 外围只要 `w_F2>0` 仍可能在 NOTICE 前发生故障；进入高风险区后也
+可能完整通过而只留下 risk-only 记录。
+
+连续暴露时间、累计 hazard 和一次穿越期间至少发生一次故障的累计概率仍保留为
+episode 统计量，但不参与当前 `lambda_F2`、`q_F2`、NOTICE 或随机采样。实际故障
+每步只按当前位置对应的 `q_F2(t)` 抽样。8 秒算力停机期间轨道继续演化，但暂停新的
+故障抽样；恢复只接纳后续任务。
 
 F1 与 F2 同时启用时，两者使用互不共享状态的 ns-3 随机流分别抽样：
 
@@ -133,13 +141,13 @@ q_comp = 1 - (1 - q_F1) * (1 - q_F2)
 `q_comp` 是 trace、观测和后续预测使用的联合概率，不替代两个来源的真实抽样。同一
 节点同一检查时刻即使两个来源同时命中，也只提交一次可恢复 compute 故障。
 
-当前 66 星、1000 秒功能窗口冻结
-`lambda_F2=0.00015569048731122528 s^-1`、`theta_F2=0.06925814255738115`。
-orbit-only 工具先用 66 星冻结参数，再以相同参数验证 351/720 星的规模效应；它不
-创建网络、路由、任务或故障执行。正式 F2-only 验证使用 `--orbitStartOffset=5695`
-对齐选定窗口，并通过真实平台 Monte Carlo 检查事件数。完整证据见
+当前冻结 `sigma_lon=18 deg`、`sigma_lat=12 deg`、`theta_F2=0.5` 和
+`rho_SF=0.5`。66 星加权暴露扫描选择 `5210--6210 s` 窗口，令该 1000 秒窗口的
+解析平均故障数为 2，得到 `lambda_SEU_max=0.0029910954712268908 s^-1` 与热点
+最大有效强度 `kappa_F2=0.0014955477356134454 s^-1`。orbit-only 工具再以相同参数
+验证 351/720 星的规模效应；它不创建网络、路由、任务或故障执行。完整证据见
 [`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。这些数值是
-有限窗口内的系统级有效计算故障强度，不是原始 SEU 计数或现实卫星绝对失效率。
+有限窗口内的系统级加速实验参数，不是原始 SEU 计数或现实卫星绝对失效率。
 
 F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中，默认关闭。
 `f3.fixedCount` 是 `fixed_k` 压力测试中人工指定的永久撞击卫星数量，不属于任务
@@ -199,7 +207,7 @@ START；生成 trace 中两个区间首尾相接而不重叠，generate/replay �
 F1、F2 各自判断风险阈值，再合并为节点级风险 episode：
 
 ```text
-risk_active = (R_F1 >= theta_F1) OR (R_F2 >= theta_F2)
+risk_active = (R_F1 >= theta_F1) OR (w_F2 >= theta_F2)
 ```
 
 联合风险第一次由无效变为有效时产生一次 NOTICE，并把当时的单步联合概率
