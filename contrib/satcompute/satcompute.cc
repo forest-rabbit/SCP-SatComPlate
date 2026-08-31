@@ -194,6 +194,9 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("faultTrace",
                          "Generated fault trace output or replay input path",
                          config.faultTrace);
+    commandLine.AddValue("faultProbabilityAudit",
+                         "Collect probability audit records and CSV outputs",
+                         config.faultProbabilityAudit);
     commandLine.AddValue("faultEnableF1",
                          "Enable F1 generation and replay prediction",
                          faultParameters.f1.enabled);
@@ -298,6 +301,17 @@ ValidateConfig(const SatComputeConfig& config)
     {
         FailConfig("faultMode", "replay requires faultTrace");
     }
+    if (config.faultProbabilityAudit)
+    {
+        if (config.faultMode == "none")
+        {
+            FailConfig("faultProbabilityAudit", "requires faultMode=generate or replay");
+        }
+        if (!hasComputeProfile)
+        {
+            FailConfig("faultProbabilityAudit", "requires computeProfile and taskTrace");
+        }
+    }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
     if (config.topologyOnly && hasComputeProfile)
     {
@@ -330,6 +344,11 @@ main(int argc, char* argv[])
     try
     {
         ValidateConfig(inputConfig);
+        if (inputConfig.faultProbabilityAudit &&
+            !faultParameters.f1.enabled && !faultParameters.f2.enabled)
+        {
+            FailConfig("faultProbabilityAudit", "requires enabled F1 or F2");
+        }
         SatComputeConfig config = inputConfig;
         config.computeProfile =
             ResolveOptionalInputFile(config.computeProfile, "computeProfile");
@@ -443,7 +462,7 @@ main(int argc, char* argv[])
                 // Schedule fault batches before task arrivals so an exact-time
                 // START is applied before a task arriving at the same nanosecond.
                 faultController = CreateObject<FaultController>();
-                if (computeProfile.has_value() &&
+                if (config.faultProbabilityAudit && computeProfile.has_value() &&
                     (faultParameters.f1.enabled || faultParameters.f2.enabled))
                 {
                     faultPredictionEngine = CreateObject<FaultPredictionEngine>();
@@ -478,7 +497,7 @@ main(int argc, char* argv[])
                                "generate with enabled F1/F2 requires computeProfile and taskTrace");
                 }
                 faultController = CreateObject<FaultController>();
-                if (computeProfile.has_value() &&
+                if (config.faultProbabilityAudit && computeProfile.has_value() &&
                     (faultParameters.f1.enabled || faultParameters.f2.enabled))
                 {
                     faultPredictionEngine = CreateObject<FaultPredictionEngine>();
@@ -501,7 +520,8 @@ main(int argc, char* argv[])
                                             topology.GetIdMap().GetCanonicalSatelliteIds(),
                                             computeNodeIds,
                                             simulationDurationNs,
-                                            faultController);
+                                            faultController,
+                                            config.faultProbabilityAudit);
                 if (faultParameters.f2.enabled)
                 {
                     faultModelEngine->BindOrbitConstellation(

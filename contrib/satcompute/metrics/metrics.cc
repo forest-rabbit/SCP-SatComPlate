@@ -138,6 +138,10 @@ ValidateInputs(const SatComputeConfig& config,
         throw MetricsError("fault generation and runtime metrics disagree");
     }
     const bool taskMode = !config.computeProfile.empty() && !config.taskTrace.empty();
+    if (config.faultProbabilityAudit != (faultPredictionEngine != nullptr))
+    {
+        throw MetricsError("fault probability audit and runtime metrics disagree");
+    }
     if (faultPredictionEngine != nullptr &&
         (faultController == nullptr || !taskMode))
     {

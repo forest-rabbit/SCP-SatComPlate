@@ -73,12 +73,14 @@ class FaultModelEngine : public Object
      * @param computeNodeIds Stable IDs present in the compute profile.
      * @param simulationDurationNs Exclusive simulation end in nanoseconds.
      * @param faultController N4A controller configured for online generation.
+     * @param probabilityAuditEnabled Whether to collect live probability audit records.
      */
     void Configure(const FaultParameters& parameters,
                    const std::vector<uint32_t>& satelliteIds,
                    const std::vector<uint32_t>& computeNodeIds,
                    int64_t simulationDurationNs,
-                   Ptr<FaultController> faultController);
+                   Ptr<FaultController> faultController,
+                   bool probabilityAuditEnabled);
 
     /** Bind live compute services after TaskCoordinator initialization. */
     void BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator);
@@ -152,6 +154,7 @@ class FaultModelEngine : public Object
     bool m_configured{}; ///< Whether Configure completed.
     bool m_bound{}; ///< Whether compute services were bound.
     bool m_finalized{}; ///< Whether the trace was closed.
+    bool m_probabilityAuditEnabled{}; ///< Whether live audit records are collected.
     int64_t m_simulationDurationNs{}; ///< Exclusive simulation end.
     FaultParameters m_parameters; ///< Unified model parameters.
     int64_t m_checkIntervalNs{}; ///< Converted model-check interval.

@@ -53,8 +53,9 @@ struct SatComputeConfig
     std::string taskCompletionPolicy; ///< 任务完成策略：strict 或 report。
 
     // fault
-    std::string faultMode;  ///< none、generate 或 replay。
-    std::string faultTrace; ///< generate 输出或 replay 输入的统一故障轨迹。
+    std::string faultMode;       ///< none、generate 或 replay。
+    std::string faultTrace;      ///< generate 输出或 replay 输入的统一故障轨迹。
+    bool faultProbabilityAudit;  ///< 是否采集并输出概率一致性审计数据。
 
     // output
     std::string outputDirectory; ///< 结构化结果输出目录。

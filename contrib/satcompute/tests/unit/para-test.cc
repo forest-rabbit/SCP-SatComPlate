@@ -55,6 +55,8 @@ main()
                 "unexpected workload defaults");
         Require(config.faultMode == "none" && config.faultTrace.empty(),
                 "fault inputs must default to none");
+        Require(!config.faultProbabilityAudit,
+                "fault probability audit must be opt-in");
         Require(!config.topologyOnly && config.topologySliceIntervalSeconds == 1.0 &&
                     config.includeFinalTopologyState,
                 "unexpected topology-only defaults");

@@ -101,6 +101,9 @@ GetDefaultSatComputeConfig()
     // --faultTrace：generate 的输出路径或 replay 的输入路径。
     config.faultTrace = "";
 
+    // --faultProbabilityAudit：按需采集概率记录；正常运行默认关闭。
+    config.faultProbabilityAudit = false;
+
     // output
 
     // --outputDir：结构化结果输出目录；默认写入 /tmp，避免污染工作树。

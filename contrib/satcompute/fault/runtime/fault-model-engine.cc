@@ -54,7 +54,8 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
                             const std::vector<uint32_t>& satelliteIds,
                             const std::vector<uint32_t>& computeNodeIds,
                             int64_t simulationDurationNs,
-                            Ptr<FaultController> faultController)
+                            Ptr<FaultController> faultController,
+                            bool probabilityAuditEnabled)
 {
     if (m_configured || !Simulator::Now().IsZero())
     {
@@ -110,6 +111,7 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
     }
     m_simulationDurationNs = simulationDurationNs;
     m_faultController = faultController;
+    m_probabilityAuditEnabled = probabilityAuditEnabled;
     m_trace.schemaVersion = FAULT_TRACE_SCHEMA_VERSION;
     if (parameters.f1.enabled)
     {
@@ -353,7 +355,7 @@ FaultModelEngine::RecordProbability(uint32_t nodeId,
                                     const NodeState& state,
                                     int64_t simulationTimeNs)
 {
-    if (!state.riskEpisode.has_value() ||
+    if (!m_probabilityAuditEnabled || !state.riskEpisode.has_value() ||
         !state.computeService->IsComputeAvailable())
     {
         return;
