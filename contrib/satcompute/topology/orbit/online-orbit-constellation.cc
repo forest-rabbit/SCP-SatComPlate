@@ -5,6 +5,8 @@
 #include "online-orbit-constellation.h"
 
 #include "ns3/leo-orbit-node-helper.h"
+#include "ns3/leo-circular-orbit-position-allocator.h"
+#include "ns3/angles.h"
 #include "ns3/nstime.h"
 
 #include <cmath>
@@ -14,8 +16,10 @@
 namespace ns3
 {
 
-OnlineOrbitConstellation::OnlineOrbitConstellation(const ConstellationDefinition& config)
-    : m_config(config)
+OnlineOrbitConstellation::OnlineOrbitConstellation(const ConstellationDefinition& config,
+                                                   double startOffsetSeconds)
+    : m_config(config),
+      m_startOffsetSeconds(startOffsetSeconds)
 {
     const LeoOrbitalShell& shell = m_config.shell;
     if (!std::isfinite(shell.alt) || shell.alt <= 0.0 || !std::isfinite(shell.inc) ||
@@ -26,6 +30,11 @@ OnlineOrbitConstellation::OnlineOrbitConstellation(const ConstellationDefinition
         shell.raanSpanDeg > 360.0)
     {
         throw OnlineOrbitConstellationError("online orbit shell is invalid");
+    }
+    if (!std::isfinite(m_startOffsetSeconds) || m_startOffsetSeconds < 0.0)
+    {
+        throw OnlineOrbitConstellationError(
+            "online orbit start offset must be finite and non-negative");
     }
     const uint64_t satelliteCount64 =
         static_cast<uint64_t>(shell.planes) * shell.sats;
@@ -67,12 +76,42 @@ OnlineOrbitConstellation::OnlineOrbitConstellation(const ConstellationDefinition
         }
         m_mobilityModels.push_back(mobility);
     }
+
+    if (m_startOffsetSeconds > 0.0)
+    {
+        Ptr<LeoCircularOrbitAllocator> allocator =
+            CreateObject<LeoCircularOrbitAllocator>();
+        allocator->SetNumOrbits(shell.planes);
+        allocator->SetNumSatellites(shell.sats);
+        allocator->SetPhasingFactor(static_cast<uint16_t>(shell.phasing));
+        allocator->SetRaanSpanDeg(shell.raanSpanDeg);
+        const double earthRotationDegrees =
+            m_startOffsetSeconds * 360.0 / Days(1).GetSeconds();
+        for (uint32_t satelliteId = 0; satelliteId < satelliteCount; ++satelliteId)
+        {
+            const LeoOrbitPosition initial = allocator->GetNextOrbitPosition();
+            Ptr<LeoCircularOrbitMobilityModel> mobility =
+                m_mobilityModels[satelliteId];
+            const double orbitalProgressDegrees = RadiansToDegrees(
+                mobility->GetAngularVelocity() * m_startOffsetSeconds);
+            mobility->SetPosition(
+                Vector(initial.longitude - earthRotationDegrees,
+                       initial.argumentOfLatitude + orbitalProgressDegrees,
+                       initial.satelliteIndex));
+        }
+    }
 }
 
 const ConstellationDefinition&
 OnlineOrbitConstellation::GetConfig() const
 {
     return m_config;
+}
+
+double
+OnlineOrbitConstellation::GetStartOffsetSeconds() const
+{
+    return m_startOffsetSeconds;
 }
 
 const NodeContainer&
@@ -97,6 +136,13 @@ Vector
 OnlineOrbitConstellation::GetPosition(uint32_t satelliteId) const
 {
     return GetMobilityModel(satelliteId)->GetPosition();
+}
+
+Vector
+OnlineOrbitConstellation::GetPositionAt(uint32_t satelliteId,
+                                        Time simulationTime) const
+{
+    return GetMobilityModel(satelliteId)->GetPositionAt(simulationTime);
 }
 
 std::vector<SatelliteEcefPosition>

@@ -168,6 +168,12 @@ LeoCircularOrbitMobilityModel::GetAngularVelocity() const
 }
 
 Vector
+LeoCircularOrbitMobilityModel::GetPositionAt(Time time) const
+{
+    return CalcPosition(time);
+}
+
+Vector
 LeoCircularOrbitMobilityModel::CalcPosition(Time t) const
 {
     double lon = CalcLongitude(t);

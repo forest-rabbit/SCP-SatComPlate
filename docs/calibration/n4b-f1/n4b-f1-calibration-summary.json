@@ -1,0 +1,173 @@
+{
+  "check_interval_s": 1.0,
+  "recoverable_compute_duration_s": 8.0,
+  "calibration_scope": "accelerated functional scenario; not a physical satellite failure rate",
+  "heating_tau_candidates": [
+    {
+      "heating_tau_s": 39.0,
+      "temperature_after_10s_c": 21.071160129927748,
+      "time_to_temperature_risk_s": 8,
+      "time_to_risk_threshold_s": 40,
+      "time_to_critical_s": 50
+    },
+    {
+      "heating_tau_s": 43.0,
+      "temperature_after_10s_c": 20.73493390017602,
+      "time_to_temperature_risk_s": 8,
+      "time_to_risk_threshold_s": 44,
+      "time_to_critical_s": 56
+    },
+    {
+      "heating_tau_s": 47.0,
+      "temperature_after_10s_c": 20.449784559001525,
+      "time_to_temperature_risk_s": 9,
+      "time_to_risk_threshold_s": 48,
+      "time_to_critical_s": 61
+    }
+  ],
+  "cooling_tau_candidates": [
+    {
+      "cooling_tau_s": 20.0,
+      "temperature_after_30s_c": 19.90069208192959,
+      "temperature_after_60s_c": 17.647231888782237,
+      "temperature_after_120s_c": 17.032223778296665
+    },
+    {
+      "cooling_tau_s": 30.0,
+      "temperature_after_30s_c": 21.782432735228753,
+      "temperature_after_60s_c": 18.759358682075973,
+      "temperature_after_120s_c": 17.238103305553548
+    },
+    {
+      "cooling_tau_s": 40.0,
+      "temperature_after_30s_c": 23.140765185633185,
+      "temperature_after_60s_c": 19.90069208192958,
+      "temperature_after_120s_c": 17.647231888782226
+    },
+    {
+      "cooling_tau_s": 60.0,
+      "temperature_after_30s_c": 24.884898576264224,
+      "temperature_after_60s_c": 21.78243273522875,
+      "temperature_after_120s_c": 18.759358682075963
+    }
+  ],
+  "monte_carlo": {
+    "random_seed": 1,
+    "run_start": 1,
+    "run_count": 30,
+    "satellite_count": 66,
+    "duration_s": 1000,
+    "hotspot_count": 3,
+    "hotspot_busy_s": 50,
+    "hotspot_idle_s": 290,
+    "functional_target_mean_fault_count": 1.0,
+    "candidates": [
+      {
+        "max_failure_intensity_per_s": 0.005,
+        "mean_fault_count": 0.8666666666666667,
+        "mean_warned_fault_count": 0.3333333333333333,
+        "mean_unannounced_fault_count": 0.5333333333333333,
+        "mean_risk_only_episode_count": 8.266666666666667,
+        "fault_temperature_c": {
+          "sample_count": 26,
+          "minimum": 20.73493390017602,
+          "mean": 26.95319072622798,
+          "p50": 27.13013432451102,
+          "p95": 28.969317975890498,
+          "maximum": 29.10794752927565
+        },
+        "warning_lead_time_s": {
+          "sample_count": 10,
+          "minimum": 0.0,
+          "mean": 4.1,
+          "p50": 3.0,
+          "p95": 8.0,
+          "maximum": 9.0
+        }
+      },
+      {
+        "max_failure_intensity_per_s": 0.01,
+        "mean_fault_count": 1.7666666666666666,
+        "mean_warned_fault_count": 0.5666666666666667,
+        "mean_unannounced_fault_count": 1.2,
+        "mean_risk_only_episode_count": 7.733333333333333,
+        "fault_temperature_c": {
+          "sample_count": 53,
+          "minimum": 20.21468739930185,
+          "mean": 26.856770994645007,
+          "p50": 27.73262601547355,
+          "p95": 29.10506983093471,
+          "maximum": 29.243391601414828
+        },
+        "warning_lead_time_s": {
+          "sample_count": 17,
+          "minimum": 0.0,
+          "mean": 4.411764705882353,
+          "p50": 4.0,
+          "p95": 8.0,
+          "maximum": 9.0
+        }
+      },
+      {
+        "max_failure_intensity_per_s": 0.02,
+        "mean_fault_count": 3.033333333333333,
+        "mean_warned_fault_count": 0.9333333333333333,
+        "mean_unannounced_fault_count": 2.1,
+        "mean_risk_only_episode_count": 6.866666666666666,
+        "fault_temperature_c": {
+          "sample_count": 91,
+          "minimum": 20.21468739930185,
+          "mean": 26.76531457860769,
+          "p50": 27.21129903705218,
+          "p95": 29.10794752927565,
+          "maximum": 29.37297400449077
+        },
+        "warning_lead_time_s": {
+          "sample_count": 28,
+          "minimum": 0.0,
+          "mean": 3.9642857142857144,
+          "p50": 4.0,
+          "p95": 8.0,
+          "maximum": 9.0
+        }
+      },
+      {
+        "max_failure_intensity_per_s": 0.05,
+        "mean_fault_count": 7.4,
+        "mean_warned_fault_count": 1.7666666666666666,
+        "mean_unannounced_fault_count": 5.633333333333334,
+        "mean_risk_only_episode_count": 4.166666666666667,
+        "fault_temperature_c": {
+          "sample_count": 222,
+          "minimum": 20.21468739930185,
+          "mean": 26.38701673258323,
+          "p50": 26.836491143467292,
+          "p95": 29.10506983093471,
+          "maximum": 29.375721531243435
+        },
+        "warning_lead_time_s": {
+          "sample_count": 53,
+          "minimum": 0.0,
+          "mean": 4.132075471698113,
+          "p50": 4.0,
+          "p95": 8.0,
+          "maximum": 9.0
+        }
+      }
+    ]
+  },
+  "selected": {
+    "heating_tau_s": 43.0,
+    "cooling_tau_s": 40.0,
+    "temperature_after_recovery_from_critical_c": 27.643499790013763,
+    "time_to_temperature_risk_s": 8,
+    "time_to_risk_threshold_s": 44,
+    "time_to_critical_s": 56,
+    "representative_task_duration_s": 10,
+    "representative_tasks_before_critical": 6,
+    "max_failure_intensity_per_s": 0.005,
+    "configured_max_failure_intensity_per_s": 0.005,
+    "monte_carlo_mean_fault_count": 0.8666666666666667,
+    "monte_carlo_mean_risk_only_episode_count": 8.266666666666667
+  }
+}

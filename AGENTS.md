@@ -13,9 +13,10 @@ must not be merged into `main` as an unrelated history.
 
 Project-specific code belongs in `contrib/satcompute/`; do not modify upstream
 `src/` modules unless a separately reviewed upstream-compatible change is
-required. SatCompute models satellites and inter-satellite links only. Ground
-stations, feeder links, the frontend transport, fault execution, IPv6, and
-SRv6 are outside the current implementation scope.
+required. SatCompute models satellites, inter-satellite links, task compute,
+and project-owned fault generation/execution only. Ground stations, feeder
+links, the frontend transport, IPv6, and SRv6 are outside the current
+implementation scope.
 
 SatCompute-owned tests and fixtures stay under
 `contrib/satcompute/tests/{unit,integration,fixtures}`. Each increment

@@ -11,4 +11,7 @@
 - [项目里程碑](../MILESTONES.md)：已完成阶段、集成证据、验证结论和后续边界；
 - [SatCompute 运行手册](../contrib/satcompute/README.md)：执行流程、全部参数和
   输入输出；
-- [模块文档](../contrib/satcompute/)：拓扑、路由、任务、传输、指标、工具与测试。
+- [模块文档](../contrib/satcompute/)：拓扑、路由、任务、传输、指标、工具与测试；
+- [N4B F1 标定](calibration/n4b-f1/README.md)：热模型与概率候选；
+- [N4B F2 标定](calibration/n4b-f2/README.md)：66/351/720 星轨道暴露与真实平台
+  Monte Carlo。

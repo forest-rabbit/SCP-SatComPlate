@@ -72,6 +72,16 @@ class LeoCircularOrbitMobilityModel : public GeocentricConstantPositionMobilityM
     double GetAngularVelocity() const;
 
     /**
+     * @brief Return the deterministic ECEF position at a simulation time.
+     *
+     * This query does not advance the simulator or mutate mobility state.
+     *
+     * @param time Absolute simulation time.
+     * @return ECEF position in meters at time.
+     */
+    Vector GetPositionAt(Time time) const;
+
+    /**
      * @brief Gets the altitude in m
      *
      * @return the altitude in m (above Earth surface)

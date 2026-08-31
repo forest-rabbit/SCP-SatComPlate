@@ -30,7 +30,15 @@ maxIslDistance <= floor(2 * sqrt(R_orbit^2 - R_clearance^2))
 因此默认 780 km shell 的上限为 `6,171,353 m`。该值与旧版 Hypatia/WGS72
 半径得到的 `6,174,589 m` 不同，当前主线以 ns-3.48 的实际坐标几何为准。
 
-默认 `synthetic-66.csv` 为：
+当前提供三套单层 Walker Star 输入：
+
+| 文件 | 高度 | 倾角 | 轨道面 x 每面卫星 | 总数 | 用途 |
+|---|---:|---:|---:|---:|---|
+| `synthetic-66.csv` | 780 km | 86.4 deg | 6 x 11 | 66 | 默认功能与回归场景 |
+| `synthetic-351.csv` | 1015 km | 98.98 deg | 27 x 13 | 351 | Telesat T1 规模验证 |
+| `synthetic-720.csv` | 1200 km | 87.9 deg | 18 x 40 | 720 | OneWeb 规模验证 |
+
+默认 `synthetic-66.csv` 的内容为：
 
 ```text
 altitudeKm,inclinationDegrees,numberOfPlanes,numberOfSatellitesPerPlane,phasingFactor,raanSpanDeg

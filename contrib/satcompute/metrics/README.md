@@ -10,7 +10,7 @@
 metrics/
 ├── metrics.h / metrics.cc                         统一编排、交叉校验和旧文件清理
 ├── core/
-│   ├── fault-metrics.h / fault-metrics.cc         故障事件与故障运行汇总
+│   ├── fault-metrics.h / fault-metrics.cc         故障事件、因果预测与故障运行汇总
 │   ├── flow-metrics.h / flow-metrics.cc           FlowMonitor 汇总与逐流明细
 │   ├── transfer-metrics.h / transfer-metrics.cc   逻辑传输汇总
 │   ├── task-metrics.h / task-metrics.cc           任务事件、任务汇总和算力节点汇总
@@ -45,6 +45,9 @@ metrics/
 | 任务模式 | `compute-node-summary.csv` | 各算力节点的任务数、忙碌时间和利用率 |
 | 提供 `faultTrace` | `fault-events.csv` | canonical NOTICE/START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
 | 提供 `faultTrace` | `fault-summary.json` | 故障类型/事件/活动故障、失败任务、FAILED/CANCELLED transfer 与故障路由重算计数 |
+| `faultProbabilityAudit=1` 的 generate/replay | `fault-predictions.csv` | 活动风险中运行任务的逐检查点 F1/F2/联合因果概率和任务进度 |
+| `faultProbabilityAudit=1` 的 generate/replay | `fault-prediction-summary.json` | 正式预测、风险 episode 和涉及任务的数量 |
+| `faultProbabilityAudit=1` 的 generate | `fault-model-probabilities.csv` | 随机抽样前由真实在线 F1/F2 状态计算的同结构概率真值，仅用于验证 |
 
 `run-summary.json` 同时保留便于脚本读取的顶层计数和按 `transfer`、`task` 分组的
 汇总。它记录实际使用的任务文件路径和关键运行参数，但不复制一份平台配置。
@@ -69,6 +72,55 @@ timestamp 批次最多令一行 `route_recomputed=true`，因此逐行求和就�
 `active_fault_count_at_end`、`failed_task_count`、`failed_transfer_count`、
 `cancelled_transfer_count` 和 `route_recomputation_count_due_to_fault`。失败与取消计数
 来自仿真终点的稳定终态，不把仍在运行的对象误记为故障终态。
+
+### 计算故障预测输出
+
+以下三个文件属于显式启用的概率审计输出。`faultProbabilityAudit` 默认 `false`；关闭
+时平台不创建预测器，并从复用的 `outputDir` 中删除陈旧概率审计文件。
+
+`fault-predictions.csv` 每行对应一次活动 compute 风险与一个正在运行任务的因果
+预测，列为：
+
+```text
+simulation_time_ns, fault_id, node_id, task_id, notice_time_ns,
+risk_elapsed_time_ns, task_compute_start_time_ns, task_service_time_ns,
+task_elapsed_time_ns, remaining_compute_time_ns,
+expected_compute_completion_time_ns, completion_ratio,
+f1_step_failure_probability, f2_step_failure_probability,
+combined_step_failure_probability, horizon_step_count,
+failure_before_finish_probability
+```
+
+所有字段均来自预测时刻已经可见的 NOTICE、任务快照和无随机数 F1/F2 影子模型。
+三个单步字段满足：
+
+```text
+q_comp,k = 1 - (1 - q_F1,k) * (1 - q_F2,k)
+P_fail_before_finish = 1 - product(k, 1 - q_comp,k)
+```
+
+CSV 中的三个单步字段对应当前 `k=0`；累计概率还包含任务预计完成前的未来检查点。
+未来 F1 按任务在无故障条件下继续忙碌推进，未来 F2 使用 ns-3.48 原生轨道的按时刻
+ECEF 坐标，因此同一 episode 内的 `q_comp` 可以随温度、能源或空间区域变化，不是
+NOTICE 时冻结的常数。
+
+`fault-prediction-summary.json` 固定包含：
+
+- `prediction_count`；
+- `risk_episode_count`；
+- `task_count`。
+
+平台不再把一次随机结果写成 `true/false` 预测标签，也不计算 Brier score。真实故障
+仍保存在 Fault Trace、`fault-events.csv` 和任务终态中；后续备份实验可按稳定 ID 和
+时间关联，不把结果反向塞入预测器指标。
+
+generate 额外写出的 `fault-model-probabilities.csv` 与 `fault-predictions.csv` 使用
+同一列结构，但前者读取真实在线模型状态并在 F1/F2 随机抽样前计算，后者读取独立的
+无随机数影子状态。该文件不是 replay 输入；replay 仍只读取统一 Fault Trace。
+[`compare-fault-probabilities.py`](../tools/validation/compare-fault-probabilities.py)
+按 `(simulation_time_ns,node_id,task_id)` 将 generate 真值与 replay 预测逐行匹配，
+检查其余上下文，并分别给出 `q_F1`、`q_F2`、`q_comp` 和
+`P_fail_before_finish` 的 MAE、RMSE 与最大绝对误差。
 
 ## 路由模式输出
 
@@ -126,7 +178,8 @@ FlowMonitor 的 `lostPackets` 大于显式原因总数时，差值以
 空目录随后移除；用户放入的未知文件不会被递归删除。已经停用的
 `routing-summary.json` 和 `routing-reservation-events.csv` 也只按精确文件名清理。
 无 `faultTrace` 时不会生成故障专用文件；若复用一个曾执行故障的输出目录，只精确
-删除 `fault-events.csv` 与 `fault-summary.json`，不会触碰用户文件。
+删除 `fault-events.csv`、`fault-summary.json`、`fault-predictions.csv`、
+`fault-prediction-summary.json` 与 `fault-model-probabilities.csv`，不会触碰用户文件。
 
 相关覆盖见 [测试说明](../tests/README.md)中的 task、capacity-aware、diagnostics
 smoke、完整 workload regression 与 fault lifecycle regression；DropReason 的离线一致性检查见

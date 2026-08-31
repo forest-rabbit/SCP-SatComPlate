@@ -13,7 +13,7 @@ tests/
 │   └── regression/          五种路由与完整任务回归
 ├── fixtures/
 │   ├── constellation/       4/16 星轻量星座
-│   ├── fault/               合法故障轨迹
+│   ├── fault/               合法 replay 故障轨迹
 │   ├── topology/            最小节点切片
 │   └── task/                合法与非法算力/任务输入
 └── support/                 C++/Python 测试公共构造
@@ -32,16 +32,22 @@ tests/
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
 | `routing-policy-factory-test.cc` | 五种路由名到 next-hop/path policy 的映射 |
 | `task-input-test.cc` | ComputeProfile/TaskTrace closed-world 校验、canonical 排序和派生传输 ID |
-| `compute-service-test.cc` | 整数服务时间、非抢占 FCFS 和同刻 task ID tie-break |
+| `compute-service-test.cc` | 整数服务时间、非抢占 FCFS、同刻 task ID tie-break 和因果运行任务快照 |
 | `fault-lifecycle-test.cc` | FAILED/CANCELLED 幂等终止、迟到包隔离和 reservation 归零 |
-| `fault-trace-test.cc` | closed-world 字段、时间/概率边界、区间冲突和 canonical 排序 |
-| `compute-fault-execution-test.cc` | 计算故障批处理、任务各阶段、恢复、通信不变和重复运行顺序 |
+| `fault-trace-test.cc` | v1/v2 closed-world 字段、四类记录、算术/区间校验和 canonical writer |
+| `fault-model-test.cc` | 内置参数、F1/F2 状态、独立抽样、`q_comp`，共享模型状态滚动预测、原生未来位置、无状态/RNG 副作用，以及 F3 fixed-K/Poisson 数量、范围、无放回和确定性 |
+| `compute-fault-execution-test.cc` | 计算故障批处理、任务各阶段、恢复、通信不变、NOTICE/START 当刻模型预测和 generate/replay 预测一致性 |
 | `satellite-fault-execution-test.cc` | 整星端点语义、即时重路由、capacity 重准入和按实时距离恢复 |
 | `online-orbit-foundation-test.cc` | 原生 mobility、连续坐标、固定 plus-grid 候选和 canonical 顺序 |
 | `online-topology-controller-test.cc` | 距离门控、fixed/distance 时延、周期更新和按边集合重算路由 |
 
-`test_workload_generators.py` 检查任务生成器的确定性、总输入字节预算、结果大小和
-无版本/hash 字段合同。
+`test_fault_probability_comparison.py` 检查概率审计工具对完全一致输入的零误差报告，
+以及缺失 replay 记录时的失败结果。`test_workload_generators.py` 检查 stress 任务
+生成器的确定性、总输入字节预算、
+结果大小和无版本/hash 字段合同；同时检查 F1 验证档的 66 星、20 任务，以及 F2
+验证档的 66 星、8 任务、热点故障、恢复后、风险-only/截断风险和稀疏对照角色；
+N4B 联合档还检查 100 任务、5 个有界热点、F2/F3 窗口任务、62 个分布式对照和
+提交 fixture 的逐字节确定性。
 
 ## Smoke
 
@@ -59,8 +65,20 @@ tests/
   size-aware 仿真和 66 星在线拓扑；
 - `run-full-workload-regression.sh`：运行任务确定性、无任务模式、strict/report、
   失败诊断，并执行正式的 100 秒/66 星/20 任务示例；
-- `run-fault-lifecycle-regression.sh`：执行 compute 与整星故障，检查精确事件、终态
-  指标、capacity 账本归零、重复运行逐字节一致和无故障目录复用。
+- `run-fault-lifecycle-regression.sh`：覆盖 N4A compute/整星 replay、N4B F1 热校准，
+  以及 F2 轨道偏移、真实 ECEF 暴露、100-run 概率标定、风险-only、有/无预警实际
+  故障和 66 星小任务闭环；同时检查同 seed trace 一致、generate/replay 逐文件等价、
+  compute 故障不改变路由、故障中任务失败和恢复后新任务完成；预测部分检查滚动的
+  F1/F2/`q_comp`、动态 `P_fail_before_finish`、任务剩余时间、NOTICE 当刻输出、风险
+  已持续时间，以及 F1-only、F2-only、F1+F2 的 generate 抽样前模型真值与 replay
+  预测逐时刻概率审计；这些场景显式开启 `faultProbabilityAudit`，并另行检查正常
+  generate/replay 默认不生成审计文件、复用目录时清理陈旧文件、无预警故障无正式
+  预测和无风险输出；F3 部分覆盖无任务 fixed-K 永久
+  整星故障、即时重路由、F3 抢占活动 compute 区间以及 F1/F2/F3 同开。
+- `run-n4b-joint-acceptance.sh`：冻结 66 星、1000 秒、100 任务的四轮联合验收；
+  比较正常/审计 generate 的 trace 与正式输出、审计 generate/replay 的事件和概率、
+  正常 generate/replay 的正式输出，并在复用 replay 目录后检查陈旧审计文件清理；
+  同时固定 94/100 任务终态、F1/F2/F3 事件、唯一 F3 重路由、零丢包和账本归零。
 
 ## 本地运行
 

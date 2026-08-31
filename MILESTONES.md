@@ -20,6 +20,7 @@ N0–N2 是 ns-3.33 版本的原始里程碑，相关 PR 位于旧 SatCompute �
 | N2：动态星座与压力验证 | 已完成 | `feature/n2-integration` → `main` / `n2-complete` | 2026-08-03 |
 | N3：迁移到 ns-3.48 | 已完成 | [PR #72](https://github.com/forest-rabbit/SCP-SatComPlate/pull/72) / `n3-complete` / `b83bf646b` | 2026-08-05 |
 | N4A：确定性故障输入与执行基础 | 已完成 | PR #75–#80 / `n4a-complete` | 2026-08-05 |
+| N4B：统一故障建模与因果概率预测 | 实现与本地验收已完成，待合入 | [PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81) | 2026-08-31 |
 
 N2 的最终发布链固定为 `feature/n2-integration` 合入旧仓库 `main`，并以
 annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移动 N0、N1
@@ -366,9 +367,90 @@ regression。故障回归验证 compute 不重算路由、整星精确重算、�
 - 阶段 CI：[SatCompute CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/workflows/phase_gate.yml)，`phase=n4a`
 - 阶段 tag：`n4a-complete`，指向 PR #80 的合并提交
 
-N4A 明确不包含 backup selection、主备切换、checkpoint、迁移、重放、recovery
-transfer、RTO/RPO 或 `SUPERSEDED` 运行状态。这些备份与恢复策略属于后续 N4B；
-故障原因/轨迹生成模型也不属于本阶段执行平台。
+N4A 明确不包含故障原因/轨迹生成模型，也不包含 backup selection、主备切换、
+checkpoint、迁移、recovery transfer、RTO/RPO 或 `SUPERSEDED` 运行状态。这些能力
+不属于本阶段执行平台；其后续里程碑只在对应实现合入并通过验收后记录。
+
+## N4B：统一故障建模与因果概率预测
+
+N4B 在 N4A 的确定性执行合同之上在线生成风险与实际故障，再把 v2 Fault Trace
+冻结为后续 replay 的外生输入。F1、F2 仍使用独立随机流分别抽样，平台以逻辑或
+折叠同刻结果；`q_comp = 1 - (1 - q_F1)(1 - q_F2)` 只作为统一风险输出与预测输入，
+不替代两次真实抽样。N4B 不实现任何备份、checkpoint、迁移或接管策略。
+
+### 2026-08-30：建立统一生成合同并完成 F1 标定
+
+平台增加 `none/generate/replay` 三种模式和 Unified Fault Trace v2。v2 在同一文件中
+表达有/无 NOTICE 的实际 compute 故障、未发生故障的风险 episode，以及无预警整星
+故障；不增加独立 Risk Trace 或 SHA256 元数据。generate 在线执行刚生成的事件，
+replay 只执行冻结事件，不读取未来 START 进行二次决策。
+
+F1 从实时 ComputeService 忙闲状态更新指数温度和能源修正。冻结的加速仿真参数为
+1 秒检查、`heating_tau=43 s`、`cooling_tau=40 s`、风险阈值 0.60、最大故障强度
+0.005/s 和 8 秒可恢复停机；连续负载在 44 秒进入风险、56 秒达到 30 ℃。66 星、
+1000 秒、3 热点、30 个固定 run 的候选标定平均产生约 0.87 次故障和 8.27 个
+risk-only episode。
+
+- 模式与 trace 证据：`b47119be2`、`88076e4ff`
+- F1 模型与生成证据：`77264de8d`、`337c57cfe`
+- 标定证据：[N4B F1 参数标定](docs/calibration/n4b-f1/README.md)
+
+### 2026-08-30 至 2026-08-31：完成 F2、联合竞争风险与 F3
+
+F2 直接读取正式平台同一 `LeoCircularOrbitMobilityModel` 的实时 ECEF 位置，而不
+回放拓扑 JSON。66/351/720 星各执行 7200 秒 orbit-only 暴露扫描；66 星选择原轨道
+5695–6695 秒窗口，星座总暴露为 6423 satellite-seconds，并冻结系统级有效强度
+`1/6423 s^-1` 和 461 秒累计暴露对应的风险阈值。真实 66 星平台的 100 个固定 run
+平均产生 1.02 次 F2 故障，近似 95% 均值区间包含解析目标 1。
+
+F1/F2 各自维护状态和独立随机流，任一风险仍有效时不提前 `NOTICE_CLEAR`，同一节点
+同刻最多向执行层提交一次可恢复 compute START。F3 使用独立事件时间与无放回节点
+选择流；当前 `fixed_k=1` 验收模式产生无预警、无恢复的永久整星故障，并在冲突时
+优先于 compute 故障。
+
+- F2 与轨道偏移证据：`2335498a9`、`2f09c37c7`、`08792f78c`
+- F2 标定证据：[N4B F2 轨道暴露与参数标定](docs/calibration/n4b-f2/README.md)
+- 联合/F3 证据：`1c269632f`、`492d051ab`、`4a1124252`
+
+### 2026-08-31：完成因果概率预测与概率对概率审计
+
+预测器复制当前 F1/F2 状态，在任务剩余计算窗口内无随机数滚动模型，逐步计算
+`q_comp,k` 与 `P_fail_before_finish = 1 - product_k(1 - q_comp,k)`。正式预测记录由
+已经执行的 NOTICE 门控；它不读取未来 START、最终 `risk_duration` 或
+`fault_occurred`，实际故障或任务结束后停止记录，也不触发备份。
+
+`faultProbabilityAudit` 默认关闭，正常运行不创建预测器、概率 CSV 或自动对比。
+显式审计分别对 F1-only、F2-only、F1+F2 的 41、92、78 条 generate 抽样前模型
+概率与 replay 影子预测做逐时刻比较，全部记录匹配、上下文无差异且最大绝对误差在
+`1e-12` 内；复用输出目录时会清除陈旧审计文件。
+
+- 预测实现证据：`b981d9ae2`、`a8d6988c6`、`5f2c23e91`
+- 审计与默认关闭证据：`200766a47`、`fe8d45862`、`0c149f670`
+
+### 2026-08-31：完成 100 任务联合验收候选
+
+最终场景冻结 66 星、1000 秒、`orbitStartOffset=5695`、seed/run `1/16`、固定
+8 ms ISL、20 秒网络更新和 Capacity-aware 路由，同时启用 F1/F2/F3。100 个任务
+采用 5 个分级热点、8 个 F2/F3 窗口任务和 62 个分布式短任务；它用于联合生命周期
+验收，不是吞吐压力实验。
+
+四轮 runner 依次执行默认关闭审计的 generate、开启审计的 generate、开启审计的
+replay，以及复用目录且关闭审计的 replay。冻结结果为 94/100 任务完成、6 个任务
+按合同失败；出现 5 次可恢复 compute START、8 个 risk-only episode，以及节点 4
+在 `829256867404 ns` 的一次永久整星 START。只有 F3 引起一次即时路由重算；200 个
+transfer 中 193 个完成、7 个随失败任务取消，FlowMonitor 无丢包，Size-aware 与
+Capacity-aware 账本全部归零。联合审计的 72 条概率记录零缺失、上下文一致且在
+`1e-12` 容差内；审计开关前后的 Fault Trace 逐字节相同。
+
+完整本地阶段门禁通过：定向 ns-3.48 构建保持 `Examples=OFF`、`Tests=OFF`；6 个
+Python unit、12 个 SatCompute C++ unit executable、5 个 smoke 和 4 个 regression
+runner 全部通过。GitHub 阶段 CI 按仓库约定留到 PR #81 合入 `main` 后只运行一次；
+在此之前本表保持“待合入”，不提前创建 `n4b-complete` tag。
+
+- 输入与生成器证据：`60be2341b`、`5b4a89c07`
+- 联合 runner 证据：`2c4003c39`
+- 场景说明：[N4B 100 任务联合验收](contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/README.md)
+- 集成候选：[PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81)
 
 ## ECMP 算法演进
 

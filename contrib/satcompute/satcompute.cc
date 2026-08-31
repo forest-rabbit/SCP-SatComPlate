@@ -8,6 +8,9 @@
 #include "ns3/circular-orbit-topology-policy.h"
 #include "ns3/ecmp-route-recorder.h"
 #include "ns3/fault-controller.h"
+#include "ns3/fault-para.h"
+#include "ns3/fault-model-engine.h"
+#include "ns3/fault-prediction-engine.h"
 #include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/online-orbit-constellation.h"
@@ -94,6 +97,21 @@ ResolveOptionalInputFile(const std::string& value, std::string_view fieldName)
     return resolved.string();
 }
 
+std::string
+ResolveOutputFile(const std::string& value, std::string_view fieldName)
+{
+    RequireNotEmpty(value, fieldName);
+    const std::filesystem::path resolved =
+        std::filesystem::absolute(value).lexically_normal();
+    std::error_code error;
+    const bool exists = std::filesystem::exists(resolved, error);
+    if (error || (exists && !std::filesystem::is_regular_file(resolved)))
+    {
+        FailConfig(fieldName, "must be a writable file path: " + value);
+    }
+    return resolved.string();
+}
+
 void
 LogTaskInputs(const ComputeProfile& profile,
               const TaskTrace& trace,
@@ -126,7 +144,9 @@ LogTaskInputs(const ComputeProfile& profile,
 }
 
 void
-AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
+AddCommandLineOptions(CommandLine& commandLine,
+                      SatComputeConfig& config,
+                      FaultParameters& faultParameters)
 {
     commandLine.AddValue("simulationDuration",
                          "Simulation duration in seconds",
@@ -134,6 +154,9 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
     commandLine.AddValue("constellationConfig",
                          "Path to the native LEO shell CSV",
                          config.constellationConfig);
+    commandLine.AddValue("orbitStartOffset",
+                         "Orbit epoch offset represented by simulation time zero in seconds",
+                         config.orbitStartOffsetSeconds);
     commandLine.AddValue("maxIslDistance",
                          "Maximum valid ISL distance in meters",
                          config.maxIslDistanceMeters);
@@ -165,9 +188,24 @@ AddCommandLineOptions(CommandLine& commandLine, SatComputeConfig& config)
     commandLine.AddValue("taskCompletionPolicy",
                          "Task completion policy: strict or report",
                          config.taskCompletionPolicy);
+    commandLine.AddValue("faultMode",
+                         "Fault mode: none, generate, or replay",
+                         config.faultMode);
     commandLine.AddValue("faultTrace",
-                         "Deterministic satellite fault trace JSON path",
+                         "Generated fault trace output or replay input path",
                          config.faultTrace);
+    commandLine.AddValue("faultProbabilityAudit",
+                         "Collect probability audit records and CSV outputs",
+                         config.faultProbabilityAudit);
+    commandLine.AddValue("faultEnableF1",
+                         "Enable F1 generation and replay prediction",
+                         faultParameters.f1.enabled);
+    commandLine.AddValue("faultEnableF2",
+                         "Enable F2 generation and replay prediction",
+                         faultParameters.f2.enabled);
+    commandLine.AddValue("faultEnableF3",
+                         "Enable the built-in F3 source in generate mode",
+                         faultParameters.f3.enabled);
     commandLine.AddValue("topologyOnly",
                          "Generate topology slices without network simulation",
                          config.topologyOnly);
@@ -189,6 +227,11 @@ ValidateConfig(const SatComputeConfig& config)
 {
     RequireNotEmpty(config.constellationConfig, "constellationConfig");
     RequirePositiveSeconds(config.simulationDurationSeconds, "simulationDuration");
+    if (!std::isfinite(config.orbitStartOffsetSeconds) ||
+        config.orbitStartOffsetSeconds < 0.0)
+    {
+        FailConfig("orbitStartOffset", "must be a finite non-negative number of seconds");
+    }
     if (!std::isfinite(config.maxIslDistanceMeters) || config.maxIslDistanceMeters <= 0.0)
     {
         FailConfig("maxIslDistance", "must be a finite positive number of meters");
@@ -245,14 +288,38 @@ ValidateConfig(const SatComputeConfig& config)
         FailConfig("islMtuBytes", "must be at least 64028 for size-aware chunking");
     }
     RequireChoice(config.taskCompletionPolicy, "taskCompletionPolicy", {"strict", "report"});
+    RequireChoice(config.faultMode, "faultMode", {"none", "generate", "replay"});
+    if (config.faultMode == "none" && !config.faultTrace.empty())
+    {
+        FailConfig("faultMode", "none cannot use faultTrace");
+    }
+    if (config.faultMode == "generate" && config.faultTrace.empty())
+    {
+        FailConfig("faultMode", "generate requires faultTrace");
+    }
+    if (config.faultMode == "replay" && config.faultTrace.empty())
+    {
+        FailConfig("faultMode", "replay requires faultTrace");
+    }
+    if (config.faultProbabilityAudit)
+    {
+        if (config.faultMode == "none")
+        {
+            FailConfig("faultProbabilityAudit", "requires faultMode=generate or replay");
+        }
+        if (!hasComputeProfile)
+        {
+            FailConfig("faultProbabilityAudit", "requires computeProfile and taskTrace");
+        }
+    }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
     if (config.topologyOnly && hasComputeProfile)
     {
         FailConfig("topologyOnly", "cannot load task inputs");
     }
-    if (config.topologyOnly && !config.faultTrace.empty())
+    if (config.topologyOnly && config.faultMode != "none")
     {
-        FailConfig("topologyOnly", "cannot load a fault trace");
+        FailConfig("topologyOnly", "requires faultMode=none");
     }
     RequireNotEmpty(config.outputDirectory, "outputDir");
     RequireChoice(config.taskLogMode, "taskLogMode", {"summary", "verbose", "silent"});
@@ -269,18 +336,31 @@ int
 main(int argc, char* argv[])
 {
     SatComputeConfig inputConfig = GetDefaultSatComputeConfig();
+    FaultParameters faultParameters = GetDefaultFaultParameters();
     CommandLine command(__FILE__);
-    AddCommandLineOptions(command, inputConfig);
+    AddCommandLineOptions(command, inputConfig, faultParameters);
     command.Parse(argc, argv);
 
     try
     {
         ValidateConfig(inputConfig);
+        if (inputConfig.faultProbabilityAudit &&
+            !faultParameters.f1.enabled && !faultParameters.f2.enabled)
+        {
+            FailConfig("faultProbabilityAudit", "requires enabled F1 or F2");
+        }
         SatComputeConfig config = inputConfig;
         config.computeProfile =
             ResolveOptionalInputFile(config.computeProfile, "computeProfile");
         config.taskTrace = ResolveOptionalInputFile(config.taskTrace, "taskTrace");
-        config.faultTrace = ResolveOptionalInputFile(config.faultTrace, "faultTrace");
+        if (config.faultMode == "replay")
+        {
+            config.faultTrace = ResolveOptionalInputFile(config.faultTrace, "faultTrace");
+        }
+        else if (config.faultMode == "generate")
+        {
+            config.faultTrace = ResolveOutputFile(config.faultTrace, "faultTrace");
+        }
         const int64_t simulationDurationNs =
             SatComputeSecondsToNanoseconds(config.simulationDurationSeconds,
                                            "simulationDuration");
@@ -307,7 +387,9 @@ main(int argc, char* argv[])
         {
             TopologySliceExportResult sliceResult;
             {
-                OnlineOrbitConstellation constellation(constellationDefinition);
+                OnlineOrbitConstellation constellation(
+                    constellationDefinition,
+                    config.orbitStartOffsetSeconds);
                 CircularOrbitTopologyPolicy policy(constellationDefinition,
                                                    constellation.GetPositions(),
                                                    config.maxIslDistanceMeters,
@@ -346,6 +428,8 @@ main(int argc, char* argv[])
             Ptr<NetworkTransferEngine> transferEngine;
             Ptr<TaskCoordinator> taskCoordinator;
             Ptr<FaultController> faultController;
+            Ptr<FaultModelEngine> faultModelEngine;
+            Ptr<FaultPredictionEngine> faultPredictionEngine;
             std::optional<ComputeProfile> computeProfile;
             std::optional<TaskTrace> taskTrace;
             std::optional<FaultTrace> faultTrace;
@@ -358,7 +442,16 @@ main(int argc, char* argv[])
                                           computeProfile.value());
                 LogTaskInputs(computeProfile.value(), taskTrace.value(), config.taskLogMode);
             }
-            if (!config.faultTrace.empty())
+            std::vector<uint32_t> computeNodeIds;
+            if (computeProfile.has_value())
+            {
+                computeNodeIds.reserve(computeProfile->nodes.size());
+                for (const ComputeNodeProfile& node : computeProfile->nodes)
+                {
+                    computeNodeIds.push_back(node.nodeId);
+                }
+            }
+            if (config.faultMode == "replay")
             {
                 faultTrace = ReadFaultTrace(config.faultTrace,
                                             simulationDurationNs,
@@ -369,11 +462,71 @@ main(int argc, char* argv[])
                 // Schedule fault batches before task arrivals so an exact-time
                 // START is applied before a task arriving at the same nanosecond.
                 faultController = CreateObject<FaultController>();
+                if (config.faultProbabilityAudit && computeProfile.has_value() &&
+                    (faultParameters.f1.enabled || faultParameters.f2.enabled))
+                {
+                    faultPredictionEngine = CreateObject<FaultPredictionEngine>();
+                    faultPredictionEngine->Configure(faultParameters,
+                        computeNodeIds,
+                        simulationDurationNs,
+                        faultController);
+                    if (faultParameters.f2.enabled)
+                    {
+                        faultPredictionEngine->BindOrbitConstellation(
+                            topology.GetOnlineConstellation());
+                    }
+                }
                 faultController->Configure(
                     faultTrace.value(),
                     topology.GetIdMap().GetCanonicalSatelliteIds(),
                     simulationDurationNs);
                 faultController->BindTopology(topology);
+            }
+            else if (config.faultMode == "generate")
+            {
+                if (!faultParameters.f1.enabled && !faultParameters.f2.enabled &&
+                    !faultParameters.f3.enabled)
+                {
+                    FailConfig("faultMode",
+                               "generate requires at least one enabled fault source");
+                }
+                if ((faultParameters.f1.enabled || faultParameters.f2.enabled) &&
+                    !computeProfile.has_value())
+                {
+                    FailConfig("faultMode",
+                               "generate with enabled F1/F2 requires computeProfile and taskTrace");
+                }
+                faultController = CreateObject<FaultController>();
+                if (config.faultProbabilityAudit && computeProfile.has_value() &&
+                    (faultParameters.f1.enabled || faultParameters.f2.enabled))
+                {
+                    faultPredictionEngine = CreateObject<FaultPredictionEngine>();
+                    faultPredictionEngine->Configure(faultParameters,
+                        computeNodeIds,
+                        simulationDurationNs,
+                        faultController);
+                    if (faultParameters.f2.enabled)
+                    {
+                        faultPredictionEngine->BindOrbitConstellation(
+                            topology.GetOnlineConstellation());
+                    }
+                }
+                faultController->ConfigureGeneration(
+                    topology.GetIdMap().GetCanonicalSatelliteIds(),
+                    simulationDurationNs);
+                faultController->BindTopology(topology);
+                faultModelEngine = CreateObject<FaultModelEngine>();
+                faultModelEngine->Configure(faultParameters,
+                                            topology.GetIdMap().GetCanonicalSatelliteIds(),
+                                            computeNodeIds,
+                                            simulationDurationNs,
+                                            faultController,
+                                            config.faultProbabilityAudit);
+                if (faultParameters.f2.enabled)
+                {
+                    faultModelEngine->BindOrbitConstellation(
+                        topology.GetOnlineConstellation());
+                }
             }
             if (computeProfile.has_value() && taskTrace.has_value())
             {
@@ -392,6 +545,14 @@ main(int argc, char* argv[])
                 {
                     faultController->BindTaskCoordinator(taskCoordinator);
                 }
+                if (faultPredictionEngine != nullptr)
+                {
+                    faultPredictionEngine->BindTaskCoordinator(taskCoordinator);
+                }
+            }
+            if (faultModelEngine != nullptr)
+            {
+                faultModelEngine->BindTaskCoordinator(taskCoordinator);
             }
 
             const Ptr<FlowMonitor> flowMonitor = InstallSimulationFlowMonitor();
@@ -399,6 +560,11 @@ main(int argc, char* argv[])
             const auto wallStart = std::chrono::steady_clock::now();
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
+            if (config.faultMode == "generate")
+            {
+                const FaultTrace& generatedTrace = faultModelEngine->Finalize();
+                WriteFaultTraceV2(config.faultTrace, generatedTrace);
+            }
             const int64_t wallClockNs =
                 std::chrono::duration_cast<std::chrono::nanoseconds>(wallStop - wallStart).count();
             std::optional<CapacityAwareRuntimeSummary> capacitySummary;
@@ -415,6 +581,8 @@ main(int argc, char* argv[])
                 topology.GetAppliedTopologySliceCount(),
                 topology.GetRouteComputationCount(),
                 faultController,
+                faultModelEngine,
+                faultPredictionEngine,
                 topology.GetFlowRouteRegistry(),
                 capacitySummary,
                 flowMonitor,

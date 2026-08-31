@@ -32,6 +32,8 @@ main()
         Require(config.constellationConfig ==
                     "contrib/satcompute/input/topology/constellations/synthetic-66.csv",
                 "unexpected constellation path");
+        Require(config.orbitStartOffsetSeconds == 0.0,
+                "unexpected orbit start offset");
         Require(config.maxIslDistanceMeters == 6171353.0, "unexpected ISL distance");
         Require(config.delayMode == "fixed" && config.fixedDelaySeconds == 0.008,
                 "unexpected delay defaults");
@@ -51,7 +53,10 @@ main()
                     config.transferPayloadBytes == 1'024 &&
                     config.taskCompletionPolicy == "strict",
                 "unexpected workload defaults");
-        Require(config.faultTrace.empty(), "fault trace must default to disabled");
+        Require(config.faultMode == "none" && config.faultTrace.empty(),
+                "fault inputs must default to none");
+        Require(!config.faultProbabilityAudit,
+                "fault probability audit must be opt-in");
         Require(!config.topologyOnly && config.topologySliceIntervalSeconds == 1.0 &&
                     config.includeFinalTopologyState,
                 "unexpected topology-only defaults");

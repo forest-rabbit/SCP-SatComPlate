@@ -1,0 +1,139 @@
+{
+  "calibration_scope": "orbit-only F2 exposure; no network, tasks, F1, or F3",
+  "constellation_config": "synthetic-351.csv",
+  "satellite_count": 351,
+  "altitude_km": 1015.0,
+  "inclination_deg": 98.98,
+  "calibration_duration_s": 7200,
+  "sample_interval_s": 1,
+  "region": {
+    "longitude_min_deg": -90.0,
+    "longitude_max_deg": 5.0,
+    "latitude_min_deg": -50.0,
+    "latitude_max_deg": 5.0
+  },
+  "episode_statistics": {
+    "entering_satellite_count": 210,
+    "complete_episode_count": 202,
+    "left_censored_episode_count": 29,
+    "right_censored_episode_count": 29,
+    "complete_exposure_duration_s": {
+      "count": 202,
+      "min": 14.0,
+      "median": 981.0,
+      "mean": 909.9653465346535,
+      "max": 982.0
+    },
+    "total_constellation_exposure_s": 206904
+  },
+  "sliding_window": {
+    "duration_s": 1000,
+    "exposure_s": {
+      "count": 6201,
+      "min": 28403.0,
+      "median": 28762.0,
+      "mean": 28757.192549588777,
+      "max": 28961.0
+    },
+    "candidate_start_offsets": [
+      {
+        "start_offset_s": 6062,
+        "total_exposure_s": 28961,
+        "overlapping_episode_count": 60,
+        "complete_episode_count": 4,
+        "left_censored_episode_count": 28,
+        "right_censored_episode_count": 28
+      },
+      {
+        "start_offset_s": 6080,
+        "total_exposure_s": 28961,
+        "overlapping_episode_count": 60,
+        "complete_episode_count": 4,
+        "left_censored_episode_count": 28,
+        "right_censored_episode_count": 28
+      },
+      {
+        "start_offset_s": 6098,
+        "total_exposure_s": 28961,
+        "overlapping_episode_count": 60,
+        "complete_episode_count": 4,
+        "left_censored_episode_count": 28,
+        "right_censored_episode_count": 28
+      },
+      {
+        "start_offset_s": 6116,
+        "total_exposure_s": 28961,
+        "overlapping_episode_count": 60,
+        "complete_episode_count": 4,
+        "left_censored_episode_count": 28,
+        "right_censored_episode_count": 28
+      },
+      {
+        "start_offset_s": 6134,
+        "total_exposure_s": 28961,
+        "overlapping_episode_count": 60,
+        "complete_episode_count": 4,
+        "left_censored_episode_count": 28,
+        "right_censored_episode_count": 28
+      },
+      {
+        "start_offset_s": 6152,
+        "total_exposure_s": 28961,
+        "overlapping_episode_count": 60,
+        "complete_episode_count": 4,
+        "left_censored_episode_count": 28,
+        "right_censored_episode_count": 28
+      },
+      {
+        "start_offset_s": 6170,
+        "total_exposure_s": 28961,
+        "overlapping_episode_count": 60,
+        "complete_episode_count": 3,
+        "left_censored_episode_count": 28,
+        "right_censored_episode_count": 29
+      },
+      {
+        "start_offset_s": 6171,
+        "total_exposure_s": 28961,
+        "overlapping_episode_count": 60,
+        "complete_episode_count": 2,
+        "left_censored_episode_count": 29,
+        "right_censored_episode_count": 29
+      },
+      {
+        "start_offset_s": 6172,
+        "total_exposure_s": 28961,
+        "overlapping_episode_count": 60,
+        "complete_episode_count": 2,
+        "left_censored_episode_count": 29,
+        "right_censored_episode_count": 29
+      },
+      {
+        "start_offset_s": 6173,
+        "total_exposure_s": 28961,
+        "overlapping_episode_count": 60,
+        "complete_episode_count": 2,
+        "left_censored_episode_count": 29,
+        "right_censored_episode_count": 29
+      }
+    ]
+  },
+  "selected": {
+    "start_offset_s": 6062,
+    "window_total_exposure_s": 28961,
+    "overlapping_episode_count": 60,
+    "complete_episode_count": 4,
+    "left_censored_episode_count": 28,
+    "right_censored_episode_count": 28,
+    "functional_target_mean_fault_count": 1.0,
+    "local_candidate_failure_intensity_per_s": 3.452919443389386e-05,
+    "stress_target_mean_fault_count_3_intensity_per_s": 0.00010358758330168157,
+    "stress_target_mean_fault_count_4_intensity_per_s": 0.00013811677773557544,
+    "threshold_exposure_s": 490.5,
+    "local_candidate_risk_threshold": 0.01679395245537035
+  },
+  "fixed_reference_validation": {
+    "effective_failure_intensity_per_s": 0.00015569048731122528,
+    "expected_fault_count": 4.508952203020395
+  }
+}

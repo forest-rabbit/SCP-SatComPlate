@@ -26,6 +26,7 @@ struct SatComputeConfig
 
     // topology
     std::string constellationConfig;        ///< 原生 LEO shell CSV 路径。
+    double orbitStartOffsetSeconds;         ///< 轨道 epoch 相对偏移，单位为秒。
     double maxIslDistanceMeters;            ///< ISL 最大允许距离，单位为米。
     double networkUpdateIntervalSeconds;    ///< 网络状态应用周期，单位为秒。
     bool topologyOnly;                      ///< 是否只生成轨道和拓扑切片。
@@ -52,7 +53,9 @@ struct SatComputeConfig
     std::string taskCompletionPolicy; ///< 任务完成策略：strict 或 report。
 
     // fault
-    std::string faultTrace; ///< 确定性卫星故障轨迹 JSON；空字符串表示无故障。
+    std::string faultMode;       ///< none、generate 或 replay。
+    std::string faultTrace;      ///< generate 输出或 replay 输入的统一故障轨迹。
+    bool faultProbabilityAudit;  ///< 是否采集并输出概率一致性审计数据。
 
     // output
     std::string outputDirectory; ///< 结构化结果输出目录。

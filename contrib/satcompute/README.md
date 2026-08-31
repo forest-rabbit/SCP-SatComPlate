@@ -1,8 +1,9 @@
 # SatCompute 运行手册
 
 SatCompute 是 SCP-SatComPlate 在 ns-3.48 上的项目模块，只模拟卫星、星间链路、
-IPv4 路由、任务传输和星上计算。平台入口为 `satcompute.cc`；`para.h/.cc` 保存唯一
-一组类型化运行参数和默认值，星座、算力、任务与故障则使用彼此独立的数据文件。
+IPv4 路由、任务传输和星上计算。平台入口为 `satcompute.cc`；`para.h/.cc` 保存运行
+参数，`fault/fault-para.h/.cc` 保存故障内部参数，星座、算力、任务与 Fault Trace
+使用彼此独立的数据文件。
 
 ## 执行流程
 
@@ -31,8 +32,11 @@ topologyOnly                正式仿真
 5. 后续只更新候选链路距离、active 状态和 distance 时延，不更换异轨对端；
 6. 只有 active 边集合变化时才重算 hop-based IPv4 路由；
 7. 同时提供 ComputeProfile 与 TaskTrace 时，执行输入传输、FCFS 计算和结果传输；
-8. 提供 FaultTrace 时先完成字段、引用、时间区间和顺序校验；
-9. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
+8. `faultMode=generate` 时在线更新模型、实际执行故障并写 v2 trace；
+9. `faultMode=replay` 时校验 v1/v2 trace，并在精确纳秒确定性重放；
+10. 显式启用概率审计且存在 F1/F2 任务时，用同一模型的无随机数影子状态滚动计算
+    完成前故障概率，并只在 NOTICE 有效时输出正式记录；
+11. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
 
 `topologyOnly=1` 使用相同轨道和候选链路实现，但不会创建 InternetStack、
 NetDevice、路由、FlowMonitor 或任务对象。
@@ -48,7 +52,7 @@ NetDevice、路由、FlowMonitor 或任务对象。
 | [`routing/`](routing/README.md) | 五种 IPv4 策略、hash、HRW 和 reservation 状态 |
 | [`task/`](task/README.md) | ComputeProfile、TaskTrace、FCFS 服务和任务协调 |
 | [`traffic/`](traffic/README.md) | 任务内部的 UDP 输入/结果传输 |
-| [`fault/`](fault/README.md) | 确定性故障定义、状态覆盖与批处理执行控制 |
+| [`fault/`](fault/README.md) | 故障参数、统一 trace、在线判定、状态覆盖与批处理执行 |
 | [`metrics/`](metrics/README.md) | 网络、路由、任务和失败诊断输出 |
 | [`input/`](input/README.md) | 星座、算力、任务、故障与组合示例 |
 | [`tools/`](tools/README.md) | 任务生成与输出校验工具 |
@@ -71,12 +75,20 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 不带参数时，平台使用下表中的默认值运行 1000 秒。日常开发建议显式指定较短的
 `simulationDuration` 和独立的 `outputDir`。完整任务运行见
 [100 秒、66 星、20 任务示例](input/examples/leo-66-100s-20tasks/README.md)。
+F1 在线生成与重放见
+[120 秒、66 星 F1 示例](input/examples/leo-66-120s-f1/README.md)。
+F2 在线生成与重放见
+[1000 秒、66 星 F2 示例](input/examples/leo-66-1000s-f2/README.md)。
+F3 无任务永久整星生成与重放见
+[1000 秒、66 星 F3 示例](input/examples/leo-66-1000s-f3/README.md)。
+F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
+[1000 秒、66 星、100 任务 N4B 验收场景](input/examples/leo-66-1000s-n4b-joint/README.md)。
 
 ## 参数边界
 
 人工设置的时长和间隔统一以秒传入，平台在组件边界转换为 ns-3 `Time` 或有符号
-整数纳秒。星座 CSV 只描述轨道结构，算力、任务和故障分别位于独立输入文件；这些
-数据与 `para.cc` 不重复。
+整数纳秒。星座 CSV 只描述轨道结构，算力、任务和 Fault Trace 位于独立数据文件，
+故障内部参数位于 `fault-para.cc`；它们与 `para.cc` 不重复。
 
 ### simulation
 
@@ -91,6 +103,7 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
 | `--constellationConfig` | `input/topology/constellations/synthetic-66.csv` | 路径 | 一个原生 LEO shell CSV；不能为空且必须通过星座校验 |
+| `--orbitStartOffset` | `0` | 秒 | 仿真 `t=0` 相对星座轨道 epoch 的确定性偏移；必须为有限非负值 |
 | `--maxIslDistance` | `6171353` | 米 | 候选 ISL 最大有效距离；不得超过对应轨道高度的 80 km clearance 上限 |
 | `--networkUpdateInterval` | `20` | 秒 | 正式仿真的链路状态/时延更新周期；必须大于 0 |
 | `--topologyOnly` | `false` | bool | 只输出轨道和拓扑切片；启用时禁止任务和故障输入 |
@@ -142,12 +155,38 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
-| `--faultTrace` | 空 | 路径 | 确定性故障 JSON；字段合同见 `input/fault/README.md` |
+| `--faultMode` | `none` | 枚举 | `none`、`generate` 或 `replay` |
+| `--faultTrace` | 空 | 路径 | generate 输出或 replay 输入的统一 Fault Trace |
+| `--faultProbabilityAudit` | `false` | bool | 是否按需运行预测器并输出概率一致性审计文件 |
+| `--faultEnableF1` | `true` | bool | generate 是否启用 F1 来源；replay 审计时是否启用 F1 影子模型 |
+| `--faultEnableF2` | `false` | bool | generate 是否启用 F2 来源；replay 审计时是否启用 F2 影子模型 |
+| `--faultEnableF3` | `false` | bool | generate 是否启用内置 F3 永久整星来源 |
 
-空路径完全保持无故障行为。`compute` 故障只改变算力可用性；`satellite` 故障还会
+`none` 要求 `faultTrace` 为空；`generate` 将它作为输出路径，`replay` 将它作为
+已有输入路径。故障内部参数集中在 `fault/fault-para.cc`，不再使用模型配置 JSON。
+`faultProbabilityAudit` 默认关闭，只能与 generate/replay、任务输入和至少一个启用的
+F1/F2 来源共同使用；关闭时不创建预测器，也不采集在线模型概率记录。
+三个 `faultEnable*` 不复制经纬度、强度、阈值或恢复时间等内部参数。generate 中
+它们选择真实故障来源；replay 不重新抽样，但 `faultEnableF1/F2` 选择预测器需要
+重建的影子模型，因此应与生成该 trace 时的 F1/F2 开关保持一致。当前 generate
+支持 F1-only、F2-only 和 F1+F2；联合模式为两个
+来源分别使用独立随机流抽样，同刻命中只向平台提交一次 compute START，且对外输出
+`q_comp = 1 - (1 - q_F1)(1 - q_F2)`。F3 使用独立的事件时间与节点选择随机流，
+支持 `fixed_k` 和 `poisson`；其模式、数量或强度在 `fault-para.cc` 中维护。
+`compute` 故障只改变算力可用性；`satellite` 故障还会
 在精确纳秒关闭关联 ISL、立即重算 IPv4 路由，并按任务阶段终止端点 transfer。
 有限恢复重新读取当时的原生轨道坐标，只恢复仍满足距离门限的候选链路。两类故障
-都不复活旧任务，`failure_probability` 只作为风险元数据保留，不参与重新抽样。
+都不复活旧任务。generate 的每个检查步按各启用来源的当步条件概率分别抽样；F3
+无预警、无恢复，并在同节点同刻优先于 compute 故障。replay 只执行已确定的 trace，
+不会再次抽样。
+
+`faultProbabilityAudit=1` 时，generate/replay 在有任务输入且启用 F1/F2 的前提下
+共用同一套因果预测逻辑。预测器持续
+维护独立、无随机数的 F1/F2 影子状态；正式记录由 NOTICE 门控。对任务剩余窗口中
+每个检查点计算 `q_comp,k=1-(1-q_F1,k)(1-q_F2,k)`，再得到
+`P_fail_before_finish=1-product_k(1-q_comp,k)`。它不读取未来 START、最终
+`risk_duration_ns` 或 `fault_occurred`，不改变真实抽样，也不会在本阶段触发主动
+备份。完整边界见 [fault README](fault/README.md)。
 
 ### output
 
@@ -158,8 +197,12 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 | `--diagnosticMode` | `off` | 枚举 | `off` 或 `failure`；后者在部分完成时写失败证据 |
 
 运行摘要会记录实际使用的关键参数和各层结果，仅作为本次仿真的输出证据，不是
-第二个配置入口。提供 `faultTrace` 时还会生成 `fault-events.csv` 和
-`fault-summary.json`；空路径不生成故障专用文件。
+第二个配置入口。generate/replay 会生成 `fault-events.csv` 和 `fault-summary.json`；
+只有显式设置 `faultProbabilityAudit=1` 时，才会生成 `fault-predictions.csv` 与
+`fault-prediction-summary.json`；generate 还会生成抽样前的
+`fault-model-probabilities.csv`，用于和 replay 预测做概率对概率验证。该文件不是
+故障输入。正常运行默认不创建预测器或这些审计文件，并会清理同一输出目录中的陈旧
+审计文件；概率对比脚本也只由测试显式调用。
 
 ## 星座与动态拓扑
 
@@ -194,9 +237,12 @@ plane-major 顺序编号为 `0..65`，不直接使用全局 `Node::GetId()`。
 固定候选并记录 `active`、距离、时延和带宽。详细合同见
 [topology/export](topology/export/README.md)。
 
-故障工作流是：先生成整个周期的拓扑切片，再据此生成故障 JSON，最后让正式平台
-在线计算同一自然拓扑并读取故障事件。compute 与整星故障都按精确时刻执行；整星
-通信资源禁用、恢复和重路由不会等待网络周期 tick。
+topology-only 切片仍用于可视化和后续故障研究。F2 暴露参数的 orbit-only 标定只
+推进与正式平台相同的原生轨道，不创建网络、路由或任务；正式 F2 generate 则直接
+读取本轮 `OnlineOrbitConstellation` 的实时 ECEF 坐标，不回读这些切片。F1 同样
+直接读取本轮 ComputeService 忙闲状态。两者都会在线产生并执行风险/故障，同时输出
+可 replay 的 trace。replay 使用相同星座和任务输入重放已经确定的事件。compute 与
+整星故障都按精确时刻执行；整星通信资源禁用、恢复和重路由不会等待网络周期 tick。
 
 ## 任务与计算
 
@@ -230,9 +276,9 @@ ceil(compute_work_units * 1,000,000,000
 ## 输出与验证
 
 正式仿真常用输出包括 `run-summary.json`、网络逐流指标、传输/任务指标、计算节点
-利用率、路由事件，以及相应 size-aware/capacity-aware 与 fault 汇总。任务和
-transfer 汇总会保留故障终态、原因与时间。只有显式启用失败诊断且运行部分完成时，
-才保留 `diagnostics/failure/`。完整文件说明见
+利用率、路由事件，以及相应 size-aware/capacity-aware、fault 和完成前故障概率
+汇总。任务和 transfer 汇总会保留故障终态、原因与时间。只有显式启用失败诊断且
+运行部分完成时，才保留 `diagnostics/failure/`。完整文件说明见
 [metrics README](metrics/README.md)。
 
 测试命令、覆盖范围和阶段 CI 规则统一放在

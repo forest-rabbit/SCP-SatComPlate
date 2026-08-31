@@ -315,6 +315,29 @@ ComputeService::GetRunningTaskId() const
     return m_currentTask.taskId;
 }
 
+std::optional<RunningComputeTaskSnapshot>
+ComputeService::GetRunningTaskSnapshot() const
+{
+    if (!m_hasCurrentTask)
+    {
+        return std::nullopt;
+    }
+    const int64_t elapsedTimeNs =
+        Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs;
+    NS_ABORT_MSG_IF(m_currentTaskStartTimeNs < 0 ||
+                        m_currentTaskServiceTimeNs <= 0 || elapsedTimeNs < 0 ||
+                        elapsedTimeNs > m_currentTaskServiceTimeNs,
+                    "ComputeService running-task timing is invalid");
+    return RunningComputeTaskSnapshot{
+        m_currentTask.taskId,
+        m_currentTaskStartTimeNs,
+        m_currentTaskServiceTimeNs,
+        elapsedTimeNs,
+        m_currentTaskServiceTimeNs - elapsedTimeNs,
+        static_cast<double>(elapsedTimeNs) /
+            static_cast<double>(m_currentTaskServiceTimeNs)};
+}
+
 bool
 ComputeService::IsIdle() const
 {

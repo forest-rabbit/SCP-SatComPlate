@@ -3,10 +3,19 @@ build_lib(
   SOURCE_FILES
     para.cc
     common/time-conversion.cc
-    fault/fault-controller.cc
-    fault/fault-definition.cc
-    fault/fault-state.cc
-    fault/fault-trace.cc
+    fault/fault-para.cc
+    fault/model/compute-failure-predictor.cc
+    fault/model/compute-fault-combination.cc
+    fault/model/f1-self-state-fault-model.cc
+    fault/model/f2-radiation-fault-model.cc
+    fault/model/f3-debris-fault-model.cc
+    fault/parameter/fault-parameter-validator.cc
+    fault/runtime/fault-controller.cc
+    fault/runtime/fault-model-engine.cc
+    fault/runtime/fault-prediction-engine.cc
+    fault/runtime/fault-state.cc
+    fault/trace/fault-definition.cc
+    fault/trace/fault-trace.cc
     metrics/core/fault-metrics.cc
     metrics/core/flow-metrics.cc
     metrics/core/run-summary.cc
@@ -54,10 +63,20 @@ build_lib(
   HEADER_FILES
     para.h
     common/time-conversion.h
-    fault/fault-controller.h
-    fault/fault-definition.h
-    fault/fault-state.h
-    fault/fault-trace.h
+    fault/fault-para.h
+    fault/model/compute-failure-predictor.h
+    fault/model/compute-fault-combination.h
+    fault/model/f1-self-state-fault-model.h
+    fault/model/f2-radiation-fault-model.h
+    fault/model/f3-debris-fault-model.h
+    fault/parameter/fault-parameter-validator.h
+    fault/runtime/fault-controller.h
+    fault/runtime/compute-failure-probability-record.h
+    fault/runtime/fault-model-engine.h
+    fault/runtime/fault-prediction-engine.h
+    fault/runtime/fault-state.h
+    fault/trace/fault-definition.h
+    fault/trace/fault-trace.h
     metrics/core/fault-metrics.h
     metrics/core/flow-metrics.h
     metrics/core/run-summary.h
@@ -143,6 +162,28 @@ build_exec(
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
 )
 
+# Pure-model calibration tool. It does not run the network simulator or create
+# an ns-3 example target.
+build_exec(
+  EXECNAME satcompute-f1-calibration
+  EXECNAME_PREFIX satcompute_tool_
+  SOURCE_FILES tools/validation/f1-calibration.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tools
+)
+
+# Orbit-only F2 exposure calibration. It creates native mobility nodes but no
+# network stack, routing, task, fault-execution, or ns-3 example target.
+build_exec(
+  EXECNAME satcompute-f2-exposure-calibration
+  EXECNAME_PREFIX satcompute_tool_
+  SOURCE_FILES tools/validation/f2-exposure-calibration.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tools
+)
+
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
 build_exec(
@@ -203,6 +244,15 @@ build_exec(
   EXECNAME satcompute-fault-trace-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/fault-trace-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-fault-model-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/fault-model-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

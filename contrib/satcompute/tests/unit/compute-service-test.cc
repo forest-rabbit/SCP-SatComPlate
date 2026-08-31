@@ -6,6 +6,7 @@
 #include "ns3/node.h"
 #include "ns3/simulator.h"
 
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
@@ -179,6 +180,72 @@ CheckFaultSafeCancellation()
     Simulator::Destroy();
 }
 
+void
+CheckRunningTaskSnapshot()
+{
+    constexpr int64_t secondNs = 1000000000;
+    Recorder recorder;
+    Ptr<Node> node = CreateObject<Node>();
+    Ptr<ComputeService> service = CreateObject<ComputeService>();
+    service->Configure(11,
+                       10,
+                       MakeCallback(&Recorder::OnStart, &recorder),
+                       MakeCallback(&Recorder::OnComplete, &recorder));
+    node->AddApplication(service);
+    service->SetStartTime(NanoSeconds(0));
+    service->SetStopTime(NanoSeconds(20 * secondNs));
+
+    bool idleChecked = false;
+    bool progressChecked = false;
+    bool completionBoundaryChecked = false;
+    bool completedChecked = false;
+    Simulator::Schedule(NanoSeconds(secondNs / 2),
+                        [service, &idleChecked] {
+                            Check(!service->GetRunningTaskSnapshot().has_value(),
+                                  "idle compute service exposed a running task");
+                            idleChecked = true;
+                        });
+    Simulator::Schedule(NanoSeconds(secondNs), &Submit, service, 41, 100);
+    Simulator::Schedule(NanoSeconds(4 * secondNs),
+                        [service, &progressChecked] {
+                            const auto snapshot = service->GetRunningTaskSnapshot();
+                            Check(snapshot.has_value() && snapshot->taskId == 41 &&
+                                      snapshot->startTimeNs == 1000000000 &&
+                                      snapshot->serviceTimeNs == 10000000000 &&
+                                      snapshot->elapsedTimeNs == 3000000000 &&
+                                      snapshot->remainingTimeNs == 7000000000 &&
+                                      std::abs(snapshot->completionRatio - 0.3) < 1e-15,
+                                  "running compute task progress snapshot differs");
+                            progressChecked = true;
+                        });
+    // This event was scheduled before the dynamic completion event, so it
+    // observes the causal boundary immediately before task completion.
+    Simulator::Schedule(NanoSeconds(11 * secondNs),
+                        [service, &completionBoundaryChecked] {
+                            const auto snapshot = service->GetRunningTaskSnapshot();
+                            Check(snapshot.has_value() &&
+                                      snapshot->elapsedTimeNs == snapshot->serviceTimeNs &&
+                                      snapshot->remainingTimeNs == 0 &&
+                                      snapshot->completionRatio == 1.0,
+                                  "compute completion boundary snapshot differs");
+                            completionBoundaryChecked = true;
+                        });
+    Simulator::Schedule(NanoSeconds(12 * secondNs),
+                        [service, &completedChecked] {
+                            Check(!service->GetRunningTaskSnapshot().has_value(),
+                                  "completed compute task remained visible");
+                            completedChecked = true;
+                        });
+    Simulator::Stop(NanoSeconds(13 * secondNs));
+    Simulator::Run();
+
+    Check(idleChecked && progressChecked && completionBoundaryChecked &&
+              completedChecked && recorder.completions.size() == 1 &&
+              recorder.completions[0].timeNs == 11 * secondNs,
+          "running task snapshot checks did not complete");
+    Simulator::Destroy();
+}
+
 } // namespace
 
 int
@@ -189,6 +256,7 @@ main()
         CheckExactServiceTime();
         CheckFcfsQueue();
         CheckFaultSafeCancellation();
+        CheckRunningTaskSnapshot();
         std::cout << "SatCompute compute service tests passed." << std::endl;
         return 0;
     }

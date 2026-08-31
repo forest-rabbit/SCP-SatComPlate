@@ -10,10 +10,22 @@
 #include "ns3/event-id.h"
 
 #include <cstdint>
+#include <optional>
 #include <set>
 
 namespace ns3
 {
+
+/** Causal progress snapshot for the task currently using one compute node. */
+struct RunningComputeTaskSnapshot
+{
+    uint64_t taskId{}; ///< Stable task ID.
+    int64_t startTimeNs{}; ///< Exact compute-dispatch time.
+    int64_t serviceTimeNs{}; ///< Fixed non-preemptive service duration.
+    int64_t elapsedTimeNs{}; ///< Known elapsed service time at this instant.
+    int64_t remainingTimeNs{}; ///< Known time until the scheduled completion.
+    double completionRatio{}; ///< elapsed/service in [0, 1].
+};
 
 /** Deterministic, non-preemptive, single-server FCFS compute queue. */
 class ComputeService : public Application
@@ -50,6 +62,8 @@ class ComputeService : public Application
     bool IsComputeAvailable() const;
     bool HasRunningTask() const;
     uint64_t GetRunningTaskId() const;
+    /** @return Current task progress, or null when the service is not running a task. */
+    std::optional<RunningComputeTaskSnapshot> GetRunningTaskSnapshot() const;
     bool IsIdle() const;
     uint64_t GetCancelledRunningTaskCount() const;
     uint64_t GetRemovedQueuedTaskCount() const;

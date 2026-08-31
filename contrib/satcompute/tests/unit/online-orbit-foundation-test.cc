@@ -74,13 +74,46 @@ RunIdentityAndMotionCase()
                    0.001,
                    "online orbit ECEF radius differs");
 
+        const Vector predictedOneSecond =
+            constellation.GetPositionAt(0, Seconds(1));
         double movementM = 0.0;
+        double predictionErrorM = 0.0;
         Simulator::Schedule(Seconds(1), [&] {
-            movementM = Distance(initial, constellation.GetPosition(0));
+            const Vector actualOneSecond = constellation.GetPosition(0);
+            movementM = Distance(initial, actualOneSecond);
+            predictionErrorM = Distance(predictedOneSecond, actualOneSecond);
         });
         Simulator::Stop(Seconds(1));
         Simulator::Run();
         Check(movementM > 1000.0, "official mobility position did not evolve continuously");
+        Check(predictionErrorM < 0.001,
+              "time-indexed native orbit query differs from runtime position");
+    }
+    Simulator::Destroy();
+}
+
+void
+RunStartOffsetCase()
+{
+    constexpr double startOffsetSeconds = 5695.0;
+    const ConstellationDefinition config = MakeTestConstellation(3, 4);
+    Vector expected;
+    {
+        OnlineOrbitConstellation baseline(config);
+        Simulator::Schedule(Seconds(startOffsetSeconds), [&] {
+            expected = baseline.GetPosition(7);
+        });
+        Simulator::Stop(Seconds(startOffsetSeconds));
+        Simulator::Run();
+    }
+    Simulator::Destroy();
+
+    {
+        OnlineOrbitConstellation shifted(config, startOffsetSeconds);
+        Check(shifted.GetStartOffsetSeconds() == startOffsetSeconds,
+              "online orbit lost its start offset");
+        Check(Distance(expected, shifted.GetPosition(7)) < 0.001,
+              "shifted orbit time zero differs from the baseline future position");
     }
     Simulator::Destroy();
 }
@@ -193,6 +226,7 @@ main(int argc, char* argv[])
     try
     {
         RunIdentityAndMotionCase();
+        RunStartOffsetCase();
         RunCandidateCase();
         RunValidationCase();
         std::cout << "SatCompute online orbit foundation tests passed." << std::endl;

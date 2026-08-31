@@ -21,6 +21,12 @@ SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真�
 - 支持 global-first、逐流 hash、HRW、size-aware HRW 和 capacity-aware HRW；
 - 支持输入传输、非抢占 FCFS 计算和结果传输的完整任务闭环；
 - 支持确定性 compute/整星故障的预警、开始、有限恢复、任务/传输终止与即时重路由；
+- 支持 `none/generate/replay`，可按实时计算负载生成 F1 温度/能源风险，也可按实时
+  ECEF 位置生成 F2 连续辐射暴露风险；两者都能产生可恢复 compute 故障和可确定性
+  重放的统一 trace；
+- 支持独立 F3 fixed-K/Poisson 永久整星故障，并在冲突时优先于可恢复 compute 故障；
+- 可按需启用 F1/F2 因果概率预测与 generate/replay 一致性审计；正常运行默认关闭
+  预测采集、审计 CSV 和对比；
 - topology-only 模式可输出每个切片的卫星 `x/y/z` 与候选链路状态。
 
 备份恢复、前后端实时状态传输、IPv6、SRv6、地面站和馈电链路尚未实现。
@@ -80,6 +86,15 @@ Python 工具仅依赖标准库，因此仓库不维护额外的 `uv.lock`，也
 仓库提供一组已经纳入回归测试的
 [100 秒、66 星、20 任务示例](contrib/satcompute/input/examples/leo-66-100s-20tasks/README.md)。
 它复用正式星座与算力文件，展示完整任务仿真和同周期 topology-only 切片生成。
+F1 在线故障闭环见
+[120 秒、66 星热点任务示例](contrib/satcompute/input/examples/leo-66-120s-f1/README.md)。
+F2 的纯轨道暴露标定和真实平台闭环分别见
+[F2 标定证据](docs/calibration/n4b-f2/README.md)与
+[1000 秒、66 星、8 任务示例](contrib/satcompute/input/examples/leo-66-1000s-f2/README.md)。
+F3 无任务永久整星闭环见
+[1000 秒、66 星 fixed-K 示例](contrib/satcompute/input/examples/leo-66-1000s-f3/README.md)。
+F1/F2/F3、任务、路由和概率审计的最终联合闭环见
+[1000 秒、66 星、100 任务 N4B 验收场景](contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/README.md)。
 
 只生成 0–20 秒、每秒一个拓扑切片：
 
@@ -102,7 +117,10 @@ Python 工具仅依赖标准库，因此仓库不维护额外的 `uv.lock`，也
 | [路由模块](contrib/satcompute/routing/README.md) | 五种 IPv4 策略、核心公式与确定性状态 |
 | [任务与传输](contrib/satcompute/task/README.md) | 任务状态机、FCFS 与结果大小 |
 | [指标模块](contrib/satcompute/metrics/README.md) | 输出文件、字段职责与失败诊断 |
-| [辅助工具](contrib/satcompute/tools/README.md) | TaskTrace 生成与失败输出检查 |
+| [故障模块](contrib/satcompute/fault/README.md) | 统一 trace、F1/F2/F3 在线模型与 N4A 执行边界 |
+| [F1 标定证据](docs/calibration/n4b-f1/README.md) | 热时间常数、30-run 概率候选与选择边界 |
+| [F2 标定证据](docs/calibration/n4b-f2/README.md) | 66/351/720 星轨道暴露、冻结参数与真实平台 Monte Carlo |
+| [辅助工具](contrib/satcompute/tools/README.md) | TaskTrace 生成、F1/F2 标定与失败输出检查 |
 | [测试说明](contrib/satcompute/tests/README.md) | 本地测试入口、覆盖范围与阶段 CI 规则 |
 
 许可证和上游来源见 [NOTICE](NOTICE.md)。

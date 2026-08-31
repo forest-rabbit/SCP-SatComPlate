@@ -1,4 +1,109 @@
-# 失败输出一致性检查
+# 验证与标定工具
+
+## F1 参数标定
+
+`f1-calibration.cc` 构建为 `satcompute-f1-calibration`，直接调用
+`F1SelfStateFaultModel` 比较 `tau_h`、`tau_c` 和 `lambda_F1_max` 候选。它不建立
+卫星网络，不生成正式 Fault Trace，也不在 Python 中重新实现风险公式。
+
+```bash
+./ns3 run "satcompute-f1-calibration \
+  --outputDir=/tmp/satcompute-f1-calibration"
+```
+
+| 参数 | 含义 |
+|---|---|
+| `--outputDir` | 必填；标定 CSV 和 summary 的输出目录 |
+
+工具直接读取并校验 `fault/fault-para.cc` 中的内置参数，避免平台运行和标定工具出现
+两套配置来源。若修改故障参数，必须重新编译后再运行标定。
+
+输出为：
+
+- `n4b-f1-calibration.csv`：升降温候选逐秒状态，以及四个强度候选各 30 个固定
+  run 的计数和分布；
+- `n4b-f1-calibration-summary.json`：候选汇总、选择参数、热时间、任务数量、平均
+  故障数、风险-only 数、故障温度和预警提前量。
+
+当前冻结输出与解释见
+[`docs/calibration/n4b-f1`](../../../../docs/calibration/n4b-f1/README.md)。这些结果
+属于 66 星/1000 秒功能场景标定，不代表客观航天器失效率。
+
+## F2 轨道暴露标定
+
+`f2-exposure-calibration.cc` 构建为 `satcompute-f2-exposure-calibration`，只推进
+ns-3.48 原生圆轨道并按 1 秒读取 ECEF 坐标。它不创建 InternetStack、NetDevice、
+路由、任务、F1/F3 或故障执行，因此 1000 秒暴露窗口的选择不受网络负载影响。
+
+```bash
+./ns3 run "satcompute-f2-exposure-calibration \
+  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --calibrationDuration=7200 \
+  --windowDuration=1000 \
+  --outputDir=/tmp/satcompute-f2-66"
+```
+
+| 参数 | 含义 |
+|---|---|
+| `--constellationConfig` | 必填；一个原生 LEO shell CSV |
+| `--calibrationDuration` | 轨道扫描时长，默认 7200 秒 |
+| `--windowDuration` | 滑动功能窗口，默认 1000 秒 |
+| `--referenceFailureIntensity` | 可选；以 66 星冻结强度验证更大星座，不参与重新标定 |
+| `--outputDir` | 必填；episode CSV 和 summary 的输出目录 |
+
+工具输出 `n4b-f2-exposure-calibration.csv` 与
+`n4b-f2-exposure-summary.json`。66 星负责选择窗口并冻结 `lambda_F2/theta_F2`；
+351/720 星必须复用 66 星强度，只检查总暴露和期望事件数是否随规模增长，不能各自
+重新调成平均一次故障。冻结证据和三组复现命令见
+[`docs/calibration/n4b-f2`](../../../../docs/calibration/n4b-f2/README.md)。
+
+## F2 真实平台 Monte Carlo
+
+orbit-only 标定完成后，`run-f2-monte-carlo.py` 才调用 66 星、1000 秒、8 任务的真实
+F2-only generate；它覆盖概率抽样、N4A compute 故障、8 秒恢复和任务执行，不重复
+实现 F2 公式。
+
+```bash
+python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
+  --run-count=100 \
+  --outputDir=/tmp/satcompute-f2-monte-carlo
+```
+
+脚本固定 `randomSeed=1`，依次使用 `randomRun=1..N`，输出逐 run CSV 和统计 JSON。
+当前 100-run 实际故障均值为 1.02，近似 95% 均值区间为
+`[0.8311, 1.2089]`，包含解析目标 1，因此没有因
+单次运行的随机计数重新调整强度。
+
+## Generate/Replay 概率一致性
+
+`compare-fault-probabilities.py` 比较一次 generate 的抽样前真实模型概率与一次
+replay 的因果预测概率。replay 仍只以 generate 的 Fault Trace 为故障输入；这里的
+CSV 只用于仿真结束后的实现验证。两次平台运行都必须显式传入
+`--faultProbabilityAudit=1`；正常运行默认不生成这些文件，平台也不会自动调用本
+对比脚本。
+
+```bash
+python3 contrib/satcompute/tools/validation/compare-fault-probabilities.py \
+  --model=/tmp/generate/fault-model-probabilities.csv \
+  --prediction=/tmp/replay/fault-predictions.csv \
+  --detail=/tmp/audit/fault-probability-audit.csv \
+  --summary=/tmp/audit/fault-probability-audit-summary.json
+```
+
+脚本以 `(simulation_time_ns,node_id,task_id)` 为主键，要求 `fault_id`、NOTICE、任务
+进度和预测窗口上下文一致，再分别比较当前步 `q_F1`、`q_F2`、`q_comp` 以及任务
+完成前累计概率 `P_fail_before_finish`。summary 固定给出：
+
+- model、prediction、matched 与双向缺失记录数；
+- 上下文不一致记录数；
+- 四个概率字段各自的 MAE、RMSE 和最大绝对误差；
+- `within_tolerance` 总结论。
+
+`--absolute-tolerance` 默认 `1e-12`。没有匹配记录、键集合不同、上下文不同或任一
+最大误差超限时返回非零状态。N4B 回归分别在 66 星 F1-only、F2-only 和 F1+F2
+场景运行该工具。
+
+## 失败输出一致性检查
 
 `check-flow-drop-reasons.py` 检查一次失败任务运行中的 FlowMonitor DropReason 证据。
 它不会修改输出，也不重复验证路由、任务或拓扑合同；这些断言由对应的 C++、smoke

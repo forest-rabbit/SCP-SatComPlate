@@ -5,7 +5,7 @@
 #ifndef SATCOMPUTE_FAULT_STATE_H
 #define SATCOMPUTE_FAULT_STATE_H
 
-#include "fault-definition.h"
+#include "ns3/fault-definition.h"
 
 #include <cstdint>
 #include <map>

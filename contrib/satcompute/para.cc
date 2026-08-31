@@ -29,6 +29,9 @@ GetDefaultSatComputeConfig()
     config.constellationConfig =
         "contrib/satcompute/input/topology/constellations/synthetic-66.csv";
 
+    // --orbitStartOffset：仿真 0 秒对应的轨道 epoch 偏移，单位为秒。
+    config.orbitStartOffsetSeconds = 0.0;
+
     // --maxIslDistance：候选链路的最大有效距离，单位为米。
     config.maxIslDistanceMeters = 6'171'353.0;
 
@@ -92,8 +95,14 @@ GetDefaultSatComputeConfig()
 
     // fault
 
-    // --faultTrace：确定性故障轨迹 JSON；空路径完全保持无故障行为。
+    // --faultMode：none 不创建故障模块，generate 在线生成，replay 确定性重放。
+    config.faultMode = "none";
+
+    // --faultTrace：generate 的输出路径或 replay 的输入路径。
     config.faultTrace = "";
+
+    // --faultProbabilityAudit：按需采集概率记录；正常运行默认关闭。
+    config.faultProbabilityAudit = false;
 
     // output
 

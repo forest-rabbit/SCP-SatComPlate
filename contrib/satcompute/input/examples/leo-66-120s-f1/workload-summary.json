@@ -1,0 +1,58 @@
+{
+  "profile": "f1-validation",
+  "seed": "n4b-f1-66",
+  "task_count": 20,
+  "hotspot_compute_node_ids": [
+    0,
+    11,
+    22
+  ],
+  "hotspot_task_ids": {
+    "0": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "11": [
+      6,
+      7,
+      8,
+      9
+    ],
+    "22": [
+      11,
+      12,
+      13,
+      14
+    ]
+  },
+  "expected_critical_failure_task_ids": [
+    4,
+    9,
+    14
+  ],
+  "post_recovery_task_ids": [
+    5,
+    10,
+    15
+  ],
+  "risk_only_compute_node_id": 33,
+  "risk_only_task_ids": [
+    16,
+    17,
+    18
+  ],
+  "control_compute_node_ids": [
+    44,
+    55
+  ],
+  "control_task_ids": [
+    19,
+    20
+  ],
+  "hotspot_task_duration_s": 15,
+  "risk_only_task_duration_s": 15,
+  "post_recovery_task_duration_s": 2,
+  "control_task_duration_s": 2
+}

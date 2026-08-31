@@ -4,6 +4,12 @@
 ComputeProfile 生成 TaskTrace。它不生成星座、坐标、链路或完整平台配置，也不在
 Python 中复制 ns-3.48 的轨道计算。
 
+脚本包含四个明确的生成档：默认 `stress` 用于可调规模压力任务；
+`f1-validation` 固定生成 N4B 第一阶段的 66 星、20 任务输入；`f2-validation` 固定
+生成第二阶段的 66 星、8 任务输入；`n4b-joint-validation` 固定生成 N4B 最终联合
+验收的 66 星、100 任务输入。四者共用同一套输入闭集校验、稳定 ID 和 JSON writer，
+不再维护独立的故障场景生成器。
+
 ## 输入与输出
 
 输入必须满足以下约束：
@@ -12,15 +18,19 @@ Python 中复制 ns-3.48 的轨道计算。
   `node_id`；坐标字段可以存在，但只用于确认这是节点切片，不参与任务分配；
 - `--compute-profile` 是平台可直接读取的 ComputeProfile，其中所有算力节点都必须
   出现在节点切片中；
-- 所有字节、任务数量和时间边界均使用整数，时间参数单位为 ns。
+- `stress` 档的字节、任务数量和时间边界均使用整数，时间参数单位为 ns；
+- `f1-validation` 要求节点切片恰好包含 66 星、ComputeProfile 至少包含 6 个节点；
+- `f2-validation` 要求节点切片恰好包含 66 星，并包含固定验证节点
+  `0/11/18/29/40/51` 的算力配置。
+- `n4b-joint-validation` 要求节点切片恰好包含 66 星，且全部卫星均具有算力配置。
 
 脚本写出两个 JSON：
 
 - `--output-task-trace`：平台可直接读取的 `{"tasks": [...]}`；
-- `--output-workload-summary`：实际分布、类别计数、总字节、到达范围和节点任务数，
+- `--output-workload-summary`：stress 档记录分布与预算，F1/F2 验证档记录任务角色；
   仅用于检查生成结果，不是平台输入。
 
-## 快速示例
+## stress 快速示例
 
 先用平台导出一个节点切片，再运行：
 
@@ -38,24 +48,79 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --output-workload-summary=/tmp/tasks-summary.json
 ```
 
+## F1 验证档
+
+```bash
+python3 contrib/satcompute/tools/generation/generate-task-workload.py \
+  --profile=f1-validation \
+  --nodes-file=/tmp/satcompute-topology/topology/nodes_0s.json \
+  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
+  --seed=n4b-f1-66 \
+  --output-task-trace=/tmp/f1-task-trace.json \
+  --output-workload-summary=/tmp/f1-workload-summary.json
+```
+
+该档固定产生 20 个任务：3 个热点节点分别包含连续负载与恢复后任务，1 个节点只
+形成风险 episode，2 个节点承载稀疏短任务。它只构造任务忙闲条件，不预先写故障；
+是否发生故障仍由正式仿真中的 `FaultModelEngine` 根据实时状态判定。
+
+## F2 验证档
+
+先用 `--orbitStartOffset=5695 --topologyOnly=1` 导出 66 星选定窗口的 0 秒节点切片，
+再运行：
+
+```bash
+python3 contrib/satcompute/tools/generation/generate-task-workload.py \
+  --profile=f2-validation \
+  --nodes-file=/tmp/satcompute-n4b-f2-topology/topology/nodes_0s.json \
+  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
+  --seed=n4b-f2-66 \
+  --output-task-trace=/tmp/f2-task-trace.json \
+  --output-workload-summary=/tmp/f2-workload-summary.json
+```
+
+该档固定产生 8 个任务：两个长热点任务覆盖固定 seed/run 下的实际故障，两个任务
+验证恢复后新任务可继续运行，两个任务覆盖风险-only/终点截断 episode，另有两个
+稀疏对照任务。完整命令和预期结果见
+[`leo-66-1000s-f2`](../../input/examples/leo-66-1000s-f2/README.md)。任务仍只用于
+验证执行生命周期，F2 是否发生由正式平台的实时 ECEF 暴露和 ns-3 随机流决定。
+
+## N4B 联合验收档
+
+```bash
+python3 contrib/satcompute/tools/generation/generate-task-workload.py \
+  --profile=n4b-joint-validation \
+  --nodes-file=/tmp/satcompute-n4b-joint-topology/topology/nodes_0s.json \
+  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
+  --seed=n4b-joint-66 \
+  --output-task-trace=/tmp/n4b-joint-task-trace.json \
+  --output-workload-summary=/tmp/n4b-joint-workload-summary.json
+```
+
+该档固定产生 100 个任务：30 个任务覆盖 3 个强热点、1 个临界热点和 1 个温热对照
+节点；8 个任务覆盖 F2/F3 故障、恢复和邻接对照窗口；其余 62 个 2–5 秒短任务分散
+到 55 个非保留计算节点。完整角色、冻结 seed/run 和四轮验收流程见
+[`leo-66-1000s-n4b-joint`](../../input/examples/leo-66-1000s-n4b-joint/README.md)。
+
 ## 参数
 
 ### 基本任务与到达过程
 
 | 参数 | 含义 |
 |---|---|
+| `--profile` | `stress`（默认）、`f1-validation`、`f2-validation` 或 `n4b-joint-validation` |
 | `--nodes-file` | topology-only 节点切片 |
 | `--compute-profile` | 算力节点及其处理速率 |
-| `--task-count` | 任务总数；任务 ID 固定为 `1..N` |
-| `--total-input-bytes` | 所有任务 `input_bytes` 的精确总预算 |
+| `--task-count` | stress 必填；任务总数，任务 ID 固定为 `1..N` |
+| `--total-input-bytes` | stress 必填；所有任务 `input_bytes` 的精确总预算 |
 | `--seed` | 非空字符串；相同输入和参数生成相同结果 |
-| `--arrival-start-ns` | 最早到达边界，含该时刻 |
-| `--arrival-end-ns` | 最晚到达边界，含该时刻 |
-| `--arrival-mode` | `uniform` 为均匀散布，`burst` 为确定性突发到达 |
+| `--arrival-start-ns` | stress 必填；最早到达边界，含该时刻 |
+| `--arrival-end-ns` | stress 必填；最晚到达边界，含该时刻 |
+| `--arrival-mode` | stress 必填；`uniform` 均匀散布，`burst` 确定性突发到达 |
 | `--output-task-trace` | TaskTrace 输出路径 |
 | `--output-workload-summary` | 分布汇总输出路径 |
 
-### 任务类别比例
+### stress 任务类别比例
 
 比例使用 basis point（bp），`10000 bp = 100%`。四项之和必须为 10000。
 
@@ -69,7 +134,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 脚本以最大余数法把比例转换为整数任务数。类别只用于生成不同的输入权重、计算量
 和结果大小，TaskTrace 本身仍保持平台的通用任务字段。
 
-### 大任务尾部与普通任务边界
+### stress 大任务尾部与普通任务边界
 
 | 参数 | 默认值 | 含义 |
 |---|---:|---|
@@ -90,7 +155,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 确定性来源不是 Python 的全局随机状态，而是脚本内对
 `seed + task_id + field_name` 执行的 FNV-1a 64-bit 映射。
 
-生成过程还保证：
+stress 档的生成过程还保证：
 
 - compute 节点、source 节点和 result 节点按稳定 ID 尽量均衡分配；
 - 每个任务的 source 与 compute 不同，result 与 compute 不同；
@@ -98,6 +163,11 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 - `output_bytes` 按任务类别生成并显式写入，不由仿真时推导；
 - 同一类别内，较大的输入总体对应较大的 `compute_work_units`；
 - 到达时刻、任务数组和 summary 中按稳定 task ID 输出。
+
+F1 验证档额外把热点节点、预期临界故障任务、恢复后任务、风险-only 节点及对照
+节点写入 summary。F2 验证档记录轨道起始偏移、固定 seed/run、热点、预期故障时刻、
+恢复后、风险-only 与对照任务。联合验收档记录分级热点、F2/F3 窗口任务和分散对照
+任务。三种 summary 都只供测试精确断言，不是平台输入。
 
 主要函数按职责分为：输入闭集校验（`read_satellite_ids`、
 `read_compute_profile`）、整数预算分配（`largest_remainder`、

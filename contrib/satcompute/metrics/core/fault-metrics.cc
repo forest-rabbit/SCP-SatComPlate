@@ -6,7 +6,9 @@
 
 #include "fault-metrics.h"
 
-#include "../../fault/fault-controller.h"
+#include "ns3/fault-controller.h"
+#include "ns3/fault-model-engine.h"
+#include "ns3/fault-prediction-engine.h"
 #include "../../task/task-coordinator.h"
 
 #include <nlohmann/json.hpp>
@@ -14,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <set>
 #include <stdexcept>
 #include <string>
 
@@ -75,10 +78,82 @@ RemoveOwnedFile(const std::filesystem::path& path)
     }
 }
 
+void
+WriteProbabilityRecords(const std::vector<ComputeFailureProbabilityRecord>& records,
+                        const std::string& filename,
+                        const std::string& outputDirectory)
+{
+    std::ofstream output(OutputPath(outputDirectory, filename),
+                         std::ios::out | std::ios::trunc);
+    if (!output.is_open())
+    {
+        throw std::runtime_error("cannot write " + filename);
+    }
+    output << "simulation_time_ns,fault_id,node_id,task_id,notice_time_ns,"
+              "risk_elapsed_time_ns,task_compute_start_time_ns,task_service_time_ns,"
+              "task_elapsed_time_ns,remaining_compute_time_ns,"
+              "expected_compute_completion_time_ns,completion_ratio,"
+              "f1_step_failure_probability,f2_step_failure_probability,"
+              "combined_step_failure_probability,horizon_step_count,"
+              "failure_before_finish_probability\n";
+    output << std::setprecision(17) << std::boolalpha;
+    for (const ComputeFailureProbabilityRecord& record : records)
+    {
+        output << record.simulationTimeNs << ',' << record.faultId << ','
+               << record.nodeId << ',' << record.taskId << ','
+               << record.noticeTimeNs << ',' << record.riskElapsedTimeNs << ','
+               << record.taskComputeStartTimeNs << ','
+               << record.taskServiceTimeNs << ','
+               << record.taskElapsedTimeNs << ','
+               << record.remainingComputeTimeNs << ','
+               << record.expectedComputeCompletionTimeNs << ','
+               << record.completionRatio << ','
+               << record.f1StepFailureProbability << ','
+               << record.f2StepFailureProbability << ','
+               << record.combinedStepFailureProbability << ','
+               << record.horizonStepCount << ','
+               << record.failureBeforeFinishProbability << '\n';
+    }
+}
+
+void
+WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
+                       const std::string& outputDirectory)
+{
+    const std::vector<ComputeFailureProbabilityRecord>& predictions =
+        predictionEngine.GetPredictionRecords();
+    WriteProbabilityRecords(predictions,
+                            "fault-predictions.csv",
+                            outputDirectory);
+
+    std::set<uint64_t> episodeIds;
+    std::set<uint64_t> taskIds;
+    for (const ComputeFailureProbabilityRecord& prediction : predictions)
+    {
+        episodeIds.insert(prediction.faultId);
+        taskIds.insert(prediction.taskId);
+    }
+    const Json summary = {
+        {"prediction_count", predictions.size()},
+        {"risk_episode_count", episodeIds.size()},
+        {"task_count", taskIds.size()}};
+    std::ofstream summaryOutput(
+        OutputPath(outputDirectory, "fault-prediction-summary.json"),
+        std::ios::out | std::ios::trunc);
+    if (!summaryOutput.is_open())
+    {
+        throw std::runtime_error(
+            "cannot write fault-prediction-summary.json");
+    }
+    summaryOutput << summary.dump(2) << '\n';
+}
+
 } // namespace
 
 void
 WriteFaultMetrics(const FaultController& controller,
+                  const FaultModelEngine* modelEngine,
+                  const FaultPredictionEngine* predictionEngine,
                   const TaskCoordinator* taskCoordinator,
                   const std::vector<TransferSummaryRecord>& transferSummaries,
                   const std::string& outputDirectory)
@@ -104,7 +179,9 @@ WriteFaultMetrics(const FaultController& controller,
                     << ',' << FaultTypeToString(event.faultType) << ','
                     << FaultEventTypeToString(event.eventType) << ',';
         WriteOptionalCsv(eventOutput, event.noticeTimeNs);
-        eventOutput << ',' << event.startTimeNs << ',';
+        eventOutput << ',';
+        WriteOptionalCsv(eventOutput, event.startTimeNs);
+        eventOutput << ',';
         WriteOptionalCsv(eventOutput, event.durationNs);
         eventOutput << ',';
         WriteOptionalCsv(eventOutput, event.failureProbability);
@@ -137,6 +214,8 @@ WriteFaultMetrics(const FaultController& controller,
         {
         case FaultEventType::NOTICE:
             ++noticeEventCount;
+            break;
+        case FaultEventType::NOTICE_CLEAR:
             break;
         case FaultEventType::START:
             ++startEventCount;
@@ -195,6 +274,35 @@ WriteFaultMetrics(const FaultController& controller,
         throw std::runtime_error("cannot write fault-summary.json");
     }
     summaryOutput << summary.dump(2) << '\n';
+
+    if (predictionEngine != nullptr)
+    {
+        if (taskCoordinator == nullptr)
+        {
+            throw std::runtime_error(
+                "prediction metrics require a TaskCoordinator");
+        }
+        WritePredictionMetrics(*predictionEngine, outputDirectory);
+    }
+    else
+    {
+        const std::filesystem::path root =
+            outputDirectory.empty() ? "." : outputDirectory;
+        RemoveOwnedFile(root / "fault-predictions.csv");
+        RemoveOwnedFile(root / "fault-prediction-summary.json");
+    }
+    const std::filesystem::path root =
+        outputDirectory.empty() ? "." : outputDirectory;
+    if (modelEngine != nullptr && predictionEngine != nullptr)
+    {
+        WriteProbabilityRecords(modelEngine->GetProbabilityRecords(),
+                                "fault-model-probabilities.csv",
+                                outputDirectory);
+    }
+    else
+    {
+        RemoveOwnedFile(root / "fault-model-probabilities.csv");
+    }
 }
 
 void
@@ -203,6 +311,9 @@ RemoveFaultMetrics(const std::string& outputDirectory)
     const std::filesystem::path root = outputDirectory.empty() ? "." : outputDirectory;
     RemoveOwnedFile(root / "fault-events.csv");
     RemoveOwnedFile(root / "fault-summary.json");
+    RemoveOwnedFile(root / "fault-predictions.csv");
+    RemoveOwnedFile(root / "fault-prediction-summary.json");
+    RemoveOwnedFile(root / "fault-model-probabilities.csv");
 }
 
 } // namespace ns3
