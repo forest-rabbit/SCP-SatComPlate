@@ -45,9 +45,9 @@ metrics/
 | 任务模式 | `compute-node-summary.csv` | 各算力节点的任务数、忙碌时间和利用率 |
 | 提供 `faultTrace` | `fault-events.csv` | canonical NOTICE/START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
 | 提供 `faultTrace` | `fault-summary.json` | 故障类型/事件/活动故障、失败任务、FAILED/CANCELLED transfer 与故障路由重算计数 |
-| generate/replay、有任务且启用 F1/F2 | `fault-predictions.csv` | 活动风险中运行任务的逐检查点 F1/F2/联合因果概率和任务进度 |
-| generate/replay、有任务且启用 F1/F2 | `fault-prediction-summary.json` | 正式预测、风险 episode 和涉及任务的数量 |
-| generate、有任务且启用 F1/F2 | `fault-model-probabilities.csv` | 随机抽样前由真实在线 F1/F2 状态计算的同结构概率真值，仅用于验证 |
+| `faultProbabilityAudit=1` 的 generate/replay | `fault-predictions.csv` | 活动风险中运行任务的逐检查点 F1/F2/联合因果概率和任务进度 |
+| `faultProbabilityAudit=1` 的 generate/replay | `fault-prediction-summary.json` | 正式预测、风险 episode 和涉及任务的数量 |
+| `faultProbabilityAudit=1` 的 generate | `fault-model-probabilities.csv` | 随机抽样前由真实在线 F1/F2 状态计算的同结构概率真值，仅用于验证 |
 
 `run-summary.json` 同时保留便于脚本读取的顶层计数和按 `transfer`、`task` 分组的
 汇总。它记录实际使用的任务文件路径和关键运行参数，但不复制一份平台配置。
@@ -74,6 +74,9 @@ timestamp 批次最多令一行 `route_recomputed=true`，因此逐行求和就�
 来自仿真终点的稳定终态，不把仍在运行的对象误记为故障终态。
 
 ### 计算故障预测输出
+
+以下三个文件属于显式启用的概率审计输出。`faultProbabilityAudit` 默认 `false`；关闭
+时平台不创建预测器，并从复用的 `outputDir` 中删除陈旧概率审计文件。
 
 `fault-predictions.csv` 每行对应一次活动 compute 风险与一个正在运行任务的因果
 预测，列为：

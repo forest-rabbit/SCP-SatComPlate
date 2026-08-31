@@ -69,8 +69,9 @@ tests/
   compute 故障不改变路由、故障中任务失败和恢复后新任务完成；预测部分检查滚动的
   F1/F2/`q_comp`、动态 `P_fail_before_finish`、任务剩余时间、NOTICE 当刻输出、风险
   已持续时间，以及 F1-only、F2-only、F1+F2 的 generate 抽样前模型真值与 replay
-  预测逐时刻概率审计，并检查无预警故障无正式预测、无风险输出和 none 模式陈旧
-  文件清理；F3 部分覆盖无任务 fixed-K 永久
+  预测逐时刻概率审计；这些场景显式开启 `faultProbabilityAudit`，并另行检查正常
+  generate/replay 默认不生成审计文件、复用目录时清理陈旧文件、无预警故障无正式
+  预测和无风险输出；F3 部分覆盖无任务 fixed-K 永久
   整星故障、即时重路由、F3 抢占活动 compute 区间以及 F1/F2/F3 同开。
 
 ## 本地运行

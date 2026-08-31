@@ -34,8 +34,8 @@ topologyOnly                正式仿真
 7. 同时提供 ComputeProfile 与 TaskTrace 时，执行输入传输、FCFS 计算和结果传输；
 8. `faultMode=generate` 时在线更新模型、实际执行故障并写 v2 trace；
 9. `faultMode=replay` 时校验 v1/v2 trace，并在精确纳秒确定性重放；
-10. 有任务且启用 F1/F2 时，用同一模型的无随机数影子状态滚动计算完成前故障概率，
-    并只在 NOTICE 有效时输出正式记录；
+10. 显式启用概率审计且存在 F1/F2 任务时，用同一模型的无随机数影子状态滚动计算
+    完成前故障概率，并只在 NOTICE 有效时输出正式记录；
 11. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
 
 `topologyOnly=1` 使用相同轨道和候选链路实现，但不会创建 InternetStack、
@@ -155,12 +155,15 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 |---|---:|---|---|
 | `--faultMode` | `none` | 枚举 | `none`、`generate` 或 `replay` |
 | `--faultTrace` | 空 | 路径 | generate 输出或 replay 输入的统一 Fault Trace |
-| `--faultEnableF1` | `true` | bool | generate 是否启用 F1 来源；replay 是否启用 F1 预测模型 |
-| `--faultEnableF2` | `false` | bool | generate 是否启用 F2 来源；replay 是否启用 F2 预测模型 |
+| `--faultProbabilityAudit` | `false` | bool | 是否按需运行预测器并输出概率一致性审计文件 |
+| `--faultEnableF1` | `true` | bool | generate 是否启用 F1 来源；replay 审计时是否启用 F1 影子模型 |
+| `--faultEnableF2` | `false` | bool | generate 是否启用 F2 来源；replay 审计时是否启用 F2 影子模型 |
 | `--faultEnableF3` | `false` | bool | generate 是否启用内置 F3 永久整星来源 |
 
 `none` 要求 `faultTrace` 为空；`generate` 将它作为输出路径，`replay` 将它作为
 已有输入路径。故障内部参数集中在 `fault/fault-para.cc`，不再使用模型配置 JSON。
+`faultProbabilityAudit` 默认关闭，只能与 generate/replay、任务输入和至少一个启用的
+F1/F2 来源共同使用；关闭时不创建预测器，也不采集在线模型概率记录。
 三个 `faultEnable*` 不复制经纬度、强度、阈值或恢复时间等内部参数。generate 中
 它们选择真实故障来源；replay 不重新抽样，但 `faultEnableF1/F2` 选择预测器需要
 重建的影子模型，因此应与生成该 trace 时的 F1/F2 开关保持一致。当前 generate
@@ -175,7 +178,8 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 无预警、无恢复，并在同节点同刻优先于 compute 故障。replay 只执行已确定的 trace，
 不会再次抽样。
 
-generate/replay 在有任务输入且启用 F1/F2 时共用同一套因果预测逻辑。预测器持续
+`faultProbabilityAudit=1` 时，generate/replay 在有任务输入且启用 F1/F2 的前提下
+共用同一套因果预测逻辑。预测器持续
 维护独立、无随机数的 F1/F2 影子状态；正式记录由 NOTICE 门控。对任务剩余窗口中
 每个检查点计算 `q_comp,k=1-(1-q_F1,k)(1-q_F2,k)`，再得到
 `P_fail_before_finish=1-product_k(1-q_comp,k)`。它不读取未来 START、最终
@@ -192,10 +196,11 @@ generate/replay 在有任务输入且启用 F1/F2 时共用同一套因果预测
 
 运行摘要会记录实际使用的关键参数和各层结果，仅作为本次仿真的输出证据，不是
 第二个配置入口。generate/replay 会生成 `fault-events.csv` 和 `fault-summary.json`；
-同时存在任务输入且启用 F1/F2 时，还会生成 `fault-predictions.csv` 与
+只有显式设置 `faultProbabilityAudit=1` 时，才会生成 `fault-predictions.csv` 与
 `fault-prediction-summary.json`；generate 还会生成抽样前的
 `fault-model-probabilities.csv`，用于和 replay 预测做概率对概率验证。该文件不是
-故障输入。none 与纯 F3 运行不生成这些概率文件。
+故障输入。正常运行默认不创建预测器或这些审计文件，并会清理同一输出目录中的陈旧
+审计文件；概率对比脚本也只由测试显式调用。
 
 ## 星座与动态拓扑
 

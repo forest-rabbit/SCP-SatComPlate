@@ -28,7 +28,7 @@ fault/
 | `model/f3-debris-fault-model.h/.cc` | 以独立 ns-3 随机流生成 fixed-K 或 Poisson 永久整星事件 |
 | `runtime/compute-failure-probability-record.h` | generate 真值与 replay 预测共用的逐时刻概率字段合同 |
 | `runtime/fault-model-engine.h/.cc` | 在线读取状态、维护风险 episode、使用 ns-3 随机流判定事件 |
-| `runtime/fault-prediction-engine.h/.cc` | 在 generate/replay 中维护无随机数影子状态，并从已执行 NOTICE 和当前任务快照生成因果预测记录 |
+| `runtime/fault-prediction-engine.h/.cc` | 按需在 generate/replay 中维护无随机数影子状态，并从已执行 NOTICE 和当前任务快照生成因果预测记录 |
 | `runtime/fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
 | `runtime/fault-controller.h/.cc` | replay/在线事件批处理，以及任务、传输和有效拓扑联动 |
 | `trace/fault-definition.h/.cc` | compute/satellite 记录以及预警、恢复、风险结束和排序时间 |
@@ -50,7 +50,7 @@ generate
 replay
   只读取已经确定的 v1/v2 Fault Trace
   -> 不按模型重新抽样故障 -> 精确重放
-  若启用 F1/F2 预测：当前任务/原生轨道 -> 无随机数影子模型 -> 预测指标
+  若显式启用概率审计：当前任务/原生轨道 -> 无随机数影子模型 -> 预测指标
 ```
 
 `generate` 中确实会发生故障，并同时写出本轮实际执行的 trace。随后使用相同星座、
@@ -60,11 +60,12 @@ replay
 独立竞争风险处理：F1/F2 分别抽样，平台只执行二者结果的逻辑或。F3 可单独运行，
 也可与两个计算来源共同运行。
 
-当任务输入存在且 F1/F2 至少启用一个时，generate 和 replay 都启用同一个因果
-预测器。replay 不重新决定故障，但预测器仍需按相同参数重建 F1/F2 影子状态；因此
+仅当 `faultProbabilityAudit=1`、任务输入存在且 F1/F2 至少启用一个时，generate 和
+replay 才启用同一个因果预测器。replay 不重新决定故障，但预测器仍需按相同参数
+重建 F1/F2 影子状态；因此
 重放 F2-only 或 F1+F2 trace 时，必须传入与 generate 相同的 `faultEnableF1/F2`。
-预测器不消费随机数，也不改变真实模型、任务或故障状态。none 和纯 F3 运行不创建
-预测器，也不生成预测文件。
+预测器不消费随机数，也不改变真实模型、任务或故障状态。该开关默认关闭；正常运行、
+none 和纯 F3 运行都不创建预测器，也不生成概率审计文件。
 
 ## F1 自身状态计算故障
 
@@ -222,6 +223,9 @@ F1/F2 各自的独立随机判定。有预警故障记录
 
 ## 任务完成前的因果故障概率预测
 
+本节能力由 `faultProbabilityAudit=1` 按需启用；默认正式运行不承担预测滚动、概率
+记录或 CSV 写出开销。
+
 预测器在每个 F1/F2 检查点为所有正在计算的任务准备内部预测，但只有以下两个条件
 同时满足时才输出正式记录：目标节点已有一个尚未结束的 compute 风险 episode，且
 该节点当前正在计算任务。NOTICE 是输出门控和风险标识，不是预测模型的起点，也不
@@ -267,8 +271,8 @@ NOTICE_CLEAR / satellite START 关闭 episode，不输出该时刻记录
 风险时长。generate 和 replay 因此使用同一条因果路径；使用相同任务和已生成 trace
 时，预测输出应逐字节一致。
 
-generate 的在线引擎还会在每次正式预测对应的随机抽样前，用真实 F1/F2 状态计算
-同结构概率记录；replay 则从无随机数影子状态输出预测记录。验证工具按
+启用概率审计后，generate 的在线引擎还会在每次正式预测对应的随机抽样前，用真实
+F1/F2 状态计算同结构概率记录；replay 则从无随机数影子状态输出预测记录。验证工具按
 `(simulation_time_ns,node_id,task_id)` 比较 `q_F1`、`q_F2`、`q_comp` 和
 `P_fail_before_finish`，并报告 MAE、RMSE、最大绝对误差、缺失记录与上下文差异。
 真实模型概率文件只是离线验证证据，不写入 Fault Trace，也不作为 replay 输入。
