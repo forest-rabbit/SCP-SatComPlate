@@ -237,7 +237,7 @@ plane-major 顺序编号为 `0..65`，不直接使用全局 `Node::GetId()`。
 固定候选并记录 `active`、距离、时延和带宽。详细合同见
 [topology/export](topology/export/README.md)。
 
-topology-only 切片仍用于可视化和后续故障研究。F2 暴露参数的 orbit-only 标定只
+topology-only 切片仍用于可视化和后续故障研究。F2 空间风险的 orbit-only 标定只
 推进与正式平台相同的原生轨道，不创建网络、路由或任务；正式 F2 generate 则直接
 读取本轮 `OnlineOrbitConstellation` 的实时 ECEF 坐标，不回读这些切片。F1 同样
 直接读取本轮 ComputeService 忙闲状态。两者都会在线产生并执行风险/故障，同时输出
