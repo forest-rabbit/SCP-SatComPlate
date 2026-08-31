@@ -81,3 +81,14 @@ taskCompletionPolicy=report
 不得生成或保留 `fault-model-probabilities.csv`、`fault-predictions.csv` 和
 `fault-prediction-summary.json`。具体断言由
 `tests/integration/regression/run-n4b-joint-acceptance.sh` 维护。
+
+在仓库根目录构建后，可单独复现正式验收：
+
+```bash
+contrib/satcompute/tests/integration/regression/run-n4b-joint-acceptance.sh
+```
+
+2026-08-31 的冻结验收中，四轮运行全部通过：normal/audit generate 的 Fault Trace
+逐字节相同，audit generate/replay 的事件、任务、transfer、路由和 reservation 输出
+逐文件相同，72 条模型/预测概率零缺失且误差不超过 `1e-12`；最后一轮还证明复用
+目录不会残留三种审计文件。该 runner 已纳入 SatCompute 完整 regression 门禁。

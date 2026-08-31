@@ -24,7 +24,9 @@ SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真�
 - 支持 `none/generate/replay`，可按实时计算负载生成 F1 温度/能源风险，也可按实时
   ECEF 位置生成 F2 连续辐射暴露风险；两者都能产生可恢复 compute 故障和可确定性
   重放的统一 trace；
-- 可按需启用 F1/F2 概率一致性审计；正常运行默认关闭预测采集、审计 CSV 和对比；
+- 支持独立 F3 fixed-K/Poisson 永久整星故障，并在冲突时优先于可恢复 compute 故障；
+- 可按需启用 F1/F2 因果概率预测与 generate/replay 一致性审计；正常运行默认关闭
+  预测采集、审计 CSV 和对比；
 - topology-only 模式可输出每个切片的卫星 `x/y/z` 与候选链路状态。
 
 备份恢复、前后端实时状态传输、IPv6、SRv6、地面站和馈电链路尚未实现。
@@ -91,6 +93,8 @@ F2 的纯轨道暴露标定和真实平台闭环分别见
 [1000 秒、66 星、8 任务示例](contrib/satcompute/input/examples/leo-66-1000s-f2/README.md)。
 F3 无任务永久整星闭环见
 [1000 秒、66 星 fixed-K 示例](contrib/satcompute/input/examples/leo-66-1000s-f3/README.md)。
+F1/F2/F3、任务、路由和概率审计的最终联合闭环见
+[1000 秒、66 星、100 任务 N4B 验收场景](contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/README.md)。
 
 只生成 0–20 秒、每秒一个拓扑切片：
 

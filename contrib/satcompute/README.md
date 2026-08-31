@@ -81,6 +81,8 @@ F2 在线生成与重放见
 [1000 秒、66 星 F2 示例](input/examples/leo-66-1000s-f2/README.md)。
 F3 无任务永久整星生成与重放见
 [1000 秒、66 星 F3 示例](input/examples/leo-66-1000s-f3/README.md)。
+F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
+[1000 秒、66 星、100 任务 N4B 验收场景](input/examples/leo-66-1000s-n4b-joint/README.md)。
 
 ## 参数边界
 
