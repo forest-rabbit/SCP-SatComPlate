@@ -63,9 +63,10 @@ source .venv/bin/activate
 uv pip install "cmake==3.25.*" ninja
 ```
 
-uv 只管理 Python 工具环境，不能替代 C++ 编译器和系统库。当前 SatCompute 的
-Python 工具仅依赖标准库，因此仓库不维护额外的 `uv.lock`，也不执行 `uv sync`；
-根目录 `pyproject.toml` 仍是 ns-3 上游 Python 绑定的打包配置。
+uv 只管理 Python 工具环境，不能替代 C++ 编译器和系统库。SatCompute 的生成器与
+检查器使用标准库；F2 论文绘图脚本通过内嵌 PEP 723 声明 NumPy/Matplotlib，可直接
+使用 `uv run <script>` 隔离执行。因此仓库仍不维护额外的 `uv.lock`，也不执行
+`uv sync`；根目录 `pyproject.toml` 仍是 ns-3 上游 Python 绑定的打包配置。
 
 ## 构建与快速运行
 

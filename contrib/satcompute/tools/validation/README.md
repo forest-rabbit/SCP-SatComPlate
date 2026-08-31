@@ -79,6 +79,57 @@ python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
 2.24，近似 95% 均值区间为 `[1.9683, 2.5117]`，包含解析目标 2，因此不按单个
 run 的随机计数重新调整强度。
 
+## F2 长时空间验证与绘图
+
+`f2-spatial-validation.cc` 构建为 `satcompute-f2-spatial-validation`。它复用正式
+`OnlineOrbitConstellation`、`F2RadiationFaultModel`、ns-3 随机流和 8 秒恢复期间
+暂停抽样的语义，但不创建网络、路由、任务、F1、F3 或 `FaultController`。默认
+基线固定为 66 星、50 万秒、`orbitStartOffset=5210`、`randomSeed=1`、
+`randomRun=1`：
+
+```bash
+./ns3 run "satcompute-f2-spatial-validation \
+  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --duration=500000 \
+  --orbitStartOffset=5210 \
+  --longitudeBin=2.5 \
+  --latitudeBin=2.5 \
+  --randomSeed=1 \
+  --randomRun=1 \
+  --outputDir=/tmp/satcompute-f2-spatial"
+```
+
+| 参数 | 含义 |
+|---|---|
+| `--duration` | 轨道与 F2 抽样时长，单位为秒，默认 500000 |
+| `--orbitStartOffset` | 仿真 `t=0` 对应的轨道 epoch，66 星基线为 5210 秒 |
+| `--longitudeBin` / `--latitudeBin` | 聚合网格大小，默认均为 2.5 度，必须整除 SAA 范围 |
+| `--randomSeed` / `--randomRun` | ns-3 确定性随机序列，正式基线固定为 1/1 |
+| `--progressInterval` | 进度输出周期，单位为秒；设为 0 时关闭 |
+| `--outputDir` | 事件 CSV、网格 CSV 和验收 JSON 的输出目录 |
+
+输出为：
+
+- `n4b-f2-spatial-fault-events.csv`：实际命中的事件位置、风险、单步概率与恢复时刻；
+- `n4b-f2-spatial-validation-bins.csv`：网格暴露、可抽样暴露、期望与实际故障数；
+- `n4b-f2-spatial-validation-summary.json`：运行参数、事件统计、空间集中性与验收结论。
+
+工具只有在事件数足够、实际计数位于条件期望四个标准差内、事件风险高于暴露风险、
+高风险区故障占比高于其暴露占比且网格风险—故障率正相关时才返回 0。正常平台运行
+不会创建这些文件。验收后使用绘图脚本生成双面板 PNG：
+
+```bash
+uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
+  --summary=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation-summary.json \
+  --bins=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation-bins.csv \
+  --events=/tmp/satcompute-f2-spatial/n4b-f2-spatial-fault-events.csv \
+  --output=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation.png
+```
+
+该脚本内嵌 PEP 723 依赖声明，`uv run` 会隔离解析 NumPy 和 Matplotlib；不需要把
+绘图依赖加入 ns-3 Python 绑定环境。`--allow-unaccepted` 只供短程工具调试，正式
+论文图必须继续使用默认的已通过验收输入。
+
 ## Generate/Replay 概率一致性
 
 `compare-fault-probabilities.py` 比较一次 generate 的抽样前真实模型概率与一次
