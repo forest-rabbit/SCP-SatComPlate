@@ -1,8 +1,12 @@
 # N4B F2 空间辐射风险标定
 
-本目录记录修订后的 F2 空间风险模型。旧的“连续暴露时间提高当前风险、累计概率
-触发 NOTICE”模型及其标定文件已经移除，避免与当前实现混用。连续暴露时间现在
-只用于 episode 统计，不参与当前故障强度、单步概率、NOTICE 或随机采样。
+本目录记录修订后的 F2 空间风险模型。当前阶段已经完成东西向非对称风险场、参数
+扫描、66 星强度反标定以及 351/720 星规模外推。100 万秒空间验证与最终论文图属于
+下一阶段，尚未用当前参数生成。
+
+旧的对称经度模型证据没有删除，统一归档在
+[`evidence/historical-symmetric/`](evidence/historical-symmetric/)；其中的 50 万秒、
+963 次故障和旧 PNG 只用于历史对照，不是当前非对称模型的验收结果。
 
 ## 模型
 
@@ -13,72 +17,92 @@ F2 使用 ns-3.48 原生圆轨道的实时 ECEF 坐标，经官方地理坐标�
 -50 deg <= latitude  <= 5 deg
 ```
 
-SAA 内以 `(-60 deg, -28 deg)` 为热点中心，采用系统级二维高斯近似：
+SAA 外令 `w_F2=0`。SAA 内以 `(-60 deg,-28 deg)` 为热点中心，采用东西向尺度不同的
+two-piece Gaussian 工程近似：
 
 ```text
-w_F2(t) = exp(-0.5 * ((lon-lon_c)/sigma_lon)^2
-                   -0.5 * ((lat-lat_c)/sigma_lat)^2)
+delta_lon = longitude - hotspot_longitude
+sigma_side = sigma_west, delta_lon < 0
+             sigma_east, delta_lon >= 0
+
+w_F2(t) = exp(-0.5 * (delta_lon / sigma_side)^2
+              -0.5 * (delta_lat / sigma_lat)^2)
 lambda_SEU(t) = lambda_SEU_max * w_F2(t)
 lambda_F2(t) = rho_SF * lambda_SEU(t)
 q_F2(t) = 1 - exp(-lambda_F2(t) * dt)
 ```
 
-`w_F2 >= theta_F2` 只负责开启 NOTICE；`0 < w_F2 < theta_F2` 时仍允许出现未预警
-故障。高斯函数是以文献观测热点为锚点的平滑工程近似，不是文献直接给出的公式。
-`rho_SF` 是场景级 SEU 到计算服务故障映射系数，也不解释为实测条件概率。
+`w_F2 >= theta_F2` 只负责开启 NOTICE；`0 < w_F2 < theta_F2` 时仍允许发生未预警
+故障。连续暴露时间只用于 episode 统计，不参与当前故障强度、单步概率、NOTICE 或
+随机采样。`rho_SF` 是场景级 SEU 到计算服务故障映射系数，不解释为实测条件概率。
 
-## 参数选择
+## 空间形状选择
 
-66 星从轨道 epoch 0 扫描 7200 秒，每秒查询一次位置。sigma 候选为
-`{12,18,24} deg x {8,12,16} deg`；阈值候选为 `{0.4,0.5,0.6}`。最终保留中间尺度：
+66 星从轨道 epoch 0 扫描 7200 秒，每秒查询一次位置。纬度尺度固定为 `12 deg`，
+比较三个满足 west < east 的最小候选：
+
+| `sigma_west/east` | 总加权暴露 | 高风险 satellite-seconds | 高风险 episode | 完整 dwell 中位数 | 选定窗口加权暴露 |
+|---:|---:|---:|---:|---:|---:|
+| 12/18 deg | 7998.1761 | 5795 | 17 | 392.0s | 1164.1045 |
+| **12/24 deg** | **9558.7763** | **6966** | **20** | **409.0s** | **1398.9946** |
+| 18/24 deg | 10768.2504 | 8123 | 23 | 402.5s | 1540.4906 |
+
+最终选择 `12/24 deg`：它在候选中形成最明确的西短东长结构，同时保留 20 个可观察
+高风险 episode，高风险区域没有覆盖整个 SAA，也没有缩小到典型轨道难以穿越。
+
+冻结形状参数为：
 
 ```text
-sigma_lon = 18 deg
+sigma_west = 12 deg
+sigma_east = 24 deg
 sigma_lat = 12 deg
 theta_F2 = 0.5
 rho_SF = 0.5
 ```
 
-该组合在 7200 秒内得到 38324 satellite-seconds 的 SAA 暴露，其中加权暴露为
-9207.6502、高风险暴露为 6952，后者约占前者对应原始 SAA 暴露的 18.1%。共观察到
-20 个高风险 episode，18 个完整 episode 的 dwell 中位数为 393.5 秒。因此高风险
-区域既未覆盖整个 SAA，也没有缩小到典型轨道难以穿越。
+在 `theta_F2=0.5` 下，NOTICE 等风险线相对热点约向西延伸 `14.13 deg`、向东延伸
+`28.26 deg`，南北各延伸 `14.13 deg`。低于 NOTICE 阈值的风险尾部仍可存在于 SAA
+矩形内，这不等于 active high-risk region 越界。
 
 阈值扫描结果为：
 
-| `theta_F2` | 高风险 satellite-seconds | episode 数 | 完整 dwell 中位数（秒） |
+| `theta_F2` | 高风险 satellite-seconds | episode 数 | 完整 dwell 中位数 |
 |---:|---:|---:|---:|
-| 0.4 | 9164 | 22 | 461.0 |
-| 0.5 | 6952 | 20 | 393.5 |
-| 0.6 | 5108 | 16 | 347.0 |
+| 0.4 | 9215 | 23 | 458.0s |
+| **0.5** | **6966** | **20** | **409.0s** |
+| 0.6 | 5180 | 17 | 330.0s |
 
-## 66 星目标与规模外推
+## 66 星强度与规模外推
 
-加权暴露最大的合格 1000 秒窗口从轨道 epoch `5210s` 开始：
+非对称模型下，满足 episode 覆盖约束且空间加权暴露最大的 1000 秒窗口从轨道 epoch
+`302s` 开始：
 
 ```text
-A_F2^w = 1337.3026834075863 satellite-seconds
+A_F2^w = 1398.9946280633549 satellite-seconds
 target E[K_F2] = 2
-kappa_F2 = 2 / A_F2^w = 0.0014955477356134454 s^-1
+kappa_F2 = 2 / A_F2^w
+          = 0.0014295980555469494 s^-1
 rho_SF = 0.5
 lambda_SEU_max = kappa_F2 / rho_SF
-               = 0.0029910954712268908 s^-1
+               = 0.002859196111093899 s^-1
 ```
 
-这里的目标是多随机 run 的平均值约为 2，不要求每个 run 恰好发生两次。冻结 66 星
+这里的目标是多个随机 run 的平均值约为 2，不要求每个 run 恰好发生两次。冻结 66 星
 参数后，351/720 星不再分别调参：
 
 | 星座 | `orbitStartOffset` | 选定窗口加权暴露量 | 固定参数下的解析期望故障数 |
 |---|---:|---:|---:|
-| 66 星 | 5210s | 1337.3027 | 2.0000 |
-| 351 星 | 4642s | 6888.1284 | 10.3015 |
-| 720 星 | 3496s | 14051.9769 | 21.0154 |
+| 66 星 | 302s | 1398.9946 | 2.0000 |
+| 351 星 | 4704s | 7150.5901 | 10.2225 |
+| 720 星 | 3478s | 14463.6294 | 20.6772 |
 
-100 个固定 `randomRun=1..100` 的真实 66 星平台运行得到平均 2.24 次故障，最小 0、
-最大 7，近似 95% 均值区间为 `[1.9683,2.5117]`，包含解析目标 2。单个 run 的
-0、1、3 次或更多故障都属于随机过程的正常结果。
+100 个固定 `randomRun=1..100` 的真实 66 星平台运行得到平均 1.91 次故障，最小 0、
+最大 6，近似 95% 均值区间为 `[1.6561,2.1639]`，包含解析目标 2。11 个 run 没有
+发生 F2 故障也属于随机过程的正常结果。
 
-## 复现
+## 复现阶段一标定
+
+66 星冻结空间参数、窗口和强度：
 
 ```bash
 ./ns3 run "satcompute-f2-exposure-calibration \
@@ -87,90 +111,61 @@ lambda_SEU_max = kappa_F2 / rho_SF
   --windowDuration=1000 \
   --targetMeanFaultCount=2 \
   --outputDir=/tmp/satcompute-f2-66"
+```
 
+351/720 星复用 66 星有效热点强度，只计算规模外推：
+
+```bash
 ./ns3 run "satcompute-f2-exposure-calibration \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-351.csv \
   --calibrationDuration=7200 \
   --windowDuration=1000 \
-  --targetMeanFaultCount=2 \
-  --referenceMaximumFailureIntensity=0.0014955477356134454 \
+  --referenceMaximumFailureIntensity=0.0014295980555469494 \
   --outputDir=/tmp/satcompute-f2-351"
 
 ./ns3 run "satcompute-f2-exposure-calibration \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-720.csv \
   --calibrationDuration=7200 \
   --windowDuration=1000 \
-  --targetMeanFaultCount=2 \
-  --referenceMaximumFailureIntensity=0.0014955477356134454 \
+  --referenceMaximumFailureIntensity=0.0014295980555469494 \
   --outputDir=/tmp/satcompute-f2-720"
+```
 
+真实平台 Monte Carlo：
+
+```bash
 python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
   --run-count=100 \
   --calibration-summary=/tmp/satcompute-f2-66/n4b-f2-spatial-calibration-summary.json \
   --outputDir=/tmp/satcompute-f2-monte-carlo
 ```
 
-orbit-only 工具输出：
+这些标定输出不是平台输入。正式 generate 仍从实时轨道位置计算 `w_F2`；replay 仍只
+执行冻结的 Fault Trace，不读取或重新计算空间风险。
 
-- `n4b-f2-spatial-exposure-episodes.csv`：SAA exposure episode；
-- `n4b-f2-spatial-calibration-summary.json`：空间场、加权暴露、高风险 dwell、窗口和
-  强度标定结果。
+## 下一阶段：100 万秒空间验证
 
-这些标定输出不是平台输入。正式 generate 仍从实时轨道位置计算 `w_F2`；replay
-仍只执行冻结的 Fault Trace，不读取或重新计算空间风险。
+最终空间证据将使用：
 
-## 50 万秒空间验证
-
-最终空间图使用 66 星、`orbitStartOffset=5210`、`randomSeed=1`、`randomRun=1`，
-连续运行 50 万秒，约等于 5.79 天或 83 圈 780 km 轨道。工具逐秒查询 66 颗卫星的
-原生位置，共完成 3300 万次位置观测；只保留实际故障与聚合网格，不输出逐秒逐星
-CSV。F2 采样包含正式的 8 秒可恢复算力停机语义，停机期间位置继续更新但暂停新的
-故障抽样。
-
-![F2 空间风险场与实际故障密度](n4b-f2-spatial-validation.png)
-
-结果为：
-
-| 指标 | 结果 |
-|---|---:|
-| SAA 内总暴露 | 2,668,977 satellite-seconds |
-| 可抽样加权暴露 | 631,441.127 weighted satellite-seconds |
-| 未计恢复抑制的逐步期望故障数 | 949.410 |
-| 按本次实际恢复区间计算的条件期望 | 943.972 |
-| 实际 F2 故障数 | 963 |
-| 实际计数相对条件期望的标准分数 | 0.620 |
-| NOTICE 高风险区内故障 | 537（55.76%） |
-| NOTICE 阈值外故障 | 426（44.24%） |
-| 高风险区占可抽样 SAA 暴露 | 17.85% |
-| 暴露加权平均风险 | 0.2372 |
-| 故障位置平均风险 | 0.5397 |
-| 529 个有效网格的风险—故障率 Pearson 相关系数 | 0.7076 |
-
-实际计数落在条件期望四个标准差内；故障位置平均风险显著高于一般暴露风险，且只占
-17.85% 暴露的 NOTICE 高风险区承载了 55.76% 的故障。单个最高计数网格受有限随机
-样本和轨道访问分布影响，不要求其中心精确等于 `(-60 deg,-28 deg)`；验收关注整体
-风险—故障率正相关与热点周围的空间集中性。五项自动验收均通过。
-
-复现长时事件与绘图：
-
-```bash
-./ns3 run "satcompute-f2-spatial-validation \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --duration=500000 \
-  --orbitStartOffset=5210 \
-  --longitudeBin=2.5 \
-  --latitudeBin=2.5 \
-  --randomSeed=1 \
-  --randomRun=1 \
-  --outputDir=/tmp/satcompute-f2-spatial"
-
-uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
-  --summary=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation-summary.json \
-  --bins=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation-bins.csv \
-  --events=/tmp/satcompute-f2-spatial/n4b-f2-spatial-fault-events.csv \
-  --output=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation.png
+```text
+constellation = 66 satellites
+duration = 1000000 s
+orbitStartOffset = 302 s
+randomSeed/randomRun = 1/1
+position and F2 check interval = 1 s
+recoverable compute outage = 8 s
+grid = 2.5 deg x 2.5 deg
 ```
 
-仓库保留论文候选 PNG，以及 [`evidence/`](evidence/) 中的事件 CSV、聚合网格 CSV
-和验收 summary。它们都是可复现实验证据，不是平台输入。旧模型的 CSV/JSON 不再
-作为当前证据保留。
+该运行只包含原生轨道位置和 F2 抽样，不创建网络、路由、任务、F1、F3 或
+`FaultController`。最终图只画完整地球经纬度坐标（经度 `[-180,180]`、纬度
+`[-90,90]`），不使用地球底图；SAA 矩形外的理论风险严格为 0。左图显示非对称理论
+风险场，右图显示邻域平滑后的每网格估计故障数并叠加更醒目的真实故障散点。右图
+色标从 0 到本次平滑网格的最大估计故障数，不再使用“每百万 exposure”的刻度。
+
+论文图使用同一组蓝色梯度，低值到高值依次为 `#F4F9FE`、`#D2E3F3`、`#AACFE5`、
+`#68ACD5`、`#3888C0`、`#105CA4`、`#08336E`。邻域平滑只用于呈现，避免有限样本在
+热点中心形成突兀空洞；原始事件、未平滑整数网格和曝光归一化故障率继续保存为可
+审计证据，不能被平滑结果覆盖。
+
+正式运行命令、100 万秒统计结果和最终 PNG 将在下一阶段完成后补入本节。

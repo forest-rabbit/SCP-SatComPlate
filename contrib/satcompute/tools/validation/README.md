@@ -49,7 +49,8 @@
 | `--calibrationDuration` | 轨道扫描时长，默认 7200 秒 |
 | `--windowDuration` | 滑动功能窗口，默认 1000 秒 |
 | `--targetMeanFaultCount` | 选定功能窗口的解析目标均值，默认 2 |
-| `--sigmaLongitude` / `--sigmaLatitude` | 高斯空间场候选标准差，单位为度 |
+| `--sigmaLongitudeWest` / `--sigmaLongitudeEast` | 热点西侧/东侧经度标准差，单位为度；必须满足 west < east |
+| `--sigmaLatitude` | 高斯空间场纬度标准差，单位为度 |
 | `--spatialRiskThreshold` | 高风险 NOTICE 候选阈值 |
 | `--referenceMaximumFailureIntensity` | 可选；以 66 星冻结的热点最大有效强度验证更大星座 |
 | `--outputDir` | 必填；episode CSV 和 summary 的输出目录 |
@@ -75,23 +76,24 @@ python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
 ```
 
 脚本从空间标定 summary 读取窗口和强度，固定 `randomSeed=1`，依次使用
-`randomRun=1..N`，输出逐 run CSV 和统计 JSON。当前 100-run 实际故障均值为
-2.24，近似 95% 均值区间为 `[1.9683, 2.5117]`，包含解析目标 2，因此不按单个
-run 的随机计数重新调整强度。
+`randomRun=1..N`，输出逐 run CSV 和统计 JSON。当前非对称模型的 100-run 实际
+故障均值为 1.91，近似 95% 均值区间为 `[1.6561, 2.1639]`，包含解析目标 2，因此
+不按单个 run 的随机计数重新调整强度。
 
 ## F2 长时空间验证与绘图
 
 `f2-spatial-validation.cc` 构建为 `satcompute-f2-spatial-validation`。它复用正式
 `OnlineOrbitConstellation`、`F2RadiationFaultModel`、ns-3 随机流和 8 秒恢复期间
 暂停抽样的语义，但不创建网络、路由、任务、F1、F3 或 `FaultController`。默认
-基线固定为 66 星、50 万秒、`orbitStartOffset=5210`、`randomSeed=1`、
-`randomRun=1`：
+工具当前仍保留 50 万秒默认值用于快速复现；非对称模型的最终论文证据将在下一阶段
+显式使用 66 星、100 万秒、`orbitStartOffset=302`、`randomSeed=1`、
+`randomRun=1` 生成：
 
 ```bash
 ./ns3 run "satcompute-f2-spatial-validation \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --duration=500000 \
-  --orbitStartOffset=5210 \
+  --duration=1000000 \
+  --orbitStartOffset=302 \
   --longitudeBin=2.5 \
   --latitudeBin=2.5 \
   --randomSeed=1 \
@@ -101,8 +103,8 @@ run 的随机计数重新调整强度。
 
 | 参数 | 含义 |
 |---|---|
-| `--duration` | 轨道与 F2 抽样时长，单位为秒，默认 500000 |
-| `--orbitStartOffset` | 仿真 `t=0` 对应的轨道 epoch，66 星基线为 5210 秒 |
+| `--duration` | 轨道与 F2 抽样时长，单位为秒；当前工具默认 500000，最终证据显式使用 1000000 |
+| `--orbitStartOffset` | 仿真 `t=0` 对应的轨道 epoch，当前 66 星标定窗口为 302 秒 |
 | `--longitudeBin` / `--latitudeBin` | 聚合网格大小，默认均为 2.5 度，必须整除 SAA 范围 |
 | `--randomSeed` / `--randomRun` | ns-3 确定性随机序列，正式基线固定为 1/1 |
 | `--progressInterval` | 进度输出周期，单位为秒；设为 0 时关闭 |

@@ -66,7 +66,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 
 ## F2 验证档
 
-先用 `--orbitStartOffset=5210 --topologyOnly=1` 导出 66 星空间标定窗口的 0 秒节点切片，
+先用 `--orbitStartOffset=302 --topologyOnly=1` 导出 66 星空间标定窗口的 0 秒节点切片，
 再运行：
 
 ```bash

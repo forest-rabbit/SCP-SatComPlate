@@ -2,8 +2,8 @@
 
 本场景为真实 F2-only generate/replay 和 Monte Carlo 提供轻量任务环境，不用于声明
 现实卫星的 SEU 或计算失效率，也不预先规定某个随机 run 必须恰好发生几次故障。
-轨道使用 `synthetic-66.csv`，仿真 0 秒通过 `--orbitStartOffset=5210` 对齐空间加权
-标定选择的 `5210--6210s` 窗口；全部 66 颗卫星都具有
+轨道使用 `synthetic-66.csv`，仿真 0 秒通过 `--orbitStartOffset=302` 对齐空间加权
+标定选择的 `302--1302s` 窗口；全部 66 颗卫星都具有
 1,500,000 work-unit/s 算力。
 
 任务由统一生成器的 `f2-validation` profile 产生：
@@ -24,7 +24,7 @@
 ./ns3 run "satcompute \
   --simulationDuration=1 \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --orbitStartOffset=5210 \
+  --orbitStartOffset=302 \
   --topologyOnly=1 \
   --topologySliceInterval=1 \
   --outputDir=/tmp/satcompute-n4b-f2-topology"
@@ -52,7 +52,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --randomSeed=1 \
   --randomRun=16 \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --orbitStartOffset=5210 \
+  --orbitStartOffset=302 \
   --maxIslDistance=6171353 \
   --delayMode=fixed \
   --fixedDelay=0.008 \
@@ -70,7 +70,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --outputDir=/tmp/satcompute-f2-generate"
 ```
 
-`randomRun=16` 只提供可复现示例，当前恰好产生 3 次故障，不能用来替代多 run
+`randomRun=16` 只提供可复现示例，当前恰好产生 2 次故障，不能用来替代多 run
 均值标定。F2 compute 故障只关闭算力 8 秒，不改变 ISL，也不触发路由重算。
 
 ## Replay
@@ -81,7 +81,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 ./ns3 run "satcompute \
   --simulationDuration=1000 \
   --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --orbitStartOffset=5210 \
+  --orbitStartOffset=302 \
   --maxIslDistance=6171353 \
   --delayMode=fixed \
   --fixedDelay=0.008 \

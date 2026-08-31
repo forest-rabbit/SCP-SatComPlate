@@ -107,22 +107,25 @@ F2 直接读取正式平台共享的 `OnlineOrbitConstellation` ECEF 坐标，�
 -50 deg <= latitude  <= 5 deg
 ```
 
-SAA 内部以文献观测热点 `(-60 deg, -28 deg)` 为中心，使用二维高斯作为系统级
-平滑空间近似：
+SAA 内部以文献观测热点 `(-60 deg, -28 deg)` 为中心，使用东西向尺度不同的
+two-piece Gaussian 作为系统级平滑空间近似：
 
 ```text
-w_F2 = exp(-0.5 * ((lon-lon_c)/sigma_lon)^2
+w_F2 = exp(-0.5 * ((lon-lon_c)/sigma_side)^2
                  -0.5 * ((lat-lat_c)/sigma_lat)^2)
+sigma_side = sigma_west, lon < lon_c
+             sigma_east, lon >= lon_c
 lambda_SEU(t) = lambda_SEU_max * w_F2(t)
 lambda_F2(t) = rho_SF * lambda_SEU(t)
 q_F2(t) = 1 - exp(-lambda_F2(t) * dt)
 NOTICE when w_F2(t) >= theta_F2
 ```
 
-`sigma_lon/sigma_lat` 决定热点宽度，`theta_F2` 只决定 NOTICE 边界，`rho_SF` 表示
-模型化 SEU 到计算服务中断的场景级映射系数；它不是实测条件概率。SAA 外第一版令
-`w_F2=0`。SAA 外围只要 `w_F2>0` 仍可能在 NOTICE 前发生故障；进入高风险区后也
-可能完整通过而只留下 risk-only 记录。
+`sigma_west < sigma_east` 令 NOTICE 区域相对热点呈现西侧较短、东侧较长的形状；
+`sigma_lat` 决定南北宽度。`theta_F2` 只决定 NOTICE 边界，`rho_SF` 表示模型化 SEU
+到计算服务中断的场景级映射系数；它不是实测条件概率。SAA 外第一版令 `w_F2=0`。
+SAA 外围只要 `w_F2>0` 仍可能在 NOTICE 前发生故障；进入高风险区后也可能完整通过
+而只留下 risk-only 记录。
 
 连续暴露时间、累计 hazard 和一次穿越期间至少发生一次故障的累计概率仍保留为
 episode 统计量，但不参与当前 `lambda_F2`、`q_F2`、NOTICE 或随机采样。实际故障
@@ -145,21 +148,26 @@ q_comp = 1 - (1 - q_F1) * (1 - q_F2)
 调参：
 
 ```text
-sigmaLongitudeDegrees = 18
+sigmaLongitudeWestDegrees = 12
+sigmaLongitudeEastDegrees = 24
 sigmaLatitudeDegrees = 12
 spatialRiskThreshold = 0.5
-referenceSeuIntensityPerSecond = 0.0029910954712268908
+referenceSeuIntensityPerSecond = 0.002859196111093899
 seuToComputeFailureProbability = 0.5
-kappa_F2 = 0.0014955477356134454 s^-1
+kappa_F2 = 0.0014295980555469494 s^-1
 ```
+
+在 `theta_F2=0.5` 下，NOTICE 等风险线相对热点约向西延伸 `14.13 deg`、向东延伸
+`28.26 deg`，南北各延伸 `14.13 deg`。配置矩形仍是整个模型 exposure region，
+该等风险线只是其中的 active high-risk region。
 
 每种星座只使用各自空间加权扫描选出的轨道 epoch offset：
 
 | 星座配置 | `orbitStartOffset` | 对应轨道窗口 | 加权暴露量 | 1000 秒解析期望故障数 |
 |---|---:|---:|---:|---:|
-| `synthetic-66.csv` | 5210s | 5210--6210s | 1337.3027 | 2.0000 |
-| `synthetic-351.csv` | 4642s | 4642--5642s | 6888.1284 | 10.3015 |
-| `synthetic-720.csv` | 3496s | 3496--4496s | 14051.9769 | 21.0154 |
+| `synthetic-66.csv` | 302s | 302--1302s | 1398.9946 | 2.0000 |
+| `synthetic-351.csv` | 4704s | 4704--5704s | 7150.5901 | 10.2225 |
+| `synthetic-720.csv` | 3478s | 3478--4478s | 14463.6294 | 20.6772 |
 
 `orbitStartOffset` 直接把仿真 `t=0` 映射到相应轨道 epoch，不会先空跑几千秒。
 351/720 星若也分别反调到平均 2 次，会破坏规模效应，因此正式实验必须继续使用表中
@@ -168,10 +176,11 @@ kappa_F2 = 0.0014955477356134454 s^-1
 [`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。这些数值是
 有限窗口内的系统级加速实验参数，不是原始 SEU 计数或现实卫星绝对失效率。
 
-用于论文空间分布图的固定基线为 66 星、50 万秒、`orbitStartOffset=5210`、
-`randomSeed=1`、`randomRun=1`、1 秒检查周期和 8 秒恢复。该 orbit-only 验证只在
-显式运行工具时生成 CSV/PNG；正常 `none/generate/replay` 不会输出这些分析文件。
-本次基线得到 963 次实际故障，结果与复现命令见
+论文空间分布图将在下一阶段使用 66 星、100 万秒、`orbitStartOffset=302`、
+`randomSeed=1`、`randomRun=1`、1 秒检查周期和 8 秒恢复重新生成。该 orbit-only
+验证只在显式运行工具时生成 CSV/PNG；正常 `none/generate/replay` 不会输出这些
+分析文件。现存 50 万秒结果属于对称经度模型的历史证据，不作为当前参数的最终图。
+标定与后续空间验证说明见
 [`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。
 
 F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中，默认关闭。
