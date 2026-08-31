@@ -238,6 +238,95 @@ class WorkloadGeneratorTest(unittest.TestCase):
             self.assertEqual(summary["risk_only_task_ids"], [5, 6])
             self.assertEqual(summary["control_task_ids"], [7, 8])
 
+    def test_n4b_joint_profile_has_bounded_hotspots_and_is_deterministic(self):
+        script = GENERATION_ROOT / "generate-task-workload.py"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            nodes = root / "nodes.json"
+            compute = root / "compute.json"
+            nodes.write_text(
+                json.dumps(
+                    {
+                        "nodes": [
+                            {"node_id": node_id, "node_type": "sat"}
+                            for node_id in range(66)
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            compute.write_text(
+                json.dumps(
+                    {
+                        "compute_nodes": [
+                            {
+                                "node_id": node_id,
+                                "compute_rate_work_units_per_second": 1_500_000,
+                            }
+                            for node_id in range(66)
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            outputs = []
+            for suffix in ("first", "second"):
+                trace = root / f"tasks-{suffix}.json"
+                summary = root / f"summary-{suffix}.json"
+                result = run_tool(
+                    script,
+                    "--profile",
+                    "n4b-joint-validation",
+                    "--nodes-file",
+                    nodes,
+                    "--compute-profile",
+                    compute,
+                    "--seed",
+                    "n4b-joint-66",
+                    "--output-task-trace",
+                    trace,
+                    "--output-workload-summary",
+                    summary,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                outputs.append((trace, summary))
+            self.assertEqual(outputs[0][0].read_bytes(), outputs[1][0].read_bytes())
+            self.assertEqual(outputs[0][1].read_bytes(), outputs[1][1].read_bytes())
+
+            trace = json.loads(outputs[0][0].read_text(encoding="utf-8"))
+            summary = json.loads(outputs[0][1].read_text(encoding="utf-8"))
+            self.assertEqual(len(trace["tasks"]), 100)
+            self.assertEqual(summary["profile"], "n4b-joint-validation")
+            self.assertEqual(summary["strong_hotspot_compute_node_ids"], [0, 11, 22])
+            self.assertEqual(summary["expected_critical_failure_task_ids"], [6, 13, 20])
+            self.assertEqual(summary["post_recovery_task_ids"], [7, 14, 21])
+            self.assertEqual(summary["boundary_hotspot_compute_node_id"], 33)
+            self.assertEqual(summary["boundary_hotspot_task_ids"], [22, 23, 24, 25, 26])
+            self.assertEqual(summary["warm_control_compute_node_id"], 44)
+            self.assertEqual(summary["warm_control_task_ids"], [27, 28, 29, 30])
+            self.assertEqual(len(summary["fault_window_roles"]), 8)
+            self.assertEqual(len(summary["distributed_control_task_ids"]), 62)
+            self.assertEqual(len(summary["distributed_control_compute_node_ids"]), 55)
+
+            counts = {
+                node_id: sum(
+                    task["compute_node_id"] == node_id for task in trace["tasks"]
+                )
+                for node_id in (0, 11, 22, 33, 44)
+            }
+            self.assertEqual(counts, {0: 7, 11: 7, 22: 7, 33: 5, 44: 4})
+            reserved = {0, 4, 5, 11, 18, 22, 29, 33, 40, 44, 51}
+            distributed_tasks = trace["tasks"][38:]
+            self.assertTrue(
+                all(task["compute_node_id"] not in reserved for task in distributed_tasks)
+            )
+            self.assertTrue(
+                all(
+                    3_000_000 <= task["compute_work_units"] <= 7_500_000
+                    for task in distributed_tasks
+                )
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
