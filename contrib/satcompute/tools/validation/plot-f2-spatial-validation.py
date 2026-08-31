@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 from pathlib import Path
 
 import matplotlib
@@ -22,16 +21,13 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap, Normalize
+from matplotlib.colors import LinearSegmentedColormap, Normalize, PowerNorm
 from matplotlib.patches import Rectangle
 
 
-# The publication view enlarges the configured SAA window without changing any
-# modeled or sampled coordinates. Raw coordinates remain in the evidence files.
-VIEW_LONGITUDE_MIN = -120.0
-VIEW_LONGITUDE_MAX = 60.0
-VIEW_LATITUDE_MIN = -60.0
-VIEW_LATITUDE_MAX = 30.0
+VIEW_MARGIN_DEG = 10.0
+RISK_FIELD_RESOLUTION_DEG = 0.5
+FAULT_COUNT_DISPLAY_GAMMA = 0.65
 PAPER_BLUE_LOW_TO_HIGH = (
     "#F4F9FE",
     "#D2E3F3",
@@ -114,11 +110,28 @@ def publication_colormap() -> LinearSegmentedColormap:
     )
 
 
+def geographic_view(parameters: dict[str, object]) -> tuple[float, float, float, float]:
+    """Return the configured risk rectangle with a fixed display-only margin."""
+    return (
+        float(parameters["longitude_min_deg"]) - VIEW_MARGIN_DEG,
+        float(parameters["longitude_max_deg"]) + VIEW_MARGIN_DEG,
+        float(parameters["latitude_min_deg"]) - VIEW_MARGIN_DEG,
+        float(parameters["latitude_max_deg"]) + VIEW_MARGIN_DEG,
+    )
+
+
 def risk_field(parameters: dict[str, object]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    # Retain the original 0.5-degree model-field sampling after changing only
-    # the display extent; the empirical evidence grid remains 2.5 degrees.
-    longitude = np.linspace(VIEW_LONGITUDE_MIN, VIEW_LONGITUDE_MAX, 361)
-    latitude = np.linspace(VIEW_LATITUDE_MIN, VIEW_LATITUDE_MAX, 181)
+    longitude_min, longitude_max, latitude_min, latitude_max = geographic_view(
+        parameters
+    )
+    longitude_samples = (
+        int(round((longitude_max - longitude_min) / RISK_FIELD_RESOLUTION_DEG)) + 1
+    )
+    latitude_samples = (
+        int(round((latitude_max - latitude_min) / RISK_FIELD_RESOLUTION_DEG)) + 1
+    )
+    longitude = np.linspace(longitude_min, longitude_max, longitude_samples)
+    latitude = np.linspace(latitude_min, latitude_max, latitude_samples)
     longitude_grid, latitude_grid = np.meshgrid(longitude, latitude)
     longitude_delta = longitude_grid - float(parameters["hotspot_longitude_deg"])
     longitude_sigma = np.where(
@@ -147,41 +160,9 @@ def risk_field(parameters: dict[str, object]) -> tuple[np.ndarray, np.ndarray, n
     return longitude_grid, latitude_grid, risk
 
 
-def locally_smooth_counts(counts: np.ndarray, valid: np.ndarray) -> np.ndarray:
-    """Return a 3x3 Gaussian-like local mean without inventing unobserved bins."""
-    kernel = np.asarray(
-        (
-            (1.0, 2.0, 1.0),
-            (2.0, 4.0, 2.0),
-            (1.0, 2.0, 1.0),
-        )
-    )
-    row_count, column_count = counts.shape
-    padded_counts = np.pad(np.where(valid, counts, 0.0), 1)
-    padded_valid = np.pad(valid.astype(float), 1)
-    numerator = np.zeros_like(counts, dtype=float)
-    denominator = np.zeros_like(counts, dtype=float)
-    for row_offset in range(3):
-        for column_offset in range(3):
-            weight = kernel[row_offset, column_offset]
-            rows = slice(row_offset, row_offset + row_count)
-            columns = slice(column_offset, column_offset + column_count)
-            numerator += weight * padded_counts[rows, columns]
-            denominator += weight * padded_valid[rows, columns]
-    smoothed = np.full_like(counts, np.nan, dtype=float)
-    usable = valid & (denominator > 0.0)
-    smoothed[usable] = numerator[usable] / denominator[usable]
-    return smoothed
-
-
 def empirical_fault_count_grid(
     bins: list[dict[str, str]], minimum_exposure: int
-) -> tuple[
-    np.ndarray,
-    np.ndarray,
-    np.ma.MaskedArray,
-    np.ma.MaskedArray,
-]:
+) -> tuple[np.ndarray, np.ndarray, np.ma.MaskedArray]:
     longitude_edges = sorted(
         {float(row["longitude_min_deg"]) for row in bins}
         | {float(row["longitude_max_deg"]) for row in bins}
@@ -203,13 +184,10 @@ def empirical_fault_count_grid(
         longitude = longitude_index[float(row["longitude_min_deg"])]
         counts[latitude, longitude] = int(row["fault_count"])
         valid[latitude, longitude] = True
-    raw_counts = np.ma.masked_where(~valid, counts)
-    smoothed_counts = np.ma.masked_invalid(locally_smooth_counts(counts, valid))
     return (
         np.asarray(longitude_edges),
         np.asarray(latitude_edges),
-        raw_counts,
-        smoothed_counts,
+        np.ma.masked_where(~valid, counts),
     )
 
 
@@ -225,6 +203,9 @@ def add_geographic_frame(
     latitude_max = float(parameters["latitude_max_deg"])
     hotspot_longitude = float(parameters["hotspot_longitude_deg"])
     hotspot_latitude = float(parameters["hotspot_latitude_deg"])
+    view_longitude_min, view_longitude_max, view_latitude_min, view_latitude_max = (
+        geographic_view(parameters)
+    )
     axis.add_patch(
         Rectangle(
             (longitude_min, latitude_min),
@@ -260,12 +241,12 @@ def add_geographic_frame(
                 "linewidth": 0.5,
             },
         )
-    axis.set_xlim(VIEW_LONGITUDE_MIN, VIEW_LONGITUDE_MAX)
-    axis.set_ylim(VIEW_LATITUDE_MIN, VIEW_LATITUDE_MAX)
-    axis.set_xticks(
-        np.arange(VIEW_LONGITUDE_MIN, VIEW_LONGITUDE_MAX + 1.0, 30.0)
-    )
-    axis.set_yticks(np.arange(VIEW_LATITUDE_MIN, VIEW_LATITUDE_MAX + 1.0, 15.0))
+    axis.set_xlim(view_longitude_min, view_longitude_max)
+    axis.set_ylim(view_latitude_min, view_latitude_max)
+    longitude_tick_start = np.ceil(view_longitude_min / 30.0) * 30.0
+    latitude_tick_start = np.ceil(view_latitude_min / 15.0) * 15.0
+    axis.set_xticks(np.arange(longitude_tick_start, view_longitude_max + 1.0, 30.0))
+    axis.set_yticks(np.arange(latitude_tick_start, view_latitude_max + 1.0, 15.0))
     axis.set_xlabel("Longitude (degrees)")
     axis.set_ylabel("Latitude (degrees)")
     axis.set_aspect("equal", adjustable="box")
@@ -313,16 +294,13 @@ def plot(
         raise ValueError("summary sections are invalid")
 
     longitude_grid, latitude_grid, risk = risk_field(parameters)
-    longitude_edges, latitude_edges, raw_counts, smoothed_counts = (
-        empirical_fault_count_grid(bins, minimum_exposure)
+    longitude_edges, latitude_edges, raw_counts = empirical_fault_count_grid(
+        bins, minimum_exposure
     )
-    finite_counts = smoothed_counts.compressed()
+    finite_counts = raw_counts.compressed()
     if finite_counts.size == 0:
         raise ValueError("no empirical bin meets the exposure threshold")
-    maximum_smoothed_count = float(np.max(finite_counts))
-    if not math.isfinite(maximum_smoothed_count) or maximum_smoothed_count <= 0.0:
-        raise ValueError("smoothed empirical fault grid has no positive count")
-    raw_peak = int(np.max(raw_counts.compressed()))
+    raw_peak = int(np.max(finite_counts))
     if raw_peak <= 0:
         raise ValueError("raw empirical fault grid has no positive count")
     upper_count = float(raw_peak)
@@ -390,22 +368,25 @@ def plot(
     count_image = axes[1].pcolormesh(
         longitude_edges,
         latitude_edges,
-        smoothed_counts,
+        raw_counts,
         cmap=color_map,
         shading="flat",
-        vmin=0.0,
-        vmax=upper_count,
+        norm=PowerNorm(
+            gamma=FAULT_COUNT_DISPLAY_GAMMA,
+            vmin=0.0,
+            vmax=upper_count,
+        ),
     )
     event_longitudes = np.asarray([float(event["longitude_deg"]) for event in events])
     event_latitudes = np.asarray([float(event["latitude_deg"]) for event in events])
     axes[1].scatter(
         event_longitudes,
         event_latitudes,
-        s=10,
+        s=3,
         facecolors="none",
         edgecolors="#08336E",
-        linewidths=0.30,
-        alpha=0.12,
+        linewidths=0.22,
+        alpha=0.30,
         zorder=5,
     )
     add_geographic_frame(axes[1], parameters, label_hotspot=False)
@@ -428,7 +409,7 @@ def plot(
         np.unique(np.rint(np.linspace(0, raw_peak, tick_count)).astype(int))
     )
     count_colorbar.set_label(
-        "Locally smoothed fault count per bin",
+        "Raw fault count per bin",
         labelpad=2.0,
     )
     count_colorbar.outline.set_linewidth(0.45)
@@ -443,10 +424,10 @@ def plot(
         0.035,
         f"{duration:,} s; {fault_count:,} sampled faults; conditional expectation "
         f"{expected:.1f}; bin risk-rate Pearson r={correlation:.3f}.\n"
-        f"Panel b uses {float(run['longitude_bin_deg']):g} x "
-        f"{float(run['latitude_bin_deg']):g} degree bins and a 3 x 3 local mean "
-        f"with the color scale capped at the raw peak ({raw_peak}); circles retain "
-        "the unsmoothed event locations.",
+        f"Panel b uses raw {float(run['longitude_bin_deg']):g} x "
+        f"{float(run['latitude_bin_deg']):g} degree eligible-bin counts with the "
+        f"color scale capped at {raw_peak} and display gamma "
+        f"{FAULT_COUNT_DISPLAY_GAMMA:g}; circles retain the individual event locations.",
         ha="center",
         va="bottom",
         fontsize=5.6,
