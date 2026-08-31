@@ -23,7 +23,6 @@ void WriteFaultMetrics(const FaultController& controller,
                        const FaultPredictionEngine* predictionEngine,
                        const TaskCoordinator* taskCoordinator,
                        const std::vector<TransferSummaryRecord>& transferSummaries,
-                       int64_t simulationDurationNs,
                        const std::string& outputDirectory);
 
 /** Remove only the fault metric files owned by SatCompute. */

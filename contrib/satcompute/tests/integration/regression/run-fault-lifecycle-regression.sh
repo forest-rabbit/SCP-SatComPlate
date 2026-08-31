@@ -53,15 +53,6 @@ satellite_only_result="$(run_platform \
   "$regression_output/satellite-only" \
   "$network_common --faultMode=replay \
 --faultTrace=$fault_inputs/satellite-finite.json")"
-censored_prediction_result="$(run_platform \
-  "$regression_output/prediction-censored" \
-  "--simulationDuration=3 --constellationConfig=$constellation \
---maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
---networkUpdateInterval=5 --islBandwidthBps=100000000 \
---routingMode=global-capacity-aware-hrw --computeProfile=$profile \
---taskTrace=$task_inputs/task-prediction-censored.json --taskCompletionPolicy=report \
---faultMode=replay --faultEnableF1=1 --faultEnableF2=0 --faultEnableF3=0 \
---faultTrace=$fault_inputs/compute-risk-censored.json")"
 f1_generated_trace="$regression_output/generate-f1/fault-trace.json"
 f1_common="--simulationDuration=90 --constellationConfig=$constellation \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
@@ -190,10 +181,6 @@ if [[ "$satellite_only_result" != *'"status":"completed"'* ]]; then
   echo "workload-free satellite fault run failed: $satellite_only_result" >&2
   exit 1
 fi
-if [[ "$censored_prediction_result" != *'"status":"partial"'* ]]; then
-  echo "censored prediction fixture did not preserve its running task" >&2
-  exit 1
-fi
 for result in "$generate_f1_result" "$generate_f1_second_result" "$replay_f1_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
     echo "F1 generate/replay did not report the intentionally failed old task: $result" >&2
@@ -282,20 +269,11 @@ PREDICTION_FIELDS = [
     "combined_step_failure_probability",
     "horizon_step_count",
     "predicted_failure_probability",
-    "observed_compute_failure_before_finish",
 ]
 PREDICTION_SUMMARY_FIELDS = {
     "prediction_count",
-    "evaluated_prediction_count",
-    "censored_prediction_count",
     "risk_episode_count",
     "task_count",
-    "observed_failure_prediction_count",
-    "mean_predicted_failure_probability",
-    "observed_failure_rate",
-    "brier_score",
-    "minimum_predicted_failure_probability",
-    "maximum_predicted_failure_probability",
 }
 
 
@@ -316,8 +294,6 @@ def validate_prediction_outputs(directory: str, require_predictions: bool):
 
     episode_ids = set()
     task_ids = set()
-    evaluated_probabilities = []
-    observations = []
     for row in rows:
         simulation_time_ns = int(row["simulation_time_ns"])
         fault_id = int(row["fault_id"])
@@ -335,7 +311,6 @@ def validate_prediction_outputs(directory: str, require_predictions: bool):
         q_comp = float(row["combined_step_failure_probability"])
         horizon_step_count = int(row["horizon_step_count"])
         predicted_probability = float(row["predicted_failure_probability"])
-        observed = row["observed_compute_failure_before_finish"]
 
         if simulation_time_ns < notice_time_ns or (
             risk_elapsed_time_ns != simulation_time_ns - notice_time_ns
@@ -368,66 +343,16 @@ def validate_prediction_outputs(directory: str, require_predictions: bool):
             raise SystemExit(f"{directory} prediction horizon differs: {row}")
         if not (q_comp <= predicted_probability <= 1.0):
             raise SystemExit(f"{directory} cumulative probability differs: {row}")
-        if observed not in ("", "true", "false"):
-            raise SystemExit(f"{directory} observed label differs: {row}")
         episode_ids.add(fault_id)
         task_ids.add(task_id)
-        if observed:
-            evaluated_probabilities.append(predicted_probability)
-            observations.append(1.0 if observed == "true" else 0.0)
 
     if (
         summary["prediction_count"] != len(rows)
-        or summary["evaluated_prediction_count"] != len(observations)
-        or summary["censored_prediction_count"] != len(rows) - len(observations)
         or summary["risk_episode_count"] != len(episode_ids)
         or summary["task_count"] != len(task_ids)
-        or summary["observed_failure_prediction_count"] != int(sum(observations))
     ):
         raise SystemExit(f"{directory} prediction summary counts differ: {summary}")
-    if not observations:
-        if any(summary[key] is not None for key in (
-            "mean_predicted_failure_probability",
-            "observed_failure_rate",
-            "brier_score",
-            "minimum_predicted_failure_probability",
-            "maximum_predicted_failure_probability",
-        )):
-            raise SystemExit(f"{directory} empty prediction summary differs: {summary}")
-        return rows, summary
-
-    expected_metrics = {
-        "mean_predicted_failure_probability": sum(evaluated_probabilities) / len(observations),
-        "observed_failure_rate": sum(observations) / len(observations),
-        "brier_score": sum(
-            (probability - observation) ** 2
-            for probability, observation in zip(evaluated_probabilities, observations)
-        ) / len(observations),
-        "minimum_predicted_failure_probability": min(evaluated_probabilities),
-        "maximum_predicted_failure_probability": max(evaluated_probabilities),
-    }
-    if any(
-        not math.isclose(
-            summary[key], expected, rel_tol=1e-12, abs_tol=1e-12
-        )
-        for key, expected in expected_metrics.items()
-    ):
-        raise SystemExit(f"{directory} prediction summary metrics differ: {summary}")
     return rows, summary
-
-
-censored_rows, censored_summary = validate_prediction_outputs(
-    "prediction-censored", True
-)
-if (
-    len(censored_rows) != 1
-    or censored_rows[0]["observed_compute_failure_before_finish"] != ""
-    or censored_summary["evaluated_prediction_count"] != 0
-    or censored_summary["censored_prediction_count"] != 1
-):
-    raise SystemExit(
-        f"right-censored prediction evidence differs: {censored_summary}"
-    )
 
 
 calibration = load_json("f1-calibration/n4b-f1-calibration-summary.json")
@@ -636,16 +561,10 @@ if (
     len(predictions_66),
     prediction_summary_66["risk_episode_count"],
     prediction_summary_66["task_count"],
-    prediction_summary_66["observed_failure_prediction_count"],
-) != (41, 4, 7, 33):
+) != (41, 4, 7):
     raise SystemExit(
         f"66-star F1 prediction evidence differs: {prediction_summary_66}"
     )
-if not any(
-    row["observed_compute_failure_before_finish"] == "false"
-    for row in predictions_66
-):
-    raise SystemExit("66-star F1 predictions have no non-failure control")
 if not any(int(row["risk_elapsed_time_ns"]) == 0 for row in predictions_66):
     raise SystemExit("66-star F1 predictions omitted the NOTICE boundary")
 if not any(

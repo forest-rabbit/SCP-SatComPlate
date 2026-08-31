@@ -301,7 +301,6 @@ MetricsRecorder::Record()
                           PeekPointer(context.faultPredictionEngine),
                           PeekPointer(taskCoordinator),
                           transfers,
-                          context.simulationDurationNs,
                           outputDirectory.string());
         result.files.push_back(outputDirectory / "fault-events.csv");
         result.files.push_back(outputDirectory / "fault-summary.json");
