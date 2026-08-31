@@ -561,6 +561,7 @@ main(int argc, char* argv[])
                 topology.GetAppliedTopologySliceCount(),
                 topology.GetRouteComputationCount(),
                 faultController,
+                faultModelEngine,
                 faultPredictionEngine,
                 topology.GetFlowRouteRegistry(),
                 capacitySummary,

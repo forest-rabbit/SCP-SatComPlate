@@ -352,7 +352,7 @@ FaultPredictionEngine::FinalizeTime(int64_t simulationTimeNs)
     m_preparedPredictions.clear();
 }
 
-const std::vector<ComputeFailurePredictionRecord>&
+const std::vector<ComputeFailureProbabilityRecord>&
 FaultPredictionEngine::GetPredictionRecords() const
 {
     if (!m_configured)

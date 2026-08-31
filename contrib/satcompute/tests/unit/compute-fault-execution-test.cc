@@ -142,7 +142,7 @@ struct ExecutionSignature
 };
 
 std::string
-EncodePrediction(const ComputeFailurePredictionRecord& prediction)
+EncodePrediction(const ComputeFailureProbabilityRecord& prediction)
 {
     std::ostringstream output;
     output << prediction.simulationTimeNs << ':' << prediction.faultId << ':'
@@ -153,7 +153,7 @@ EncodePrediction(const ComputeFailurePredictionRecord& prediction)
            << prediction.f1StepFailureProbability << ':'
            << prediction.f2StepFailureProbability << ':'
            << prediction.combinedStepFailureProbability << ':'
-           << prediction.predictedFailureProbability;
+           << prediction.failureBeforeFinishProbability;
     return output.str();
 }
 
@@ -498,7 +498,7 @@ RunComputeFaultScenario(bool generateOnline)
                   topology.GetLinkState().GetActiveLinks() == activeLinksBefore,
               "compute fault modified ISLs or recomputed routes");
 
-        const std::vector<ComputeFailurePredictionRecord>& predictions =
+        const std::vector<ComputeFailureProbabilityRecord>& predictions =
             predictionEngine->GetPredictionRecords();
         Check(predictions.size() == 2 &&
                   predictions[0].simulationTimeNs == 90 * MILLISECOND_NS &&
@@ -506,7 +506,7 @@ RunComputeFaultScenario(bool generateOnline)
                   predictions[1].simulationTimeNs == 100 * MILLISECOND_NS &&
                   predictions[1].riskElapsedTimeNs == 10 * MILLISECOND_NS,
               "causal compute failure prediction record differs");
-        for (const ComputeFailurePredictionRecord& prediction : predictions)
+        for (const ComputeFailureProbabilityRecord& prediction : predictions)
         {
             Check(prediction.faultId == 1 &&
                       prediction.nodeId == COMPUTE_NODE_ID &&
@@ -520,9 +520,9 @@ RunComputeFaultScenario(bool generateOnline)
                       std::abs(prediction.combinedStepFailureProbability -
                                prediction.f1StepFailureProbability) < 1e-15 &&
                       prediction.horizonStepCount > 0 &&
-                      prediction.predictedFailureProbability >=
+                      prediction.failureBeforeFinishProbability >=
                           prediction.combinedStepFailureProbability &&
-                      prediction.predictedFailureProbability <= 1.0 &&
+                      prediction.failureBeforeFinishProbability <= 1.0 &&
                       prediction.expectedComputeCompletionTimeNs ==
                           prediction.simulationTimeNs +
                               prediction.remainingComputeTimeNs,

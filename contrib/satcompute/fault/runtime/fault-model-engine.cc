@@ -4,6 +4,7 @@
 
 #include "fault-model-engine.h"
 
+#include "ns3/compute-failure-predictor.h"
 #include "ns3/fault-parameter-validator.h"
 
 #include "../../common/time-conversion.h"
@@ -348,6 +349,62 @@ FaultModelEngine::ShortenActiveComputeFault(NodeState& state,
 }
 
 void
+FaultModelEngine::RecordProbability(uint32_t nodeId,
+                                    const NodeState& state,
+                                    int64_t simulationTimeNs)
+{
+    if (!state.riskEpisode.has_value() ||
+        !state.computeService->IsComputeAvailable())
+    {
+        return;
+    }
+    const std::optional<RunningComputeTaskSnapshot> task =
+        state.computeService->GetRunningTaskSnapshot();
+    if (!task.has_value())
+    {
+        return;
+    }
+
+    ComputeFailurePredictionInput input;
+    input.f1Model = m_f1Model.has_value() ? &m_f1Model.value() : nullptr;
+    input.f1State = state.f1State;
+    input.f2Model = m_f2Model.has_value() ? &m_f2Model.value() : nullptr;
+    input.f2State = state.f2State;
+    if (m_f2Model.has_value())
+    {
+        input.f2PositionAtTime =
+            [this, nodeId](int64_t targetTimeNs) {
+                return m_constellation->GetPositionAt(nodeId,
+                                                      NanoSeconds(targetTimeNs));
+            };
+    }
+    input.predictionTimeNs = simulationTimeNs;
+    input.remainingComputeTimeNs = task->remainingTimeNs;
+    input.checkIntervalNs = m_checkIntervalNs;
+    const ComputeFailurePrediction prediction =
+        PredictComputeFailureBeforeFinish(input);
+    const RiskEpisode& risk = state.riskEpisode.value();
+    m_probabilityRecords.push_back(
+        {simulationTimeNs,
+         risk.faultId,
+         nodeId,
+         task->taskId,
+         risk.noticeTimeNs,
+         simulationTimeNs - risk.noticeTimeNs,
+         task->startTimeNs,
+         task->serviceTimeNs,
+         task->elapsedTimeNs,
+         task->remainingTimeNs,
+         simulationTimeNs + task->remainingTimeNs,
+         task->completionRatio,
+         prediction.f1StepFailureProbability,
+         prediction.f2StepFailureProbability,
+         prediction.combinedStepFailureProbability,
+         prediction.horizonStepCount,
+         prediction.predictedFailureProbability});
+}
+
+void
 FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
                               bool updateComputeModels)
 {
@@ -431,6 +488,8 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
             completedRecords.push_back(riskOnly);
             state.riskEpisode = std::nullopt;
         }
+
+        RecordProbability(nodeId, state, simulationTimeNs);
 
         double f1RandomValue = 0.0;
         double f2RandomValue = 0.0;
@@ -574,6 +633,16 @@ FaultModelEngine::GetNodeSnapshots() const
     return snapshots;
 }
 
+const std::vector<ComputeFailureProbabilityRecord>&
+FaultModelEngine::GetProbabilityRecords() const
+{
+    if (!m_configured)
+    {
+        throw FaultModelEngineError("FaultModelEngine is not configured");
+    }
+    return m_probabilityRecords;
+}
+
 void
 FaultModelEngine::DoDispose()
 {
@@ -594,6 +663,7 @@ FaultModelEngine::DoDispose()
     m_faultController = nullptr;
     m_taskCoordinator = nullptr;
     m_constellation = nullptr;
+    m_probabilityRecords.clear();
     Object::DoDispose();
 }
 

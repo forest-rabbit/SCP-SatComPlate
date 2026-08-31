@@ -71,6 +71,7 @@ build_lib(
     fault/model/f3-debris-fault-model.h
     fault/parameter/fault-parameter-validator.h
     fault/runtime/fault-controller.h
+    fault/runtime/compute-failure-probability-record.h
     fault/runtime/fault-model-engine.h
     fault/runtime/fault-prediction-engine.h
     fault/runtime/fault-state.h

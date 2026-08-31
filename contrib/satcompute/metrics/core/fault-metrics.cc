@@ -7,6 +7,7 @@
 #include "fault-metrics.h"
 
 #include "ns3/fault-controller.h"
+#include "ns3/fault-model-engine.h"
 #include "ns3/fault-prediction-engine.h"
 #include "../../task/task-coordinator.h"
 
@@ -78,17 +79,15 @@ RemoveOwnedFile(const std::filesystem::path& path)
 }
 
 void
-WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
-                       const std::string& outputDirectory)
+WriteProbabilityRecords(const std::vector<ComputeFailureProbabilityRecord>& records,
+                        const std::string& filename,
+                        const std::string& outputDirectory)
 {
-    const std::vector<ComputeFailurePredictionRecord>& predictions =
-        predictionEngine.GetPredictionRecords();
-
-    std::ofstream output(OutputPath(outputDirectory, "fault-predictions.csv"),
+    std::ofstream output(OutputPath(outputDirectory, filename),
                          std::ios::out | std::ios::trunc);
     if (!output.is_open())
     {
-        throw std::runtime_error("cannot write fault-predictions.csv");
+        throw std::runtime_error("cannot write " + filename);
     }
     output << "simulation_time_ns,fault_id,node_id,task_id,notice_time_ns,"
               "risk_elapsed_time_ns,task_compute_start_time_ns,task_service_time_ns,"
@@ -96,32 +95,44 @@ WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
               "expected_compute_completion_time_ns,completion_ratio,"
               "f1_step_failure_probability,f2_step_failure_probability,"
               "combined_step_failure_probability,horizon_step_count,"
-              "predicted_failure_probability\n";
+              "failure_before_finish_probability\n";
     output << std::setprecision(17) << std::boolalpha;
+    for (const ComputeFailureProbabilityRecord& record : records)
+    {
+        output << record.simulationTimeNs << ',' << record.faultId << ','
+               << record.nodeId << ',' << record.taskId << ','
+               << record.noticeTimeNs << ',' << record.riskElapsedTimeNs << ','
+               << record.taskComputeStartTimeNs << ','
+               << record.taskServiceTimeNs << ','
+               << record.taskElapsedTimeNs << ','
+               << record.remainingComputeTimeNs << ','
+               << record.expectedComputeCompletionTimeNs << ','
+               << record.completionRatio << ','
+               << record.f1StepFailureProbability << ','
+               << record.f2StepFailureProbability << ','
+               << record.combinedStepFailureProbability << ','
+               << record.horizonStepCount << ','
+               << record.failureBeforeFinishProbability << '\n';
+    }
+}
+
+void
+WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
+                       const std::string& outputDirectory)
+{
+    const std::vector<ComputeFailureProbabilityRecord>& predictions =
+        predictionEngine.GetPredictionRecords();
+    WriteProbabilityRecords(predictions,
+                            "fault-predictions.csv",
+                            outputDirectory);
 
     std::set<uint64_t> episodeIds;
     std::set<uint64_t> taskIds;
-    for (const ComputeFailurePredictionRecord& prediction : predictions)
+    for (const ComputeFailureProbabilityRecord& prediction : predictions)
     {
         episodeIds.insert(prediction.faultId);
         taskIds.insert(prediction.taskId);
-
-        output << prediction.simulationTimeNs << ',' << prediction.faultId << ','
-               << prediction.nodeId << ',' << prediction.taskId << ','
-               << prediction.noticeTimeNs << ',' << prediction.riskElapsedTimeNs << ','
-               << prediction.taskComputeStartTimeNs << ','
-               << prediction.taskServiceTimeNs << ','
-               << prediction.taskElapsedTimeNs << ','
-               << prediction.remainingComputeTimeNs << ','
-               << prediction.expectedComputeCompletionTimeNs << ','
-               << prediction.completionRatio << ','
-               << prediction.f1StepFailureProbability << ','
-               << prediction.f2StepFailureProbability << ','
-               << prediction.combinedStepFailureProbability << ','
-               << prediction.horizonStepCount << ','
-               << prediction.predictedFailureProbability << '\n';
     }
-
     const Json summary = {
         {"prediction_count", predictions.size()},
         {"risk_episode_count", episodeIds.size()},
@@ -141,6 +152,7 @@ WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
 
 void
 WriteFaultMetrics(const FaultController& controller,
+                  const FaultModelEngine* modelEngine,
                   const FaultPredictionEngine* predictionEngine,
                   const TaskCoordinator* taskCoordinator,
                   const std::vector<TransferSummaryRecord>& transferSummaries,
@@ -279,6 +291,18 @@ WriteFaultMetrics(const FaultController& controller,
         RemoveOwnedFile(root / "fault-predictions.csv");
         RemoveOwnedFile(root / "fault-prediction-summary.json");
     }
+    const std::filesystem::path root =
+        outputDirectory.empty() ? "." : outputDirectory;
+    if (modelEngine != nullptr && predictionEngine != nullptr)
+    {
+        WriteProbabilityRecords(modelEngine->GetProbabilityRecords(),
+                                "fault-model-probabilities.csv",
+                                outputDirectory);
+    }
+    else
+    {
+        RemoveOwnedFile(root / "fault-model-probabilities.csv");
+    }
 }
 
 void
@@ -289,6 +313,7 @@ RemoveFaultMetrics(const std::string& outputDirectory)
     RemoveOwnedFile(root / "fault-summary.json");
     RemoveOwnedFile(root / "fault-predictions.csv");
     RemoveOwnedFile(root / "fault-prediction-summary.json");
+    RemoveOwnedFile(root / "fault-model-probabilities.csv");
 }
 
 } // namespace ns3

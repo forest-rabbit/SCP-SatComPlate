@@ -7,6 +7,7 @@
 
 #include "fault-controller.h"
 
+#include "ns3/compute-failure-probability-record.h"
 #include "ns3/fault-para.h"
 #include "ns3/compute-fault-combination.h"
 #include "ns3/f1-self-state-fault-model.h"
@@ -91,6 +92,9 @@ class FaultModelEngine : public Object
     /** Return node snapshots in ascending stable-node-ID order. */
     std::vector<FaultModelNodeSnapshot> GetNodeSnapshots() const;
 
+    /** @return Pre-sampling probabilities produced from live generate state. */
+    const std::vector<ComputeFailureProbabilityRecord>& GetProbabilityRecords() const;
+
   private:
     /** Notice metadata retained until risk exit or compute failure. */
     struct RiskEpisode
@@ -137,6 +141,10 @@ class FaultModelEngine : public Object
     /** End an active compute outage at a superseding F3 timestamp. */
     void ShortenActiveComputeFault(NodeState& state,
                                    int64_t simulationTimeNs);
+    /** Record one active-risk task forecast from live state before random draws. */
+    void RecordProbability(uint32_t nodeId,
+                           const NodeState& state,
+                           int64_t simulationTimeNs);
     /** Update periodic models and/or execute F3 events in one timestamp batch. */
     void ProcessTime(int64_t simulationTimeNs, bool updateComputeModels);
     void DoDispose() override;
@@ -155,6 +163,7 @@ class FaultModelEngine : public Object
     std::map<int64_t, std::vector<uint32_t>> m_f3EventsByTime; ///< F3 schedule.
     uint64_t m_nextFaultId{1}; ///< Next trace identity.
     FaultTrace m_trace; ///< Completed canonical trace records.
+    std::vector<ComputeFailureProbabilityRecord> m_probabilityRecords; ///< Live probabilities.
     std::vector<EventId> m_modelEvents; ///< Pre-scheduled model/F3 checks.
     Ptr<FaultController> m_faultController; ///< Sole runtime fault executor.
     Ptr<TaskCoordinator> m_taskCoordinator; ///< Bound task lifecycle owner.

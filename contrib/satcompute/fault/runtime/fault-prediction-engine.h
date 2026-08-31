@@ -5,6 +5,7 @@
 #ifndef SATCOMPUTE_FAULT_PREDICTION_ENGINE_H
 #define SATCOMPUTE_FAULT_PREDICTION_ENGINE_H
 
+#include "ns3/compute-failure-probability-record.h"
 #include "ns3/compute-failure-predictor.h"
 #include "ns3/event-id.h"
 #include "ns3/fault-para.h"
@@ -31,28 +32,6 @@ class FaultPredictionEngineError : public std::runtime_error
 {
   public:
     using std::runtime_error::runtime_error;
-};
-
-/** One NOTICE-gated, model-driven forecast for a currently running task. */
-struct ComputeFailurePredictionRecord
-{
-    int64_t simulationTimeNs{}; ///< Time at which this forecast became visible.
-    uint64_t faultId{}; ///< Active risk-episode identity.
-    uint32_t nodeId{}; ///< Stable compute-satellite ID.
-    uint64_t taskId{}; ///< Stable running-task ID.
-    int64_t noticeTimeNs{}; ///< Already observed risk-entry time.
-    int64_t riskElapsedTimeNs{}; ///< simulation_time - notice_time.
-    int64_t taskComputeStartTimeNs{}; ///< Already observed compute-dispatch time.
-    int64_t taskServiceTimeNs{}; ///< Fixed task compute duration.
-    int64_t taskElapsedTimeNs{}; ///< Known compute progress in nanoseconds.
-    int64_t remainingComputeTimeNs{}; ///< Known time to scheduled completion.
-    int64_t expectedComputeCompletionTimeNs{}; ///< Known scheduled completion time.
-    double completionRatio{}; ///< Known task completion ratio in [0, 1].
-    double f1StepFailureProbability{}; ///< Current conditional F1 probability.
-    double f2StepFailureProbability{}; ///< Current conditional F2 probability.
-    double combinedStepFailureProbability{}; ///< Current q_comp union probability.
-    uint64_t horizonStepCount{}; ///< Current/future checks through completion.
-    double predictedFailureProbability{}; ///< P(F1 or F2 before completion).
 };
 
 /**
@@ -96,7 +75,7 @@ class FaultPredictionEngine : public Object
     void BindOrbitConstellation(const OnlineOrbitConstellation& constellation);
 
     /** @return Formal prediction records accumulated so far. */
-    const std::vector<ComputeFailurePredictionRecord>& GetPredictionRecords() const;
+    const std::vector<ComputeFailureProbabilityRecord>& GetPredictionRecords() const;
 
   private:
     /** Minimal causal state retained from one executed compute NOTICE. */
@@ -143,7 +122,7 @@ class FaultPredictionEngine : public Object
     std::size_t m_consumedFaultEventCount{}; ///< Visible controller-event prefix.
     std::map<uint32_t, ActiveRisk> m_activeRisks; ///< Active NOTICE by node.
     std::map<uint32_t, PreparedPrediction> m_preparedPredictions; ///< Current tick.
-    std::vector<ComputeFailurePredictionRecord> m_predictionRecords; ///< Past output.
+    std::vector<ComputeFailureProbabilityRecord> m_predictionRecords; ///< Past output.
     std::vector<EventId> m_predictionEvents; ///< Pre-scheduled prepare checks.
     Ptr<FaultController> m_faultController; ///< Time-gated event source.
     Ptr<TaskCoordinator> m_taskCoordinator; ///< Compute-service lifecycle owner.

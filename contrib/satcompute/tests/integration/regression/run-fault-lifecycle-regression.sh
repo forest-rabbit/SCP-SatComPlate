@@ -231,6 +231,29 @@ for result in "$generate_f3_priority_result" "$replay_f3_priority_result" \
   fi
 done
 
+probability_audit_tool="contrib/satcompute/tools/validation/compare-fault-probabilities.py"
+for scenario in f1-66 f2-66 combined-66; do
+  case "$scenario" in
+    f1-66)
+      generate_directory="generate-f1-66"
+      replay_directory="replay-f1-66"
+      ;;
+    f2-66)
+      generate_directory="generate-f2-66"
+      replay_directory="replay-f2-66"
+      ;;
+    combined-66)
+      generate_directory="generate-combined-66"
+      replay_directory="replay-combined-66"
+      ;;
+  esac
+  python3 "$probability_audit_tool" \
+    --model "$regression_output/$generate_directory/fault-model-probabilities.csv" \
+    --prediction "$regression_output/$replay_directory/fault-predictions.csv" \
+    --detail "$regression_output/probability-audit/$scenario.csv" \
+    --summary "$regression_output/probability-audit/$scenario.json"
+done
+
 python3 - "$regression_output" <<'PY'
 import csv
 import json
@@ -268,7 +291,7 @@ PREDICTION_FIELDS = [
     "f2_step_failure_probability",
     "combined_step_failure_probability",
     "horizon_step_count",
-    "predicted_failure_probability",
+    "failure_before_finish_probability",
 ]
 PREDICTION_SUMMARY_FIELDS = {
     "prediction_count",
@@ -310,7 +333,7 @@ def validate_prediction_outputs(directory: str, require_predictions: bool):
         q_f2 = float(row["f2_step_failure_probability"])
         q_comp = float(row["combined_step_failure_probability"])
         horizon_step_count = int(row["horizon_step_count"])
-        predicted_probability = float(row["predicted_failure_probability"])
+        predicted_probability = float(row["failure_before_finish_probability"])
 
         if simulation_time_ns < notice_time_ns or (
             risk_elapsed_time_ns != simulation_time_ns - notice_time_ns
@@ -353,6 +376,40 @@ def validate_prediction_outputs(directory: str, require_predictions: bool):
     ):
         raise SystemExit(f"{directory} prediction summary counts differ: {summary}")
     return rows, summary
+
+
+for scenario in ("f1-66", "f2-66", "combined-66"):
+    audit = load_json(f"probability-audit/{scenario}.json")
+    if set(audit) != {
+        "absolute_tolerance",
+        "model_record_count",
+        "prediction_record_count",
+        "matched_record_count",
+        "missing_model_record_count",
+        "missing_prediction_record_count",
+        "context_mismatch_count",
+        "probability_errors",
+        "within_tolerance",
+    }:
+        raise SystemExit(f"{scenario} probability audit schema differs: {audit}")
+    if (
+        not audit["within_tolerance"]
+        or audit["matched_record_count"] <= 0
+        or audit["model_record_count"] != audit["matched_record_count"]
+        or audit["prediction_record_count"] != audit["matched_record_count"]
+        or audit["missing_model_record_count"] != 0
+        or audit["missing_prediction_record_count"] != 0
+        or audit["context_mismatch_count"] != 0
+    ):
+        raise SystemExit(f"{scenario} probability audit differs: {audit}")
+    for field, errors in audit["probability_errors"].items():
+        if set(errors) != {"mae", "rmse", "max_absolute_error"} or any(
+            value is None or value > audit["absolute_tolerance"]
+            for value in errors.values()
+        ):
+            raise SystemExit(
+                f"{scenario} probability error differs for {field}: {errors}"
+            )
 
 
 calibration = load_json("f1-calibration/n4b-f1-calibration-summary.json")
@@ -422,6 +479,10 @@ if (root / "generate-f1/fault-trace.json").read_bytes() != (
     root / "generate-f1-second/fault-trace.json"
 ).read_bytes():
     raise SystemExit("same-seed F1 generated traces are not byte-identical")
+if (root / "generate-f1/fault-model-probabilities.csv").read_bytes() != (
+    root / "generate-f1-second/fault-model-probabilities.csv"
+).read_bytes():
+    raise SystemExit("same-seed F1 model probabilities are not byte-identical")
 
 for filename in (
     "fault-events.csv",
@@ -627,6 +688,10 @@ if (root / "generate-f2-66/fault-trace.json").read_bytes() != (
     root / "generate-f2-66-second/fault-trace.json"
 ).read_bytes():
     raise SystemExit("same-seed F2 generated traces are not byte-identical")
+if (root / "generate-f2-66/fault-model-probabilities.csv").read_bytes() != (
+    root / "generate-f2-66-second/fault-model-probabilities.csv"
+).read_bytes():
+    raise SystemExit("same-seed F2 model probabilities are not byte-identical")
 
 for filename in (
     "fault-events.csv",
@@ -709,6 +774,12 @@ if (root / "generate-combined-66/fault-trace.json").read_bytes() != (
     root / "generate-combined-66-second/fault-trace.json"
 ).read_bytes():
     raise SystemExit("same-seed combined F1/F2 traces are not byte-identical")
+if (root / "generate-combined-66/fault-model-probabilities.csv").read_bytes() != (
+    root / "generate-combined-66-second/fault-model-probabilities.csv"
+).read_bytes():
+    raise SystemExit(
+        "same-seed combined F1/F2 model probabilities are not byte-identical"
+    )
 for filename in (
     "fault-events.csv",
     "fault-summary.json",
@@ -1038,7 +1109,8 @@ fi
 if [[ -e "$regression_output/satellite-first/fault-events.csv" ||
       -e "$regression_output/satellite-first/fault-summary.json" ||
       -e "$regression_output/satellite-first/fault-predictions.csv" ||
-      -e "$regression_output/satellite-first/fault-prediction-summary.json" ]]; then
+      -e "$regression_output/satellite-first/fault-prediction-summary.json" ||
+      -e "$regression_output/satellite-first/fault-model-probabilities.csv" ]]; then
   echo "no-fault run retained stale fault metrics" >&2
   exit 1
 fi

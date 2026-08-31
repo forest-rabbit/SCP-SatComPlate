@@ -15,11 +15,13 @@ namespace ns3
 {
 
 class FaultController;
+class FaultModelEngine;
 class FaultPredictionEngine;
 class TaskCoordinator;
 
 /** Write deterministic fault events and one run-level fault summary. */
 void WriteFaultMetrics(const FaultController& controller,
+                       const FaultModelEngine* modelEngine,
                        const FaultPredictionEngine* predictionEngine,
                        const TaskCoordinator* taskCoordinator,
                        const std::vector<TransferSummaryRecord>& transferSummaries,
