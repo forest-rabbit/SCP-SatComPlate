@@ -32,11 +32,21 @@ network_common="--simulationDuration=1 --constellationConfig=$constellation \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --routingMode=global-first"
+probability_audit="--faultProbabilityAudit=1"
 
 ./ns3 run --no-build \
   "satcompute-f1-calibration \
 --outputDir=$regression_output/f1-calibration" >/dev/null
 
+default_generate_trace="$regression_output/generate-default/fault-trace.json"
+run_platform \
+  "$regression_output/generate-default" \
+  "$common --taskTrace=$fault_task --faultMode=generate \
+--faultProbabilityAudit=1 --faultTrace=$default_generate_trace" >/dev/null
+default_generate_result="$(run_platform \
+  "$regression_output/generate-default" \
+  "$common --taskTrace=$fault_task --faultMode=generate \
+--faultTrace=$default_generate_trace")"
 compute_result="$(run_platform \
   "$regression_output/compute" \
   "$common --taskTrace=$fault_task --faultMode=replay \
@@ -58,7 +68,8 @@ f1_common="--simulationDuration=90 --constellationConfig=$constellation \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=20 --islBandwidthBps=100000000 \
 --routingMode=global-capacity-aware-hrw --computeProfile=$profile \
---taskTrace=$task_inputs/task-f1-critical.json --taskCompletionPolicy=report"
+--taskTrace=$task_inputs/task-f1-critical.json --taskCompletionPolicy=report \
+$probability_audit"
 generate_f1_result="$(run_platform \
   "$regression_output/generate-f1" \
   "$f1_common --faultMode=generate \
@@ -77,7 +88,7 @@ f1_sampled_common="--simulationDuration=80 --randomRun=64 \
 --delayMode=fixed --fixedDelay=0.001 --networkUpdateInterval=20 \
 --islBandwidthBps=100000000 --routingMode=global-capacity-aware-hrw \
 --computeProfile=$profile --taskTrace=$task_inputs/task-f1-risk-window.json \
---taskCompletionPolicy=report"
+--taskCompletionPolicy=report $probability_audit"
 generate_f1_sampled_result="$(run_platform \
   "$regression_output/generate-f1-sampled" \
   "$f1_sampled_common --faultMode=generate \
@@ -92,7 +103,8 @@ f1_66_common="--simulationDuration=120 \
 --networkUpdateInterval=20 --islBandwidthBps=2000000000 \
 --routingMode=global-capacity-aware-hrw \
 --computeProfile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
---taskTrace=$f1_example/task-trace.json --taskCompletionPolicy=report"
+--taskTrace=$f1_example/task-trace.json --taskCompletionPolicy=report \
+$probability_audit"
 generate_f1_66_result="$(run_platform \
   "$regression_output/generate-f1-66" \
   "$f1_66_common --faultMode=generate \
@@ -106,7 +118,8 @@ f2_common="--simulationDuration=1000 --randomSeed=1 --randomRun=16 \
 --orbitStartOffset=5695 --maxIslDistance=6171353 --delayMode=fixed \
 --fixedDelay=0.008 --networkUpdateInterval=20 --islBandwidthBps=2000000000 \
 --routingMode=global-capacity-aware-hrw --computeProfile=$all_compute_profile \
---taskTrace=$f2_example/task-trace.json --taskCompletionPolicy=report"
+--taskTrace=$f2_example/task-trace.json --taskCompletionPolicy=report \
+$probability_audit"
 generate_f2_result="$(run_platform \
   "$regression_output/generate-f2-66" \
   "$f2_common --faultMode=generate --faultEnableF1=0 --faultEnableF2=1 \
@@ -171,7 +184,8 @@ replay_all_faults_result="$(run_platform \
   "$f2_common --faultMode=replay --faultEnableF1=1 --faultEnableF2=1 \
 --faultEnableF3=1 --faultTrace=$all_faults_trace")"
 
-for result in "$compute_result" "$satellite_first_result" "$satellite_second_result"; do
+for result in "$default_generate_result" "$compute_result" \
+  "$satellite_first_result" "$satellite_second_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
     echo "fault lifecycle run did not report its intentional failed task" >&2
     exit 1
@@ -1091,16 +1105,32 @@ for filename in (
     "size-aware-reservation-events.csv",
     "size-aware-summary.json",
     "capacity-aware-summary.json",
-    "fault-predictions.csv",
-    "fault-prediction-summary.json",
 ):
     first = (root / "satellite-first" / filename).read_bytes()
     second = (root / "satellite-second" / filename).read_bytes()
     if first != second:
         raise SystemExit(f"repeated satellite fault output differs: {filename}")
 
-validate_prediction_outputs("compute", False)
-validate_prediction_outputs("satellite-first", False)
+for directory in (
+    "generate-default",
+    "compute",
+    "satellite-first",
+    "satellite-second",
+):
+    if not (root / directory / "fault-events.csv").is_file() or not (
+        root / directory / "fault-summary.json"
+    ).is_file():
+        raise SystemExit(f"normal fault run omitted formal fault evidence: {directory}")
+    for filename in (
+        "fault-model-probabilities.csv",
+        "fault-predictions.csv",
+        "fault-prediction-summary.json",
+    ):
+        if (root / directory / filename).exists():
+            raise SystemExit(
+                f"normal fault run unexpectedly emitted probability audit file: "
+                f"{directory}/{filename}"
+            )
 PY
 
 no_fault_result="$(run_platform \
