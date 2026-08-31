@@ -26,10 +26,12 @@ from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.patches import Rectangle
 
 
-GLOBAL_LONGITUDE_MIN = -180.0
-GLOBAL_LONGITUDE_MAX = 180.0
-GLOBAL_LATITUDE_MIN = -90.0
-GLOBAL_LATITUDE_MAX = 90.0
+# The publication view enlarges the configured SAA window without changing any
+# modeled or sampled coordinates. Raw coordinates remain in the evidence files.
+VIEW_LONGITUDE_MIN = -120.0
+VIEW_LONGITUDE_MAX = 60.0
+VIEW_LATITUDE_MIN = -60.0
+VIEW_LATITUDE_MAX = 30.0
 PAPER_BLUE_LOW_TO_HIGH = (
     "#F4F9FE",
     "#D2E3F3",
@@ -113,8 +115,10 @@ def publication_colormap() -> LinearSegmentedColormap:
 
 
 def risk_field(parameters: dict[str, object]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    longitude = np.linspace(GLOBAL_LONGITUDE_MIN, GLOBAL_LONGITUDE_MAX, 721)
-    latitude = np.linspace(GLOBAL_LATITUDE_MIN, GLOBAL_LATITUDE_MAX, 361)
+    # Retain the original 0.5-degree model-field sampling after changing only
+    # the display extent; the empirical evidence grid remains 2.5 degrees.
+    longitude = np.linspace(VIEW_LONGITUDE_MIN, VIEW_LONGITUDE_MAX, 361)
+    latitude = np.linspace(VIEW_LATITUDE_MIN, VIEW_LATITUDE_MAX, 181)
     longitude_grid, latitude_grid = np.meshgrid(longitude, latitude)
     longitude_delta = longitude_grid - float(parameters["hotspot_longitude_deg"])
     longitude_sigma = np.where(
@@ -256,10 +260,12 @@ def add_geographic_frame(
                 "linewidth": 0.5,
             },
         )
-    axis.set_xlim(GLOBAL_LONGITUDE_MIN, GLOBAL_LONGITUDE_MAX)
-    axis.set_ylim(GLOBAL_LATITUDE_MIN, GLOBAL_LATITUDE_MAX)
-    axis.set_xticks(np.arange(-180.0, 181.0, 60.0))
-    axis.set_yticks(np.arange(-90.0, 91.0, 30.0))
+    axis.set_xlim(VIEW_LONGITUDE_MIN, VIEW_LONGITUDE_MAX)
+    axis.set_ylim(VIEW_LATITUDE_MIN, VIEW_LATITUDE_MAX)
+    axis.set_xticks(
+        np.arange(VIEW_LONGITUDE_MIN, VIEW_LONGITUDE_MAX + 1.0, 30.0)
+    )
+    axis.set_yticks(np.arange(VIEW_LATITUDE_MIN, VIEW_LATITUDE_MAX + 1.0, 15.0))
     axis.set_xlabel("Longitude (degrees)")
     axis.set_ylabel("Latitude (degrees)")
     axis.set_aspect("equal", adjustable="box")
