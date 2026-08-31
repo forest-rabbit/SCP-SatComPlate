@@ -55,7 +55,8 @@ struct F2FaultParameters
     double latitudeMaxDegrees{}; ///< 北侧纬度边界，单位为度。
     double hotspotLongitudeDegrees{}; ///< 经验 SEU 热点中心经度，单位为度。
     double hotspotLatitudeDegrees{}; ///< 经验 SEU 热点中心纬度，单位为度。
-    double sigmaLongitudeDegrees{}; ///< 高斯空间风险的经度标准差，单位为度。
+    double sigmaLongitudeWestDegrees{}; ///< 热点西侧高斯经度标准差，单位为度。
+    double sigmaLongitudeEastDegrees{}; ///< 热点东侧高斯经度标准差，单位为度。
     double sigmaLatitudeDegrees{}; ///< 高斯空间风险的纬度标准差，单位为度。
     double spatialRiskThreshold{}; ///< 触发风险通知的当前空间风险阈值。
     double referenceSeuIntensityPerSecond{}; ///< 热点中心的参考 SEU 强度。

@@ -187,7 +187,7 @@ def main():
         "random_run_last": args.run_count,
         "run_count": args.run_count,
         "orbit_start_offset_s": orbit_start_offset,
-        "spatial_model": "gaussian_hotspot",
+        "spatial_model": "two_piece_gaussian_hotspot",
         "reference_seu_intensity_per_s": calibration["seu_mapping"][
             "configured_reference_seu_intensity_per_s"
         ],

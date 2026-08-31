@@ -82,9 +82,12 @@ F2RadiationFaultModel::Update(F2RadiationFaultSnapshot& snapshot,
         snapshot.continuousExposureSeconds += intervalSeconds;
     }
 
-    const double longitudeOffset =
-        (snapshot.longitudeDegrees - m_parameters.hotspotLongitudeDegrees) /
-        m_parameters.sigmaLongitudeDegrees;
+    const double longitudeDelta =
+        snapshot.longitudeDegrees - m_parameters.hotspotLongitudeDegrees;
+    const double longitudeSigma =
+        longitudeDelta < 0.0 ? m_parameters.sigmaLongitudeWestDegrees
+                             : m_parameters.sigmaLongitudeEastDegrees;
+    const double longitudeOffset = longitudeDelta / longitudeSigma;
     const double latitudeOffset =
         (snapshot.latitudeDegrees - m_parameters.hotspotLatitudeDegrees) /
         m_parameters.sigmaLatitudeDegrees;

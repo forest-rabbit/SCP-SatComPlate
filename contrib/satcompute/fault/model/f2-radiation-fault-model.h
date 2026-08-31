@@ -19,7 +19,7 @@ struct F2RadiationFaultSnapshot
     double continuousExposureSeconds{}; ///< Current uninterrupted region exposure.
     double cumulativeFailureHazard{}; ///< Integrated compute-failure hazard this pass.
     double cumulativeFailureProbability{}; ///< At-least-one-failure pass statistic.
-    double spatialRisk{}; ///< Current dimensionless Gaussian risk score.
+    double spatialRisk{}; ///< Current dimensionless two-piece Gaussian risk score.
     double seuIntensityPerSecond{}; ///< Current modeled raw SEU intensity.
     double failureIntensityPerSecond{}; ///< Current effective service-failure intensity.
     double stepFailureProbability{}; ///< Conditional probability for the latest interval.

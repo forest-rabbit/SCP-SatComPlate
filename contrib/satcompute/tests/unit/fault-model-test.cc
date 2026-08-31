@@ -69,7 +69,8 @@ CheckDefaults()
               parameters.f2.longitudeMinDegrees == -90.0 &&
               parameters.f2.hotspotLongitudeDegrees == -60.0 &&
               parameters.f2.hotspotLatitudeDegrees == -28.0 &&
-              parameters.f2.sigmaLongitudeDegrees == 18.0 &&
+              parameters.f2.sigmaLongitudeWestDegrees == 12.0 &&
+              parameters.f2.sigmaLongitudeEastDegrees == 24.0 &&
               parameters.f2.sigmaLatitudeDegrees == 12.0 &&
               parameters.f2.spatialRiskThreshold == 0.5 &&
               parameters.f2.referenceSeuIntensityPerSecond ==
@@ -128,6 +129,11 @@ CheckInvalid()
     value = GetDefaultFaultParameters();
     value.f2.sigmaLatitudeDegrees = 0.0;
     ExpectError(value, "F2.sigma", "F2-sigma");
+
+    value = GetDefaultFaultParameters();
+    value.f2.sigmaLongitudeWestDegrees =
+        value.f2.sigmaLongitudeEastDegrees;
+    ExpectError(value, "F2.sigma_longitude", "F2-longitude-sigma-order");
 
     value = GetDefaultFaultParameters();
     value.f2.spatialRiskThreshold = 1.0;
@@ -398,6 +404,17 @@ CheckF2Model()
     Check(longitudeNear.spatialRisk < hotspot.spatialRisk &&
               longitudeNear.spatialRisk > longitudeFar.spatialRisk,
           "F2 longitude risk is not monotonic away from the hotspot");
+
+    F2RadiationFaultSnapshot westEqualDistance = model.CreateInitialSnapshot();
+    F2RadiationFaultSnapshot eastEqualDistance = model.CreateInitialSnapshot();
+    model.Update(westEqualDistance,
+                 MakeEcef(parameters.f2.hotspotLatitudeDegrees, -70.0),
+                 1.0);
+    model.Update(eastEqualDistance,
+                 MakeEcef(parameters.f2.hotspotLatitudeDegrees, -50.0),
+                 1.0);
+    Check(westEqualDistance.spatialRisk < eastEqualDistance.spatialRisk,
+          "F2 longitude field does not contract west and extend east");
 
     F2RadiationFaultSnapshot latitudeNear = model.CreateInitialSnapshot();
     F2RadiationFaultSnapshot latitudeFar = model.CreateInitialSnapshot();

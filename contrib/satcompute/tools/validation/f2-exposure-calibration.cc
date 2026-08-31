@@ -357,7 +357,10 @@ class ExposureCalibration
               {"latitude_max_deg", m_parameters.latitudeMaxDegrees},
               {"hotspot_longitude_deg", m_parameters.hotspotLongitudeDegrees},
               {"hotspot_latitude_deg", m_parameters.hotspotLatitudeDegrees},
-              {"sigma_longitude_deg", m_parameters.sigmaLongitudeDegrees},
+              {"sigma_longitude_west_deg",
+               m_parameters.sigmaLongitudeWestDegrees},
+              {"sigma_longitude_east_deg",
+               m_parameters.sigmaLongitudeEastDegrees},
               {"sigma_latitude_deg", m_parameters.sigmaLatitudeDegrees},
               {"spatial_risk_threshold", m_parameters.spatialRiskThreshold}}},
             {"seu_mapping",
@@ -617,7 +620,10 @@ main(int argc, char* argv[])
     int64_t calibrationDurationSeconds = 7200;
     int64_t windowDurationSeconds = 1000;
     double functionalTargetMeanFaultCount = 2.0;
-    double sigmaLongitudeDegrees = parameters.f2.sigmaLongitudeDegrees;
+    double sigmaLongitudeWestDegrees =
+        parameters.f2.sigmaLongitudeWestDegrees;
+    double sigmaLongitudeEastDegrees =
+        parameters.f2.sigmaLongitudeEastDegrees;
     double sigmaLatitudeDegrees = parameters.f2.sigmaLatitudeDegrees;
     double spatialRiskThreshold = parameters.f2.spatialRiskThreshold;
     double referenceMaximumFailureIntensity = -1.0;
@@ -634,9 +640,12 @@ main(int argc, char* argv[])
     command.AddValue("targetMeanFaultCount",
                      "Target mean F2 faults in the selected functional window",
                      functionalTargetMeanFaultCount);
-    command.AddValue("sigmaLongitude",
-                     "Candidate Gaussian longitude sigma in degrees",
-                     sigmaLongitudeDegrees);
+    command.AddValue("sigmaLongitudeWest",
+                     "Candidate west-side Gaussian longitude sigma in degrees",
+                     sigmaLongitudeWestDegrees);
+    command.AddValue("sigmaLongitudeEast",
+                     "Candidate east-side Gaussian longitude sigma in degrees",
+                     sigmaLongitudeEastDegrees);
     command.AddValue("sigmaLatitude",
                      "Candidate Gaussian latitude sigma in degrees",
                      sigmaLatitudeDegrees);
@@ -672,7 +681,8 @@ main(int argc, char* argv[])
             throw std::runtime_error(
                 "reference maximum failure intensity must be finite");
         }
-        parameters.f2.sigmaLongitudeDegrees = sigmaLongitudeDegrees;
+        parameters.f2.sigmaLongitudeWestDegrees = sigmaLongitudeWestDegrees;
+        parameters.f2.sigmaLongitudeEastDegrees = sigmaLongitudeEastDegrees;
         parameters.f2.sigmaLatitudeDegrees = sigmaLatitudeDegrees;
         parameters.f2.spatialRiskThreshold = spatialRiskThreshold;
         ValidateFaultParameters(parameters);

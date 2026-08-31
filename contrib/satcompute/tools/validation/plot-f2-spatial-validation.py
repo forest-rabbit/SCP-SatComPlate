@@ -88,9 +88,13 @@ def risk_field(parameters: dict[str, object]) -> tuple[np.ndarray, np.ndarray, n
         221,
     )
     longitude_grid, latitude_grid = np.meshgrid(longitude, latitude)
-    longitude_offset = (
-        longitude_grid - float(parameters["hotspot_longitude_deg"])
-    ) / float(parameters["sigma_longitude_deg"])
+    longitude_delta = longitude_grid - float(parameters["hotspot_longitude_deg"])
+    longitude_sigma = np.where(
+        longitude_delta < 0.0,
+        float(parameters["sigma_longitude_west_deg"]),
+        float(parameters["sigma_longitude_east_deg"]),
+    )
+    longitude_offset = longitude_delta / longitude_sigma
     latitude_offset = (
         latitude_grid - float(parameters["hotspot_latitude_deg"])
     ) / float(parameters["sigma_latitude_deg"])

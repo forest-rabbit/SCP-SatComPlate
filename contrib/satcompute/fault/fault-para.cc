@@ -98,8 +98,11 @@ GetDefaultFaultParameters()
     // 文献观测到的 SAA 内 SEU 热点中心纬度，单位为度。
     parameters.f2.hotspotLatitudeDegrees = -28.0;
 
-    // 66 星轨道候选扫描冻结的高斯空间风险场经度标准差，单位为度。
-    parameters.f2.sigmaLongitudeDegrees = 18.0;
+    // 热点西侧的高斯空间风险场经度标准差，单位为度。
+    parameters.f2.sigmaLongitudeWestDegrees = 12.0;
+
+    // 热点东侧的高斯空间风险场经度标准差，单位为度。
+    parameters.f2.sigmaLongitudeEastDegrees = 24.0;
 
     // 66 星轨道候选扫描冻结的高斯空间风险场纬度标准差，单位为度。
     parameters.f2.sigmaLatitudeDegrees = 12.0;

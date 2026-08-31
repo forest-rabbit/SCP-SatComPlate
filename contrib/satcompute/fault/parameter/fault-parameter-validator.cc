@@ -110,7 +110,10 @@ ValidateFaultParameters(const FaultParameters& parameters)
                  -90.0,
                  90.0,
                  "F2.hotspot_latitude_deg");
-    RequireFinite(f2.sigmaLongitudeDegrees, "F2.sigma_longitude_deg");
+    RequireFinite(f2.sigmaLongitudeWestDegrees,
+                  "F2.sigma_longitude_west_deg");
+    RequireFinite(f2.sigmaLongitudeEastDegrees,
+                  "F2.sigma_longitude_east_deg");
     RequireFinite(f2.sigmaLatitudeDegrees, "F2.sigma_latitude_deg");
     RequireRange(f2.spatialRiskThreshold,
                  0.0,
@@ -134,9 +137,15 @@ ValidateFaultParameters(const FaultParameters& parameters)
     {
         Fail("F2.hotspot", "must be inside the configured radiation region");
     }
-    if (f2.sigmaLongitudeDegrees <= 0.0 || f2.sigmaLatitudeDegrees <= 0.0)
+    if (f2.sigmaLongitudeWestDegrees <= 0.0 ||
+        f2.sigmaLongitudeEastDegrees <= 0.0 || f2.sigmaLatitudeDegrees <= 0.0)
     {
         Fail("F2.sigma", "values must be positive");
+    }
+    if (f2.sigmaLongitudeWestDegrees >= f2.sigmaLongitudeEastDegrees)
+    {
+        Fail("F2.sigma_longitude",
+             "must satisfy west sigma < east sigma");
     }
     if (f2.spatialRiskThreshold <= 0.0 || f2.spatialRiskThreshold >= 1.0)
     {
