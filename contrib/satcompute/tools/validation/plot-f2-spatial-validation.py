@@ -21,13 +21,14 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap, Normalize, PowerNorm
+from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.patches import Rectangle
 
 
 VIEW_MARGIN_DEG = 10.0
 RISK_FIELD_RESOLUTION_DEG = 0.5
-FAULT_COUNT_DISPLAY_GAMMA = 0.65
+FAULT_COUNT_DARK_RANGE_START = 8
+FAULT_COUNT_DARK_RANGE_PALETTE_FRACTION = 0.80
 PAPER_BLUE_LOW_TO_HIGH = (
     "#F4F9FE",
     "#D2E3F3",
@@ -106,6 +107,26 @@ def publication_colormap() -> LinearSegmentedColormap:
     return LinearSegmentedColormap.from_list(
         "satcompute_f2_blue",
         PAPER_BLUE_LOW_TO_HIGH,
+        N=256,
+    )
+
+
+def fault_count_colormap(raw_peak: int) -> LinearSegmentedColormap:
+    """Compress high counts into the darkest fifth without moving value ticks."""
+    base_colormap = publication_colormap()
+    data_positions = np.linspace(0.0, 1.0, 256)
+    if raw_peak <= FAULT_COUNT_DARK_RANGE_START:
+        palette_positions = data_positions
+    else:
+        pivot = FAULT_COUNT_DARK_RANGE_START / raw_peak
+        palette_positions = np.interp(
+            data_positions,
+            [0.0, pivot, 1.0],
+            [0.0, FAULT_COUNT_DARK_RANGE_PALETTE_FRACTION, 1.0],
+        )
+    return LinearSegmentedColormap.from_list(
+        "satcompute_f2_fault_count_blue",
+        base_colormap(palette_positions),
         N=256,
     )
 
@@ -369,13 +390,9 @@ def plot(
         longitude_edges,
         latitude_edges,
         raw_counts,
-        cmap=color_map,
+        cmap=fault_count_colormap(raw_peak),
         shading="flat",
-        norm=PowerNorm(
-            gamma=FAULT_COUNT_DISPLAY_GAMMA,
-            vmin=0.0,
-            vmax=upper_count,
-        ),
+        norm=Normalize(vmin=0.0, vmax=upper_count, clip=True),
     )
     event_longitudes = np.asarray([float(event["longitude_deg"]) for event in events])
     event_latitudes = np.asarray([float(event["latitude_deg"]) for event in events])
@@ -404,10 +421,8 @@ def plot(
         pad=0.20,
         aspect=32,
     )
-    tick_count = min(5, raw_peak + 1)
-    count_colorbar.set_ticks(
-        np.unique(np.rint(np.linspace(0, raw_peak, tick_count)).astype(int))
-    )
+    count_colorbar.set_ticks(np.arange(0, raw_peak + 1, 1))
+    count_colorbar.ax.tick_params(labelsize=5.2)
     count_colorbar.set_label(
         "Raw fault count per bin",
         labelpad=2.0,
@@ -426,8 +441,10 @@ def plot(
         f"{expected:.1f}; bin risk-rate Pearson r={correlation:.3f}.\n"
         f"Panel b uses raw {float(run['longitude_bin_deg']):g} x "
         f"{float(run['latitude_bin_deg']):g} degree eligible-bin counts with the "
-        f"color scale capped at {raw_peak} and display gamma "
-        f"{FAULT_COUNT_DISPLAY_GAMMA:g}; circles retain the individual event locations.",
+        f"linear integer ticks spanning 0--{raw_peak}.\nCounts "
+        f"{FAULT_COUNT_DARK_RANGE_START}--{raw_peak} use the darkest "
+        f"{(1.0 - FAULT_COUNT_DARK_RANGE_PALETTE_FRACTION) * 100:g}% of the blue "
+        "ramp. Circles retain the individual event locations.",
         ha="center",
         va="bottom",
         fontsize=5.6,
