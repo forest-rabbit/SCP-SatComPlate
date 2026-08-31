@@ -24,7 +24,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.patches import Rectangle
-from matplotlib.ticker import MaxNLocator
 
 
 GLOBAL_LONGITUDE_MIN = -180.0
@@ -393,20 +392,10 @@ def plot(
         event_latitudes,
         s=10,
         facecolors="none",
-        edgecolors="white",
-        linewidths=0.65,
-        alpha=0.78,
-        zorder=5,
-    )
-    axes[1].scatter(
-        event_longitudes,
-        event_latitudes,
-        s=6,
-        facecolors="none",
         edgecolors="#08336E",
-        linewidths=0.28,
-        alpha=0.82,
-        zorder=6,
+        linewidths=0.30,
+        alpha=0.12,
+        zorder=5,
     )
     add_geographic_frame(axes[1], parameters, label_hotspot=False)
     axes[1].set_title(
@@ -423,8 +412,10 @@ def plot(
         pad=0.20,
         aspect=32,
     )
-    count_colorbar.locator = MaxNLocator(nbins=5, integer=True)
-    count_colorbar.update_ticks()
+    tick_count = min(5, raw_peak + 1)
+    count_colorbar.set_ticks(
+        np.unique(np.rint(np.linspace(0, raw_peak, tick_count)).astype(int))
+    )
     count_colorbar.set_label(
         "Locally smoothed fault count per bin",
         labelpad=2.0,
