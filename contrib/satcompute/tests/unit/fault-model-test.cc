@@ -74,7 +74,7 @@ CheckDefaults()
               parameters.f2.sigmaLatitudeDegrees == 12.0 &&
               parameters.f2.spatialRiskThreshold == 0.5 &&
               parameters.f2.referenceSeuIntensityPerSecond ==
-                  0.0029910954712268908 &&
+                  0.002859196111093899 &&
               parameters.f2.seuToComputeFailureProbability == 0.5 &&
               !parameters.f3.enabled &&
               parameters.f3.mode == "fixed_k" && parameters.f3.fixedCount == 1,

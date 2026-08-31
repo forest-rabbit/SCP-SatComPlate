@@ -624,7 +624,7 @@ main(int argc, char* argv[])
     std::string constellationConfig;
     std::string outputDirectory;
     int64_t durationSeconds = 500000;
-    double orbitStartOffsetSeconds = 5210.0;
+    double orbitStartOffsetSeconds = 302.0;
     double longitudeBinDegrees = 2.5;
     double latitudeBinDegrees = 2.5;
     int64_t progressIntervalSeconds = 50000;

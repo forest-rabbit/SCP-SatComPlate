@@ -803,7 +803,7 @@ def build_f2_validation_workload(satellite_ids, compute_nodes, seed):
         "profile": "f2-validation",
         "seed": seed,
         "task_count": len(tasks),
-        "orbit_start_offset_s": 5210,
+        "orbit_start_offset_s": 302,
         "random_seed": 1,
         "random_run": 16,
         "roles": roles,

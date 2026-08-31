@@ -2,7 +2,7 @@
   "profile": "f2-validation",
   "seed": "n4b-f2-66",
   "task_count": 8,
-  "orbit_start_offset_s": 5210,
+  "orbit_start_offset_s": 302,
   "random_seed": 1,
   "random_run": 16,
   "roles": [

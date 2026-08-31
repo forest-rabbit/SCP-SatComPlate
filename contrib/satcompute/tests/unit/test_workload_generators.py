@@ -232,7 +232,7 @@ class WorkloadGeneratorTest(unittest.TestCase):
             summary = json.loads(outputs[0][1].read_text(encoding="utf-8"))
             self.assertEqual(len(trace["tasks"]), 8)
             self.assertEqual(summary["profile"], "f2-validation")
-            self.assertEqual(summary["orbit_start_offset_s"], 5210)
+            self.assertEqual(summary["orbit_start_offset_s"], 302)
             self.assertEqual(summary["long_task_compute_node_ids"], [51, 29])
             self.assertEqual(summary["long_task_ids"], [1, 3])
             self.assertEqual(summary["follow_up_task_ids"], [2, 4])
