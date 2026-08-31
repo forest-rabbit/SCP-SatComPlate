@@ -25,4 +25,6 @@ SatCompute 不使用一个完整 JSON 同时控制星座、运行参数、任务
 小任务闭环见
 [`examples/leo-66-1000s-f2/`](examples/leo-66-1000s-f2/README.md)，无需任务输入的
 F3 永久整星闭环见
-[`examples/leo-66-1000s-f3/`](examples/leo-66-1000s-f3/README.md)。
+[`examples/leo-66-1000s-f3/`](examples/leo-66-1000s-f3/README.md)。N4B 最终的
+66 星、1000 秒、100 任务联合验收见
+[`examples/leo-66-1000s-n4b-joint/`](examples/leo-66-1000s-n4b-joint/README.md)。

@@ -4,10 +4,11 @@
 ComputeProfile 生成 TaskTrace。它不生成星座、坐标、链路或完整平台配置，也不在
 Python 中复制 ns-3.48 的轨道计算。
 
-脚本包含三个明确的生成档：默认 `stress` 用于可调规模压力任务；
+脚本包含四个明确的生成档：默认 `stress` 用于可调规模压力任务；
 `f1-validation` 固定生成 N4B 第一阶段的 66 星、20 任务输入；`f2-validation` 固定
-生成第二阶段的 66 星、8 任务输入。三者共用同一套输入闭集校验、稳定 ID 和 JSON
-writer，不再维护独立的故障场景生成器。
+生成第二阶段的 66 星、8 任务输入；`n4b-joint-validation` 固定生成 N4B 最终联合
+验收的 66 星、100 任务输入。四者共用同一套输入闭集校验、稳定 ID 和 JSON writer，
+不再维护独立的故障场景生成器。
 
 ## 输入与输出
 
@@ -21,6 +22,7 @@ writer，不再维护独立的故障场景生成器。
 - `f1-validation` 要求节点切片恰好包含 66 星、ComputeProfile 至少包含 6 个节点；
 - `f2-validation` 要求节点切片恰好包含 66 星，并包含固定验证节点
   `0/11/18/29/40/51` 的算力配置。
+- `n4b-joint-validation` 要求节点切片恰好包含 66 星，且全部卫星均具有算力配置。
 
 脚本写出两个 JSON：
 
@@ -83,13 +85,30 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 [`leo-66-1000s-f2`](../../input/examples/leo-66-1000s-f2/README.md)。任务仍只用于
 验证执行生命周期，F2 是否发生由正式平台的实时 ECEF 暴露和 ns-3 随机流决定。
 
+## N4B 联合验收档
+
+```bash
+python3 contrib/satcompute/tools/generation/generate-task-workload.py \
+  --profile=n4b-joint-validation \
+  --nodes-file=/tmp/satcompute-n4b-joint-topology/topology/nodes_0s.json \
+  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
+  --seed=n4b-joint-66 \
+  --output-task-trace=/tmp/n4b-joint-task-trace.json \
+  --output-workload-summary=/tmp/n4b-joint-workload-summary.json
+```
+
+该档固定产生 100 个任务：30 个任务覆盖 3 个强热点、1 个临界热点和 1 个温热对照
+节点；8 个任务覆盖 F2/F3 故障、恢复和邻接对照窗口；其余 62 个 2–5 秒短任务分散
+到 55 个非保留计算节点。完整角色、冻结 seed/run 和四轮验收流程见
+[`leo-66-1000s-n4b-joint`](../../input/examples/leo-66-1000s-n4b-joint/README.md)。
+
 ## 参数
 
 ### 基本任务与到达过程
 
 | 参数 | 含义 |
 |---|---|
-| `--profile` | `stress`（默认）、`f1-validation` 或 `f2-validation` |
+| `--profile` | `stress`（默认）、`f1-validation`、`f2-validation` 或 `n4b-joint-validation` |
 | `--nodes-file` | topology-only 节点切片 |
 | `--compute-profile` | 算力节点及其处理速率 |
 | `--task-count` | stress 必填；任务总数，任务 ID 固定为 `1..N` |
@@ -147,7 +166,8 @@ stress 档的生成过程还保证：
 
 F1 验证档额外把热点节点、预期临界故障任务、恢复后任务、风险-only 节点及对照
 节点写入 summary。F2 验证档记录轨道起始偏移、固定 seed/run、热点、预期故障时刻、
-恢复后、风险-only 与对照任务。两种 summary 都只供测试精确断言，不是平台输入。
+恢复后、风险-only 与对照任务。联合验收档记录分级热点、F2/F3 窗口任务和分散对照
+任务。三种 summary 都只供测试精确断言，不是平台输入。
 
 主要函数按职责分为：输入闭集校验（`read_satellite_ids`、
 `read_compute_profile`）、整数预算分配（`largest_remainder`、

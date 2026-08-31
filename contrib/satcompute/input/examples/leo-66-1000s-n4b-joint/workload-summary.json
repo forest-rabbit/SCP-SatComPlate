@@ -1,0 +1,257 @@
+{
+  "profile": "n4b-joint-validation",
+  "seed": "n4b-joint-66",
+  "task_count": 100,
+  "simulation_duration_s": 1000,
+  "orbit_start_offset_s": 5695,
+  "random_seed": 1,
+  "random_run": 16,
+  "strong_hotspot_compute_node_ids": [
+    0,
+    11,
+    22
+  ],
+  "strong_hotspot_task_ids": {
+    "0": {
+      "continuous": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "post_recovery": 7
+    },
+    "11": {
+      "continuous": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "post_recovery": 14
+    },
+    "22": {
+      "continuous": [
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "post_recovery": 21
+    }
+  },
+  "expected_critical_failure_task_ids": [
+    6,
+    13,
+    20
+  ],
+  "post_recovery_task_ids": [
+    7,
+    14,
+    21
+  ],
+  "boundary_hotspot_compute_node_id": 33,
+  "boundary_hotspot_task_ids": [
+    22,
+    23,
+    24,
+    25,
+    26
+  ],
+  "warm_control_compute_node_id": 44,
+  "warm_control_task_ids": [
+    27,
+    28,
+    29,
+    30
+  ],
+  "fault_window_roles": [
+    {
+      "task_id": 31,
+      "compute_node_id": 51,
+      "duration_s": 20,
+      "role": "f2-fault-active"
+    },
+    {
+      "task_id": 32,
+      "compute_node_id": 51,
+      "duration_s": 5,
+      "role": "f2-post-recovery"
+    },
+    {
+      "task_id": 33,
+      "compute_node_id": 40,
+      "duration_s": 10,
+      "role": "f2-risk-active"
+    },
+    {
+      "task_id": 34,
+      "compute_node_id": 18,
+      "duration_s": 10,
+      "role": "f2-truncated-risk-active"
+    },
+    {
+      "task_id": 35,
+      "compute_node_id": 29,
+      "duration_s": 10,
+      "role": "f2-late-risk-active"
+    },
+    {
+      "task_id": 36,
+      "compute_node_id": 4,
+      "duration_s": 10,
+      "role": "f3-fault-active"
+    },
+    {
+      "task_id": 37,
+      "compute_node_id": 4,
+      "duration_s": 3,
+      "role": "f3-post-fault"
+    },
+    {
+      "task_id": 38,
+      "compute_node_id": 5,
+      "duration_s": 5,
+      "role": "f3-neighbor-control"
+    }
+  ],
+  "distributed_control_compute_node_ids": [
+    1,
+    2,
+    3,
+    6,
+    7,
+    8,
+    9,
+    10,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    19,
+    20,
+    21,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    30,
+    31,
+    32,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    41,
+    42,
+    43,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65
+  ],
+  "distributed_control_task_ids": [
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99,
+    100
+  ],
+  "strong_hotspot_task_duration_s": 10,
+  "boundary_hotspot_task_duration_s": 10,
+  "warm_control_task_duration_s": 8,
+  "post_recovery_task_duration_s": 2,
+  "expected_f2_fault": {
+    "node_id": 51,
+    "start_time_ns": 386000000000
+  },
+  "expected_f3_fault": {
+    "node_id": 4,
+    "start_time_ns": 829256867404
+  }
+}

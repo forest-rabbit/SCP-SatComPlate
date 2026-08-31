@@ -14,6 +14,7 @@ NODES = MODULE_ROOT / "tests" / "fixtures" / "topology" / "nodes_0s.json"
 COMPUTE = MODULE_ROOT / "tests" / "fixtures" / "task" / "compute-profile-single.json"
 F1_EXAMPLE = MODULE_ROOT / "input" / "examples" / "leo-66-120s-f1"
 F2_EXAMPLE = MODULE_ROOT / "input" / "examples" / "leo-66-1000s-f2"
+JOINT_EXAMPLE = MODULE_ROOT / "input" / "examples" / "leo-66-1000s-n4b-joint"
 
 
 def run_tool(*arguments):
@@ -292,6 +293,14 @@ class WorkloadGeneratorTest(unittest.TestCase):
                 outputs.append((trace, summary))
             self.assertEqual(outputs[0][0].read_bytes(), outputs[1][0].read_bytes())
             self.assertEqual(outputs[0][1].read_bytes(), outputs[1][1].read_bytes())
+            self.assertEqual(
+                outputs[0][0].read_bytes(),
+                (JOINT_EXAMPLE / "task-trace.json").read_bytes(),
+            )
+            self.assertEqual(
+                outputs[0][1].read_bytes(),
+                (JOINT_EXAMPLE / "workload-summary.json").read_bytes(),
+            )
 
             trace = json.loads(outputs[0][0].read_text(encoding="utf-8"))
             summary = json.loads(outputs[0][1].read_text(encoding="utf-8"))
