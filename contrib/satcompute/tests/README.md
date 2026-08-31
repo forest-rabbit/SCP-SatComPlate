@@ -41,7 +41,9 @@ tests/
 | `online-orbit-foundation-test.cc` | 原生 mobility、连续坐标、固定 plus-grid 候选和 canonical 顺序 |
 | `online-topology-controller-test.cc` | 距离门控、fixed/distance 时延、周期更新和按边集合重算路由 |
 
-`test_workload_generators.py` 检查 stress 任务生成器的确定性、总输入字节预算、
+`test_fault_probability_comparison.py` 检查概率审计工具对完全一致输入的零误差报告，
+以及缺失 replay 记录时的失败结果。`test_workload_generators.py` 检查 stress 任务
+生成器的确定性、总输入字节预算、
 结果大小和无版本/hash 字段合同；同时检查 F1 验证档的 66 星、20 任务，以及 F2
 验证档的 66 星、8 任务、热点故障、恢复后、风险-only/截断风险和稀疏对照角色。
 
@@ -66,8 +68,9 @@ tests/
   故障和 66 星小任务闭环；同时检查同 seed trace 一致、generate/replay 逐文件等价、
   compute 故障不改变路由、故障中任务失败和恢复后新任务完成；预测部分检查滚动的
   F1/F2/`q_comp`、动态 `P_fail_before_finish`、任务剩余时间、NOTICE 当刻输出、风险
-  已持续时间、右删失标签和 Brier 汇总，并检查无预警故障无正式预测、无风险输出和
-  none 模式陈旧文件清理；F3 部分覆盖无任务 fixed-K 永久
+  已持续时间，以及 F1-only、F2-only、F1+F2 的 generate 抽样前模型真值与 replay
+  预测逐时刻概率审计，并检查无预警故障无正式预测、无风险输出和 none 模式陈旧
+  文件清理；F3 部分覆盖无任务 fixed-K 永久
   整星故障、即时重路由、F3 抢占活动 compute 区间以及 F1/F2/F3 同开。
 
 ## 本地运行

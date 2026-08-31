@@ -74,6 +74,33 @@ python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
 `[0.8311, 1.2089]`，包含解析目标 1，因此没有因
 单次运行的随机计数重新调整强度。
 
+## Generate/Replay 概率一致性
+
+`compare-fault-probabilities.py` 比较一次 generate 的抽样前真实模型概率与一次
+replay 的因果预测概率。replay 仍只以 generate 的 Fault Trace 为故障输入；这里的
+CSV 只用于仿真结束后的实现验证。
+
+```bash
+python3 contrib/satcompute/tools/validation/compare-fault-probabilities.py \
+  --model=/tmp/generate/fault-model-probabilities.csv \
+  --prediction=/tmp/replay/fault-predictions.csv \
+  --detail=/tmp/audit/fault-probability-audit.csv \
+  --summary=/tmp/audit/fault-probability-audit-summary.json
+```
+
+脚本以 `(simulation_time_ns,node_id,task_id)` 为主键，要求 `fault_id`、NOTICE、任务
+进度和预测窗口上下文一致，再分别比较当前步 `q_F1`、`q_F2`、`q_comp` 以及任务
+完成前累计概率 `P_fail_before_finish`。summary 固定给出：
+
+- model、prediction、matched 与双向缺失记录数；
+- 上下文不一致记录数；
+- 四个概率字段各自的 MAE、RMSE 和最大绝对误差；
+- `within_tolerance` 总结论。
+
+`--absolute-tolerance` 默认 `1e-12`。没有匹配记录、键集合不同、上下文不同或任一
+最大误差超限时返回非零状态。N4B 回归分别在 66 星 F1-only、F2-only 和 F1+F2
+场景运行该工具。
+
 ## 失败输出一致性检查
 
 `check-flow-drop-reasons.py` 检查一次失败任务运行中的 FlowMonitor DropReason 证据。

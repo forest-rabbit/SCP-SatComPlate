@@ -12,7 +12,7 @@ fault/
 ├── fault-para.h/.cc             人工维护的 common/F1/F2/F3 参数
 ├── parameter/                   参数合法性校验
 ├── model/                       F1/F2 状态模型、概率组合/预测与 F3 调度模型
-├── runtime/                     在线判定、因果预测、状态覆盖与故障执行
+├── runtime/                     概率记录、在线判定、因果预测、状态覆盖与故障执行
 ├── trace/                       统一记录定义、JSON 读取和写出
 └── README.md
 ```
@@ -26,6 +26,7 @@ fault/
 | `model/f1-self-state-fault-model.h/.cc` | 无运行期副作用的 F1 温度、DoD、风险、强度和单步概率 |
 | `model/f2-radiation-fault-model.h/.cc` | 原生 ECEF 转经纬度、区域判定、连续暴露、累计风险与单步概率 |
 | `model/f3-debris-fault-model.h/.cc` | 以独立 ns-3 随机流生成 fixed-K 或 Poisson 永久整星事件 |
+| `runtime/compute-failure-probability-record.h` | generate 真值与 replay 预测共用的逐时刻概率字段合同 |
 | `runtime/fault-model-engine.h/.cc` | 在线读取状态、维护风险 episode、使用 ns-3 随机流判定事件 |
 | `runtime/fault-prediction-engine.h/.cc` | 在 generate/replay 中维护无随机数影子状态，并从已执行 NOTICE 和当前任务快照生成因果预测记录 |
 | `runtime/fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
@@ -255,19 +256,27 @@ NOTICE 时刻且有运行任务       输出 risk_elapsed_time_ns = 0
 NOTICE_CLEAR / satellite START 关闭 episode，不输出该时刻记录
 ```
 
+未来接入主动备份后，`BACKUP_START` 也将成为该任务本轮预测的终点：触发当刻冻结
+`q_F1/q_F2/q_comp/P_fail_before_finish`、任务完成度和剩余时间作为决策证据，随后由
+备份状态机接管，不再为同一 task/attempt 重复预测或启动第二份备份。N4B 只冻结这条
+生命周期合同，不创建 `BACKUP_START` 事件。
+
 预测记录中的 `risk_elapsed_time_ns=now-notice_time_ns` 是当前时刻已经观察到的风险
 持续时间；它不是 trace 在 episode 结束后才能确定的 `risk_duration_ns`。运行期还
 明确禁止读取未来的 compute START、`fault_occurred`、`warning_lead_time_ns` 或最终
 风险时长。generate 和 replay 因此使用同一条因果路径；使用相同任务和已生成 trace
 时，预测输出应逐字节一致。
 
-`observed_compute_failure_before_finish` 只在仿真结束后由 metrics 根据实际 START
-补充，用于 Brier score 和后续 Monte Carlo 校准，不会反馈给预测器。若预计任务完成
-前被 F3/其他竞争事件终止，或预计完成时刻达到/超出仿真终点且窗口内没有故障，该
-标签留空并按右删失处理，不进入评分。模型内部一致性由逐步概率单元测试验证，随机
-实现的校准需要多 seed/run，模型对现实故障
-的有效性仍需外部数据；三者不能混为一种“准确率”。当前输出只是后续主动备份的
-候选输入；本阶段不启动副本、不选择备份节点，也不产生
+generate 的在线引擎还会在每次正式预测对应的随机抽样前，用真实 F1/F2 状态计算
+同结构概率记录；replay 则从无随机数影子状态输出预测记录。验证工具按
+`(simulation_time_ns,node_id,task_id)` 比较 `q_F1`、`q_F2`、`q_comp` 和
+`P_fail_before_finish`，并报告 MAE、RMSE、最大绝对误差、缺失记录与上下文差异。
+真实模型概率文件只是离线验证证据，不写入 Fault Trace，也不作为 replay 输入。
+
+这里验证的是模型实现和重放状态是否一致，不把一次随机故障结果当成概率真值，因而
+不生成二元观测标签，也不计算 Brier score。F1/F2 现实有效性仍需外部数据，事件数
+标定仍需固定配置下的多 seed/run，两者不能与实现一致性混为一种“准确率”。当前
+输出只是后续主动备份的候选输入；本阶段不启动副本、不选择备份节点，也不产生
 `BACKUP_START`、`BACKUP_READY` 或 `TAKEOVER`。F1/F2 单步概率随状态变化的预测扩展
 已经完成，阈值/收益最优点仍必须以后续多次运行的校准证据为准，不能从单次轨迹
 推断。

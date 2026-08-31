@@ -193,7 +193,9 @@ generate/replay 在有任务输入且启用 F1/F2 时共用同一套因果预测
 运行摘要会记录实际使用的关键参数和各层结果，仅作为本次仿真的输出证据，不是
 第二个配置入口。generate/replay 会生成 `fault-events.csv` 和 `fault-summary.json`；
 同时存在任务输入且启用 F1/F2 时，还会生成 `fault-predictions.csv` 与
-`fault-prediction-summary.json`。none 与纯 F3 运行不生成预测文件。
+`fault-prediction-summary.json`；generate 还会生成抽样前的
+`fault-model-probabilities.csv`，用于和 replay 预测做概率对概率验证。该文件不是
+故障输入。none 与纯 F3 运行不生成这些概率文件。
 
 ## 星座与动态拓扑
 

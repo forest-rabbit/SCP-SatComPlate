@@ -252,6 +252,10 @@ for scenario in f1-66 f2-66 combined-66; do
     --prediction "$regression_output/$replay_directory/fault-predictions.csv" \
     --detail "$regression_output/probability-audit/$scenario.csv" \
     --summary "$regression_output/probability-audit/$scenario.json"
+  if [[ -e "$regression_output/$replay_directory/fault-model-probabilities.csv" ]]; then
+    echo "$scenario replay unexpectedly emitted live model probabilities" >&2
+    exit 1
+  fi
 done
 
 python3 - "$regression_output" <<'PY'
