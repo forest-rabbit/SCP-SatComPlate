@@ -159,12 +159,14 @@ class ExposureCalibration
      *
      * @param outputDirectory Existing or creatable calibration output directory.
      * @param constellationConfig User-provided constellation path for provenance.
+     * @param functionalTargetMeanFaultCount Target mean faults in the selected window.
      * @param referenceMaximumFailureIntensity Optional fixed hotspot effective
      *        intensity used to validate scaling on a different constellation.
      * @return Complete ordered JSON summary.
      */
     Json Finalize(const std::filesystem::path& outputDirectory,
                   const std::filesystem::path& constellationConfig,
+                  double functionalTargetMeanFaultCount,
                   const std::optional<double>& referenceMaximumFailureIntensity)
     {
         const int64_t endTimeNs = Seconds(m_calibrationDurationSeconds).GetNanoSeconds();
@@ -290,7 +292,8 @@ class ExposureCalibration
         }
         const ExposureWindow selectedWindow = candidates.front();
         const double candidateMaximumFailureIntensity =
-            1.0 / selectedWindow.weightedExposureSeconds;
+            functionalTargetMeanFaultCount /
+            selectedWindow.weightedExposureSeconds;
         if (m_parameters.seuToComputeFailureProbability <= 0.0)
         {
             throw std::runtime_error(
@@ -403,7 +406,8 @@ class ExposureCalibration
                selectedWindow.leftCensoredEpisodeCount},
               {"right_censored_episode_count",
                selectedWindow.rightCensoredEpisodeCount},
-              {"functional_target_mean_fault_count", 1.0},
+              {"functional_target_mean_fault_count",
+               functionalTargetMeanFaultCount},
               {"candidate_maximum_effective_failure_intensity_per_s",
                candidateMaximumFailureIntensity},
               {"candidate_reference_seu_intensity_per_s",
@@ -612,6 +616,7 @@ main(int argc, char* argv[])
     std::string outputDirectory;
     int64_t calibrationDurationSeconds = 7200;
     int64_t windowDurationSeconds = 1000;
+    double functionalTargetMeanFaultCount = 2.0;
     double sigmaLongitudeDegrees = parameters.f2.sigmaLongitudeDegrees;
     double sigmaLatitudeDegrees = parameters.f2.sigmaLatitudeDegrees;
     double spatialRiskThreshold = parameters.f2.spatialRiskThreshold;
@@ -626,6 +631,9 @@ main(int argc, char* argv[])
     command.AddValue("windowDuration",
                      "Sliding functional-window duration in seconds",
                      windowDurationSeconds);
+    command.AddValue("targetMeanFaultCount",
+                     "Target mean F2 faults in the selected functional window",
+                     functionalTargetMeanFaultCount);
     command.AddValue("sigmaLongitude",
                      "Candidate Gaussian longitude sigma in degrees",
                      sigmaLongitudeDegrees);
@@ -653,6 +661,12 @@ main(int argc, char* argv[])
         {
             throw std::runtime_error("calibration and window durations are invalid");
         }
+        if (!std::isfinite(functionalTargetMeanFaultCount) ||
+            functionalTargetMeanFaultCount <= 0.0)
+        {
+            throw std::runtime_error(
+                "target mean fault count must be finite and positive");
+        }
         if (!std::isfinite(referenceMaximumFailureIntensity))
         {
             throw std::runtime_error(
@@ -679,7 +693,10 @@ main(int argc, char* argv[])
                 ? std::optional<double>(referenceMaximumFailureIntensity)
                 : std::nullopt;
         const Json summary =
-            calibration.Finalize(outputDirectory, constellationConfig, reference);
+            calibration.Finalize(outputDirectory,
+                                 constellationConfig,
+                                 functionalTargetMeanFaultCount,
+                                 reference);
         Simulator::Destroy();
         std::cout << summary.dump() << std::endl;
         return 0;

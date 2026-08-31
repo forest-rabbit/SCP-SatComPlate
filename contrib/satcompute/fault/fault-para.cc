@@ -107,8 +107,8 @@ GetDefaultFaultParameters()
     // 候选阈值扫描冻结的 F2 空间风险通知阈值。
     parameters.f2.spatialRiskThreshold = 0.50;
 
-    // 66 星选定 1000 秒窗口目标均值为 1 时反标定的热点参考 SEU 强度。
-    parameters.f2.referenceSeuIntensityPerSecond = 0.0014955477356134454;
+    // 66 星选定 1000 秒窗口目标均值为 2 时反标定的热点参考 SEU 强度。
+    parameters.f2.referenceSeuIntensityPerSecond = 0.0029910954712268908;
 
     // 冻结的场景级 SEU 到计算服务故障映射系数，不解释为实测概率。
     parameters.f2.seuToComputeFailureProbability = 0.50;
