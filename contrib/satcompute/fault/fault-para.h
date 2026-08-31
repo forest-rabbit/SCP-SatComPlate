@@ -45,7 +45,7 @@ struct F1FaultParameters
     double maxFailureIntensityPerSecond{}; ///< F1 每秒最大故障强度。
 };
 
-/** F2 地理暴露与有效强度参数。 */
+/** F2 空间辐射风险与 SEU 映射参数。 */
 struct F2FaultParameters
 {
     bool enabled{}; ///< 是否启用 F2 在线判定。
@@ -53,9 +53,13 @@ struct F2FaultParameters
     double longitudeMaxDegrees{}; ///< 东侧经度边界，单位为度。
     double latitudeMinDegrees{}; ///< 南侧纬度边界，单位为度。
     double latitudeMaxDegrees{}; ///< 北侧纬度边界，单位为度。
-    double effectiveFailureIntensityPerSecond{}; ///< 区域内每秒有效故障强度。
-    double riskThreshold{}; ///< 累计暴露风险通知阈值。
-    bool resetExposureOnExit{}; ///< 离开区域后是否关闭并重置暴露。
+    double hotspotLongitudeDegrees{}; ///< 经验 SEU 热点中心经度，单位为度。
+    double hotspotLatitudeDegrees{}; ///< 经验 SEU 热点中心纬度，单位为度。
+    double sigmaLongitudeDegrees{}; ///< 高斯空间风险的经度标准差，单位为度。
+    double sigmaLatitudeDegrees{}; ///< 高斯空间风险的纬度标准差，单位为度。
+    double spatialRiskThreshold{}; ///< 触发风险通知的当前空间风险阈值。
+    double referenceSeuIntensityPerSecond{}; ///< 热点中心的参考 SEU 强度。
+    double seuToComputeFailureProbability{}; ///< SEU 映射为计算故障的条件概率。
 };
 
 /** F3 永久整星故障参数。 */

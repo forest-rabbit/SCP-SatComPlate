@@ -67,10 +67,15 @@ CheckDefaults()
           "F1 defaults differ");
     Check(!parameters.f2.enabled &&
               parameters.f2.longitudeMinDegrees == -90.0 &&
-              parameters.f2.effectiveFailureIntensityPerSecond ==
-                  0.00015569048731122528 &&
-              parameters.f2.riskThreshold == 0.06925814255738115 &&
-              parameters.f2.resetExposureOnExit && !parameters.f3.enabled &&
+              parameters.f2.hotspotLongitudeDegrees == -60.0 &&
+              parameters.f2.hotspotLatitudeDegrees == -28.0 &&
+              parameters.f2.sigmaLongitudeDegrees == 18.0 &&
+              parameters.f2.sigmaLatitudeDegrees == 12.0 &&
+              parameters.f2.spatialRiskThreshold == 0.5 &&
+              parameters.f2.referenceSeuIntensityPerSecond ==
+                  0.00031138097462245056 &&
+              parameters.f2.seuToComputeFailureProbability == 0.5 &&
+              !parameters.f3.enabled &&
               parameters.f3.mode == "fixed_k" && parameters.f3.fixedCount == 1,
           "F2/F3 defaults differ");
 }
@@ -117,8 +122,26 @@ CheckInvalid()
     ExpectError(value, "F2.region", "F2-region");
 
     value = GetDefaultFaultParameters();
-    value.f2.resetExposureOnExit = false;
-    ExpectError(value, "F2.reset_exposure_on_exit", "F2-reset");
+    value.f2.hotspotLongitudeDegrees = 20.0;
+    ExpectError(value, "F2.hotspot", "F2-hotspot");
+
+    value = GetDefaultFaultParameters();
+    value.f2.sigmaLatitudeDegrees = 0.0;
+    ExpectError(value, "F2.sigma", "F2-sigma");
+
+    value = GetDefaultFaultParameters();
+    value.f2.spatialRiskThreshold = 1.0;
+    ExpectError(value, "F2.spatial_risk_threshold", "F2-spatial-threshold");
+
+    value = GetDefaultFaultParameters();
+    value.f2.referenceSeuIntensityPerSecond = -0.1;
+    ExpectError(value, "F2.reference_seu_intensity_per_s", "negative-SEU-intensity");
+
+    value = GetDefaultFaultParameters();
+    value.f2.seuToComputeFailureProbability = 1.1;
+    ExpectError(value,
+                "F2.seu_to_compute_failure_probability",
+                "invalid-SEU-failure-mapping");
 
     value = GetDefaultFaultParameters();
     value.f3.singleSatelliteIntensityPerSecond = 0.1;
@@ -265,9 +288,12 @@ void
 CheckF2Model()
 {
     FaultParameters parameters = GetDefaultFaultParameters();
-    parameters.f2.effectiveFailureIntensityPerSecond = 0.01;
-    parameters.f2.riskThreshold = 0.05;
+    parameters.f2.referenceSeuIntensityPerSecond = 0.02;
+    parameters.f2.seuToComputeFailureProbability = 0.5;
+    parameters.f2.spatialRiskThreshold = 0.5;
     const F2RadiationFaultModel model(parameters.f2);
+    Check(std::abs(model.GetMaximumFailureIntensityPerSecond() - 0.01) < 1e-15,
+          "F2 maximum effective intensity differs");
 
     F2FaultParameters globalParameters = parameters.f2;
     globalParameters.longitudeMinDegrees = -180.0;
@@ -318,11 +344,84 @@ CheckF2Model()
         Check(!snapshot.inRegion, "F2 rectangle accepted an outside position");
     }
 
+    F2RadiationFaultSnapshot hotspot = model.CreateInitialSnapshot();
+    const Vector hotspotPosition =
+        MakeEcef(parameters.f2.hotspotLatitudeDegrees,
+                 parameters.f2.hotspotLongitudeDegrees);
+    model.Update(hotspot, hotspotPosition, 0.0);
+    Check(hotspot.inRegion && std::abs(hotspot.spatialRisk - 1.0) < 1e-15 &&
+              std::abs(hotspot.seuIntensityPerSecond - 0.02) < 1e-15 &&
+              std::abs(hotspot.failureIntensityPerSecond - 0.01) < 1e-15 &&
+              hotspot.stepFailureProbability == 0.0 && model.IsRiskActive(hotspot),
+          "F2 hotspot did not produce unit spatial risk and active notice state");
+
+    F2RadiationFaultSnapshot longitudeNear = model.CreateInitialSnapshot();
+    F2RadiationFaultSnapshot longitudeFar = model.CreateInitialSnapshot();
+    model.Update(longitudeNear,
+                 MakeEcef(parameters.f2.hotspotLatitudeDegrees, -50.0),
+                 1.0);
+    model.Update(longitudeFar,
+                 MakeEcef(parameters.f2.hotspotLatitudeDegrees, -30.0),
+                 1.0);
+    Check(longitudeNear.spatialRisk < hotspot.spatialRisk &&
+              longitudeNear.spatialRisk > longitudeFar.spatialRisk,
+          "F2 longitude risk is not monotonic away from the hotspot");
+
+    F2RadiationFaultSnapshot latitudeNear = model.CreateInitialSnapshot();
+    F2RadiationFaultSnapshot latitudeFar = model.CreateInitialSnapshot();
+    model.Update(latitudeNear,
+                 MakeEcef(-20.0, parameters.f2.hotspotLongitudeDegrees),
+                 1.0);
+    model.Update(latitudeFar,
+                 MakeEcef(0.0, parameters.f2.hotspotLongitudeDegrees),
+                 1.0);
+    Check(latitudeNear.spatialRisk < hotspot.spatialRisk &&
+              latitudeNear.spatialRisk > latitudeFar.spatialRisk,
+          "F2 latitude risk is not monotonic away from the hotspot");
+
+    F2RadiationFaultSnapshot northbound = model.CreateInitialSnapshot();
+    F2RadiationFaultSnapshot southbound = model.CreateInitialSnapshot();
+    model.Update(northbound, MakeEcef(-40.0, -60.0), 0.0);
+    for (int second = 0; second < 10; ++second)
+    {
+        model.Update(northbound, MakeEcef(-40.0, -60.0), 1.0);
+    }
+    model.Update(northbound, hotspotPosition, 1.0);
+    model.Update(southbound, MakeEcef(-10.0, -60.0), 0.0);
+    model.Update(southbound, hotspotPosition, 1.0);
+    Check(northbound.continuousExposureSeconds !=
+                  southbound.continuousExposureSeconds &&
+              northbound.spatialRisk == southbound.spatialRisk &&
+              northbound.failureIntensityPerSecond ==
+                  southbound.failureIntensityPerSecond &&
+              northbound.stepFailureProbability ==
+                  southbound.stepFailureProbability,
+          "F2 current risk depends on direction or preceding exposure time");
+
+    F2FaultParameters zeroMappingParameters = parameters.f2;
+    zeroMappingParameters.seuToComputeFailureProbability = 0.0;
+    const F2RadiationFaultModel zeroMappingModel(zeroMappingParameters);
+    F2RadiationFaultSnapshot zeroMapping = zeroMappingModel.CreateInitialSnapshot();
+    zeroMappingModel.Update(zeroMapping, hotspotPosition, 1.0);
+    F2FaultParameters fullMappingParameters = parameters.f2;
+    fullMappingParameters.seuToComputeFailureProbability = 1.0;
+    const F2RadiationFaultModel fullMappingModel(fullMappingParameters);
+    F2RadiationFaultSnapshot fullMapping = fullMappingModel.CreateInitialSnapshot();
+    fullMappingModel.Update(fullMapping, hotspotPosition, 1.0);
+    Check(zeroMapping.failureIntensityPerSecond == 0.0 &&
+              zeroMapping.stepFailureProbability == 0.0 &&
+              std::abs(fullMapping.failureIntensityPerSecond -
+                       fullMapping.seuIntensityPerSecond) < 1e-15 &&
+              fullMapping.stepFailureProbability >
+                  northbound.stepFailureProbability,
+          "F2 SEU-to-compute mapping boundaries differ");
+
     F2RadiationFaultSnapshot exposure = model.CreateInitialSnapshot();
-    const Vector insidePosition = MakeEcef(-25.0, -45.0);
+    const Vector insidePosition = hotspotPosition;
     model.Update(exposure, insidePosition, 0.0);
     Check(exposure.inRegion && exposure.continuousExposureSeconds == 0.0 &&
-              exposure.cumulativeRisk == 0.0 &&
+              exposure.cumulativeFailureHazard == 0.0 &&
+              exposure.cumulativeFailureProbability == 0.0 &&
               exposure.stepFailureProbability == 0.0,
           "F2 entry did not begin at zero exposure");
 
@@ -333,25 +432,30 @@ CheckF2Model()
         Check(exposure.continuousExposureSeconds == second &&
                   std::abs(exposure.stepFailureProbability - expectedStepProbability) <
                       1e-15 &&
-                  std::abs(exposure.cumulativeRisk -
+                  std::abs(exposure.cumulativeFailureProbability -
                            (-std::expm1(-0.01 * second))) < 1e-15,
-              "F2 exposure risk or current-step probability differs");
+              "F2 pass statistic or current-step probability differs");
     }
-    Check(model.IsRiskActive(exposure), "F2 cumulative risk missed its threshold");
+    Check(model.IsRiskActive(exposure), "F2 hotspot risk missed its threshold");
     Check(std::abs(std::pow(1.0 - expectedStepProbability, 10.0) -
                    std::exp(-0.01 * 10.0)) < 1e-15,
           "F2 repeated-step survival differs from the exponential process");
 
     model.Update(exposure, MakeEcef(25.0, 45.0), 1.0);
     Check(!exposure.inRegion && exposure.continuousExposureSeconds == 0.0 &&
-              exposure.cumulativeRisk == 0.0 &&
+              exposure.cumulativeFailureHazard == 0.0 &&
+              exposure.cumulativeFailureProbability == 0.0 &&
+              exposure.spatialRisk == 0.0 &&
+              exposure.seuIntensityPerSecond == 0.0 &&
               exposure.failureIntensityPerSecond == 0.0 &&
               exposure.stepFailureProbability == 0.0 &&
               !model.IsRiskActive(exposure),
           "F2 exit did not clear continuous exposure and current probability");
     model.Update(exposure, insidePosition, 1.0);
     Check(exposure.inRegion && exposure.continuousExposureSeconds == 0.0 &&
-              exposure.cumulativeRisk == 0.0,
+              std::abs(exposure.cumulativeFailureHazard - 0.01) < 1e-15 &&
+              std::abs(exposure.cumulativeFailureProbability -
+                       expectedStepProbability) < 1e-15,
           "F2 re-entry retained exposure from the preceding episode");
 }
 
@@ -444,10 +548,13 @@ CheckComputeFailurePrediction()
     Check(f1State.temperatureC == currentTemperatureC,
           "F1 forecast mutated the live input snapshot");
 
-    parameters.f2.effectiveFailureIntensityPerSecond = 0.01;
+    parameters.f2.referenceSeuIntensityPerSecond = 0.02;
+    parameters.f2.seuToComputeFailureProbability = 0.5;
     const F2RadiationFaultModel f2Model(parameters.f2);
     F2RadiationFaultSnapshot f2State = f2Model.CreateInitialSnapshot();
-    const Vector insidePosition = MakeEcef(-25.0, -45.0);
+    const Vector insidePosition =
+        MakeEcef(parameters.f2.hotspotLatitudeDegrees,
+                 parameters.f2.hotspotLongitudeDegrees);
     const Vector outsidePosition = MakeEcef(25.0, 45.0);
     f2Model.Update(f2State, insidePosition, 0.0);
     f2Model.Update(f2State, insidePosition, 1.0);
