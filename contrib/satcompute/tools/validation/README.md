@@ -84,10 +84,8 @@ python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
 
 `f2-spatial-validation.cc` 构建为 `satcompute-f2-spatial-validation`。它复用正式
 `OnlineOrbitConstellation`、`F2RadiationFaultModel`、ns-3 随机流和 8 秒恢复期间
-暂停抽样的语义，但不创建网络、路由、任务、F1、F3 或 `FaultController`。默认
-工具当前仍保留 50 万秒默认值用于快速复现；非对称模型的最终论文证据将在下一阶段
-显式使用 66 星、100 万秒、`orbitStartOffset=302`、`randomSeed=1`、
-`randomRun=1` 生成：
+暂停抽样的语义，但不创建网络、路由、任务、F1、F3 或 `FaultController`。正式默认
+固定为 66 星、100 万秒、`orbitStartOffset=302`、`randomSeed=1`、`randomRun=1`：
 
 ```bash
 ./ns3 run "satcompute-f2-spatial-validation \
@@ -103,11 +101,11 @@ python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
 
 | 参数 | 含义 |
 |---|---|
-| `--duration` | 轨道与 F2 抽样时长，单位为秒；当前工具默认 500000，最终证据显式使用 1000000 |
+| `--duration` | 轨道与 F2 抽样时长，单位为秒，默认 1000000 |
 | `--orbitStartOffset` | 仿真 `t=0` 对应的轨道 epoch，当前 66 星标定窗口为 302 秒 |
 | `--longitudeBin` / `--latitudeBin` | 聚合网格大小，默认均为 2.5 度，必须整除 SAA 范围 |
 | `--randomSeed` / `--randomRun` | ns-3 确定性随机序列，正式基线固定为 1/1 |
-| `--progressInterval` | 进度输出周期，单位为秒；设为 0 时关闭 |
+| `--progressInterval` | 进度输出周期，单位为秒，默认 100000；设为 0 时关闭 |
 | `--outputDir` | 事件 CSV、网格 CSV 和验收 JSON 的输出目录 |
 
 输出为：
@@ -118,7 +116,8 @@ python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
 
 工具只有在事件数足够、实际计数位于条件期望四个标准差内、事件风险高于暴露风险、
 高风险区故障占比高于其暴露占比且网格风险—故障率正相关时才返回 0。正常平台运行
-不会创建这些文件。验收后使用绘图脚本生成双面板 PNG：
+不会创建这些文件。验收后使用绘图脚本生成双面板 600 dpi PNG，并同时导出文本可
+编辑的 SVG 和 PDF：
 
 ```bash
 uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
@@ -127,6 +126,11 @@ uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
   --events=/tmp/satcompute-f2-spatial/n4b-f2-spatial-fault-events.csv \
   --output=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation.png
 ```
+
+左图使用完整地球经纬度坐标显示东西向非对称理论风险场；右图使用 3 x 3 邻域均值
+展示每个 2.5 度网格的故障数，色标上限固定为原始网格最大故障数，并叠加未平滑的
+实际故障位置。平滑只用于论文图呈现，不覆盖事件 CSV、原始整数网格或曝光归一化
+故障率。
 
 该脚本内嵌 PEP 723 依赖声明，`uv run` 会隔离解析 NumPy 和 Matplotlib；不需要把
 绘图依赖加入 ns-3 Python 绑定环境。`--allow-unaccepted` 只供短程工具调试，正式
