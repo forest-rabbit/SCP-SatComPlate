@@ -20,7 +20,7 @@ N0–N2 是 ns-3.33 版本的原始里程碑，相关 PR 位于旧 SatCompute �
 | N2：动态星座与压力验证 | 已完成 | `feature/n2-integration` → `main` / `n2-complete` | 2026-08-03 |
 | N3：迁移到 ns-3.48 | 已完成 | [PR #72](https://github.com/forest-rabbit/SCP-SatComPlate/pull/72) / `n3-complete` / `b83bf646b` | 2026-08-05 |
 | N4A：确定性故障输入与执行基础 | 已完成 | PR #75–#80 / `n4a-complete` | 2026-08-05 |
-| N4B：统一故障建模与因果概率预测 | 实现与本地验收已完成，待合入 | [PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81) | 2026-08-31 |
+| N4B：统一故障建模与因果概率预测 | 已完成 | [PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81) / `n4b-complete` | 2026-08-31 |
 
 N2 的最终发布链固定为 `feature/n2-integration` 合入旧仓库 `main`，并以
 annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移动 N0、N1
@@ -444,13 +444,17 @@ Capacity-aware 账本全部归零。联合审计的 72 条概率记录零缺失�
 
 完整本地阶段门禁通过：定向 ns-3.48 构建保持 `Examples=OFF`、`Tests=OFF`；6 个
 Python unit、12 个 SatCompute C++ unit executable、5 个 smoke 和 4 个 regression
-runner 全部通过。GitHub 阶段 CI 按仓库约定留到 PR #81 合入 `main` 后只运行一次；
-在此之前本表保持“待合入”，不提前创建 `n4b-complete` tag。
+runner 全部通过。PR #81 以 squash 提交 `38025d964` 合入 `main` 后，只运行一次
+正式 `phase=n4b` 阶段门禁；定向配置、构建、Python/C++ unit、5 个 smoke 和包含
+100 任务联合场景的 4 个 regression runner 在 14 分 53 秒内全部通过。随后的
+docs-only 收口不改变任何代码、输入或测试，`n4b-complete` 冻结该最终收口点。
 
 - 输入与生成器证据：`60be2341b`、`5b4a89c07`
 - 联合 runner 证据：`2c4003c39`
 - 场景说明：[N4B 100 任务联合验收](contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/README.md)
-- 集成候选：[PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81)
+- 集成证据：[PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81) / `38025d964`
+- 阶段 CI：[run 33353263977](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/33353263977)
+- 阶段 tag：`n4b-complete`
 
 ## ECMP 算法演进
 
