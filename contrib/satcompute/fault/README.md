@@ -168,6 +168,12 @@ kappa_F2 = 0.0014955477356134454 s^-1
 [`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。这些数值是
 有限窗口内的系统级加速实验参数，不是原始 SEU 计数或现实卫星绝对失效率。
 
+用于论文空间分布图的固定基线为 66 星、50 万秒、`orbitStartOffset=5210`、
+`randomSeed=1`、`randomRun=1`、1 秒检查周期和 8 秒恢复。该 orbit-only 验证只在
+显式运行工具时生成 CSV/PNG；正常 `none/generate/replay` 不会输出这些分析文件。
+本次基线得到 963 次实际故障，结果与复现命令见
+[`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。
+
 F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中，默认关闭。
 `f3.fixedCount` 是 `fixed_k` 压力测试中人工指定的永久撞击卫星数量，不属于任务
 输入，也不代表现实碰撞频率。

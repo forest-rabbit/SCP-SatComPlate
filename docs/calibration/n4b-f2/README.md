@@ -119,7 +119,58 @@ orbit-only 工具输出：
 这些标定输出不是平台输入。正式 generate 仍从实时轨道位置计算 `w_F2`；replay
 仍只执行冻结的 Fault Trace，不读取或重新计算空间风险。
 
-50 万秒空间故障分布图和对应的大规模事件证据将在下一阶段通过同一原生轨道与
-F2 模型生成。该时长约为 5.79 天、约 83 圈 780 km 轨道；按 7200 秒平均加权暴露
-外推，抽样暂停前的累计期望约为 956 次，足以形成空间密度图。实际事件数会因 8 秒
-故障停机期间暂停重复抽样而略有差异。旧模型的 CSV/JSON 不再作为当前证据保留。
+## 50 万秒空间验证
+
+最终空间图使用 66 星、`orbitStartOffset=5210`、`randomSeed=1`、`randomRun=1`，
+连续运行 50 万秒，约等于 5.79 天或 83 圈 780 km 轨道。工具逐秒查询 66 颗卫星的
+原生位置，共完成 3300 万次位置观测；只保留实际故障与聚合网格，不输出逐秒逐星
+CSV。F2 采样包含正式的 8 秒可恢复算力停机语义，停机期间位置继续更新但暂停新的
+故障抽样。
+
+![F2 空间风险场与实际故障密度](n4b-f2-spatial-validation.png)
+
+结果为：
+
+| 指标 | 结果 |
+|---|---:|
+| SAA 内总暴露 | 2,668,977 satellite-seconds |
+| 可抽样加权暴露 | 631,441.127 weighted satellite-seconds |
+| 未计恢复抑制的逐步期望故障数 | 949.410 |
+| 按本次实际恢复区间计算的条件期望 | 943.972 |
+| 实际 F2 故障数 | 963 |
+| 实际计数相对条件期望的标准分数 | 0.620 |
+| NOTICE 高风险区内故障 | 537（55.76%） |
+| NOTICE 阈值外故障 | 426（44.24%） |
+| 高风险区占可抽样 SAA 暴露 | 17.85% |
+| 暴露加权平均风险 | 0.2372 |
+| 故障位置平均风险 | 0.5397 |
+| 529 个有效网格的风险—故障率 Pearson 相关系数 | 0.7076 |
+
+实际计数落在条件期望四个标准差内；故障位置平均风险显著高于一般暴露风险，且只占
+17.85% 暴露的 NOTICE 高风险区承载了 55.76% 的故障。单个最高计数网格受有限随机
+样本和轨道访问分布影响，不要求其中心精确等于 `(-60 deg,-28 deg)`；验收关注整体
+风险—故障率正相关与热点周围的空间集中性。五项自动验收均通过。
+
+复现长时事件与绘图：
+
+```bash
+./ns3 run "satcompute-f2-spatial-validation \
+  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --duration=500000 \
+  --orbitStartOffset=5210 \
+  --longitudeBin=2.5 \
+  --latitudeBin=2.5 \
+  --randomSeed=1 \
+  --randomRun=1 \
+  --outputDir=/tmp/satcompute-f2-spatial"
+
+uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
+  --summary=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation-summary.json \
+  --bins=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation-bins.csv \
+  --events=/tmp/satcompute-f2-spatial/n4b-f2-spatial-fault-events.csv \
+  --output=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation.png
+```
+
+仓库保留论文候选 PNG，以及 [`evidence/`](evidence/) 中的事件 CSV、聚合网格 CSV
+和验收 summary。它们都是可复现实验证据，不是平台输入。旧模型的 CSV/JSON 不再
+作为当前证据保留。
