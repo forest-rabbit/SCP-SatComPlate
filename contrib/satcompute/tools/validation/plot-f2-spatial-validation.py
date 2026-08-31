@@ -283,6 +283,11 @@ def export_figure(figure: plt.Figure, output: Path) -> tuple[Path, Path, Path]:
     }
     figure.savefig(output, dpi=600, **common)
     figure.savefig(svg_output, **common)
+    svg_text = svg_output.read_text(encoding="utf-8")
+    svg_output.write_text(
+        "\n".join(line.rstrip() for line in svg_text.splitlines()) + "\n",
+        encoding="utf-8",
+    )
     figure.savefig(pdf_output, **common)
     return output, svg_output, pdf_output
 

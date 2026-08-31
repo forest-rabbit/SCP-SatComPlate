@@ -136,6 +136,11 @@ uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
 绘图依赖加入 ns-3 Python 绑定环境。`--allow-unaccepted` 只供短程工具调试，正式
 论文图必须继续使用默认的已通过验收输入。
 
+冻结的 100 万秒 seed/run `1/1` 结果为 1888 次实际故障、1880.59 次条件期望、
+0.1709 的计数标准分数和 0.8224 的网格风险—故障率相关系数，五项验收全部通过。
+原始 CSV、summary 与 PNG/SVG/PDF 见
+[`docs/calibration/n4b-f2`](../../../../docs/calibration/n4b-f2/README.md)。
+
 ## Generate/Replay 概率一致性
 
 `compare-fault-probabilities.py` 比较一次 generate 的抽样前真实模型概率与一次

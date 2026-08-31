@@ -1,8 +1,7 @@
 # N4B F2 空间辐射风险标定
 
-本目录记录修订后的 F2 空间风险模型。当前阶段已经完成东西向非对称风险场、参数
-扫描、66 星强度反标定以及 351/720 星规模外推。100 万秒空间验证与最终论文图属于
-下一阶段，尚未用当前参数生成。
+本目录记录修订后的 F2 空间风险模型。当前已经完成东西向非对称风险场、参数扫描、
+66 星强度反标定、351/720 星规模外推，以及 66 星 100 万秒空间验证与论文候选图。
 
 旧的对称经度模型证据没有删除，统一归档在
 [`evidence/historical-symmetric/`](evidence/historical-symmetric/)；其中的 50 万秒、
@@ -143,9 +142,9 @@ python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
 这些标定输出不是平台输入。正式 generate 仍从实时轨道位置计算 `w_F2`；replay 仍只
 执行冻结的 Fault Trace，不读取或重新计算空间风险。
 
-## 下一阶段：100 万秒空间验证
+## 100 万秒空间验证
 
-最终空间证据将使用：
+最终空间证据使用：
 
 ```text
 constellation = 66 satellites
@@ -158,14 +157,79 @@ grid = 2.5 deg x 2.5 deg
 ```
 
 该运行只包含原生轨道位置和 F2 抽样，不创建网络、路由、任务、F1、F3 或
-`FaultController`。最终图只画完整地球经纬度坐标（经度 `[-180,180]`、纬度
-`[-90,90]`），不使用地球底图；SAA 矩形外的理论风险严格为 0。左图显示非对称理论
-风险场，右图显示邻域平滑后的每网格估计故障数并叠加更醒目的真实故障散点。右图
-色标从 0 到本次平滑网格的最大估计故障数，不再使用“每百万 exposure”的刻度。
+`FaultController`。共执行 6600 万次原生位置查询，本机运行耗时 160.97 秒，峰值
+常驻内存 18840 KiB。正式结果为：
+
+| 指标 | 结果 |
+|---|---:|
+| SAA 内总暴露 | 5,331,826 satellite-seconds |
+| 可抽样 SAA 暴露 | 5,318,612 satellite-seconds |
+| 可抽样加权暴露 | 1,315,957.7695 weighted satellite-seconds |
+| 未计恢复抑制的逐步期望故障数 | 1,890.3900 |
+| 按本次实际恢复区间计算的条件期望 | 1,880.5918 |
+| 实际 F2 故障数 | 1,888 |
+| 实际计数相对条件期望的标准分数 | 0.1709 |
+| NOTICE 高风险区内故障 | 983（52.07%） |
+| NOTICE 阈值外故障 | 905（47.93%） |
+| 高风险区占可抽样 SAA 暴露 | 17.92% |
+| 暴露加权平均风险 | 0.2474 |
+| 故障位置平均风险 | 0.5190 |
+| 风险—故障率 Pearson 相关系数 | 0.8224（699 个有效网格） |
+| 原始最高故障数网格 | 13 次，中心 `(-58.75 deg,-31.25 deg)` |
+
+实际故障数只比条件期望多 7.41 次，位于 0.171 个标准差内。只占 17.92% 暴露的
+NOTICE 区域承载了 52.07% 的故障；故障位置平均风险约为一般暴露风险的 2.10 倍，
+风险—故障率相关系数达到 0.8224。事件数、计数偏差、风险集中性、高风险区富集和
+正相关五项自动验收全部通过。
+
+![F2 非对称空间风险场与百万秒故障分布](n4b-f2-spatial-validation.png)
+
+论文候选图同时提供[可编辑 SVG](n4b-f2-spatial-validation.svg)和
+[PDF](n4b-f2-spatial-validation.pdf)。图中只画完整地球经纬度坐标（经度
+`[-180,180]`、纬度 `[-90,90]`），不使用地球底图；SAA 矩形外的理论风险严格为 0。
+左图显示非对称理论风险场，右图显示每个网格的 3 x 3 邻域平滑故障数并叠加全部
+1888 个原始故障位置。右图色标固定从 0 到未平滑网格的最大故障数 13，不再使用
+“每百万 exposure”的刻度。
 
 论文图使用同一组蓝色梯度，低值到高值依次为 `#F4F9FE`、`#D2E3F3`、`#AACFE5`、
-`#68ACD5`、`#3888C0`、`#105CA4`、`#08336E`。邻域平滑只用于呈现，避免有限样本在
-热点中心形成突兀空洞；原始事件、未平滑整数网格和曝光归一化故障率继续保存为可
-审计证据，不能被平滑结果覆盖。
+`#68ACD5`、`#3888C0`、`#105CA4`、`#08336E`。邻域平滑使用权重
+`[[1,2,1],[2,4,2],[1,2,1]]` 的局部均值，只处理满足最低暴露要求的原始网格；没有
+观测的网格继续保持遮罩，不凭空填充。平滑只用于呈现，避免有限样本在热点中心形成
+突兀空洞；原始事件、未平滑整数网格和曝光归一化故障率继续保存为可审计证据，不能
+被平滑结果覆盖。
 
-正式运行命令、100 万秒统计结果和最终 PNG 将在下一阶段完成后补入本节。
+复现正式运行和绘图：
+
+```bash
+./ns3 run "satcompute-f2-spatial-validation \
+  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --duration=1000000 \
+  --orbitStartOffset=302 \
+  --longitudeBin=2.5 \
+  --latitudeBin=2.5 \
+  --randomSeed=1 \
+  --randomRun=1 \
+  --outputDir=/tmp/satcompute-f2-spatial"
+
+uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
+  --summary=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation-summary.json \
+  --bins=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation-bins.csv \
+  --events=/tmp/satcompute-f2-spatial/n4b-f2-spatial-fault-events.csv \
+  --output=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation.png
+```
+
+仓库保留 PNG/SVG/PDF，以及原始[事件 CSV](evidence/n4b-f2-spatial-fault-events.csv)、
+[未平滑网格 CSV](evidence/n4b-f2-spatial-validation-bins.csv)和
+[验收 summary](evidence/n4b-f2-spatial-validation-summary.json)。它们都是可复现实验
+证据，不是平台输入；正常运行不会生成或读取这些文件。
+
+### 图像 QA 与统计边界
+
+- 图宽 7.2 英寸，PNG 以 600 dpi 导出为 4254 x 1795 像素；SVG 保留可编辑文字，
+  PDF 嵌入 TrueType 子集字体；
+- 本图的样本定义为 66 颗卫星、一个固定 seed/run 和 100 万个一秒检查点，共
+  6600 万次位置观测；1888 是事件数，不是独立卫星样本数；
+- 图中 Pearson `r` 是空间一致性的描述性指标，不是跨随机 run 的置信区间或显著性
+  检验；故障总量的随机波动依据仍是前述 100-run Monte Carlo；
+- 图像没有地球底图、局部手工修补或事件抽样。唯一的数据变换是已公开权重的全局
+  3 x 3 网格平滑，全部 1888 个事件位置仍以圆圈叠加并保留在源 CSV 中。

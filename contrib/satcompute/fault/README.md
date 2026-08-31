@@ -176,11 +176,12 @@ kappa_F2 = 0.0014295980555469494 s^-1
 [`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。这些数值是
 有限窗口内的系统级加速实验参数，不是原始 SEU 计数或现实卫星绝对失效率。
 
-论文空间分布图将在下一阶段使用 66 星、100 万秒、`orbitStartOffset=302`、
-`randomSeed=1`、`randomRun=1`、1 秒检查周期和 8 秒恢复重新生成。该 orbit-only
-验证只在显式运行工具时生成 CSV/PNG；正常 `none/generate/replay` 不会输出这些
-分析文件。现存 50 万秒结果属于对称经度模型的历史证据，不作为当前参数的最终图。
-标定与后续空间验证说明见
+论文空间分布图已经使用 66 星、100 万秒、`orbitStartOffset=302`、`randomSeed=1`、
+`randomRun=1`、1 秒检查周期和 8 秒恢复重新生成。结果为 1888 次故障，条件期望
+1880.59，风险—故障率相关系数 0.8224，全部五项空间验收通过。该 orbit-only 验证
+只在显式运行工具时生成 CSV/JSON/PNG/SVG/PDF；正常 `none/generate/replay` 不会输出
+这些分析文件。50 万秒结果属于对称经度模型的历史证据，不作为当前参数的最终图。
+标定、原始证据和论文候选图见
 [`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。
 
 F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中，默认关闭。
