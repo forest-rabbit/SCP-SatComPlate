@@ -141,11 +141,30 @@ q_comp = 1 - (1 - q_F1) * (1 - q_F2)
 `q_comp` 是 trace、观测和后续预测使用的联合概率，不替代两个来源的真实抽样。同一
 节点同一检查时刻即使两个来源同时命中，也只提交一次可恢复 compute 故障。
 
-当前冻结 `sigma_lon=18 deg`、`sigma_lat=12 deg`、`theta_F2=0.5` 和
-`rho_SF=0.5`。66 星加权暴露扫描选择 `5210--6210 s` 窗口，令该 1000 秒窗口的
-解析平均故障数为 2，得到 `lambda_SEU_max=0.0029910954712268908 s^-1` 与热点
-最大有效强度 `kappa_F2=0.0014955477356134454 s^-1`。orbit-only 工具再以相同参数
-验证 351/720 星的规模效应；它不创建网络、路由、任务或故障执行。完整证据见
+当前三种星座统一使用以下 [`fault-para.cc`](fault-para.cc) 参数，不按星座规模分别
+调参：
+
+```text
+sigmaLongitudeDegrees = 18
+sigmaLatitudeDegrees = 12
+spatialRiskThreshold = 0.5
+referenceSeuIntensityPerSecond = 0.0029910954712268908
+seuToComputeFailureProbability = 0.5
+kappa_F2 = 0.0014955477356134454 s^-1
+```
+
+每种星座只使用各自空间加权扫描选出的轨道 epoch offset：
+
+| 星座配置 | `orbitStartOffset` | 对应轨道窗口 | 加权暴露量 | 1000 秒解析期望故障数 |
+|---|---:|---:|---:|---:|
+| `synthetic-66.csv` | 5210s | 5210--6210s | 1337.3027 | 2.0000 |
+| `synthetic-351.csv` | 4642s | 4642--5642s | 6888.1284 | 10.3015 |
+| `synthetic-720.csv` | 3496s | 3496--4496s | 14051.9769 | 21.0154 |
+
+`orbitStartOffset` 直接把仿真 `t=0` 映射到相应轨道 epoch，不会先空跑几千秒。
+351/720 星若也分别反调到平均 2 次，会破坏规模效应，因此正式实验必须继续使用表中
+同一组 F2 强度参数。orbit-only 工具只负责选择窗口和验证规模效应，不创建网络、
+路由、任务或故障执行。完整证据见
 [`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。这些数值是
 有限窗口内的系统级加速实验参数，不是原始 SEU 计数或现实卫星绝对失效率。
 
