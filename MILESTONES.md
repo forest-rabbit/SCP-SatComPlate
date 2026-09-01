@@ -373,108 +373,34 @@ checkpoint、迁移、recovery transfer、RTO/RPO 或 `SUPERSEDED` 运行状态�
 
 ## N4B：统一故障建模与因果概率预测
 
-N4B 在 N4A 的确定性执行合同之上在线生成风险与实际故障，再把 v2 Fault Trace
-冻结为后续 replay 的外生输入。F1、F2 仍使用独立随机流分别抽样，平台以逻辑或
-折叠同刻结果；`q_comp = 1 - (1 - q_F1)(1 - q_F2)` 只作为统一风险输出与预测输入，
-不替代两次真实抽样。N4B 不实现任何备份、checkpoint、迁移或接管策略。
+N4B 在 N4A 的确定性执行基础上完成 F1/F2/F3 在线故障建模、Unified Fault Trace v2、
+`none/generate/replay` 三种模式和任务完成前的因果故障概率预测。F1/F2 保持独立随机
+来源，F3 表示永久整星故障；当前模型、事件与执行合同统一记录在
+[故障模块说明](contrib/satcompute/fault/README.md)。本阶段不包含备份、checkpoint、
+迁移或接管策略。
 
-### 2026-08-30：建立统一生成合同并完成 F1 标定
+### 2026-08-31：完成 N4B 主体
 
-平台增加 `none/generate/replay` 三种模式和 Unified Fault Trace v2。v2 在同一文件中
-表达有/无 NOTICE 的实际 compute 故障、未发生故障的风险 episode，以及无预警整星
-故障；不增加独立 Risk Trace 或 SHA256 元数据。generate 在线执行刚生成的事件，
-replay 只执行冻结事件，不读取未来 START 进行二次决策。
+F1/F2/F3、确定性 generate/replay、默认关闭的概率审计和 66 星、1000 秒、100 任务
+联合场景均完成验收。F1/F2 参数与复现实验分别保存在标定文档中，联合场景 README
+负责记录任务构成、运行参数和逐项断言。
 
-F1 从实时 ComputeService 忙闲状态更新指数温度和能源修正。冻结的加速仿真参数为
-1 秒检查、`heating_tau=43 s`、`cooling_tau=40 s`、风险阈值 0.60、最大故障强度
-0.005/s 和 8 秒可恢复停机；连续负载在 44 秒进入风险、56 秒达到 30 ℃。66 星、
-1000 秒、3 热点、30 个固定 run 的候选标定平均产生约 0.87 次故障和 8.27 个
-risk-only episode。
-
-- 模式与 trace 证据：`b47119be2`、`88076e4ff`
-- F1 模型与生成证据：`77264de8d`、`337c57cfe`
-- 标定证据：[N4B F1 参数标定](docs/calibration/n4b-f1/README.md)
-
-### 2026-08-30 至 2026-08-31：完成首版 F2、联合竞争风险与 F3
-
-该段记录 `n4b-complete` 的历史基线：首版 F2 已经读取正式平台同一
-`LeoCircularOrbitMobilityModel` 的实时 ECEF 位置，但仍采用均匀区域强度和累计暴露
-NOTICE。该风险公式、`5695s` 窗口和平均 1 次故障的标定已经由后述空间风险修订
-取代，不再表示当前 F2 行为；保留提交号只用于追溯 N4B 当时的验收过程。
-
-F1/F2 各自维护状态和独立随机流，任一风险仍有效时不提前 `NOTICE_CLEAR`，同一节点
-同刻最多向执行层提交一次可恢复 compute START。F3 使用独立事件时间与无放回节点
-选择流；当前 `fixed_k=1` 验收模式产生无预警、无恢复的永久整星故障，并在冲突时
-优先于 compute 故障。
-
-- F2 与轨道偏移证据：`2335498a9`、`2f09c37c7`、`08792f78c`
-- F2 标定证据：[N4B F2 轨道暴露与参数标定](docs/calibration/n4b-f2/README.md)
-- 联合/F3 证据：`1c269632f`、`492d051ab`、`4a1124252`
-
-### 2026-08-31：完成因果概率预测与概率对概率审计
-
-预测器复制当前 F1/F2 状态，在任务剩余计算窗口内无随机数滚动模型，逐步计算
-`q_comp,k` 与 `P_fail_before_finish = 1 - product_k(1 - q_comp,k)`。正式预测记录由
-已经执行的 NOTICE 门控；它不读取未来 START、最终 `risk_duration` 或
-`fault_occurred`，实际故障或任务结束后停止记录，也不触发备份。
-
-`faultProbabilityAudit` 默认关闭，正常运行不创建预测器、概率 CSV 或自动对比。
-显式审计分别对 F1-only、F2-only、F1+F2 的 41、92、78 条 generate 抽样前模型
-概率与 replay 影子预测做逐时刻比较，全部记录匹配、上下文无差异且最大绝对误差在
-`1e-12` 内；复用输出目录时会清除陈旧审计文件。
-
-- 预测实现证据：`b981d9ae2`、`a8d6988c6`、`5f2c23e91`
-- 审计与默认关闭证据：`200766a47`、`fe8d45862`、`0c149f670`
-
-### 2026-08-31：完成 100 任务联合验收候选
-
-最终场景冻结 66 星、1000 秒、`orbitStartOffset=5695`、seed/run `1/16`、固定
-8 ms ISL、20 秒网络更新和 Capacity-aware 路由，同时启用 F1/F2/F3。100 个任务
-采用 5 个分级热点、8 个 F2/F3 窗口任务和 62 个分布式短任务；它用于联合生命周期
-验收，不是吞吐压力实验。
-
-以下计数同样是 `n4b-complete` 的修订前历史结果。空间 F2 合入前必须在新窗口上
-重新冻结联合场景；这些数字不能作为当前空间风险模型的预期输出。
-
-四轮 runner 依次执行默认关闭审计的 generate、开启审计的 generate、开启审计的
-replay，以及复用目录且关闭审计的 replay。冻结结果为 94/100 任务完成、6 个任务
-按合同失败；出现 5 次可恢复 compute START、8 个 risk-only episode，以及节点 4
-在 `829256867404 ns` 的一次永久整星 START。只有 F3 引起一次即时路由重算；200 个
-transfer 中 193 个完成、7 个随失败任务取消，FlowMonitor 无丢包，Size-aware 与
-Capacity-aware 账本全部归零。联合审计的 72 条概率记录零缺失、上下文一致且在
-`1e-12` 容差内；审计开关前后的 Fault Trace 逐字节相同。
-
-完整本地阶段门禁通过：定向 ns-3.48 构建保持 `Examples=OFF`、`Tests=OFF`；6 个
-Python unit、12 个 SatCompute C++ unit executable、5 个 smoke 和 4 个 regression
-runner 全部通过。PR #81 以 squash 提交 `38025d964` 合入 `main` 后，只运行一次
-正式 `phase=n4b` 阶段门禁；定向配置、构建、Python/C++ unit、5 个 smoke 和包含
-100 任务联合场景的 4 个 regression runner 在 14 分 53 秒内全部通过。随后的
-docs-only 收口不改变任何代码、输入或测试，`n4b-complete` 冻结该最终收口点。
-
-- 输入与生成器证据：`60be2341b`、`5b4a89c07`
-- 联合 runner 证据：`2c4003c39`
-- 场景说明：[N4B 100 任务联合验收](contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/README.md)
+- F1 标定：[N4B F1 参数标定](docs/calibration/n4b-f1/README.md)
+- 联合场景：[N4B 100 任务联合验收](contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/README.md)
 - 集成证据：[PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81) / `38025d964`
 - 阶段 CI：[run 33353263977](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/33353263977)
 - 阶段 tag：`n4b-complete`
 
 ### 2026-09-01：完成 F2 东西向非对称空间风险修订
 
-F2 改用热点西短东长的 two-piece Gaussian 风险场，保留独立的 F1/F2 随机流，并
-重新冻结 66/351/720 星的轨道窗口与故障强度。66 星 100-run 标定均值为 1.91 次，
-95% 均值区间包含每 1000 秒 2 次的目标。
+F2 改用由实时卫星位置驱动、热点西短东长的空间风险场，并重新完成 66/351/720 星
+窗口标定、66 星百万秒空间验证以及 F1/F2 联合预测和 generate/replay 回归。
 
-66 星 100 万秒 orbit-only 验证得到 1888 次故障，风险—故障率相关系数为 0.8224；
-高风险区以 17.92% 的有效暴露承载 52.07% 的故障，空间分布门槛全部通过。论文候选图
-及原始事件、网格、验收摘要和显示修正审计均已保存，正常平台运行默认不生成这些输出。
+当前 100 任务联合场景中，93 个任务完成、7 个按故障合同失败；发生 6 次可恢复
+compute START、6 个 risk-only episode 和 1 次永久 F3 整星故障。200 个 transfer 中
+192 个完成、8 个取消，只有 F3 引起一次路由重算，资源账本最终归零。
 
-F2-only、F1/F2 联合概率审计和 generate/replay 合同回归全部通过；更新后的 66 星、
-1000 秒、100 任务联合场景得到 93 个任务完成、7 个按故障合同失败，资源与路由账本
-收敛。本地构建、unit、smoke 和 regression 门禁均通过。
-
-- 模型与参数：`9c82895a6`、`7d4a014e7`
-- 标定、绘图与回归证据：[N4B F2 空间辐射风险标定](docs/calibration/n4b-f2/README.md)
-- 联合场景：[N4B 100 任务联合验收](contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/README.md)
+- 标定与论文图：[N4B F2 空间辐射风险标定](docs/calibration/n4b-f2/README.md)
 - 集成证据：[PR #83](https://github.com/forest-rabbit/SCP-SatComPlate/pull/83) / `65bd39a1f`
 - 阶段 CI：[run 33459723117](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/33459723117)，2 分 4 秒通过
 
