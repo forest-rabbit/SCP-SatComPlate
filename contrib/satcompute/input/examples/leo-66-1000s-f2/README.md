@@ -8,8 +8,8 @@
 
 任务由统一生成器的 `f2-validation` profile 产生：
 
-- 节点 51 和 29 各有一个 60 秒长任务及一个 10 秒后续任务；
-- 节点 40 和 18 各有一个 20 秒中等任务；
+- 节点 17 和 16 各有一个覆盖确定性 F2 START 的 60 秒长任务及一个恢复后 10 秒任务；
+- 节点 28 和 27 各有一个处于 risk-only episode 内的 20 秒中等任务；
 - 节点 0 和 11 各有一个 5 秒短对照任务。
 
 这些角色只描述负载形状。F2 故障由每秒实时位置、空间风险和独立 ns-3 随机流
@@ -70,8 +70,11 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --outputDir=/tmp/satcompute-f2-generate"
 ```
 
-`randomRun=16` 只提供可复现示例，当前恰好产生 2 次故障，不能用来替代多 run
-均值标定。F2 compute 故障只关闭算力 8 秒，不改变 ISL，也不触发路由重算。
+`randomRun=16` 只提供可复现生命周期示例：节点 17 在 `236s`、节点 16 在 `850s`
+各发生一次 F2 START，任务 1/3 失败，恢复后的任务 2/4 与 risk-only/对照任务均完成。
+该单次结果不能替代多 run 均值标定。F2 compute 故障只关闭算力 8 秒，不改变 ISL，
+也不触发路由重算。显式开启概率审计时，F2-only generate/replay 固定匹配 126 条
+模型概率和因果预测记录。
 
 ## Replay
 

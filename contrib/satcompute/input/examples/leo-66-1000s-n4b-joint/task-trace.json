@@ -303,52 +303,52 @@
     {
       "task_id": 31,
       "source_node_id": 65,
-      "compute_node_id": 51,
+      "compute_node_id": 17,
       "result_node_id": 27,
       "input_bytes": 4096,
       "output_bytes": 2048,
       "compute_work_units": 30000000,
-      "arrival_time_ns": 378100000000
+      "arrival_time_ns": 228100000000
     },
     {
       "task_id": 32,
       "source_node_id": 14,
-      "compute_node_id": 51,
+      "compute_node_id": 17,
       "result_node_id": 8,
       "input_bytes": 4096,
       "output_bytes": 2048,
       "compute_work_units": 7500000,
-      "arrival_time_ns": 395100000000
+      "arrival_time_ns": 245100000000
     },
     {
       "task_id": 33,
       "source_node_id": 19,
-      "compute_node_id": 40,
+      "compute_node_id": 28,
       "result_node_id": 37,
       "input_bytes": 4096,
       "output_bytes": 2048,
       "compute_work_units": 15000000,
-      "arrival_time_ns": 458100000000
+      "arrival_time_ns": 200100000000
     },
     {
       "task_id": 34,
       "source_node_id": 64,
-      "compute_node_id": 18,
+      "compute_node_id": 16,
       "result_node_id": 44,
       "input_bytes": 4096,
       "output_bytes": 2048,
-      "compute_work_units": 15000000,
-      "arrival_time_ns": 536100000000
+      "compute_work_units": 30000000,
+      "arrival_time_ns": 842100000000
     },
     {
       "task_id": 35,
       "source_node_id": 21,
-      "compute_node_id": 29,
+      "compute_node_id": 16,
       "result_node_id": 43,
       "input_bytes": 4096,
       "output_bytes": 2048,
-      "compute_work_units": 15000000,
-      "arrival_time_ns": 653100000000
+      "compute_work_units": 7500000,
+      "arrival_time_ns": 859100000000
     },
     {
       "task_id": 36,
@@ -503,7 +503,7 @@
     {
       "task_id": 51,
       "source_node_id": 23,
-      "compute_node_id": 16,
+      "compute_node_id": 18,
       "result_node_id": 13,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -513,7 +513,7 @@
     {
       "task_id": 52,
       "source_node_id": 0,
-      "compute_node_id": 17,
+      "compute_node_id": 19,
       "result_node_id": 22,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -523,7 +523,7 @@
     {
       "task_id": 53,
       "source_node_id": 51,
-      "compute_node_id": 19,
+      "compute_node_id": 20,
       "result_node_id": 31,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -533,7 +533,7 @@
     {
       "task_id": 54,
       "source_node_id": 4,
-      "compute_node_id": 20,
+      "compute_node_id": 21,
       "result_node_id": 38,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -543,8 +543,8 @@
     {
       "task_id": 55,
       "source_node_id": 53,
-      "compute_node_id": 21,
-      "result_node_id": 23,
+      "compute_node_id": 23,
+      "result_node_id": 24,
       "input_bytes": 4096,
       "output_bytes": 2048,
       "compute_work_units": 6000000,
@@ -553,7 +553,7 @@
     {
       "task_id": 56,
       "source_node_id": 28,
-      "compute_node_id": 23,
+      "compute_node_id": 24,
       "result_node_id": 10,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -563,7 +563,7 @@
     {
       "task_id": 57,
       "source_node_id": 1,
-      "compute_node_id": 24,
+      "compute_node_id": 25,
       "result_node_id": 65,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -573,7 +573,7 @@
     {
       "task_id": 58,
       "source_node_id": 0,
-      "compute_node_id": 25,
+      "compute_node_id": 26,
       "result_node_id": 60,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -583,7 +583,7 @@
     {
       "task_id": 59,
       "source_node_id": 51,
-      "compute_node_id": 26,
+      "compute_node_id": 27,
       "result_node_id": 35,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -593,7 +593,7 @@
     {
       "task_id": 60,
       "source_node_id": 3,
-      "compute_node_id": 27,
+      "compute_node_id": 29,
       "result_node_id": 11,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -603,7 +603,7 @@
     {
       "task_id": 61,
       "source_node_id": 26,
-      "compute_node_id": 28,
+      "compute_node_id": 30,
       "result_node_id": 34,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -613,7 +613,7 @@
     {
       "task_id": 62,
       "source_node_id": 13,
-      "compute_node_id": 30,
+      "compute_node_id": 31,
       "result_node_id": 57,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -623,7 +623,7 @@
     {
       "task_id": 63,
       "source_node_id": 18,
-      "compute_node_id": 31,
+      "compute_node_id": 32,
       "result_node_id": 22,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -633,7 +633,7 @@
     {
       "task_id": 64,
       "source_node_id": 15,
-      "compute_node_id": 32,
+      "compute_node_id": 34,
       "result_node_id": 9,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -643,7 +643,7 @@
     {
       "task_id": 65,
       "source_node_id": 46,
-      "compute_node_id": 34,
+      "compute_node_id": 35,
       "result_node_id": 30,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -653,7 +653,7 @@
     {
       "task_id": 66,
       "source_node_id": 19,
-      "compute_node_id": 35,
+      "compute_node_id": 36,
       "result_node_id": 25,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -663,7 +663,7 @@
     {
       "task_id": 67,
       "source_node_id": 24,
-      "compute_node_id": 36,
+      "compute_node_id": 37,
       "result_node_id": 26,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -673,7 +673,7 @@
     {
       "task_id": 68,
       "source_node_id": 43,
-      "compute_node_id": 37,
+      "compute_node_id": 38,
       "result_node_id": 41,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -683,7 +683,7 @@
     {
       "task_id": 69,
       "source_node_id": 4,
-      "compute_node_id": 38,
+      "compute_node_id": 39,
       "result_node_id": 54,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -693,7 +693,7 @@
     {
       "task_id": 70,
       "source_node_id": 58,
-      "compute_node_id": 39,
+      "compute_node_id": 40,
       "result_node_id": 0,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -793,7 +793,7 @@
     {
       "task_id": 80,
       "source_node_id": 23,
-      "compute_node_id": 52,
+      "compute_node_id": 51,
       "result_node_id": 19,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -803,7 +803,7 @@
     {
       "task_id": 81,
       "source_node_id": 50,
-      "compute_node_id": 53,
+      "compute_node_id": 52,
       "result_node_id": 44,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -813,7 +813,7 @@
     {
       "task_id": 82,
       "source_node_id": 57,
-      "compute_node_id": 54,
+      "compute_node_id": 53,
       "result_node_id": 47,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -823,7 +823,7 @@
     {
       "task_id": 83,
       "source_node_id": 38,
-      "compute_node_id": 55,
+      "compute_node_id": 54,
       "result_node_id": 64,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -833,7 +833,7 @@
     {
       "task_id": 84,
       "source_node_id": 13,
-      "compute_node_id": 56,
+      "compute_node_id": 55,
       "result_node_id": 53,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -842,8 +842,8 @@
     },
     {
       "task_id": 85,
-      "source_node_id": 56,
-      "compute_node_id": 57,
+      "source_node_id": 57,
+      "compute_node_id": 56,
       "result_node_id": 10,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -853,7 +853,7 @@
     {
       "task_id": 86,
       "source_node_id": 27,
-      "compute_node_id": 58,
+      "compute_node_id": 57,
       "result_node_id": 59,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -863,7 +863,7 @@
     {
       "task_id": 87,
       "source_node_id": 60,
-      "compute_node_id": 59,
+      "compute_node_id": 58,
       "result_node_id": 48,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -873,7 +873,7 @@
     {
       "task_id": 88,
       "source_node_id": 13,
-      "compute_node_id": 60,
+      "compute_node_id": 59,
       "result_node_id": 45,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -883,7 +883,7 @@
     {
       "task_id": 89,
       "source_node_id": 12,
-      "compute_node_id": 61,
+      "compute_node_id": 60,
       "result_node_id": 24,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -893,7 +893,7 @@
     {
       "task_id": 90,
       "source_node_id": 26,
-      "compute_node_id": 62,
+      "compute_node_id": 61,
       "result_node_id": 56,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -903,7 +903,7 @@
     {
       "task_id": 91,
       "source_node_id": 55,
-      "compute_node_id": 63,
+      "compute_node_id": 62,
       "result_node_id": 29,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -913,7 +913,7 @@
     {
       "task_id": 92,
       "source_node_id": 6,
-      "compute_node_id": 64,
+      "compute_node_id": 63,
       "result_node_id": 52,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -923,7 +923,7 @@
     {
       "task_id": 93,
       "source_node_id": 29,
-      "compute_node_id": 65,
+      "compute_node_id": 64,
       "result_node_id": 51,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -933,7 +933,7 @@
     {
       "task_id": 94,
       "source_node_id": 38,
-      "compute_node_id": 1,
+      "compute_node_id": 65,
       "result_node_id": 32,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -943,7 +943,7 @@
     {
       "task_id": 95,
       "source_node_id": 43,
-      "compute_node_id": 2,
+      "compute_node_id": 1,
       "result_node_id": 61,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -953,7 +953,7 @@
     {
       "task_id": 96,
       "source_node_id": 22,
-      "compute_node_id": 3,
+      "compute_node_id": 2,
       "result_node_id": 52,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -963,7 +963,7 @@
     {
       "task_id": 97,
       "source_node_id": 23,
-      "compute_node_id": 6,
+      "compute_node_id": 3,
       "result_node_id": 51,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -973,7 +973,7 @@
     {
       "task_id": 98,
       "source_node_id": 14,
-      "compute_node_id": 7,
+      "compute_node_id": 6,
       "result_node_id": 42,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -983,7 +983,7 @@
     {
       "task_id": 99,
       "source_node_id": 23,
-      "compute_node_id": 8,
+      "compute_node_id": 7,
       "result_node_id": 5,
       "input_bytes": 4096,
       "output_bytes": 2048,
@@ -993,7 +993,7 @@
     {
       "task_id": 100,
       "source_node_id": 10,
-      "compute_node_id": 9,
+      "compute_node_id": 8,
       "result_node_id": 32,
       "input_bytes": 4096,
       "output_bytes": 2048,

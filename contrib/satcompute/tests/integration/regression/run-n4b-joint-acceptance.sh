@@ -20,7 +20,7 @@ constellation="contrib/satcompute/input/topology/constellations/synthetic-66.csv
 compute_profile="contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json"
 task_trace="$example/task-trace.json"
 common="--simulationDuration=1000 --randomSeed=1 --randomRun=16 \
---constellationConfig=$constellation --orbitStartOffset=5695 \
+--constellationConfig=$constellation --orbitStartOffset=302 \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.008 \
 --networkUpdateInterval=20 --islBandwidthBps=2000000000 \
 --routingMode=global-capacity-aware-hrw --computeProfile=$compute_profile \
@@ -134,7 +134,7 @@ if (root / "replay-audit/fault-model-probabilities.csv").exists():
     raise SystemExit("replay unexpectedly emitted live model probabilities")
 
 trace = load_json("generate-audit/fault-trace.json")
-if trace.get("schema_version") != 2 or len(trace.get("faults", [])) != 14:
+if trace.get("schema_version") != 2 or len(trace.get("faults", [])) != 13:
     raise SystemExit(f"joint Fault Trace shape differs: {trace}")
 compute_faults = [
     fault
@@ -150,7 +150,8 @@ if actual_compute_evidence != [
     (11, 66_000_000_000, 8_000_000_000),
     (22, 76_000_000_000, 8_000_000_000),
     (22, 100_000_000_000, 8_000_000_000),
-    (51, 386_000_000_000, 8_000_000_000),
+    (17, 236_000_000_000, 8_000_000_000),
+    (16, 850_000_000_000, 8_000_000_000),
 ]:
     raise SystemExit(f"joint compute fault evidence differs: {actual_compute_evidence}")
 risk_only = [
@@ -158,7 +159,7 @@ risk_only = [
     for fault in trace["faults"]
     if fault["fault_type"] == "compute" and not fault["fault_occurred"]
 ]
-if len(risk_only) != 8:
+if len(risk_only) != 6:
     raise SystemExit(f"joint risk-only episode count differs: {len(risk_only)}")
 satellite_faults = [
     fault for fault in trace["faults"] if fault["fault_type"] == "satellite"
@@ -172,16 +173,16 @@ if len(satellite_faults) != 1 or (
 
 expected_fault_summary = {
     "active_fault_count_at_end": 1,
-    "cancelled_transfer_count": 7,
-    "compute_fault_count": 13,
-    "failed_task_count": 6,
+    "cancelled_transfer_count": 8,
+    "compute_fault_count": 12,
+    "failed_task_count": 7,
     "failed_transfer_count": 0,
-    "fault_count": 14,
+    "fault_count": 13,
     "notice_event_count": 11,
-    "recovery_event_count": 5,
+    "recovery_event_count": 6,
     "route_recomputation_count_due_to_fault": 1,
     "satellite_fault_count": 1,
-    "start_event_count": 6,
+    "start_event_count": 7,
 }
 fault_summary = load_json("generate-audit/fault-summary.json")
 if fault_summary != expected_fault_summary:
@@ -203,25 +204,26 @@ expected_failed_tasks = {
     6: ("COMPUTE_NODE_FAILURE", 56_000_000_000),
     13: ("COMPUTE_NODE_FAILURE", 66_000_000_000),
     20: ("COMPUTE_NODE_FAILURE", 76_000_000_000),
-    31: ("COMPUTE_NODE_FAILURE", 386_000_000_000),
+    31: ("COMPUTE_NODE_FAILURE", 236_000_000_000),
+    34: ("COMPUTE_NODE_FAILURE", 850_000_000_000),
     36: ("COMPUTE_SATELLITE_FAILURE", 829_256_867_404),
     37: ("COMPUTE_SATELLITE_FAILURE", 840_100_000_000),
 }
 if failed_tasks != expected_failed_tasks:
     raise SystemExit(f"joint failed-task evidence differs: {failed_tasks}")
 if collections.Counter(row["final_state"] for row in task_rows) != {
-    "COMPLETED": 94,
-    "FAILED": 6,
+    "COMPLETED": 93,
+    "FAILED": 7,
 }:
     raise SystemExit("joint task terminal-state counts differ")
-for task_id in (7, 14, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 38):
+for task_id in (7, 14, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 35, 38):
     if task_by_id[task_id]["final_state"] != "COMPLETED":
         raise SystemExit(f"joint recovery/control task {task_id} did not complete")
 
 transfer_rows = load_csv("generate-audit/transfer-summary.csv")
 if len(transfer_rows) != 200 or collections.Counter(
     row["terminal_state"] for row in transfer_rows
-) != {"COMPLETED": 193, "CANCELLED": 7}:
+) != {"COMPLETED": 192, "CANCELLED": 8}:
     raise SystemExit("joint transfer terminal-state counts differ")
 cancelled_transfers = [
     row for row in transfer_rows if row["terminal_state"] == "CANCELLED"
@@ -246,7 +248,7 @@ if (
     run_summary["task_completion_rate_percent"],
     run_summary["route_computation_count"],
     run_summary["applied_topology_slice_count"],
-) != ("PARTIAL", 100, 94, 94, 2, 50):
+) != ("PARTIAL", 100, 93, 93, 2, 50):
     raise SystemExit(f"joint run summary differs: {run_summary}")
 for field in (
     "flow_monitor_lost_packets",
@@ -260,27 +262,27 @@ if any(reason["dropped_packets"] != 0 for reason in run_summary["flow_monitor_dr
 if (
     run_summary["transfer"]["transfer_count"],
     run_summary["transfer"]["completed_transfer_count"],
-) != (200, 193):
+) != (200, 192):
     raise SystemExit("joint run transfer summary differs")
 
 prediction_summary = load_json("generate-audit/fault-prediction-summary.json")
 if prediction_summary != {
-    "prediction_count": 72,
-    "risk_episode_count": 7,
-    "task_count": 10,
+    "prediction_count": 82,
+    "risk_episode_count": 9,
+    "task_count": 12,
 }:
     raise SystemExit(f"joint prediction summary differs: {prediction_summary}")
 model_rows = load_csv("generate-audit/fault-model-probabilities.csv")
 prediction_rows = load_csv("replay-audit/fault-predictions.csv")
-if len(model_rows) != 72 or len(prediction_rows) != 72:
+if len(model_rows) != 82 or len(prediction_rows) != 82:
     raise SystemExit("joint probability record count differs")
 
 probability_audit = load_json("probability-audit/n4b-joint.json")
 if (
     not probability_audit["within_tolerance"]
-    or probability_audit["model_record_count"] != 72
-    or probability_audit["prediction_record_count"] != 72
-    or probability_audit["matched_record_count"] != 72
+    or probability_audit["model_record_count"] != 82
+    or probability_audit["prediction_record_count"] != 82
+    or probability_audit["matched_record_count"] != 82
     or probability_audit["missing_model_record_count"] != 0
     or probability_audit["missing_prediction_record_count"] != 0
     or probability_audit["context_mismatch_count"] != 0
@@ -348,4 +350,4 @@ for filename in core_outputs:
         raise SystemExit(f"normal generate/replay output differs: {filename}")
 PY
 
-echo "N4B joint acceptance passed: 66 stars, 1000 s, 100 tasks, 72 probability records."
+echo "N4B joint acceptance passed: 66 stars, 1000 s, 100 tasks, 82 probability records."

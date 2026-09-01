@@ -99,7 +99,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 
 该档固定产生 100 个任务：30 个任务覆盖 3 个强热点、1 个临界热点和 1 个温热对照
 节点；8 个任务覆盖 F2/F3 故障、恢复和邻接对照窗口；其余 62 个 2–5 秒短任务分散
-到 55 个非保留计算节点。完整角色、冻结 seed/run 和四轮验收流程见
+到 56 个非保留计算节点。完整角色、冻结 seed/run 和四轮验收流程见
 [`leo-66-1000s-n4b-joint`](../../input/examples/leo-66-1000s-n4b-joint/README.md)。
 
 ## 参数

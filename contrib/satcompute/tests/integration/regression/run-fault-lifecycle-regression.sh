@@ -115,7 +115,7 @@ replay_f1_66_result="$(run_platform \
 f2_trace="$regression_output/generate-f2-66/fault-trace.json"
 f2_common="--simulationDuration=1000 --randomSeed=1 --randomRun=16 \
 --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
---orbitStartOffset=5695 --maxIslDistance=6171353 --delayMode=fixed \
+--orbitStartOffset=302 --maxIslDistance=6171353 --delayMode=fixed \
 --fixedDelay=0.008 --networkUpdateInterval=20 --islBandwidthBps=2000000000 \
 --routingMode=global-capacity-aware-hrw --computeProfile=$all_compute_profile \
 --taskTrace=$f2_example/task-trace.json --taskCompletionPolicy=report \
@@ -680,7 +680,7 @@ if (
 
 f2_trace = load_json("generate-f2-66/fault-trace.json")
 f2_faults = f2_trace["faults"]
-if f2_trace["schema_version"] != 2 or len(f2_faults) != 8:
+if f2_trace["schema_version"] != 2 or len(f2_faults) != 7:
     raise SystemExit(f"66-star F2 trace shape differs: {f2_faults}")
 f2_occurred = [fault for fault in f2_faults if fault["fault_occurred"]]
 f2_risk_only = [fault for fault in f2_faults if not fault["fault_occurred"]]
@@ -694,10 +694,11 @@ if [
     )
     for fault in f2_occurred
 ] != [
-    (51, None, 386_000_000_000, None, 8_000_000_000),
+    (17, 148_000_000_000, 236_000_000_000, 88_000_000_000, 8_000_000_000),
+    (16, 713_000_000_000, 850_000_000_000, 137_000_000_000, 8_000_000_000),
 ]:
     raise SystemExit(f"66-star F2 occurred faults differ: {f2_occurred}")
-if len(f2_risk_only) != 7 or any(
+if len(f2_risk_only) != 5 or any(
     fault["notice_time_ns"] is None or fault["risk_duration_ns"] <= 0
     for fault in f2_risk_only
 ):
@@ -729,7 +730,17 @@ for filename in (
     if generated != replayed:
         raise SystemExit(f"F2 generate/replay output differs: {filename}")
 
-validate_prediction_outputs("generate-f2-66", True)
+f2_predictions, f2_prediction_summary = validate_prediction_outputs(
+    "generate-f2-66", True
+)
+if (
+    len(f2_predictions),
+    f2_prediction_summary["risk_episode_count"],
+    f2_prediction_summary["task_count"],
+) != (126, 6, 6):
+    raise SystemExit(
+        f"66-star F2 prediction evidence differs: {f2_prediction_summary}"
+    )
 
 f2_events = load_csv("generate-f2-66/fault-events.csv")
 f2_start_events = [row for row in f2_events if row["event_type"] == "START"]
@@ -737,10 +748,11 @@ f2_recovery_events = [row for row in f2_events if row["event_type"] == "RECOVERY
 if [
     (int(row["node_id"]), int(row["simulation_time_ns"]))
     for row in f2_start_events
-] != [(51, 386_000_000_000)]:
+] != [(17, 236_000_000_000), (16, 850_000_000_000)]:
     raise SystemExit("F2 START events differ")
 if [int(row["simulation_time_ns"]) for row in f2_recovery_events] != [
-    394_000_000_000,
+    244_000_000_000,
+    858_000_000_000,
 ]:
     raise SystemExit("F2 recovery duration differs")
 if any(row["route_recomputed"] != "false" for row in f2_events):
@@ -754,9 +766,9 @@ if sorted(
     task_id
     for task_id, row in f2_tasks.items()
     if row["final_state"] == "FAILED"
-) != [1]:
+) != [1, 3]:
     raise SystemExit("F2 did not fail the active hotspot task")
-if any(f2_tasks[task_id]["final_state"] != "COMPLETED" for task_id in (2, 3, 4, 5, 6, 7, 8)):
+if any(f2_tasks[task_id]["final_state"] != "COMPLETED" for task_id in (2, 4, 5, 6, 7, 8)):
     raise SystemExit("F2 post-recovery, risk-only, or sparse task did not complete")
 f2_run = load_json("generate-f2-66/run-summary.json")
 if (
@@ -764,7 +776,7 @@ if (
     f2_run["applied_topology_slice_count"],
     f2_run["task_count"],
     f2_run["completed_task_count"],
-) != (1, 50, 8, 7):
+) != (1, 50, 8, 6):
     raise SystemExit("66-star F2 changed topology, routing, or task counts")
 
 
@@ -773,16 +785,14 @@ combined_faults = combined_trace["faults"]
 combined_occurred = [
     fault for fault in combined_faults if fault["fault_occurred"]
 ]
-if len(combined_faults) != 9 or [
+if len(combined_faults) != 7 or [
     (fault["node_id"], fault["start_time_ns"])
     for fault in combined_occurred
 ] != [
-    (51, 386_000_000_000),
-    (29, 656_000_000_000),
+    (17, 236_000_000_000),
+    (16, 850_000_000_000),
 ]:
     raise SystemExit(f"combined F1/F2 fault trace differs: {combined_faults}")
-if combined_occurred[0]["failure_probability"] <= f2_occurred[0]["failure_probability"]:
-    raise SystemExit("combined trace did not expose q_comp")
 if len({
     (fault["node_id"], fault["start_time_ns"])
     for fault in combined_occurred
@@ -816,7 +826,25 @@ for filename in (
     if generated != replayed:
         raise SystemExit(f"combined F1/F2 generate/replay output differs: {filename}")
 
-validate_prediction_outputs("generate-combined-66", True)
+combined_predictions, combined_prediction_summary = validate_prediction_outputs(
+    "generate-combined-66", True
+)
+if (
+    len(combined_predictions),
+    combined_prediction_summary["risk_episode_count"],
+    combined_prediction_summary["task_count"],
+) != (126, 6, 6):
+    raise SystemExit(
+        "66-star combined prediction evidence differs: "
+        f"{combined_prediction_summary}"
+    )
+if not any(
+    float(row["f1_step_failure_probability"]) > 0.0
+    and float(row["combined_step_failure_probability"])
+    > float(row["f2_step_failure_probability"])
+    for row in combined_predictions
+):
+    raise SystemExit("combined predictor did not expose F1/F2 q_comp")
 
 
 f3_trace = load_json("generate-f3-66/fault-trace.json")
