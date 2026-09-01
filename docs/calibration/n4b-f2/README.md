@@ -303,4 +303,7 @@ FlowMonitor 零丢包，Size-aware 与 Capacity-aware 账本归零。联合场�
 
 本地阶段门禁已经通过定向全构建、6 个 Python unit、12 个 C++ unit executable、
 5 个 smoke，以及路由、工作负载、故障生命周期和联合验收 4 个 regression runner。
-阶段 CI、提交、PR 和分支整理属于下一步集成操作，不包含在本节本地验收中。
+修订通过 [PR #83](https://github.com/forest-rabbit/SCP-SatComPlate/pull/83) squash 合入
+`main@65bd39a1f`；正式 `phase=n4b-f2-spatial-revision`
+[阶段 CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/33459723117) 在
+2 分 4 秒内通过定向配置、完整构建以及全部 unit、smoke 和 regression 门禁。

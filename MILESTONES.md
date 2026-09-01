@@ -470,11 +470,13 @@ F2 改用热点西短东长的 two-piece Gaussian 风险场，保留独立的 F1
 
 F2-only、F1/F2 联合概率审计和 generate/replay 合同回归全部通过；更新后的 66 星、
 1000 秒、100 任务联合场景得到 93 个任务完成、7 个按故障合同失败，资源与路由账本
-收敛。本地构建、unit、smoke 和 regression 门禁均通过，阶段 CI、提交与 PR 尚未执行。
+收敛。本地构建、unit、smoke 和 regression 门禁均通过。
 
 - 模型与参数：`9c82895a6`、`7d4a014e7`
 - 标定、绘图与回归证据：[N4B F2 空间辐射风险标定](docs/calibration/n4b-f2/README.md)
 - 联合场景：[N4B 100 任务联合验收](contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/README.md)
+- 集成证据：[PR #83](https://github.com/forest-rabbit/SCP-SatComPlate/pull/83) / `65bd39a1f`
+- 阶段 CI：[run 33459723117](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/33459723117)，2 分 4 秒通过
 
 ## ECMP 算法演进
 
