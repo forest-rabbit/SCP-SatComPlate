@@ -75,7 +75,7 @@ GetDefaultFaultParameters()
     // F1 每秒最大故障强度。
     parameters.f1.maxFailureIntensityPerSecond = 0.005;
 
-    // F2: radiation exposure compute fault
+    // F2: spatial radiation-induced compute fault
 
     // 默认运行仍保持 F2 关闭；F2-only 功能场景由平台运行参数显式启用。
     parameters.f2.enabled = false;
@@ -92,14 +92,29 @@ GetDefaultFaultParameters()
     // 辐射区域北侧纬度边界，单位为度。
     parameters.f2.latitudeMaxDegrees = 5.0;
 
-    // 66 星、1000 秒功能窗口标定的区域内每秒有效故障强度。
-    parameters.f2.effectiveFailureIntensityPerSecond = 0.00015569048731122528;
+    // 文献观测到的 SAA 内 SEU 热点中心经度，单位为度。
+    parameters.f2.hotspotLongitudeDegrees = -60.0;
 
-    // 典型完整穿越进行到一半（461 秒）时的累计风险通知阈值。
-    parameters.f2.riskThreshold = 0.06925814255738115;
+    // 文献观测到的 SAA 内 SEU 热点中心纬度，单位为度。
+    parameters.f2.hotspotLatitudeDegrees = -28.0;
 
-    // 离开辐射区域后关闭 episode 并清零连续暴露。
-    parameters.f2.resetExposureOnExit = true;
+    // 热点西侧的高斯空间风险场经度标准差，单位为度。
+    parameters.f2.sigmaLongitudeWestDegrees = 12.0;
+
+    // 热点东侧的高斯空间风险场经度标准差，单位为度。
+    parameters.f2.sigmaLongitudeEastDegrees = 24.0;
+
+    // 66 星轨道候选扫描冻结的高斯空间风险场纬度标准差，单位为度。
+    parameters.f2.sigmaLatitudeDegrees = 12.0;
+
+    // 候选阈值扫描冻结的 F2 空间风险通知阈值。
+    parameters.f2.spatialRiskThreshold = 0.50;
+
+    // 66 星选定 1000 秒窗口目标均值为 2 时反标定的热点参考 SEU 强度。
+    parameters.f2.referenceSeuIntensityPerSecond = 0.002859196111093899;
+
+    // 冻结的场景级 SEU 到计算服务故障映射系数，不解释为实测概率。
+    parameters.f2.seuToComputeFailureProbability = 0.50;
 
     // F3: fatal debris impact
 

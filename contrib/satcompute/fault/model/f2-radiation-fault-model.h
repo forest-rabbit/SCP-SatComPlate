@@ -11,19 +11,22 @@
 namespace ns3
 {
 
-/** Complete F2 geographic exposure state for one satellite. */
+/** Complete F2 spatial-radiation state for one satellite. */
 struct F2RadiationFaultSnapshot
 {
     double latitudeDegrees{}; ///< Current geocentric latitude in degrees.
     double longitudeDegrees{}; ///< Current longitude in [-180, 180) degrees.
     double continuousExposureSeconds{}; ///< Current uninterrupted region exposure.
-    double cumulativeRisk{}; ///< At-least-one-event risk for this exposure episode.
+    double cumulativeFailureHazard{}; ///< Integrated compute-failure hazard this pass.
+    double cumulativeFailureProbability{}; ///< At-least-one-failure pass statistic.
+    double spatialRisk{}; ///< Current dimensionless two-piece Gaussian risk score.
+    double seuIntensityPerSecond{}; ///< Current modeled raw SEU intensity.
     double failureIntensityPerSecond{}; ///< Current effective service-failure intensity.
     double stepFailureProbability{}; ///< Conditional probability for the latest interval.
     bool inRegion{}; ///< Whether the current ECEF position is inside the F2 rectangle.
 };
 
-/** Pure F2 ECEF, region, continuous-exposure, risk, and hazard calculations. */
+/** Pure F2 ECEF, spatial-risk, SEU-mapping, and hazard calculations. */
 class F2RadiationFaultModel
 {
   public:
@@ -36,9 +39,9 @@ class F2RadiationFaultModel
     /**
      * Observe one ECEF position and advance the current exposure episode.
      *
-     * A transition from outside to inside starts at zero accumulated exposure.
-     * Each following inside sample adds the exact interval. The current-step
-     * probability uses only the interval intensity, never cumulative risk.
+     * Current position alone determines spatial risk and current-step failure
+     * intensity. Continuous exposure and integrated pass probability remain
+     * statistics and never drive the current risk or notice state.
      *
      * @param snapshot Mutable satellite exposure state.
      * @param ecefPositionM Current ns-3 mobility position in ECEF meters.
@@ -49,12 +52,19 @@ class F2RadiationFaultModel
                 double intervalSeconds) const;
 
     /**
-     * Test the configured cumulative-risk notice threshold.
+     * Test the configured current spatial-risk notice threshold.
      *
      * @param snapshot Current satellite exposure state.
-     * @return True when the satellite is inside and cumulative risk reached the threshold.
+     * @return True when the current in-region spatial risk reached the threshold.
      */
     bool IsRiskActive(const F2RadiationFaultSnapshot& snapshot) const;
+
+    /**
+     * Return the maximum effective compute-failure intensity at the hotspot.
+     *
+     * @return Product of reference SEU intensity and SEU-to-failure probability.
+     */
+    double GetMaximumFailureIntensityPerSecond() const;
 
   private:
     F2FaultParameters m_parameters; ///< Immutable validated F2 parameters.

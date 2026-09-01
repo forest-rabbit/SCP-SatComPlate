@@ -95,7 +95,7 @@ RunIdentityAndMotionCase()
 void
 RunStartOffsetCase()
 {
-    constexpr double startOffsetSeconds = 5695.0;
+    constexpr double startOffsetSeconds = 1234.0;
     const ConstellationDefinition config = MakeTestConstellation(3, 4);
     Vector expected;
     {

@@ -232,11 +232,11 @@ class WorkloadGeneratorTest(unittest.TestCase):
             summary = json.loads(outputs[0][1].read_text(encoding="utf-8"))
             self.assertEqual(len(trace["tasks"]), 8)
             self.assertEqual(summary["profile"], "f2-validation")
-            self.assertEqual(summary["hotspot_compute_node_ids"], [51, 29])
-            self.assertEqual(summary["expected_failed_task_ids"], [1])
-            self.assertEqual(summary["post_recovery_task_ids"], [2])
-            self.assertEqual(summary["unaffected_hotspot_task_ids"], [3, 4])
-            self.assertEqual(summary["risk_only_task_ids"], [5, 6])
+            self.assertEqual(summary["orbit_start_offset_s"], 302)
+            self.assertEqual(summary["long_task_compute_node_ids"], [17, 16])
+            self.assertEqual(summary["long_task_ids"], [1, 3])
+            self.assertEqual(summary["follow_up_task_ids"], [2, 4])
+            self.assertEqual(summary["medium_task_ids"], [5, 6])
             self.assertEqual(summary["control_task_ids"], [7, 8])
 
     def test_n4b_joint_profile_has_bounded_hotspots_and_is_deterministic(self):
@@ -306,6 +306,7 @@ class WorkloadGeneratorTest(unittest.TestCase):
             summary = json.loads(outputs[0][1].read_text(encoding="utf-8"))
             self.assertEqual(len(trace["tasks"]), 100)
             self.assertEqual(summary["profile"], "n4b-joint-validation")
+            self.assertEqual(summary["orbit_start_offset_s"], 302)
             self.assertEqual(summary["strong_hotspot_compute_node_ids"], [0, 11, 22])
             self.assertEqual(summary["expected_critical_failure_task_ids"], [6, 13, 20])
             self.assertEqual(summary["post_recovery_task_ids"], [7, 14, 21])
@@ -315,7 +316,14 @@ class WorkloadGeneratorTest(unittest.TestCase):
             self.assertEqual(summary["warm_control_task_ids"], [27, 28, 29, 30])
             self.assertEqual(len(summary["fault_window_roles"]), 8)
             self.assertEqual(len(summary["distributed_control_task_ids"]), 62)
-            self.assertEqual(len(summary["distributed_control_compute_node_ids"]), 55)
+            self.assertEqual(len(summary["distributed_control_compute_node_ids"]), 56)
+            self.assertEqual(
+                summary["expected_f2_faults"],
+                [
+                    {"node_id": 17, "start_time_ns": 236_000_000_000},
+                    {"node_id": 16, "start_time_ns": 850_000_000_000},
+                ],
+            )
 
             counts = {
                 node_id: sum(
@@ -324,7 +332,7 @@ class WorkloadGeneratorTest(unittest.TestCase):
                 for node_id in (0, 11, 22, 33, 44)
             }
             self.assertEqual(counts, {0: 7, 11: 7, 22: 7, 33: 5, 44: 4})
-            reserved = {0, 4, 5, 11, 18, 22, 29, 33, 40, 44, 51}
+            reserved = {0, 4, 5, 11, 16, 17, 22, 28, 33, 44}
             distributed_tasks = trace["tasks"][38:]
             self.assertTrue(
                 all(task["compute_node_id"] not in reserved for task in distributed_tasks)

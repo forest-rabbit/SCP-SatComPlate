@@ -1,0 +1,79 @@
+{
+  "validation_scope": "orbit-only native positions plus F2 sampling; no network, routing, tasks, F1, F3, or FaultController",
+  "constellation": {
+    "config": "synthetic-66.csv",
+    "satellite_count": 66,
+    "altitude_km": 780.0,
+    "inclination_deg": 86.4
+  },
+  "run": {
+    "duration_s": 1000000,
+    "orbit_start_offset_s": 302.0,
+    "sample_interval_s": 1,
+    "recoverable_compute_duration_s": 8,
+    "random_seed": 1,
+    "random_run": 1,
+    "longitude_bin_deg": 2.5,
+    "latitude_bin_deg": 2.5
+  },
+  "f2_parameters": {
+    "longitude_min_deg": -90.0,
+    "longitude_max_deg": 5.0,
+    "latitude_min_deg": -50.0,
+    "latitude_max_deg": 5.0,
+    "hotspot_longitude_deg": -60.0,
+    "hotspot_latitude_deg": -28.0,
+    "sigma_longitude_west_deg": 12.0,
+    "sigma_longitude_east_deg": 24.0,
+    "sigma_latitude_deg": 12.0,
+    "spatial_risk_threshold": 0.5,
+    "reference_seu_intensity_per_s": 0.002859196111093899,
+    "seu_to_compute_failure_probability": 0.5,
+    "maximum_effective_failure_intensity_per_s": 0.0014295980555469494
+  },
+  "sampling": {
+    "position_sample_count": 66000000,
+    "region_exposure_satellite_s": 5331826,
+    "eligible_region_exposure_satellite_s": 5318612,
+    "weighted_region_exposure_satellite_s": 1322816.1506707107,
+    "eligible_weighted_region_exposure_satellite_s": 1315957.7695395623,
+    "random_draw_count": 65986718,
+    "recovery_suppressed_draw_count": 13216,
+    "expected_fault_count_without_recovery_suppression": 1890.3899909573088,
+    "expected_fault_count_with_observed_recovery_suppression": 1880.5917809607515,
+    "actual_fault_count": 1888,
+    "count_z_score": 0.17089442788284318,
+    "notice_region_fault_count": 983,
+    "unannounced_region_fault_count": 905
+  },
+  "spatial_validation": {
+    "exposure_weighted_mean_risk": 0.24742503674634703,
+    "fault_event_mean_risk": 0.5190222076194586,
+    "high_risk_exposure_fraction": 0.17918829198294592,
+    "high_risk_fault_fraction": 0.520656779661017,
+    "risk_rate_pearson_correlation": 0.8224188966861005,
+    "correlation_bin_count": 699,
+    "peak_fault_count_bin": {
+      "longitude_center_deg": -58.75,
+      "latitude_center_deg": -31.25,
+      "eligible_exposure_s": 6304,
+      "fault_count": 13,
+      "fault_rate_per_million_exposure_s": 2062.1827411167515
+    },
+    "peak_observed_rate_bin": {
+      "longitude_center_deg": -46.25,
+      "latitude_center_deg": -31.25,
+      "eligible_exposure_s": 6278,
+      "fault_count": 13,
+      "fault_rate_per_million_exposure_s": 2070.7231602421152
+    }
+  },
+  "acceptance": {
+    "sufficient_fault_count": true,
+    "count_within_four_sigma": true,
+    "fault_risk_exceeds_exposure_risk": true,
+    "high_risk_fault_fraction_exceeds_exposure_fraction": true,
+    "positive_bin_risk_rate_correlation": true,
+    "all_passed": true
+  }
+}

@@ -750,10 +750,10 @@ def build_f2_validation_workload(satellite_ids, compute_nodes, seed):
     if len(satellite_ids) != 66:
         raise ValueError("f2-validation profile requires exactly 66 satellites")
     compute_by_id = {node["node_id"]: node for node in compute_nodes}
-    required_compute_ids = (0, 11, 18, 29, 40, 51)
+    required_compute_ids = (0, 11, 16, 17, 27, 28)
     if any(node_id not in compute_by_id for node_id in required_compute_ids):
         raise ValueError(
-            "f2-validation profile requires compute nodes 0, 11, 18, 29, 40, and 51"
+            "f2-validation profile requires compute nodes 0, 11, 16, 17, 27, and 28"
         )
 
     tasks = []
@@ -790,32 +790,28 @@ def build_f2_validation_workload(satellite_ids, compute_nodes, seed):
         return {"task_id": task_id, "role": role}
 
     roles = [
-        add_task(51, 60, 360_100_000_000, "fault-active"),
-        add_task(51, 10, 395_100_000_000, "post-recovery"),
-        add_task(29, 60, 600_100_000_000, "unaffected-long-task"),
-        add_task(29, 10, 635_100_000_000, "unaffected-follow-up"),
-        add_task(40, 20, 450_100_000_000, "risk-only-active"),
-        add_task(18, 20, 530_100_000_000, "truncated-risk-active"),
-        add_task(0, 5, 100_100_000_000, "sparse-control"),
-        add_task(11, 5, 800_100_000_000, "sparse-control"),
+        add_task(17, 60, 200_100_000_000, "long-window-a"),
+        add_task(17, 10, 245_100_000_000, "follow-up-a"),
+        add_task(16, 60, 820_100_000_000, "long-window-b"),
+        add_task(16, 10, 859_100_000_000, "follow-up-b"),
+        add_task(28, 20, 200_100_000_000, "medium-window-a"),
+        add_task(27, 20, 700_100_000_000, "medium-window-b"),
+        add_task(0, 5, 100_100_000_000, "short-control"),
+        add_task(11, 5, 500_100_000_000, "short-control"),
     ]
     summary = {
         "profile": "f2-validation",
         "seed": seed,
         "task_count": len(tasks),
-        "orbit_start_offset_s": 5695,
+        "orbit_start_offset_s": 302,
         "random_seed": 1,
         "random_run": 16,
         "roles": roles,
-        "hotspot_compute_node_ids": [51, 29],
-        "expected_failed_task_ids": [1],
-        "post_recovery_task_ids": [2],
-        "unaffected_hotspot_task_ids": [3, 4],
-        "risk_only_task_ids": [5, 6],
+        "long_task_compute_node_ids": [17, 16],
+        "long_task_ids": [1, 3],
+        "follow_up_task_ids": [2, 4],
+        "medium_task_ids": [5, 6],
         "control_task_ids": [7, 8],
-        "expected_fault_start_time_ns": {
-            "51": 386_000_000_000,
-        },
     }
     return {"tasks": tasks}, summary
 
@@ -835,7 +831,7 @@ def build_n4b_joint_validation_workload(satellite_ids, compute_nodes, seed):
     strong_hotspot_ids = (0, 11, 22)
     boundary_hotspot_id = 33
     warm_control_id = 44
-    fault_window_node_ids = (51, 40, 18, 29, 4, 5)
+    fault_window_node_ids = (17, 28, 16, 4, 5)
     reserved_node_ids = set(strong_hotspot_ids) | {
         boundary_hotspot_id,
         warm_control_id,
@@ -844,7 +840,7 @@ def build_n4b_joint_validation_workload(satellite_ids, compute_nodes, seed):
     distributed_node_ids = [
         node_id for node_id in satellite_ids if node_id not in reserved_node_ids
     ]
-    if len(distributed_node_ids) != 55:
+    if len(distributed_node_ids) != 56:
         raise AssertionError("joint validation distributed-node set differs")
 
     tasks = []
@@ -919,11 +915,11 @@ def build_n4b_joint_validation_workload(satellite_ids, compute_nodes, seed):
     ]
 
     fault_window_specs = (
-        (51, 20, 378_100_000_000, "f2-fault-active"),
-        (51, 5, 395_100_000_000, "f2-post-recovery"),
-        (40, 10, 458_100_000_000, "f2-risk-active"),
-        (18, 10, 536_100_000_000, "f2-truncated-risk-active"),
-        (29, 10, 653_100_000_000, "f2-late-risk-active"),
+        (17, 20, 228_100_000_000, "f2-first-fault-active"),
+        (17, 5, 245_100_000_000, "f2-first-post-recovery"),
+        (28, 10, 200_100_000_000, "f2-risk-active"),
+        (16, 20, 842_100_000_000, "f2-second-fault-active"),
+        (16, 5, 859_100_000_000, "f2-second-post-recovery"),
         (4, 10, 824_100_000_000, "f3-fault-active"),
         (4, 3, 840_100_000_000, "f3-post-fault"),
         (5, 5, 825_100_000_000, "f3-neighbor-control"),
@@ -965,7 +961,7 @@ def build_n4b_joint_validation_workload(satellite_ids, compute_nodes, seed):
         "seed": seed,
         "task_count": len(tasks),
         "simulation_duration_s": 1000,
-        "orbit_start_offset_s": 5695,
+        "orbit_start_offset_s": 302,
         "random_seed": 1,
         "random_run": 16,
         "strong_hotspot_compute_node_ids": list(strong_hotspot_ids),
@@ -983,10 +979,10 @@ def build_n4b_joint_validation_workload(satellite_ids, compute_nodes, seed):
         "boundary_hotspot_task_duration_s": 10,
         "warm_control_task_duration_s": 8,
         "post_recovery_task_duration_s": 2,
-        "expected_f2_fault": {
-            "node_id": 51,
-            "start_time_ns": 386_000_000_000,
-        },
+        "expected_f2_faults": [
+            {"node_id": 17, "start_time_ns": 236_000_000_000},
+            {"node_id": 16, "start_time_ns": 850_000_000_000},
+        ],
         "expected_f3_fault": {
             "node_id": 4,
             "start_time_ns": 829_256_867_404,

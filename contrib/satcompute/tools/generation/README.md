@@ -66,7 +66,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 
 ## F2 验证档
 
-先用 `--orbitStartOffset=5695 --topologyOnly=1` 导出 66 星选定窗口的 0 秒节点切片，
+先用 `--orbitStartOffset=302 --topologyOnly=1` 导出 66 星空间标定窗口的 0 秒节点切片，
 再运行：
 
 ```bash
@@ -79,11 +79,11 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --output-workload-summary=/tmp/f2-workload-summary.json
 ```
 
-该档固定产生 8 个任务：两个长热点任务覆盖固定 seed/run 下的实际故障，两个任务
-验证恢复后新任务可继续运行，两个任务覆盖风险-only/终点截断 episode，另有两个
-稀疏对照任务。完整命令和预期结果见
+该档固定产生 8 个轻量任务：两个 60 秒长任务、两个 10 秒后续任务、两个 20 秒
+中等任务和两个 5 秒对照任务。任务只为真实平台 Monte Carlo 提供完整执行环境，
+不再预先声明某个随机 run 必须在哪颗卫星、哪个时刻故障。完整命令见
 [`leo-66-1000s-f2`](../../input/examples/leo-66-1000s-f2/README.md)。任务仍只用于
-验证执行生命周期，F2 是否发生由正式平台的实时 ECEF 暴露和 ns-3 随机流决定。
+验证执行生命周期，F2 是否发生由正式平台的实时空间风险和 ns-3 随机流决定。
 
 ## N4B 联合验收档
 
@@ -99,7 +99,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 
 该档固定产生 100 个任务：30 个任务覆盖 3 个强热点、1 个临界热点和 1 个温热对照
 节点；8 个任务覆盖 F2/F3 故障、恢复和邻接对照窗口；其余 62 个 2–5 秒短任务分散
-到 55 个非保留计算节点。完整角色、冻结 seed/run 和四轮验收流程见
+到 56 个非保留计算节点。完整角色、冻结 seed/run 和四轮验收流程见
 [`leo-66-1000s-n4b-joint`](../../input/examples/leo-66-1000s-n4b-joint/README.md)。
 
 ## 参数

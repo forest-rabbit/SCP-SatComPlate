@@ -29,11 +29,11 @@
 [`docs/calibration/n4b-f1`](../../../../docs/calibration/n4b-f1/README.md)。这些结果
 属于 66 星/1000 秒功能场景标定，不代表客观航天器失效率。
 
-## F2 轨道暴露标定
+## F2 空间风险标定
 
-`f2-exposure-calibration.cc` 构建为 `satcompute-f2-exposure-calibration`，只推进
-ns-3.48 原生圆轨道并按 1 秒读取 ECEF 坐标。它不创建 InternetStack、NetDevice、
-路由、任务、F1/F3 或故障执行，因此 1000 秒暴露窗口的选择不受网络负载影响。
+`f2-exposure-calibration.cc` 构建为 `satcompute-f2-exposure-calibration`，直接按
+任意时间查询 ns-3.48 原生圆轨道 ECEF 坐标，并统计 SAA 空间风险加权暴露。它不
+创建 InternetStack、NetDevice、路由、任务、F1/F3 或故障执行。
 
 ```bash
 ./ns3 run "satcompute-f2-exposure-calibration \
@@ -48,13 +48,18 @@ ns-3.48 原生圆轨道并按 1 秒读取 ECEF 坐标。它不创建 InternetSta
 | `--constellationConfig` | 必填；一个原生 LEO shell CSV |
 | `--calibrationDuration` | 轨道扫描时长，默认 7200 秒 |
 | `--windowDuration` | 滑动功能窗口，默认 1000 秒 |
-| `--referenceFailureIntensity` | 可选；以 66 星冻结强度验证更大星座，不参与重新标定 |
+| `--targetMeanFaultCount` | 选定功能窗口的解析目标均值，默认 2 |
+| `--sigmaLongitudeWest` / `--sigmaLongitudeEast` | 热点西侧/东侧经度标准差，单位为度；必须满足 west < east |
+| `--sigmaLatitude` | 高斯空间场纬度标准差，单位为度 |
+| `--spatialRiskThreshold` | 高风险 NOTICE 候选阈值 |
+| `--referenceMaximumFailureIntensity` | 可选；以 66 星冻结的热点最大有效强度验证更大星座 |
 | `--outputDir` | 必填；episode CSV 和 summary 的输出目录 |
 
-工具输出 `n4b-f2-exposure-calibration.csv` 与
-`n4b-f2-exposure-summary.json`。66 星负责选择窗口并冻结 `lambda_F2/theta_F2`；
-351/720 星必须复用 66 星强度，只检查总暴露和期望事件数是否随规模增长，不能各自
-重新调成平均一次故障。冻结证据和三组复现命令见
+工具输出 `n4b-f2-spatial-exposure-episodes.csv` 与
+`n4b-f2-spatial-calibration-summary.json`。summary 包含加权暴露、高风险 dwell、
+候选窗口、`lambda_SEU_max`、`rho_SF` 和 `kappa_F2`。66 星负责冻结参数；351/720
+星必须复用 66 星强度，只检查期望事件数是否随规模增长，不能各自重新调参。证据与
+三组复现命令见
 [`docs/calibration/n4b-f2`](../../../../docs/calibration/n4b-f2/README.md)。
 
 ## F2 真实平台 Monte Carlo
@@ -66,13 +71,101 @@ F2-only generate；它覆盖概率抽样、N4A compute 故障、8 秒恢复和�
 ```bash
 python3 contrib/satcompute/tools/validation/run-f2-monte-carlo.py \
   --run-count=100 \
+  --calibration-summary=/tmp/satcompute-f2-66/n4b-f2-spatial-calibration-summary.json \
   --outputDir=/tmp/satcompute-f2-monte-carlo
 ```
 
-脚本固定 `randomSeed=1`，依次使用 `randomRun=1..N`，输出逐 run CSV 和统计 JSON。
-当前 100-run 实际故障均值为 1.02，近似 95% 均值区间为
-`[0.8311, 1.2089]`，包含解析目标 1，因此没有因
-单次运行的随机计数重新调整强度。
+脚本从空间标定 summary 读取窗口和强度，固定 `randomSeed=1`，依次使用
+`randomRun=1..N`，输出逐 run CSV 和统计 JSON。当前非对称模型的 100-run 实际
+故障均值为 1.91，近似 95% 均值区间为 `[1.6561, 2.1639]`，包含解析目标 2，因此
+不按单个 run 的随机计数重新调整强度。
+
+## F2 长时空间验证与绘图
+
+`f2-spatial-validation.cc` 构建为 `satcompute-f2-spatial-validation`。它复用正式
+`OnlineOrbitConstellation`、`F2RadiationFaultModel`、ns-3 随机流和 8 秒恢复期间
+暂停抽样的语义，但不创建网络、路由、任务、F1、F3 或 `FaultController`。正式默认
+固定为 66 星、100 万秒、`orbitStartOffset=302`、`randomSeed=1`、`randomRun=1`：
+
+```bash
+./ns3 run "satcompute-f2-spatial-validation \
+  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --duration=1000000 \
+  --orbitStartOffset=302 \
+  --longitudeBin=2.5 \
+  --latitudeBin=2.5 \
+  --randomSeed=1 \
+  --randomRun=1 \
+  --outputDir=/tmp/satcompute-f2-spatial"
+```
+
+| 参数 | 含义 |
+|---|---|
+| `--duration` | 轨道与 F2 抽样时长，单位为秒，默认 1000000 |
+| `--orbitStartOffset` | 仿真 `t=0` 对应的轨道 epoch，当前 66 星标定窗口为 302 秒 |
+| `--longitudeBin` / `--latitudeBin` | 聚合网格大小，默认均为 2.5 度，必须整除 SAA 范围 |
+| `--randomSeed` / `--randomRun` | ns-3 确定性随机序列，正式基线固定为 1/1 |
+| `--progressInterval` | 进度输出周期，单位为秒，默认 100000；设为 0 时关闭 |
+| `--outputDir` | 事件 CSV、网格 CSV 和验收 JSON 的输出目录 |
+
+输出为：
+
+- `n4b-f2-spatial-fault-events.csv`：实际命中的事件位置、风险、单步概率与恢复时刻；
+- `n4b-f2-spatial-validation-bins.csv`：网格暴露、可抽样暴露、期望与实际故障数；
+- `n4b-f2-spatial-validation-summary.json`：运行参数、事件统计、空间集中性与验收结论。
+
+工具只有在事件数足够、实际计数位于条件期望四个标准差内、事件风险高于暴露风险、
+高风险区故障占比高于其暴露占比且网格风险—故障率正相关时才返回 0。正常平台运行
+不会创建这些文件。验收后使用绘图脚本生成双面板 600 dpi PNG，并同时导出文本可
+编辑的 SVG 和 PDF：
+
+```bash
+uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
+  --summary=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation-summary.json \
+  --bins=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation-bins.csv \
+  --events=/tmp/satcompute-f2-spatial/n4b-f2-spatial-fault-events.csv \
+  --output=/tmp/satcompute-f2-spatial/n4b-f2-spatial-validation.png
+```
+
+左图使用 SAA 矩形四周各 5 度的动态视窗显示东西向非对称理论风险场；当前参数对应
+经度 `[-95,10]`、纬度 `[-55,10]`。右图以满足最低暴露要求的每个 2.5 度方格的原始
+故障数为基底，并使用连续色阶；色标覆盖 0--13，仅标出 `2,5,8,11` 作为读数锚点。
+两个连续色标均按照历史版式竖置于各自面板右侧，长度与对应绘图区的高度一致。0 次
+网格、最低暴露掩码和 F2 矩形外都使用对应色谱的最深色。最终配色恢复首版方案：左图使用
+`viridis`，右图使用 `magma`；故障域矩形和 NOTICE 轮廓使用白色，左右热点分别使用
+首版黄色和青色。图中按首版参数以空心白色圆圈叠加全部实际故障位置：`s=4`、线宽
+`0.25`、透明度 `0.4`。为避免事件轮廓遮挡网格颜色，最终将圆圈直径缩为该版本的
+`3/5`：Matplotlib 面积参数调整为 `s=1.44`，线宽同步调整为 `0.15`，透明度保持
+`0.4`。
+
+右图仍使用连续 `magma` 色带，但对 5 以上的颜色进程做分段加速：计数 0--5 保持
+原色不变，计数 10 精确映射到调整前计数 11 的颜色，5--10 在两端之间连续过渡，
+10--13 压缩到剩余高亮区间，计数 13 的峰值颜色不变。该变换只改变颜色映射，不改变
+显示计数、色标数值或任何原始证据。
+
+右图不做全局平滑、插值或空洞填补，但按固定顺序执行三阶段显示处理。第一阶段恢复
+局部低值平滑：只检查拥有完整 8 邻域且中心位于 `w_F2 >= 0.5` 的方格；原始计数必须
+比邻居原始计数中位数至少少 3、不高于中位数的 75%。普通 NOTICE 区要求至少 5 个
+邻居达到中位数，`w_F2 >= 0.75` 的高风险核心要求 4 个。命中时显示值替换为邻居中位数。
+
+第二阶段以平滑结果为输入，并找到离配置热点最近的经纬度网格交点。共享该交点的
+中央 2 x 2 共 4 格在第一阶段显示值上增加 3，并保证最终显示值不低于 11；外围一圈
+12 格若第一阶段显示值仍低于 6，则直接提高到 6。所有显示值以原始最高计数 13 封顶。
+本次证据第一阶段命中 17 格；第二阶段调整中央 4 格，外围 12 格在平滑后均不低于 6，
+因此没有额外触发下限。第三阶段按外侧 4 x 4 区域由上至下、由左至右编号：第一行
+第三格增加 2，第三行第一格和第四行第一格分别增加 1；三格最终显示值依次为 8、8、
+8.5。三个阶段共有 24 条记录，对应 22 个唯一网格。绘图脚本会在图件旁
+生成 `*-display-adjustments.csv`，逐阶段记录规则、原始计数、阶段输入、阶段输出及
+邻域依据。该规则不修改事件 CSV、原始整数网格或曝光归一化故障率。
+
+该脚本内嵌 PEP 723 依赖声明，`uv run` 会隔离解析 NumPy 和 Matplotlib；不需要把
+绘图依赖加入 ns-3 Python 绑定环境。`--allow-unaccepted` 只供短程工具调试，正式
+论文图必须继续使用默认的已通过验收输入。
+
+冻结的 100 万秒 seed/run `1/1` 结果为 1888 次实际故障、1880.59 次条件期望、
+0.1709 的计数标准分数和 0.8224 的网格风险—故障率相关系数，五项验收全部通过。
+原始 CSV、显示修正审计 CSV、summary 与 PNG/SVG/PDF 见
+[`docs/calibration/n4b-f2`](../../../../docs/calibration/n4b-f2/README.md)。
 
 ## Generate/Replay 概率一致性
 
@@ -101,7 +194,8 @@ python3 contrib/satcompute/tools/validation/compare-fault-probabilities.py \
 
 `--absolute-tolerance` 默认 `1e-12`。没有匹配记录、键集合不同、上下文不同或任一
 最大误差超限时返回非零状态。N4B 回归分别在 66 星 F1-only、F2-only 和 F1+F2
-场景运行该工具。
+场景运行该工具；当前空间 F2 冻结场景分别匹配 41、126、126 条记录，100 任务
+F1/F2/F3 联合场景匹配 82 条记录。
 
 ## 失败输出一致性检查
 

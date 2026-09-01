@@ -184,6 +184,21 @@ build_exec(
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tools
 )
 
+# Long-horizon orbit-only F2 sampling and spatial-density evidence. It shares
+# the native orbit and pure F2 model, but creates no network or task objects.
+build_exec(
+  EXECNAME satcompute-f2-spatial-validation
+  EXECNAME_PREFIX satcompute_tool_
+  SOURCE_FILES tools/validation/f2-spatial-validation.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tools
+)
+add_custom_target(
+  satcompute-f2-spatial-validation
+  DEPENDS satcompute_tool_satcompute-f2-spatial-validation
+)
+
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
 build_exec(

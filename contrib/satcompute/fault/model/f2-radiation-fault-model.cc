@@ -63,7 +63,10 @@ F2RadiationFaultModel::Update(F2RadiationFaultSnapshot& snapshot,
     if (!snapshot.inRegion)
     {
         snapshot.continuousExposureSeconds = 0.0;
-        snapshot.cumulativeRisk = 0.0;
+        snapshot.cumulativeFailureHazard = 0.0;
+        snapshot.cumulativeFailureProbability = 0.0;
+        snapshot.spatialRisk = 0.0;
+        snapshot.seuIntensityPerSecond = 0.0;
         snapshot.failureIntensityPerSecond = 0.0;
         snapshot.stepFailureProbability = 0.0;
         return;
@@ -72,24 +75,50 @@ F2RadiationFaultModel::Update(F2RadiationFaultSnapshot& snapshot,
     if (!wasInRegion)
     {
         snapshot.continuousExposureSeconds = 0.0;
+        snapshot.cumulativeFailureHazard = 0.0;
     }
     else
     {
         snapshot.continuousExposureSeconds += intervalSeconds;
     }
-    snapshot.cumulativeRisk =
-        -std::expm1(-m_parameters.effectiveFailureIntensityPerSecond *
-                    snapshot.continuousExposureSeconds);
+
+    const double longitudeDelta =
+        snapshot.longitudeDegrees - m_parameters.hotspotLongitudeDegrees;
+    const double longitudeSigma =
+        longitudeDelta < 0.0 ? m_parameters.sigmaLongitudeWestDegrees
+                             : m_parameters.sigmaLongitudeEastDegrees;
+    const double longitudeOffset = longitudeDelta / longitudeSigma;
+    const double latitudeOffset =
+        (snapshot.latitudeDegrees - m_parameters.hotspotLatitudeDegrees) /
+        m_parameters.sigmaLatitudeDegrees;
+    snapshot.spatialRisk =
+        std::exp(-0.5 * (longitudeOffset * longitudeOffset +
+                         latitudeOffset * latitudeOffset));
+    snapshot.seuIntensityPerSecond =
+        m_parameters.referenceSeuIntensityPerSecond * snapshot.spatialRisk;
     snapshot.failureIntensityPerSecond =
-        m_parameters.effectiveFailureIntensityPerSecond;
+        m_parameters.seuToComputeFailureProbability *
+        snapshot.seuIntensityPerSecond;
     snapshot.stepFailureProbability =
         -std::expm1(-snapshot.failureIntensityPerSecond * intervalSeconds);
+    snapshot.cumulativeFailureHazard +=
+        snapshot.failureIntensityPerSecond * intervalSeconds;
+    snapshot.cumulativeFailureProbability =
+        -std::expm1(-snapshot.cumulativeFailureHazard);
 }
 
 bool
 F2RadiationFaultModel::IsRiskActive(const F2RadiationFaultSnapshot& snapshot) const
 {
-    return snapshot.inRegion && snapshot.cumulativeRisk >= m_parameters.riskThreshold;
+    return snapshot.inRegion &&
+           snapshot.spatialRisk >= m_parameters.spatialRiskThreshold;
+}
+
+double
+F2RadiationFaultModel::GetMaximumFailureIntensityPerSecond() const
+{
+    return m_parameters.referenceSeuIntensityPerSecond *
+           m_parameters.seuToComputeFailureProbability;
 }
 
 } // namespace ns3

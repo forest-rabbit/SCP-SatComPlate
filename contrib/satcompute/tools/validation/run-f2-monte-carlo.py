@@ -23,9 +23,6 @@ COMPUTE_PROFILE = Path(
 TASK_TRACE = Path(
     "contrib/satcompute/input/examples/leo-66-1000s-f2/task-trace.json"
 )
-CALIBRATION_SUMMARY = Path(
-    "docs/calibration/n4b-f2/synthetic-66/n4b-f2-exposure-summary.json"
-)
 
 
 def positive_int(value):
@@ -55,7 +52,7 @@ def distribution(values):
     }
 
 
-def run_platform(ns3_path, random_run, temporary_root):
+def run_platform(ns3_path, random_run, orbit_start_offset, temporary_root):
     run_directory = temporary_root / f"run-{random_run}"
     trace_path = run_directory / "fault-trace.json"
     arguments = [
@@ -64,7 +61,7 @@ def run_platform(ns3_path, random_run, temporary_root):
         "--randomSeed=1",
         f"--randomRun={random_run}",
         f"--constellationConfig={CONSTELLATION}",
-        "--orbitStartOffset=5695",
+        f"--orbitStartOffset={orbit_start_offset}",
         "--maxIslDistance=6171353",
         "--delayMode=fixed",
         "--fixedDelay=0.008",
@@ -113,6 +110,12 @@ def main():
         description="Run fixed-seed F2-only Monte Carlo through the real platform"
     )
     parser.add_argument("--run-count", type=positive_int, default=30)
+    parser.add_argument(
+        "--calibration-summary",
+        required=True,
+        type=Path,
+        help="Spatial calibration summary produced by the orbit-only tool",
+    )
     parser.add_argument("--outputDir", required=True, type=Path)
     parser.add_argument("--ns3", type=Path, default=REPOSITORY_ROOT / "ns3")
     args = parser.parse_args()
@@ -120,17 +123,40 @@ def main():
     ns3_path = args.ns3.resolve()
     if not ns3_path.is_file():
         raise ValueError(f"ns-3 launcher does not exist: {ns3_path}")
-    calibration = read_json(REPOSITORY_ROOT / CALIBRATION_SUMMARY)
+    calibration_path = args.calibration_summary
+    if not calibration_path.is_absolute():
+        calibration_path = REPOSITORY_ROOT / calibration_path
+    calibration = read_json(calibration_path.resolve())
     selected = calibration["selected"]
     expected_mean = selected["functional_target_mean_fault_count"]
-    intensity = selected["local_candidate_failure_intensity_per_s"]
+    orbit_start_offset = selected["start_offset_s"]
+    maximum_effective_intensity = selected[
+        "candidate_maximum_effective_failure_intensity_per_s"
+    ]
+    configured_maximum_effective_intensity = calibration["seu_mapping"][
+        "configured_maximum_effective_failure_intensity_per_s"
+    ]
+    if not math.isclose(
+        maximum_effective_intensity,
+        configured_maximum_effective_intensity,
+        rel_tol=1e-12,
+        abs_tol=0.0,
+    ):
+        raise ValueError(
+            "calibration candidate and configured maximum F2 intensity differ"
+        )
     output_directory = args.outputDir.resolve()
     output_directory.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="satcompute-f2-monte-carlo-") as directory:
         temporary_root = Path(directory)
         rows = [
-            run_platform(ns3_path, random_run, temporary_root)
+            run_platform(
+                ns3_path,
+                random_run,
+                orbit_start_offset,
+                temporary_root,
+            )
             for random_run in range(1, args.run_count + 1)
         ]
 
@@ -160,8 +186,17 @@ def main():
         "random_run_first": 1,
         "random_run_last": args.run_count,
         "run_count": args.run_count,
-        "orbit_start_offset_s": 5695,
-        "effective_failure_intensity_per_s": intensity,
+        "orbit_start_offset_s": orbit_start_offset,
+        "spatial_model": "two_piece_gaussian_hotspot",
+        "reference_seu_intensity_per_s": calibration["seu_mapping"][
+            "configured_reference_seu_intensity_per_s"
+        ],
+        "seu_to_compute_failure_probability": calibration["seu_mapping"][
+            "seu_to_compute_failure_probability"
+        ],
+        "maximum_effective_failure_intensity_per_s": (
+            maximum_effective_intensity
+        ),
         "analytical_target_mean_fault_count": expected_mean,
         "observed_fault_count": distribution(fault_counts),
         "observed_mean_standard_error": standard_error,

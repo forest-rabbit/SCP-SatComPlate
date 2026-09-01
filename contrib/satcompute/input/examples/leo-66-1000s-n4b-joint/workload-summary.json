@@ -3,7 +3,7 @@
   "seed": "n4b-joint-66",
   "task_count": 100,
   "simulation_duration_s": 1000,
-  "orbit_start_offset_s": 5695,
+  "orbit_start_offset_s": 302,
   "random_seed": 1,
   "random_run": 16,
   "strong_hotspot_compute_node_ids": [
@@ -74,33 +74,33 @@
   "fault_window_roles": [
     {
       "task_id": 31,
-      "compute_node_id": 51,
+      "compute_node_id": 17,
       "duration_s": 20,
-      "role": "f2-fault-active"
+      "role": "f2-first-fault-active"
     },
     {
       "task_id": 32,
-      "compute_node_id": 51,
+      "compute_node_id": 17,
       "duration_s": 5,
-      "role": "f2-post-recovery"
+      "role": "f2-first-post-recovery"
     },
     {
       "task_id": 33,
-      "compute_node_id": 40,
+      "compute_node_id": 28,
       "duration_s": 10,
       "role": "f2-risk-active"
     },
     {
       "task_id": 34,
-      "compute_node_id": 18,
-      "duration_s": 10,
-      "role": "f2-truncated-risk-active"
+      "compute_node_id": 16,
+      "duration_s": 20,
+      "role": "f2-second-fault-active"
     },
     {
       "task_id": 35,
-      "compute_node_id": 29,
-      "duration_s": 10,
-      "role": "f2-late-risk-active"
+      "compute_node_id": 16,
+      "duration_s": 5,
+      "role": "f2-second-post-recovery"
     },
     {
       "task_id": 36,
@@ -134,8 +134,7 @@
     13,
     14,
     15,
-    16,
-    17,
+    18,
     19,
     20,
     21,
@@ -144,7 +143,7 @@
     25,
     26,
     27,
-    28,
+    29,
     30,
     31,
     32,
@@ -154,6 +153,7 @@
     37,
     38,
     39,
+    40,
     41,
     42,
     43,
@@ -163,6 +163,7 @@
     48,
     49,
     50,
+    51,
     52,
     53,
     54,
@@ -246,10 +247,16 @@
   "boundary_hotspot_task_duration_s": 10,
   "warm_control_task_duration_s": 8,
   "post_recovery_task_duration_s": 2,
-  "expected_f2_fault": {
-    "node_id": 51,
-    "start_time_ns": 386000000000
-  },
+  "expected_f2_faults": [
+    {
+      "node_id": 17,
+      "start_time_ns": 236000000000
+    },
+    {
+      "node_id": 16,
+      "start_time_ns": 850000000000
+    }
+  ],
   "expected_f3_fault": {
     "node_id": 4,
     "start_time_ns": 829256867404

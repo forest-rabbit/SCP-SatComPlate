@@ -22,7 +22,7 @@ SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真�
 - 支持输入传输、非抢占 FCFS 计算和结果传输的完整任务闭环；
 - 支持确定性 compute/整星故障的预警、开始、有限恢复、任务/传输终止与即时重路由；
 - 支持 `none/generate/replay`，可按实时计算负载生成 F1 温度/能源风险，也可按实时
-  ECEF 位置生成 F2 连续辐射暴露风险；两者都能产生可恢复 compute 故障和可确定性
+  ECEF 位置生成 F2 空间 SEU 风险；两者都能产生可恢复 compute 故障和可确定性
   重放的统一 trace；
 - 支持独立 F3 fixed-K/Poisson 永久整星故障，并在冲突时优先于可恢复 compute 故障；
 - 可按需启用 F1/F2 因果概率预测与 generate/replay 一致性审计；正常运行默认关闭
@@ -63,9 +63,10 @@ source .venv/bin/activate
 uv pip install "cmake==3.25.*" ninja
 ```
 
-uv 只管理 Python 工具环境，不能替代 C++ 编译器和系统库。当前 SatCompute 的
-Python 工具仅依赖标准库，因此仓库不维护额外的 `uv.lock`，也不执行 `uv sync`；
-根目录 `pyproject.toml` 仍是 ns-3 上游 Python 绑定的打包配置。
+uv 只管理 Python 工具环境，不能替代 C++ 编译器和系统库。SatCompute 的生成器与
+检查器使用标准库；F2 论文绘图脚本通过内嵌 PEP 723 声明 NumPy/Matplotlib，可直接
+使用 `uv run <script>` 隔离执行。因此仓库仍不维护额外的 `uv.lock`，也不执行
+`uv sync`；根目录 `pyproject.toml` 仍是 ns-3 上游 Python 绑定的打包配置。
 
 ## 构建与快速运行
 

@@ -395,13 +395,12 @@ risk-only episode。
 - F1 模型与生成证据：`77264de8d`、`337c57cfe`
 - 标定证据：[N4B F1 参数标定](docs/calibration/n4b-f1/README.md)
 
-### 2026-08-30 至 2026-08-31：完成 F2、联合竞争风险与 F3
+### 2026-08-30 至 2026-08-31：完成首版 F2、联合竞争风险与 F3
 
-F2 直接读取正式平台同一 `LeoCircularOrbitMobilityModel` 的实时 ECEF 位置，而不
-回放拓扑 JSON。66/351/720 星各执行 7200 秒 orbit-only 暴露扫描；66 星选择原轨道
-5695–6695 秒窗口，星座总暴露为 6423 satellite-seconds，并冻结系统级有效强度
-`1/6423 s^-1` 和 461 秒累计暴露对应的风险阈值。真实 66 星平台的 100 个固定 run
-平均产生 1.02 次 F2 故障，近似 95% 均值区间包含解析目标 1。
+该段记录 `n4b-complete` 的历史基线：首版 F2 已经读取正式平台同一
+`LeoCircularOrbitMobilityModel` 的实时 ECEF 位置，但仍采用均匀区域强度和累计暴露
+NOTICE。该风险公式、`5695s` 窗口和平均 1 次故障的标定已经由后述空间风险修订
+取代，不再表示当前 F2 行为；保留提交号只用于追溯 N4B 当时的验收过程。
 
 F1/F2 各自维护状态和独立随机流，任一风险仍有效时不提前 `NOTICE_CLEAR`，同一节点
 同刻最多向执行层提交一次可恢复 compute START。F3 使用独立事件时间与无放回节点
@@ -434,6 +433,9 @@ F1/F2 各自维护状态和独立随机流，任一风险仍有效时不提前 `
 采用 5 个分级热点、8 个 F2/F3 窗口任务和 62 个分布式短任务；它用于联合生命周期
 验收，不是吞吐压力实验。
 
+以下计数同样是 `n4b-complete` 的修订前历史结果。空间 F2 合入前必须在新窗口上
+重新冻结联合场景；这些数字不能作为当前空间风险模型的预期输出。
+
 四轮 runner 依次执行默认关闭审计的 generate、开启审计的 generate、开启审计的
 replay，以及复用目录且关闭审计的 replay。冻结结果为 94/100 任务完成、6 个任务
 按合同失败；出现 5 次可恢复 compute START、8 个 risk-only episode，以及节点 4
@@ -455,6 +457,24 @@ docs-only 收口不改变任何代码、输入或测试，`n4b-complete` 冻结�
 - 集成证据：[PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81) / `38025d964`
 - 阶段 CI：[run 33353263977](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/33353263977)
 - 阶段 tag：`n4b-complete`
+
+### 2026-09-01：完成 F2 东西向非对称空间风险修订
+
+F2 改用热点西短东长的 two-piece Gaussian 风险场，保留独立的 F1/F2 随机流，并
+重新冻结 66/351/720 星的轨道窗口与故障强度。66 星 100-run 标定均值为 1.91 次，
+95% 均值区间包含每 1000 秒 2 次的目标。
+
+66 星 100 万秒 orbit-only 验证得到 1888 次故障，风险—故障率相关系数为 0.8224；
+高风险区以 17.92% 的有效暴露承载 52.07% 的故障，空间分布门槛全部通过。论文候选图
+及原始事件、网格、验收摘要和显示修正审计均已保存，正常平台运行默认不生成这些输出。
+
+F2-only、F1/F2 联合概率审计和 generate/replay 合同回归全部通过；更新后的 66 星、
+1000 秒、100 任务联合场景得到 93 个任务完成、7 个按故障合同失败，资源与路由账本
+收敛。本地构建、unit、smoke 和 regression 门禁均通过，阶段 CI、提交与 PR 尚未执行。
+
+- 模型与参数：`9c82895a6`、`7d4a014e7`
+- 标定、绘图与回归证据：[N4B F2 空间辐射风险标定](docs/calibration/n4b-f2/README.md)
+- 联合场景：[N4B 100 任务联合验收](contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/README.md)
 
 ## ECMP 算法演进
 
