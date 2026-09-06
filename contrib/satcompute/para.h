@@ -61,6 +61,8 @@ struct SatComputeConfig
     std::string outputDirectory; ///< 结构化结果输出目录。
     std::string taskLogMode;     ///< 任务日志级别。
     std::string diagnosticMode;  ///< 失败诊断模式。
+    bool linkMetrics; ///< 是否启用定向链路窗口统计，正常运行默认关闭。
+    double linkMetricsIntervalSeconds; ///< 链路统计窗口，单位为秒，与拓扑更新独立。
 };
 
 /**

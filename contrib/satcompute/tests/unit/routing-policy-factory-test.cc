@@ -118,6 +118,45 @@ CheckPathPolicies()
           "capacity-aware factory product differs");
 }
 
+void
+ObserveReservation(std::vector<uint64_t>* rates, uint32_t source, uint32_t interface,
+                   uint64_t rate)
+{
+    Check(source == 7 && interface == 2, "reservation observer link identity differs");
+    rates->push_back(rate);
+}
+
+void
+CheckReservationObserver()
+{
+    CapacityReservationState state;
+    CapacityAwarePath path;
+    CapacityAwarePathHop hop{};
+    hop.sourceSatelliteId = 7;
+    hop.destinationSatelliteId = 8;
+    hop.candidate.outputInterface = 2;
+    hop.linkRateBps = 10'000'000'000;
+    path.hops.push_back(hop);
+    path.admittedRateBps = 6'000'000'000;
+    state.Reserve(1, path);
+    std::vector<uint64_t> rates;
+    state.SetObserver(MakeBoundCallback(&ObserveReservation, &rates));
+    path.admittedRateBps = 4'000'000'000;
+    state.Reserve(2, path);
+    Check(state.GetResidualRateBps(hop) == 0, "10 Gbps reservation residual differs");
+    state.Release(1);
+    state.Release(2);
+    Check(rates == std::vector<uint64_t>({6'000'000'000, 10'000'000'000,
+                                         4'000'000'000, 0}),
+          "reservation observer events differ");
+    Check(state.GetResidualRateBps(hop) == hop.linkRateBps,
+          "observer changed reservation release");
+    state.SetObserver({});
+    state.Reserve(3, path);
+    state.Release(3);
+    Check(rates.size() == 4, "disabled observer emitted events");
+}
+
 } // namespace
 
 int
@@ -127,6 +166,7 @@ main()
     {
         CheckNextHopPolicies();
         CheckPathPolicies();
+        CheckReservationObserver();
         std::cout << "SatCompute routing policy factory tests passed." << std::endl;
         return 0;
     }

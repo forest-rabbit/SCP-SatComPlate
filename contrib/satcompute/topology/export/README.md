@@ -78,7 +78,7 @@ links_1s.json
       "active": true,
       "distance_m": 2000000.0,
       "delay_ns": 8000000,
-      "link_bandwidth_bps": 2000000000
+      "link_bandwidth_bps": 10000000000
     }
   ]
 }

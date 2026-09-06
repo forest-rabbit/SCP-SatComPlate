@@ -19,8 +19,9 @@ tests/
 └── support/                 C++/Python 测试公共构造
 ```
 
-测试输出全部写入 `mktemp` 创建的 `/tmp` 目录，并在脚本退出时清理，不向仓库写入
-运行结果。
+日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动启动的三规模压力
+测试是例外：输入和原始指标保存在 `.gitignore` 排除的本地 `output/` 目录，便于
+后续备份可行性分析；大规模压力测试不接入 `run-all.sh` 或 GitHub CI。
 
 ## Unit
 
@@ -29,6 +30,7 @@ tests/
 | 文件 | 主要覆盖 |
 |---|---|
 | `para-test.cc` | `para.cc` 默认值、分组和关键压力测试默认项 |
+| `link-window-test.cc` | 10 Gbps、空闲、双向独立、跨窗/尾窗、可用性、队列与预留时间积分 |
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
 | `routing-policy-factory-test.cc` | 五种路由名到 next-hop/path policy 的映射 |
 | `task-input-test.cc` | ComputeProfile/TaskTrace closed-world 校验、canonical 排序和派生传输 ID |
@@ -58,6 +60,7 @@ N4B 联合档还检查 100 任务、5 个有界热点、F2/F3 窗口任务、62 
 | `run-task-smoke.sh` | 输入传输、FCFS 计算、结果传输的单任务闭环 |
 | `run-diagnostics-smoke.sh` | strict 部分完成、队列丢包和失败诊断文件 |
 | `run-topology-smoke.sh` | topology-only 切片、终点采样、XYZ 演化和逐字节确定性 |
+| `run-link-metrics-smoke.py` | 指标开关不改变业务、空闲/丢包/故障、窗口汇总和陈旧文件清理 |
 
 ## Regression
 
@@ -103,8 +106,55 @@ contrib/satcompute/tests/integration/regression/run-all.sh
 定位失败时可直接运行对应具名 shell 脚本或 C++ executable。各 runner 默认使用
 `./ns3 run --no-build`，因此修改 C++ 后必须先重新执行 `./ns3 build`。
 
+## 手动压力测试：10 Gbps
+
+已完成的三规模结果见[压力基线记录](../../../docs/pressure-10g-baseline.md)。
+
+本轮是无故障、无备份的资源基线。保留旧 75% 档的 **1500 任务、81,750,000,000
+字节 INPUT、15 个 1 GB 和 30 个 500 MB 大任务**，使用当前 FNV 任务生成器及
+原生轨道；不是旧 SHA-256 工作负载或旧 2 Gbps 仿真的逐项复现。75% 是任务档位，
+不代表网络利用率。任务类别暂不改为后续的三种图像加 LLM。
+
+| 星座 | 计算节点 | 仿真时长 | 到达窗口 |
+|---|---:|---:|---:|
+| 66 | 66 | 1000 s | 1--600 s |
+| 351 | 117 | 600 s | 1--340 s |
+| 720 | 240 | 300 s | 1--165 s |
+
+运行器显式冻结：10 Gbps、8 ms 单向时延、20 s 拓扑更新、1 s 链路统计、MTU
+65,535 字节、每方向队列 64,000,000 字节、socket 缓冲 131,072 字节；路由为
+`global-capacity-aware-hrw`，分包为 `size-aware`，ns-3 随机 seed/run 和路由 seed 均为 1，
+任务生成器 seed 固定为 `20260726`。
+压力测试队列沿用历史 64 MB 档，**不改变 `para.cc` 的正常队列默认值**。
+
+在项目 uv 环境中完成构建后，选择一个不存在的输出目录：
+
+```bash
+source .venv/bin/activate
+python3 contrib/satcompute/tools/generation/prepare-pressure-baseline.py \
+  --output-root=output/pressure-10g-new
+
+python3 contrib/satcompute/tests/integration/regression/run-pressure-baseline.py \
+  --input-root=output/pressure-10g-new --size=66 --stage=smoke
+python3 contrib/satcompute/tests/integration/regression/run-pressure-baseline.py \
+  --input-root=output/pressure-10g-new --size=66 --stage=full
+python3 contrib/satcompute/tools/validation/summarize-pressure-baseline.py \
+  --run-dir=output/pressure-10g-new/66/full
+```
+
+66 星通过后，依次把 `--size` 改为 351、720，每个规模均先 smoke 再 full 和汇总。
+smoke 使用正式输入最早到达的 20 个任务、30 s 仿真，并对照指标关闭的运行；full
+要求已有 smoke 验证通过。重复实验应使用新目录或 `--label` 指定新的结果子目录，
+运行器拒绝覆盖既有输入和结果。
+
+输出保留 `preflight.json`、`execution.json`（代码提交及命令）、`execution-result.json`、
+`run.log`、`time.txt` 及正式指标；汇总器核对窗口/逐链路/全网总量、序列化完整性、
+带宽和队列上限，产生 `pressure-summary.json`。活跃期结果使用覆盖任务活动的完整
+统计窗口，避免将整段仿真末尾空闲纳入活跃期平均；不能当作实际加备份后的保证。
+
 ## CI 规则
 
-GitHub 的 `SatCompute CI` 是手动阶段门禁：一个大阶段的分支全部合并并清理后，
-只在 `main` 上触发一次。阶段内的小提交和 PR 只运行与改动匹配的本地检查；最终
+GitHub 的 `SatCompute CI` 是手动阶段门禁：一个大阶段的 PR 全部合并到 `main` 后，
+只触发一次，通过并确认提交已合并后清理功能分支。阶段内的小提交和 PR 只运行
+与改动匹配的本地检查；最终
 仍需通过上面的完整 SatCompute 门禁。

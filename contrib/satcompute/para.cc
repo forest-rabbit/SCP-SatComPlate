@@ -56,7 +56,7 @@ GetDefaultSatComputeConfig()
     config.fixedDelaySeconds = 0.008;
 
     // --islBandwidthBps：每条 ISL 的数据速率，单位为 bit/s。
-    config.islBandwidthBps = 2'000'000'000;
+    config.islBandwidthBps = 10'000'000'000;
 
     // --islMtuBytes：size-aware 最大 payload 加 IPv4/UDP 头，单位为字节。
     config.islMtuBytes = 64'028;
@@ -114,6 +114,12 @@ GetDefaultSatComputeConfig()
 
     // --diagnosticMode：off 关闭失败诊断，failure 在未完成时输出诊断文件。
     config.diagnosticMode = "off";
+
+    // --linkMetrics：按需输出实际链路占用、队列和带宽预留，不改变业务行为。
+    config.linkMetrics = false;
+
+    // --linkMetricsInterval：统计窗口长度，单位为秒，与 networkUpdateInterval 独立。
+    config.linkMetricsIntervalSeconds = 1.0;
 
     return config;
 }

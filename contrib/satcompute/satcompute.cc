@@ -13,6 +13,7 @@
 #include "ns3/fault-prediction-engine.h"
 #include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
+#include "ns3/link-metrics-recorder.h"
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/para.h"
 #include "ns3/rng-seed-manager.h"
@@ -218,6 +219,9 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("outputDir", "Structured output directory", config.outputDirectory);
     commandLine.AddValue("taskLogMode", "Task log mode", config.taskLogMode);
     commandLine.AddValue("diagnosticMode", "Failure diagnostic mode", config.diagnosticMode);
+    commandLine.AddValue("linkMetrics", "Collect directed-link window metrics", config.linkMetrics);
+    commandLine.AddValue("linkMetricsInterval", "Link metric window in seconds",
+                         config.linkMetricsIntervalSeconds);
     commandLine.AddValue("randomSeed", "ns-3 global random seed", config.randomSeed);
     commandLine.AddValue("randomRun", "ns-3 independent run number", config.randomRun);
 }
@@ -244,6 +248,11 @@ ValidateConfig(const SatComputeConfig& config)
         FailConfig("fixedDelay", "must be greater than zero in fixed mode");
     }
     RequirePositiveSeconds(config.networkUpdateIntervalSeconds, "networkUpdateInterval");
+    RequirePositiveSeconds(config.linkMetricsIntervalSeconds, "linkMetricsInterval");
+    if (config.topologyOnly && config.linkMetrics)
+    {
+        FailConfig("linkMetrics", "requires network simulation, not topologyOnly");
+    }
     if (config.islBandwidthBps == 0)
     {
         FailConfig("islBandwidthBps", "must be greater than zero");
@@ -555,11 +564,26 @@ main(int argc, char* argv[])
                 faultModelEngine->BindTaskCoordinator(taskCoordinator);
             }
 
+            std::optional<LinkMetricsRecorder> linkMetrics;
+            if (config.linkMetrics)
+            {
+                linkMetrics.emplace(topology, transferEngine, simulationDurationNs,
+                    SatComputeSecondsToNanoseconds(config.linkMetricsIntervalSeconds,
+                                                   "linkMetricsInterval"), outputDirectory);
+            }
+            else
+            {
+                LinkMetricsRecorder::RemoveOutputs(outputDirectory);
+            }
             const Ptr<FlowMonitor> flowMonitor = InstallSimulationFlowMonitor();
             Simulator::Stop(NanoSeconds(simulationDurationNs));
             const auto wallStart = std::chrono::steady_clock::now();
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
+            if (linkMetrics)
+            {
+                linkMetrics->Finalize();
+            }
             if (config.faultMode == "generate")
             {
                 const FaultTrace& generatedTrace = faultModelEngine->Finalize();

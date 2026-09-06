@@ -7,6 +7,7 @@
 
 #include "../algorithm/capacity-aware-path-types.h"
 #include "../algorithm/capacity-aware-path-view.h"
+#include "ns3/callback.h"
 
 #include <cstdint>
 #include <map>
@@ -42,12 +43,17 @@ class CapacityReservationState
     CapacityAwareRuntimeSummary CollectSummary() const;
     void Reserve(uint64_t transferId, const CapacityAwarePath& path);
     void Release(uint64_t transferId);
+    /** Observe post-change source/interface/rate without affecting admission.
+     * @param observer Optional callback; an empty callback disables observations.
+     */
+    void SetObserver(Callback<void, uint32_t, uint32_t, uint64_t> observer);
 
   private:
     typedef std::pair<uint32_t, uint32_t> DirectedLinkKey;
 
     std::map<DirectedLinkKey, uint64_t> m_reservedRateBps;
     std::map<uint64_t, CapacityAwarePath> m_activePaths;
+    Callback<void, uint32_t, uint32_t, uint64_t> m_observer; ///< Optional metrics observer.
 };
 
 } // namespace ns3

@@ -14,6 +14,19 @@
 namespace ns3
 {
 
+void
+CapacityReservationState::SetObserver(Callback<void, uint32_t, uint32_t, uint64_t> observer)
+{
+    m_observer = observer;
+    if (!m_observer.IsNull())
+    {
+        for (const auto& [key, rate] : m_reservedRateBps)
+        {
+            m_observer(key.first, key.second, rate);
+        }
+    }
+}
+
 uint64_t
 CapacityReservationState::GetResidualRateBps(const CapacityAwarePathHop& hop) const
 {
@@ -101,6 +114,10 @@ CapacityReservationState::Reserve(uint64_t transferId, const CapacityAwarePath& 
         NS_ABORT_MSG_IF(reservedRate > std::numeric_limits<uint64_t>::max() - path.admittedRateBps,
                         "capacity-aware reserved rate 溢出");
         reservedRate += path.admittedRateBps;
+        if (!m_observer.IsNull())
+        {
+            m_observer(key.first, key.second, reservedRate);
+        }
     }
     m_activePaths.insert(std::make_pair(transferId, path));
 }
@@ -119,6 +136,10 @@ CapacityReservationState::Release(uint64_t transferId)
                             reserved->second < active->second.admittedRateBps,
                         "capacity-aware release 状态不一致");
         reserved->second -= active->second.admittedRateBps;
+        if (!m_observer.IsNull())
+        {
+            m_observer(key.first, key.second, reserved->second);
+        }
         if (reserved->second == 0)
         {
             m_reservedRateBps.erase(reserved);
