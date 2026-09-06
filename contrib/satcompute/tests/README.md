@@ -108,6 +108,8 @@ contrib/satcompute/tests/integration/regression/run-all.sh
 
 ## 手动压力测试：10 Gbps
 
+已完成的三规模结果见[压力基线记录](../../../docs/pressure-10g-baseline.md)。
+
 本轮是无故障、无备份的资源基线。保留旧 75% 档的 **1500 任务、81,750,000,000
 字节 INPUT、15 个 1 GB 和 30 个 500 MB 大任务**，使用当前 FNV 任务生成器及
 原生轨道；不是旧 SHA-256 工作负载或旧 2 Gbps 仿真的逐项复现。75% 是任务档位，
