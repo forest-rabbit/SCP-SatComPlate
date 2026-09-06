@@ -102,6 +102,14 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 到 56 个非保留计算节点。完整角色、冻结 seed/run 和四轮验收流程见
 [`leo-66-1000s-n4b-joint`](../../input/examples/leo-66-1000s-n4b-joint/README.md)。
 
+## 三规模压力输入准备
+
+`prepare-pressure-baseline.py` 调用平台导出原生节点切片，再调用本目录的任务生成器，
+不复制轨道计算或任务生成规则。它冻结 66/351/720 星的计算资源部署及 1500 任务预算，
+核对三规模逻辑任务和到达顺序一致，同时保留最早 20 个任务供预运行使用。
+`--output-root` 为必填的新输出目录，`--sizes` 可选，默认三种规模。
+本轮带宽为 10 Gbps，详细参数和命令见[手动压力测试](../../tests/README.md#手动压力测试10-gbps)。
+
 ## 参数
 
 ### 基本任务与到达过程
