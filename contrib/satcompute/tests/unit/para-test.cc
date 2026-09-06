@@ -39,7 +39,7 @@ main()
                 "unexpected delay defaults");
         Require(config.networkUpdateIntervalSeconds == 20.0,
                 "unexpected network interval");
-        Require(config.islBandwidthBps == 2'000'000'000 &&
+        Require(config.islBandwidthBps == 10'000'000'000 &&
                     config.islMtuBytes == 64'028 &&
                     config.islQueueBytes == 1'500'000 &&
                     config.receiverRcvBufBytes == 131'072,

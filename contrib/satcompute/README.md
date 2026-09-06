@@ -119,7 +119,7 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 |---|---:|---|---|
 | `--delayMode` | `fixed` | 枚举 | `fixed` 或 `distance` |
 | `--fixedDelay` | `0.008` | 秒 | fixed 模式的单向链路时延；该模式下必须大于 0 |
-| `--islBandwidthBps` | `2000000000` | bit/s | 每条 ISL 的数据速率；必须大于 0 |
+| `--islBandwidthBps` | `10000000000` | bit/s | 每条定向 ISL 的数据速率，默认 10 Gbps；必须大于 0 |
 | `--islMtuBytes` | `64028` | 字节 | ISL MTU；至少 68，size-aware 分包时至少 64028 |
 | `--islQueueBytes` | `1500000` | 字节 | 每条 ISL 队列容量；必须大于 0 |
 

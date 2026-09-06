@@ -56,7 +56,7 @@ GetDefaultSatComputeConfig()
     config.fixedDelaySeconds = 0.008;
 
     // --islBandwidthBps：每条 ISL 的数据速率，单位为 bit/s。
-    config.islBandwidthBps = 2'000'000'000;
+    config.islBandwidthBps = 10'000'000'000;
 
     // --islMtuBytes：size-aware 最大 payload 加 IPv4/UDP 头，单位为字节。
     config.islMtuBytes = 64'028;
