@@ -18,6 +18,7 @@ build_lib(
     fault/trace/fault-trace.cc
     metrics/core/fault-metrics.cc
     metrics/core/flow-metrics.cc
+    metrics/core/link-window.cc
     metrics/core/run-summary.cc
     metrics/core/task-metrics.cc
     metrics/core/transfer-metrics.cc
@@ -79,6 +80,7 @@ build_lib(
     fault/trace/fault-trace.h
     metrics/core/fault-metrics.h
     metrics/core/flow-metrics.h
+    metrics/core/link-window.h
     metrics/core/run-summary.h
     metrics/core/task-metrics.h
     metrics/core/transfer-metrics.h
@@ -201,6 +203,15 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-link-window-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/link-window-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-para-test
   EXECNAME_PREFIX satcompute_test_
