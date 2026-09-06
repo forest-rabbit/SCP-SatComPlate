@@ -19,6 +19,16 @@
 namespace ns3
 {
 
+void
+NetworkTransferEngine::SetCapacityReservationObserver(
+    Callback<void, uint32_t, uint32_t, uint64_t> observer)
+{
+    if (m_capacityReservationState != nullptr)
+    {
+        m_capacityReservationState->SetObserver(observer);
+    }
+}
+
 NS_OBJECT_ENSURE_REGISTERED(NetworkTransferEngine);
 
 namespace
