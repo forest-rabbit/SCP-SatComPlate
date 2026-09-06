@@ -7,6 +7,7 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools/generation/prepare-pressure-baseline.py"
 PREPARE = runpy.run_path(str(SCRIPT))
+REPORT = runpy.run_path(str(SCRIPT.parents[1] / "validation/summarize-pressure-baseline.py"))
 
 
 class PressureBaselineTests(unittest.TestCase):
@@ -22,6 +23,10 @@ class PressureBaselineTests(unittest.TestCase):
         for size, (planes, per_plane, duration, last_arrival) in PREPARE["SCALES"].items():
             self.assertEqual(planes * per_plane, size)
             self.assertLess(last_arrival, duration)
+
+    def test_percentiles(self):
+        self.assertEqual(REPORT["percentile"]([1, 2, 3], 0.5), 2)
+        self.assertAlmostEqual(REPORT["percentile"]([1, 2, 3], 0.95), 2.9)
 
 
 if __name__ == "__main__":

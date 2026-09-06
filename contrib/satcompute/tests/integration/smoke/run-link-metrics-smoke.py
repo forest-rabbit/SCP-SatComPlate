@@ -4,6 +4,7 @@
 import csv
 import json
 import math
+import runpy
 import shlex
 import subprocess
 import tempfile
@@ -86,6 +87,24 @@ def main():
         summary = check_windows(on)
         assert any(float(row["peak_reserved_rate_bps"]) == 10_000_000_000 for row in summary)
         assert any(int(row["tx_started_bytes"]) == 0 for row in summary)
+        (on / "execution-result.json").write_text(json.dumps({"elapsed_wall_s": 0}))
+        report = runpy.run_path(str(ROOT / "contrib/satcompute/tools/validation/summarize-pressure-baseline.py"))
+        assert report["summarize"](on)["completed_tasks"] == 1
+        summary_path = on / "link-summary.csv"
+        original = summary_path.read_text()
+        data = rows(on, FILES[1])
+        data[0]["tx_started_bytes"] = str(int(data[0]["tx_started_bytes"]) + 1)
+        with summary_path.open("w") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(data[0]))
+            writer.writeheader()
+            writer.writerows(data)
+        try:
+            report["summarize"](on)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("pressure audit accepted inconsistent link bytes")
+        summary_path.write_text(original)
 
         run(root / "idle", tasks=False)
         assert all(float(row["utilization_percent"]) == 0 for row in check_windows(root / "idle"))
