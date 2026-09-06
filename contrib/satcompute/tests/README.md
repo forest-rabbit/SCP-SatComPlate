@@ -121,7 +121,8 @@ contrib/satcompute/tests/integration/regression/run-all.sh
 
 运行器显式冻结：10 Gbps、8 ms 单向时延、20 s 拓扑更新、1 s 链路统计、MTU
 65,535 字节、每方向队列 64,000,000 字节、socket 缓冲 131,072 字节；路由为
-`global-capacity-aware-hrw`，分包为 `size-aware`，随机 seed/run 和路由 seed 均为 1。
+`global-capacity-aware-hrw`，分包为 `size-aware`，ns-3 随机 seed/run 和路由 seed 均为 1，
+任务生成器 seed 固定为 `20260726`。
 压力测试队列沿用历史 64 MB 档，**不改变 `para.cc` 的正常队列默认值**。
 
 在项目 uv 环境中完成构建后，选择一个不存在的输出目录：

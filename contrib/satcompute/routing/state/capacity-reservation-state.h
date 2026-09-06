@@ -43,7 +43,9 @@ class CapacityReservationState
     CapacityAwareRuntimeSummary CollectSummary() const;
     void Reserve(uint64_t transferId, const CapacityAwarePath& path);
     void Release(uint64_t transferId);
-    /** Observe post-change source/interface/rate without affecting admission. */
+    /** Observe post-change source/interface/rate without affecting admission.
+     * @param observer Optional callback; an empty callback disables observations.
+     */
     void SetObserver(Callback<void, uint32_t, uint32_t, uint64_t> observer);
 
   private:

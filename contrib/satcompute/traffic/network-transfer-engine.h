@@ -66,7 +66,9 @@ class NetworkTransferEngine : public Object
     std::vector<TransferSummaryRecord> CollectSummaries() const;
     std::vector<UdpSocketDropEvent> CollectUdpSocketDropEvents() const;
     CapacityAwareRuntimeSummary CollectCapacityAwareSummary() const;
-    /** Install an optional read-only per-directed-link reservation observer. */
+    /** Install an optional read-only per-directed-link reservation observer.
+     * @param observer Source satellite/interface/reserved bit/s callback, or empty.
+     */
     void SetCapacityReservationObserver(Callback<void, uint32_t, uint32_t, uint64_t> observer);
 
   private:

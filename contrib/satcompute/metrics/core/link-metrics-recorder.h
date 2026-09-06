@@ -23,17 +23,29 @@ namespace ns3
 class LinkMetricsRecorder
 {
   public:
-    /** Bind existing candidate devices before Simulator::Run; topology outlives this object. */
+    /** Bind existing candidate devices before Simulator::Run.
+     * Keep the recorder alive through all simulator/topology updates; after its
+     * destruction the topology must not issue further route-update callbacks.
+     * @param topology Observed topology, which must outlive this recorder.
+     * @param engine Optional source of capacity reservation observations.
+     * @param durationNs Positive observation horizon in nanoseconds.
+     * @param intervalNs Positive window size in nanoseconds.
+     * @param directory Directory for the three link metric outputs.
+     */
     LinkMetricsRecorder(SatelliteTopology& topology, Ptr<NetworkTransferEngine> engine,
                         int64_t durationNs, int64_t intervalNs,
                         const std::filesystem::path& directory);
+    /** Disconnect device and reservation observations after simulation ends. */
     ~LinkMetricsRecorder();
     /** Flush idle/tail intervals after Simulator::Run and write per-link totals. */
     void Finalize();
-    /** Remove only this recorder's known outputs when collection is disabled. */
+    /** Remove only this recorder's known outputs when collection is disabled.
+     * @param directory Output directory; unrelated files are preserved.
+     */
     static void RemoveOutputs(const std::filesystem::path& directory);
 
   private:
+    /** Bound trace callbacks and accumulated state for one directed device. */
     struct Entry
     {
         LinkMetricsRecorder* owner; ///< Owning recorder.
@@ -47,14 +59,46 @@ class LinkMetricsRecorder
         Callback<void, uint32_t, uint32_t> queueCallback; ///< Bound queue occupancy trace.
     };
 
+    /** Observe serialization start.
+     * @param entry Directed link state.
+     * @param packet Complete frame being sent.
+     */
     static void OnTx(Entry* entry, Ptr<const Packet> packet);
+    /** Observe a queue rejection.
+     * @param entry Directed link state.
+     * @param packet Dropped frame.
+     */
     static void OnDrop(Entry* entry, Ptr<const Packet> packet);
+    /** Observe queue occupancy.
+     * @param entry Directed link state.
+     * @param oldBytes Previous queued byte count.
+     * @param newBytes Current queued byte count.
+     */
     static void OnQueue(Entry* entry, uint32_t oldBytes, uint32_t newBytes);
+    /** Observe post-change capacity reservation.
+     * @param source External source satellite ID.
+     * @param interface IPv4 output interface index.
+     * @param rate New reserved rate in bit/s.
+     */
     void OnReservation(uint32_t source, uint32_t interface, uint64_t rate);
+    /** Refresh logical link availability after a topology transition. */
     void OnTopologyUpdate();
+    /** Close elapsed windows before recording a same-time event.
+     * @return Whether the event is inside the observation horizon.
+     */
     bool BeforeEvent();
+    /** Write all complete windows ending by the supplied time.
+     * @param nowNs Inclusive flush limit in nanoseconds.
+     */
     void FlushThrough(int64_t nowNs);
+    /** Write one per-link/network window and update whole-run totals.
+     * @param endNs Exclusive window end in nanoseconds.
+     */
     void WriteWindow(int64_t endNs);
+    /** Read the native device rate without narrowing to 32 bits.
+     * @param device Observed point-to-point device.
+     * @return Configured bit/s.
+     */
     static uint64_t ReadRate(Ptr<PointToPointNetDevice> device);
 
     SatelliteTopology& m_topology; ///< Observed topology, never mutated.

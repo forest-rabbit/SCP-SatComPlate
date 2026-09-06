@@ -28,7 +28,9 @@ struct LinkWindowTotals
     uint64_t maxQueueBytes{}; ///< Maximum queued bytes, including the interval start.
     uint64_t peakReservedBps{}; ///< Maximum reserved rate, including the interval start.
 
-    /** Add another interval, preserving maxima. */
+    /** Add another interval, preserving maxima.
+     * @param other Integrated interval to add.
+     */
     void Add(const LinkWindowTotals& other);
 };
 
@@ -36,22 +38,48 @@ struct LinkWindowTotals
 class LinkWindow
 {
   public:
-    /** Construct an initially idle link at simulation time zero. */
+    /** Construct an initially idle link at simulation time zero.
+     * @param rateBps Positive configured link rate in bit/s.
+     * @param available Initial logical availability.
+     */
     LinkWindow(uint64_t rateBps, bool available);
-    /** Integrate the old state through nowNs before changing availability/rate. */
+    /** Integrate the old state before changing availability/rate.
+     * @param nowNs Transition time in nanoseconds.
+     * @param rateBps New positive configured link rate in bit/s.
+     * @param available New logical availability.
+     */
     void SetLink(int64_t nowNs, uint64_t rateBps, bool available);
-    /** Observe a physical frame transmission beginning at nowNs. */
+    /** Observe a physical frame transmission.
+     * @param nowNs Transmission start in nanoseconds.
+     * @param bytes Complete frame size, including link framing.
+     * @param serializationNs Positive serialization duration, excluding propagation.
+     */
     void StartTransmission(int64_t nowNs, uint64_t bytes, int64_t serializationNs);
-    /** Observe a queue occupancy transition. */
+    /** Observe a queue occupancy transition.
+     * @param nowNs Transition time in nanoseconds.
+     * @param bytes New queued byte count, excluding the frame being sent.
+     */
     void SetQueue(int64_t nowNs, uint64_t bytes);
-    /** Observe a rate reservation transition, independently of actual traffic. */
+    /** Observe a rate reservation transition, independently of actual traffic.
+     * @param nowNs Transition time in nanoseconds.
+     * @param rateBps New total reserved rate in bit/s.
+     */
     void SetReserved(int64_t nowNs, uint64_t rateBps);
-    /** Observe a device queue drop, not an actual transmission. */
+    /** Observe a device queue drop, not an actual transmission.
+     * @param nowNs Drop time in nanoseconds.
+     * @param bytes Dropped frame size in bytes.
+     */
     void Drop(int64_t nowNs, uint64_t bytes);
-    /** Close the current interval and preserve the state for the next interval. */
+    /** Close the current interval and preserve the state for the next interval.
+     * @param nowNs Exclusive interval end in nanoseconds.
+     * @return Integrated observations since construction or the preceding Take call.
+     */
     LinkWindowTotals Take(int64_t nowNs);
 
   private:
+    /** Integrate the existing state without changing it.
+     * @param nowNs Nondecreasing event time in nanoseconds.
+     */
     void Advance(int64_t nowNs);
 
     int64_t m_lastNs{}; ///< Last integrated event timestamp.
