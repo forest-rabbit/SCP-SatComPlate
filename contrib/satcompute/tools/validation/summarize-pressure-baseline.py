@@ -29,6 +29,8 @@ def require(condition, message):
 
 def summarize(directory):
     run = json.loads((directory / "run-summary.json").read_text())
+    require(run["run_status"] == "COMPLETE", "pressure summary requires a complete run")
+    require(not (directory / "fault-events.csv").exists(), "pressure summary requires faultMode=none")
     tasks = list(read_rows(directory / "task-summary.csv"))
     complete = [task for task in tasks if task["final_state"] == "COMPLETED"]
     require(bool(complete), "no completed tasks to summarize")

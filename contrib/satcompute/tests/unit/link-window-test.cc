@@ -30,6 +30,12 @@ int main()
     Check(empty.busyNs == 0 && empty.txBytes == 0 && empty.availableNs == 1000000000);
     Check(empty.availableCapacityBitNs == 10000000000000000000.0L);
     Check(empty.capacityBitNs == empty.availableCapacityBitNs);
+    LinkWindow large(10'000'000'000, true);
+    large.StartTransmission(0, 5'000'000'000, 4'000'000'000);
+    const auto largeWindow = large.Take(4'000'000'000);
+    Check(largeWindow.txBytes == 5'000'000'000);
+    Check(largeWindow.busyNs == 4'000'000'000);
+    Check(std::abs(largeWindow.serializedBits - 40'000'000'000.0L) < 1e-6L);
 
     LinkWindow link(8000, true);
     link.SetQueue(100000000, 100);
