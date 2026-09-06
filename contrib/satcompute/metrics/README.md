@@ -12,6 +12,8 @@ metrics/
 ├── core/
 │   ├── fault-metrics.h / fault-metrics.cc         故障事件、因果预测与故障运行汇总
 │   ├── flow-metrics.h / flow-metrics.cc           FlowMonitor 汇总与逐流明细
+│   ├── link-window.h / link-window.cc             定向链路的时间积分与跨窗分摊
+│   ├── link-metrics-recorder.h / .cc              可选设备跟踪、窗口及全程链路输出
 │   ├── transfer-metrics.h / transfer-metrics.cc   逻辑传输汇总
 │   ├── task-metrics.h / task-metrics.cc           任务事件、任务汇总和算力节点汇总
 │   └── run-summary.h / run-summary.cc              单次运行汇总
@@ -25,8 +27,10 @@ metrics/
     └── flow-drop-reason-diagnostics.h / .cc       FlowMonitor 丢包原因归因
 ```
 
-`MetricsRecorder::Record()` 是唯一的总入口。它先冻结各运行时数据源，再验证这些
-数据是否互相一致，最后按当前工作负载、路由模式和诊断模式选择输出文件。
+`MetricsRecorder::Record()` 是运行结束后常规汇总的入口。它先冻结各运行时数据源，
+再验证这些数据是否互相一致，最后按当前工作负载、路由模式和诊断模式选择输出文件。
+可选的 `LinkMetricsRecorder` 在运行期间流式写出窗口，在常规汇总前完成链路收尾，
+不把全部窗口缓存在内存中。
 
 ## 常规输出
 

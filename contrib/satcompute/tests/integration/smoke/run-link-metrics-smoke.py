@@ -89,7 +89,11 @@ def main():
         assert any(int(row["tx_started_bytes"]) == 0 for row in summary)
         (on / "execution-result.json").write_text(json.dumps({"elapsed_wall_s": 0}))
         report = runpy.run_path(str(ROOT / "contrib/satcompute/tools/validation/summarize-pressure-baseline.py"))
-        assert report["summarize"](on)["completed_tasks"] == 1
+        observed = report["summarize"](on)
+        assert observed["completed_tasks"] == 1
+        assert 0 < observed["network_mean_reserved_capacity_percent"] <= 100
+        assert observed["mean_transfer_capacity_wait_s"] >= 0
+        assert observed["max_transfer_capacity_wait_s"] >= observed["mean_transfer_capacity_wait_s"]
         summary_path = on / "link-summary.csv"
         original = summary_path.read_text()
         data = rows(on, FILES[1])

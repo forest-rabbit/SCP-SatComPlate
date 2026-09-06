@@ -96,6 +96,12 @@ def summarize(directory):
                          rel_tol=1e-9, abs_tol=1e-9), "network/link busy totals differ")
     hottest = max(summary_rows, key=lambda row: float(row["utilization_percent"]))
     compute = list(read_rows(directory / "compute-node-summary.csv"))
+    waits = [int(row["capacity_waiting_time_ns"]) / 1e9
+             for row in read_rows(directory / "transfer-summary.csv")]
+    reserved = sum(float(row["mean_reserved_rate_bps"]) * float(row["measurement_duration_s"])
+                   for row in summary_rows)
+    capacity = sum(float(row["mean_link_capacity_bps"]) * float(row["measurement_duration_s"])
+                   for row in summary_rows)
     flow = next(read_rows(directory / "network-flow-metrics.csv"))
     peak_rss = None
     time_path = directory / "time.txt"
@@ -126,6 +132,10 @@ def summarize(directory):
                          "mean_utilization_percent": float(hottest["utilization_percent"])},
         "link_queue_drops": sum(int(row["drop_packets"]) for row in summary_rows),
         "max_queue_bytes": max(int(row["max_queue_bytes"]) for row in summary_rows),
+        "network_mean_reserved_capacity_percent": reserved / capacity * 100,
+        "transfers_with_capacity_wait": sum(wait > 0 for wait in waits),
+        "mean_transfer_capacity_wait_s": statistics.mean(waits),
+        "max_transfer_capacity_wait_s": max(waits),
         "max_high_load_window_s_per_link": max(row["high_load_window_s"] for row in by_link.values()),
         "mean_compute_utilization_percent": statistics.mean(float(row["utilization_percent"]) for row in compute),
         "max_compute_utilization_percent": max(float(row["utilization_percent"]) for row in compute),
