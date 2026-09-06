@@ -21,6 +21,7 @@ struct LinkWindowTotals
     uint64_t dropBytes{}; ///< Device queue drop bytes.
     uint64_t dropPackets{}; ///< Device queue drop packets.
     long double serializedBits{}; ///< Serialized bits apportioned across window boundaries.
+    long double capacityBitNs{}; ///< Integral of configured bit/s over nanoseconds.
     long double availableCapacityBitNs{}; ///< Integral of available bit/s over nanoseconds.
     long double reservedBitNs{}; ///< Integral of reserved bit/s over nanoseconds.
     long double queueByteNs{}; ///< Integral of queued bytes over nanoseconds.

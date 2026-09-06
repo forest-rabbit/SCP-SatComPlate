@@ -52,6 +52,48 @@ metrics/
 `run-summary.json` 同时保留便于脚本读取的顶层计数和按 `transfer`、`task` 分组的
 汇总。它记录实际使用的任务文件路径和关键运行参数，但不复制一份平台配置。
 
+## 可选链路窗口统计
+
+`--linkMetrics=1 --linkMetricsInterval=1` 启用每秒定向链路统计。默认关闭，不连接
+采集回调、不创建以下三个文件；关闭后复用目录时只清理这三个已知文件。
+`topologyOnly=1` 不能启用此功能。实现为 `core/link-window.*`（纯时间积分）和
+`core/link-metrics-recorder.*`（原生设备跟踪及流式输出）。
+
+| 文件 | 粒度 |
+|---|---|
+| `link-window-metrics.csv` | 每条候选定向链路、每个窗口，包括空闲及不可用链路 |
+| `network-link-window-metrics.csv` | 每个窗口的全网汇总及最繁忙链路利用率 |
+| `link-summary.csv` | 每条定向链路全程汇总及最大窗口利用率 |
+
+窗口为 `[start,end)`，结束时不足一个窗口按实际长度计算。统计器不调度新的仿真
+事件；在下一次业务/拓扑事件之前关闭已过去的窗口，仿真结束后补齐空闲窗口。
+瞬时采集基于 `PhyTxBegin`，不统计进入设备队列前提交的字节；入队失败只记入丢包。
+
+关键列的含义：
+
+- `window_start_s/window_end_s`：窗口边界，秒；`source_node_id/destination_node_id`
+  使用外部卫星 ID，`output_interface` 是源节点 IPv4 输出接口，两方向分别统计。
+- `tx_busy_time_s`：实际帧序列化占用时间，不含传播时延及帧间隔；跨窗帧按时间分摊。
+  `utilization_percent = tx_busy_time_s / 窗口时长 * 100`。
+- `available_time_s`：逻辑链路可用时间；`available_tx_busy_time_s` 是可用期内的
+  序列化时间。`available_utilization_percent` 用这两个量相除；全窗不可用时留空，
+  不把断链误当作空闲容量。故障后设备仍可能发送旧队列帧，故物理占用和可用占用分列。
+- `tx_started_bytes/tx_started_packets`：发送开始落在本窗的完整帧计数（含 PPP 头）。
+  它们不能直接计算跨窗利用率；`serialized_bits` 才是按发送时间分摊的比特量，
+  `mean_link_throughput_bps = serialized_bits / 窗口秒数`。仿真末尾尚未发完的帧
+  只计已发生的序列化部分。与 IP FlowMonitor 的头部和逐跳口径不同。
+- `mean_link_capacity_bps`：配置带宽的时间平均；`mean_available_capacity_bps` 还
+  乘链路可用时间比例，断链期间贡献为零。
+- `mean_reserved_rate_bps/peak_reserved_rate_bps`：capacity-aware 预留速率的时间
+  平均和窗口峰值，不是物理占用。非 capacity-aware 为零，不代表另一种准入保证。
+- `mean_queue_bytes/max_queue_bytes`：设备队列字节数的时间平均/峰值，排除正在发送
+  的帧；`drop_packets/drop_bytes` 为设备队列丢包。
+
+全网 `mean_utilization_percent` 用可用链路时间加权，包含有效但空闲的链路；全部
+不可用时留空。`sum_link_throughput_bps` 是各跳链路吞吐量之和，不是端到端吞吐量。
+正常压力基线每条链路均为 10 Gbps。窗口最大值只表示该窗口平均，不能宣称是瞬时峰值。
+实际空闲与路由可准入容量必须分别分析，不能直接把空闲率换算为新增备份可保证的带宽。
+
 ## 故障输出
 
 `fault-events.csv` 每行对应一个已经执行的事件，列为：

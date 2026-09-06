@@ -9,6 +9,7 @@ test_output="$(mktemp -d /tmp/satcompute-cpp-tests.XXXXXX)"
 trap 'rm -rf "$test_output"' EXIT
 
 ./ns3 run --no-build "satcompute-para-test"
+./ns3 run --no-build "satcompute-link-window-test"
 
 ./ns3 run --no-build \
   "satcompute-constellation-definition-test \

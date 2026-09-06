@@ -122,6 +122,8 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 | `--islBandwidthBps` | `10000000000` | bit/s | 每条定向 ISL 的数据速率，默认 10 Gbps；必须大于 0 |
 | `--islMtuBytes` | `64028` | 字节 | ISL MTU；至少 68，size-aware 分包时至少 64028 |
 | `--islQueueBytes` | `1500000` | 字节 | 每条 ISL 队列容量；必须大于 0 |
+| `--linkMetrics` | `false` | 布尔 | 启用逐定向链路窗口统计；仅用于正式网络仿真 |
+| `--linkMetricsInterval` | `1.0` | 秒 | 链路统计窗口，必须大于 0，与拓扑更新周期独立 |
 
 `distance` 时延按当前 ECEF 直线距离除以光速并四舍五入到整数纳秒；
 `fixedDelay` 在该模式下不参与链路时延。

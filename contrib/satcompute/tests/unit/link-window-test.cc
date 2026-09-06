@@ -29,6 +29,7 @@ int main()
     const auto empty = idle.Take(1000000000);
     Check(empty.busyNs == 0 && empty.txBytes == 0 && empty.availableNs == 1000000000);
     Check(empty.availableCapacityBitNs == 10000000000000000000.0L);
+    Check(empty.capacityBitNs == empty.availableCapacityBitNs);
 
     LinkWindow link(8000, true);
     link.SetQueue(100000000, 100);

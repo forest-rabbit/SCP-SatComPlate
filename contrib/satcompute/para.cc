@@ -115,6 +115,12 @@ GetDefaultSatComputeConfig()
     // --diagnosticMode：off 关闭失败诊断，failure 在未完成时输出诊断文件。
     config.diagnosticMode = "off";
 
+    // --linkMetrics：按需输出实际链路占用、队列和带宽预留，不改变业务行为。
+    config.linkMetrics = false;
+
+    // --linkMetricsInterval：统计窗口长度，单位为秒，与 networkUpdateInterval 独立。
+    config.linkMetricsIntervalSeconds = 1.0;
+
     return config;
 }
 

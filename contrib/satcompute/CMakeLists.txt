@@ -19,6 +19,7 @@ build_lib(
     metrics/core/fault-metrics.cc
     metrics/core/flow-metrics.cc
     metrics/core/link-window.cc
+    metrics/core/link-metrics-recorder.cc
     metrics/core/run-summary.cc
     metrics/core/task-metrics.cc
     metrics/core/transfer-metrics.cc
@@ -81,6 +82,7 @@ build_lib(
     metrics/core/fault-metrics.h
     metrics/core/flow-metrics.h
     metrics/core/link-window.h
+    metrics/core/link-metrics-recorder.h
     metrics/core/run-summary.h
     metrics/core/task-metrics.h
     metrics/core/transfer-metrics.h

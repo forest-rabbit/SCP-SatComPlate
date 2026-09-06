@@ -22,6 +22,7 @@ LinkWindowTotals::Add(const LinkWindowTotals& other)
     dropBytes += other.dropBytes;
     dropPackets += other.dropPackets;
     serializedBits += other.serializedBits;
+    capacityBitNs += other.capacityBitNs;
     availableCapacityBitNs += other.availableCapacityBitNs;
     reservedBitNs += other.reservedBitNs;
     queueByteNs += other.queueByteNs;
@@ -49,6 +50,7 @@ LinkWindow::Advance(int64_t nowNs)
     const int64_t busy = std::max<int64_t>(0, std::min(nowNs, m_busyUntilNs) - m_lastNs);
     m_totals.busyNs += busy;
     m_totals.serializedBits += busy * m_busyBitsPerNs;
+    m_totals.capacityBitNs += static_cast<long double>(m_rateBps) * elapsed;
     if (m_available)
     {
         m_totals.availableNs += elapsed;

@@ -65,6 +65,8 @@ main()
                 "unexpected output defaults");
         Require(config.randomSeed == 1 && config.randomRun == 1,
                 "unexpected random defaults");
+        Require(!config.linkMetrics && config.linkMetricsIntervalSeconds == 1.0,
+                "link metrics must default to off with a one-second interval");
     }
     catch (const std::exception& error)
     {
