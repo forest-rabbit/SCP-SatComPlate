@@ -170,6 +170,13 @@ G2增加 `test_n4c_formal_workload.py`，逐任务核对正式C800与G1预算、
 `satcompute-task-deadline-test` 纳入现有C++入口，覆盖正式解析、legacy类型、deadline取整/溢出、
 同ns完成优先、超时释放FCFS占用、RESULT晚于deadline送达及仿真截断。
 
+G3的 `test_n4c_hotspot.py` 检查地理权重、fallback和业务守恒；临时计算停机、FCFS保留、
+新到达/INPUT继续、重复故障及真实WU影响账本在原有 compute-service / compute-fault
+测试中覆盖，controlled F3和未来事件不可见在原有 fault-model / fault-risk-query 中覆盖。
+正常模式无模型状态CSV、audit切换不改变影响账本及旧文件清理由原有联合回归检查。
+手动C800标定/验证不进入CI，命令和逐轮证据见
+[G3审阅报告](../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
+
 GitHub 的 `SatCompute CI` 是手动阶段门禁：一个大阶段的 PR 全部合并到 `main` 后，
 只触发一次，通过并确认提交已合并后清理功能分支。阶段内的小提交和 PR 只运行
 与改动匹配的本地检查；最终

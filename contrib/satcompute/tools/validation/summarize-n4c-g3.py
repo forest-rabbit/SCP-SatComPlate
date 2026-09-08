@@ -98,6 +98,10 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
         if start["fault_type"] == "compute":
             require(len(actual_direct) == int(start["affected_task_count"]) <= 1,
                     "compute START count differs from its direct task impacts")
+            require(start["route_recomputed"] == "false" and
+                    start["communication_available_after"] == "true" and
+                    start["satellite_available_after"] == "true" and
+                    start["compute_available_after"] == "false", "compute outage changed communication")
     require(all(t["failure_reason"] != "COMPUTE_NODE_FAILURE" or int(t["task_id"]) in compute_direct
                 for t in tasks), "compute-only failure without RUNNING interruption")
     f3_events = [e for e in starts.values() if e["fault_source"] == "F3"]
@@ -108,6 +112,9 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
         event = f3_events[0]
         require((int(event["node_id"]), int(event["simulation_time_ns"]), int(event["affected_task_count"])) ==
                 (f3["node_id"], f3["time_ns"], 1), "controlled F3 target/time/direct count differs")
+        require(event["route_recomputed"] == "true" and all(event[k] == "false" for k in (
+            "satellite_available_after", "communication_available_after", "compute_available_after")),
+            "F3 did not immediately disable the satellite and recompute routes")
         task = by_id[f3["victim_task_id"]]
         t0 = int(task["compute_start_time_ns"])
         require(t0 >= 0 and t0 < f3["time_ns"] < t0 + int(task["baseline_compute_time_ns"]),
@@ -154,11 +161,19 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
                     "p_f1": distribution([float(s["p_f1"]) for s in subset]),
                     "f1_risk": distribution([float(s["f1_risk"]) for s in subset])}
     source_counts = Counter(e["fault_source"] for e in starts.values())
+    trace = json.loads((directory / "fault-trace.json").read_text())["faults"] if events else []
+    risk_only = [f for f in trace if f["fault_type"] == "compute" and not f["fault_occurred"]]
+    cleared = {int(e["fault_id"]) for e in events if e["event_type"] == "NOTICE_CLEAR"}
+    truncated_risk = [f for f in risk_only if f["fault_id"] not in cleared]
+    require(all(f["notice_time_ns"] + f["risk_duration_ns"] == 1000 * 10**9 for f in truncated_risk),
+            "risk-only record lacks either CLEAR or end-of-run truncation")
     source_events = {"F1": source_counts["F1"] + source_counts["F1+F2"],
                      "F2": source_counts["F2"] + source_counts["F1+F2"],
                      "F1+F2_merged": source_counts["F1+F2"], "F3": source_counts["F3"],
                      "compute_outages": sum(e["fault_type"] == "compute" for e in starts.values()),
-                     "risk_only_episodes": sum(e["event_type"] == "NOTICE_CLEAR" for e in events)}
+                     "risk_only_episodes": len(risk_only),
+                     "risk_only_closed_episodes": len(cleared),
+                     "risk_only_truncated_episodes": len(truncated_risk)}
     by_source = {}
     for source in ("F1", "F2", "F3"):
         selected = [r for r in impacts if int(r["task_id"]) in direct[source] and
@@ -190,6 +205,7 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
             "reservation exceeds frozen link capacity")
     network_windows = rows(directory / "network-link-window-metrics.csv")
     network = {"flow_monitor_lost_packets": run["flow_monitor_lost_packets"],
+        "route_recomputations_due_to_fault": sum(e["route_recomputed"] == "true" for e in events),
         "link_queue_drops": sum(int(link["drop_packets"]) for link in links),
         "mean_available_utilization_percent": 100 * sum(float(w["available_busy_time_s"]) for w in network_windows) /
             sum(float(w["available_link_time_s"]) for w in network_windows),
