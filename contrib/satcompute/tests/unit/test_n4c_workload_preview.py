@@ -49,16 +49,21 @@ class WorkloadPreviewTests(unittest.TestCase):
             self.assertTrue(0 < row["input_bytes"] < 4096)
             self.assertEqual(json.loads(request)["max_new_tokens"], row["generation_tokens"])
             self.assertEqual(row["cached_tokens"], row["prompt_tokens"] + row["generation_tokens"])
+            self.assertTrue(5000 <= row["cached_tokens"] <= 10000)
             self.assertEqual(row["k_variable_bytes"], row["cached_tokens"] * 114_688)
             self.assertEqual(row["output_bytes"], 4 * row["generation_tokens"])
             self.assertEqual(row["compute_work_units"], 100 * row["cached_tokens"])
             self.assertTrue(5e9 <= row["reference_service_time_ns"] <= 10e9)
             self.assertIsNone(row["rho_variable"])
         # Rate sensitivity must expose a failed target, not silently retune WU.
-        faster, _ = PREVIEW["summarize_attributes"](self.attributes, 50_000, 100)
+        faster, _ = PREVIEW["summarize_attributes"](self.attributes, 200_000, 100)
         self.assertFalse(faster["llm_5_to_10_seconds_target_met"])
-        paired, _ = PREVIEW["summarize_attributes"](self.attributes, 50_000, 250)
+        paired, _ = PREVIEW["summarize_attributes"](self.attributes, 200_000, 200)
         self.assertTrue(paired["llm_5_to_10_seconds_target_met"])
+        for seed in ("n4c-g1-66-alternate", "another-seed"):
+            summary, rows = PREVIEW["summarize_attributes"](PREVIEW["preview_attributes"](seed))
+            self.assertTrue(summary["llm_5_to_10_seconds_target_met"])
+            self.assertEqual(sum(row["input_bytes"] for row in rows), 81_750_000_000)
 
     def test_reordering_and_task_set_changes_do_not_change_fixed_attributes_work(self):
         self.assertEqual(PREVIEW["summarize_attributes"](list(reversed(self.attributes))),
@@ -71,30 +76,55 @@ class WorkloadPreviewTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             PREVIEW["summarize_attributes"]([self.attributes[0], self.attributes[0]])
 
-    def test_every_preview_task_conserves_state_for_three_checkpoint_grains(self):
+    def test_every_preview_task_conserves_state_for_three_budget_partitions(self):
         parameters = model.LlmParameters()
         for task in self.attributes:
             budget = PREVIEW["task_budget"](task, parameters)
             ends, _ = PREVIEW["preview_unit_ends"](budget)
             for interval in (50, 100, 200):
-                records = model.checkpoint_budgets(budget, ends, interval)
+                records = model.state_budget_points(budget, ends, interval)
                 self.assertEqual(sum(row.delta_variable_bytes for row in records), budget.k_variable_bytes)
                 self.assertEqual(sum(row.delta_work_units for row in records), budget.compute_work_units)
                 self.assertEqual(sum(row.delta_total_bytes for row in records),
                                  budget.k_variable_bytes + len(records) * budget.header_bytes)
+                self.assertEqual(records[-1].completed_extent, budget.extent)
+                self.assertEqual(len({row.completed_extent for row in records}), len(records))
+                self.assertTrue(all(row.delta_work_units > 0 and row.completed_extent in ends for row in records))
 
-    def test_search_grid_counts_and_node_demand(self):
-        grid = PREVIEW["checkpoint_grid_rows"](model.LlmParameters(), 20_000)
-        self.assertEqual(len(grid), 4 * 92)
-        for row in grid:
-            self.assertEqual(row["k_total_bytes"], row["k_variable_bytes"] +
-                             row["checkpoint_count"] * row["h_bytes_per_checkpoint"])
-            self.assertGreater(row["actual_interval_seconds_min"], 0)
+    def test_only_three_state_checks_and_node_demand(self):
+        checks = PREVIEW["state_budget_check_rows"](model.LlmParameters())
+        self.assertEqual(len(checks), 4 * 3)
+        self.assertEqual({row["check_step_percent"] for row in checks}, {5, 10, 20})
+        self.assertNotIn("checkpoint_grid_rows", PREVIEW)
+        for row in checks:
+            self.assertEqual(row["accounted_variable_plus_repeated_h_bytes"], row["k_variable_bytes"] +
+                             row["budget_point_count"] * row["h_bytes"])
             self.assertGreaterEqual(row["max_alignment_overshoot_percentage_points"], -1e-12)
             self.assertLess(row["max_work_rounding_error_wu"], 1)
         self.assertEqual(sum(node["task_count"] for node in self.summary["node_demand_preview"]), 1500)
         demand = sum(node["service_demand_seconds"] for node in self.summary["node_demand_preview"])
         self.assertAlmostEqual(demand, sum(row["reference_service_time_ns"] for row in self.rows) / 1e9)
+
+    def test_service_demand_shares_and_short_task_band_endpoints(self):
+        groups = self.summary["service_demand"]
+        self.assertEqual(groups["all"]["total_work_units"], self.summary["total_compute_work_units"])
+        self.assertEqual(groups["all"]["total_work_units"], groups["images"]["total_work_units"] +
+                         groups["llm"]["total_work_units"])
+        self.assertAlmostEqual(groups["llm_share"], groups["llm"]["total_service_demand_seconds"] /
+                               groups["all"]["total_service_demand_seconds"])
+        for profile, group in self.summary["classes"].items():
+            self.assertAlmostEqual(group["total_service_demand_seconds"], group["total_work_units"] / 100_000)
+            self.assertEqual(group["service_bands"], PREVIEW["service_bands"](
+                [row for row in self.rows if row["task_profile"] == profile]))
+        images = [row for row in self.rows if row["task_profile"] != "llm"]
+        self.assertEqual(self.summary["image_service_bands"], PREVIEW["service_bands"](images))
+        self.assertGreater(self.summary["image_service_bands"]["lt_0_5s"]["count"], 0)
+        boundaries = [499_999_999, 500_000_000, 999_999_999, 1_000_000_000,
+                      1_999_999_999, 2_000_000_000, 4_999_999_999,
+                      5_000_000_000, 10_000_000_000, 10_000_000_001]
+        bins = PREVIEW["service_bands"]([{"reference_service_time_ns": t} for t in boundaries])
+        self.assertEqual([entry["count"] for entry in bins.values()], [1, 3, 5, 2, 2, 1])
+        self.assertEqual([entry["ratio"] for entry in bins.values()], [.1, .3, .5, .2, .2, .1])
 
     def test_cli_reproducibility_no_runtime_trace_and_existing_output_refused(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -106,7 +136,7 @@ class WorkloadPreviewTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("G1 approval still required", result.stdout)
             expected = {"summary.json", "task-budgets.csv", "representative-budgets.csv",
-                        "checkpoint-grid.csv", "llm-requests.json", "execution.json"}
+                        "state-budget-checks.csv", "llm-requests.json", "execution.json"}
             self.assertEqual({item.name for item in first.iterdir()}, expected)
             for name in expected - {"execution.json"}:
                 self.assertEqual((first / name).read_bytes(), (second / name).read_bytes())
@@ -114,6 +144,7 @@ class WorkloadPreviewTests(unittest.TestCase):
             self.assertEqual(len(rows), 1500)
             self.assertNotIn("source_node_id", rows[0])
             self.assertNotIn("arrival_time_ns", rows[0])
+            self.assertNotIn("deadline_ns", rows[0])
             saved = (first / "summary.json").read_bytes()
             result = subprocess.run([sys.executable, str(SCRIPT), "--output-dir", str(first)],
                                     capture_output=True, text=True, check=False)

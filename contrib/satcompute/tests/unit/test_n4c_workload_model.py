@@ -14,15 +14,34 @@ import task_workload_model as model
 
 class WorkloadModelTests(unittest.TestCase):
     def test_size_mapping_and_integer_rounding(self):
-        for size, expected in ((1, 1), (999, 1), (1001, 2), (10_000_000, 10_000),
-                               (100_000_000, 100_000), (500_000_000, 500_000),
-                               (1_000_000_000, 1_000_000)):
+        for size, expected in ((1, 1), (666, 1), (667, 2), (999, 2), (1001, 2),
+                               (10_000_000, 15_000), (50_000_000, 75_000),
+                               (100_000_000, 150_000), (500_000_000, 750_000),
+                               (1_000_000_000, 1_500_000)):
             for reference in model.IMAGE_REFERENCES:
                 budget = model.image_budget(reference.profile, size, "1")
                 self.assertEqual(budget.compute_work_units, expected)
-        self.assertEqual(model.image_work_units(1001, Fraction(3, 2)), 2)
-        self.assertEqual(model.image_work_units(1 << 20), 1049)
-        self.assertEqual(model.image_work_units(1_000_000), 1000)
+        self.assertEqual(model.image_work_units(1001, Fraction(3, 2)), 3)
+        self.assertEqual(model.image_work_units(1 << 20), 1573)
+        self.assertEqual(model.image_work_units(1_000_000), 1500)
+        for size, nanoseconds in ((10_000_000, 150_000_000), (50_000_000, 750_000_000),
+                                  (100_000_000, 1_500_000_000), (500_000_000, 7_500_000_000),
+                                  (1_000_000_000, 15_000_000_000)):
+            self.assertEqual(model.service_time_ns(model.image_work_units(size), 100_000), nanoseconds)
+        self.assertEqual(model.service_time_ns(model.image_work_units(1), 100_000), 10_000)
+
+    def test_image_normalization_preserves_bytes_and_recomputes_sigma(self):
+        for reference in model.IMAGE_REFERENCES:
+            for size in (1001, reference.input_bytes, 100_000_000, 1_000_000_000):
+                current = model.image_budget(reference.profile, size, "same-label")
+                old_scale = model.image_budget(reference.profile, size, "same-label", Fraction(2, 3))
+                self.assertEqual(old_scale.compute_work_units, model.ceil_div(size, 1000))
+                for field in ("payload_bytes", "index_bytes", "output_bytes", "header_bytes",
+                              "k_variable_bytes", "rho_variable"):
+                    self.assertEqual(getattr(current, field), getattr(old_scale, field))
+                self.assertEqual(current.sigma_variable_bytes_per_work_unit,
+                                 old_scale.sigma_variable_bytes_per_work_unit *
+                                 Fraction(old_scale.compute_work_units, current.compute_work_units))
 
     def test_mapping_is_monotone_and_independent_of_task_set_and_label(self):
         sizes = [13, 1001, 1001, 500_009, 100_000_000, 1_000_000_000]
@@ -88,6 +107,11 @@ class WorkloadModelTests(unittest.TestCase):
                       for end in range(20_100, 70_001, 100)]
         self.assertEqual(initial + sum(increments), budget.k_variable_bytes)
         self.assertEqual(model.llm_budget(9999, 200, 500), replace(budget, input_bytes=9999))
+        for tokens in (5000, 7500, 10000):
+            revised = model.llm_budget(768, 200, tokens - 200)
+            self.assertEqual(revised.k_variable_bytes, tokens * 114_688)
+            self.assertEqual(model.service_time_ns(revised.compute_work_units, 100_000), tokens * 1_000_000)
+            self.assertEqual(revised.sigma_variable_bytes_per_work_unit, Fraction(114_688, 100))
 
     def test_service_time_matches_platform_nanosecond_contract(self):
         self.assertEqual(model.service_time_ns(5_000_000, 1_500_000), 3_333_333_334)
@@ -96,16 +120,16 @@ class WorkloadModelTests(unittest.TestCase):
         self.assertEqual(model.service_time_ns(model.INT64_MAX, 1_000_000_000),
                          model.INT64_MAX)
 
-    def test_legal_boundaries_and_all_search_granularities(self):
+    def test_legal_boundaries_and_three_state_budget_partitions(self):
         budgets = [(model.image_budget("dense-image", 52_428_800, "d"),
                     model.uniform_unit_ends(52_428_800, 524_288)),
                    (model.image_budget("sparse-inference", 7000, "s"),
                     model.sample_unit_ends((1000, 2000, 500, 3500))),
                    (model.llm_budget(500, 200, 1300), model.uniform_unit_ends(1500, 1))]
         for budget, ends in budgets:
-            for interval in (*range(10, 101), 200):
+            for interval in (50, 100, 200):
                 with self.subTest(profile=budget.task_profile, interval=interval):
-                    records = model.checkpoint_budgets(budget, ends, interval)
+                    records = model.state_budget_points(budget, ends, interval)
                     self.assertEqual(sum(row.delta_work_units for row in records),
                                      budget.compute_work_units)
                     self.assertEqual(sum(row.delta_variable_bytes for row in records),
@@ -119,13 +143,12 @@ class WorkloadModelTests(unittest.TestCase):
                     self.assertTrue(all(row.completed_extent * 1000 >=
                                         budget.extent * row.nominal_progress_per_mille
                                         for row in records))
-        dense, ends = budgets[0]
-        self.assertEqual(model.checkpoint_budgets(dense, ends, 11)[0].completed_extent,
-                         2 * 524_288)
+        sparse, ends = budgets[1]
+        self.assertEqual(model.state_budget_points(sparse, ends, 50)[0].completed_extent, 1000)
 
     def test_tiny_task_coalesces_zero_work_boundaries_without_losing_completion(self):
         budget = model.image_budget("dense-image", 8, "tiny")
-        records = model.checkpoint_budgets(budget, (2, 4, 6, 8), 10)
+        records = model.state_budget_points(budget, (2, 4, 6, 8), 50)
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].completed_extent, 8)
         self.assertEqual(records[0].delta_variable_bytes, budget.k_variable_bytes)
@@ -151,7 +174,7 @@ class WorkloadModelTests(unittest.TestCase):
             lambda: model.llm_budget(100, 10, 40960),
             lambda: model.llm_budget(100, 10, 10,
                                     model.LlmParameters(work_units_per_token=model.UINT64_MAX)),
-            lambda: model.checkpoint_budgets(
+            lambda: model.state_budget_points(
                 model.llm_budget(100, 1, 1, model.LlmParameters(header_bytes=model.UINT64_MAX)),
                 (2,), 100),
             lambda: model.service_time_ns(model.UINT64_MAX, 1),
@@ -164,10 +187,10 @@ class WorkloadModelTests(unittest.TestCase):
         budget = model.llm_budget(100, 10, 10)
         for ends in ((), (1, 1, 20), (1, 21), (1, 19), (True, 20)):
             with self.assertRaises(ValueError):
-                model.checkpoint_budgets(budget, ends, 100)
+                model.state_budget_points(budget, ends, 100)
         for bad_interval in (True, 0, -1, 1001, 10.5):
             with self.assertRaises(ValueError):
-                model.checkpoint_budgets(budget, (20,), bad_interval)
+                model.state_budget_points(budget, (20,), bad_interval)
 
 
 if __name__ == "__main__":

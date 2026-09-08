@@ -13,7 +13,7 @@ import sys
 
 from task_workload_model import (
     IMAGE_REFERENCES, QWEN_CONFIG_URL, TASK_MODELING_COMMIT, TASK_PROFILES,
-    LlmParameters, TaskBudget, ceil_div, checkpoint_budgets, image_budget, image_reference,
+    LlmParameters, TaskBudget, ceil_div, state_budget_points, image_budget, image_reference,
     llm_budget, require_uint, service_time_ns, uniform_unit_ends,
 )
 
@@ -25,7 +25,7 @@ LARGEST_REMAINDER = GENERATOR["largest_remainder"]
 TASK_COUNT = 1500
 TOTAL_INPUT_BYTES = 81_750_000_000
 COUNTS = dict(zip(TASK_PROFILES, (450, 450, 450, 150)))
-REFERENCE_RATE = 20_000
+REFERENCE_RATE = 100_000
 REFERENCE_LLM_WU_PER_TOKEN = LlmParameters().work_units_per_token
 COMPUTE_NODE_COUNT = 66
 REFERENCE_TASK_LABELS = {
@@ -56,7 +56,7 @@ def preview_attributes(seed: str) -> list[dict]:
         if task["task_profile"] != "llm":
             continue
         prompt = 128 + STABLE_VALUE(seed, task_id, "n4c-prompt-tokens") % 129
-        total = 1000 + STABLE_VALUE(seed, task_id, "n4c-total-tokens") % 1001
+        total = 5000 + STABLE_VALUE(seed, task_id, "n4c-total-tokens") % 5001
         repeats = 10 + STABLE_VALUE(seed, task_id, "n4c-request-length") % 21
         request = {
             "prompt": "Summarize these observations: " + "cloud, coast, vegetation; " * repeats,
@@ -161,11 +161,32 @@ def budget_row(task_id: int | str, budget: TaskBudget) -> dict:
         "input_bytes": budget.input_bytes, "output_bytes": budget.output_bytes,
         "compute_work_units": budget.compute_work_units,
         "k_payload_bytes": budget.payload_bytes, "k_index_bytes": budget.index_bytes,
-        "k_variable_bytes": budget.k_variable_bytes, "h_bytes_per_checkpoint": budget.header_bytes,
+        "k_variable_bytes": budget.k_variable_bytes, "h_bytes": budget.header_bytes,
         "rho_variable": None if rho is None else float(rho),
         "sigma_variable_bytes_per_work_unit": float(sigma),
         "sigma_variable_numerator": sigma.numerator, "sigma_variable_denominator": sigma.denominator,
     }
+
+
+def service_bands(rows: list[dict]) -> dict:
+    """First three counts are cumulative; other bins have explicit endpoints."""
+    times = [row["reference_service_time_ns"] for row in rows]
+    counts = {
+        "lt_0_5s": sum(t < 500_000_000 for t in times),
+        "lt_1s": sum(t < 1_000_000_000 for t in times),
+        "lt_2s": sum(t < 2_000_000_000 for t in times),
+        "2s_le_t_lt_5s": sum(2_000_000_000 <= t < 5_000_000_000 for t in times),
+        "5s_le_t_le_10s": sum(5_000_000_000 <= t <= 10_000_000_000 for t in times),
+        "gt_10s": sum(t > 10_000_000_000 for t in times),
+    }
+    return {key: {"count": count, "ratio": count / len(times) if times else 0}
+            for key, count in counts.items()}
+
+
+def service_demand(rows: list[dict]) -> dict:
+    """Sum compute demand, not observed node utilization or wall-clock time."""
+    return {"count": len(rows), "total_work_units": sum(row["compute_work_units"] for row in rows),
+            "total_service_demand_seconds": sum(row["reference_service_time_ns"] for row in rows) / 1e9}
 
 
 def summarize_attributes(attributes: list[dict], reference_rate: int = REFERENCE_RATE,
@@ -206,9 +227,10 @@ def summarize_attributes(attributes: list[dict], reference_rate: int = REFERENCE
             "output_bytes": sum(row["output_bytes"] for row in group),
             "work_units": distribution([row["compute_work_units"] for row in group]),
             "total_work_units": sum(row["compute_work_units"] for row in group),
+            "total_service_demand_seconds": service_demand(group)["total_service_demand_seconds"],
+            "total_variable_state_bytes": sum(row["k_variable_bytes"] for row in group),
             "service_time_seconds": distribution(seconds),
-            "service_below_one_second_count": sum(value < 1 for value in seconds),
-            "service_below_two_seconds_count": sum(value < 2 for value in seconds),
+            "service_bands": service_bands(group),
         }
     nodes = []
     for node_id in range(COMPUTE_NODE_COUNT):
@@ -218,6 +240,9 @@ def summarize_attributes(attributes: list[dict], reference_rate: int = REFERENCE
                       "service_demand_seconds": demand,
                       "demand_over_1000_second_capacity": demand / 1000})
     llm_group = [row for row in rows if row["task_profile"] == "llm"]
+    image_group = [row for row in rows if row["task_profile"] != "llm"]
+    total_ns = sum(row["reference_service_time_ns"] for row in rows)
+    llm_ns = sum(row["reference_service_time_ns"] for row in llm_group)
     summary = {
         "purpose": "offline-g1-candidate-not-tasktrace-not-runtime-validation",
         "reference_rate_work_units_per_second": reference_rate,
@@ -228,6 +253,9 @@ def summarize_attributes(attributes: list[dict], reference_rate: int = REFERENCE
         "total_output_bytes": sum(row["output_bytes"] for row in rows),
         "total_compute_work_units": sum(row["compute_work_units"] for row in rows),
         "total_variable_state_bytes": sum(row["k_variable_bytes"] for row in rows),
+        "service_demand": {"images": service_demand(image_group), "llm": service_demand(llm_group),
+                           "all": service_demand(rows), "llm_share": llm_ns / total_ns},
+        "image_service_bands": service_bands(image_group),
         "llm_5_to_10_seconds_target_met": bool(llm_group) and all(
             5_000_000_000 <= row["reference_service_time_ns"] <= 10_000_000_000 for row in llm_group),
         "tail_counts": {str(size): sum(row["input_bytes"] == size for row in rows)
@@ -239,12 +267,15 @@ def summarize_attributes(attributes: list[dict], reference_rate: int = REFERENCE
         "classes": class_summaries, "node_demand_preview": nodes,
         "node_service_demand_seconds": distribution([node["service_demand_seconds"] for node in nodes]),
         "assumptions": [
-            "Image a_z=1; all scaled state/output bytes are reference-ratio budgets, not new measurements.",
+            "Image W=ceil(3*S*a_z/2000), a_z=1; state/output are reference-ratio budgets, not measurements.",
             "Ordinary images: FNV weights 10..100, bounds 1048576..300000000 B; raw arrays aligned to 8 B.",
-            "LLM: synthetic P=128..256 and P+G=1000..2000, equal WU/token, no tokenizer or inference.",
+            "LLM: synthetic P=128..256 and P+G=5000..10000, equal WU/token, no tokenizer or inference.",
+            "Larger LLM token counts increase total KV bytes; this is not merely WU normalization.",
+            "Short-task lt bands are cumulative, not a partition; no minimum duration is imposed.",
             "LLM RESULT: generated uint32 token IDs; raw KV state only, H=0 is a scenario assumption.",
             "Sparse safe points: equal-sized synthetic files at the measured mean file size, not actual DOTA files.",
             "Node IDs 0..65 round-robin by task ID only estimate demand; no geography, arrival, queue or deadline.",
+            "Only 5/10/20-percent state conservation checks; no L1/batches, n/delta search or N5 execution.",
             "No faults, network transfers, checkpoint execution, or N5 algorithms were run.",
         ],
     }
@@ -256,48 +287,40 @@ def representative_budgets(parameters: LlmParameters) -> list[tuple[str, TaskBud
     result = []
     for reference in IMAGE_REFERENCES:
         label = REFERENCE_TASK_LABELS[reference.profile]
-        for size in (reference.input_bytes, 10_000_000, 100_000_000, 500_000_000, 1_000_000_000):
+        for size in (reference.input_bytes, 10_000_000, 50_000_000, 100_000_000,
+                     500_000_000, 1_000_000_000):
             result.append((f"{reference.profile}-{size}", image_budget(reference.profile, size, label)))
-    for tokens in (1000, 1500, 2000):
+    for tokens in (5000, 7500, 10000):
         result.append((f"llm-{tokens}", llm_budget(768, 200, tokens - 200, parameters)))
     return result
 
 
-def checkpoint_grid_rows(parameters: LlmParameters, rate: int) -> list[dict]:
-    """Audit every requested search granularity, not a frequency optimization."""
+def state_budget_check_rows(parameters: LlmParameters) -> list[dict]:
+    """Check only 5/10/20-percent partitions; do not generate N5 L1 records."""
     representatives = [(ref.profile, image_budget(ref.profile, ref.input_bytes,
                                                   REFERENCE_TASK_LABELS[ref.profile]))
                        for ref in IMAGE_REFERENCES]
-    representatives.append(("llm", llm_budget(768, 200, 1300, parameters)))
+    representatives.append(("llm", llm_budget(768, 200, 7300, parameters)))
     rows = []
     for label, budget in representatives:
         ends, layout = preview_unit_ends(budget)
-        for interval in (*range(10, 101), 200):
-            records = checkpoint_budgets(budget, ends, interval)
-            previous_time = 0
-            seconds = []
-            for record in records:
-                now = service_time_ns(record.completed_work_units, rate)
-                seconds.append((now - previous_time) / 1e9)
-                previous_time = now
+        for interval in (50, 100, 200):
+            records = state_budget_points(budget, ends, interval)
             if (sum(row.delta_work_units for row in records) != budget.compute_work_units or
                 sum(row.delta_variable_bytes for row in records) != budget.k_variable_bytes):
-                raise AssertionError("checkpoint grid lost WU or variable bytes")
-            stats = distribution(seconds)
+                raise AssertionError("state budget check lost WU or variable bytes")
             rows.append({"task_profile": label, "legal_unit_assumption": layout,
-                         "nominal_interval_percent": interval / 10,
-                         "checkpoint_count": len(records), "k_variable_bytes": budget.k_variable_bytes,
-                         "h_bytes_per_checkpoint": budget.header_bytes,
-                         "k_total_bytes": sum(row.delta_total_bytes for row in records),
+                         "check_step_percent": interval / 10,
+                         "budget_point_count": len(records), "k_variable_bytes": budget.k_variable_bytes,
+                         "h_bytes": budget.header_bytes,
+                         "accounted_variable_plus_repeated_h_bytes": sum(row.delta_total_bytes for row in records),
                          "max_alignment_overshoot_percentage_points": max(
                              float(Fraction(row.completed_extent * 100, budget.extent)) -
                              row.nominal_progress_per_mille / 10 for row in records),
                          "max_work_rounding_error_wu": max(
                              float(row.completed_work_units -
                                    Fraction(budget.compute_work_units * row.completed_extent, budget.extent))
-                             for row in records),
-                         "intervals_below_one_second": sum(value < 1 for value in seconds),
-                         **{f"actual_interval_seconds_{key}": value for key, value in stats.items()}})
+                             for row in records)})
     return rows
 
 
@@ -317,21 +340,13 @@ def main() -> int:
     parser.add_argument("--llm-work-units-per-token", type=int, default=REFERENCE_LLM_WU_PER_TOKEN)
     args = parser.parse_args()
     try:
+        if args.output_dir.exists():
+            raise ValueError("output directory already exists; choose a new path")
         attributes = preview_attributes(args.seed)
         summary, rows = summarize_attributes(attributes, args.reference_rate, args.llm_work_units_per_token)
         summary["input_seed"] = args.seed
         parameters = LlmParameters(work_units_per_token=args.llm_work_units_per_token)
-        grid = checkpoint_grid_rows(parameters, args.reference_rate)
-        cases = []
-        # First hold token/WU fixed and vary speed; then expose paired candidates
-        # that preserve LLM time while changing image service and state/WU scales.
-        for rate, omega in ((10_000, 100), (20_000, 100), (50_000, 100),
-                            (10_000, 50), (50_000, 250)):
-            case, _ = summarize_attributes(attributes, rate, omega)
-            cases.append({key: case[key] for key in (
-                "reference_rate_work_units_per_second", "llm_parameters", "total_compute_work_units",
-                "llm_5_to_10_seconds_target_met", "classes", "node_service_demand_seconds")})
-        summary["rate_and_token_work_sensitivity"] = cases
+        checks = state_budget_check_rows(parameters)
         representatives = [budget_row(label, budget) for label, budget in representative_budgets(parameters)]
         repository = Path(__file__).resolve().parents[4]
         head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repository, text=True).strip()
@@ -343,7 +358,7 @@ def main() -> int:
             for task in attributes if task["task_profile"] == "llm"]), encoding="utf-8")
         write_csv(args.output_dir / "task-budgets.csv", rows)
         write_csv(args.output_dir / "representative-budgets.csv", representatives)
-        write_csv(args.output_dir / "checkpoint-grid.csv", grid)
+        write_csv(args.output_dir / "state-budget-checks.csv", checks)
         (args.output_dir / "execution.json").write_text(json_text({
             "code_commit": head, "worktree_dirty": dirty, "python": sys.version,
             "command": [sys.executable, *sys.argv], "input_seed": args.seed,

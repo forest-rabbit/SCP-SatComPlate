@@ -14,7 +14,7 @@ from typing import Sequence
 UINT64_MAX = (1 << 64) - 1
 INT64_MAX = (1 << 63) - 1
 NS_PER_SECOND = 1_000_000_000
-IMAGE_WORK_UNITS_PER_BYTE = Fraction(1, 1000)
+IMAGE_WORK_UNITS_PER_BYTE = Fraction(3, 2000)
 TASK_PROFILES = ("dense-image", "sparse-inference", "compression", "llm")
 TASK_MODELING_COMMIT = "0dbc0c7b6281219e1356151fd640336cde885e7d"
 QWEN_CONFIG_REVISION = "c1899de289a04d12100db370d81485cdf75e47ca"
@@ -233,8 +233,8 @@ def sample_unit_ends(sample_bytes: Sequence[int]) -> tuple[int, ...]:
 
 
 @dataclass(frozen=True)
-class CheckpointBudget:
-    """One planned legal save, not an executed or committed checkpoint event."""
+class StateBudgetPoint:
+    """One diagnostic application-progress point, not an N5 backup object."""
 
     nominal_progress_per_mille: int
     completed_extent: int
@@ -246,17 +246,16 @@ class CheckpointBudget:
 
     @property
     def delta_total_bytes(self) -> int:
-        """One record's variable bytes plus one H, with overflow checking."""
+        """Hypothetical variable-plus-H accounting, not serialized L1 bytes."""
         return require_uint(self.delta_variable_bytes + self.header_bytes, "delta_total_bytes")
 
 
-def checkpoint_budgets(budget: TaskBudget, unit_ends: Sequence[int],
-                       interval_per_mille: int) -> tuple[CheckpointBudget, ...]:
-    """Plan nominal intervals at successor legal boundaries, without duplicates.
+def state_budget_points(budget: TaskBudget, unit_ends: Sequence[int],
+                        interval_per_mille: int) -> tuple[StateBudgetPoint, ...]:
+    """Map abstract progress to successor legal boundaries, without duplicates.
 
-    per-mille 10..100 is the 1.0%..10.0%, 0.1 percentage-point search grid.
-    50/100/200 also cover the historical 5/10/20% granularity checks. A future
-    executor must wait until completed_work_units before it may save each row.
+    G1 only samples 50/100/200 per-mille (5/10/20%) to check state conservation.
+    These diagnostic points are neither a frequency search nor L1 records.
     """
     require_uint(interval_per_mille, "interval_per_mille", 1, 1000)
     previous_end = 0
@@ -279,7 +278,7 @@ def checkpoint_budgets(budget: TaskBudget, unit_ends: Sequence[int],
             continue
         state = budget.state_at_work(work)
         require_uint(state - previous_state + budget.header_bytes, "delta_total_bytes")
-        record = CheckpointBudget(nominal, end, work, work - previous_work,
+        record = StateBudgetPoint(nominal, end, work, work - previous_work,
                                   state, state - previous_state, budget.header_bytes)
         records.append(record)
         previous_work, previous_state = work, state
