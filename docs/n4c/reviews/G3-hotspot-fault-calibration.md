@@ -79,3 +79,10 @@ calibration 11/12/13，并额外重复 11（audit off）；之后才查看 valid
 正式输入位于 `input/examples/leo-66-1000s-n4c-g3`，与已验收 w64 none 输入逐字节一致。
 新控制 F3 查询测试已经重新编译并通过；此前错误短目标名触发的旧二进制运行
 不作为该新增断言证据。完整 37 Python、15 C++、6 smoke、4 regression 再次通过。
+
+联合 calibration 11/12/13（启动 `1cdd8f8bc`，干净工作区）direct F1/F2 为
+76/0、77/0、81/0，联合均值 78，样本 SD=2.64575，min/max=76/81。
+各轮 F3 均且仅中断 node 9 的 task 79；compute START=1.138335016 s，
+F3=2.130334420 s，无故障完成应为 9.755335016 s，实际进度 11.51201%。
+重复 run 11 的 audit on/off 共 18 项正式证据一致，正常输出无任何 audit 文件。
+据此冻结 F1=0.2，其余参数不变；之后启动 validation 21/22/23，不用其结果回调参数。
