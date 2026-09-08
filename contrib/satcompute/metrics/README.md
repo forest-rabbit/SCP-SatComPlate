@@ -60,9 +60,11 @@ metrics/
 | 任务模式 | `compute-node-summary.csv` | 各算力节点的任务数、忙碌时间和利用率 |
 | 提供 `faultTrace` | `fault-events.csv` | canonical NOTICE/START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
 | 提供 `faultTrace` | `fault-summary.json` | 故障类型/事件/活动故障、失败任务、FAILED/CANCELLED transfer 与故障路由重算计数 |
+| generate 任务模式 | `fault-task-impact.csv` | 已发生故障的逐任务直接/间接影响、真实进度及最终结果 |
 | `faultProbabilityAudit=1` 的 generate | `fault-predictions.csv` | 活动风险中运行任务的逐检查点 F1/F2/联合因果概率和任务进度 |
 | `faultProbabilityAudit=1` 的 generate | `fault-prediction-summary.json` | 正式预测、风险 episode 和涉及任务的数量 |
 | `faultProbabilityAudit=1` 的 generate | `fault-model-probabilities.csv` | 随机抽样前由真实在线 F1/F2 状态计算的同结构概率真值，仅用于验证 |
+| `faultProbabilityAudit=1` 的 generate | `fault-model-state.csv` | 逐节点检查时刻的忙闲、温度、F1/F2 风险、原生经纬度和实际采样资格；停机期间仍更新状态 |
 
 `run-summary.json` 同时保留便于脚本读取的顶层计数和按 `transfer`、`task` 分组的
 汇总。它记录实际使用的任务文件路径和关键运行参数，但不复制一份平台配置。

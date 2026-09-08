@@ -13,7 +13,7 @@ G3 使用同一入口的 `--profile=n4c-hotspot`，由 `n4c_hotspot.py` 只重�
 ComputeProfile 生成 TaskTrace。它不生成星座、坐标、链路或完整平台配置，也不在
 Python 中复制 ns-3.48 的轨道计算。
 
-脚本包含四个明确的生成档：默认 `stress` 用于可调规模压力任务；
+除 N4C 的正式任务/热点分配档外，脚本保留四个已有生成档：默认 `stress` 用于可调规模压力任务；
 `f1-validation` 固定生成 N4B 第一阶段的 66 星、20 任务输入；`f2-validation` 固定
 生成第二阶段的 66 星、8 任务输入；`n4b-joint-validation` 固定生成 N4B 最终联合
 验收的 66 星、100 任务输入。四者共用同一套输入闭集校验、稳定 ID 和 JSON writer，
@@ -24,7 +24,7 @@ Python 中复制 ns-3.48 的轨道计算。
 输入必须满足以下约束：
 
 - `--nodes-file` 是 `nodes_<time>s.json`，包含至少 3 颗 `sat` 节点及唯一
-  `node_id`；坐标字段可以存在，但只用于确认这是节点切片，不参与任务分配；
+  `node_id`；已有 stress/F1/F2/N4B 档不按坐标分配，N4C hotspot 则显式读取原生轨迹；
 - `--compute-profile` 是平台可直接读取的 ComputeProfile，其中所有算力节点都必须
   出现在节点切片中；
 - `stress` 档的字节、任务数量和时间边界均使用整数，时间参数单位为 ns；

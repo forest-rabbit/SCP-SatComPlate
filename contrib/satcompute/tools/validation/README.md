@@ -1,5 +1,20 @@
 # 验证与标定工具
 
+## N4C G3 故障压力
+
+`summarize-n4c-g3.py --run-dir=... --manifest=... [--expect-f3] [--none-dir=...]`
+核对 C800 业务、真实 START 来源、逐任务影响、整数 WU 进度、deadline 和末端账本，
+输出 `g3-summary.json`。event 数、去重 RUNNING victim 和 QUEUED/INPUT 间接影响
+分别统计；`--none-dir` 给出同任务实际 queue delay 差值，不推定每次停机增加 8 秒。
+`--expect-f3` 要求受控 F3 严格只有预定的一个运行中 victim，且不产生后续坏端点。
+
+`plot-n4c-g3.py --old-none=... --hotspot-none=... --generate=... --output-dir=...`
+从上述 summary 和原始 CSV 生成负载/温度图与原生 F2 暴露图，同时保存逐点 CSV。
+generate 必须显式开启 probability audit；不插值、平滑或人工调整计数，F2 色标表示
+模型空间风险而不是观测故障密度。输出为可编辑 PDF/SVG 及 PNG 预览。
+这些工具都按需手动运行，不进入平台正常路径或 CI；冻结参数和实测结果只维护于
+[G3 阶段证据](../../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
+
 ## 链路压力结果核验
 
 `summarize-pressure-baseline.py --run-dir=<正式运行目录>` 流式读取链路窗口，检查

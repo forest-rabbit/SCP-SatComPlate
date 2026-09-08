@@ -192,6 +192,9 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
                 "F1": len(direct["F1"]), "F2": len(direct["F2"]), "F1_union_F2": len(compute_direct),
                 "F3": len(direct["F3"]), "total": len(all_direct)},
             "impact_types": dict(Counter(r["impact_type"] for r in impacts)),
+            "unique_tasks_by_impact_type": {kind: len({r["task_id"] for r in impacts if r["impact_type"] == kind})
+                for kind in sorted({r["impact_type"] for r in impacts})},
+            "unique_observed_impacted_tasks": len({r["task_id"] for r in impacts}),
             "indirect_unique_tasks": len({r["task_id"] for r in impacts if r["progress_valid"] == "0"}),
             "task_states": dict(Counter(t["final_state"] for t in tasks)),
             "failure_reasons": dict(Counter(t["failure_reason"] for t in tasks if t["failure_reason"])),

@@ -30,8 +30,8 @@ def write_points(path, records):
 
 
 def save(fig, stem):
-    for extension in ("pdf", "svg", "png"):
-        fig.savefig(stem.with_suffix("." + extension), dpi=240, facecolor="white")
+    for extension in (".pdf", ".svg", ".png"):
+        fig.savefig(stem.with_suffix(extension), dpi=600, facecolor="white")
     plt.close(fig)
 
 
@@ -41,11 +41,14 @@ def main():
     parser.add_argument("--hotspot-none", required=True, type=Path)
     parser.add_argument("--generate", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--figure-dir", type=Path, help="Optional separate directory for the six figure exports")
     parser.add_argument("--layout-qa-scripts", type=Path)
     args = parser.parse_args()
     output = args.output_dir
     output.mkdir(parents=True, exist_ok=True)
-    plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 8,
+    figure_dir = args.figure_dir or output
+    figure_dir.mkdir(parents=True, exist_ok=True)
+    plt.rcParams.update({"font.family": "sans-serif", "font.sans-serif": ["DejaVu Sans"], "font.size": 8,
         "axes.titlesize": 9, "axes.labelsize": 8, "xtick.labelsize": 7,
         "ytick.labelsize": 7, "legend.fontsize": 7, "pdf.fonttype": 42,
         "ps.fonttype": 42, "svg.fonttype": "none", "axes.spines.top": False,
@@ -87,7 +90,7 @@ def main():
         require_matplotlib_panel_alignment(fig, json_out=output / "load-thermal-alignment.json",
             overlay_svg=output / "load-thermal-alignment.svg", tolerance_pt=1.5,
             gutter_tolerance_pt=1.5, strict=True)
-    save(fig, output / "load-thermal")
+    save(fig, figure_dir / "load-thermal")
 
     states = rows(args.generate / "fault-model-state.csv")
     lookup = {(s["simulation_time_ns"], s["node_id"]): s for s in states}
@@ -107,7 +110,7 @@ def main():
     if hits:
         write_points(output / "f2-event-points.csv", hits)
     fig, ax = plt.subplots(figsize=(5.5, 3.25))
-    fig.subplots_adjust(left=.13, right=.84, bottom=.18, top=.84)
+    fig.subplots_adjust(left=.13, right=.84, bottom=.18, top=.75)
     cloud = ax.scatter([float(p["longitude_deg"]) for p in exposure],
         [float(p["latitude_deg"]) for p in exposure],
         c=[float(p["f2_spatial_risk"]) for p in exposure], cmap="viridis", vmin=0, vmax=1,
@@ -117,12 +120,12 @@ def main():
         ax.scatter([float(p["longitude_deg"]) for p in hits],
             [float(p["latitude_deg"]) for p in hits], marker="*", s=65,
             color="#C94C35", edgecolor="white", linewidths=.5, label=f"Actual F2 START (n = {len(hits)})")
-        ax.legend(loc="upper left", frameon=True, facecolor="white", framealpha=.9)
-    ax.set(xlim=(-95, 10), ylim=(-55, 10), xlabel="Longitude (deg)", ylabel="Latitude (deg)",
-           title=f"Native orbit exposure: {len(exposure):,} node-second samples")
-    color_ax = fig.add_axes([.88, .18, .025, .66])
+        ax.legend(loc="lower left", bbox_to_anchor=(0, 1.01), frameon=False, borderaxespad=0)
+    ax.set(xlim=(-95, 10), ylim=(-55, 10), xlabel="Longitude (deg)", ylabel="Latitude (deg)")
+    fig.suptitle(f"Native orbit exposure: {len(exposure):,} node-second samples", fontsize=9, y=.96)
+    color_ax = fig.add_axes([.88, .18, .025, .57])
     fig.colorbar(cloud, cax=color_ax, label="Model spatial risk (not event density)")
-    save(fig, output / "f2-native-exposure")
+    save(fig, figure_dir / "f2-native-exposure")
     provenance = {"inputs": {k: str(getattr(args, k)) for k in ("old_none", "hotspot_none", "generate")},
         "node_points": len(points), "saa_node_second_samples": len(exposure), "actual_f2_events": len(hits),
         "processing": "No smoothing, interpolation, invented samples, or manual count adjustment.",
