@@ -1,6 +1,7 @@
 # N4C 计划与基线
 
-当前状态：N4C-0/N4C-1 开发批次，G1 尚未批准。源任务书为工作区中的
+当前状态：N4C-0/N4C-1 首轮实现与验证已交付，见
+[G1 审阅包](reviews/G1-workload-state-mapping.md)；G1 尚未批准。源任务书为工作区中的
 `Codex_N4C_Implementation_and_Review_Gates.md`（2026-09-08 修订版）。后续对话确认：
 **仅修改 SatComPlate；TaskModeling 不修改、不重新实验；LLM 不下载、不运行。**
 本页覆盖源任务书第 3.2 节原来的跨仓库开发安排，不修改用户原始任务书。
