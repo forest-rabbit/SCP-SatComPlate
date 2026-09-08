@@ -98,10 +98,10 @@ GetDefaultSatComputeConfig()
 
     // fault
 
-    // --faultMode：none 不创建故障模块，generate 在线生成，replay 确定性重放。
+    // --faultMode: none disables faults; generate samples and executes online.
     config.faultMode = "none";
 
-    // --faultTrace：generate 的输出路径或 replay 的输入路径。
+    // --faultTrace: generated fault-event output path.
     config.faultTrace = "";
 
     // --faultProbabilityAudit：按需采集概率记录；正常运行默认关闭。

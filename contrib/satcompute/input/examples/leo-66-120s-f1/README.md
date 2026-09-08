@@ -67,33 +67,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 预期 trace 包含节点 0、11、22 的三次实际 compute 故障和节点 33 的一条风险-only
 记录。计算故障不会改变 ISL，也不会触发路由重算。
 
-## Replay
+## 重复验证
 
-将上一轮已经确定的 trace 作为输入：
-
-```bash
-./ns3 run "satcompute \
-  --simulationDuration=120 \
-  --randomSeed=1 \
-  --randomRun=1 \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --maxIslDistance=6171353 \
-  --delayMode=fixed \
-  --fixedDelay=0.008 \
-  --networkUpdateInterval=20 \
-  --islBandwidthBps=2000000000 \
-  --routingMode=global-capacity-aware-hrw \
-  --computeProfile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/examples/leo-66-120s-f1/task-trace.json \
-  --taskCompletionPolicy=report \
-  --faultMode=replay \
-  --faultEnableF1=1 \
-  --faultEnableF2=0 \
-  --faultEnableF3=0 \
-  --faultTrace=/tmp/satcompute-f1-generate/fault-trace.json \
-  --outputDir=/tmp/satcompute-f1-replay"
-```
-
-回归会逐文件比较两轮的故障事件、滚动预测、任务、传输和路由证据，确保 generate
-与 replay 执行结果一致。replay 的 F1/F2 开关用于重建预测影子模型，不重新抽样
-trace 中已经确定的故障。
+保持上述参数与 seed/run 不变，将输出路径改为新目录后再次 generate；故障事件与
+业务输出应一致。可加 `--faultProbabilityAudit=1` 比较独立预测与在线概率（仅 F1/F2）。

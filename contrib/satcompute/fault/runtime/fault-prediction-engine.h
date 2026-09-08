@@ -37,7 +37,7 @@ class FaultPredictionEngineError : public std::runtime_error
 /**
  * Maintain deterministic F1/F2 shadow state and emit NOTICE-gated forecasts.
  *
- * Generate and replay use the same pure model kernels and parameters. The
+ * Optional generation auditing uses the same pure kernels and parameters. The
  * engine never consumes a random stream and never mutates the live fault-model
  * state. It prepares a causal forecast before a fault check, then observes the
  * events that actually executed at that timestamp. A formal record is emitted

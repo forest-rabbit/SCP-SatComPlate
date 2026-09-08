@@ -81,9 +81,6 @@ class FaultController : public Object
     FaultController();
     ~FaultController() override;
 
-    void Configure(const FaultTrace& trace,
-                   const std::vector<uint32_t>& satelliteIds,
-                   int64_t simulationDurationNs);
     void ConfigureGeneration(const std::vector<uint32_t>& satelliteIds,
                              int64_t simulationDurationNs);
     /**
@@ -108,6 +105,7 @@ class FaultController : public Object
     const std::vector<FaultRuntimeEventRecord>& GetEvents() const;
 
   private:
+    friend struct FaultControllerTestAccess; ///< Test-only ns event injection, never a CLI mode.
     struct ScheduledFaultEvent
     {
         FaultEventType eventType{FaultEventType::NOTICE};
@@ -122,7 +120,6 @@ class FaultController : public Object
     void DoDispose() override;
 
     bool m_configured{};
-    bool m_generationMode{};
     bool m_generatedTraceFinalized{};
     int64_t m_simulationDurationNs{};
     FaultTrace m_trace;

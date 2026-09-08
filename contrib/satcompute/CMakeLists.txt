@@ -206,6 +206,14 @@ add_custom_target(
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
 build_exec(
+  EXECNAME satcompute-fault-risk-query-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/fault-risk-query-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
   EXECNAME satcompute-task-deadline-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/task-deadline-test.cc

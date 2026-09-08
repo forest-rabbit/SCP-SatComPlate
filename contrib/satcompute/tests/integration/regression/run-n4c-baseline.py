@@ -26,11 +26,17 @@ def main():
     output.mkdir(parents=True)
     arguments = ["satcompute", "--simulationDuration=1000", "--orbitStartOffset=0",
                  f"--computeProfile={INPUT}/compute-profile.json", f"--taskTrace={INPUT}/task-trace.json",
+                 "--constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv",
                  "--computeDeadlineFactor=1.3", "--islBandwidthBps=10000000000", "--linkMetrics=1",
+                 "--delayMode=fixed", "--fixedDelay=0.008", "--networkUpdateInterval=20",
+                 "--routingMode=global-capacity-aware-hrw", "--transferChunkMode=size-aware",
+                 "--islMtuBytes=64028", "--islQueueBytes=1500000", "--receiverRcvBufBytes=131072",
+                 "--linkMetricsInterval=1", "--maxIslDistance=6171353",
                  "--randomSeed=1", "--randomRun=1", "--ecmpHashSeed=1",
                  f"--faultMode={args.fault_mode}", f"--outputDir={output}"]
     if args.fault_mode == "generate":
         arguments += [f"--faultTrace={output}/fault-trace.json", "--taskCompletionPolicy=report",
+                      "--faultEnableF1=1", "--faultEnableF2=1", "--faultEnableF3=1",
                       f"--faultProbabilityAudit={int(args.audit)}"]
     command = [str(ROOT / "ns3"), "run", "--no-build", shlex.join(arguments)]
     identity = {"command": command, "seed": 1, "run": 1, "fault_mode": args.fault_mode,

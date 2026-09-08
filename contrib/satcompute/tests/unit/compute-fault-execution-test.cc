@@ -13,6 +13,7 @@
 #include "ns3/task-coordinator.h"
 
 #include "../support/config-factory.h"
+#include "../support/fault-injection.h"
 
 #include <algorithm>
 #include <cmath>
@@ -214,7 +215,7 @@ CheckFaultStateOverlay()
 }
 
 void
-CheckRiskOnlyReplay()
+CheckRiskOnlyInjection()
 {
     FaultDefinition riskOnly;
     riskOnly.faultId = 1;
@@ -228,7 +229,10 @@ CheckRiskOnlyReplay()
     FaultTrace trace;
     trace.faults = {riskOnly};
     Ptr<FaultController> controller = CreateObject<FaultController>();
-    controller->Configure(trace, {COMPUTE_NODE_ID}, SIMULATION_DURATION_NS);
+    FaultControllerTestAccess::Schedule(controller,
+                                        trace.faults,
+                                        {COMPUTE_NODE_ID},
+                                        SIMULATION_DURATION_NS);
     Simulator::Stop(NanoSeconds(50 * MILLISECOND_NS));
     Simulator::Run();
 
@@ -342,9 +346,10 @@ RunComputeFaultScenario(bool generateOnline)
         }
         else
         {
-            controller->Configure(trace,
-                                  topology.GetIdMap().GetCanonicalSatelliteIds(),
-                                  SIMULATION_DURATION_NS);
+            FaultControllerTestAccess::Schedule(controller,
+                                                trace.faults,
+                                                topology.GetIdMap().GetCanonicalSatelliteIds(),
+                                                SIMULATION_DURATION_NS);
         }
 
         Ptr<TaskCoordinator> coordinator = CreateObject<TaskCoordinator>();
@@ -560,14 +565,14 @@ main()
     try
     {
         CheckFaultStateOverlay();
-        CheckRiskOnlyReplay();
+        CheckRiskOnlyInjection();
         const ExecutionSignature first = RunComputeFaultScenario(false);
         const ExecutionSignature second = RunComputeFaultScenario(false);
         Check(first == second,
               "identical compute fault runs produced different lifecycle ordering");
         const ExecutionSignature generated = RunComputeFaultScenario(true);
         Check(first == generated,
-              "online generated compute faults differ from deterministic replay");
+              "online generated compute faults differ from test-only event injection");
         std::cout << "SatCompute compute fault execution tests passed." << std::endl;
         return 0;
     }

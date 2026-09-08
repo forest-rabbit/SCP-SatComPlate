@@ -29,7 +29,7 @@ common="--simulationDuration=1000 --randomSeed=1 --randomRun=16 \
 
 generate_normal="$acceptance_output/generate-normal"
 generate_audit="$acceptance_output/generate-audit"
-replay_audit="$acceptance_output/replay-audit"
+repeat_audit="$acceptance_output/repeat-audit"
 normal_trace="$generate_normal/fault-trace.json"
 audit_trace="$generate_audit/fault-trace.json"
 
@@ -40,16 +40,16 @@ generate_audit_result="$(run_platform \
   "$generate_audit" \
   "$common --faultMode=generate --faultProbabilityAudit=1 \
 --faultTrace=$audit_trace")"
-replay_audit_result="$(run_platform \
-  "$replay_audit" \
-  "$common --faultMode=replay --faultProbabilityAudit=1 \
---faultTrace=$audit_trace")"
+repeat_audit_result="$(run_platform \
+  "$repeat_audit" \
+  "$common --faultMode=generate --faultProbabilityAudit=1 \
+--faultTrace=$repeat_audit/fault-trace.json")"
 
 for result in "$generate_normal_result" "$generate_audit_result" \
-  "$replay_audit_result"; do
+  "$repeat_audit_result"; do
   if [[ "$result" != *'"status":"partial"'* ||
         "$result" != *'"satellite_count":66'* ]]; then
-    echo "N4B joint generate/replay result differs: $result" >&2
+    echo "N4B joint generate/repeat result differs: $result" >&2
     exit 1
   fi
 done
@@ -57,7 +57,7 @@ done
 probability_audit_tool="contrib/satcompute/tools/validation/compare-fault-probabilities.py"
 python3 "$probability_audit_tool" \
   --model "$generate_audit/fault-model-probabilities.csv" \
-  --prediction "$replay_audit/fault-predictions.csv" \
+  --prediction "$repeat_audit/fault-predictions.csv" \
   --detail "$acceptance_output/probability-audit/n4b-joint.csv" \
   --summary "$acceptance_output/probability-audit/n4b-joint.json"
 
@@ -118,9 +118,9 @@ require_equal_files(
 )
 require_equal_files(
     "generate-audit",
-    "replay-audit",
+    "repeat-audit",
     core_outputs + audit_outputs,
-    "generate/replay output",
+    "generate/repeat output",
 )
 
 for filename in (
@@ -130,8 +130,8 @@ for filename in (
 ):
     if (root / "generate-normal" / filename).exists():
         raise SystemExit(f"normal generate unexpectedly emitted {filename}")
-if (root / "replay-audit/fault-model-probabilities.csv").exists():
-    raise SystemExit("replay unexpectedly emitted live model probabilities")
+require_equal_files("generate-audit", "repeat-audit",
+                    ("fault-trace.json", "fault-model-probabilities.csv"), "same-seed generation")
 
 trace = load_json("generate-audit/fault-trace.json")
 if trace.get("schema_version") != 2 or len(trace.get("faults", [])) != 13:
@@ -273,7 +273,7 @@ if prediction_summary != {
 }:
     raise SystemExit(f"joint prediction summary differs: {prediction_summary}")
 model_rows = load_csv("generate-audit/fault-model-probabilities.csv")
-prediction_rows = load_csv("replay-audit/fault-predictions.csv")
+prediction_rows = load_csv("repeat-audit/fault-predictions.csv")
 if len(model_rows) != 82 or len(prediction_rows) != 82:
     raise SystemExit("joint probability record count differs")
 
@@ -309,14 +309,14 @@ if any(value != 0 for value in capacity_summary.values()):
     raise SystemExit(f"joint Capacity-aware account leaked: {capacity_summary}")
 PY
 
-# Reuse the audited replay directory with auditing disabled. The platform must remove
+# Reuse the audited repeat directory with auditing disabled. The platform must remove
 # stale audit artifacts without removing or changing its normal formal outputs.
-replay_normal_result="$(run_platform \
-  "$replay_audit" \
-  "$common --faultMode=replay --faultTrace=$audit_trace")"
-if [[ "$replay_normal_result" != *'"status":"partial"'* ||
-      "$replay_normal_result" != *'"satellite_count":66'* ]]; then
-  echo "N4B joint normal replay result differs: $replay_normal_result" >&2
+repeat_normal_result="$(run_platform \
+  "$repeat_audit" \
+  "$common --faultMode=generate --faultTrace=$repeat_audit/fault-trace.json")"
+if [[ "$repeat_normal_result" != *'"status":"partial"'* ||
+      "$repeat_normal_result" != *'"satellite_count":66'* ]]; then
+  echo "N4B joint normal repeat result differs: $repeat_normal_result" >&2
   exit 1
 fi
 
@@ -341,13 +341,13 @@ for filename in (
     "fault-predictions.csv",
     "fault-prediction-summary.json",
 ):
-    if (root / "replay-audit" / filename).exists():
-        raise SystemExit(f"normal replay retained stale audit file: {filename}")
+    if (root / "repeat-audit" / filename).exists():
+        raise SystemExit(f"normal repeat retained stale audit file: {filename}")
 for filename in core_outputs:
     generated = (root / "generate-normal" / filename).read_bytes()
-    replayed = (root / "replay-audit" / filename).read_bytes()
-    if generated != replayed:
-        raise SystemExit(f"normal generate/replay output differs: {filename}")
+    repeated = (root / "repeat-audit" / filename).read_bytes()
+    if generated != repeated:
+        raise SystemExit(f"normal generate/repeat output differs: {filename}")
 PY
 
 echo "N4B joint acceptance passed: 66 stars, 1000 s, 100 tasks, 82 probability records."

@@ -21,11 +21,11 @@ SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真�
 - 支持 global-first、逐流 hash、HRW、size-aware HRW 和 capacity-aware HRW；
 - 支持输入传输、非抢占 FCFS 计算和结果传输的完整任务闭环；
 - 支持确定性 compute/整星故障的预警、开始、有限恢复、任务/传输终止与即时重路由；
-- 支持 `none/generate/replay`，可按实时计算负载生成 F1 温度/能源风险，也可按实时
+- 支持 `none/generate`，可按实时计算负载生成 F1 温度/能源风险，也可按实时
   ECEF 位置生成 F2 空间 SEU 风险；两者都能产生可恢复 compute 故障和可确定性
-  重放的统一 trace；
+  核查的事件 trace；
 - 支持独立 F3 fixed-K/Poisson 永久整星故障，并在冲突时优先于可恢复 compute 故障；
-- 可按需启用 F1/F2 因果概率预测与 generate/replay 一致性审计；正常运行默认关闭
+- 可按需启用 F1/F2 因果概率预测与 独立模型一致性审计；正常运行默认关闭
   预测采集、审计 CSV 和对比；
 - topology-only 模式可输出每个切片的卫星 `x/y/z` 与候选链路状态。
 

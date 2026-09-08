@@ -180,18 +180,18 @@ uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
 原始 CSV、显示修正审计 CSV、summary 与 PNG/SVG/PDF 见
 [`docs/calibration/n4b-f2`](../../../../docs/calibration/n4b-f2/README.md)。
 
-## Generate/Replay 概率一致性
+## 在线模型与独立预测的一致性
 
 `compare-fault-probabilities.py` 比较一次 generate 的抽样前真实模型概率与一次
-replay 的因果预测概率。replay 仍只以 generate 的 Fault Trace 为故障输入；这里的
-CSV 只用于仿真结束后的实现验证。两次平台运行都必须显式传入
+同轮或同 seed 重复 generate 的独立因果预测概率；CSV 只用于仿真结束后的实现验证。
+平台运行必须显式传入
 `--faultProbabilityAudit=1`；正常运行默认不生成这些文件，平台也不会自动调用本
 对比脚本。
 
 ```bash
 python3 contrib/satcompute/tools/validation/compare-fault-probabilities.py \
   --model=/tmp/generate/fault-model-probabilities.csv \
-  --prediction=/tmp/replay/fault-predictions.csv \
+  --prediction=/tmp/generate/fault-predictions.csv \
   --detail=/tmp/audit/fault-probability-audit.csv \
   --summary=/tmp/audit/fault-probability-audit-summary.json
 ```

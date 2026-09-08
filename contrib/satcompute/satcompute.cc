@@ -192,20 +192,16 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("taskCompletionPolicy",
                          "Task completion policy: strict or report",
                          config.taskCompletionPolicy);
-    commandLine.AddValue("faultMode",
-                         "Fault mode: none, generate, or replay",
-                         config.faultMode);
-    commandLine.AddValue("faultTrace",
-                         "Generated fault trace output or replay input path",
-                         config.faultTrace);
+    commandLine.AddValue("faultMode", "Fault mode: none or generate", config.faultMode);
+    commandLine.AddValue("faultTrace", "Generated fault trace output path", config.faultTrace);
     commandLine.AddValue("faultProbabilityAudit",
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
     commandLine.AddValue("faultEnableF1",
-                         "Enable F1 generation and replay prediction",
+                         "Enable F1 generation and optional probability audit",
                          faultParameters.f1.enabled);
     commandLine.AddValue("faultEnableF2",
-                         "Enable F2 generation and replay prediction",
+                         "Enable F2 generation and optional probability audit",
                          faultParameters.f2.enabled);
     commandLine.AddValue("faultEnableF3",
                          "Enable the built-in F3 source in generate mode",
@@ -304,7 +300,7 @@ ValidateConfig(const SatComputeConfig& config)
         FailConfig("islMtuBytes", "must be at least 64028 for size-aware chunking");
     }
     RequireChoice(config.taskCompletionPolicy, "taskCompletionPolicy", {"strict", "report"});
-    RequireChoice(config.faultMode, "faultMode", {"none", "generate", "replay"});
+    RequireChoice(config.faultMode, "faultMode", {"none", "generate"});
     if (config.faultMode == "none" && !config.faultTrace.empty())
     {
         FailConfig("faultMode", "none cannot use faultTrace");
@@ -313,15 +309,11 @@ ValidateConfig(const SatComputeConfig& config)
     {
         FailConfig("faultMode", "generate requires faultTrace");
     }
-    if (config.faultMode == "replay" && config.faultTrace.empty())
-    {
-        FailConfig("faultMode", "replay requires faultTrace");
-    }
     if (config.faultProbabilityAudit)
     {
         if (config.faultMode == "none")
         {
-            FailConfig("faultProbabilityAudit", "requires faultMode=generate or replay");
+            FailConfig("faultProbabilityAudit", "requires faultMode=generate");
         }
         if (!hasComputeProfile)
         {
@@ -369,11 +361,7 @@ main(int argc, char* argv[])
         config.computeProfile =
             ResolveOptionalInputFile(config.computeProfile, "computeProfile");
         config.taskTrace = ResolveOptionalInputFile(config.taskTrace, "taskTrace");
-        if (config.faultMode == "replay")
-        {
-            config.faultTrace = ResolveOptionalInputFile(config.faultTrace, "faultTrace");
-        }
-        else if (config.faultMode == "generate")
+        if (config.faultMode == "generate")
         {
             config.faultTrace = ResolveOutputFile(config.faultTrace, "faultTrace");
         }
@@ -448,7 +436,6 @@ main(int argc, char* argv[])
             Ptr<FaultPredictionEngine> faultPredictionEngine;
             std::optional<ComputeProfile> computeProfile;
             std::optional<TaskTrace> taskTrace;
-            std::optional<FaultTrace> faultTrace;
             if (!config.computeProfile.empty() && !config.taskTrace.empty())
             {
                 computeProfile = ReadComputeProfile(config.computeProfile, topology);
@@ -467,38 +454,7 @@ main(int argc, char* argv[])
                     computeNodeIds.push_back(node.nodeId);
                 }
             }
-            if (config.faultMode == "replay")
-            {
-                faultTrace = ReadFaultTrace(config.faultTrace,
-                                            simulationDurationNs,
-                                            topology,
-                                            computeProfile.has_value()
-                                                ? &computeProfile.value()
-                                                : nullptr);
-                // Schedule fault batches before task arrivals so an exact-time
-                // START is applied before a task arriving at the same nanosecond.
-                faultController = CreateObject<FaultController>();
-                if (config.faultProbabilityAudit && computeProfile.has_value() &&
-                    (faultParameters.f1.enabled || faultParameters.f2.enabled))
-                {
-                    faultPredictionEngine = CreateObject<FaultPredictionEngine>();
-                    faultPredictionEngine->Configure(faultParameters,
-                        computeNodeIds,
-                        simulationDurationNs,
-                        faultController);
-                    if (faultParameters.f2.enabled)
-                    {
-                        faultPredictionEngine->BindOrbitConstellation(
-                            topology.GetOnlineConstellation());
-                    }
-                }
-                faultController->Configure(
-                    faultTrace.value(),
-                    topology.GetIdMap().GetCanonicalSatelliteIds(),
-                    simulationDurationNs);
-                faultController->BindTopology(topology);
-            }
-            else if (config.faultMode == "generate")
+            if (config.faultMode == "generate")
             {
                 if (!faultParameters.f1.enabled && !faultParameters.f2.enabled &&
                     !faultParameters.f3.enabled)

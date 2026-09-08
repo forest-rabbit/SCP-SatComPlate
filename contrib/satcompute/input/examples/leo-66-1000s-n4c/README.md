@@ -23,3 +23,23 @@ source .venv/bin/activate
 `--nodes-file`、本例 `--compute-profile`、`--seed=n4c-g1-66`，以及两个输出参数
 `--output-task-trace`、`--output-workload-summary`；不要覆盖已有实验结果。
 图像1 GB需15 s，LLM需5..10 s；计算deadline从首次开始计算起算，详见[任务模块](../../../task/README.md)。
+
+需要留存命令、提交号、墙钟及完整指标时，使用显式验收 runner：
+
+```bash
+python contrib/satcompute/tests/integration/regression/run-n4c-baseline.py \
+  --output-dir=output/n4c-none-a
+python contrib/satcompute/tools/validation/summarize-n4c-baseline.py \
+  --run-dir=output/n4c-none-a
+```
+
+runner 的 `--fault-mode=generate` 显式启用 F1/F2/F3 原有参数，仅验证执行，
+不做强度标定；加 `--audit` 才输出概率审计。输出目录必须不存在。重复运行比较：
+
+```bash
+python contrib/satcompute/tools/validation/compare-n4c-runs.py \
+  --left=output/n4c-none-a --right=output/n4c-none-b \
+  --output=output/n4c-comparison.json
+```
+
+无故障汇总器要求全部成功；故障运行使用比较器核对业务终态和事件，不能套用无故障成功率门槛。

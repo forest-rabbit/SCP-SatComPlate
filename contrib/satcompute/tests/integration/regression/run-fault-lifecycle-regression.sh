@@ -17,7 +17,6 @@ run_platform() {
 
 constellation="contrib/satcompute/tests/fixtures/constellation/connected-16.csv"
 task_inputs="contrib/satcompute/tests/fixtures/task"
-fault_inputs="contrib/satcompute/tests/fixtures/fault"
 profile="$task_inputs/compute-profile-single.json"
 fault_task="$task_inputs/task-fault-running.json"
 f1_example="contrib/satcompute/input/examples/leo-66-120s-f1"
@@ -28,10 +27,6 @@ common="--simulationDuration=1 --constellationConfig=$constellation \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --routingMode=global-capacity-aware-hrw --computeProfile=$profile \
 --taskCompletionPolicy=report"
-network_common="--simulationDuration=1 --constellationConfig=$constellation \
---maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
---networkUpdateInterval=2 --islBandwidthBps=100000000 \
---routingMode=global-first"
 probability_audit="--faultProbabilityAudit=1"
 
 ./ns3 run --no-build \
@@ -47,22 +42,7 @@ default_generate_result="$(run_platform \
   "$regression_output/generate-default" \
   "$common --taskTrace=$fault_task --faultMode=generate \
 --faultTrace=$default_generate_trace")"
-compute_result="$(run_platform \
-  "$regression_output/compute" \
-  "$common --taskTrace=$fault_task --faultMode=replay \
---faultTrace=$fault_inputs/compute-finite.json")"
-satellite_first_result="$(run_platform \
-  "$regression_output/satellite-first" \
-  "$common --taskTrace=$fault_task --faultMode=replay \
---faultTrace=$fault_inputs/satellite-input-finite.json")"
-satellite_second_result="$(run_platform \
-  "$regression_output/satellite-second" \
-  "$common --taskTrace=$fault_task --faultMode=replay \
---faultTrace=$fault_inputs/satellite-input-finite.json")"
-satellite_only_result="$(run_platform \
-  "$regression_output/satellite-only" \
-  "$network_common --faultMode=replay \
---faultTrace=$fault_inputs/satellite-finite.json")"
+# Executor edge cases use test-only ns event injection, never file input.
 f1_generated_trace="$regression_output/generate-f1/fault-trace.json"
 f1_common="--simulationDuration=90 --constellationConfig=$constellation \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
@@ -79,9 +59,10 @@ generate_f1_second_result="$(run_platform \
   "$regression_output/generate-f1-second" \
   "$f1_common --faultMode=generate \
 --faultTrace=$f1_second_trace")"
-replay_f1_result="$(run_platform \
-  "$regression_output/replay-f1" \
-  "$f1_common --faultMode=replay --faultTrace=$f1_generated_trace")"
+repeat_f1_result="$(run_platform \
+  "$regression_output/repeat-f1" \
+  "$f1_common --faultMode=generate \
+--faultTrace=$regression_output/repeat-f1/fault-trace.json")"
 f1_sampled_trace="$regression_output/generate-f1-sampled/fault-trace.json"
 f1_sampled_common="--simulationDuration=80 --randomRun=64 \
 --constellationConfig=$constellation --maxIslDistance=6171353 \
@@ -93,9 +74,10 @@ generate_f1_sampled_result="$(run_platform \
   "$regression_output/generate-f1-sampled" \
   "$f1_sampled_common --faultMode=generate \
 --faultTrace=$f1_sampled_trace")"
-replay_f1_sampled_result="$(run_platform \
-  "$regression_output/replay-f1-sampled" \
-  "$f1_sampled_common --faultMode=replay --faultTrace=$f1_sampled_trace")"
+repeat_f1_sampled_result="$(run_platform \
+  "$regression_output/repeat-f1-sampled" \
+  "$f1_sampled_common --faultMode=generate \
+--faultTrace=$regression_output/repeat-f1-sampled/fault-trace.json")"
 f1_66_trace="$regression_output/generate-f1-66/fault-trace.json"
 f1_66_common="--simulationDuration=120 \
 --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
@@ -109,9 +91,10 @@ generate_f1_66_result="$(run_platform \
   "$regression_output/generate-f1-66" \
   "$f1_66_common --faultMode=generate \
 --faultTrace=$f1_66_trace")"
-replay_f1_66_result="$(run_platform \
-  "$regression_output/replay-f1-66" \
-  "$f1_66_common --faultMode=replay --faultTrace=$f1_66_trace")"
+repeat_f1_66_result="$(run_platform \
+  "$regression_output/repeat-f1-66" \
+  "$f1_66_common --faultMode=generate \
+--faultTrace=$regression_output/repeat-f1-66/fault-trace.json")"
 f2_trace="$regression_output/generate-f2-66/fault-trace.json"
 f2_common="--simulationDuration=1000 --randomSeed=1 --randomRun=16 \
 --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
@@ -129,10 +112,10 @@ generate_f2_second_result="$(run_platform \
   "$regression_output/generate-f2-66-second" \
   "$f2_common --faultMode=generate --faultEnableF1=0 --faultEnableF2=1 \
 --faultEnableF3=0 --faultTrace=$f2_second_trace")"
-replay_f2_result="$(run_platform \
-  "$regression_output/replay-f2-66" \
-  "$f2_common --faultMode=replay --faultEnableF1=0 --faultEnableF2=1 \
---faultEnableF3=0 --faultTrace=$f2_trace")"
+repeat_f2_result="$(run_platform \
+  "$regression_output/repeat-f2-66" \
+  "$f2_common --faultMode=generate --faultEnableF1=0 --faultEnableF2=1 \
+--faultEnableF3=0 --faultTrace=$regression_output/repeat-f2-66/fault-trace.json")"
 combined_trace="$regression_output/generate-combined-66/fault-trace.json"
 generate_combined_result="$(run_platform \
   "$regression_output/generate-combined-66" \
@@ -143,10 +126,10 @@ generate_combined_second_result="$(run_platform \
   "$regression_output/generate-combined-66-second" \
   "$f2_common --faultMode=generate --faultEnableF1=1 --faultEnableF2=1 \
 --faultEnableF3=0 --faultTrace=$combined_second_trace")"
-replay_combined_result="$(run_platform \
-  "$regression_output/replay-combined-66" \
-  "$f2_common --faultMode=replay --faultEnableF1=1 --faultEnableF2=1 \
---faultEnableF3=0 --faultTrace=$combined_trace")"
+repeat_combined_result="$(run_platform \
+  "$regression_output/repeat-combined-66" \
+  "$f2_common --faultMode=generate --faultEnableF1=1 --faultEnableF2=1 \
+--faultEnableF3=0 --faultTrace=$regression_output/repeat-combined-66/fault-trace.json")"
 f3_trace="$regression_output/generate-f3-66/fault-trace.json"
 f3_common="--simulationDuration=1000 --randomSeed=1 --randomRun=1 \
 --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
@@ -162,85 +145,80 @@ generate_f3_second_result="$(run_platform \
   "$regression_output/generate-f3-66-second" \
   "$f3_common --faultMode=generate --faultEnableF1=0 --faultEnableF2=0 \
 --faultEnableF3=1 --faultTrace=$f3_second_trace")"
-replay_f3_result="$(run_platform \
-  "$regression_output/replay-f3-66" \
-  "$f3_common --faultMode=replay --faultTrace=$f3_trace")"
+repeat_f3_result="$(run_platform \
+  "$regression_output/repeat-f3-66" \
+  "$f3_common --faultMode=generate --faultEnableF1=0 --faultEnableF2=0 \
+--faultEnableF3=1 --faultTrace=$regression_output/repeat-f3-66/fault-trace.json")"
 f3_priority_trace="$regression_output/generate-f3-priority/fault-trace.json"
 f3_priority_common="$f1_66_common --randomSeed=1 --randomRun=106"
 generate_f3_priority_result="$(run_platform \
   "$regression_output/generate-f3-priority" \
   "$f3_priority_common --faultMode=generate --faultEnableF1=1 \
 --faultEnableF2=0 --faultEnableF3=1 --faultTrace=$f3_priority_trace")"
-replay_f3_priority_result="$(run_platform \
-  "$regression_output/replay-f3-priority" \
-  "$f3_priority_common --faultMode=replay --faultTrace=$f3_priority_trace")"
+repeat_f3_priority_result="$(run_platform \
+  "$regression_output/repeat-f3-priority" \
+  "$f3_priority_common --faultMode=generate --faultEnableF1=1 \
+--faultEnableF2=0 --faultEnableF3=1 --faultTrace=$regression_output/repeat-f3-priority/fault-trace.json")"
 all_faults_trace="$regression_output/generate-all-faults/fault-trace.json"
 generate_all_faults_result="$(run_platform \
   "$regression_output/generate-all-faults" \
   "$f2_common --faultMode=generate --faultEnableF1=1 --faultEnableF2=1 \
 --faultEnableF3=1 --faultTrace=$all_faults_trace")"
-replay_all_faults_result="$(run_platform \
-  "$regression_output/replay-all-faults" \
-  "$f2_common --faultMode=replay --faultEnableF1=1 --faultEnableF2=1 \
---faultEnableF3=1 --faultTrace=$all_faults_trace")"
+repeat_all_faults_result="$(run_platform \
+  "$regression_output/repeat-all-faults" \
+  "$f2_common --faultMode=generate --faultEnableF1=1 --faultEnableF2=1 \
+--faultEnableF3=1 --faultTrace=$regression_output/repeat-all-faults/fault-trace.json")"
 
-for result in "$default_generate_result" "$compute_result" \
-  "$satellite_first_result" "$satellite_second_result"; do
-  if [[ "$result" != *'"status":"partial"'* ]]; then
-    echo "fault lifecycle run did not report its intentional failed task" >&2
-    exit 1
-  fi
-done
-if [[ "$satellite_only_result" != *'"status":"completed"'* ]]; then
-  echo "workload-free satellite fault run failed: $satellite_only_result" >&2
+if [[ "$default_generate_result" != *'"status":"partial"'* ]]; then
+  echo "default generated run did not report its truncated task" >&2
   exit 1
 fi
-for result in "$generate_f1_result" "$generate_f1_second_result" "$replay_f1_result"; do
+for result in "$generate_f1_result" "$generate_f1_second_result" "$repeat_f1_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
-    echo "F1 generate/replay did not report the intentionally failed old task: $result" >&2
+    echo "F1 generate/repeat did not report the intentionally failed old task: $result" >&2
     exit 1
   fi
 done
-for result in "$generate_f1_sampled_result" "$replay_f1_sampled_result"; do
+for result in "$generate_f1_sampled_result" "$repeat_f1_sampled_result"; do
   if [[ "$result" != *'"status":"partial"'* ]]; then
-    echo "sampled F1 generate/replay missed its controlled branch: $result" >&2
+    echo "sampled F1 generate/repeat missed its controlled branch: $result" >&2
     exit 1
   fi
 done
-for result in "$generate_f1_66_result" "$replay_f1_66_result"; do
+for result in "$generate_f1_66_result" "$repeat_f1_66_result"; do
   if [[ "$result" != *'"status":"partial"'* ||
         "$result" != *'"satellite_count":66'* ]]; then
-    echo "66-star F1 generate/replay result differs: $result" >&2
+    echo "66-star F1 generate/repeat result differs: $result" >&2
     exit 1
   fi
 done
-for result in "$generate_f2_result" "$generate_f2_second_result" "$replay_f2_result"; do
+for result in "$generate_f2_result" "$generate_f2_second_result" "$repeat_f2_result"; do
   if [[ "$result" != *'"status":"partial"'* ||
         "$result" != *'"satellite_count":66'* ]]; then
-    echo "66-star F2 generate/replay result differs: $result" >&2
+    echo "66-star F2 generate/repeat result differs: $result" >&2
     exit 1
   fi
 done
 for result in "$generate_combined_result" "$generate_combined_second_result" \
-  "$replay_combined_result"; do
+  "$repeat_combined_result"; do
   if [[ "$result" != *'"status":"partial"'* ||
         "$result" != *'"satellite_count":66'* ]]; then
-    echo "66-star combined F1/F2 generate/replay result differs: $result" >&2
+    echo "66-star combined F1/F2 generate/repeat result differs: $result" >&2
     exit 1
   fi
 done
-for result in "$generate_f3_result" "$generate_f3_second_result" "$replay_f3_result"; do
+for result in "$generate_f3_result" "$generate_f3_second_result" "$repeat_f3_result"; do
   if [[ "$result" != *'"status":"completed"'* ||
         "$result" != *'"satellite_count":66'* ]]; then
-    echo "66-star F3-only generate/replay result differs: $result" >&2
+    echo "66-star F3-only generate/repeat result differs: $result" >&2
     exit 1
   fi
 done
-for result in "$generate_f3_priority_result" "$replay_f3_priority_result" \
-  "$generate_all_faults_result" "$replay_all_faults_result"; do
+for result in "$generate_f3_priority_result" "$repeat_f3_priority_result" \
+  "$generate_all_faults_result" "$repeat_all_faults_result"; do
   if [[ "$result" != *'"status":"partial"'* ||
         "$result" != *'"satellite_count":66'* ]]; then
-    echo "66-star combined F3 generate/replay result differs: $result" >&2
+    echo "66-star combined F3 generate/repeat result differs: $result" >&2
     exit 1
   fi
 done
@@ -250,26 +228,22 @@ for scenario in f1-66 f2-66 combined-66; do
   case "$scenario" in
     f1-66)
       generate_directory="generate-f1-66"
-      replay_directory="replay-f1-66"
+      repeat_directory="repeat-f1-66"
       ;;
     f2-66)
       generate_directory="generate-f2-66"
-      replay_directory="replay-f2-66"
+      repeat_directory="repeat-f2-66"
       ;;
     combined-66)
       generate_directory="generate-combined-66"
-      replay_directory="replay-combined-66"
+      repeat_directory="repeat-combined-66"
       ;;
   esac
   python3 "$probability_audit_tool" \
     --model "$regression_output/$generate_directory/fault-model-probabilities.csv" \
-    --prediction "$regression_output/$replay_directory/fault-predictions.csv" \
+    --prediction "$regression_output/$repeat_directory/fault-predictions.csv" \
     --detail "$regression_output/probability-audit/$scenario.csv" \
     --summary "$regression_output/probability-audit/$scenario.json"
-  if [[ -e "$regression_output/$replay_directory/fault-model-probabilities.csv" ]]; then
-    echo "$scenario replay unexpectedly emitted live model probabilities" >&2
-    exit 1
-  fi
 done
 
 python3 - "$regression_output" <<'PY'
@@ -516,9 +490,9 @@ for filename in (
     "fault-prediction-summary.json",
 ):
     generated = (root / "generate-f1" / filename).read_bytes()
-    replayed = (root / "replay-f1" / filename).read_bytes()
-    if generated != replayed:
-        raise SystemExit(f"F1 generate/replay output differs: {filename}")
+    repeated = (root / "repeat-f1" / filename).read_bytes()
+    if generated != repeated:
+        raise SystemExit(f"F1 generate/repeat output differs: {filename}")
 
 validate_prediction_outputs("generate-f1", True)
 
@@ -575,9 +549,9 @@ for filename in (
     "fault-prediction-summary.json",
 ):
     generated = (root / "generate-f1-sampled" / filename).read_bytes()
-    replayed = (root / "replay-f1-sampled" / filename).read_bytes()
-    if generated != replayed:
-        raise SystemExit(f"sampled F1 generate/replay output differs: {filename}")
+    repeated = (root / "repeat-f1-sampled" / filename).read_bytes()
+    if generated != repeated:
+        raise SystemExit(f"sampled F1 generate/repeat output differs: {filename}")
 validate_prediction_outputs("generate-f1-sampled", False)
 sampled_events = load_csv("generate-f1-sampled/fault-events.csv")
 if [row["event_type"] for row in sampled_events] != ["START", "RECOVERY"] or (
@@ -629,9 +603,9 @@ for filename in (
     "fault-prediction-summary.json",
 ):
     generated = (root / "generate-f1-66" / filename).read_bytes()
-    replayed = (root / "replay-f1-66" / filename).read_bytes()
-    if generated != replayed:
-        raise SystemExit(f"66-star F1 generate/replay output differs: {filename}")
+    repeated = (root / "repeat-f1-66" / filename).read_bytes()
+    if generated != repeated:
+        raise SystemExit(f"66-star F1 generate/repeat output differs: {filename}")
 
 predictions_66, prediction_summary_66 = validate_prediction_outputs(
     "generate-f1-66", True
@@ -726,9 +700,9 @@ for filename in (
     "fault-prediction-summary.json",
 ):
     generated = (root / "generate-f2-66" / filename).read_bytes()
-    replayed = (root / "replay-f2-66" / filename).read_bytes()
-    if generated != replayed:
-        raise SystemExit(f"F2 generate/replay output differs: {filename}")
+    repeated = (root / "repeat-f2-66" / filename).read_bytes()
+    if generated != repeated:
+        raise SystemExit(f"F2 generate/repeat output differs: {filename}")
 
 f2_predictions, f2_prediction_summary = validate_prediction_outputs(
     "generate-f2-66", True
@@ -822,9 +796,9 @@ for filename in (
     "fault-prediction-summary.json",
 ):
     generated = (root / "generate-combined-66" / filename).read_bytes()
-    replayed = (root / "replay-combined-66" / filename).read_bytes()
-    if generated != replayed:
-        raise SystemExit(f"combined F1/F2 generate/replay output differs: {filename}")
+    repeated = (root / "repeat-combined-66" / filename).read_bytes()
+    if generated != repeated:
+        raise SystemExit(f"combined F1/F2 generate/repeat output differs: {filename}")
 
 combined_predictions, combined_prediction_summary = validate_prediction_outputs(
     "generate-combined-66", True
@@ -867,9 +841,9 @@ if (root / "generate-f3-66/fault-trace.json").read_bytes() != (
     raise SystemExit("same-seed F3 generated traces are not byte-identical")
 for filename in ("fault-events.csv", "fault-summary.json", "ecmp-route-events.csv"):
     generated = (root / "generate-f3-66" / filename).read_bytes()
-    replayed = (root / "replay-f3-66" / filename).read_bytes()
-    if generated != replayed:
-        raise SystemExit(f"F3-only generate/replay output differs: {filename}")
+    repeated = (root / "repeat-f3-66" / filename).read_bytes()
+    if generated != repeated:
+        raise SystemExit(f"F3-only generate/repeat output differs: {filename}")
 f3_events = load_csv("generate-f3-66/fault-events.csv")
 if len(f3_events) != 1 or (
     f3_events[0]["event_type"],
@@ -934,9 +908,9 @@ for filename in (
     "fault-prediction-summary.json",
 ):
     generated = (root / "generate-f3-priority" / filename).read_bytes()
-    replayed = (root / "replay-f3-priority" / filename).read_bytes()
-    if generated != replayed:
-        raise SystemExit(f"F3 priority generate/replay output differs: {filename}")
+    repeated = (root / "repeat-f3-priority" / filename).read_bytes()
+    if generated != repeated:
+        raise SystemExit(f"F3 priority generate/repeat output differs: {filename}")
 
 validate_prediction_outputs("generate-f3-priority", True)
 
@@ -963,187 +937,16 @@ for filename in (
     "fault-prediction-summary.json",
 ):
     generated = (root / "generate-all-faults" / filename).read_bytes()
-    replayed = (root / "replay-all-faults" / filename).read_bytes()
-    if generated != replayed:
-        raise SystemExit(f"combined F1/F2/F3 generate/replay output differs: {filename}")
+    repeated = (root / "repeat-all-faults" / filename).read_bytes()
+    if generated != repeated:
+        raise SystemExit(f"combined F1/F2/F3 generate/repeat output differs: {filename}")
 
 validate_prediction_outputs("generate-all-faults", True)
 
 
-compute_events = load_csv("compute/fault-events.csv")
-if [row["event_type"] for row in compute_events] != ["NOTICE", "START", "RECOVERY"]:
-    raise SystemExit("compute fault event order differs")
-if [int(row["simulation_time_ns"]) for row in compute_events] != [
-    250_000_000,
-    500_000_000,
-    750_000_000,
-]:
-    raise SystemExit("compute fault event timestamps differ")
-if any(row["failure_probability"] != "0.75" for row in compute_events):
-    raise SystemExit("compute fault probability was sampled or rewritten")
-if any(row["route_recomputed"] != "false" for row in compute_events):
-    raise SystemExit("compute fault unexpectedly recomputed routes")
-
-compute_summary = load_json("compute/fault-summary.json")
-expected_compute = {
-    "fault_count": 1,
-    "compute_fault_count": 1,
-    "satellite_fault_count": 0,
-    "notice_event_count": 1,
-    "start_event_count": 1,
-    "recovery_event_count": 1,
-    "active_fault_count_at_end": 0,
-    "failed_task_count": 1,
-    "failed_transfer_count": 0,
-    "cancelled_transfer_count": 1,
-    "route_recomputation_count_due_to_fault": 0,
-}
-if compute_summary != expected_compute:
-    raise SystemExit(f"compute fault summary differs: {compute_summary}")
-compute_run = load_json("compute/run-summary.json")
-if (
-    compute_run["run_status"],
-    compute_run["route_computation_count"],
-    compute_run["applied_topology_slice_count"],
-) != ("PARTIAL", 1, 1):
-    raise SystemExit("compute fault changed topology or route counters")
-
-compute_tasks = load_csv("compute/task-summary.csv")
-if len(compute_tasks) != 1 or (
-    compute_tasks[0]["final_state"],
-    compute_tasks[0]["failure_reason"],
-    int(compute_tasks[0]["failure_time_ns"]),
-) != ("FAILED", "COMPUTE_NODE_FAILURE", 500_000_000):
-    raise SystemExit("compute task terminal evidence differs")
-compute_transfers = {int(row["transfer_id"]): row for row in load_csv(
-    "compute/transfer-summary.csv"
-)}
-if compute_transfers[1]["terminal_state"] != "COMPLETED":
-    raise SystemExit("compute fault lost completed INPUT history")
-if (
-    compute_transfers[2]["terminal_state"],
-    compute_transfers[2]["terminal_reason"],
-    int(compute_transfers[2]["terminal_time_ns"]),
-) != ("CANCELLED", "TASK_FAILED", 500_000_000):
-    raise SystemExit("compute fault result cancellation differs")
-
-satellite_events = load_csv("satellite-first/fault-events.csv")
-if [row["event_type"] for row in satellite_events] != ["START", "RECOVERY"]:
-    raise SystemExit("satellite fault event order differs")
-if [int(row["simulation_time_ns"]) for row in satellite_events] != [
-    100_500_000,
-    350_500_000,
-]:
-    raise SystemExit("satellite fault event timestamps differ")
-if any(row["route_recomputed"] != "true" for row in satellite_events):
-    raise SystemExit("satellite fault did not record exact-time route recomputation")
-if satellite_events[0]["communication_available_after"] != "false" or (
-    satellite_events[1]["communication_available_after"] != "true"
-):
-    raise SystemExit("satellite communication availability evidence differs")
-
-satellite_summary = load_json("satellite-first/fault-summary.json")
-expected_satellite = {
-    "fault_count": 1,
-    "compute_fault_count": 0,
-    "satellite_fault_count": 1,
-    "notice_event_count": 0,
-    "start_event_count": 1,
-    "recovery_event_count": 1,
-    "active_fault_count_at_end": 0,
-    "failed_task_count": 1,
-    "failed_transfer_count": 1,
-    "cancelled_transfer_count": 1,
-    "route_recomputation_count_due_to_fault": 2,
-}
-if satellite_summary != expected_satellite:
-    raise SystemExit(f"satellite fault summary differs: {satellite_summary}")
-satellite_run = load_json("satellite-first/run-summary.json")
-if (
-    satellite_run["run_status"],
-    satellite_run["route_computation_count"],
-    satellite_run["applied_topology_slice_count"],
-) != ("PARTIAL", 3, 1):
-    raise SystemExit("satellite fault route or topology counters differ")
-
-satellite_only_summary = load_json("satellite-only/fault-summary.json")
-expected_satellite_only = {
-    "fault_count": 1,
-    "compute_fault_count": 0,
-    "satellite_fault_count": 1,
-    "notice_event_count": 0,
-    "start_event_count": 1,
-    "recovery_event_count": 1,
-    "active_fault_count_at_end": 0,
-    "failed_task_count": 0,
-    "failed_transfer_count": 0,
-    "cancelled_transfer_count": 0,
-    "route_recomputation_count_due_to_fault": 2,
-}
-if satellite_only_summary != expected_satellite_only:
-    raise SystemExit(
-        f"workload-free satellite fault summary differs: {satellite_only_summary}"
-    )
-for filename in ("task-summary.csv", "transfer-summary.csv"):
-    if (root / "satellite-only" / filename).exists():
-        raise SystemExit(f"workload-free satellite fault created {filename}")
-
-satellite_tasks = load_csv("satellite-first/task-summary.csv")
-if len(satellite_tasks) != 1 or (
-    satellite_tasks[0]["final_state"],
-    satellite_tasks[0]["failure_reason"],
-    int(satellite_tasks[0]["failure_time_ns"]),
-) != ("FAILED", "COMPUTE_SATELLITE_FAILURE", 100_500_000):
-    raise SystemExit("satellite task terminal evidence differs")
-satellite_transfers = {int(row["transfer_id"]): row for row in load_csv(
-    "satellite-first/transfer-summary.csv"
-)}
-if (
-    satellite_transfers[1]["terminal_state"],
-    satellite_transfers[1]["terminal_reason"],
-    int(satellite_transfers[1]["terminal_time_ns"]),
-) != ("FAILED", "DESTINATION_SATELLITE_FAILED", 100_500_000):
-    raise SystemExit("satellite INPUT failure evidence differs")
-if (
-    satellite_transfers[2]["terminal_state"],
-    satellite_transfers[2]["terminal_reason"],
-) != ("CANCELLED", "TASK_FAILED"):
-    raise SystemExit("satellite RESULT cancellation evidence differs")
-
-for directory in ("compute", "satellite-first", "satellite-second"):
-    capacity = load_json(f"{directory}/capacity-aware-summary.json")
-    if any(capacity.values()):
-        raise SystemExit(f"{directory} leaked capacity state: {capacity}")
-    size = load_json(f"{directory}/size-aware-summary.json")
-    for key in (
-        "active_flow_count_at_end",
-        "assignment_count_at_end",
-        "final_total_reserved_bytes",
-    ):
-        if size[key] != 0:
-            raise SystemExit(f"{directory} leaked flow state: {key}={size[key]}")
-
-for filename in (
-    "fault-events.csv",
-    "fault-summary.json",
-    "task-events.csv",
-    "task-summary.csv",
-    "transfer-summary.csv",
-    "ecmp-route-events.csv",
-    "size-aware-reservation-events.csv",
-    "size-aware-summary.json",
-    "capacity-aware-summary.json",
-):
-    first = (root / "satellite-first" / filename).read_bytes()
-    second = (root / "satellite-second" / filename).read_bytes()
-    if first != second:
-        raise SystemExit(f"repeated satellite fault output differs: {filename}")
-
+# Task/transfer fault boundaries are covered by the C++ injection tests.
 for directory in (
     "generate-default",
-    "compute",
-    "satellite-first",
-    "satellite-second",
 ):
     if not (root / directory / "fault-events.csv").is_file() or not (
         root / directory / "fault-summary.json"
@@ -1162,21 +965,21 @@ for directory in (
 PY
 
 no_fault_result="$(run_platform \
-  "$regression_output/satellite-first" \
+  "$regression_output/generate-default" \
   "$common --taskTrace=$task_inputs/task-single.json")"
 if [[ "$no_fault_result" != *'"status":"completed"'* ]]; then
   echo "no-fault reuse regression failed: $no_fault_result" >&2
   exit 1
 fi
-if [[ -e "$regression_output/satellite-first/fault-events.csv" ||
-      -e "$regression_output/satellite-first/fault-summary.json" ||
-      -e "$regression_output/satellite-first/fault-predictions.csv" ||
-      -e "$regression_output/satellite-first/fault-prediction-summary.json" ||
-      -e "$regression_output/satellite-first/fault-model-probabilities.csv" ]]; then
+if [[ -e "$regression_output/generate-default/fault-events.csv" ||
+      -e "$regression_output/generate-default/fault-summary.json" ||
+      -e "$regression_output/generate-default/fault-predictions.csv" ||
+      -e "$regression_output/generate-default/fault-prediction-summary.json" ||
+      -e "$regression_output/generate-default/fault-model-probabilities.csv" ]]; then
   echo "no-fault run retained stale fault metrics" >&2
   exit 1
 fi
-python3 - "$regression_output/satellite-first" <<'PY'
+python3 - "$regression_output/generate-default" <<'PY'
 import csv
 import pathlib
 import sys
@@ -1201,4 +1004,13 @@ if len(transfers) != 2 or any(
     raise SystemExit("no-fault transfer terminal evidence changed")
 PY
 
-echo "SatCompute deterministic fault lifecycle regression passed."
+if ./ns3 run --no-build "satcompute --faultMode=replay --outputDir=$regression_output/rejected" >"$regression_output/rejected.log" 2>&1; then
+  echo "removed replay mode was accepted" >&2
+  exit 1
+fi
+if ! rg -q 'faultMode has an unsupported value: replay' "$regression_output/rejected.log"; then
+  echo "removed mode was not rejected by configuration validation" >&2
+  exit 1
+fi
+
+echo "SatCompute generated fault lifecycle regression passed."

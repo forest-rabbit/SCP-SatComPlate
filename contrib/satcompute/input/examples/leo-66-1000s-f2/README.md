@@ -1,6 +1,6 @@
 # 1000 秒、66 星、8 任务 F2 空间风险验证
 
-本场景为真实 F2-only generate/replay 和 Monte Carlo 提供轻量任务环境，不用于声明
+本场景为真实 F2-only generate 和 Monte Carlo 提供轻量任务环境，不用于声明
 现实卫星的 SEU 或计算失效率，也不预先规定某个随机 run 必须恰好发生几次故障。
 轨道使用 `synthetic-66.csv`，仿真 0 秒通过 `--orbitStartOffset=302` 对齐空间加权
 标定选择的 `302--1302s` 窗口；全部 66 颗卫星都具有
@@ -73,34 +73,10 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 `randomRun=16` 只提供可复现生命周期示例：节点 17 在 `236s`、节点 16 在 `850s`
 各发生一次 F2 START，任务 1/3 失败，恢复后的任务 2/4 与 risk-only/对照任务均完成。
 该单次结果不能替代多 run 均值标定。F2 compute 故障只关闭算力 8 秒，不改变 ISL，
-也不触发路由重算。显式开启概率审计时，F2-only generate/replay 固定匹配 126 条
+也不触发路由重算。显式开启概率审计时，F2-only generate 固定匹配 126 条
 模型概率和因果预测记录。
 
-## Replay
+## 重复验证
 
-将 generate 已冻结的 trace 作为输入，并保持相同轨道、任务和 F2 开关：
-
-```bash
-./ns3 run "satcompute \
-  --simulationDuration=1000 \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --orbitStartOffset=302 \
-  --maxIslDistance=6171353 \
-  --delayMode=fixed \
-  --fixedDelay=0.008 \
-  --networkUpdateInterval=20 \
-  --islBandwidthBps=2000000000 \
-  --routingMode=global-capacity-aware-hrw \
-  --computeProfile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/examples/leo-66-1000s-f2/task-trace.json \
-  --taskCompletionPolicy=report \
-  --faultMode=replay \
-  --faultEnableF1=0 \
-  --faultEnableF2=1 \
-  --faultEnableF3=0 \
-  --faultTrace=/tmp/satcompute-f2-generate/fault-trace.json \
-  --outputDir=/tmp/satcompute-f2-replay"
-```
-
-replay 不重新计算空间风险或抽样，只执行 trace 中已经确定的 NOTICE、START、
-RECOVERY 和 NOTICE_CLEAR。概率审计仍为按需开关，正常运行默认关闭。
+保持上述参数与 seed/run 不变，将输出路径改为新目录后再次 generate；故障事件与
+业务输出应一致。可加 `--faultProbabilityAudit=1` 比较独立预测与在线概率（仅 F1/F2）。

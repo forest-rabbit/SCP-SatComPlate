@@ -454,6 +454,7 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
                               m_constellation->GetPosition(nodeId),
                               m_parameters.checkIntervalSeconds);
         }
+        state.modelTimeNs = simulationTimeNs;
         if (f3NodeIds.contains(nodeId) || !computeAvailable)
         {
             continue;
@@ -633,6 +634,68 @@ FaultModelEngine::GetNodeSnapshots() const
              m_faultController->GetState().IsComputeAvailable(nodeId)});
     }
     return snapshots;
+}
+
+ComputeRiskSnapshot
+FaultModelEngine::QueryComputeRisk(uint32_t nodeId, int64_t horizonNs) const
+{
+    ComputeRiskSnapshot result;
+    result.nodeId = nodeId;
+    result.asOfTimeNs = Simulator::Now().GetNanoSeconds();
+    result.horizonNs = horizonNs;
+    if (horizonNs <= 0 || result.asOfTimeNs > std::numeric_limits<int64_t>::max() - horizonNs)
+    {
+        throw FaultModelEngineError("risk horizon must be positive and not overflow time");
+    }
+    const auto node = m_nodes.find(nodeId);
+    if (!m_configured || !m_bound || m_finalized || m_faultController == nullptr ||
+        result.asOfTimeNs >= m_simulationDurationNs || node == m_nodes.end() ||
+        node->second.computeService == nullptr || (m_f2Model && m_constellation == nullptr))
+    {
+        return result;
+    }
+    const auto& state = node->second;
+    result.permanentlyUnavailable = !m_faultController->GetState().IsSatelliteAvailable(nodeId);
+    if (result.permanentlyUnavailable ||
+        !m_faultController->GetState().IsComputeAvailable(nodeId) ||
+        !state.computeService->IsComputeAvailable())
+    {
+        result.status = ComputeRiskStatus::UNAVAILABLE;
+        return result;
+    }
+    result.status = ComputeRiskStatus::AVAILABLE;
+    auto f1 = state.f1State;
+    auto f2 = state.f2State;
+    const bool busy = state.computeService->HasRunningTask();
+    const int64_t endNs = result.asOfTimeNs + horizonNs;
+    double p1 = 0.0;
+    double p2 = 0.0;
+    // Project copies only. Catch up a pending current-time check without counting
+    // it in the future interval; never inspect queued tasks or future F3 events.
+    for (int64_t timeNs = state.modelTimeNs; timeNs <= endNs - m_checkIntervalNs;)
+    {
+        timeNs += m_checkIntervalNs;
+        if (m_f1Model)
+        {
+            m_f1Model->Update(f1, busy, m_parameters.checkIntervalSeconds);
+        }
+        if (m_f2Model)
+        {
+            m_f2Model->Update(f2,
+                              m_constellation->GetPositionAt(nodeId, NanoSeconds(timeNs)),
+                              m_parameters.checkIntervalSeconds);
+        }
+        if (timeNs > result.asOfTimeNs)
+        {
+            ++result.checkCount;
+            p1 = CombineComputeFaultProbabilities(p1, m_f1Model ? f1.stepFailureProbability : 0.0);
+            p2 = CombineComputeFaultProbabilities(p2, m_f2Model ? f2.stepFailureProbability : 0.0);
+        }
+    }
+    result.pF1 = p1;
+    result.pF2 = p2;
+    result.pCompute = CombineComputeFaultProbabilities(p1, p2);
+    return result;
 }
 
 const std::vector<ComputeFailureProbabilityRecord>&

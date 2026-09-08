@@ -26,6 +26,7 @@ trap 'rm -rf "$test_output"' EXIT
 ./ns3 run --no-build \
   "satcompute-fault-trace-test --outputDir=$test_output/fault-trace"
 ./ns3 run --no-build "satcompute-fault-model-test"
+./ns3 run --no-build "satcompute-fault-risk-query-test"
 ./ns3 run --no-build "satcompute-compute-fault-execution-test"
 ./ns3 run --no-build "satcompute-satellite-fault-execution-test"
 ./ns3 run --no-build "satcompute-online-orbit-foundation-test"
