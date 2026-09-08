@@ -379,10 +379,29 @@ WriteFaultMetrics(const FaultController& controller,
         WriteProbabilityRecords(modelEngine->GetProbabilityRecords(),
                                 "fault-model-probabilities.csv",
                                 outputDirectory);
+        std::ofstream states(OutputPath(outputDirectory, "fault-model-state.csv"));
+        if (!states)
+        {
+            throw std::runtime_error("cannot write fault-model-state.csv");
+        }
+        states << "simulation_time_ns,node_id,busy,sampling_eligible,temperature_c,"
+                  "f1_risk,p_f1,latitude_deg,longitude_deg,in_saa,f2_spatial_risk,p_f2,p_compute\n";
+        states << std::setprecision(17);
+        for (const auto& r : modelEngine->GetStateAuditRecords())
+        {
+            states << r.timeNs << ',' << r.nodeId << ',' << r.f1.busy << ','
+                   << r.samplingEligible << ',' << r.f1.temperatureC << ',' << r.f1.combinedRisk
+                   << ',' << r.f1.stepFailureProbability << ',' << r.f2.latitudeDegrees << ','
+                   << r.f2.longitudeDegrees << ',' << r.f2.inRegion << ',' << r.f2.spatialRisk
+                   << ',' << r.f2.stepFailureProbability << ','
+                   << CombineComputeFaultProbabilities(r.f1.stepFailureProbability,
+                                                       r.f2.stepFailureProbability) << '\n';
+        }
     }
     else
     {
         RemoveOwnedFile(root / "fault-model-probabilities.csv");
+        RemoveOwnedFile(root / "fault-model-state.csv");
     }
 }
 
@@ -396,6 +415,7 @@ RemoveFaultMetrics(const std::string& outputDirectory)
     RemoveOwnedFile(root / "fault-prediction-summary.json");
     RemoveOwnedFile(root / "fault-model-probabilities.csv");
     RemoveOwnedFile(root / "fault-task-impact.csv");
+    RemoveOwnedFile(root / "fault-model-state.csv");
 }
 
 } // namespace ns3

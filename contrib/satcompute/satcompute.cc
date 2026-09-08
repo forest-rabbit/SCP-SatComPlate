@@ -206,6 +206,15 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("faultEnableF3",
                          "Enable the built-in F3 source in generate mode",
                          faultParameters.f3.enabled);
+    commandLine.AddValue("faultF1MaxIntensity",
+                         "Scenario F1 maximum intensity per second; thermal shape unchanged",
+                         faultParameters.f1.maxFailureIntensityPerSecond);
+    commandLine.AddValue("faultF3Mode", "F3 fixed_k, poisson or controlled",
+                         faultParameters.f3.mode);
+    commandLine.AddValue("faultF3Node", "Controlled F3 target, scheduler-only scenario truth",
+                         faultParameters.f3.controlledNodeId);
+    commandLine.AddValue("faultF3Time", "Controlled F3 START in seconds",
+                         faultParameters.f3.controlledStartSeconds);
     commandLine.AddValue("topologyOnly",
                          "Generate topology slices without network simulation",
                          config.topologyOnly);

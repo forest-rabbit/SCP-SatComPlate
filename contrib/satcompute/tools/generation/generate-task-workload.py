@@ -1032,6 +1032,7 @@ def main():
             "f2-validation",
             "n4b-joint-validation",
             "n4c-c800",
+            "n4c-hotspot",
         ),
         default="stress",
     )
@@ -1040,6 +1041,11 @@ def main():
     parser.add_argument("--task-count", type=positive_int)
     parser.add_argument("--total-input-bytes", type=positive_int)
     parser.add_argument("--seed", required=True)
+    parser.add_argument("--base-task-trace", type=Path,
+                        help="Frozen G2 C800 trace; hotspot changes placement only")
+    parser.add_argument("--position-slices", type=Path, help="Native topology-only output directory")
+    parser.add_argument("--hotspot-weight", type=positive_int, default=4)
+    parser.add_argument("--regional-candidate-limit", type=non_negative_int, default=0)
     parser.add_argument("--arrival-start-ns", type=non_negative_int)
     parser.add_argument("--arrival-end-ns", type=non_negative_int)
     parser.add_argument("--arrival-mode", choices=("uniform", "burst"))
@@ -1113,6 +1119,20 @@ def main():
         raise ValueError("seed must be a non-empty string without NUL")
     satellite_ids = read_satellite_ids(args.nodes_file)
     compute_nodes = read_compute_profile(args.compute_profile, satellite_ids)
+    if args.profile == "n4c-hotspot":
+        if args.base_task_trace is None or args.position_slices is None:
+            parser.error("n4c-hotspot requires base-task-trace and position-slices")
+        if len(compute_nodes) != 66 or any(n["compute_rate_work_units_per_second"] != 100000
+                                          for n in compute_nodes):
+            parser.error("n4c-hotspot requires all 66 workers at 100000 WU/s")
+        hotspot = runpy.run_path(str(Path(__file__).with_name("n4c_hotspot.py")))
+        trace, summary = hotspot["build_hotspot"](
+            read_json(args.base_task_trace), hotspot["read_positions"](args.position_slices),
+            args.seed, args.hotspot_weight, args.regional_candidate_limit)
+        write_json(args.output_task_trace, trace)
+        write_json(args.output_workload_summary, summary)
+        print(json.dumps({k: v for k, v in summary.items() if k != "placements"}, indent=2))
+        return
     if args.profile == "n4c-c800":
         for name, expected in (("task_count", 800), ("total_input_bytes", 81_750_000_000),
                                ("arrival_start_ns", 1_000_000_000),

@@ -206,6 +206,13 @@ F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中
 
 ## F3 致命碎片整星故障
 
+G3 另提供 `--faultF3Mode=controlled --faultF3Node=N --faultF3Time=S` 单事件场景接口，
+秒制时间进入模型时转为整数 ns。仅调度器知道未来目标/时刻，在线风险查询不返回它们；
+fixed_k/poisson 保留。受控场景不屏蔽该卫星的 F1/F2，也不恢复 production replay。
+`--faultF1MaxIntensity` 可覆盖该轮 F1 最大强度；默认参数、温度曲线和 F2 参数不变，
+实验命令必须记录覆盖值。probability audit 开启时额外输出 `fault-model-state.csv`，
+记录每次模型更新的温度、F1/F2 风险、位置及采样资格；普通运行不输出该诊断文件。
+
 F3 不依赖任务，只从完整的稳定卫星 ID 集合选择节点，并为每次事件写出：
 
 ```text

@@ -159,9 +159,16 @@ ValidateFaultParameters(const FaultParameters& parameters)
     const F3FaultParameters& f3 = parameters.f3;
     RequireFinite(f3.singleSatelliteIntensityPerSecond,
                   "F3.single_satellite_intensity_per_s");
-    if (f3.mode != "fixed_k" && f3.mode != "poisson")
+    if (f3.mode != "fixed_k" && f3.mode != "poisson" && f3.mode != "controlled")
     {
-        Fail("F3.mode", "must be fixed_k or poisson");
+        Fail("F3.mode", "must be fixed_k, poisson or controlled");
+    }
+    RequireFinite(f3.controlledStartSeconds, "F3.controlled_start_s");
+    if (f3.controlledStartSeconds < 0.0 ||
+        (f3.mode == "controlled" &&
+         (f3.fixedCount != 1 || f3.singleSatelliteIntensityPerSecond != 0.0)))
+    {
+        Fail("F3.controlled", "requires non-negative time, fixed_count=1 and no Poisson intensity");
     }
     if (f3.singleSatelliteIntensityPerSecond < 0.0)
     {

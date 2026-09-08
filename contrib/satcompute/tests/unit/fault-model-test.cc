@@ -726,6 +726,37 @@ CheckComputeFailurePrediction()
 void
 CheckF3Model()
 {
+    auto controlled = GetDefaultFaultParameters();
+    controlled.f3.enabled = true;
+    controlled.f3.mode = "controlled";
+    controlled.f3.controlledNodeId = 9;
+    controlled.f3.controlledStartSeconds = 1.23456789;
+    ValidateFaultParameters(controlled);
+    const F3DebrisFaultModel controlledModel(controlled.f3);
+    const auto schedule = controlledModel.GenerateSchedule({3, 9}, 2000000000, 11, 12);
+    Check(schedule.size() == 1 && schedule[0].nodeId == 9 &&
+              schedule[0].startTimeNs == 1234567890,
+          "controlled F3 changed its exact target/time");
+    bool rejected = false;
+    try
+    {
+        controlledModel.GenerateSchedule({3, 8}, 2000000000, 11, 12);
+    }
+    catch (const F3DebrisFaultModelError&)
+    {
+        rejected = true;
+    }
+    Check(rejected, "controlled F3 accepted an unknown satellite");
+    rejected = false;
+    try
+    {
+        controlledModel.GenerateSchedule({3, 9}, 1000000000, 11, 12);
+    }
+    catch (const F3DebrisFaultModelError&)
+    {
+        rejected = true;
+    }
+    Check(rejected, "controlled F3 accepted a time beyond the simulation end");
     FaultParameters parameters = GetDefaultFaultParameters();
     parameters.f3.enabled = true;
     parameters.f3.mode = "fixed_k";

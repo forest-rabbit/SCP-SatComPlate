@@ -331,6 +331,7 @@ MetricsRecorder::Record()
         {
             result.files.push_back(outputDirectory /
                                    "fault-model-probabilities.csv");
+            result.files.push_back(outputDirectory / "fault-model-state.csv");
         }
     }
     else

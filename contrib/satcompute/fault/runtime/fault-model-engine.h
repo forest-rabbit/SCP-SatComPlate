@@ -82,6 +82,16 @@ struct FaultModelNodeSnapshot
 };
 
 /** Evaluate fault models online and submit events to the N4A controller. */
+struct FaultModelStateRecord
+{
+    int64_t timeNs{}; ///< Actual model check time.
+    uint32_t nodeId{}; ///< Stable satellite ID.
+    F1SelfStateFaultSnapshot f1; ///< State after this check's thermal update.
+    F2RadiationFaultSnapshot f2; ///< Native position-driven state at this check.
+    bool samplingEligible{}; ///< False during compute outage or a same-time F3.
+};
+
+/** Evaluate fault models online and submit events to the controller. */
 class FaultModelEngine : public Object
 {
   public:
@@ -134,6 +144,8 @@ class FaultModelEngine : public Object
 
     /** @return Pre-sampling probabilities produced from live generate state. */
     const std::vector<ComputeFailureProbabilityRecord>& GetProbabilityRecords() const;
+    /** @return Optional state samples collected only with probability audit enabled. */
+    const std::vector<FaultModelStateRecord>& GetStateAuditRecords() const;
 
   private:
     /** Notice metadata retained until risk exit or compute failure. */
@@ -206,6 +218,7 @@ class FaultModelEngine : public Object
     uint64_t m_nextFaultId{1}; ///< Next trace identity.
     FaultTrace m_trace; ///< Completed canonical trace records.
     std::vector<ComputeFailureProbabilityRecord> m_probabilityRecords; ///< Live probabilities.
+    std::vector<FaultModelStateRecord> m_stateAuditRecords; ///< Optional observed state, no RNG.
     std::vector<EventId> m_modelEvents; ///< Pre-scheduled model/F3 checks.
     Ptr<FaultController> m_faultController; ///< Sole runtime fault executor.
     Ptr<TaskCoordinator> m_taskCoordinator; ///< Bound task lifecycle owner.

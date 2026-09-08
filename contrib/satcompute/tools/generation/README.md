@@ -1,5 +1,14 @@
 # 确定性任务生成器
 
+G3 使用同一入口的 `--profile=n4c-hotspot`，由 `n4c_hotspot.py` 只重排 G2 C800
+端点，不改变每任务类别/字节/WU/到达时刻。额外输入为 `--base-task-trace` 和
+`--position-slices`（原生 topology-only 的 1 秒节点切片目录）。
+`--hotspot-weight` 默认 4、背景为 1；`--regional-candidate-limit=0` 使用区域内全部节点，
+正整数则仅给各区域距中心最近的前 N 个候选加权，用于明确的负载集中度实验。
+北美/欧洲/东亚边界与权重、缺候选 fallback、每任务原生切片时刻都写入 workload summary。
+附带早期 LLM 单 victim F3 候选：其计算星只接收该任务，输入源/结果端点仍在其他星；
+该星保持在线通信，直到受控故障才断链，未屏蔽任何 F1/F2。候选有效性须在联合运行验证。
+
 `generate-task-workload.py` 根据一份 topology-only 节点切片和一份
 ComputeProfile 生成 TaskTrace。它不生成星座、坐标、链路或完整平台配置，也不在
 Python 中复制 ns-3.48 的轨道计算。

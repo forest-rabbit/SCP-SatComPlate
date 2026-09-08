@@ -67,9 +67,11 @@ struct F2FaultParameters
 struct F3FaultParameters
 {
     bool enabled{}; ///< 是否启用 F3 在线判定。
-    std::string mode; ///< fixed_k 或 poisson 生成模式。
+    std::string mode; ///< fixed_k、poisson 或 controlled 单事件场景。
     uint32_t fixedCount{}; ///< fixed_k 模式下的永久故障卫星数量。
     double singleSatelliteIntensityPerSecond{}; ///< 单颗存活卫星的每秒泊松强度。
+    uint32_t controlledNodeId{}; ///< controlled 场景目标，仅调度器读取。
+    double controlledStartSeconds{}; ///< controlled 场景 START 秒数。
 };
 
 /** N4B 全部内置故障参数。 */

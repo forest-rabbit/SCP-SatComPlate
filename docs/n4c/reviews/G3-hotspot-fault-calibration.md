@@ -33,3 +33,16 @@ F1/F2 目标约 79 个不同 RUNNING victim，F3 联合场景恰好 1 个 RUNNIN
 重复故障影响记录、F3 原有永久规则；34 Python、15 C++ 和全部四组 regression 通过，
 旧 100 任务联合用例仍为 93 完成/7 失败、82 条概率匹配。
 日志 `output/n4c-g3-20260908/lifecycle-regression.log`；未重写旧 G2/N4B 输出。
+
+## 预声明实验与首轮候选
+
+在运行标定之前声明：ns-3 seed=1，calibration runs=11/12/13，validation runs=21/22/23；
+正式输入 placement seed=`n4c-g3-hotspot`。先以 run 11 做候选 pilot，不因结果更换 seed。
+参数冻结后使用未参与调参的 validation 三轮；如未达标如实报告，不丢弃不利 run。
+首轮权重 4:1、区域不限候选：原生 1 秒切片的最大年龄 0.998906 s，
+北美/欧洲/东亚/background 为 73/65/39/623 个任务，区域内总需求 416.36978 s，
+背景 1423.21488 s。欧洲/东亚空候选发生 48/37 次，确定性回退到其余加权候选。
+候选输出在 `output/n4c-g3-20260908/pilot-w4`；所有业务字段和 arrival 与 G2 相同。
+受控 F3 候选：node 9、task 79（最早到达 LLM）、2.130334420 s；该星首次任务前无
+计算负载且原生北侧轨迹不在 SAA，故障不是用专属概率屏蔽构造，仍需联合运行验证。
+controlled F3 合法性、精确 ns、未知节点/越界拒绝及全部 37 Python/15 C++/6 smoke 通过。

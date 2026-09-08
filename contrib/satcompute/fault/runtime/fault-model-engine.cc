@@ -455,6 +455,11 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
                               m_parameters.checkIntervalSeconds);
         }
         state.modelTimeNs = simulationTimeNs;
+        if (m_probabilityAuditEnabled)
+        {
+            m_stateAuditRecords.push_back({simulationTimeNs, nodeId, state.f1State, state.f2State,
+                                           computeAvailable && !f3NodeIds.contains(nodeId)});
+        }
         if (f3NodeIds.contains(nodeId) || !computeAvailable)
         {
             continue;
@@ -607,6 +612,12 @@ FaultModelEngine::Finalize()
     m_faultController->FinalizeGeneratedTrace(m_trace);
     m_finalized = true;
     return m_trace;
+}
+
+const std::vector<FaultModelStateRecord>&
+FaultModelEngine::GetStateAuditRecords() const
+{
+    return m_stateAuditRecords;
 }
 
 std::vector<FaultModelNodeSnapshot>

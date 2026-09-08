@@ -130,6 +130,10 @@ GetDefaultFaultParameters()
     // poisson 下每颗存活卫星的每秒撞击强度。
     parameters.f3.singleSatelliteIntensityPerSecond = 0.0;
 
+    // controlled 模式只安排这一颗卫星和一个精确时刻；不是文件 replay。
+    parameters.f3.controlledNodeId = 0;
+    parameters.f3.controlledStartSeconds = 0.0;
+
     return parameters;
 }
 
