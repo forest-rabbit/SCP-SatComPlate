@@ -1,7 +1,9 @@
 # N4C G2：正式输入与运行基线审阅
 
-G2（N4C-2/3）完成后在此暂停，不进入 G3；本阶段不运行 CI、不创建/合并 PR。
-依据工作区任务书 `Codex_N4C_G1_Final_Review_and_G2_Implementation_v2.md`。
+状态：**G2 formally approved**。批准基线为 `83c48e546` 的实现与原始证据。
+最终批准依据工作区任务书 `Codex_N4C_G2_Final_Review_and_G3_Start_v3.md`；
+G1/G2 通过顺序 merge PR 收口到 `n4c`，不合入 main、不运行阶段 CI。
+下一阶段为 N4C-4 / G3：temporary compute outage、影响账本、计算热点与故障标定。
 
 ## 阶段身份与变更
 
@@ -145,6 +147,9 @@ NOT_READY。F1/F2 都关闭时 pF1/pF2/pCompute=0、checkCount=0，不声称没�
   （compute 端 12、source 端 11、result 端 10）；不复活旧任务。
 - 另有 3 次可恢复 compute START、5 个 risk-only episode；其中计算故障影响 1 个任务。
   事件数不等于失败任务数，不以这轮结果冻结 G3 的标定目标。
+- 正式 C800 本轮的 RUNNING 直接中断数为 **0**：34 个任务均在到达时失败。
+  其中 task 150 于 539.464347038 s 到达时，compute node 28 仍在停机中。
+  这是旧准入合同的结果，不是运行中的任务被打断；原始输出不改写。
 - 1600 个 transfer 中 1532 个完成、68 个取消；本例失败任务均未开始计算，
   INPUT/RESULT 各取消一个。无 FAILED 网络传输、无 FlowMonitor/队列丢包。
 - F3 导致一次即时路由重算；含初始计算共两次，周期更新仍为 50 次。
@@ -202,11 +207,19 @@ python contrib/satcompute/tools/validation/compare-fault-probabilities.py \
 `execution-result.json/time.txt/run.log` 保存执行结果。none 的重复运行同样使用
 `compare-n4c-runs.py`。对比脚本只由测试显式调用，不加入正常运行流程。
 
-## G3 待用户确认，尚未实施
+## 已批准的 G3 范围，尚未实施
 
-- 地理热点区域及权重，不依据 G2 随机终态反推；
-- C800 的受影响任务数接受范围，不能继续沿用旧 150/1500 目标；
-- F1/F2/F3 的期望贡献、F3 K、强度标定和独立 seed 规模。
+- 先修正 F1/F2：仅中断 RUNNING，保留 QUEUED，停机期间 INPUT/arrival 可继续入队，
+  RESULT 不受影响；恢复后 FCFS 继续。未开始的任务不建立 compute deadline。
+- 新增 fault-task-impact 账本，区分故障来源、直接中断与间接等待，记录 WU 进度。
+  F1/F2 同刻命中保留两来源但仅一次停机；记录 START 与实际影响两种时刻；
+  不把停机时长直接当成额外排队时延。停机期间不新增重叠 compute 故障。
+- 冻结 C800 业务属性及全 66 星 100,000 WU/s，以原生位置建立北美/欧洲/东亚
+  计算热点，先运行同输入的 hotspot none baseline。
+- F1/F2 目标为约 79 个不同 RUNNING 任务被直接打断，不固定内部比例，不按配额停采样；
+  F2 保持 SAA 模型，使用预声明 calibration/validation runs 验证自然波动。
+- 受控 F3 为 1 次永久故障、联合运行中的 1 个 RUNNING victim；后续静态端点不再
+  指向坏星，不向运行算法泄露未来 F3，不屏蔽 victim 的 F1/F2、不挑 seed。
 
 本阶段未实现 checkpoint、L1、remote batch/tail、恢复状态机、备份节点选择、
-频率优化或 cL/cR 标定。完成报告并推送 G2 分支后 **STOP AT G2**。
+频率优化或 cL/cR 标定。G2 历史结果保留；G3 完成后推送并等待审阅，不自行合回 n4c。
