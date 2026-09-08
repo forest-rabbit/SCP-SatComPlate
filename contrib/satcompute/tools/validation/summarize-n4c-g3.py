@@ -173,6 +173,21 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
             "capacity ledger did not drain")
     transfers = rows(directory / "transfer-summary.csv")
     require(len(transfers) == 1600, "transfer ledger incomplete")
+    run = json.loads((directory / "run-summary.json").read_text())
+    links = rows(directory / "link-summary.csv")
+    windows = rows(directory / "link-window-metrics.csv")
+    last = max(float(w["window_end_s"]) for w in windows)
+    require(last == 1000 and all(float(w["mean_reserved_rate_bps"]) == 0 and
+            int(w["max_queue_bytes"]) == 0 for w in windows if float(w["window_end_s"]) == last),
+            "terminal link ledger did not drain")
+    require(all(float(link["peak_reserved_rate_bps"]) <= 10_000_000_000 for link in links),
+            "reservation exceeds frozen link capacity")
+    network_windows = rows(directory / "network-link-window-metrics.csv")
+    network = {"flow_monitor_lost_packets": run["flow_monitor_lost_packets"],
+        "link_queue_drops": sum(int(link["drop_packets"]) for link in links),
+        "mean_available_utilization_percent": 100 * sum(float(w["available_busy_time_s"]) for w in network_windows) /
+            sum(float(w["available_link_time_s"]) for w in network_windows),
+        "terminal_link_ledger_drained": True}
     return {"events": source_events, "unique_direct_running": {
                 "F1": len(direct["F1"]), "F2": len(direct["F2"]), "F1_union_F2": len(compute_direct),
                 "F3": len(direct["F3"]), "total": len(all_direct)},
@@ -181,6 +196,7 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
             "task_states": dict(Counter(t["final_state"] for t in tasks)),
             "failure_reasons": dict(Counter(t["failure_reason"] for t in tasks if t["failure_reason"])),
             "transfers": dict(Counter(t["terminal_state"] for t in transfers)),
+            "network": network,
             "region_runtime": region_runtime, "node_state_audit": state_summary,
             "by_fault_source": by_source, "f3_victim": victim_evidence,
             "queue_delta_vs_none_s": queue_delta, "node_busy_s": distribution([int(n["busy_time_ns"])/1e9 for n in node_rows]),

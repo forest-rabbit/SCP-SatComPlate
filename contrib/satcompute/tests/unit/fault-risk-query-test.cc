@@ -38,7 +38,7 @@ struct Signature
 };
 
 Signature
-Run(bool queryEnabled, bool auditEnabled, bool computeSources = true)
+Run(bool queryEnabled, bool auditEnabled, bool computeSources = true, bool controlledF3 = false)
 {
     RngSeedManager::SetSeed(1);
     RngSeedManager::SetRun(1);
@@ -70,6 +70,12 @@ Run(bool queryEnabled, bool auditEnabled, bool computeSources = true)
         parameters.f1.enabled = computeSources;
         parameters.f2.enabled = computeSources;
         parameters.f3.enabled = true;
+        if (controlledF3)
+        {
+            parameters.f3.mode = "controlled";
+            parameters.f3.controlledNodeId = 3;
+            parameters.f3.controlledStartSeconds = 2.0;
+        }
         model->Configure(parameters, ids, ids, durationNs, controller, auditEnabled);
         Check(model->QueryComputeRisk(3).status == ComputeRiskStatus::NOT_READY,
               "unbound query must not be ready");
@@ -131,6 +137,11 @@ Run(bool queryEnabled, bool auditEnabled, bool computeSources = true)
                         ++matched;
                     }
                     const auto q = model->QueryComputeRisk(live.nodeId);
+                    if (controlledF3 && second < 2)
+                    {
+                        Check(!q.permanentlyUnavailable && q.status == ComputeRiskStatus::AVAILABLE,
+                              "controlled F3 truth leaked before actual failure");
+                    }
                     Check(q == model->QueryComputeRisk(live.nodeId), "query is not idempotent");
                     Check(q.asOfTimeNs == second * 1000000000LL && q.horizonNs == 1000000000LL,
                           "query time/horizon differs");
@@ -249,6 +260,10 @@ main()
         Check(queried.queries == audited.queries, "audit changed query values");
         const auto f3Only = Run(true, false, false);
         Check(!f3Only.queries.empty(), "F3-only query case was not exercised");
+        const auto controlled = Run(false, false, false, true);
+        const auto controlledQueried = Run(true, false, false, true);
+        Check(controlled.business == controlledQueried.business,
+              "queries altered controlled F3 execution");
         std::cout << "SatCompute read-only node risk query tests passed.\n";
         return 0;
     }
