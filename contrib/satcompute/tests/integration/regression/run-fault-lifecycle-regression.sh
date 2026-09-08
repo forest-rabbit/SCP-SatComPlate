@@ -954,6 +954,7 @@ for directory in (
         raise SystemExit(f"normal fault run omitted formal fault evidence: {directory}")
     for filename in (
         "fault-model-probabilities.csv",
+        "fault-model-state.csv",
         "fault-predictions.csv",
         "fault-prediction-summary.json",
     ):
@@ -973,6 +974,8 @@ if [[ "$no_fault_result" != *'"status":"completed"'* ]]; then
 fi
 if [[ -e "$regression_output/generate-default/fault-events.csv" ||
       -e "$regression_output/generate-default/fault-summary.json" ||
+      -e "$regression_output/generate-default/fault-task-impact.csv" ||
+      -e "$regression_output/generate-default/fault-model-state.csv" ||
       -e "$regression_output/generate-default/fault-predictions.csv" ||
       -e "$regression_output/generate-default/fault-prediction-summary.json" ||
       -e "$regression_output/generate-default/fault-model-probabilities.csv" ]]; then

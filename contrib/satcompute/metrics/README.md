@@ -16,6 +16,8 @@ G3 的 `fault-task-impact.csv` 在 generate 任务运行结束时输出，不依
 仅 RUNNING 记录有效 WU 进度，使用真实速率乘已执行时间的 128-bit 整数计算；
 未开始的 progress/WU/deadline 使用无效标记。最终结果在结束时关联，未终结为 TRUNCATED。
 QUEUED_DELAYED 表示停机期间无法调度，不声称比 none 固定多等 8 s；额外等待需对照。
+`recoverable_outage_duration_ns` 保留 START 时已知的计划停机时长；若之后被 F3 抢占，
+实际区间以最终 Fault Trace / RECOVERY 事件为准，不把未来抢占时刻倒灌进因果快照。
 
 ```text
 metrics/

@@ -92,6 +92,12 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
                 direct[source].add(int(row["task_id"]))
     compute_direct = direct["F1"] | direct["F2"]
     all_direct = compute_direct | direct["F3"]
+    for fault_id, start in starts.items():
+        actual_direct = {r["task_id"] for r in impacts if int(r["fault_id"]) == fault_id and
+            r["impact_type"] == "RUNNING_INTERRUPTED"}
+        if start["fault_type"] == "compute":
+            require(len(actual_direct) == int(start["affected_task_count"]) <= 1,
+                    "compute START count differs from its direct task impacts")
     require(all(t["failure_reason"] != "COMPUTE_NODE_FAILURE" or int(t["task_id"]) in compute_direct
                 for t in tasks), "compute-only failure without RUNNING interruption")
     f3_events = [e for e in starts.values() if e["fault_source"] == "F3"]

@@ -92,6 +92,7 @@ def require_equal_files(left_directory, right_directory, filenames, label):
 core_outputs = (
     "fault-events.csv",
     "fault-summary.json",
+    "fault-task-impact.csv",
     "task-events.csv",
     "task-summary.csv",
     "transfer-summary.csv",
@@ -103,6 +104,7 @@ core_outputs = (
 audit_outputs = (
     "fault-predictions.csv",
     "fault-prediction-summary.json",
+    "fault-model-state.csv",
 )
 
 if (root / "generate-normal/fault-trace.json").read_bytes() != (
@@ -125,6 +127,7 @@ require_equal_files(
 
 for filename in (
     "fault-model-probabilities.csv",
+    "fault-model-state.csv",
     "fault-predictions.csv",
     "fault-prediction-summary.json",
 ):
@@ -328,6 +331,7 @@ root = pathlib.Path(sys.argv[1])
 core_outputs = (
     "fault-events.csv",
     "fault-summary.json",
+    "fault-task-impact.csv",
     "task-events.csv",
     "task-summary.csv",
     "transfer-summary.csv",
@@ -338,6 +342,7 @@ core_outputs = (
 )
 for filename in (
     "fault-model-probabilities.csv",
+    "fault-model-state.csv",
     "fault-predictions.csv",
     "fault-prediction-summary.json",
 ):
