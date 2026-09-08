@@ -21,6 +21,7 @@ N0–N2 是 ns-3.33 版本的原始里程碑，相关 PR 位于旧 SatCompute �
 | N3：迁移到 ns-3.48 | 已完成 | [PR #72](https://github.com/forest-rabbit/SCP-SatComPlate/pull/72) / `n3-complete` / `b83bf646b` | 2026-08-05 |
 | N4A：确定性故障输入与执行基础 | 已完成 | PR #75–#80 / `n4a-complete` | 2026-08-05 |
 | N4B：统一故障建模与因果概率预测 | 已完成 | [PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81) / `n4b-complete` | 2026-08-31 |
+| N5 前置：任务增量与压力基线 | 实验基础已完成，尚未实现备份算法 | 平台 PR #86 / TaskModeling PR #5 | 2026-09-06 |
 
 N2 的最终发布链固定为 `feature/n2-integration` 合入旧仓库 `main`，并以
 annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移动 N0、N1
@@ -404,6 +405,23 @@ compute START、6 个 risk-only episode 和 1 次永久 F3 整星故障。200 �
 - 集成证据：[PR #83](https://github.com/forest-rabbit/SCP-SatComPlate/pull/83) / `65bd39a1f`
 - 阶段 CI：[run 33459723117](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/33459723117)，2 分 4 秒通过
 
+## N5 前置：任务增量与压力基线
+
+SCP-TaskModeling 已完成三类图像任务的真实增量计量、5% / 10% / 20% checkpoint
+粒度与恢复验证。参考 `rho_variable` 分别约为 1.0000076294（稠密图像）、
+0.001869064（稀疏推理）和 0.5424813080（压缩编码），固定头 `H` 单独计量。
+
+2026-09-06，本平台完成 10 Gbps、66/351/720 星压力基线：每组 1500 个任务、
+3000 个 transfer 全部完成，零丢包，预留归零，并可输出吞吐量、物理链路利用率和
+容量等待指标。本轮未接入新任务增量模型，也不包含故障与备份。
+
+- 任务证据：[TaskModeling PR #5](https://github.com/forest-rabbit/SCP-TaskModeling/pull/5) 合入后的 `0dbc0c7` 快照
+- 压力证据：[PR #86](https://github.com/forest-rabbit/SCP-SatComPlate/pull/86) / `a9bf4ad16`；[阶段 CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/34014479346) 通过
+- 参数口径、实验边界及待确定项：[N5 前置基础](docs/n5-prerequisites.md)；详细压力结果：[10 Gbps 基线](docs/pressure-10g-baseline.md)
+
+以上作为 N5 的前置依据，不表示备份算法已完成；WU 映射、最终 `sigma`、LLM
+参数及平台接入仍待确定。
+
 ## ECMP 算法演进
 
 N0 的 Hash ECMP 属于平台底座，已记录在 N0。本节只记录其后的算法演进与专项
@@ -463,5 +481,5 @@ Capacity-aware 两次重放均为 2/2、17,144/17,144 个包、零丢包。独�
 
 阶段完成时补充日期、PR/tag/提交、阶段 CI、主要交付、实验结论和明确边界。
 里程碑只记录已经合入对应主线且验收通过的事实；计划、设想和实验草稿不写成
-已完成内容。大型输入与运行输出只保存在 `/tmp` 或外部归档，仓库只提交可复查
-的合同、哈希和紧凑结果。
+已完成内容。大型输入与运行输出保存在 Git 忽略的输出目录、`/tmp` 或外部归档，
+仓库只提交可复查的合同、来源与提交引用和紧凑结果。
