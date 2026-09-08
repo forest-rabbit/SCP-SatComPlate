@@ -33,10 +33,26 @@ enum class TaskFailureReason
     COMPUTE_SATELLITE_FAILURE,
     RESULT_SATELLITE_FAILURE,
     INPUT_TRANSFER_FAILED,
-    RESULT_TRANSFER_FAILED
+    RESULT_TRANSFER_FAILED,
+    COMPUTE_DEADLINE_EXCEEDED
 };
 
 const char* TaskFailureReasonToString(TaskFailureReason reason);
+
+/** Closed-world task classes; UNSPECIFIED is only for legacy inputs. */
+enum class TaskProfile
+{
+    UNSPECIFIED,
+    DENSE_IMAGE,
+    SPARSE_INFERENCE,
+    COMPRESSION,
+    LLM
+};
+
+const char* TaskProfileToString(TaskProfile profile);
+
+/** Ceiling of baseline ns times the shortest decimal representation of factor. */
+int64_t CalculateComputeDeadlineBudgetNs(int64_t baselineTimeNs, double factor);
 
 struct TaskDefinition
 {
@@ -50,11 +66,18 @@ struct TaskDefinition
     int64_t arrivalTimeNs{};
     uint64_t inputTransferId{};
     uint64_t resultTransferId{};
+    TaskProfile taskProfile{TaskProfile::UNSPECIFIED};
 };
 
 struct TaskRuntime
 {
     explicit TaskRuntime(const TaskDefinition& taskDefinition);
+
+    void ConfigureComputeDeadline(uint64_t referenceRate, double factor);
+    bool EstablishComputeDeadline(int64_t firstStartTimeNs);
+    bool ComputeDeadlineMet() const;
+    bool ResultDelivered() const;
+    bool TaskSucceeded() const;
 
     void TransitionTo(TaskState requestedState,
                       int64_t eventTimeNs,
@@ -69,6 +92,9 @@ struct TaskRuntime
     int64_t inputTransferCompleteTimeNs{-1};
     int64_t queueEnterTimeNs{-1};
     int64_t computeStartTimeNs{-1};
+    int64_t baselineComputeTimeNs{-1};
+    int64_t computeDeadlineBudgetNs{-1};
+    int64_t computeDeadlineTimeNs{-1};
     int64_t computeCompleteTimeNs{-1};
     int64_t resultTransferStartTimeNs{-1};
     int64_t resultTransferCompleteTimeNs{-1};

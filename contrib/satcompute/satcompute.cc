@@ -180,6 +180,9 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Satellite compute profile JSON path",
                          config.computeProfile);
     commandLine.AddValue("taskTrace", "Task trace JSON path", config.taskTrace);
+    commandLine.AddValue("computeDeadlineFactor",
+                         "Compute-stage deadline factor (finite, at least 1)",
+                         config.computeDeadlineFactor);
     commandLine.AddValue("transferChunkMode",
                          "Transfer chunking policy",
                          config.transferChunkMode);
@@ -277,6 +280,10 @@ ValidateConfig(const SatComputeConfig& config)
                    "global-size-aware-hrw",
                    "global-capacity-aware-hrw"});
     const bool hasComputeProfile = !config.computeProfile.empty();
+    if (!std::isfinite(config.computeDeadlineFactor) || config.computeDeadlineFactor < 1.0)
+    {
+        FailConfig("computeDeadlineFactor", "must be finite and at least 1");
+    }
     const bool hasTaskTrace = !config.taskTrace.empty();
     if (hasComputeProfile != hasTaskTrace)
     {
@@ -548,7 +555,8 @@ main(int argc, char* argv[])
                                             config.islMtuBytes,
                                             config.receiverRcvBufBytes,
                                             config.diagnosticMode == "failure",
-                                            simulationDurationNs);
+                                            simulationDurationNs,
+                                            config.computeDeadlineFactor);
                 transferEngine = taskCoordinator->GetTransferEngine();
                 if (faultController != nullptr)
                 {

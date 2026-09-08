@@ -163,6 +163,10 @@ V2-1500/C1000/C800/C600四组离线预算。每项只做5/10/20%状态守恒检�
 不运行网络或随机故障标定。手动预览命令见
 [N4C 工作量模型](../../../docs/n4c/workload-mapping.md)。
 
+G2增加 `test_n4c_formal_workload.py`，逐任务核对正式C800与G1预算、节点分配和双次生成。
+`satcompute-task-deadline-test` 纳入现有C++入口，覆盖正式解析、legacy类型、deadline取整/溢出、
+同ns完成优先、超时释放FCFS占用、RESULT晚于deadline送达及仿真截断。
+
 GitHub 的 `SatCompute CI` 是手动阶段门禁：一个大阶段的 PR 全部合并到 `main` 后，
 只触发一次，通过并确认提交已合并后清理功能分支。阶段内的小提交和 PR 只运行
 与改动匹配的本地检查；最终

@@ -145,6 +145,7 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 |---|---:|---|---|
 | `--computeProfile` | 空 | 路径 | 卫星静态算力 JSON；必须与 `taskTrace` 同时提供 |
 | `--taskTrace` | 空 | 路径 | 任务到达 JSON；必须与 `computeProfile` 同时提供 |
+| `--computeDeadlineFactor` | `1.3` | 倍率 | 有限且至少为1；首次计算开始后的deadline预算倍率，语义见[任务模块](task/README.md) |
 | `--transferChunkMode` | `size-aware` | 枚举 | `fixed` 或 `size-aware` 分包 |
 | `--transferPayloadBytes` | `1024` | 字节 | fixed payload，范围 `1..65507`，加 28-byte IPv4/UDP 头后不能超过 MTU |
 | `--receiverRcvBufBytes` | `131072` | 字节 | 每个 UDP 接收 socket 的缓冲区；必须大于 0 |

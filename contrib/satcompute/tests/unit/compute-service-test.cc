@@ -171,11 +171,9 @@ CheckFaultSafeCancellation()
               recorder.completions[0].timeNs == 35,
           "cancelled compute task completed or recovered work did not complete");
     Check(service->IsComputeAvailable() && service->IsIdle() &&
-              service->GetEnqueuedTaskCount() == 3 &&
-              service->GetCompletedTaskCount() == 1 &&
+              service->GetEnqueuedTaskCount() == 3 && service->GetCompletedTaskCount() == 1 &&
               service->GetCancelledRunningTaskCount() == 1 &&
-              service->GetRemovedQueuedTaskCount() == 1 &&
-              service->GetBusyTimeNs() == 5,
+              service->GetRemovedQueuedTaskCount() == 1 && service->GetBusyTimeNs() == 15,
           "fault-safe compute counters or busy-time accounting differ");
     Simulator::Destroy();
 }

@@ -193,7 +193,9 @@ G1 v3保留v2的 `W=ceil(3*S/2000)`、100000 WU/s；LLM为100 WU/token与5000..1
 正式 TaskTrace 生成档，不改变上面的四个档位、默认参数或运行时接口。
 
 所有候选参数、字节来源和命令见[工作量模型](../../../../docs/n4c/workload-mapping.md)。
-仅显式调用预览命令才会生成 CSV/JSON，正常仿真不增加输出。G1 通过前不接入正式生成器。
+仅显式调用预览命令才会生成预算 CSV/JSON。G1已批准C800；正式生成器新增 `--profile=n4c-c800`，
+复用同一G1属性/预算函数，统一66星100,000 WU/s、1..600 s确定性到达、无地理偏置分配；
+输入示例和命令见 [C800](../../input/examples/leo-66-1000s-n4c/README.md)。
 `StateBudgetPoint` / `state_budget_points` 只作合法进度映射和5/10/20%守恒验证；
 `state-budget-checks.csv` 替代首版搜索网格输出。不生成 L1/batch/tail，不搜索 n/delta，
 也不统计 D_L/D_R 或指定 c_L/c_R。

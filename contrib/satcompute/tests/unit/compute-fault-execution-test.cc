@@ -488,11 +488,12 @@ RunComputeFaultScenario(bool generateOnline)
 
         const Ptr<ComputeService> service = coordinator->GetComputeServices().front();
         Check(service->IsComputeAvailable() && service->IsIdle() &&
-                  service->GetEnqueuedTaskCount() == 5 &&
-                  service->GetCompletedTaskCount() == 3 &&
+                  service->GetEnqueuedTaskCount() == 5 && service->GetCompletedTaskCount() == 3 &&
                   service->GetCancelledRunningTaskCount() == 1 &&
                   service->GetRemovedQueuedTaskCount() == 1 &&
-                  service->GetBusyTimeNs() == 3,
+                  service->GetBusyTimeNs() ==
+                      3 + static_cast<uint64_t>(FindTask(*coordinator, 3).failureTimeNs -
+                                                FindTask(*coordinator, 3).computeStartTimeNs),
               "compute fault service accounting differs");
         Check(topology.GetRouteComputationCount() == routeComputationsBefore &&
                   topology.GetLinkState().GetActiveLinks() == activeLinksBefore,
