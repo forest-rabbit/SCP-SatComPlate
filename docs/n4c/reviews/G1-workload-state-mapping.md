@@ -4,8 +4,8 @@
 最终批准依据：Codex_N4C_G1_Final_Review_and_G2_Implementation.md。
 此前构成对比依据：Codex_N4C_G1_v3_Workload_Composition_Review_and_Revision.md。
 代码及双次预览固定到 **f04bff7eae7b8c6c699914c01667d6af8060453b**；生成时工作区干净，
-本次doc-only批准提交不改变代码或结果，位于feature/n4c-workload-mapping；
-推送后G2从该提交建立feature/n4c-g2-input-runtime，不从旧main重新开始。
+G1批准提交a6faf14ee不改变代码或结果，位于feature/n4c-workload-mapping；
+G2尚未开始，后续分支必须包含该批准提交，不从旧main重新开始。
 冻结800 tasks（240/240/240/80），INPUT 81.75 GB，10个1 GB + 20个500 MB，
 100,000 WU/s，图像W=ceil(3*S/2000)，LLM 100 WU/token及5000..10000 total token，
 无最小任务时长。C600/C1000/V2-1500的下述对比仍是历史证据。
@@ -195,12 +195,12 @@ LLM未缩短，全部落在5–10 s：
 
 ## 6. 实现、验证与复现
 
-本轮修改七个文件：
+G1 v3实现涉及：
 
 - contrib/satcompute/tools/generation/preview-n4c-workload.py：具名构成参数和普通/大图像统计。
 - contrib/satcompute/tests/unit/test_n4c_workload_preview.py：四个候选合同、确定性及守恒覆盖。
 - generation/tests的README：使用入口、按需输出及测试范围。
-- docs/n4c/workload-mapping.md、plan-and-baseline.md、本报告：候选合同、比较与阶段边界。
+- [工作量模型](../workload-mapping.md)及本报告：候选合同和比较证据；阶段边界统一见[文档索引](../../README.md)。
 
 只新增--candidate参数，可取V2-1500/C1000/C800/C600；省略时保留V2-1500作历史兼容，
 历史默认不代表正式选择；G2已选C800。没有新增全局schema、工厂、依赖、CUDA/模型运行或安全散列。
