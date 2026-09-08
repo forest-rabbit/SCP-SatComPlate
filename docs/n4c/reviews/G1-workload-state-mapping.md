@@ -1,9 +1,14 @@
 # G1：工作量与恢复状态映射审阅包
 
-日期：2026-09-08。状态：**G1 v3构成对比与本地验证完成，等待最终候选选择及G1批准。**
-本轮任务书：Codex_N4C_G1_v3_Workload_Composition_Review_and_Revision.md。
+日期：2026-09-08。状态：**G1 formally approved. C800 is frozen as the N4C workload baseline.**
+最终批准依据：Codex_N4C_G1_Final_Review_and_G2_Implementation.md。
+此前构成对比依据：Codex_N4C_G1_v3_Workload_Composition_Review_and_Revision.md。
 代码及双次预览固定到 **f04bff7eae7b8c6c699914c01667d6af8060453b**；生成时工作区干净，
-后续文档提交不改变代码或结果。分支保持feature/n4c-workload-mapping；不进入G2/N5。
+本次doc-only批准提交不改变代码或结果，位于feature/n4c-workload-mapping；
+推送后G2从该提交建立feature/n4c-g2-input-runtime，不从旧main重新开始。
+冻结800 tasks（240/240/240/80），INPUT 81.75 GB，10个1 GB + 20个500 MB，
+100,000 WU/s，图像W=ceil(3*S/2000)，LLM 100 WU/token及5000..10000 total token，
+无最小任务时长。C600/C1000/V2-1500的下述对比仍是历史证据。
 
 ## 1. 保留的映射与历史证据
 
@@ -76,17 +81,17 @@ compression占图像计算需求由v2的47.98%下降到新候选约42.50%–43.5
 这是保留类别分配规则的可见结果，不据此宣称类别已经客观均衡。
 每类INPUT及需求完整列在后面的预算表；如要改变这种倾斜，应另行审阅。
 
-### 当前建议
+### 最终选择及理由
 
-建议优先审阅 **C800**，但不将它写为最终配置或“最优负载”：
+用户已正式选择 **C800**；这是受控实验基线，不宣称“最优负载”：
 
 - 普通图像中位数1.29188 s、p95为2.41789 s；仍有269/690个普通图像短于1 s，保留短任务异质性。
 - 保留30个7.5/15 s长图像，以及80个5–10 s LLM；LLM计算需求占比约33.34%，仍是重要组成。
 - C1000保留更多任务，但普通图像p95仅1.87591 s；C600的普通图像中位数1.803425 s，
   可提供更长的单任务进度观察区间，但任务总数与LLM数更少。C800处于两者之间。
 
-这是对任务数量、普通图像粒度和计算需求构成的折中建议，不是根据人为30%/40%阈值，
-也没有验证备份收益或故障命中率。若更重视延长普通任务，C600仍可选择。
+这是对任务数量、普通图像粒度和计算需求构成的折中，不是根据人为30%/40%阈值，
+也没有验证备份收益或故障命中率。3:3:3:1只是实验任务数比例，不代表真实发生率或算力需求比例。
 
 ## 3. INPUT与计算时长分布
 
@@ -198,7 +203,7 @@ LLM未缩短，全部落在5–10 s：
 - docs/n4c/workload-mapping.md、plan-and-baseline.md、本报告：候选合同、比较与阶段边界。
 
 只新增--candidate参数，可取V2-1500/C1000/C800/C600；省略时保留V2-1500作历史兼容，
-不代表它或C800是最终G2选择。没有新增全局schema、工厂、依赖、CUDA/模型运行或安全散列。
+历史默认不代表正式选择；G2已选C800。没有新增全局schema、工厂、依赖、CUDA/模型运行或安全散列。
 TaskModeling保持main / 0dbc0c7b6281219e1356151fd640336cde885e7d，工作区干净。
 
 项目根目录中运行（每个输出目录必须尚不存在）：
@@ -254,9 +259,9 @@ execution.json；无source/result节点、arrival/deadline或备份对象。
 execution是命令、环境、候选与提交身份，不参与逐字节业务比较。项目使用现有
 Python3.10.12和CMake3.31.10，没有环境同步或模型下载步骤。
 
-## 7. 停止点
+## 7. G1 收口与 G2 交接
 
-代码和审阅报告提交、推送原分支供审阅；不创建/合并PR，不触发阶段CI、不打tag或删分支。
-**停在G1，等待用户选择C600/C800/C1000并正式批准。**
-不开始deadline、ComputeProfile/TaskTrace接入、热点、F1/F2/F3调参、replay删除，
-也不执行checkpoint网络或N5算法。
+G1批准以独立doc-only提交推送原分支，保留全部比较证据；不创建/合并PR、不触发CI、不打tag或删分支。
+G2仅接入正式TaskTrace/ComputeProfile、首次计算开始的deadline、none基线、生产replay清理及
+只读在线风险查询。deadline默认alpha=1.3，排除初始INPUT/排队与RESULT，不改变FCFS。
+完成G2报告并推送后停止；热点、故障强度/目标审阅留给G3，真实checkpoint/备份恢复留给N5。

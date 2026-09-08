@@ -1,10 +1,14 @@
-# N4C 工作量与恢复状态候选
+# N4C 工作量与恢复状态映射
 
-本页是 G1 待审阅的候选合同，不代表参数已获批准或接入正式 TaskTrace。
+**G1 formally approved. C800 is frozen as the N4C workload baseline.**
+批准依据为 `Codex_N4C_G1_Final_Review_and_G2_Implementation.md`；正式 TaskTrace 接入属于 G2。
+冻结800 tasks（240/240/240/80）、81.75 GB INPUT、10个1 GB + 20个500 MB，
+统一100,000 WU/s；图像W=ceil(3*S/2000)，LLM 100 WU/token、5000..10000 total token，
+无最小任务时长。其他候选保留为历史对照，不覆盖原始预览。
 本轮依据 `Codex_N4C_G1_Review_Workload_State_Revision_v2.md` 收缩范围：只冻结
 输入、WU、完整恢复状态、sigma/H；5/10/20% 仅作预算守恒检查，不展开 N5。
 v3依据 `Codex_N4C_G1_v3_Workload_Composition_Review_and_Revision.md` 只比较任务数量
-与大图像构成，不改变下述映射、速率、token范围或状态公式；最终候选尚未选择。
+与大图像构成，不改变下述映射、速率、token范围或状态公式；最终候选为C800。
 实现位于 `contrib/satcompute/tools/generation/task_workload_model.py`，只使用标准库。
 TaskModeling 保持不变；平台不导入其代码，不运行图像实验、tokenizer 或 LLM。
 
@@ -151,7 +155,7 @@ BACKUP_START 或已提交状态。本轮没有频率搜索网格、batch 统计�
 |---|---|
 | `--output-dir` | 必填的新目录；已存在则拒绝，保护原始证据 |
 | `--seed` | `n4c-g1-66`，稳定属性生成种子，不是 ns-3 seed/run |
-| `--candidate` | `V2-1500`为兼容历史的默认；可选`C1000/C800/C600`，不是正式G2选择 |
+| `--candidate` | 离线工具保留`V2-1500`历史默认；正式G2选择为显式`C800`，其他仅作比较 |
 | `--reference-rate` | 100000 WU/s；仅用于离线时间计算，不改正式 ComputeProfile |
 | `--llm-work-units-per-token` | 100 WU/token；统一系数，不逐任务反算 |
 | 类型/预算 | 数量比例3:3:3:1；全部候选总 INPUT 81,750,000,000 B |

@@ -1,7 +1,9 @@
 # N4C 计划与基线
 
-当前状态：N4C-0/N4C-1 已完成 G1 v3 工作负载构成对比与本地验证，等待候选选择，见
-[G1 审阅包](reviews/G1-workload-state-mapping.md)；G1 尚未批准。源任务书为工作区中的
+当前状态：**G1 formally approved. C800 is frozen as the N4C workload baseline.**
+见 [G1 审阅包](reviews/G1-workload-state-mapping.md)。最终批准及 G2 合同以工作区的
+`Codex_N4C_G1_Final_Review_and_G2_Implementation.md` 为准，覆盖旧的候选及 deadline 口径。
+源任务书为工作区中的
 `Codex_N4C_Implementation_and_Review_Gates.md`（2026-09-08 修订版）。后续对话确认：
 **仅修改 SatComPlate；TaskModeling 不修改、不重新实验；LLM 不下载、不运行。**
 本页覆盖源任务书第 3.2 节原来的跨仓库开发安排，不修改用户原始任务书。
@@ -9,14 +11,18 @@
 `Codex_N4C_G1_Review_and_cL_cR_Distribution_Revision.md` 的网格和 batch 统计要求。
 不恢复已撤回的 `checkpoint_size_analysis.py`；此前首版的搜索网格也从当前工具中移除。
 v3增量依据 `Codex_N4C_G1_v3_Workload_Composition_Review_and_Revision.md`：保留v2映射
-及历史证据，只比较C1000/C800/C600和10个1 GB+20个500 MB大图像构成，不先冻结C800。
+及历史证据，比较C1000/C800/C600和10个1 GB+20个500 MB大图像构成；最终选择C800。
+
+正式基线：800 tasks，240/240/240/80，INPUT 81.75 GB，10个1 GB + 20个500 MB；
+统一100,000 WU/s；图像W=ceil(3*S/2000)，LLM 100 WU/token、5000..10000 total token；
+不设最小任务时间。C600/C1000/V2-1500继续保留为历史证据。
 
 ## 四个审阅批次
 
 | 批次 | 范围 | 停止点 |
 |---|---|---|
 | 第一阶段 | N4C-0 盘点 + N4C-1 工作量/状态纯函数、LLM 公式、离线候选预览 | G1：工作量、字节、算力候选审阅 |
-| 第二阶段 | N4C-2 四类 TaskTrace/deadline/无故障基线 + N4C-3 在线风险与 replay 清理 | G2：输入/接口/故障标定预算审阅 |
+| 第二阶段 | N4C-2 四类 TaskTrace/计算阶段deadline/无故障基线 + N4C-3 在线风险与生产replay清理 | G2：输入、运行与只读风险接口审阅；停止 |
 | 第三阶段 | N4C-4 原生位置驱动地理负载、none 对照、故障标定与独立验证 | G3：热点、任务影响和参数冻结审阅 |
 | 第四阶段 | N4C-5 整体验收、文档、获批合入、阶段 CI 和 tag | G4：收口确认；之后才进入 N5A |
 
@@ -53,7 +59,7 @@ G1/G2/G3 未批准时不自行推进下一批或合入对应设计。阶段完�
 `tests/unit/` 对应测试。所有函数均无 ns-3 运行、模型加载或网络查询副作用。
 正式 `para.cc`、TaskTrace、ComputeProfile、故障参数和旧 fixture 保持不变。
 
-## G1 v3 候选与待审阅内容
+## G1 冻结内容与 G2 边界
 
 - 三类图像 `a_z=1`，`W=ceil(3*S/2000)`，1 GB 对应 1,500,000 WU，参考算力
   100,000 WU/s、纯计算15 s；不设最小时长。完整字节分账和来源见
@@ -71,7 +77,16 @@ G1/G2/G3 未批准时不自行推进下一批或合入对应设计。阶段完�
 - 重要风险：普通图像与 1 GB 尾部时长差异、合法保存粒度及 1 s 风险周期、
   参考 rho 跨输入外推、LLM 等成本 token 简化。不能靠调整故障强度隐藏这些风险。
 
-G1需要用户从C600/C800/C1000中选择并正式批准；不设LLM占比或短任务占比的任意硬阈值。
-本地测试通过仅说明实现与候选合同一致，不能因审阅者倾向C800就默认接入G2。
+用户已正式批准C800，不设LLM占比或短任务占比的任意硬阈值。
+G2从本次doc-only批准提交创建feature/n4c-g2-input-runtime，先复用G1业务属性生成
+正式TaskTrace及统一100,000 WU/s ComputeProfile，再跑66星/1000 s/10 Gbps/none基线。
+到达窗口1..600 s，无地理热点；全部完成对应1600次INPUT/RESULT业务传输。
+computeDeadlineFactor默认1.3，仅从首次RUNNING建立计算deadline，初始INPUT/排队及
+RESULT不计入；保持FCFS，不自动kill，也不因未来恢复重置。N5的cL只冻结等效预算语义，
+G2不实现checkpoint或真实计算pause。
+G2只保留生产none/generate，测试可直接注入故障事件；在线风险查询不依赖NOTICE/audit，
+不消费RNG，不修改物理状态。完成G2报告并推送后停止，不自行进入G3。
+旧1500任务/45大图像/端到端deadline和约150受影响任务目标均不能沿用为C800的G3合同；
+热点权重、影响任务目标、F1/F2比例、F3 K及独立seed范围留待G3审阅。
 N5A 才做固定 n/delta/节点的真实备份恢复；N5B 做频率优化与状态/成本分析；
-N5C 做节点选择和共享池。本轮完成后提交、推送原分支，停止于 G1，不进入 G2。
+N5C 做节点选择和共享池。PR合入、阶段CI、tag及后续分支整理仍留在G4收口。
