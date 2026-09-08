@@ -20,17 +20,18 @@
 - [N5 前置基础](n5-prerequisites.md)：SCP-TaskModeling 三类任务的增量比例、固定头
   开销和测量边界，以及压力基线与后续备份算法之间尚需确定的内容；
 - [N4C 工作量模型](n4c/workload-mapping.md)：已批准的 C800 映射、参数来源与字节口径；
-- [G1 审阅结果](n4c/reviews/G1-workload-state-mapping.md)：候选比较、冻结决定及验证证据。
+- [G1 审阅结果](n4c/reviews/G1-workload-state-mapping.md)：候选比较、冻结决定及验证证据；
+- [G2 审阅结果](n4c/reviews/G2-input-runtime-baseline.md)：C800 正式输入、deadline、在线风险和执行基线。
 
 ## N4C 阶段边界
 
-G1 已批准，C800 已冻结；G2 正在实现。依据工作区任务书
+G1 已批准，C800 已冻结；G2 已完成本地验收，等待用户审阅，尚未进入 G3。依据工作区任务书
 `Codex_N4C_G1_Final_Review_and_G2_Implementation_v2.md`，不再另维护实施计划副本。
 
 | 审阅点 | 范围 |
 |---|---|
 | G1（已批准） | N4C-0/1：工作量、状态映射和离线预览 |
-| G2（开发中） | N4C-2/3：正式输入、计算阶段 deadline、none 基线、生产 replay 清理与只读在线风险查询 |
+| G2（待审阅） | N4C-2/3：正式输入、计算阶段 deadline、none 基线、生产 replay 清理与只读在线风险查询 |
 | G3 | N4C-4：地理负载热点、none 对照、故障标定与独立 seed 验证 |
 | G4 | N4C-5：整体验收、文档、获批 PR 合入、阶段 CI 与 tag |
 
