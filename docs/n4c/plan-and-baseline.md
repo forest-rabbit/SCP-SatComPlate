@@ -1,6 +1,6 @@
 # N4C 计划与基线
 
-当前状态：N4C-0/N4C-1 正在进行 G1 v3 工作负载构成对比，等待候选选择，见
+当前状态：N4C-0/N4C-1 已完成 G1 v3 工作负载构成对比与本地验证，等待候选选择，见
 [G1 审阅包](reviews/G1-workload-state-mapping.md)；G1 尚未批准。源任务书为工作区中的
 `Codex_N4C_Implementation_and_Review_Gates.md`（2026-09-08 修订版）。后续对话确认：
 **仅修改 SatComPlate；TaskModeling 不修改、不重新实验；LLM 不下载、不运行。**
