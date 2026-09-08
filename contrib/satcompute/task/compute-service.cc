@@ -89,10 +89,7 @@ ComputeService::SubmitTask(uint64_t taskId,
     NS_ABORT_MSG_IF(queueEnterTimeNs < 0 ||
                         queueEnterTimeNs != Simulator::Now().GetNanoSeconds(),
                     "queue entry time must equal the current simulation time");
-    if (!m_computeAvailable)
-    {
-        return false;
-    }
+    // Temporary compute outages stop dispatch, not admission to the FCFS queue.
     NS_ABORT_MSG_IF(!m_knownTaskIds.insert(taskId).second,
                     "ComputeService received a duplicate task ID");
 

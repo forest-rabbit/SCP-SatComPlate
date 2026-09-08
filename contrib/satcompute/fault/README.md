@@ -360,7 +360,9 @@ NOTICE -> NOTICE_CLEAR -> RECOVERY -> START
 最后一条因果预测，同时不会提前读取 START 或把无预警故障伪装为命中预测。
 
 compute START 只令目标节点 `compute_available=false`，不会关闭 ISL 或重算路由。
-目标节点上尚未越过计算阶段的任务按 N4A 合同失败；有限恢复只接纳新任务。
+只直接中断 RUNNING 任务；QUEUED 保留，INPUT/新到达可继续传输入队，RESULT 不受影响。
+有限恢复后按原 FCFS 调度，旧 FAILED victim 不复活。停机期间仍更新模型状态，
+但不新增 F1/F2 抽样或重叠停机；同次 F1/F2 命中仅产生一次 compute START。
 
 satellite START 同时关闭整星、通信和计算，在精确时刻更新有效 ISL 并在边集合变化时
 立即重算 IPv4。恢复会读取当时的实时轨道位置，只恢复仍满足距离门限的固定候选；

@@ -383,6 +383,17 @@ RunComputeFaultScenario(bool generateOnline)
                                 phasesChecked = true;
                             });
 
+        Simulator::Schedule(NanoSeconds(199 * MILLISECOND_NS), [coordinator] {
+            for (const uint64_t id : std::vector<uint64_t>{1, 2, 6, 8})
+            {
+                const auto& task = FindTask(*coordinator, id);
+                Check(task.state == TASK_QUEUED && task.computeStartTimeNs == -1 &&
+                          task.computeDeadlineTimeNs == -1,
+                      "outage did not retain unstarted queue without a deadline");
+            }
+            Check(!coordinator->GetComputeServices().front()->HasRunningTask(),
+                  "outage dispatched work");
+        });
         Simulator::Stop(NanoSeconds(SIMULATION_DURATION_NS));
         Simulator::Run();
         if (generateOnline)
@@ -426,8 +437,8 @@ RunComputeFaultScenario(bool generateOnline)
                   !firstNotice.riskDurationNs.has_value() &&
                   firstNotice.failureProbability == 0.8,
               "NOTICE leaked future occurred-fault fields");
-        Check(firstStart.affectedTaskCount == 4 &&
-                  firstStart.affectedTransferCount == 6 &&
+        Check(firstStart.affectedTaskCount == 1 &&
+                  firstStart.affectedTransferCount == 1 &&
                   !firstStart.computeAvailableAfter &&
                   firstStart.startTimeNs == 100 * MILLISECOND_NS,
               "first compute fault impact counts differ");
@@ -451,25 +462,42 @@ RunComputeFaultScenario(bool generateOnline)
               "finite compute fault did not recover cleanly");
 
         for (const uint64_t taskId :
-             std::vector<uint64_t>{1, 2, 3, 6, 8})
+             std::vector<uint64_t>{3})
         {
             const TaskRuntime& task = FindTask(*coordinator, taskId);
             Check(task.state == TASK_FAILED &&
                       task.failureReason == TaskFailureReason::COMPUTE_NODE_FAILURE,
                   "compute fault did not leave task in permanent FAILED state");
         }
-        for (const uint64_t taskId : std::vector<uint64_t>{4, 5, 7})
+        for (const uint64_t taskId : std::vector<uint64_t>{1, 2, 4, 5, 6, 7, 8})
         {
             Check(FindTask(*coordinator, taskId).state == TASK_COMPLETED,
                   "unaffected or post-recovery task did not complete");
         }
-        Check(FindTask(*coordinator, 8).failureTimeNs == 100 * MILLISECOND_NS &&
-                  FindTask(*coordinator, 6).failureTimeNs == 150 * MILLISECOND_NS,
-              "same-time or in-outage arrival failure time differs");
+        for (const uint64_t taskId : std::vector<uint64_t>{1, 2, 6, 8})
+        {
+            Check(FindTask(*coordinator, taskId).computeStartTimeNs >=
+                      250 * MILLISECOND_NS,
+                  "queued or in-outage arrival task started before recovery");
+        }
+        std::vector<const TaskRuntime*> resumed;
+        for (const uint64_t id : std::vector<uint64_t>{1, 2, 6, 8})
+        {
+            resumed.push_back(&FindTask(*coordinator, id));
+        }
+        std::sort(resumed.begin(), resumed.end(), [](const auto* left, const auto* right) {
+            return std::tie(left->queueEnterTimeNs, left->definition.taskId) <
+                   std::tie(right->queueEnterTimeNs, right->definition.taskId);
+        });
+        for (std::size_t i = 1; i < resumed.size(); ++i)
+        {
+            Check(resumed[i - 1]->computeStartTimeNs < resumed[i]->computeStartTimeNs,
+                  "recovery changed FCFS order");
+        }
 
         Ptr<NetworkTransferEngine> transferEngine = coordinator->GetTransferEngine();
         for (const uint64_t transferId :
-             std::vector<uint64_t>{1, 2, 4, 6, 11, 12, 15, 16})
+             std::vector<uint64_t>{6})
         {
             Check(transferEngine->GetTransferState(transferId) ==
                           TransferRuntimeState::CANCELLED &&
@@ -484,7 +512,7 @@ RunComputeFaultScenario(bool generateOnline)
                       TransferRuntimeState::COMPLETED,
               "completed input transfer history was not preserved");
         for (const uint64_t transferId :
-             std::vector<uint64_t>{7, 8, 9, 10, 13, 14})
+             std::vector<uint64_t>{1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
         {
             Check(transferEngine->GetTransferState(transferId) ==
                       TransferRuntimeState::COMPLETED,
@@ -493,11 +521,11 @@ RunComputeFaultScenario(bool generateOnline)
 
         const Ptr<ComputeService> service = coordinator->GetComputeServices().front();
         Check(service->IsComputeAvailable() && service->IsIdle() &&
-                  service->GetEnqueuedTaskCount() == 5 && service->GetCompletedTaskCount() == 3 &&
+                  service->GetEnqueuedTaskCount() == 8 && service->GetCompletedTaskCount() == 7 &&
                   service->GetCancelledRunningTaskCount() == 1 &&
-                  service->GetRemovedQueuedTaskCount() == 1 &&
+                  service->GetRemovedQueuedTaskCount() == 0 &&
                   service->GetBusyTimeNs() ==
-                      3 + static_cast<uint64_t>(FindTask(*coordinator, 3).failureTimeNs -
+                      7 + static_cast<uint64_t>(FindTask(*coordinator, 3).failureTimeNs -
                                                 FindTask(*coordinator, 3).computeStartTimeNs),
               "compute fault service accounting differs");
         Check(topology.GetRouteComputationCount() == routeComputationsBefore &&

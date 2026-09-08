@@ -88,14 +88,16 @@ compute 故障开始时，`TaskCoordinator` 按当前阶段处理目标节点任
 
 | 当前状态 | 处理 |
 |---|---|
-| `PENDING` 且恰在同纳秒到达 | 任务失败，INPUT/RESULT 都取消 |
-| `INPUT_TRANSFERRING` | 任务失败，活动 INPUT 与未启动 RESULT 都取消 |
-| `QUEUED` | 从 FCFS 队列精确移除，任务失败，保留已完成 INPUT，取消 RESULT |
+| `PENDING` / 停机期间新到达 | 整星端点存活时照常启动 INPUT |
+| `INPUT_TRANSFERRING` | INPUT 继续，收齐后可在停机期间入队 |
+| `QUEUED` | 保留原 FCFS 队列，恢复后继续调度，不建立首次计算 deadline |
 | `RUNNING` | 取消 completion event，任务失败，保留已完成 INPUT，取消 RESULT |
 | `RESULT_TRANSFERRING` / `COMPLETED` | 计算阶段已越过，不受 compute 故障影响 |
 
-故障期间后来到达的任务同样立即失败。有限恢复只令 service 接受新任务，既不恢复
-旧 `FAILED` 任务，也不创建迁移、重放或新的 attempt。
+F1/F2 是临时计算服务停机，假设输入数据和队列保留；恢复后继续原 FCFS 调度。
+已被打断的 RUNNING 任务仍为 `FAILED`，不自动恢复、重计算、迁移或创建新 attempt。
+停机造成的排队受阻单独记录，不直接等同于额外增加整个停机时长；初始等待不消耗
+compute deadline，结束时未完成仍属于截断。F3 永久整星失效不适用队列保留规则。
 
 整星故障还检查任务当前仍需要的三个端点：
 

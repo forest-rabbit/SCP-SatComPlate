@@ -213,11 +213,6 @@ TaskCoordinator::HandleTaskArrival(uint64_t taskId)
                                  "RESULT_SATELLITE_UNAVAILABLE_AT_ARRIVAL");
         return;
     }
-    if (!GetComputeService(task.definition.computeNodeId)->IsComputeAvailable())
-    {
-        FailTaskForComputeNode(task, timeNs, "COMPUTE_NODE_UNAVAILABLE_AT_ARRIVAL");
-        return;
-    }
     TransitionTask(taskId,
                    TASK_INPUT_TRANSFERRING,
                    task.definition.sourceNodeId,
@@ -247,13 +242,6 @@ TaskCoordinator::HandleInputTransferComplete(uint64_t transferId, int64_t comple
                                  task.definition.computeNodeId,
                                  completionTimeNs,
                                  "COMPUTE_SATELLITE_UNAVAILABLE_AFTER_INPUT");
-        return;
-    }
-    if (!GetComputeService(task.definition.computeNodeId)->IsComputeAvailable())
-    {
-        FailTaskForComputeNode(task,
-                               completionTimeNs,
-                               "COMPUTE_NODE_UNAVAILABLE_AFTER_INPUT");
         return;
     }
     TransitionTask(task.definition.taskId,
@@ -779,11 +767,8 @@ TaskCoordinator::ApplyFaultBatch(
         TaskFaultImpact& nodeImpact = impacts.at(change.nodeId);
         for (TaskRuntime& task : m_tasks)
         {
-            if (IsTerminalTaskState(task.state) ||
-                task.definition.computeNodeId != change.nodeId ||
-                task.state == TASK_RESULT_TRANSFERRING ||
-                (task.state == TASK_PENDING &&
-                 task.definition.arrivalTimeNs != eventTimeNs))
+            if (task.state != TASK_RUNNING ||
+                task.definition.computeNodeId != change.nodeId)
             {
                 continue;
             }
