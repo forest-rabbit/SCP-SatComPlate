@@ -34,10 +34,15 @@
 | `output_bytes` | `uint64` | 必须大于 0；计算完成后实际发送的结果大小 |
 | `compute_work_units` | `uint64` | 必须大于 0 |
 | `arrival_time_ns` | 非负整数 | 必须严格早于 `simulationDuration` |
+| `task_profile` | 可选字符串 | `dense-image`、`sparse-inference`、`compression`、`llm`；缺省为内部 `UNSPECIFIED`，不接受显式 null/未知类别 |
 
 TaskTrace 是精确事件数据，因此到达时刻直接使用整数纳秒；平台级仿真时长和周期仍
 以秒传入 CLI。文件不接受未知字段，也不包含 schema/version/hash。reader 会按
 `task_id` 排序，数组顺序不影响运行。
+
+N4C 的 C800 全部显式给出 `task_profile`，使用全 66 星 100,000 WU/s 的
+[正式输入](../examples/leo-66-1000s-n4c/README.md)。旧文件缺省类别时保持原算力口径；
+首次计算才建立的绝对 deadline 不存入输入 JSON，属于运行时状态。
 
 ## 正式 workload
 

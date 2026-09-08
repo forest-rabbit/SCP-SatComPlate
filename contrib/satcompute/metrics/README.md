@@ -56,6 +56,19 @@ metrics/
 `run-summary.json` 同时保留便于脚本读取的顶层计数和按 `transfer`、`task` 分组的
 汇总。它记录实际使用的任务文件路径和关键运行参数，但不复制一份平台配置。
 
+## 任务与算力字段
+
+`task-summary.csv` 的 N4C 字段为 `task_profile`、`baseline_compute_time_ns`、
+`compute_deadline_budget_ns`、`compute_deadline_time_ns`、`compute_deadline_met`、
+`result_delivered`、`task_success` 和 `compute_stage_elapsed_time_ns`。
+绝对 deadline 在首次开始计算前为 `-1`；布尔列为 `0/1`。
+成功必须同时满足按时计算完成和完整 RESULT 送达，不能只看计算完成时间。
+elapsed 记录计算开始到完成、失败或仿真截断的已过时间；初始等待不占 deadline。
+
+`compute-node-summary.csv` 另列 `task_count/total_work_units/total_queue_wait_ns`、
+`cancelled_running_tasks/removed_queued_tasks`。前两项是分配需求；busy time 是实际占用，
+包含失败和截断前已执行的时间，不因失败抹除资源消耗。
+
 ## 可选链路窗口统计
 
 `--linkMetrics=1 --linkMetricsInterval=1` 启用每秒定向链路统计。默认关闭，不连接

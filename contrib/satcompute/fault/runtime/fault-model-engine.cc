@@ -664,6 +664,11 @@ FaultModelEngine::QueryComputeRisk(uint32_t nodeId, int64_t horizonNs) const
         return result;
     }
     result.status = ComputeRiskStatus::AVAILABLE;
+    if (!m_f1Model && !m_f2Model)
+    {
+        result.pF1 = result.pF2 = result.pCompute = 0.0;
+        return result;
+    }
     auto f1 = state.f1State;
     auto f2 = state.f2State;
     const bool busy = state.computeService->HasRunningTask();

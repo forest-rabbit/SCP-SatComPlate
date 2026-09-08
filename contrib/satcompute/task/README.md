@@ -82,7 +82,7 @@ service_time_ns = ceil(
 
 `ComputeService` 还提供计算可用性开关，以及精确取消 running task、移除 queued
 task 的幂等接口。被取消的运行任务不会触发原 completion event，也不会计入正常
-完成数或成功计算 busy time；节点恢复后只调度队列中仍合法的任务。
+完成数，但取消前实际执行时间仍计入 busy time；节点恢复后只调度队列中仍合法的任务。
 
 compute 故障开始时，`TaskCoordinator` 按当前阶段处理目标节点任务：
 

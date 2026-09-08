@@ -72,7 +72,7 @@ N4B 联合档还检查 100 任务、5 个有界热点、F2/F3 窗口任务、62 
 - `run-full-workload-regression.sh`：运行任务确定性、无任务模式、strict/report、
   失败诊断，并执行正式的 100 秒/66 星/20 任务示例；
 - `run-fault-lifecycle-regression.sh`：覆盖 N4B F1 热校准，
-  以及 F2 轨道偏移、真实 ECEF 暴露、100-run 概率标定、风险-only、有/无预警实际
+  以及 F2 轨道偏移、真实 ECEF 风险、risk-only、有/无预警实际
   故障和 66 星小任务闭环；同时检查同 seed trace 一致、重复 generate 逐文件等价、
   compute 故障不改变路由、故障中任务失败和恢复后新任务完成；预测部分检查滚动的
   F1/F2/`q_comp`、动态 `P_fail_before_finish`、任务剩余时间、NOTICE 当刻输出、风险

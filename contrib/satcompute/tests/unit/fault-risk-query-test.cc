@@ -38,7 +38,7 @@ struct Signature
 };
 
 Signature
-Run(bool queryEnabled, bool auditEnabled)
+Run(bool queryEnabled, bool auditEnabled, bool computeSources = true)
 {
     RngSeedManager::SetSeed(1);
     RngSeedManager::SetRun(1);
@@ -67,12 +67,16 @@ Run(bool queryEnabled, bool auditEnabled)
               "unconfigured query must not be ready");
         auto parameters = GetDefaultFaultParameters();
         parameters.f1.temperature.heatingTauSeconds = 2.0;
-        parameters.f2.enabled = true;
+        parameters.f1.enabled = computeSources;
+        parameters.f2.enabled = computeSources;
         parameters.f3.enabled = true;
         model->Configure(parameters, ids, ids, durationNs, controller, auditEnabled);
         Check(model->QueryComputeRisk(3).status == ComputeRiskStatus::NOT_READY,
               "unbound query must not be ready");
-        model->BindOrbitConstellation(topology.GetConstellation());
+        if (computeSources)
+        {
+            model->BindOrbitConstellation(topology.GetConstellation());
+        }
         auto coordinator = CreateObject<TaskCoordinator>();
         coordinator->Initialize(profile,
                                 tasks,
@@ -132,17 +136,22 @@ Run(bool queryEnabled, bool auditEnabled)
                           "query time/horizon differs");
                     if (q.status == ComputeRiskStatus::AVAILABLE)
                     {
-                        Check(q.checkCount == 1 && q.pF1 && q.pF2 && q.pCompute,
+                        Check(q.checkCount == (computeSources ? 1 : 0) && q.pF1 && q.pF2 &&
+                                  q.pCompute,
                               "available query lacks one-second probabilities");
                         Close(*q.pCompute, CombineComputeFaultProbabilities(*q.pF1, *q.pF2));
                         auto f1 = live.f1State;
                         auto f2 = live.f2State;
-                        F1SelfStateFaultModel(parameters.f1).Update(f1, isBusy, 1.0);
-                        F2RadiationFaultModel(parameters.f2)
-                            .Update(f2,
+                        if (computeSources)
+                        {
+                            F1SelfStateFaultModel(parameters.f1).Update(f1, isBusy, 1.0);
+                            F2RadiationFaultModel(parameters.f2)
+                                .Update(
+                                    f2,
                                     topology.GetConstellation().GetPositionAt(live.nodeId,
                                                                               Seconds(second + 1)),
                                     1.0);
+                        }
                         Close(*q.pF1, f1.stepFailureProbability);
                         Close(*q.pF2, f2.stepFailureProbability);
                         if (isBusy)
@@ -150,7 +159,8 @@ Run(bool queryEnabled, bool auditEnabled)
                         else if (!live.riskEpisodeActive)
                             ++idle;
                         auto longer = model->QueryComputeRisk(live.nodeId, 2000000000LL);
-                        Check(longer.checkCount == 2 && *longer.pCompute >= *q.pCompute,
+                        Check(longer.checkCount == (computeSources ? 2 : 0) &&
+                                  *longer.pCompute >= *q.pCompute,
                               "longer horizon is not cumulative");
                         auto shorter = model->QueryComputeRisk(live.nodeId, 1);
                         Check(shorter.checkCount == 0 && shorter.pCompute == 0.0,
@@ -237,6 +247,8 @@ main()
         Check(control.business == queried.business && queried.business == audited.business,
               "query/audit changed generation");
         Check(queried.queries == audited.queries, "audit changed query values");
+        const auto f3Only = Run(true, false, false);
+        Check(!f3Only.queries.empty(), "F3-only query case was not exercised");
         std::cout << "SatCompute read-only node risk query tests passed.\n";
         return 0;
     }
