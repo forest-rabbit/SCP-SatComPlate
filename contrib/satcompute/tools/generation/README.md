@@ -182,3 +182,13 @@ F1 验证档额外把热点节点、预期临界故障任务、恢复后任务�
 `bounded_weighted_allocation`）、稳定节点/类别/时间分配，以及最终 TaskTrace 和
 summary 写出。对应单元测试见
 [test_workload_generators.py](../../tests/unit/test_workload_generators.py)。
+
+## N4C G1 离线建模候选
+
+`task_workload_model.py` 提供三类图像的字节/WU/状态预算、LLM token/KV公式和合法
+checkpoint 进度纯函数。图像只引用已有 TaskModeling 测量；LLM 不下载或运行模型。
+`preview-n4c-workload.py` 按需生成1500项离线属性预算与算力候选对照；它不是新的
+正式 TaskTrace 生成档，不改变上面的四个档位、默认参数或运行时接口。
+
+所有候选参数、字节来源和命令见[工作量模型](../../../../docs/n4c/workload-mapping.md)。
+仅显式调用预览命令才会生成 CSV/JSON，正常仿真不增加输出。G1 通过前不接入正式生成器。

@@ -154,6 +154,11 @@ smoke 使用正式输入最早到达的 20 个任务、30 s 仿真，并对照�
 
 ## CI 规则
 
+N4C G1 的 `test_n4c_workload_model.py` 与 `test_n4c_workload_preview.py` 也由现有
+Python unittest 发现入口运行，覆盖公式、非法参数、字节守恒、合法进度和1500项
+离线预算。它们不下载数据/模型，不运行网络或随机故障标定。手动预览命令见
+[N4C 工作量模型](../../../docs/n4c/workload-mapping.md)。
+
 GitHub 的 `SatCompute CI` 是手动阶段门禁：一个大阶段的 PR 全部合并到 `main` 后，
 只触发一次，通过并确认提交已合并后清理功能分支。阶段内的小提交和 PR 只运行
 与改动匹配的本地检查；最终
