@@ -495,7 +495,8 @@ FaultController::ProcessBatch(int64_t simulationTimeNs)
                 {event.fault.nodeId,
                  event.fault.faultType == FaultType::SATELLITE
                      ? TaskFaultKind::SATELLITE
-                     : TaskFaultKind::COMPUTE});
+                     : TaskFaultKind::COMPUTE,
+                 event.fault});
             refreshNaturalState =
                 refreshNaturalState || event.fault.faultType == FaultType::SATELLITE;
         }
@@ -508,7 +509,8 @@ FaultController::ProcessBatch(int64_t simulationTimeNs)
                 {event.fault.nodeId,
                  event.fault.faultType == FaultType::SATELLITE
                      ? TaskFaultKind::SATELLITE
-                     : TaskFaultKind::COMPUTE});
+                     : TaskFaultKind::COMPUTE,
+                 event.fault});
         }
 
         const FaultNodeAvailability& availability =

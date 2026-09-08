@@ -148,6 +148,75 @@ WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
     summaryOutput << summary.dump(2) << '\n';
 }
 
+const char*
+FaultSource(const FaultDefinition& fault)
+{
+    if (fault.faultType == FaultType::SATELLITE)
+    {
+        return "F3";
+    }
+    if (fault.f1Occurred && fault.f2Occurred)
+    {
+        return "F1+F2";
+    }
+    return fault.f1Occurred ? "F1" : fault.f2Occurred ? "F2" : "UNSPECIFIED";
+}
+
+void
+WriteTaskImpacts(const TaskCoordinator& coordinator, const std::string& outputDirectory)
+{
+    std::map<uint64_t, const TaskRuntime*> tasks;
+    for (const auto& task : coordinator.GetTaskRuntimes())
+    {
+        tasks.emplace(task.definition.taskId, &task);
+    }
+    std::ofstream output(OutputPath(outputDirectory, "fault-task-impact.csv"));
+    if (!output)
+    {
+        throw std::runtime_error("cannot write fault-task-impact.csv");
+    }
+    output << "fault_id,fault_type,fault_time_ns,impact_time_ns,fault_node_id,task_id,"
+              "task_profile,input_bytes,output_bytes,compute_work_units,task_state_before_fault,"
+              "task_state_before_impact,impact_type,compute_start_time_ns,"
+              "completed_work_units_at_fault,remaining_work_units_at_fault,compute_progress_at_fault,"
+              "progress_valid,baseline_compute_time_ns,compute_deadline_time_ns,"
+              "deadline_slack_at_fault_ns,recoverable_outage_duration_ns,final_task_state,"
+              "final_failure_reason\n";
+    output << std::setprecision(17);
+    for (const auto& record : coordinator.GetFaultTaskImpacts())
+    {
+        const auto& task = *tasks.at(record.taskId);
+        const auto& def = task.definition;
+        const auto& fault = record.fault;
+        const auto faultTime = fault.startTimeNs.value();
+        const char* atStart = record.impactTimeNs == faultTime
+            ? TaskStateToString(record.stateBeforeImpact)
+            : def.arrivalTimeNs > faultTime ? "NOT_ARRIVED" : "NOT_CAPTURED";
+        output << fault.faultId << ',' << FaultSource(fault) << ',' << faultTime << ','
+               << record.impactTimeNs << ',' << fault.nodeId << ',' << def.taskId << ','
+               << TaskProfileToString(def.taskProfile) << ',' << def.inputBytes << ','
+               << def.outputBytes << ',' << def.computeWorkUnits << ',' << atStart << ','
+               << TaskStateToString(record.stateBeforeImpact) << ',' << record.impactType << ','
+               << record.computeStartTimeNs << ',';
+        if (record.progressValid)
+        {
+            output << record.completedWorkUnits << ',' << record.remainingWorkUnits << ','
+                   << static_cast<double>(record.completedWorkUnits) / def.computeWorkUnits;
+        }
+        else
+        {
+            output << "-1,-1,-1";
+        }
+        output << ',' << static_cast<int>(record.progressValid) << ','
+               << task.baselineComputeTimeNs << ',' << record.deadlineTimeNs << ','
+               << (record.deadlineTimeNs < 0 ? -1 : record.deadlineTimeNs - faultTime) << ','
+               << fault.durationNs.value_or(-1) << ','
+               << (IsTerminalTaskState(task.state) ? TaskStateToString(task.state) : "TRUNCATED")
+               << ',' << (task.state == TASK_FAILED ? TaskFailureReasonToString(task.failureReason) : "")
+               << '\n';
+    }
+}
+
 } // namespace
 
 void
@@ -160,6 +229,11 @@ WriteFaultMetrics(const FaultController& controller,
 {
     const FaultTrace& trace = controller.GetTrace();
     const std::vector<FaultRuntimeEventRecord>& events = controller.GetEvents();
+    std::map<uint64_t, const FaultDefinition*> faultById;
+    for (const auto& fault : trace.faults)
+    {
+        faultById.emplace(fault.faultId, &fault);
+    }
 
     std::ofstream eventOutput(OutputPath(outputDirectory, "fault-events.csv"),
                               std::ios::out | std::ios::trunc);
@@ -171,7 +245,7 @@ WriteFaultMetrics(const FaultController& controller,
                    "notice_time_ns,start_time_ns,duration_ns,failure_probability,"
                    "satellite_available_after,communication_available_after,"
                    "compute_available_after,affected_task_count,affected_transfer_count,"
-                   "route_recomputed\n";
+                   "route_recomputed,fault_source\n";
     eventOutput << std::setprecision(17) << std::boolalpha;
     for (const FaultRuntimeEventRecord& event : events)
     {
@@ -188,7 +262,9 @@ WriteFaultMetrics(const FaultController& controller,
         eventOutput << ',' << event.satelliteAvailableAfter << ','
                     << event.communicationAvailableAfter << ','
                     << event.computeAvailableAfter << ',' << event.affectedTaskCount << ','
-                    << event.affectedTransferCount << ',' << event.routeRecomputed << '\n';
+                    << event.affectedTransferCount << ',' << event.routeRecomputed << ','
+                    << (event.eventType == FaultEventType::START
+                            ? FaultSource(*faultById.at(event.faultId)) : "") << '\n';
     }
 
     uint64_t computeFaultCount = 0;
@@ -275,6 +351,11 @@ WriteFaultMetrics(const FaultController& controller,
     }
     summaryOutput << summary.dump(2) << '\n';
 
+    if (taskCoordinator != nullptr)
+    {
+        WriteTaskImpacts(*taskCoordinator, outputDirectory);
+    }
+
     if (predictionEngine != nullptr)
     {
         if (taskCoordinator == nullptr)
@@ -314,6 +395,7 @@ RemoveFaultMetrics(const std::string& outputDirectory)
     RemoveOwnedFile(root / "fault-predictions.csv");
     RemoveOwnedFile(root / "fault-prediction-summary.json");
     RemoveOwnedFile(root / "fault-model-probabilities.csv");
+    RemoveOwnedFile(root / "fault-task-impact.csv");
 }
 
 } // namespace ns3

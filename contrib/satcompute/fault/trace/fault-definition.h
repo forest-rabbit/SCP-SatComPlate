@@ -34,6 +34,8 @@ struct FaultDefinition
     std::optional<int64_t> warningLeadTimeNs; ///< Start minus notice.
     std::optional<int64_t> riskDurationNs; ///< Risk-clear minus notice.
     std::optional<int64_t> durationNs; ///< Recoverable outage duration.
+    bool f1Occurred{}; ///< Observed independent F1 hit; runtime provenance, not a new event.
+    bool f2Occurred{}; ///< Observed independent F2 hit; both may be true for one outage.
 
     /** @return Start plus duration, or null for non-recoverable/non-fault records. */
     std::optional<int64_t> GetRecoveryTimeNs() const;

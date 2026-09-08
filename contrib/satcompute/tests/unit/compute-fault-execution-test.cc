@@ -89,6 +89,7 @@ MakeComputeFault(uint64_t faultId,
     fault.failureProbability = failureProbability;
     fault.warningLeadTimeNs = fault.GetWarningLeadTimeNs();
     fault.durationNs = durationNs;
+    fault.f1Occurred = true;
     return fault;
 }
 
@@ -302,6 +303,9 @@ RunComputeFaultScenario(bool generateOnline)
                              50 * MILLISECOND_NS),
         };
         Ptr<FaultController> controller = CreateObject<FaultController>();
+        trace.faults[0].f2Occurred = true;
+        trace.faults[1].f1Occurred = false;
+        trace.faults[1].f2Occurred = true;
         Ptr<FaultPredictionEngine> predictionEngine =
             CreateObject<FaultPredictionEngine>();
         FaultParameters predictionParameters = GetDefaultFaultParameters();
@@ -520,6 +524,40 @@ RunComputeFaultScenario(bool generateOnline)
         }
 
         const Ptr<ComputeService> service = coordinator->GetComputeServices().front();
+        const auto& impacts = coordinator->GetFaultTaskImpacts();
+        std::size_t interrupted = 0;
+        bool sawLaterArrival = false;
+        bool sawRepeatedQueue = false;
+        for (const auto& record : impacts)
+        {
+            if (record.impactType == "RUNNING_INTERRUPTED")
+            {
+                ++interrupted;
+                const auto& task = FindTask(*coordinator, record.taskId);
+                Check(record.taskId == 3 && record.fault.f1Occurred && record.fault.f2Occurred &&
+                          record.progressValid && record.impactTimeNs == 100 * MILLISECOND_NS &&
+                          record.completedWorkUnits == static_cast<uint64_t>(
+                              record.impactTimeNs - task.computeStartTimeNs) &&
+                          record.completedWorkUnits + record.remainingWorkUnits ==
+                              task.definition.computeWorkUnits &&
+                          record.deadlineTimeNs == task.computeDeadlineTimeNs,
+                      "direct impact source/progress/deadline snapshot differs");
+            }
+            else
+            {
+                Check(!record.progressValid && record.computeStartTimeNs == -1 &&
+                          record.deadlineTimeNs == -1,
+                      "indirect impact fabricated running progress or future deadline");
+            }
+            sawLaterArrival |= record.taskId == 6 &&
+                record.impactType == "ARRIVAL_DURING_COMPUTE_OUTAGE" &&
+                record.impactTimeNs == 150 * MILLISECOND_NS &&
+                record.fault.startTimeNs == 100 * MILLISECOND_NS;
+            sawRepeatedQueue |= record.taskId == 2 && record.fault.faultId == 2 &&
+                record.impactType == "QUEUED_DELAYED";
+        }
+        Check(interrupted == 1 && sawLaterArrival && sawRepeatedQueue,
+              "fault/task ledger lost source union, later admission, or a repeated impact");
         Check(service->IsComputeAvailable() && service->IsIdle() &&
                   service->GetEnqueuedTaskCount() == 8 && service->GetCompletedTaskCount() == 7 &&
                   service->GetCancelledRunningTaskCount() == 1 &&

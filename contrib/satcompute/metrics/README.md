@@ -6,6 +6,17 @@
 
 ## 代码结构
 
+G3 的 `fault-task-impact.csv` 在 generate 任务运行结束时输出，不依赖概率 audit。
+一行记录一个 `(fault_id, task_id, impact_type)`，同任务遭遇不同停机分别保留。
+`fault_type` 是该账本的来源标签 F1/F2/F1+F2/F3；旧 fault-events 的 compute/satellite
+资源类型不变，追加 `fault_source`。同次两来源命中只执行一次停机，联合 victim 按 task 去重。
+`fault_time_ns` 为 START，`impact_time_ns` 为实际观察（例如停机后新到达）；
+`task_state_before_fault` 对尚未到达任务为 NOT_ARRIVED，对未在 START 采集的其他状态
+为 NOT_CAPTURED，不能用后来的状态冒充历史。`task_state_before_impact` 保存观察前状态。
+仅 RUNNING 记录有效 WU 进度，使用真实速率乘已执行时间的 128-bit 整数计算；
+未开始的 progress/WU/deadline 使用无效标记。最终结果在结束时关联，未终结为 TRUNCATED。
+QUEUED_DELAYED 表示停机期间无法调度，不声称比 none 固定多等 8 s；额外等待需对照。
+
 ```text
 metrics/
 ├── metrics.h / metrics.cc                         统一编排、交叉校验和旧文件清理

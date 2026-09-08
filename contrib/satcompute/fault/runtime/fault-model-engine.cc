@@ -539,6 +539,8 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
                                  state.riskEpisode,
                                  stepFailureProbability,
                                  simulationTimeNs);
+            fault.f1Occurred = outcome.f1Occurred;
+            fault.f2Occurred = outcome.f2Occurred;
             events.push_back({FaultEventType::START, fault});
             completedRecords.push_back(fault);
             state.activeComputeFault = fault;

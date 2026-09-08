@@ -316,6 +316,10 @@ MetricsRecorder::Record()
                           outputDirectory.string());
         result.files.push_back(outputDirectory / "fault-events.csv");
         result.files.push_back(outputDirectory / "fault-summary.json");
+        if (taskCoordinator != nullptr)
+        {
+            result.files.push_back(outputDirectory / "fault-task-impact.csv");
+        }
         if (context.faultPredictionEngine != nullptr)
         {
             result.files.push_back(outputDirectory / "fault-predictions.csv");
