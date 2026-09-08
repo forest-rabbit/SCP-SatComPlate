@@ -49,6 +49,7 @@ main()
                 "unexpected routing defaults");
         Require(config.computeProfile.empty() && config.taskTrace.empty(),
                 "workload inputs must be opt-in");
+        Require(config.computeDeadlineFactor == 1.3, "unexpected compute deadline factor");
         Require(config.transferChunkMode == "size-aware" &&
                     config.transferPayloadBytes == 1'024 &&
                     config.taskCompletionPolicy == "strict",

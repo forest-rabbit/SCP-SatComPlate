@@ -53,8 +53,8 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
 
 1. generate，默认关闭概率审计，代表正常运行；
 2. generate，显式开启概率审计，验证开关不改变 Fault Trace；
-3. replay，开启概率审计，验证执行等价和概率对概率一致性；
-4. replay，关闭审计并复用第 3 轮目录，验证陈旧概率文件被清理。
+3. 重复 generate，开启概率审计，验证执行等价和概率对概率一致性；
+4. 重复 generate，关闭审计并复用第 3 轮目录，验证陈旧概率文件被清理。
 
 共同参数为：
 
@@ -79,7 +79,7 @@ taskCompletionPolicy=report
 `829256867404 ns` 的永久 F3 整星故障。F1/F2 不重算路由，F3 只引起一次即时路由
 重算；仿真结束时 Capacity-aware 和 Size-aware 账本必须归零。
 
-概率审计开启时，generate 在线模型与 replay 影子预测应匹配 82 条记录；正常运行
+概率审计开启时，generate 在线模型与 独立审计预测应匹配 82 条记录；正常运行
 不得生成或保留 `fault-model-probabilities.csv`、`fault-predictions.csv` 和
 `fault-prediction-summary.json`。具体断言由
 `tests/integration/regression/run-n4b-joint-acceptance.sh` 维护。
@@ -91,6 +91,6 @@ contrib/satcompute/tests/integration/regression/run-n4b-joint-acceptance.sh
 ```
 
 空间 F2 阶段三的冻结验收中，四轮运行全部通过：normal/audit generate 的 Fault Trace
-逐字节相同，audit generate/replay 的事件、任务、transfer、路由和 reservation 输出
+逐字节相同，audit generate/重复 generate 的事件、任务、transfer、路由和 reservation 输出
 逐文件相同，82 条模型/预测概率零缺失且误差不超过 `1e-12`；最后一轮还证明复用
 目录不会残留三种审计文件。该 runner 已纳入 SatCompute 完整 regression 门禁。

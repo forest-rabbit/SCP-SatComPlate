@@ -138,6 +138,12 @@ ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
     {
         Simulator::Cancel(m_completionEvent);
     }
+    const auto elapsed =
+        static_cast<uint64_t>(Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs);
+    NS_ABORT_MSG_IF(elapsed > static_cast<uint64_t>(m_currentTaskServiceTimeNs) ||
+                        m_busyTimeNs > std::numeric_limits<uint64_t>::max() - elapsed,
+                    "cancelled compute busy-time overflow");
+    m_busyTimeNs += elapsed;
     m_hasCurrentTask = false;
     m_currentTask = {};
     m_currentTaskStartTimeNs = -1;
@@ -147,6 +153,21 @@ ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
                     "ComputeService running-task cancellation counter overflow");
     ++m_cancelledRunningTaskCount;
     RequestDispatch();
+    return true;
+}
+
+bool
+ComputeService::CompleteTaskIfDue(uint64_t taskId)
+{
+    if (!m_isRunning || !m_computeAvailable || !m_hasCurrentTask ||
+        m_currentTask.taskId != taskId ||
+        Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs != m_currentTaskServiceTimeNs)
+    {
+        return false;
+    }
+    if (m_completionEvent.IsPending())
+        Simulator::Cancel(m_completionEvent);
+    CompleteCurrentTask();
     return true;
 }
 
@@ -183,6 +204,10 @@ ComputeService::StartApplication()
 void
 ComputeService::StopApplication()
 {
+    if (m_isRunning && m_hasCurrentTask)
+    {
+        m_busyTimeNs = GetBusyTimeNs();
+    }
     m_isRunning = false;
     if (m_dispatchEvent.IsPending())
     {
@@ -281,7 +306,10 @@ ComputeService::GetCompletedTaskCount() const
 uint64_t
 ComputeService::GetBusyTimeNs() const
 {
-    return m_busyTimeNs;
+    return m_busyTimeNs + (m_isRunning && m_hasCurrentTask
+                               ? static_cast<uint64_t>(Simulator::Now().GetNanoSeconds() -
+                                                       m_currentTaskStartTimeNs)
+                               : 0);
 }
 
 uint32_t

@@ -119,15 +119,16 @@ def main():
         assert sum(int(row["tx_started_packets"]) for row in dropped) == 0
 
         # Failed links retain identity but have an explicit unavailable interval.
-        fault = root / "fault.json"
-        fault.write_text(json.dumps({"faults": [{"fault_id": 1, "node_id": 0,
-            "fault_type": "satellite", "start_time_ns": 1_000_000_000,
-            "notice_time_ns": None, "failure_probability": None, "duration_ns": None}]}))
-        run(root / "fault", extra=("--faultMode=replay", f"--faultTrace={fault}"))
+        run(root / "fault", tasks=False, extra=(
+            "--faultMode=generate", "--faultEnableF1=0", "--faultEnableF2=0",
+            "--faultEnableF3=1", f"--faultTrace={root / 'fault' / 'fault-trace.json'}"))
+        event = rows(root / "fault", "fault-events.csv")[0]
+        failed_node = event["node_id"]
+        start_s = int(event["simulation_time_ns"]) / 1e9
         check_windows(root / "fault")
         incident = [r for r in rows(root / "fault", FILES[0])
-                    if "0" in (r["source_node_id"], r["destination_node_id"])
-                    and float(r["window_start_s"]) >= 1]
+                    if failed_node in (r["source_node_id"], r["destination_node_id"])
+                    and float(r["window_start_s"]) >= start_s]
         assert incident
         assert all(float(r["available_time_s"]) == 0 and
                    r["available_utilization_percent"] == "" for r in incident)

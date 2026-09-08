@@ -50,6 +50,17 @@ PENDING
 
 ## FCFS 计算模型
 
+N4C 的 `task_profile` 只接受 `dense-image`、`sparse-inference`、`compression`、`llm`；
+旧输入缺省时明确记为 `UNSPECIFIED`，不猜测类别。正式 C800 使用统一100,000 WU/s；
+旧示例的 ComputeProfile 不改。输入及生成命令见 [C800 示例](../input/examples/leo-66-1000s-n4c/README.md)。
+
+`computeDeadlineFactor` 默认1.3，有限且至少为1。预算为参考服务时间乘倍率后向上取整到ns；
+正式四类参考速率为100,000 WU/s，legacy任务沿用其输入节点速率。
+绝对deadline只在首次RUNNING时建立，不包含初始INPUT/排队或RESULT传输，不重置。
+超时未算完立即以 `COMPUTE_DEADLINE_EXCEEDED` 终止，释放计算占用；同ns完成优先。
+任务成功必须同时按时算完并完整送达RESULT，已算完的RESULT不受compute deadline影响。
+超时不使卫星故障、不改变FCFS排序；busy time包含失败前已执行及仿真截断前的计算时间。
+
 每个 ComputeProfile 节点创建一个 `ComputeService`。队列排序键是：
 
 ```text
@@ -71,7 +82,7 @@ service_time_ns = ceil(
 
 `ComputeService` 还提供计算可用性开关，以及精确取消 running task、移除 queued
 task 的幂等接口。被取消的运行任务不会触发原 completion event，也不会计入正常
-完成数或成功计算 busy time；节点恢复后只调度队列中仍合法的任务。
+完成数，但取消前实际执行时间仍计入 busy time；节点恢复后只调度队列中仍合法的任务。
 
 compute 故障开始时，`TaskCoordinator` 按当前阶段处理目标节点任务：
 

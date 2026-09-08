@@ -4,6 +4,7 @@
 import argparse
 import json
 import math
+import runpy
 from collections import defaultdict
 from pathlib import Path
 
@@ -991,6 +992,36 @@ def build_n4b_joint_validation_workload(satellite_ids, compute_nodes, seed):
     return {"tasks": tasks}, summary
 
 
+def build_n4c_c800_workload(satellite_ids, compute_nodes, seed):
+    """Package the approved G1 attributes with non-geographic G2 endpoints."""
+    if sorted(satellite_ids) != list(range(66)):
+        raise ValueError("n4c-c800 requires satellite IDs 0..65")
+    if (sorted(node["node_id"] for node in compute_nodes) != list(range(66)) or
+            any(node["compute_rate_work_units_per_second"] != 100_000
+                for node in compute_nodes)):
+        raise ValueError("n4c-c800 requires all 66 nodes at 100000 WU/s")
+    # Reuse the frozen G1 allocator and model; do not copy its byte/WU formulas.
+    preview = runpy.run_path(str(Path(__file__).with_name("preview-n4c-workload.py")))
+    attributes = preview["preview_attributes"](seed, "C800")
+    summary, budgets = preview["summarize_attributes"](attributes)
+    ids = [task["task_id"] for task in attributes]
+    nodes = sorted(satellite_ids)
+    compute = assign_balanced_nodes(ids, nodes, seed, "n4c-compute")
+    source = assign_balanced_nodes(ids, nodes, seed, "n4c-source", compute)
+    result = assign_balanced_nodes(ids, nodes, seed, "n4c-result", compute)
+    arrivals = generate_arrivals(ids, 1_000_000_000, 600_000_000_000, "uniform", seed)
+    tasks = [{**{key: row[key] for key in ("task_id", "task_profile", "input_bytes",
+                                          "output_bytes", "compute_work_units")},
+              "source_node_id": source[row["task_id"]],
+              "compute_node_id": compute[row["task_id"]],
+              "result_node_id": result[row["task_id"]],
+              "arrival_time_ns": arrivals[row["task_id"]]} for row in budgets]
+    summary.update(profile="n4c-c800", seed=seed, simulation_duration_s=1000,
+                   arrival_window_s=[1, 600], endpoint_assignment="non-geographic-balanced",
+                   state_metadata="G1 model/preview only; not runtime checkpoint objects")
+    return {"tasks": tasks}, summary
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate one deterministic SatCompute TaskTrace.")
     parser.add_argument(
@@ -1000,6 +1031,7 @@ def main():
             "f1-validation",
             "f2-validation",
             "n4b-joint-validation",
+            "n4c-c800",
         ),
         default="stress",
     )
@@ -1081,6 +1113,17 @@ def main():
         raise ValueError("seed must be a non-empty string without NUL")
     satellite_ids = read_satellite_ids(args.nodes_file)
     compute_nodes = read_compute_profile(args.compute_profile, satellite_ids)
+    if args.profile == "n4c-c800":
+        for name, expected in (("task_count", 800), ("total_input_bytes", 81_750_000_000),
+                               ("arrival_start_ns", 1_000_000_000),
+                               ("arrival_end_ns", 600_000_000_000), ("arrival_mode", "uniform")):
+            if getattr(args, name) not in (None, expected):
+                raise ValueError(f"n4c-c800 freezes {name}={expected}")
+        trace, summary = build_n4c_c800_workload(satellite_ids, compute_nodes, args.seed)
+        write_json(args.output_task_trace, trace)
+        write_json(args.output_workload_summary, summary)
+        print("PASS: generated formal G1 C800 TaskTrace (800 tasks)")
+        return
     if args.profile == "f1-validation":
         trace, summary = build_f1_validation_workload(
             satellite_ids,

@@ -78,6 +78,9 @@ GetDefaultSatComputeConfig()
     // --computeProfile：每颗卫星的算力资源 JSON；必须与 taskTrace 同时提供。
     config.computeProfile = "";
 
+    // --computeDeadlineFactor: compute-stage deadline budget / reference service time.
+    config.computeDeadlineFactor = 1.3;
+
     // --taskTrace：任务到达、输入字节、计算量和输出字节 JSON。
     config.taskTrace = "";
 
@@ -95,10 +98,10 @@ GetDefaultSatComputeConfig()
 
     // fault
 
-    // --faultMode：none 不创建故障模块，generate 在线生成，replay 确定性重放。
+    // --faultMode: none disables faults; generate samples and executes online.
     config.faultMode = "none";
 
-    // --faultTrace：generate 的输出路径或 replay 的输入路径。
+    // --faultTrace: generated fault-event output path.
     config.faultTrace = "";
 
     // --faultProbabilityAudit：按需采集概率记录；正常运行默认关闭。

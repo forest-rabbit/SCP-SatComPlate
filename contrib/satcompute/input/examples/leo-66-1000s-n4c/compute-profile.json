@@ -1,0 +1,268 @@
+{
+  "compute_nodes": [
+    {
+      "node_id": 0,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 1,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 2,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 3,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 4,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 5,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 6,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 7,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 8,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 9,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 10,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 11,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 12,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 13,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 14,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 15,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 16,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 17,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 18,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 19,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 20,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 21,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 22,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 23,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 24,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 25,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 26,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 27,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 28,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 29,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 30,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 31,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 32,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 33,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 34,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 35,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 36,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 37,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 38,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 39,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 40,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 41,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 42,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 43,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 44,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 45,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 46,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 47,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 48,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 49,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 50,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 51,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 52,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 53,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 54,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 55,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 56,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 57,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 58,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 59,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 60,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 61,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 62,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 63,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 64,
+      "compute_rate_work_units_per_second": 100000
+    },
+    {
+      "node_id": 65,
+      "compute_rate_work_units_per_second": 100000
+    }
+  ]
+}

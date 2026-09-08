@@ -70,7 +70,8 @@ class TaskCoordinator : public Object
                     uint16_t islMtuBytes,
                     uint32_t receiverRcvBufBytes,
                     bool collectUdpSocketDrops,
-                    int64_t simulationDurationNs);
+                    int64_t simulationDurationNs,
+                    double computeDeadlineFactor = 1.3);
 
     bool IsComplete() const;
     void ValidateCompleted() const;
@@ -98,9 +99,11 @@ class TaskCoordinator : public Object
                         uint32_t nodeId,
                         int64_t eventTimeNs,
                         const std::string& cause);
-    TaskFaultImpact FailTaskForComputeNode(TaskRuntime& task,
-                                           int64_t eventTimeNs,
-                                           const std::string& cause);
+    TaskFaultImpact FailTaskForComputeNode(
+        TaskRuntime& task,
+        int64_t eventTimeNs,
+        const std::string& cause,
+        TaskFailureReason reason = TaskFailureReason::COMPUTE_NODE_FAILURE);
     TaskFaultImpact FailTaskForSatelliteNode(TaskRuntime& task,
                                              uint32_t failedNodeId,
                                              int64_t eventTimeNs,
@@ -110,6 +113,9 @@ class TaskCoordinator : public Object
     void HandleComputeStart(uint64_t taskId, uint32_t nodeId, int64_t startTimeNs);
     void HandleComputeComplete(uint64_t taskId, uint32_t nodeId, int64_t completionTimeNs);
     void HandleResultTransferComplete(uint64_t transferId, int64_t completionTimeNs);
+    void HandleComputeDeadline(uint64_t taskId);
+    void CancelComputeDeadline(uint64_t taskId);
+    void DoDispose() override;
 
     bool m_initialized{};
     std::vector<TaskRuntime> m_tasks;
@@ -120,6 +126,7 @@ class TaskCoordinator : public Object
     std::map<uint64_t, uint64_t> m_resultTransferTasks;
     std::set<uint32_t> m_unavailableSatelliteNodes;
     std::vector<TaskEventRecord> m_taskEvents;
+    std::map<uint64_t, EventId> m_deadlineEvents;
     Ptr<NetworkTransferEngine> m_transferEngine;
 };
 

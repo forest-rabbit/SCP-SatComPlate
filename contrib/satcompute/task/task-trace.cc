@@ -35,7 +35,8 @@ void
 RequireObjectFields(const Json& value,
                     const std::filesystem::path& filename,
                     std::string_view name,
-                    std::initializer_list<std::string_view> fields)
+                    std::initializer_list<std::string_view> fields,
+                    std::initializer_list<std::string_view> optionalFields = {})
 {
     if (!value.is_object())
     {
@@ -50,6 +51,10 @@ RequireObjectFields(const Json& value,
     for (const auto& item : value.items())
     {
         actual.insert(item.key());
+    }
+    for (const std::string_view field : optionalFields)
+    {
+        actual.erase(std::string(field));
     }
     if (actual != expected)
     {
@@ -166,9 +171,35 @@ ReadTaskTrace(const std::filesystem::path& filename,
                              "input_bytes",
                              "output_bytes",
                              "compute_work_units",
-                             "arrival_time_ns"});
+                             "arrival_time_ns"},
+                            {"task_profile"});
 
         TaskDefinition task;
+        if (item.contains("task_profile"))
+        {
+            const Json& value = item.at("task_profile");
+            if (!value.is_string())
+            {
+                Fail(filename, "task_profile", "must be a known task class string");
+            }
+            bool found = false;
+            for (const TaskProfile profile : {TaskProfile::DENSE_IMAGE,
+                                              TaskProfile::SPARSE_INFERENCE,
+                                              TaskProfile::COMPRESSION,
+                                              TaskProfile::LLM})
+            {
+                if (value.get<std::string>() == TaskProfileToString(profile))
+                {
+                    task.taskProfile = profile;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                Fail(filename, "task_profile", "is unknown");
+            }
+        }
         task.taskId =
             RequireUint64(GetField(item, filename, "task_id"), filename, "task_id");
         if (task.taskId == 0 || task.taskId > std::numeric_limits<uint64_t>::max() / 2)

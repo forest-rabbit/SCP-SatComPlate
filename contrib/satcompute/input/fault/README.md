@@ -1,6 +1,6 @@
-# 故障轨迹输入与输出
+# 故障事件输出合同
 
-`input/fault/` 只说明平台可写出、可重放的 Fault Trace 数据合同，不存放故障模型
+`input/fault/` 只说明平台写出的 Fault Trace 数据合同，不存放故障模型
 配置。F1/F2/F3 的内部参数集中在 [`fault-para.cc`](../../fault/fault-para.cc)，与
 `para.cc` 一样属于编译期默认参数；修改后需要重新编译。任务输入仍由
 `tools/generation/generate-task-workload.py` 生成，任务只提供 F1 所需的忙闲条件或
@@ -12,7 +12,6 @@ F2 故障发生时的执行验证对象，不会预先决定随机故障是否�
 |---|---|
 | `none` | 必须为空 |
 | `generate` | 输出文件路径；在线判定并真实执行故障后写出 v2 trace |
-| `replay` | 已存在的 v1/v2 trace；不再抽样 |
 
 `--faultEnableF1/2/3` 默认分别为 true/false/false；模型内部数值仍只位于
 `fault-para.cc`。当前 `generate` 支持 F1-only、F2-only 或二者同时
@@ -21,17 +20,14 @@ F2 故障发生时的执行验证对象，不会预先决定随机故障是否�
 不要求任务输入，也可与 F1/F2 同时启用；它产生无预警、无恢复的永久 satellite
 START，并在同节点同刻优先。
 
-`replay` 不会使用这些开关重新决定 trace 中的故障。若同时提供任务输入，
-`faultEnableF1/F2` 会选择完成前故障概率预测器需要重建的无随机数影子模型，应与
-generate 该 trace 时的 F1/F2 开关一致；`faultEnableF3` 不进入 compute 概率预测。
-是否提供任务输入仍取决于 trace 中的节点和要验证的执行结果。
+生产没有故障文件输入；重复实验使用相同参数和 seed/run 再次 generate。
 
 `topologyOnly=1` 只能与 `faultMode=none` 一起使用，因为 topology-only 描述无故障的
 自然轨道和候选拓扑。
 
 ## 运行期标识与 JSON 映射
 
-Fault Trace 保存的是一个完整 episode，而运行期会从记录中的时间字段派生事件。
+Fault Trace 汇总已观察到的 episode；在线模型产生事件，控制器按持续时间安排恢复。
 平台没有单独的 `COMPUTE_START` 枚举；常用的 **compute START** 表示
 `fault_type=compute` 与 `event_type=START` 的组合：
 
@@ -111,11 +107,5 @@ generate 只写 schema v2。根对象和每条记录都必须包含完整字段�
 `anchor_time -> node_id -> fault_id` canonical 排序；anchor 优先使用 notice，否则
 使用 start。相同配置、seed、run 和任务输入重复 generate，应产生逐字节相同 trace。
 
-风险与故障统一写入这一份文件，不存在独立 `risk-trace.json`。replay 不再根据
-`failure_probability` 抽样；`fault_occurred=true` 的记录一定执行，false 的记录只
-重放 NOTICE/NOTICE_CLEAR。
-
-## v1 兼容
-
-N4A 的七字段 trace 没有 `schema_version`，仍可由 replay 读取。它等价于所有记录
-`fault_occurred=true`，并在读取时派生 lead time。新输出始终使用 v2，不再写 v1。
+风险与故障统一写入这一份输出，不存在独立 `risk-trace.json`。旧 v1 读取和生产
+replay 仅保留在 Git 历史中，当前主线不再支持。

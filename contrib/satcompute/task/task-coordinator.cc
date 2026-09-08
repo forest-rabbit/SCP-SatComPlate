@@ -42,7 +42,8 @@ TaskCoordinator::Initialize(const ComputeProfile& computeProfile,
                             uint16_t islMtuBytes,
                             uint32_t receiverRcvBufBytes,
                             bool collectUdpSocketDrops,
-                            int64_t simulationDurationNs)
+                            int64_t simulationDurationNs,
+                            double computeDeadlineFactor)
 {
     NS_ABORT_MSG_IF(m_initialized, "TaskCoordinator can only be initialized once");
     NS_ABORT_MSG_IF(computeProfile.nodes.empty(),
@@ -59,6 +60,12 @@ TaskCoordinator::Initialize(const ComputeProfile& computeProfile,
         NS_ABORT_MSG_IF(!m_taskIndexes.emplace(definition.taskId, index).second,
                         "TaskCoordinator has a duplicate task ID");
         m_tasks.emplace_back(definition);
+        const uint64_t referenceRate =
+            definition.taskProfile == TaskProfile::UNSPECIFIED
+                ? GetComputeNodeProfile(computeProfile, definition.computeNodeId)
+                      .computeRateWorkUnitsPerSecond
+                : 100000;
+        m_tasks.back().ConfigureComputeDeadline(referenceRate, computeDeadlineFactor);
     }
 
     m_computeServices.reserve(computeProfile.nodes.size());
@@ -271,6 +278,47 @@ TaskCoordinator::HandleComputeStart(uint64_t taskId, uint32_t nodeId, int64_t st
         return;
     }
     TransitionTask(taskId, TASK_RUNNING, nodeId, startTimeNs, "COMPUTE_DISPATCH");
+    if (!m_deadlineEvents.contains(taskId))
+    {
+        m_deadlineEvents[taskId] =
+            Simulator::Schedule(NanoSeconds(task.computeDeadlineTimeNs - startTimeNs),
+                                &TaskCoordinator::HandleComputeDeadline,
+                                this,
+                                taskId);
+    }
+}
+
+void
+TaskCoordinator::CancelComputeDeadline(uint64_t taskId)
+{
+    const auto found = m_deadlineEvents.find(taskId);
+    if (found != m_deadlineEvents.end() && found->second.IsPending())
+    {
+        Simulator::Cancel(found->second);
+    }
+}
+
+void
+TaskCoordinator::HandleComputeDeadline(uint64_t taskId)
+{
+    TaskRuntime& task = GetTask(taskId);
+    if (IsTerminalTaskState(task.state) || task.computeCompleteTimeNs >= 0)
+        return;
+    if (GetComputeService(task.definition.computeNodeId)->CompleteTaskIfDue(taskId))
+        return;
+    FailTaskForComputeNode(task,
+                           Simulator::Now().GetNanoSeconds(),
+                           "COMPUTE_DEADLINE_EXCEEDED",
+                           TaskFailureReason::COMPUTE_DEADLINE_EXCEEDED);
+}
+
+void
+TaskCoordinator::DoDispose()
+{
+    for (const auto& [taskId, event] : m_deadlineEvents)
+        CancelComputeDeadline(taskId);
+    m_deadlineEvents.clear();
+    Object::DoDispose();
 }
 
 void
@@ -285,6 +333,9 @@ TaskCoordinator::HandleComputeComplete(uint64_t taskId,
     {
         return;
     }
+    NS_ABORT_MSG_IF(completionTimeNs > task.computeDeadlineTimeNs,
+                    "compute completion occurred after deadline");
+    CancelComputeDeadline(taskId);
     TransitionTask(taskId,
                    TASK_RESULT_TRANSFERRING,
                    nodeId,
@@ -309,6 +360,7 @@ TaskCoordinator::HandleResultTransferComplete(uint64_t transferId,
     {
         return;
     }
+    NS_ABORT_MSG_IF(!task.ComputeDeadlineMet(), "RESULT cannot complete without on-time compute");
     TransitionTask(task.definition.taskId,
                    TASK_COMPLETED,
                    task.definition.resultNodeId,
@@ -382,7 +434,8 @@ TaskCoordinator::GetTaskEvents() const
 TaskFaultImpact
 TaskCoordinator::FailTaskForComputeNode(TaskRuntime& task,
                                         int64_t eventTimeNs,
-                                        const std::string& cause)
+                                        const std::string& cause,
+                                        TaskFailureReason reason)
 {
     TaskFaultImpact impact;
     if (IsTerminalTaskState(task.state))
@@ -404,9 +457,8 @@ TaskCoordinator::FailTaskForComputeNode(TaskRuntime& task,
                         "running task was absent from ComputeService");
     }
 
-    NS_ABORT_MSG_IF(!task.FailIfActive(eventTimeNs,
-                                      TaskFailureReason::COMPUTE_NODE_FAILURE,
-                                      cause),
+    CancelComputeDeadline(task.definition.taskId);
+    NS_ABORT_MSG_IF(!task.FailIfActive(eventTimeNs, reason, cause),
                     "active task could not enter TASK_FAILED");
     m_taskEvents.push_back({eventTimeNs,
                             task.definition.taskId,
@@ -497,6 +549,7 @@ TaskCoordinator::FailTaskForSatelliteNode(TaskRuntime& task,
     {
         failureReason = TaskFailureReason::COMPUTE_SATELLITE_FAILURE;
     }
+    CancelComputeDeadline(task.definition.taskId);
     NS_ABORT_MSG_IF(!task.FailIfActive(eventTimeNs, failureReason, cause),
                     "active task could not enter satellite TASK_FAILED");
     m_taskEvents.push_back({eventTimeNs,

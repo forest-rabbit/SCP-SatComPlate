@@ -49,12 +49,25 @@ metrics/
 | 任务模式 | `compute-node-summary.csv` | 各算力节点的任务数、忙碌时间和利用率 |
 | 提供 `faultTrace` | `fault-events.csv` | canonical NOTICE/START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
 | 提供 `faultTrace` | `fault-summary.json` | 故障类型/事件/活动故障、失败任务、FAILED/CANCELLED transfer 与故障路由重算计数 |
-| `faultProbabilityAudit=1` 的 generate/replay | `fault-predictions.csv` | 活动风险中运行任务的逐检查点 F1/F2/联合因果概率和任务进度 |
-| `faultProbabilityAudit=1` 的 generate/replay | `fault-prediction-summary.json` | 正式预测、风险 episode 和涉及任务的数量 |
+| `faultProbabilityAudit=1` 的 generate | `fault-predictions.csv` | 活动风险中运行任务的逐检查点 F1/F2/联合因果概率和任务进度 |
+| `faultProbabilityAudit=1` 的 generate | `fault-prediction-summary.json` | 正式预测、风险 episode 和涉及任务的数量 |
 | `faultProbabilityAudit=1` 的 generate | `fault-model-probabilities.csv` | 随机抽样前由真实在线 F1/F2 状态计算的同结构概率真值，仅用于验证 |
 
 `run-summary.json` 同时保留便于脚本读取的顶层计数和按 `transfer`、`task` 分组的
 汇总。它记录实际使用的任务文件路径和关键运行参数，但不复制一份平台配置。
+
+## 任务与算力字段
+
+`task-summary.csv` 的 N4C 字段为 `task_profile`、`baseline_compute_time_ns`、
+`compute_deadline_budget_ns`、`compute_deadline_time_ns`、`compute_deadline_met`、
+`result_delivered`、`task_success` 和 `compute_stage_elapsed_time_ns`。
+绝对 deadline 在首次开始计算前为 `-1`；布尔列为 `0/1`。
+成功必须同时满足按时计算完成和完整 RESULT 送达，不能只看计算完成时间。
+elapsed 记录计算开始到完成、失败或仿真截断的已过时间；初始等待不占 deadline。
+
+`compute-node-summary.csv` 另列 `task_count/total_work_units/total_queue_wait_ns`、
+`cancelled_running_tasks/removed_queued_tasks`。前两项是分配需求；busy time 是实际占用，
+包含失败和截断前已执行的时间，不因失败抹除资源消耗。
 
 ## 可选链路窗口统计
 
@@ -162,9 +175,9 @@ NOTICE 时冻结的常数。
 
 generate 额外写出的 `fault-model-probabilities.csv` 与 `fault-predictions.csv` 使用
 同一列结构，但前者读取真实在线模型状态并在 F1/F2 随机抽样前计算，后者读取独立的
-无随机数影子状态。该文件不是 replay 输入；replay 仍只读取统一 Fault Trace。
+无随机数审计状态。两份 CSV 都只用于离线验证，不是故障输入或在线查询前提。
 [`compare-fault-probabilities.py`](../tools/validation/compare-fault-probabilities.py)
-按 `(simulation_time_ns,node_id,task_id)` 将 generate 真值与 replay 预测逐行匹配，
+按 `(simulation_time_ns,node_id,task_id)` 将 generate 真值与独立审计预测逐行匹配，
 检查其余上下文，并分别给出 `q_F1`、`q_F2`、`q_comp` 和
 `P_fail_before_finish` 的 MAE、RMSE 与最大绝对误差。
 

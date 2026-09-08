@@ -10,7 +10,7 @@ tools/
 │   └── generate-task-workload.py      从节点切片和算力配置生成确定性 TaskTrace
 └── validation/
     ├── check-flow-drop-reasons.py      检查失败运行的 FlowMonitor 丢包证据
-    ├── compare-fault-probabilities.py  对齐 generate 真值与 replay 预测概率
+    ├── compare-fault-probabilities.py  对齐 generate 真值与 独立审计预测概率
     ├── f1-calibration.cc               调用平台纯模型生成 F1 标定证据
     ├── f2-exposure-calibration.cc      用原生轨道标定 F2 空间加权暴露
     ├── f2-spatial-validation.cc        长时抽样 F2 事件并聚合空间网格
@@ -34,7 +34,7 @@ tools/
 
 F1 校准 executable 与 SatCompute 一同构建，不运行网络仿真，也不复制温度/概率
 公式。它输出候选时间常数和 30 个固定 ns-3 run 的 Monte Carlo 证据；正式
-generate/replay 不读取校准输出。
+generate 不读取校准输出。
 
 F2 标定工具直接查询同一个 ns-3.48 原生轨道实现，计算高斯空间风险、加权暴露量和
 高风险 episode。66 星用于选择 1000 秒窗口并反标定热点最大有效强度，351/720 星
@@ -47,7 +47,7 @@ F2-only generate，检查实际故障数分布。三种验证的证据见
 CSV。绘图脚本从这些真实输出生成一张双面板 PNG，不会被正常平台运行自动调用。
 
 概率比较工具不参与仿真，也不读取 Fault Trace：它把 generate 在抽样前输出的真实
-模型概率与 replay 的无随机数预测按时间、节点和任务对齐，报告四类概率的 MAE、
+模型概率与 独立无随机数审计预测按时间、节点和任务对齐，报告四类概率的 MAE、
 RMSE 和最大绝对误差。比较结果只是 N4B 实现一致性证据，不是新的运行输入。
 
 工具的详细输入、参数和输出分别见 [任务生成器](generation/README.md)和

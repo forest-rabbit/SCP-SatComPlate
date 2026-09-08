@@ -13,7 +13,7 @@ fault/
 ├── parameter/                   参数合法性校验
 ├── model/                       F1/F2 状态模型、概率组合/预测与 F3 调度模型
 ├── runtime/                     概率记录、在线判定、因果预测、状态覆盖与故障执行
-├── trace/                       统一记录定义、JSON 读取和写出
+├── trace/                       统一记录定义、JSON 写出
 └── README.md
 ```
 
@@ -26,15 +26,15 @@ fault/
 | `model/f1-self-state-fault-model.h/.cc` | 无运行期副作用的 F1 温度、DoD、风险、强度和单步概率 |
 | `model/f2-radiation-fault-model.h/.cc` | 原生 ECEF 转经纬度、SAA 空间风险、SEU 映射、穿越统计与单步概率 |
 | `model/f3-debris-fault-model.h/.cc` | 以独立 ns-3 随机流生成 fixed-K 或 Poisson 永久整星事件 |
-| `runtime/compute-failure-probability-record.h` | generate 真值与 replay 预测共用的逐时刻概率字段合同 |
+| `runtime/compute-failure-probability-record.h` | 在线真值与独立审计预测共用的逐时刻概率字段合同 |
 | `runtime/fault-model-engine.h/.cc` | 在线读取状态、维护风险 episode、使用 ns-3 随机流判定事件 |
-| `runtime/fault-prediction-engine.h/.cc` | 按需在 generate/replay 中维护无随机数影子状态，并从已执行 NOTICE 和当前任务快照生成因果预测记录 |
+| `runtime/fault-prediction-engine.h/.cc` | 按需在 generate 中维护独立的无随机数审计状态，并从已执行 NOTICE 和当前任务快照生成因果预测记录 |
 | `runtime/fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
-| `runtime/fault-controller.h/.cc` | replay/在线事件批处理，以及任务、传输和有效拓扑联动 |
+| `runtime/fault-controller.h/.cc` | 在线事件批处理，以及任务、传输和有效拓扑联动 |
 | `trace/fault-definition.h/.cc` | compute/satellite 记录以及预警、恢复、风险结束和排序时间 |
-| `trace/fault-trace.h/.cc` | v1 兼容读取、v2 closed-world 校验、canonical writer |
+| `trace/fault-trace.h/.cc` | v2 输出校验与 canonical writer；不提供生产 reader |
 
-## 三种运行模式
+## 两种运行模式
 
 ```text
 none
@@ -47,25 +47,41 @@ generate
   完整存活卫星集合          -> F3 模型 -> 永久 satellite START
   -> FaultController 精确执行 -> 写出 Fault Trace v2
 
-replay
-  只读取已经确定的 v1/v2 Fault Trace
-  -> 不按模型重新抽样故障 -> 精确重放
-  若显式启用概率审计：当前任务/原生轨道 -> 无随机数影子模型 -> 预测指标
 ```
 
-`generate` 中确实会发生故障，并同时写出本轮实际执行的 trace。随后使用相同星座、
-任务和该 trace 进入 `replay`，应得到相同的 NOTICE、NOTICE_CLEAR、START、RECOVERY、
-任务终态、transfer 终态和路由变化。失败的旧任务不会在恢复时复活；恢复只允许后来
+`generate` 中确实会发生故障，并写出本轮实际执行的 trace。相同代码、星座、任务、
+参数及 seed/run/stream 的重复 generate 应得到相同事件与业务终态。trace 只作为输出。
+失败的旧任务不会在恢复时复活；恢复只允许后来
 到达的任务继续使用节点。generate 可启用 F1-only、F2-only 或 F1+F2；联合来源按
 独立竞争风险处理：F1/F2 分别抽样，平台只执行二者结果的逻辑或。F3 可单独运行，
 也可与两个计算来源共同运行。
 
-仅当 `faultProbabilityAudit=1`、任务输入存在且 F1/F2 至少启用一个时，generate 和
-replay 才启用同一个因果预测器。replay 不重新决定故障，但预测器仍需按相同参数
-重建 F1/F2 影子状态；因此
-重放 F2-only 或 F1+F2 trace 时，必须传入与 generate 相同的 `faultEnableF1/F2`。
-预测器不消费随机数，也不改变真实模型、任务或故障状态。该开关默认关闭；正常运行、
-none 和纯 F3 运行都不创建预测器，也不生成概率审计文件。
+正式模式不再接受 replay，旧 reader、文件调度入口和文件回放 fixture 已移除。
+测试允许通过 `tests/support/fault-injection.h` 直接安排 ns 事件，覆盖共用执行器的
+故障/恢复和同刻边界；这不是生产运行模式，也不读取故障文件。
+
+只有 `faultProbabilityAudit=1` 且存在 F1/F2 任务时才创建独立因果审计器。
+保留它用于 generate 模型与独立状态演化的一致性回归，不用于在线查询。
+审计默认关闭；只读风险查询不受它影响。
+
+## 在线节点风险查询
+
+`FaultModelEngine::QueryComputeRisk(nodeId, horizonNs=1000000000)` 返回
+`nodeId/asOfTimeNs/horizonNs/status/pF1/pF2/pCompute/checkCount/permanentlyUnavailable`。
+无需 NOTICE、运行任务或 CSV；空闲计算节点也可查询，不伪造 task ID。
+
+- 概率区间是 `(now, now+horizon]`：不包含已到达的当前检查点，包含区间末端检查点。
+  使用模型既有离散检查网格；默认 1 秒周期下，1 秒 horizon 对应下一次检查。
+  跨多个检查点累计各来源条件概率，再按 `1-(1-pF1)(1-pF2)` 联合。
+- 条件是当前忙闲状态保持不变，F2 位置按原生轨道只读外推；不读取未来任务或 F3 日程。
+  horizon 可以超过本轮停止时刻，表示同一物理模型继续运行的条件外推，不是额外仿真事件。
+- 当前已经不可计算返回 `UNAVAILABLE`，概率为空；永久整星失效另设标志。
+  未配置、未绑定、未知节点或仿真已结束返回 `NOT_READY`；非正/溢出 horizon 抛错。
+- 查询只修改局部副本，不消耗 RNG、推进时间、改变温度或产生事件；重复查询幂等。
+  同一时间戳应在模型事件之后读取，才能观察刚发生的故障；查询不能预知未执行的同刻事件。
+
+此接口不是下面按任务剩余时间计算、包含当前抽样点的 `P_fail_before_finish`，
+也不自动启动备份。F3 不并入 F1/F2 概率，零值不代表所有故障风险为零。
 
 ## F1 自身状态计算故障
 
@@ -179,7 +195,7 @@ kappa_F2 = 0.0014295980555469494 s^-1
 论文空间分布图已经使用 66 星、100 万秒、`orbitStartOffset=302`、`randomSeed=1`、
 `randomRun=1`、1 秒检查周期和 8 秒恢复重新生成。结果为 1888 次故障，条件期望
 1880.59，风险—故障率相关系数 0.8224，全部五项空间验收通过。该 orbit-only 验证
-只在显式运行工具时生成 CSV/JSON/PNG/SVG/PDF；正常 `none/generate/replay` 不会输出
+只在显式运行工具时生成 CSV/JSON/PNG/SVG/PDF；正常 `none/generate` 不会输出
 这些分析文件。50 万秒结果属于对称经度模型的历史证据，不作为当前参数的最终图。
 标定、原始证据和论文候选图见
 [`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。
@@ -214,7 +230,7 @@ Delta t ~ Exponential(Lambda_F3)
 
 同节点同刻同时命中 F3 与 compute 故障时，只生成 F3。若 F3 到来时该节点正处于
 8 秒 compute 停机区间，平台会把 compute 恢复提前到 F3 时刻，再立即执行永久整星
-START；生成 trace 中两个区间首尾相接而不重叠，generate/replay 的事件顺序均为
+START；生成 trace 中两个区间首尾相接而不重叠，generate 的事件顺序均为
 `RECOVERY -> START`。永久失效后不再更新该节点的 F1/F2 状态或消耗其抽样随机数。
 
 ## 事件标识与语义
@@ -275,7 +291,7 @@ F1/F2 各自的独立随机判定。有预警故障记录
 改变 F1/F2 的故障抽样。因此 NOTICE 前仍允许真实故障；这种无预警 START 没有正式
 预测记录，应作为“未通知故障率”单独评价。
 
-generate 与 replay 分别维护一份独立、无随机数的 F1/F2 影子状态。每个检查点先用
+generate 的可选审计器维护一份独立、无随机数的 F1/F2 状态。每个检查点先用
 当前忙闲状态和原生 ECEF 坐标推进影子状态，再复制快照并在任务剩余窗口内滚动：
 
 ```text
@@ -311,16 +327,15 @@ NOTICE_CLEAR / satellite START 关闭 episode，不输出该时刻记录
 预测记录中的 `risk_elapsed_time_ns=now-notice_time_ns` 是当前时刻已经观察到的风险
 持续时间；它不是 trace 在 episode 结束后才能确定的 `risk_duration_ns`。运行期还
 明确禁止读取未来的 compute START、`fault_occurred`、`warning_lead_time_ns` 或最终
-风险时长。generate 和 replay 因此使用同一条因果路径；使用相同任务和已生成 trace
-时，预测输出应逐字节一致。
+风险时长。相同输入及 seed/run 的两轮 generate，审计输出应逐字节一致。
 
 启用概率审计后，generate 的在线引擎还会在每次正式预测对应的随机抽样前，用真实
-F1/F2 状态计算同结构概率记录；replay 则从无随机数影子状态输出预测记录。验证工具按
+F1/F2 状态计算同结构概率记录；独立审计器则从无随机数状态输出预测记录。验证工具按
 `(simulation_time_ns,node_id,task_id)` 比较 `q_F1`、`q_F2`、`q_comp` 和
 `P_fail_before_finish`，并报告 MAE、RMSE、最大绝对误差、缺失记录与上下文差异。
-真实模型概率文件只是离线验证证据，不写入 Fault Trace，也不作为 replay 输入。
+真实模型概率文件只是离线验证证据，不写入 Fault Trace，也不是平台输入。
 
-这里验证的是模型实现和重放状态是否一致，不把一次随机故障结果当成概率真值，因而
+这里验证的是模型实现和独立审计状态是否一致，不把一次随机故障结果当成概率真值，因而
 不生成二元观测标签，也不计算 Brier score。F1/F2 现实有效性仍需外部数据，事件数
 标定仍需固定配置下的多 seed/run，两者不能与实现一致性混为一种“准确率”。当前
 空间 F2 冻结场景中，F1-only、F2-only、F1+F2 分别匹配 41、126、126 条模型/预测

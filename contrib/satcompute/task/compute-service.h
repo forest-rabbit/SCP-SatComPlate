@@ -47,6 +47,8 @@ class ComputeService : public Application
                     int64_t queueEnterTimeNs);
     bool SetComputeAvailable(bool available);
     bool CancelRunningTaskForFailure(uint64_t taskId);
+    /** Resolve inclusive completion before a same-time deadline, independent of UID. */
+    bool CompleteTaskIfDue(uint64_t taskId);
     bool RemoveQueuedTaskForFailure(uint64_t taskId);
 
     static int64_t CalculateServiceTimeNs(uint64_t computeWorkUnits,

@@ -263,52 +263,10 @@ FaultController::ScheduleRecovery(const FaultDefinition& fault)
 }
 
 void
-FaultController::Configure(const FaultTrace& trace,
-                           const std::vector<uint32_t>& satelliteIds,
-                           int64_t simulationDurationNs)
-{
-    Initialize(satelliteIds, simulationDurationNs);
-    m_trace = trace;
-    for (const FaultDefinition& fault : m_trace.faults)
-    {
-        if (fault.noticeTimeNs.has_value())
-        {
-            m_batches[fault.noticeTimeNs.value()].push_back(
-                {FaultEventType::NOTICE,
-                 MakeTimeGatedEventFault(FaultEventType::NOTICE, fault)});
-        }
-        if (!fault.faultOccurred)
-        {
-            const std::optional<int64_t> clearTimeNs = fault.GetRiskClearTimeNs();
-            NS_ABORT_MSG_IF(!clearTimeNs.has_value(),
-                            "risk-only fault has no notice clear time");
-            if (clearTimeNs.value() < m_simulationDurationNs)
-            {
-                m_batches[clearTimeNs.value()].push_back(
-                    {FaultEventType::NOTICE_CLEAR,
-                     MakeTimeGatedEventFault(FaultEventType::NOTICE_CLEAR, fault)});
-            }
-            continue;
-        }
-        NS_ABORT_MSG_IF(!fault.startTimeNs.has_value(),
-                        "occurred fault has no start time");
-        m_batches[fault.startTimeNs.value()].push_back({FaultEventType::START, fault});
-        ScheduleRecovery(fault);
-    }
-
-    for (const auto& [simulationTimeNs, events] : m_batches)
-    {
-        static_cast<void>(events);
-        ScheduleBatch(simulationTimeNs);
-    }
-}
-
-void
 FaultController::ConfigureGeneration(const std::vector<uint32_t>& satelliteIds,
                                      int64_t simulationDurationNs)
 {
     Initialize(satelliteIds, simulationDurationNs);
-    m_generationMode = true;
     m_trace.schemaVersion = FAULT_TRACE_SCHEMA_VERSION;
 }
 
@@ -320,10 +278,9 @@ FaultController::ShortenGeneratedComputeFault(
     const int64_t nowNs = Simulator::Now().GetNanoSeconds();
     const std::optional<int64_t> shortenedRecovery =
         shortenedFault.GetRecoveryTimeNs();
-    if (!m_configured || !m_generationMode || m_generatedTraceFinalized ||
-        shortenedFault.faultType != FaultType::COMPUTE ||
-        !shortenedFault.faultOccurred || !shortenedFault.startTimeNs.has_value() ||
-        shortenedFault.startTimeNs.value() >= nowNs ||
+    if (!m_configured || m_generatedTraceFinalized ||
+        shortenedFault.faultType != FaultType::COMPUTE || !shortenedFault.faultOccurred ||
+        !shortenedFault.startTimeNs.has_value() || shortenedFault.startTimeNs.value() >= nowNs ||
         shortenedRecovery != nowNs || originalRecoveryTimeNs <= nowNs ||
         m_processedBatchTimes.contains(nowNs) ||
         !m_state.IsSatelliteAvailable(shortenedFault.nodeId) ||
@@ -389,7 +346,7 @@ FaultController::ShortenGeneratedComputeFault(
 void
 FaultController::SubmitGeneratedBatch(const std::vector<GeneratedFaultEvent>& events)
 {
-    if (!m_configured || !m_generationMode)
+    if (!m_configured)
     {
         throw FaultControllerError(
             "generated events require ConfigureGeneration");
@@ -449,7 +406,7 @@ FaultController::SubmitGeneratedBatch(const std::vector<GeneratedFaultEvent>& ev
 void
 FaultController::FinalizeGeneratedTrace(const FaultTrace& trace)
 {
-    if (!m_configured || !m_generationMode)
+    if (!m_configured)
     {
         throw FaultControllerError(
             "generated trace finalization requires ConfigureGeneration");

@@ -32,6 +32,32 @@ class ComputeService;
 class OnlineOrbitConstellation;
 class TaskCoordinator;
 
+/** Availability of a read-only node-level forecast. */
+enum class ComputeRiskStatus
+{
+    AVAILABLE,
+    UNAVAILABLE,
+    NOT_READY
+};
+
+/** Conditional F1/F2 risk over (asOfTimeNs, asOfTimeNs + horizonNs].
+ * The current busy/idle condition is held constant; no future workload is read.
+ * F3 is excluded from the probability and reported only after actual failure.
+ */
+struct ComputeRiskSnapshot
+{
+    uint32_t nodeId{};    ///< Stable external satellite ID.
+    int64_t asOfTimeNs{}; ///< Current simulation timestamp.
+    int64_t horizonNs{};  ///< Requested future interval, not task remaining time.
+    ComputeRiskStatus status{ComputeRiskStatus::NOT_READY}; ///< Query readiness.
+    bool permanentlyUnavailable{};                          ///< Actual permanent satellite failure.
+    uint64_t checkCount{};          ///< Scheduled model checks in the interval.
+    std::optional<double> pF1;      ///< Conditional F1 interval probability.
+    std::optional<double> pF2;      ///< Conditional F2 interval probability.
+    std::optional<double> pCompute; ///< Independent F1/F2 union, same horizon.
+    bool operator==(const ComputeRiskSnapshot&) const = default;
+};
+
 /** Configuration or lifecycle error raised by the online fault-model engine. */
 class FaultModelEngineError : public std::runtime_error
 {
@@ -94,6 +120,18 @@ class FaultModelEngine : public Object
     /** Return node snapshots in ascending stable-node-ID order. */
     std::vector<FaultModelNodeSnapshot> GetNodeSnapshots() const;
 
+    /**
+     * Query a node without RNG, state mutation, NOTICE gating or audit dependency.
+     * Pure projection uses the same discrete check grid as generation, excluding
+     * a check at as-of time and including a check at the horizon endpoint.
+     * Call after the model event at a shared timestamp to observe that event.
+     * Invalid/overflowing horizons throw; unknown/unbound/finalized nodes are not ready.
+     * @param nodeId Stable compute node ID.
+     * @param horizonNs Positive future interval (default one second).
+     * @return Risk conditional on the current load and no intervening F3 event.
+     */
+    ComputeRiskSnapshot QueryComputeRisk(uint32_t nodeId, int64_t horizonNs = 1000000000LL) const;
+
     /** @return Pre-sampling probabilities produced from live generate state. */
     const std::vector<ComputeFailureProbabilityRecord>& GetProbabilityRecords() const;
 
@@ -111,6 +149,7 @@ class FaultModelEngine : public Object
     {
         F1SelfStateFaultSnapshot f1State; ///< Current pure F1 state.
         F2RadiationFaultSnapshot f2State; ///< Current pure F2 state.
+        int64_t modelTimeNs{};            ///< Last completed physical model update.
         std::optional<RiskEpisode> riskEpisode; ///< Open combined-risk episode.
         Ptr<UniformRandomVariable> f1Random; ///< Stable per-node F1 sampling stream.
         Ptr<UniformRandomVariable> f2Random; ///< Stable per-node F2 sampling stream.

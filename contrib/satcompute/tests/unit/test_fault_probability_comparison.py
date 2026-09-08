@@ -1,4 +1,4 @@
-"""Validation-tool tests for generate/replay probability comparisons."""
+"""Validation-tool tests for model/predictor probability comparisons."""
 
 import csv
 import json

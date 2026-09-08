@@ -46,6 +46,7 @@ struct SatComputeConfig
 
     // workload
     std::string computeProfile;       ///< 卫星算力资源 JSON 路径。
+    double computeDeadlineFactor; ///< 首次计算开始后的参考服务时间倍率，至少为 1。
     std::string taskTrace;            ///< 任务输入 JSON 路径。
     std::string transferChunkMode;    ///< 任务输入/结果传输的分包策略。
     uint32_t transferPayloadBytes;    ///< fixed 分包的 UDP payload 字节数。
@@ -53,8 +54,8 @@ struct SatComputeConfig
     std::string taskCompletionPolicy; ///< 任务完成策略：strict 或 report。
 
     // fault
-    std::string faultMode;       ///< none、generate 或 replay。
-    std::string faultTrace;      ///< generate 输出或 replay 输入的统一故障轨迹。
+    std::string faultMode;       ///< none or generate.
+    std::string faultTrace;      ///< Generated fault trace output path.
     bool faultProbabilityAudit;  ///< 是否采集并输出概率一致性审计数据。
 
     // output
