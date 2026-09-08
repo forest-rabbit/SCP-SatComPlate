@@ -187,8 +187,9 @@ summary 写出。对应单元测试见
 
 `task_workload_model.py` 提供三类图像的字节/WU/状态预算、LLM token/KV公式和合法
 应用边界纯函数。图像只引用已有 TaskModeling 测量；LLM 不下载或运行模型。
-G1 v2 采用 `W=ceil(3*S/2000)`、100000 WU/s；LLM为100 WU/token与5000..10000 token。
-`preview-n4c-workload.py` 按需生成1500项离线属性预算、短任务与服务需求统计；它不是新的
+G1 v3保留v2的 `W=ceil(3*S/2000)`、100000 WU/s；LLM为100 WU/token与5000..10000 token。
+`preview-n4c-workload.py --candidate C1000/C800/C600`（三选一）按需生成构成候选的离线
+预算、短任务与服务需求统计；省略候选时仍为历史V2-1500，不代表最终选择。它不是新的
 正式 TaskTrace 生成档，不改变上面的四个档位、默认参数或运行时接口。
 
 所有候选参数、字节来源和命令见[工作量模型](../../../../docs/n4c/workload-mapping.md)。
@@ -196,3 +197,5 @@ G1 v2 采用 `W=ceil(3*S/2000)`、100000 WU/s；LLM为100 WU/token与5000..10000
 `StateBudgetPoint` / `state_budget_points` 只作合法进度映射和5/10/20%守恒验证；
 `state-budget-checks.csv` 替代首版搜索网格输出。不生成 L1/batch/tail，不搜索 n/delta，
 也不统计 D_L/D_R 或指定 c_L/c_R。
+新三候选均为81.75 GB INPUT与10个1 GB+20个500 MB大图像；summary单独报告普通图像
+分位数、大图像类别归属/字节占比及各类总WU/K/RESULT。原v2输出不覆盖、不删除。

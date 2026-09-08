@@ -22,9 +22,11 @@ GENERATOR = runpy.run_path(str(Path(__file__).with_name("generate-task-workload.
 STABLE_VALUE = GENERATOR["deterministic_value"]
 ALLOCATE = GENERATOR["bounded_weighted_allocation"]
 LARGEST_REMAINDER = GENERATOR["largest_remainder"]
-TASK_COUNT = 1500
 TOTAL_INPUT_BYTES = 81_750_000_000
-COUNTS = dict(zip(TASK_PROFILES, (450, 450, 450, 150)))
+# Only workload composition varies: total tasks, 1 GB count, 500 MB count.
+# The default remains a historical reference, not a selected G2 workload.
+COMPOSITIONS = {"V2-1500": (1500, 15, 30), "C1000": (1000, 10, 20),
+                "C800": (800, 10, 20), "C600": (600, 10, 20)}
 REFERENCE_RATE = 100_000
 REFERENCE_LLM_WU_PER_TOKEN = LlmParameters().work_units_per_token
 COMPUTE_NODE_COUNT = 66
@@ -40,14 +42,18 @@ def json_text(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
 
 
-def preview_attributes(seed: str) -> list[dict]:
+def preview_attributes(seed: str, candidate: str = "V2-1500") -> list[dict]:
     """Allocate only task attributes; endpoints/deadline/arrival remain G2 work."""
     if not isinstance(seed, str) or not seed:
         raise ValueError("seed must be a non-empty string")
-    ids = sorted(range(1, TASK_COUNT + 1), key=lambda tid: (STABLE_VALUE(seed, tid, "n4c-class"), tid))
+    if not isinstance(candidate, str) or candidate not in COMPOSITIONS:
+        raise ValueError("unknown workload composition candidate")
+    task_count, one_gb_count, half_gb_count = COMPOSITIONS[candidate]
+    counts = dict(zip(TASK_PROFILES, (task_count // 10 * ratio for ratio in (3, 3, 3, 1))))
+    ids = sorted(range(1, task_count + 1), key=lambda tid: (STABLE_VALUE(seed, tid, "n4c-class"), tid))
     attributes = {}
     offset = 0
-    for profile, count in COUNTS.items():
+    for profile, count in counts.items():
         for task_id in ids[offset:offset + count]:
             attributes[task_id] = {"task_id": task_id, "task_profile": profile}
         offset += count
@@ -69,7 +75,7 @@ def preview_attributes(seed: str) -> list[dict]:
 
     tail_ids = set()
     tail_offset = {"compression": 0, "dense-image": 0}
-    for size, count in ((1_000_000_000, 15), (500_000_000, 30)):
+    for size, count in ((1_000_000_000, one_gb_count), (500_000_000, half_gb_count)):
         shares = LARGEST_REMAINDER(count, {"compression": 7500, "dense-image": 2500},
                                   ("compression", "dense-image"))
         for profile, assigned_count in shares.items():
@@ -189,6 +195,15 @@ def service_demand(rows: list[dict]) -> dict:
             "total_service_demand_seconds": sum(row["reference_service_time_ns"] for row in rows) / 1e9}
 
 
+def population_summary(rows: list[dict]) -> dict:
+    """Describe input and service distributions; empty subsets have no quantiles."""
+    return {"count": len(rows), "input_bytes": sum(row["input_bytes"] for row in rows),
+            "input_size_bytes": distribution([row["input_bytes"] for row in rows]) if rows else None,
+            "service_time_seconds": distribution([row["reference_service_time_ns"] / 1e9
+                                                   for row in rows]) if rows else None,
+            "service_bands": service_bands(rows)}
+
+
 def summarize_attributes(attributes: list[dict], reference_rate: int = REFERENCE_RATE,
                          llm_wu_per_token: int = REFERENCE_LLM_WU_PER_TOKEN) -> tuple[dict, list[dict]]:
     """Produce service demand estimates; do not simulate queues or thermal state."""
@@ -220,17 +235,13 @@ def summarize_attributes(attributes: list[dict], reference_rate: int = REFERENCE
         group = [row for row in rows if row["task_profile"] == profile]
         if not group:
             continue
-        seconds = [row["reference_service_time_ns"] / 1e9 for row in group]
         class_summaries[profile] = {
-            "count": len(group),
-            "input_bytes": sum(row["input_bytes"] for row in group),
+            **population_summary(group),
             "output_bytes": sum(row["output_bytes"] for row in group),
             "work_units": distribution([row["compute_work_units"] for row in group]),
             "total_work_units": sum(row["compute_work_units"] for row in group),
             "total_service_demand_seconds": service_demand(group)["total_service_demand_seconds"],
             "total_variable_state_bytes": sum(row["k_variable_bytes"] for row in group),
-            "service_time_seconds": distribution(seconds),
-            "service_bands": service_bands(group),
         }
     nodes = []
     for node_id in range(COMPUTE_NODE_COUNT):
@@ -241,6 +252,10 @@ def summarize_attributes(attributes: list[dict], reference_rate: int = REFERENCE
                       "demand_over_1000_second_capacity": demand / 1000})
     llm_group = [row for row in rows if row["task_profile"] == "llm"]
     image_group = [row for row in rows if row["task_profile"] != "llm"]
+    large_images = [row for row in image_group if row["input_bytes"] in (500_000_000, 1_000_000_000)]
+    ordinary_images = [row for row in image_group if row["input_bytes"] not in (500_000_000, 1_000_000_000)]
+    input_bytes = sum(row["input_bytes"] for row in rows)
+    large_bytes = sum(row["input_bytes"] for row in large_images)
     total_ns = sum(row["reference_service_time_ns"] for row in rows)
     llm_ns = sum(row["reference_service_time_ns"] for row in llm_group)
     summary = {
@@ -249,13 +264,21 @@ def summarize_attributes(attributes: list[dict], reference_rate: int = REFERENCE
         "llm_parameters": asdict(parameters), "llm_config_source": QWEN_CONFIG_URL,
         "image_reference_commit": TASK_MODELING_COMMIT,
         "image_reference_bytes": [asdict(reference) for reference in IMAGE_REFERENCES],
-        "task_count": len(rows), "total_input_bytes": sum(row["input_bytes"] for row in rows),
+        "task_count": len(rows), "total_input_bytes": input_bytes,
         "total_output_bytes": sum(row["output_bytes"] for row in rows),
         "total_compute_work_units": sum(row["compute_work_units"] for row in rows),
         "total_variable_state_bytes": sum(row["k_variable_bytes"] for row in rows),
         "service_demand": {"images": service_demand(image_group), "llm": service_demand(llm_group),
                            "all": service_demand(rows), "llm_share": llm_ns / total_ns},
         "image_service_bands": service_bands(image_group),
+        "image_population": population_summary(image_group),
+        "ordinary_images": {
+            "all": population_summary(ordinary_images),
+            "by_profile": {profile: population_summary([row for row in ordinary_images
+                                                        if row["task_profile"] == profile])
+                           for profile in TASK_PROFILES if profile != "llm"}},
+        "large_image_tasks": {"count": len(large_images), "input_bytes": large_bytes,
+                              "input_ratio": large_bytes / input_bytes},
         "llm_5_to_10_seconds_target_met": bool(llm_group) and all(
             5_000_000_000 <= row["reference_service_time_ns"] <= 10_000_000_000 for row in llm_group),
         "tail_counts": {str(size): sum(row["input_bytes"] == size for row in rows)
@@ -336,15 +359,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True, help="New directory; existing paths are refused")
     parser.add_argument("--seed", default="n4c-g1-66")
+    parser.add_argument("--candidate", choices=tuple(COMPOSITIONS), default="V2-1500",
+                        help="Offline composition only; V2-1500 is historical, no G2 candidate is selected")
     parser.add_argument("--reference-rate", type=int, default=REFERENCE_RATE, help="Candidate WU/s per node")
     parser.add_argument("--llm-work-units-per-token", type=int, default=REFERENCE_LLM_WU_PER_TOKEN)
     args = parser.parse_args()
     try:
         if args.output_dir.exists():
             raise ValueError("output directory already exists; choose a new path")
-        attributes = preview_attributes(args.seed)
+        attributes = preview_attributes(args.seed, args.candidate)
         summary, rows = summarize_attributes(attributes, args.reference_rate, args.llm_work_units_per_token)
         summary["input_seed"] = args.seed
+        summary["workload_candidate"] = args.candidate
         parameters = LlmParameters(work_units_per_token=args.llm_work_units_per_token)
         checks = state_budget_check_rows(parameters)
         representatives = [budget_row(label, budget) for label, budget in representative_budgets(parameters)]
@@ -362,6 +388,7 @@ def main() -> int:
         (args.output_dir / "execution.json").write_text(json_text({
             "code_commit": head, "worktree_dirty": dirty, "python": sys.version,
             "command": [sys.executable, *sys.argv], "input_seed": args.seed,
+            "workload_candidate": args.candidate,
             "kind": "offline-g1-preview", "llm_config_source": QWEN_CONFIG_URL,
             "task_modeling_reference_commit": TASK_MODELING_COMMIT,
         }), encoding="utf-8")

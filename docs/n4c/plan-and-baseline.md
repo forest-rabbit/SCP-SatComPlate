@@ -1,6 +1,6 @@
 # N4C 计划与基线
 
-当前状态：N4C-0/N4C-1 已完成 G1 v2 修订与本地验证，等待再次审阅，见
+当前状态：N4C-0/N4C-1 正在进行 G1 v3 工作负载构成对比，等待候选选择，见
 [G1 审阅包](reviews/G1-workload-state-mapping.md)；G1 尚未批准。源任务书为工作区中的
 `Codex_N4C_Implementation_and_Review_Gates.md`（2026-09-08 修订版）。后续对话确认：
 **仅修改 SatComPlate；TaskModeling 不修改、不重新实验；LLM 不下载、不运行。**
@@ -8,6 +8,8 @@
 本轮 G1 以 `Codex_N4C_G1_Review_Workload_State_Revision_v2.md` 为准，覆盖上一版
 `Codex_N4C_G1_Review_and_cL_cR_Distribution_Revision.md` 的网格和 batch 统计要求。
 不恢复已撤回的 `checkpoint_size_analysis.py`；此前首版的搜索网格也从当前工具中移除。
+v3增量依据 `Codex_N4C_G1_v3_Workload_Composition_Review_and_Revision.md`：保留v2映射
+及历史证据，只比较C1000/C800/C600和10个1 GB+20个500 MB大图像构成，不先冻结C800。
 
 ## 四个审阅批次
 
@@ -51,7 +53,7 @@ G1/G2/G3 未批准时不自行推进下一批或合入对应设计。阶段完�
 `tests/unit/` 对应测试。所有函数均无 ns-3 运行、模型加载或网络查询副作用。
 正式 `para.cc`、TaskTrace、ComputeProfile、故障参数和旧 fixture 保持不变。
 
-## G1 v2 候选与待审阅内容
+## G1 v3 候选与待审阅内容
 
 - 三类图像 `a_z=1`，`W=ceil(3*S/2000)`，1 GB 对应 1,500,000 WU，参考算力
   100,000 WU/s、纯计算15 s；不设最小时长。完整字节分账和来源见
@@ -62,11 +64,14 @@ G1/G2/G3 未批准时不自行推进下一批或合入对应设计。阶段完�
   KV保持114,688 B，因此总状态随 N 增大。小型请求 INPUT 不等于 KV 字节。
 - 状态预算点向后继合法 tile/整图/token 边界对齐，只保留5/10/20%守恒检查；
   不生成 L1/remote/tail backup object，不搜索 n/delta，不统计 D_L/D_R 或成本分段。
-- 预览 1500 个属性样本、精确字节预算、短任务比例与服务需求，不代表
+- 保留V2-1500作历史对照，新增C1000/C800/C600；比例3:3:3:1、INPUT精确81.75 GB。
+  新候选大图像改为10个1 GB、20个500 MB，仍按原权重只分给dense/compression。
+- 对比普通图像与完整图像的大小/时长、短任务比例、LLM需求占比和状态预算，不代表
   已完成 TaskTrace 接入、无故障全量运行、deadline 设计、地理分配或故障标定。
 - 重要风险：普通图像与 1 GB 尾部时长差异、合法保存粒度及 1 s 风险周期、
   参考 rho 跨输入外推、LLM 等成本 token 简化。不能靠调整故障强度隐藏这些风险。
 
-G1 需要用户认可候选；本地测试通过仅说明实现与候选合同一致。
+G1需要用户从C600/C800/C1000中选择并正式批准；不设LLM占比或短任务占比的任意硬阈值。
+本地测试通过仅说明实现与候选合同一致，不能因审阅者倾向C800就默认接入G2。
 N5A 才做固定 n/delta/节点的真实备份恢复；N5B 做频率优化与状态/成本分析；
 N5C 做节点选择和共享池。本轮完成后提交、推送原分支，停止于 G1，不进入 G2。

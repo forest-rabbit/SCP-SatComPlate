@@ -3,6 +3,8 @@
 本页是 G1 待审阅的候选合同，不代表参数已获批准或接入正式 TaskTrace。
 本轮依据 `Codex_N4C_G1_Review_Workload_State_Revision_v2.md` 收缩范围：只冻结
 输入、WU、完整恢复状态、sigma/H；5/10/20% 仅作预算守恒检查，不展开 N5。
+v3依据 `Codex_N4C_G1_v3_Workload_Composition_Review_and_Revision.md` 只比较任务数量
+与大图像构成，不改变下述映射、速率、token范围或状态公式；最终候选尚未选择。
 实现位于 `contrib/satcompute/tools/generation/task_workload_model.py`，只使用标准库。
 TaskModeling 保持不变；平台不导入其代码，不运行图像实验、tokenizer 或 LLM。
 
@@ -26,7 +28,7 @@ TaskModeling 保持不变；平台不导入其代码，不运行图像实验、t
   原参考标签下是 65/85/65 B；预览使用十进制 task ID 标签，因此通常为 45--52 B，
   不是每项都固定65或85 B。没有在平台中执行 serializer 或引入校验算法。
 - dense 的比例由当前表示决定；另外两类随内容变化。本轮用参考均值做扩展预算，
-  不是重新测量1500个任务，也不是跨地域真实分布。原始计量边界见
+  不是重新测量每个合成任务，也不是跨地域真实分布。原始计量边界见
   [N5 前置基础](../n5-prerequisites.md)。
 
 ## 2. 图像的固定工作量与字节预算
@@ -59,7 +61,7 @@ WU 放大约1.5倍而约为原值的2/3，整数取整时以 `K_variable/W` 的�
 这是输入规模的均值外推，尤其非参考大小的 index 预算不代表真实逐项序列化的索引
 长度。若未来更换恢复格式，必须重新确定 metadata/索引合同，不把本预算当现成 blob。
 极小输入的输出预算可能为0；纯模型允许该事实，正式 TaskTrace 目前拒绝0 RESULT。
-本次1500任务预览均有正 RESULT；第二阶段不得把不可运行预算静默填成1 B。
+本次各候选预览均有正 RESULT；第二阶段不得把不可运行预算静默填成1 B。
 
 `sigma_variable_bytes_per_work_unit` 是平台的新可变系数；TaskModeling 的
 `sigma_bytes_per_work_unit` 仍表示含重复头的 total-byte 系数，不改名、不混用。
@@ -140,7 +142,7 @@ service_time_ns = ceil(W * 1000000000 / node_rate_work_units_per_second)
 `delta_total_bytes=delta_variable_bytes+H` 仅验证分账算术；不是 L1 checkpoint 实例、
 BACKUP_START 或已提交状态。本轮没有频率搜索网格、batch 统计或恢复执行事件。
 
-## 5. 离线1500任务预览与全部可调参数
+## 5. 离线构成候选预览与全部可调参数
 
 新工具 `preview-n4c-workload.py` 为 G1 检查提供属性预算，不输出 TaskTrace 或星座。
 它复用正式生成器现有 FNV 和有界整数分配函数，不复制它的旧类别/WU排名规则。
@@ -149,26 +151,41 @@ BACKUP_START 或已提交状态。本轮没有频率搜索网格、batch 统计�
 |---|---|
 | `--output-dir` | 必填的新目录；已存在则拒绝，保护原始证据 |
 | `--seed` | `n4c-g1-66`，稳定属性生成种子，不是 ns-3 seed/run |
+| `--candidate` | `V2-1500`为兼容历史的默认；可选`C1000/C800/C600`，不是正式G2选择 |
 | `--reference-rate` | 100000 WU/s；仅用于离线时间计算，不改正式 ComputeProfile |
 | `--llm-work-units-per-token` | 100 WU/token；统一系数，不逐任务反算 |
-| 类型/预算 | 450/450/450/150；总 INPUT 81,750,000,000 B |
-| 大任务 | 15个1 GB、30个500 MB；dense 分4/7个，compression 分11/23个 |
+| 类型/预算 | 数量比例3:3:3:1；全部候选总 INPUT 81,750,000,000 B |
+| 大任务 | 历史V2为15个1 GB、30个500 MB；新三候选均为10/20个，类别仍限dense/compression |
 | 普通图像 | FNV整数权重10..100，有界分配1,048,576..300,000,000 B |
 | 原始数组对齐 | dense/compression 每项对齐8 B；余数分配给 sparse 编码文件，保持总预算 |
 | 合成 LLM | P=128..256，N=P+G=5000..10000；请求文本长度独立生成，不冒充 tokenizer |
 | 节点需求预览 | ID 0..65 按任务ID轮转，只计算服务需求，无地理位置/到达/排队/deadline |
 
-后六项是这批工具中的明确候选常量，不是新增全场景配置文件。后续正式生成器在 G2
+表中非CLI项是工具的明确候选常量，不是新增全场景配置文件。后续正式生成器在 G2
 消费审核结果，不将相同参数再同时存入 para.cc 和另一份全局 config。
 `N=5000+FNV(seed,task_id,"n4c-total-tokens")%5001`，G=N-P；请求中的数字长度可以
 随 G 改变，但不会按 KV 大小填充 INPUT。整数分配器重新平衡图像预算，保证总 INPUT。
+
+| 候选 | dense / sparse / compression / LLM | 1 GB / 500 MB | 大图像总字节 | 普通图像数 |
+|---|---|---|---:|---:|
+| V2-1500（历史） | 450 / 450 / 450 / 150 | 15 / 30 | 30,000,000,000 | 1305 |
+| C1000 | 300 / 300 / 300 / 100 | 10 / 20 | 20,000,000,000 | 870 |
+| C800 | 240 / 240 / 240 / 80 | 10 / 20 | 20,000,000,000 | 690 |
+| C600 | 180 / 180 / 180 / 60 | 10 / 20 | 20,000,000,000 | 510 |
+
+工具只新增一个具名候选参数，内部`COMPOSITIONS`仅列总任务数和两种大图像数量；
+没有全局schema、工厂或正式TaskTrace层。大图像沿用compression:dense=75:25和
+largest-remainder分配，同余时compression优先。因此新三候选dense各2/5个，
+compression各8/15个；sparse不分配大图像。这里的“尾部”指输入大小长尾，不是N5 tail batch。
+候选间会重新按原FNV规则分配类别和字节，不保证是同一批任务的简单子集；
+固定输入、类别和标签对应的WU/K/rho/H函数完全不变。不通过修改WU去命中特定负载比例。
 
 输出目录包含：
 
 | 文件 | 用途 |
 |---|---|
-| `summary.json` | 总字节/WU、分类型时长、短任务 count/ratio、各类/图像合计/全体服务需求和LLM占比 |
-| `task-budgets.csv` | 1500行属性与预算；没有 source/result/arrival/deadline，不可直接运行 |
+| `summary.json` | 候选组成、大图像占比、各类与图像合计INPUT/时长分位数、普通图像单独统计、短任务比例、需求和状态总量 |
+| `task-budgets.csv` | 候选任务数对应的属性预算；没有 source/result/arrival/deadline，不可直接运行 |
 | `llm-requests.json` | 每个合成请求的独立序列化文本，用来核对 INPUT 字节 |
 | `representative-budgets.csv` | 三类图像参考大小及10/50/100/500/1000 MB、LLM5000/7500/10000 token，共21行 |
 | `state-budget-checks.csv` | 四类参考任务各做5/10/20%状态守恒检查，共12行；不是checkpoint频率/字节分布 |
@@ -179,19 +196,29 @@ BACKUP_START 或已提交状态。本轮没有频率搜索网格、batch 统计�
 短任务 `<0.5s / <1s / <2s` 为累计统计；其他档为 `[2,5)`、`[5,10]`、`>10` 秒。
 不能把全部六档相加。`3:3:3:1` 是数量比例，不是计算服务需求比例。
 各类总需求按整数纳秒求和；默认速率下等于总 WU/100000；其他速率可能有纳秒取整差异。
+`ordinary_images.all/by_profile`排除500 MB和1 GB图像，`image_population`保留全部图像；
+两者均给INPUT和时长min/median/p95/max。`classes`还含各类总WU、服务需求、K和RESULT。
+`large_image_tasks`给大图像数量、总字节及占全部INPUT的比例，`tail_counts_by_profile`
+给大图像类别归属。旧v2结果保持原样，新增字段通过新目录中的V2-1500预览补齐，不能覆盖旧目录。
 
 ```bash
 source .venv/bin/activate
 PYTHONDONTWRITEBYTECODE=1 python \
   contrib/satcompute/tools/generation/preview-n4c-workload.py \
-  --output-dir output/n4c-g1-preview
+  --candidate C1000 --output-dir output/n4c-g1-C1000
+PYTHONDONTWRITEBYTECODE=1 python \
+  contrib/satcompute/tools/generation/preview-n4c-workload.py \
+  --candidate C800 --output-dir output/n4c-g1-C800
+PYTHONDONTWRITEBYTECODE=1 python \
+  contrib/satcompute/tools/generation/preview-n4c-workload.py \
+  --candidate C600 --output-dir output/n4c-g1-C600
 
 PYTHONDONTWRITEBYTECODE=1 python -m unittest discover \
   -s contrib/satcompute/tests/unit -p 'test_n4c_workload*.py' -v
 ```
 
-`output/` 被现有 gitignore 排除，无新增依赖或环境同步步骤。完整的1500任务网络
-基线和故障多seed标定分别属于 G2/G3，本命令不执行这些实验。
+`output/` 被现有 gitignore 排除，无新增依赖或环境同步步骤。用户确定最终任务构成后，
+正式网络基线和故障多seed标定才分别属于 G2/G3，本命令不执行这些实验。
 
 ## 6. 留给 N5 的接口
 
