@@ -1,182 +1,187 @@
 # G1：工作量与恢复状态映射审阅包
 
-日期：2026-09-08。状态：**第一阶段实现与本地验证完成，G1 待用户审阅；尚未批准。**
-本报告的代码与原始预览固定到 `d8eab893a572391ef6fa3410c01db813eb300612`；
-报告所在的后续文档提交不改变代码或参数。测试通过不等于工作量的物理解释已获认可。
+日期：2026-09-08。状态：**G1 v2 修订及本地验证完成，待再次审阅；未进入 G2。**
+依据工作区任务书 Codex_N4C_G1_Review_Workload_State_Revision_v2.md。
+代码和两次原始预览固定到 **702f53eee9ee6af0b6db4f348c95e50e81fd6c8e**，
+生成时工作区干净；后续报告提交不改变代码或结果。测试通过不代表 G1 已获批准。
 
-## 1. 本批次目标与实际完成范围
+## 1. 范围与清理
 
-完成 N4C-0 相关基线/接口盘点及 N4C-1 图像 WU/状态、LLM 公式、sigma/H 分账、
-合法进度与算力候选预览。遵循最新对话，仅修改平台仓库；TaskModeling 只作为已有
-测量来源。不下载模型、不运行 tokenizer/推理，也没有新增依赖。
+N4C 只冻结任务工作量与恢复状态映射，不生成正式 L1/remote/tail backup object，
+不搜索 (n, delta)。相关执行与实际状态大小从 N5A 开始，频率优化从 N5B 开始。
+本轮保留输入、WU、完整可变状态、sigma/H、合法应用边界及5/10/20%预算守恒验证。
 
-这批只交付离线预算工具，不改变正式生成器、TaskTrace、ComputeProfile、para.cc、
-故障参数或运行行为。未执行 checkpoint 传输、deadline/地理负载生成或 N5 算法。
+相对首版清理了：
 
-## 2. 仓库、分支、提交与 PR
+- 1.0%–10.0%、步长0.1个百分点的搜索网格，以及 checkpoint_grid_rows。
+- checkpoint-grid.csv 及其频率间隔统计；改为12行 state-budget-checks.csv。
+- 自动展开的多档速率敏感性表；预览只报告本次显式参数，仍允许 CLI 改参数。
+- 将诊断对象 CheckpointBudget / checkpoint_budgets 改为
+  StateBudgetPoint / state_budget_points，避免与 N5 真实 L1 混淆；字节分账输出改用 h_bytes。
 
-| 仓库 | 分支/基线 | 本批状态 |
-|---|---|---|
-| SCP-SatComPlate | 从 `main` 的 `c40e3f56a` 建立 `feature/n4c-workload-mapping` | 代码提交 `d8eab893a`；证据生成时工作区干净 |
-| SCP-TaskModeling | `main` / `0dbc0c7b6281219e1356151fd640336cde885e7d` | 未修改、未新建分支；工作区仍干净 |
+上一轮未提交的 checkpoint_size_analysis.py 已按用户要求撤回，本轮没有恢复它。
+不存在 n 枚举、batch/tail统计、10/100/500 MB分桶、成本分段或频率优化器。
+旧三个预览目录已完整移至 output/history/n4c-g1-pre-v2/，可恢复但不是v2证据。
+旧代码仍可从 Git 历史追溯；没有删除其他模块、修改用户任务书或清理未合并分支。
 
-尚未推送或创建 PR，不合并未批准的 G1 候选。完整最新 replay 可在平台基线
-`c40e3f56a` 查阅；`n4b-complete` 指向 `67c08de43`，不包含其后 PR #83 的 F2 修订。
-本批没有移动 tag、删除历史代码或修改里程碑。
+## 2. 分支、改动文件与外部影响
 
-## 3. 修改文件与核心接口
+平台分支为 feature/n4c-workload-mapping，本轮起点94a3dd4bf，main基线c40e3f56a。
+按任务书提交并推送原分支供审阅；不创建/合并 PR、不移动 tag、不运行阶段 CI。
+TaskModeling保持main / 0dbc0c7b6281219e1356151fd640336cde885e7d，工作区干净。
 
-| 位置 | 内容 |
+| 修改位置 | 内容 |
 |---|---|
-| `tools/generation/task_workload_model.py` | 图像/LLM immutable budget、整数 WU/时间、variable-only sigma、合法边界和 checkpoint 字节差分 |
-| `tools/generation/preview-n4c-workload.py` | 1500项属性预算、实际合成请求字节、算力对照和全部搜索网格账本 |
-| `tests/unit/test_n4c_workload_model.py` | 公式、参考值、非法值、整数溢出、GQA/dtype、进度/字节守恒 |
-| `tests/unit/test_n4c_workload_preview.py` | 精确数量/预算、稳定性、全部任务三粒度守恒、CLI防覆盖 |
-| generation/tests README、`docs/README.md` | 入口、按需输出和阶段边界 |
-| `docs/n4c/plan-and-baseline.md`、`workload-mapping.md` | 对话修订、基线、完整参数和来源合同 |
+| contrib/satcompute/tools/generation/task_workload_model.py | 图像WU重标、通用状态预算点命名；保留整数/有理数账本 |
+| contrib/satcompute/tools/generation/preview-n4c-workload.py | 新速率、LLM token范围、时长/需求统计、三粒度诊断输出 |
+| contrib/satcompute/tests/unit/test_n4c_workload_model.py | 新尺度、完整字节不变、sigma更新、合法边界与纳秒测试 |
+| contrib/satcompute/tests/unit/test_n4c_workload_preview.py | 1500项预算、短任务区间端点、不同种子、守恒和CLI确定性 |
+| generation/tests 的 README | 入口与范围说明 |
+| docs/n4c/plan-and-baseline.md、workload-mapping.md、本报告 | v2合同、参数解释与验收结果 |
 
-前三组相对路径均位于 `contrib/satcompute/`。核心消费对象是 `TaskBudget`，不是新的
-TaskTrace schema；正式 C++ 类型/deadline/在线风险接口仍待 G2 实现。
+只使用现有 Python 标准库与项目 .venv，不下载/运行 Qwen、tokenizer 或图像算法。
+没有修改正式生成器、TaskTrace、ComputeProfile、para.cc、故障模型、旧 fixture、上游 src
+或 CI；正常平台运行不会新增 CSV。本轮不是1500任务网络或故障实验。
 
-## 4. 公式、单位、参数与来源
+## 3. 图像 WU normalization
 
-图像使用 `W=ceil(S*a_z/1000)`，三类候选 `a_z=1`。状态参考来自已完成的三类测量，
-按整数分子/分母外推并取整；`sigma_variable=K_variable/W`，H 单独计费。
-不修改或误用 TaskModeling 原来的 total-byte sigma。完整定义与来源链接见
-[工作量模型](../workload-mapping.md)。
+三类统一a_z=1，W=ceil(3*S*a_z/2000)，参考算力100,000 WU/s，无最小时长。
+不依赖ID、排名、任务集合或输入顺序，不用rho/RESULT/压缩率推导工作量。
 
-下表的图像为100 MB预算，H 使用原测量标签；LLM为 P=200、G=1300 的示例。
-这是公式计算，不是新图像/LLM实测。
+| 输入（十进制） | WU | 参考纯计算时间（s） |
+|---|---:|---:|
+| 10 MB | 15,000 | 0.15 |
+| 50 MB | 75,000 | 0.75 |
+| 100 MB | 150,000 | 1.5 |
+| 500 MB | 750,000 | 7.5 |
+| 1 GB | 1,500,000 | 15 |
 
-| 类型 | INPUT（B） | WU | K_variable（B） | H（B/次） | sigma_variable（B/WU） | RESULT（B） |
+相同输入与表示下，重标不改变完整状态Byte、rho、H或RESULT；sigma随WU增大而
+约为旧值2/3。整数取整后使用精确K_variable/W，不直接乘显示值2/3。
+15 s延续审阅中的目标；相对已提交首版20,000 WU/s的50 s，实际时长确实缩短了。
+
+## 4. 四类时长、总工作量与计算服务需求
+
+默认种子n4c-g1-66，1500项，数量450/450/450/150，总INPUT精确81,750,000,000 B。
+保留15个1 GB、30个500 MB图像：dense为4/7个，compression为11/23个。
+
+| 类型 | 数量 | 总 WU | 总服务需求（s） | 时长 min / median / p95 / max（s） |
+|---|---:|---:|---:|---|
+| dense-image | 450 | 36,681,620 | 366.81620 | 0.12404 / 0.54645 / 1.06633 / 15 |
+| sparse-inference | 450 | 27,113,641 | 271.13641 | 0.12404 / 0.62226 / 1.04466 / 1.09882 |
+| compression | 450 | 58,830,256 | 588.30256 | 0.12404 / 0.65475 / 7.5 / 15 |
+| 三类图像合计 | 1350 | 122,625,517 | 1226.25517 | — |
+| llm | 150 | 114,089,400 | 1140.89400 | 5.033 / 7.633 / 9.6858 / 9.979 |
+| 全部 | 1500 | 236,714,917 | 2367.14917 | — |
+
+LLM占全部纯计算服务需求 **48.19696%**。3:3:3:1是任务数量比例，不是计算服务需求比例。
+时长按平台整数纳秒公式计算；默认速率下总需求正好等于总WU/100000。
+median/p95采用线性插值描述分位数，不是置信区间。
+
+下表每格为“数量（占该行任务数比例）”。前三列是累计阈值，不能将六列直接相加。
+其余区间明确采用 [2,5)、[5,10]、>10 秒。
+
+| 类型 | <0.5 s | <1 s | <2 s | 2–5 s | 5–10 s | >10 s |
 |---|---:|---:|---:|---:|---:|---:|
-| dense-image | 100,000,000 | 100,000 | 100,000,762 | 65 | 1000.00762 | 100,000,000 |
-| sparse-inference | 100,000,000 | 100,000 | 186,906 | 85 | 1.86906 | 186,906 |
-| compression | 100,000,000 | 100,000 | 54,248,130 | 65 | 542.4813 | 54,248,130 |
-| llm | 768 | 150,000 | 172,032,000 | 0 | 1146.88 | 5,200 |
+| dense-image | 194（43.11%） | 401（89.11%） | 439（97.56%） | 0（0%） | 7（1.56%） | 4（0.89%） |
+| sparse-inference | 187（41.56%） | 405（90.00%） | 450（100%） | 0（0%） | 0（0%） | 0（0%） |
+| compression | 166（36.89%） | 371（82.44%） | 416（92.44%） | 0（0%） | 23（5.11%） | 11（2.44%） |
+| 三类图像合计 | 547（40.52%） | 1177（87.19%） | 1305（96.67%） | 0（0%） | 30（2.22%） | 15（1.11%） |
 
-sparse/compression 的 RESULT 保留规范样本/segment 描述符，本来就可能等于
-K_variable；不能据此把 RESULT 和恢复状态在所有任务中混为一谈。实际1500项的图像
-标签是十进制 task ID，H 为45--52 B；65/85不是全局常量。
+保留短任务是本轮约定，不补时、不删样本。按ID轮转到66个假想节点的总需求仅用于
+离线估算；单节点min/median/p95/max为12.61157/34.74117/58.8991725/76.45373 s。
+这不是实测利用率、无排队保证或N4C网络验收结果。
 
-LLM 的公开配置固定到 [Qwen3-0.6B / c1899de](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/config.json)：
-层数28、KV heads 8、head dim 128；按2 B元素假设得到114,688 B/token。
-统一100 WU/token、H_LLM=0、uint32输出 token 列表均是场景假设，不是现实性能或
-serializer测量。KV按完整 token 递增，prompt缓存不会重复加入每段。G1不验证真实恢复。
+## 5. 完整恢复状态、rho、sigma与H
 
-## 5. 命令、环境和原始证据
+以下三类图像均为100 MB输入，H使用原测量标签；LLM为768 B请求、P=200/G=7300。
+实际1500项使用十进制task ID作为标签，图像H为45–52 B；不统一写成65/85 B。
 
-环境：项目 `.venv` 的 Python 3.10.12、CMake 3.31.10，GNU C++ 11.4.0、系统
-Ninja 1.10.1。原有 CMake 缓存启用 satcompute，`NS3_EXAMPLES/NS3_TESTS=OFF`。
-本批 `./ns3 build` 触发重新配置及491项构建任务，全部完成；没有启用或运行上游测试。
+| 类型 | WU | K_variable（B） | rho_variable | sigma_variable（B/WU） | H（B） | RESULT（B） |
+|---|---:|---:|---:|---:|---:|---:|
+| dense-image | 150,000 | 100,000,762 | 1.00000762 | 666.6717467 | 65 | 100,000,000 |
+| sparse-inference | 150,000 | 186,906 | 0.00186906 | 1.24604 | 85 | 186,906 |
+| compression | 150,000 | 54,248,130 | 0.5424813 | 361.6542 | 65 | 54,248,130 |
+| llm | 750,000 | 860,160,000 | 不定义 | 1146.88 | 0 | 29,200 |
 
-在平台仓库根目录运行：
+rho只含payload+index；sigma只含可变状态，不重复加H。sparse/compression的规范RESULT
+本来就包含描述符，数值可等于K_variable，但二者不能在所有类型中混同。完整参数和来源见
+[工作量模型](../workload-mapping.md)；图像为已有参考比例外推，不是1500项新测量。
 
-```bash
+LLM沿用Qwen3-0.6B结构：28层、8个KV heads、head_dim=128，元素2 B是场景假设。
+2*28*8*128*2=114688 B/token，W=100*(P+G)，K_KV=114688*(P+G)。
+本轮150项实际N为5033–9979，KV为577,224,704–1,144,471,552 B。
+INPUT仍是325–845 B的小型序列化请求，合计86,892 B；没有固定Byte/token等式。
+sigma精确为28672/25=1146.88 B/WU；prompt只计一次，未完成token不增加KV预算。
+
+LLM不是一次单纯WU换单位：相对首版N=1000–2000，N增大会增大完整KV。
+本批LLM状态合计130,846,851,072 B；全部四类完整可变状态合计176,611,226,134 B，
+RESULT合计45,768,636,818 B。这些不是内存实测或实际网络流量。
+请求JSON中的G数字长度比首版合计增加40 B，整数分配器相应调整14个普通图像输入，
+保持总INPUT不变。因此“不改变图像状态字节”是相同S下的模型性质，不是所有旧任务逐项不变。
+
+本模型不下载权重、不运行推理或serializer。合成P/G不冒充tokenizer实测；prompt与
+decode等成本、H_LLM=0、RESULT为4*G的uint32 token列表都是明确的仿真假设。
+它们不能证明真实推理耗时或仅靠KV就能恢复。
+
+## 6. 合法边界与预算验证
+
+dense/compression沿用524,288 B的tile及末尾边缘块；sparse为完整文件边界，
+预览按原100张/26,246,291 B的平均文件大小生成合成文件，非真实DOTA长度；LLM为整token。
+向后继合法位置对齐，合并重复WU/进度，不允许零工作推进冒充新预算点。
+
+全部1500任务各做5/10/20%检查，共4500组，验证WU、可变状态、重复H账本守恒及最终完成。
+四个参考任务的12行诊断另存CSV；参考最大WU取整误差小于1 WU，LLM为0。
+这不是L1记录输出，也不是频率参数选择，更没有remote/tail分布。
+
+c_L(D_L)、c_R(D_R)只在合同中保留未来定义，不新增求值函数或毫秒参数。
+旧5 ms/20 ms是数学示例，不是实测值。N5A负责固定n/delta/节点的备份恢复，
+N5B负责频率优化及状态/成本分析，N5C负责节点选择和共享池。
+
+## 7. 命令、测试和原始输出
+
+在平台仓库根目录运行（输出目录必须未存在）：
+
+~~~bash
 source .venv/bin/activate
+./ns3 build
+PYTHONDONTWRITEBYTECODE=1 python -m unittest discover \
+  -s contrib/satcompute/tests/unit -p 'test_n4c_workload*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python -m unittest discover \
+  -s contrib/satcompute/tests/unit -p 'test_*.py' -v
 PYTHONDONTWRITEBYTECODE=1 python \
   contrib/satcompute/tools/generation/preview-n4c-workload.py \
-  --output-dir output/n4c-g1-20260908
+  --output-dir output/n4c-g1-v2-20260908
 PYTHONDONTWRITEBYTECODE=1 python \
   contrib/satcompute/tools/generation/preview-n4c-workload.py \
-  --output-dir output/n4c-g1-20260908-repeat
-```
-
-两个目录真实存在且由现有 gitignore 排除，`execution.json` 均记录代码提交
-`d8eab893a`、`worktree_dirty=false`。复跑请换新目录，工具拒绝覆盖旧输出。
-两个目录的五个业务文件逐字节一致，execution 中命令路径等元数据不要求一致：
-
-| 文件 | 大小（B） |
-|---|---:|
-| `summary.json` | 29,728 |
-| `task-budgets.csv` | 297,910 |
-| `llm-requests.json` | 95,602 |
-| `representative-budgets.csv` | 2,359 |
-| `checkpoint-grid.csv` | 48,266 |
-
-开发中间预览保留在 `output/n4c-g1-development-20260908/`，不是本报告冻结证据。
-未使用 SHA256 或新增安全校验层。业务 CSV 仅显式调用工具时生成，正常仿真不输出。
-
-## 6. 测试清单
+  --output-dir output/n4c-g1-v2-20260908-repeat
+~~~
 
 | 检查 | 结果 |
 |---|---|
-| `./ns3 build`（项目 venv PATH） | 通过 |
-| Python unit 全发现 `test_*.py` | 24项通过，其中新 G1 测试15项 |
-| `tests/unit/run-cpp-tests.sh` | 13个项目 C++ executable 全部通过 |
-| `tests/integration/smoke/run-all.sh` | routing/capacity/task/diagnostics/topology/link 六组通过 |
-| 1500个属性样本，各做5/10/20%预算分割 | 4500组检查，WU/可变状态/重复H账本一致 |
-| 四类参考任务，1.0%--10.0%步长0.1个百分点，另加20% | 368行网格；无重复位置、无零WU推进，整数/字节守恒 |
-| 两次独立CLI预览 | 五个业务文件逐字节一致；拒绝覆盖测试通过 |
-| Python AST、文档本地链接、`git diff --check` | 通过 |
-| N4C 1500任务网络/无故障基线与故障多seed标定 | 未运行，分别属于 G2/G3 |
-| 全 regression/N4B联合重验、GitHub CI | 本批未运行；保留为后续集成与阶段收口检查 |
+| 项目构建 | 通过；Ninja no work to do；examples/tests仍为OFF |
+| G1 Python单元测试 | 17项通过，包含4500组预算检查及两个额外生成种子的LLM时长验证 |
+| 项目全部Python单元测试 | 26项通过，旧生成器fixture未修改 |
+| 两次独立CLI预览 | 五个业务文件逐字节一致，输出清单完全一致，拒绝覆盖测试通过 |
+| 文档本地链接、变更检查 | 通过 |
+| C++/smoke/完整regression、网络及故障实验、GitHub CI | 本轮未运行；未修改C++/运行时，后续阶段再做相应集成验收 |
 
-代码纯函数用整数/有理数作为判定依据，分位数只用于展示。旧生成器的全部确定性
-fixture检查仍通过；没有通过修改旧期望值获得通过，也没有关闭旧故障采样。
+项目环境为Python3.10.12、CMake3.31.10。两个输出的execution均记录上述完整代码提交、
+worktree_dirty=false；命令路径等元数据不要求逐字节一致，不使用SHA256。
 
-## 7. 关键结果与局限
+| 新输出文件 | 行数或用途 | 大小（B） |
+|---|---|---:|
+| summary.json | 数量、完整字节、时长、累计阈值、服务需求与占比 | 18,728 |
+| task-budgets.csv | 1500项离线预算，无source/arrival/deadline | 297,603 |
+| llm-requests.json | 150个实际序列化的小请求 | 95,642 |
+| representative-budgets.csv | 21项代表预算 | 2,749 |
+| state-budget-checks.csv | 12行5/10/20%守恒摘要 | 1,309 |
+| execution.json | 代码、环境、命令及来源身份 | 元数据单独记录 |
 
-默认候选为20,000 WU/s、100 WU/token：
+原始输出由现有gitignore排除；仓库提交代码、参数合同和本报告，正常仿真仍不生成这些CSV。
 
-| 类型 | 数量 | 总 WU | 服务时间 min / median / p95 / max（s） | 小于1 s数量 |
-|---|---:|---:|---|---:|
-| dense-image | 450 | 24,454,489 | 0.4135 / 1.8215 / 3.55445 / 50 | 90 |
-| sparse-inference | 450 | 18,075,828 | 0.4135 / 2.0742 / 3.4822 / 3.66275 | 97 |
-| compression | 450 | 39,220,237 | 0.4135 / 2.1825 / 25 / 50 | 84 |
-| llm | 150 | 21,966,300 | 5 / 7.2525 / 9.68825 / 9.98 | 0 |
+## 8. 当前停止点
 
-- INPUT 精确81,750,000,000 B；大任务为15个1 GB、30个500 MB。
-  dense 分4/7个，compression 分11/23个，LLM不承担图像尾部预算。
-- LLM INPUT合计86,852 B，单项324--845 B；总缓存1000--1996 token，原始KV预算
-  114,688,000--228,917,248 B。150项参考时长全部满足5--10 s。
-- 新总 WU 为103,716,854，RESULT为45,764,951,898 B；可变状态预算合计
-  70,957,085,210 B。它们不是实际网络传输或内存占用统计，也不需要等于旧压力基线。
-- 按任务ID轮转到66个假想计算节点，服务需求合计5185.8427 s；单节点
-  min/median/p95/max为42.03865/75.43615/124.2399125/200.3959 s。
-  需求除以66×1000 s容量为7.8573%，**不是实测节点利用率或无排队完成保证**。
-
-配对候选均使用同一批 P/G 与输入字节；只统一调整算力及 LLM 系数：
-
-| 候选 | 节点 WU/s | LLM WU/token | 1 GB图像时长 | 小于1 s图像任务 | LLM时长范围 | 总服务需求（s） |
-|---|---:|---:|---:|---:|---|---:|
-| 较慢算力 | 10,000 | 50 | 100 s | 34/1350 | 5--9.98 s | 9273.3704 |
-| 默认预览 | 20,000 | 100 | 50 s | 271/1350 | 5--9.98 s | 5185.8427 |
-| 较快算力 | 50,000 | 250 | 20 s | 848/1350 | 5--9.98 s | 2733.32608 |
-
-summary 另保留固定100 WU/token只改速率的对照：10,000 WU/s下LLM为10--19.96 s，
-50,000 WU/s下为2--3.992 s，明确标记不满足目标，没有偷偷逐任务调参。
-
-动态风险的可观察性仍需审阅：默认候选271个图像任务短于1 s，普通任务中位数约2 s。
-50 MiB稠密/压缩参考任务10%预算间隔约0.26215 s，稀疏参考约0.13125 s，1500-token
-LLM约0.75 s；1 s风险更新不等于每个 checkpoint 都得到一次新风险值。不能据此宣称
-已经充分验证动态频率。较慢候选增加观察时间，但尾部100 s会明显改变F1热负载。
-
-1.1%名义间隔在100个tile参考任务上首先对齐2%，最大偏移约0.9个百分点；1500-token
-LLM最大偏移约0.03333个百分点。图像累计WU向上取整误差小于1 WU；这些误差显式
-保留在网格表。稀疏预览使用合成整图边界，不声称复现实际DOTA单图长度。
-
-## 8. 与上次认可方案的差异及证据失效条件
-
-相对原任务书，按对话移除了 TaskModeling 开发和真实 LLM 运行要求；图像实测参数
-来源不变。新增的具体候选包括20,000 WU/s、100 WU/token、P/N范围、H_LLM=0、
-uint32 RESULT、合成请求和稀疏文件粒度，均在本次 G1 提交确认，不称为此前已批准。
-
-原有压力输入、F1/F2参数及历史报告保持原样。没有通过增减WU、挑选故障seed或删除
-异常样本去接近150个失败。若调整本次映射/算力/字节表示，重跑受影响的离线预览；
-G2/G3以新参数重新验证，不拿旧网络/故障结果给新输入背书。
-
-## 9. 本次需要确认的候选
-
-1. 三类图像先统一 `a_z=1`，保留参考rho及独立RESULT/H口径，是否接受？
-2. 选择20,000 WU/s的默认预览，还是10,000 WU/s的较慢候选，或提出其他档位？
-   不能只看LLM目标，还需明确普通图像与1 GB尾部的时长取舍。
-3. LLM首轮采用等成本合成token、2 B元素、H=0、uint32 token RESULT，以及本次P/N范围，
-   是否作为仿真抽象接受？不将其视为真实恢复实现的证明。
-4. 图像合法tile/整图边界、稀疏预览的合成文件粒度与后继边界对齐规则，是否接受？
-
-## 10. 到达的门禁与暂停状态
-
-**已到 G1，等待用户审阅；未进入 N4C-2/3。** 未批准的候选不合入main、不打阶段tag，
-不启动1500任务网络基线、地理热点和故障标定。分支保留供本批迭代；只有G1批准后
-才进入第二阶段。后续合入/CI/标签/分支整理继续遵守阶段计划。
+**停在G1，等待审阅者确认新WU尺度、参考算力、LLM token范围、无最小时长以及G1通过。**
+不启动G2的正式TaskTrace/ComputeProfile/deadline接入，不调F1/F2/F3、不删replay，
+也不展开N5。代码与证据仅说明本次候选实现一致，不能替代后续网络、故障或备份验收。
