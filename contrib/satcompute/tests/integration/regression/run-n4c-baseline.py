@@ -28,6 +28,11 @@ def main():
     args = parser.parse_args()
     if args.audit and args.fault_mode != "generate":
         parser.error("audit requires generate")
+    f3 = None
+    if args.fault_mode == "generate" and args.hotspot_manifest is not None and not args.disable_f3:
+        f3 = json.loads(args.hotspot_manifest.read_text()).get("f3")
+        if f3 is None:
+            parser.error("pure hotspot placement has no controlled F3 plan; use --disable-f3 or a final manifest")
     output = args.output_dir.resolve()
     if output.exists():
         parser.error("refusing to overwrite an existing output directory")
@@ -50,8 +55,7 @@ def main():
             arguments += [f"--faultF1Beta={args.f1_beta}"]
         if args.f1_gamma is not None:
             arguments += [f"--faultF1Gamma={args.f1_gamma}"]
-        if args.hotspot_manifest is not None and not args.disable_f3:
-            f3 = json.loads(args.hotspot_manifest.read_text())["f3"]
+        if f3 is not None:
             seconds, ns = divmod(f3["time_ns"], 10**9)
             arguments += ["--faultF3Mode=controlled", f"--faultF3Node={f3['node_id']}",
                           f"--faultF3Time={seconds}.{ns:09d}"]

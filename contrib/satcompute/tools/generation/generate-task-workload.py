@@ -1117,6 +1117,8 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.f3_from_none is not None and args.profile != "n4c-hotspot":
+        parser.error("f3-from-none is only supported by n4c-hotspot")
     if "\0" in args.seed or not args.seed:
         raise ValueError("seed must be a non-empty string without NUL")
     satellite_ids = read_satellite_ids(args.nodes_file)
