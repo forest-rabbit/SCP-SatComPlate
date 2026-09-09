@@ -47,7 +47,8 @@ F3单列；本轮没有F2直接victim，不能由此估计F2保护覆盖率。
   G1/G2/G3中间审阅大报告及6份旧图导出；历史由Git保留，原始运行输出未删除。
 - 保留：通用task/routing/fault/network测试、F1/F2独立标定工具、F2论文图、功能fixture、
   原生轨道和TaskModeling派生的稳定映射；上游`src/`不改。
-- N4C文档只剩`README.md`与本目录三个文件：G3索引、G4索引、G4最终证据。
+- G4冻结时N4C文档收敛为`README.md`、G3索引、G4索引、G4最终证据；
+  后续N4收尾另有一份[最终release证据](N4-final-release-validation.md)。
 
 定向构建、16个C++测试程序、29项Python测试（原生切片复现实际执行、无skip）、
 8任务shadow off/on/重复/audit/同刻F3小型smoke、topology smoke和CLI help通过。

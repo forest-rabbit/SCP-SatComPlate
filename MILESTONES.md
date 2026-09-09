@@ -443,7 +443,8 @@ G4 完成 Simplified v4 shadow、动态频率与资源/追赶时间评估，不�
   3338条概率全匹配；shadow 387 START/382 ON，77/82故障时已ON。
   ALL-OFF/shadow全生命周期waste为25625072.100/1354096.228 WU_eq，净节省94.716%；
   平均catch-up为3.12501/0.10479s，仅为解析结果。
-- 发布尚待closeout/main集成、完整阶段CI与人工审阅；最终tag必须为main合并提交上的n4-complete。
+- 输入重构与release证据见 [closeout PR #92](https://github.com/forest-rabbit/SCP-SatComPlate/pull/92)。
+  发布尚待main集成、完整阶段CI与人工审阅；最终tag必须为main合并提交上的n4-complete。
   N5 starts after n4-complete，真实checkpoint/备份/恢复仍未开始。
 
 ## ECMP 算法演进

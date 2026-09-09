@@ -10,6 +10,7 @@
   merge `233bb757ee0da228fe9d77b6cfac2929f9d6f352`，G4
   [PR #91](https://github.com/forest-rabbit/SCP-SatComPlate/pull/91)
   merge `5e8df4b094b8f1260c477c5900f58e7cee38bdb1`。
+- 本次输入重构及release证据：[closeout PR #92](https://github.com/forest-rabbit/SCP-SatComPlate/pull/92)。
 - 正式输入：[LEO-66](../../../contrib/satcompute/input/experiments/leo-66/README.md)。
   66 星、800 任务、1050/1300 s、100000 WU/s、10 Gbps、fixed 单向 1 ms、seed1/run11、deadline1.3。
 - 与已接受 G4 参考 `output/n4c-g4-shadow-20260909/fault-11/` 对比；原始输出未修改。
