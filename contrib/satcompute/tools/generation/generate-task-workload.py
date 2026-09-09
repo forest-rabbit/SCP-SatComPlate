@@ -1046,6 +1046,8 @@ def main():
     parser.add_argument("--position-slices", type=Path, help="Native topology-only output directory")
     parser.add_argument("--hotspot-weight", type=positive_int, default=4)
     parser.add_argument("--regional-candidate-limit", type=non_negative_int, default=0)
+    parser.add_argument("--f3-from-none", type=Path,
+                        help="n4c-hotspot: select a large controlled victim from actual none business timing")
     parser.add_argument("--arrival-start-ns", type=non_negative_int)
     parser.add_argument("--arrival-end-ns", type=non_negative_int)
     parser.add_argument("--arrival-mode", choices=("uniform", "burst"))
@@ -1126,9 +1128,14 @@ def main():
                                           for n in compute_nodes):
             parser.error("n4c-hotspot requires all 66 workers at 100000 WU/s")
         hotspot = runpy.run_path(str(Path(__file__).with_name("n4c_hotspot.py")))
+        none_tasks = hotspot["read_none_tasks"](args.f3_from_none) if args.f3_from_none else None
+        f3_plan = hotspot["select_f3_from_none"](none_tasks, args.seed) if none_tasks is not None else None
+        if f3_plan is not None:
+            f3_plan["none_evidence_directory"] = str(args.f3_from_none)
         trace, summary = hotspot["build_hotspot"](
             read_json(args.base_task_trace), hotspot["read_positions"](args.position_slices),
-            args.seed, args.hotspot_weight, args.regional_candidate_limit)
+            args.seed, args.hotspot_weight, args.regional_candidate_limit,
+            f3_plan=f3_plan, none_tasks=none_tasks)
         write_json(args.output_task_trace, trace)
         write_json(args.output_workload_summary, summary)
         print(json.dumps({k: v for k, v in summary.items() if k != "placements"}, indent=2))

@@ -6,8 +6,12 @@ G3 使用同一入口的 `--profile=n4c-hotspot`，由 `n4c_hotspot.py` 只重�
 `--hotspot-weight` 默认 4、背景为 1；`--regional-candidate-limit=0` 使用区域内全部节点，
 正整数则仅给各区域距中心最近的前 N 个候选加权，用于明确的负载集中度实验。
 北美/欧洲/东亚边界与权重、缺候选 fallback、每任务原生切片时刻都写入 workload summary。
-附带早期 LLM 单 victim F3 候选：其计算星只接收该任务，输入源/结果端点仍在其他星；
-该星保持在线通信，直到受控故障才断链，未屏蔽任何 F1/F2。候选有效性须在联合运行验证。
+不指定 `--f3-from-none` 时生成纯placement，f3=null，不预留任何卫星。
+先跑这份输入的none，再用 `--f3-from-none=<none输出目录>` 从实际任务/队列/传输时序
+选取 INPUT>200MB、WU进度>50%的单victim窗口，优先60–80%，按固定哈希确定候选。
+不读取故障概率、温度或SAA风险，不屏蔽F1/F2；已到达但尚未开始的RESULT依赖也会排除。
+final输入在F3时刻前逐任务端点与none一致，之后才排除故障节点。必须重跑final none及
+联合故障验收；目标任务提前被F1/F2中断或进度不足会记录失败，不能换seed补救。
 
 `generate-task-workload.py` 根据一份 topology-only 节点切片和一份
 ComputeProfile 生成 TaskTrace。它不生成星座、坐标、链路或完整平台配置，也不在

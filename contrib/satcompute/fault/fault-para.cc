@@ -36,17 +36,17 @@ GetDefaultFaultParameters()
     // 触发确定性保护停机的温度，单位为摄氏度。
     parameters.f1.temperature.criticalC = 30.0;
 
-    // 从 17 C 持续计算到 30 C 的秒数；指数时间常数由温度锚点派生。
+    // 从 17 C 持续计算到 30 C 的秒数；升温系数由温度锚点和 gamma 派生。
     parameters.f1.temperature.heatingToCriticalSeconds = 30.0;
 
-    // 升温形状 gamma；1 保持旧曲线，G3 v3 仅比较 1.5/2，完成 pilot 后冻结。
-    parameters.f1.temperature.heatingShapeGamma = 1.0;
+    // 升温形状 gamma；1 为旧指数。G3 v3 四组 pilot 后按热状态分布冻结为 1.5。
+    parameters.f1.temperature.heatingShapeGamma = 1.5;
 
     // 从 30 C 线性冷却到 17 C 的秒数；实际 F1 恢复时长按故障温度派生。
     parameters.f1.temperature.coolingFromCriticalToBaseSeconds = 4.0;
 
     // riskC 到 criticalC 区间内的参考 1 秒概率曲线 beta；越小则中温段概率越高。
-    parameters.f1.temperature.growthFactor = 3.0;
+    parameters.f1.temperature.growthFactor = 10.0;
 
     // 是否把能源压力作为 F1 风险的小权重修正。
     parameters.f1.energy.enabled = true;

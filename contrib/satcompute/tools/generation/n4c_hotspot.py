@@ -2,6 +2,7 @@
 
 from bisect import bisect_right
 from collections import Counter, defaultdict
+import csv
 import json
 import math
 from pathlib import Path
@@ -54,7 +55,109 @@ def read_positions(directory):
     return result
 
 
-def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions=REGIONS):
+def read_none_tasks(directory):
+    """Read business timing only; selection never opens fault/probability/state output."""
+    with (Path(directory) / "task-summary.csv").open() as stream:
+        tasks = list(csv.DictReader(stream))
+    if not tasks or any(t["final_state"] != "COMPLETED" for t in tasks):
+        raise ValueError("controlled F3 selection requires a completed none baseline")
+    for name in ("fault-events.csv", "fault-model-state.csv"):
+        if (Path(directory) / name).exists():
+            raise ValueError("F3 selection input must be none, not a fault run")
+    return tasks
+
+
+def node_obligations(task, node):
+    """Closed unsafe intervals, including already-arrived future RESULT obligations."""
+    arrival = int(task["arrival_time_ns"])
+    if int(task["compute_node_id"]) == node:
+        # INPUT, queue, compute and the RESULT's source all depend on this node.
+        return [(arrival, int(task["result_transfer_complete_time_ns"]), "compute")]
+    intervals = []
+    if int(task["source_node_id"]) == node:
+        intervals.append((arrival, int(task["input_transfer_complete_time_ns"]), "source"))
+    if int(task["result_node_id"]) == node:
+        # Not yet transferring is not safe: an already-arrived task still needs this result endpoint.
+        intervals.append((arrival, int(task["result_transfer_complete_time_ns"]), "result"))
+    return intervals
+
+
+def ordinary_use(tasks, node, time_ns, victim_id):
+    evidence = []
+    for task in tasks:
+        if int(task["task_id"]) == victim_id:
+            continue
+        obligations = node_obligations(task, node)
+        if obligations and max(end for _, end, _ in obligations) < time_ns:
+            role = obligations[-1][2]
+            evidence.append((int(task["task_id"]), role,
+                             max(end for _, end, _ in obligations)))
+    return min(evidence) if evidence else None
+
+
+def select_f3_from_none(tasks, seed):
+    """Choose a large victim from actual none intervals, never from risk or seeds' outcomes."""
+    if not tasks or any(t["final_state"] != "COMPLETED" for t in tasks):
+        raise ValueError("F3 selection requires completed none tasks")
+    candidates = []
+    for task in tasks:
+        if int(task["input_bytes"]) <= 200_000_000:
+            continue
+        node, task_id = int(task["compute_node_id"]), int(task["task_id"])
+        if node in (int(task["source_node_id"]), int(task["result_node_id"])):
+            continue
+        work, rate = int(task["compute_work_units"]), int(task["compute_rate_work_units_per_second"])
+        start, finish = int(task["compute_start_time_ns"]), int(task["compute_complete_time_ns"])
+        if start < 0 or rate != 100000 or finish <= start:
+            raise ValueError("invalid none compute timing/rate")
+        blocked = [interval for other in tasks if int(other["task_id"]) != task_id
+                   for interval in node_obligations(other, node)]
+        # Prefer a legal 60--80% interval; fall back only to the strict >50% requirement.
+        for priority, low_work, high_work in (
+                (0, (6 * work + 9) // 10, 8 * work // 10),
+                (1, work // 2 + 1, work - 1)):
+            lower = start + (low_work * 10**9 + rate - 1) // rate
+            upper = min(finish - 1, start + ((high_work + 1) * 10**9 + rate - 1) // rate - 1)
+            windows = [(lower, upper)] if lower <= upper else []
+            for blocked_start, blocked_end, _ in blocked:
+                remaining = []
+                for a, b in windows:
+                    if blocked_end < a or blocked_start > b:
+                        remaining.append((a, b))
+                    else:
+                        if a < blocked_start:
+                            remaining.append((a, blocked_start - 1))
+                        if blocked_end < b:
+                            remaining.append((blocked_end + 1, b))
+                windows = remaining
+            target = start + (((7 * work + 9) // 10) * 10**9 + rate - 1) // rate
+            for a, b in windows:
+                time_ns = max(a, min(b, target))
+                ordinary = ordinary_use(tasks, node, time_ns, task_id)
+                if ordinary is None:
+                    continue
+                progress = min(work, (time_ns - start) * rate // 10**9) / work
+                if not .5 < progress < 1:
+                    raise AssertionError("F3 candidate has invalid WU progress")
+                candidates.append((priority, stable_hash(seed, "f3-large-victim", task_id, node),
+                                   task_id, abs(time_ns-target), time_ns, {
+                    "node_id": node, "time_ns": time_ns, "victim_task_id": task_id,
+                    "ordinary_task_id": ordinary[0], "ordinary_role": ordinary[1],
+                    "large_victim": True, "input_bytes": int(task["input_bytes"]),
+                    "compute_work_units": work, "none_compute_start_time_ns": start,
+                    "none_compute_finish_time_ns": finish, "none_progress": progress,
+                    "ordinary_release_time_ns": ordinary[2],
+                    "construction": "actual none business intervals; prefer 60-80% WU progress, then stable hash/task id; no risk input"}))
+            if any(c[2] == task_id for c in candidates):
+                break
+    if not candidates:
+        raise ValueError("none baseline has no large single-victim F3 window with ordinary pre-use")
+    chosen = min(candidates, key=lambda c: c[:5])[-1]
+    return {**chosen, "legal_candidate_task_count": len({c[2] for c in candidates})}
+
+
+def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions=REGIONS,
+                  f3_plan=None, none_tasks=None):
     if not isinstance(hot_weight, int) or hot_weight < 1 or regional_limit < 0:
         raise ValueError("positive integer hotspot weight and non-negative regional limit required")
     tasks = [dict(t) for t in base["tasks"]]
@@ -72,22 +175,10 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
             raise ValueError("native preceding slice is missing or at least 1 second old")
         return times[index], positions[times[index]]
 
-    # Early small-request LLM: INPUT can finish well before a one-second offset.
-    # An early victim has no prior compute queue; other endpoint use remains normal.
-    # Choose a northern native track, physically outside SAA before the event.
-    victim = min((t for t in tasks if t["task_profile"] == "llm"),
-                 key=lambda t: (t["arrival_time_ns"], t["task_id"]))
-    f3_time = victim["arrival_time_ns"] + 1_000_000_000
-    eligible = [n for n in range(66)
-                if all(positions[t][n][0] > 10 for t in times if t <= f3_time)]
-    if not eligible:
-        raise ValueError("no northern early controlled F3 candidate")
-    f3_node = min(eligible, key=lambda n: (stable_hash(seed, "f3-node", n), n))
-    pre_tasks = [t for t in tasks if t["task_id"] != victim["task_id"]
-                 and victim["arrival_time_ns"] < t["arrival_time_ns"] < f3_time]
-    if not pre_tasks:
-        raise ValueError("no ordinary pre-F3 endpoint task; choose another deterministic window")
-    ordinary = min(pre_tasks, key=lambda t: (t["input_bytes"], t["arrival_time_ns"], t["task_id"]))
+    if (f3_plan is None) != (none_tasks is None):
+        raise ValueError("final F3 placement requires its actual none evidence")
+    f3_time = f3_plan["time_ns"] if f3_plan else None
+    f3_node = f3_plan["node_id"] if f3_plan else None
     counts = {role: Counter() for role in ("source", "result")}
     placements = []
     fallback = Counter()
@@ -95,7 +186,7 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
     region_totals = defaultdict(lambda: {"task_count": 0, "input_bytes": 0, "work_units": 0})
     for task in sorted(tasks, key=lambda t: (t["arrival_time_ns"], t["task_id"])):
         arrival = task["arrival_time_ns"]
-        available = [n for n in range(66) if arrival < f3_time or n != f3_node]
+        available = [n for n in range(66) if not f3_plan or arrival < f3_time or n != f3_node]
         if not 1_000_000_000 <= arrival <= 600_000_000_000:
             raise ValueError("arrival outside frozen window")
         slice_time, pos = sample(arrival)
@@ -110,29 +201,18 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
                 ((pos[n][0] - (south+north)/2)/(north-south))**2 +
                 ((pos[n][1] - (west+east)/2)/(east-west))**2, n))
             hot.update(candidates[:regional_limit] if regional_limit else candidates)
-        if task["task_id"] == victim["task_id"]:
-            compute = f3_node
-        else:
-            # During the victim's controlled interval, avoid a second queued
-            # compute endpoint; source use is allowed and verified with none.
-            compute_options = [n for n in available if not
-                (n == f3_node and victim["arrival_time_ns"] <= arrival < f3_time)]
-            weights = [hot_weight if n in hot else 1 for n in compute_options]
-            ticket = stable_hash(seed, task["task_id"], "compute") % sum(weights)
-            for n, weight in zip(compute_options, weights):
-                if ticket < weight:
-                    compute = n
-                    break
-                ticket -= weight
+        weights = [hot_weight if n in hot else 1 for n in available]
+        ticket = stable_hash(seed, task["task_id"], "compute") % sum(weights)
+        for n, weight in zip(available, weights):
+            if ticket < weight:
+                compute = n
+                break
+            ticket -= weight
         task["compute_node_id"] = compute
         for role in ("source", "result"):
-            options = [n for n in available if n != compute and
-                       not (role == "result" and n == f3_node and
-                            arrival + (task["compute_work_units"] * 10**9 + 99999) // 100000 >= f3_time)]
+            options = [n for n in available if n != compute]
             node = min(options, key=lambda n: (counts[role][n],
                        stable_hash(seed, task["task_id"], role, n), n))
-            if task["task_id"] == ordinary["task_id"] and role == "source":
-                node = f3_node
             task[role + "_node_id"] = node
             counts[role][node] += 1
         latitude, longitude = pos[compute]
@@ -150,9 +230,22 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
     for task in output["tasks"]:
         if any(task[k] != original[task["task_id"]][k] for k in (*BUSINESS, "arrival_time_ns")):
             raise AssertionError("placement changed frozen business/arrival")
-        if task["arrival_time_ns"] >= f3_time and any(
+        if f3_plan and task["arrival_time_ns"] >= f3_time and any(
                 task[k] == f3_node for k in ("source_node_id", "compute_node_id", "result_node_id")):
             raise AssertionError("post-F3 task uses permanently failed node")
+    if none_tasks is not None:
+        observed = {int(t["task_id"]): t for t in none_tasks}
+        if len(observed) != 800:
+            raise ValueError("none evidence is not C800")
+        for task in output["tasks"]:
+            previous = observed[task["task_id"]]
+            if any(task[k] != int(previous[k]) for k in
+                   ("arrival_time_ns", "input_bytes", "output_bytes", "compute_work_units")) or \
+                    task["task_profile"] != previous["task_profile"]:
+                raise ValueError("none evidence changed task business")
+            if task["arrival_time_ns"] < f3_time and any(task[k] != int(previous[k]) for k in
+                    ("source_node_id", "compute_node_id", "result_node_id")):
+                raise ValueError("final placement changed pre-F3 endpoints; wrong none/seed/weight")
     for totals in region_totals.values():
         totals["compute_service_demand_s"] = totals["work_units"] / 100_000
     manifest = {"profile": "n4c-hotspot", "seed": seed, "regions": regions,
@@ -163,8 +256,6 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
                 "empty_region_fallback_counts": dict(fallback),
                 "fallback_rule": "remaining weighted candidates; background always available",
                 "business_attributes_and_arrivals_unchanged": True,
-                "f3": {"node_id": f3_node, "time_ns": f3_time, "victim_task_id": victim["task_id"],
-                       "ordinary_task_id": ordinary["task_id"], "ordinary_role": "source",
-                       "construction": "early LLM victim plus ordinary pre-F3 INPUT source; verify completed endpoint use in none and generate; no probability shielding"},
+                "f3": f3_plan,
                 "by_region": dict(region_totals), "placements": placements}
     return output, manifest

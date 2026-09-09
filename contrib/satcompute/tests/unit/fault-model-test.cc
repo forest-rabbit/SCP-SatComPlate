@@ -61,10 +61,10 @@ CheckDefaults()
           "fault common defaults differ");
     Check(parameters.f1.enabled && parameters.f1.temperature.baseC == 17.0 &&
               parameters.f1.temperature.heatingToCriticalSeconds == 30.0 &&
-              parameters.f1.temperature.heatingShapeGamma == 1.0 &&
+              parameters.f1.temperature.heatingShapeGamma == 1.5 &&
               parameters.f1.temperature.coolingFromCriticalToBaseSeconds == 4.0 &&
               parameters.f1.energy.initialDod == 0.25 &&
-              parameters.f1.temperature.growthFactor == 3.0,
+              parameters.f1.temperature.growthFactor == 10.0,
           "F1 defaults differ");
     Check(!parameters.f2.enabled &&
               parameters.f2.longitudeMinDegrees == -90.0 &&

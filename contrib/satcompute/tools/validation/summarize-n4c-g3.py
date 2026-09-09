@@ -6,6 +6,7 @@ import csv
 import json
 from pathlib import Path
 import statistics
+import runpy
 
 PLATFORM = Path(__file__).resolve().parents[2]
 
@@ -31,7 +32,7 @@ def distribution(values):
     return {"count": len(values), "mean": statistics.mean(values),
             "sd": statistics.stdev(values) if len(values) > 1 else 0,
             "min": values[0], "p10": quantile(.1), "p50": quantile(.5),
-            "p90": quantile(.9), "max": values[-1]}
+            "p90": quantile(.9), "p95": quantile(.95), "max": values[-1]}
 
 
 def summarize(directory, manifest, expect_f3=False, none_directory=None):
@@ -49,17 +50,28 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
         require(success == (actual["task_success"] == "1") == (actual["final_state"] == "COMPLETED"),
                 "success/deadline/RESULT contract mismatch")
     placements = {p["task_id"]: p for p in manifest["placements"]}
-    f3_plan = manifest["f3"]
-    ordinary = by_id[f3_plan["ordinary_task_id"]]
-    require(int(ordinary["source_node_id"]) == f3_plan["node_id"] and
-            0 <= int(ordinary["arrival_time_ns"]) < int(ordinary["input_transfer_complete_time_ns"]) < f3_plan["time_ns"] and
-            int(ordinary["compute_node_id"]) != f3_plan["node_id"] and
-            int(ordinary["result_node_id"]) != f3_plan["node_id"],
-            "ordinary pre-F3 source was not actually used and released before F3")
-    ordinary_evidence = {"task_id": int(ordinary["task_id"]), "role": "source",
-        "arrival_time_ns": int(ordinary["arrival_time_ns"]),
-        "endpoint_release_time_ns": int(ordinary["input_transfer_complete_time_ns"]),
-        "fault_time_ns": f3_plan["time_ns"]}
+    f3_plan = manifest.get("f3")
+    ordinary_evidence = None
+    f3_errors = []
+    def f3_check(condition, message):
+        if not condition:
+            f3_errors.append(message)
+    if f3_plan:
+        ordinary = by_id[f3_plan["ordinary_task_id"]]
+        role = f3_plan["ordinary_role"]
+        release_field = "input_transfer_complete_time_ns" if role == "source" else "result_transfer_complete_time_ns"
+        release = int(ordinary[release_field])
+        actual_use = int(ordinary["arrival_time_ns"] if role == "source" else ordinary[
+            "compute_start_time_ns" if role == "compute" else "result_transfer_start_time_ns"])
+        if role == "compute" and release < 0 and ordinary["final_state"] == "FAILED":
+            release = int(ordinary["failure_time_ns"])
+        f3_check(int(ordinary[role + "_node_id"]) == f3_plan["node_id"] and
+                 0 <= actual_use < release < f3_plan["time_ns"],
+                 "ordinary pre-F3 endpoint was not actually used and released")
+        ordinary_evidence = {"task_id": int(ordinary["task_id"]), "role": role,
+            "arrival_time_ns": int(ordinary["arrival_time_ns"]),
+            "actual_use_time_ns": actual_use, "endpoint_release_time_ns": release,
+            "fault_time_ns": f3_plan["time_ns"]}
     events = rows(directory / "fault-events.csv") if (directory / "fault-events.csv").exists() else []
     starts = {int(e["fault_id"]): e for e in events if e["event_type"] == "START"}
     impacts = rows(directory / "fault-task-impact.csv") if events else []
@@ -118,31 +130,56 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
     f3_events = [e for e in starts.values() if e["fault_source"] == "F3"]
     victim_evidence = None
     if expect_f3:
+        require(f3_plan is not None, "controlled F3 requires a final manifest")
         f3 = manifest["f3"]
-        require(len(f3_events) == 1 and direct["F3"] == {f3["victim_task_id"]}, "F3 single victim failed")
+        require(len(f3_events) == 1, "F3 event count differs from controlled schedule")
+        f3_check(direct["F3"] == {f3["victim_task_id"]}, "F3 single RUNNING victim failed")
         event = f3_events[0]
-        require((int(event["node_id"]), int(event["simulation_time_ns"]), int(event["affected_task_count"])) ==
-                (f3["node_id"], f3["time_ns"], 1), "controlled F3 target/time/direct count differs")
+        require((int(event["node_id"]), int(event["simulation_time_ns"])) ==
+                (f3["node_id"], f3["time_ns"]), "controlled F3 target/time differs")
+        f3_check(int(event["affected_task_count"]) == 1, "F3 affected task count is not one")
         require(event["route_recomputed"] == "true" and all(event[k] == "false" for k in (
             "satellite_available_after", "communication_available_after", "compute_available_after")),
             "F3 did not immediately disable the satellite and recompute routes")
         task = by_id[f3["victim_task_id"]]
+        f3_check(all(int(task[k]) != f3["node_id"] for k in ("source_node_id", "result_node_id")),
+                 "F3 victim source/result coincides with failed compute node")
         t0 = int(task["compute_start_time_ns"])
-        require(t0 >= 0 and t0 < f3["time_ns"] < t0 + int(task["baseline_compute_time_ns"]),
+        f3_check(t0 >= 0 and t0 < f3["time_ns"] < t0 + int(task["baseline_compute_time_ns"]),
                 "F3 victim was not running inside its compute interval")
-        require(len([i for i in impacts if i["fault_id"] == event["fault_id"]]) == 1,
+        f3_check(len([i for i in impacts if i["fault_id"] == event["fault_id"]]) == 1,
                 "F3 has extra active or post-fault victims")
-        require(not compute_direct.intersection(direct["F3"]), "F3 victim already failed from F1/F2")
+        f3_check(f3["victim_task_id"] not in compute_direct, "F3 victim already failed from F1/F2")
         for task_row in tasks:
             if int(task_row["arrival_time_ns"]) >= f3["time_ns"]:
                 require(all(int(task_row[k]) != f3["node_id"] for k in (
                     "source_node_id", "compute_node_id", "result_node_id")), "post-F3 static endpoint uses failed node")
+        victim_impacts = [i for i in impacts if i["fault_id"] == event["fault_id"] and
+                          int(i["task_id"]) == f3["victim_task_id"] and i["progress_valid"] == "1"]
+        progress = float(victim_impacts[0]["compute_progress_at_fault"]) if victim_impacts else None
+        if f3.get("large_victim"):
+            f3_check(int(task["input_bytes"]) > 200_000_000 and progress is not None and progress > .5,
+                     "F3 large-victim INPUT/progress contract failed")
         victim_evidence = {**f3, "compute_start_time_ns": t0,
                            "no_failure_compute_finish_time_ns": t0 + int(task["baseline_compute_time_ns"]),
-                           "progress": next(float(i["compute_progress_at_fault"]) for i in impacts
-                                            if i["fault_id"] == event["fault_id"])}
+                           "progress": progress, "task_profile": task["task_profile"],
+                           "actual_input_bytes": int(task["input_bytes"]),
+                           "deadline_slack_ns": int(task["compute_deadline_time_ns"]) - f3["time_ns"]}
     elif events:
         require(not f3_events, "unexpected F3 during F1/F2 pre-calibration")
+    elif f3_plan and f3_plan.get("large_victim"):
+        task = by_id[f3_plan["victim_task_id"]]
+        start, end, time = int(task["compute_start_time_ns"]), int(task["compute_complete_time_ns"]), f3_plan["time_ns"]
+        work = int(task["compute_work_units"])
+        progress = min(work, max(0, time-start)*100000//10**9) / work
+        require(start < time < end and progress > .5 and int(task["input_bytes"]) > 200_000_000,
+                "final none does not preserve the large F3 compute window")
+        placement = runpy.run_path(str(PLATFORM / "tools/generation/n4c_hotspot.py"))
+        require(not any(a <= time <= b for other in tasks if int(other["task_id"]) != int(task["task_id"])
+                        for a, b, _ in placement["node_obligations"](other, f3_plan["node_id"])),
+                "final none has an extra active/pending F3 endpoint")
+        victim_evidence = {**f3_plan, "actual_none_progress": progress, "compute_start_time_ns": start,
+                           "compute_finish_time_ns": end}
     node_rows = rows(directory / "compute-node-summary.csv")
     require(sum(int(n["busy_time_ns"]) for n in node_rows) ==
             sum(max(0, int(t["compute_stage_elapsed_time_ns"])) for t in tasks), "busy-time ledger differs")
@@ -219,6 +256,9 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
         for field in ("temperature_c", "p_f1", "continuous_busy_s")}
     f1_start_distributions["outage_duration_s"] = distribution([int(e["duration_ns"])/1e9 for e in f1_starts])
     f1_start_distributions["same_node_start_interval_s"] = distribution(intervals)
+    f1_temperature_counts = {"starts": len(f1_starts),
+        "medium_22_to_25_c": sum(22 <= float(e["temperature_c"]) <= 25 for e in f1_starts),
+        "critical_29p9_to_30_c": sum(29.9 <= float(e["temperature_c"]) <= 30 for e in f1_starts)}
     for event in f1_starts:
         require(20 < float(event["temperature_c"]) <= 30 and 0 < float(event["p_f1"]) <= 1,
                 "F1 START probability/temperature outside new contract")
@@ -256,8 +296,9 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
             sum(float(w["available_link_time_s"]) for w in network_windows),
         "terminal_link_ledger_drained": True}
     require(all(t["final_state"] in ("COMPLETED", "FAILED") for t in tasks), "task truncated")
-    require({int(t["task_id"]) for t in tasks if t["final_state"] == "FAILED"} == all_direct,
-            "G3 has a failed task outside direct fault victims")
+    unexpected_failed = {int(t["task_id"]) for t in tasks if t["final_state"] == "FAILED"} - all_direct
+    if not f3_errors:
+        require(not unexpected_failed, "G3 has a failed task outside direct fault victims")
     require(network["flow_monitor_lost_packets"] == 0 and network["link_queue_drops"] == 0,
             "G3 has unexpected packet loss")
     return {"events": source_events, "unique_direct_running": {
@@ -274,7 +315,13 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
             "network": network,
             "region_runtime": region_runtime, "node_state_audit": state_summary,
             "by_fault_source": by_source, "f3_victim": victim_evidence,
+            "f3_acceptance": {"passed": not f3_errors, "errors": f3_errors},
+            "unexpected_failed_task_ids": sorted(unexpected_failed),
             "f3_pre_failure_participation": ordinary_evidence, "f1_start_distributions": f1_start_distributions,
+            "f1_start_temperature_bands": f1_temperature_counts,
+            "hotspot_task_ratio": sum(p["weighted_hot_candidate"] for p in placements.values()) / len(tasks),
+            "queue_delay_s": distribution([int(t["queue_delay_ns"])/1e9 for t in tasks if int(t["queue_delay_ns"]) >= 0]),
+            "last_task_completion_s": max(int(t["result_transfer_complete_time_ns"]) for t in tasks) / 1e9,
             "f1_outage_cooling_samples_checked": cooling_checks,
             "queue_delta_vs_none_s": queue_delta, "node_busy_s": distribution([int(n["busy_time_ns"])/1e9 for n in node_rows]),
             "audit": "business, actual START, per-task impact, WU progress, deadline and terminal ledgers matched"}
@@ -290,7 +337,8 @@ def main():
     result = summarize(args.run_dir, json.loads(args.manifest.read_text()), args.expect_f3, args.none_dir)
     (args.run_dir / "g3-summary.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({k: result[k] for k in ("events", "unique_direct_running", "task_states", "failure_reasons", "f3_victim")}, indent=2))
+    return 0 if result["f3_acceptance"]["passed"] else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
