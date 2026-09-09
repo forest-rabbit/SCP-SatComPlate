@@ -256,11 +256,17 @@ root = Path(sys.argv[1])
 check = runpy.run_path("contrib/satcompute/tests/support/fault-run-audit.py")["audit"]
 cal = json.loads((root / "f1-calibration/n4b-f1-calibration-summary.json").read_text())
 assert cal["heating_to_critical_s"] == 30 and cal["cooling_from_critical_to_base_s"] == 4
-assert abs(cal["derived_heating_tau_s"] - 23.420413244821606) < 1e-12
+for gamma in (1.5, 2.):
+    expected = (5**(1-gamma) - 18**(1-gamma)) / ((gamma-1)*30)
+    assert abs(cal["derived_heating_coefficients_by_gamma"][f"{gamma:.6f}"] - expected) < 1e-14
 assert cal["derived_cooling_rate_c_per_s"] == 3.25
 with (root / "f1-calibration/n4b-f1-calibration.csv").open() as stream:
     references = list(csv.DictReader(stream))
-assert len(references) == 548 and {r["beta"] for r in references} == {"3", "4", "5", "6"}
+assert len(references) == 548
+assert {(r["beta"], r["gamma"]) for r in references} == {
+    ("8", "1.5"), ("8", "2"), ("10", "1.5"), ("10", "2")}
+assert all(abs(float(r["temperature_c"])-30) < 1e-10 for r in references
+           if r["phase"] == "heating" and float(r["elapsed_s"]) == 30)
 core = ("fault-trace.json", "fault-events.csv", "fault-summary.json", "fault-task-impact.csv",
         "task-events.csv", "task-summary.csv", "transfer-summary.csv", "ecmp-route-events.csv",
         "size-aware-reservation-events.csv", "size-aware-summary.json", "capacity-aware-summary.json",
