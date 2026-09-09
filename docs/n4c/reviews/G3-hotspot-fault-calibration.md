@@ -1,6 +1,8 @@
 # N4C G3：F1 升温形状、热点标定与大任务 F3
 
-状态：v3 修订进行中，**停在 G3 审阅，不进入 G4/N5**。本轮不跑 CI、不合并、不打标签。
+状态：v3 修订与验证已完成；功能核验通过，**数量标定未达标，停在 G3 审阅**。
+F1∪F2 direct标定均值48.33、独立验证均值51，均低于75–83；不进入G4/N5。
+本轮不跑CI、不合并、不打标签。
 当前只更新本报告和既有两张图；批量原始结果在 `output/n4c-g3-v3-20260909`。
 旧 beta=3、validation 21/22/23 保留在 Git 历史和
 `output/n4c-g3-revision-20260909`，不再作为本轮正式或 held-out 证据。
@@ -96,7 +98,7 @@ min/P10/P50/P90/max=16/20.8/27/65.9/176 s。
 128仍不足，停止扩大搜索，以此上限候选完成后续正式标定并如实报告差距。
 大任务F3由candidate none唯一合法候选确定：node41/task191、1GB/1,500,000WU；
 none计算536.690531627→551.690531627 s，F3=547.190531627 s，对应70% WU进度。
-普通task22的源端node41于472.065216011 s完成INPUT并脱离。final none及联合结果待验证。
+普通task22于471.945437896 s实际使用源端node41，472.065216011 s完成INPUT并脱离。
 F3只从none真实业务时序选：
 INPUT>200MB、WU进度>50%，优先60–80%，固定hash/task ID打破平局；
 不读概率/温度/空间风险，移除旧北侧/SAA规避规则。
@@ -109,6 +111,66 @@ INPUT>200MB、WU进度>50%，优先60–80%，固定hash/task ID打破平局；
 **held-out validation 31/32/33**；不根据验证结果反向调整参数。
 代表图预声明取calibration run11，不选择最漂亮的一轮。
 
+最终输入冻结在干净提交 **a6e034bafb1e269e6e4c6b8b7c6ebdb34a9d8687**；final none、
+三轮calibration、audit-off重复及三轮validation均从此提交启动，模型/输入不再变化。
+final none用时450.38 s：800/800任务、1600/1600传输完成，零deadline/endpoint失败、
+零丢包/队列丢弃/截断，capacity与末端链路账本清零；最终热点占比87.25%，最忙节点
+busy=514.05444 s（51.4054%）；排队mean/P95/max=13.7793/43.7357/57.0765 s，
+最后任务606.335354 s完成。平均可用链路利用率0.200277%，有效传输窗口聚合IP吞吐量
+1664.845408 Mbps。final none确认上述F3计算窗口及70% WU进度，没有额外端点依赖。
+
+## 正式标定与独立验证
+
+| 组/run | F1/F2 START | F1∪F2 direct | F3 direct | 完成/失败 | 匹配概率行 |
+|---|---:|---:|---:|---:|---:|
+| calibration 11 | 47/2 | 47 | 1 | 752/48 | 1711 |
+| calibration 12 | 53/1 | 53 | 1 | 746/54 | 1736 |
+| calibration 13 | 45/0 | 45 | 1 | 754/46 | 1705 |
+| validation 31 | 49/0 | 49 | 1 | 750/50 | 1710 |
+| validation 32 | 51/3 | 51 | 1 | 748/52 | 1751 |
+| validation 33 | 53/3 | 53 | 1 | 746/54 | 1716 |
+
+标定F1∪F2 direct均值 **48.33**、样本标准差 **4.16**、范围45–53，未达到75–83。
+权重128只是预声明搜索上限，不是达标候选；停止扩搜，不回调beta/gamma。
+31/32/33在上述标定结果确认后首次启动，验证均值 **51**、样本标准差 **2**、范围49–53，
+仍低于目标，不用于继续调参。标定与验证分别较参考79少38.82%/35.44%。
+六轮F2 direct均为0，没有同刻双来源（边界由确定性测试覆盖）。
+六轮F3均恰好一个事件、一个RUNNING victim：compression task191，源57/计算41/结果31，
+INPUT=1GB、WU=1,500,000，真实开始536.690531627 s；F3时已完成1,050,000WU（70%），
+deadline余量9 s；普通task22事前源端参与时序均通过，无额外QUEUED/INPUT/RESULT victim，
+整星立即永久不可用、恰好一次故障路由重算。
+六轮均无额外deadline/network/endpoint失败、丢包、队列丢弃或任务截断，末端资源账本清零。
+
+代表run11有50次START，但只有48个直接失败任务；1552个transfer完成、48个取消，
+取消项均为失败任务未开始的RESULT，800个INPUT均完成。没有额外deadline/network/endpoint失败。
+QUEUED_DELAYED为455行/351个不同任务；停机期到达60个任务、INPUT继续4个任务。
+共376个任务出现在影响账本，直接和间接受影响集合会重叠，不能简单相加。
+相同任务对比none的平均排队变化为-0.517468 s：失败任务剩余工作被丢弃，可能减轻后续
+整体排队，不代表停机没有延误。代表轮平均可用链路利用率0.194681%。
+
+## 代表轮：故障时概率、任务大小和WU完成度
+
+均取预声明calibration11。前四行统计47次F1 START，间隔统计同节点42对相邻START；
+任务行只统计47个实际RUNNING direct victim。分位数线性插值。
+
+| 量 | min | P10 | P50 | P90 | max |
+|---|---:|---:|---:|---:|---:|
+| START温度 °C | 25.8338 | 26.9081 | 28.5595 | 29.1566 | 29.3546 |
+| 当前步pF1 % | 1.5467 | 4.5395 | 23.6780 | 43.0283 | 52.4428 |
+| continuous busy s | 1.5147 | 14.9415 | 22.3838 | 24.6501 | 26.2641 |
+| 动态恢复 s | 2.7181 | 3.0486 | 3.5568 | 3.7405 | 3.8014 |
+| 同节点START间隔 s | 17 | 20 | 26 | 30 | 132 |
+| 直接victim完成度 % | 2.9180 | 11.2956 | 37.4927 | 83.9314 | 97.6438 |
+| 直接victim INPUT B | 429 | 522.6 | 129,497,184 | 500,000,000 | 1,000,000,000 |
+| 直接victim WU | 64,129 | 110,170.4 | 246,793 | 913,900 | 1,500,000 |
+| deadline余量 s | 0.5037 | 0.8916 | 2.4571 | 10.2441 | 17.5092 |
+
+F1 victim类别dense/sparse/compression/LLM=11/9/15/12，区域北美/欧洲/东亚=21/21/5。
+22–25°C和29.9–30°C START均0次；温度和pF1中位符合建议，P90仍低于约50%，保留差距。
+两次F2分别在263 s/node28、742 s/node17，pF2=0.0240649%/0.1243540%、pF1=0，
+当时没有RUNNING任务，不能为它们编造任务大小或完成度。各轮逐条pF1/pF2/q_comp、任务
+字节、WU进度、deadline余量和终态保留在fault-events.csv与fault-task-impact.csv。
+
 ## 实现与功能回归
 
 - 已通过配置内模块/入口/工具编译、39个Python、15个C++、6个smoke及4个维护regression。
@@ -119,8 +181,39 @@ INPUT>200MB、WU进度>50%，优先60–80%，固定hash/task ID打破平局；
   none前缀不变及故障后端点排除；不完整F3计划在仿真和输出创建前拒绝。
 - F1/F2/联合小例概率行161/136/111全部一致；100任务联合回归88完成/12失败、
   483行概率匹配。回归不要求固定随机故障配额。
-- 正常运行审计默认关闭；正式证据还需完成全量概率对比及audit on/off业务一致性复跑。
+- 六轮正式运行 **10,329行** pF1/pF2/q_comp/P_fail_before_finish全部匹配，
+  MAE/RMSE/max absolute error均为0，无缺失或上下文错配；**862个**实际停机冷却点通过。
+- run11 audit on/off的18项正式业务证据相同（run-summary只排除墙钟时间）；关闭审计时
+  四种可选概率/状态输出均不存在。正常运行默认关闭，QueryComputeRisk无需CSV。
   概率相等验证的是同模型实现一致，不是现实世界“预测准确率100%”。
 
-两张既有图待正式数据完成后原地更新；保留源点、provenance和实际导出QA，
-不补点、平滑或修改观测值。更新完成后仍停在G3 Review。
+## 实际数据图与复现
+
+![负载与热状态](figures/g3/load-thermal.png)
+
+左为66个配对节点的G2 none与本轮final none busy time；右为本轮calibration11的
+全部66个节点利用率/峰值温度，标记5个实际F1节点。均为单轮原始节点观测，不是seed均值。
+
+![原生F2暴露](figures/g3/f2-native-exposure.png)
+
+从65,482条模型状态中取全部5,015个SAA节点秒观测，标出两次实际F2；
+颜色是空间风险，不是故障密度。两图按科研绘图技能沿用Python流程，原地导出PNG/PDF/SVG，
+不补点、平滑或修改观测值。最小字体7 pt，碰撞检查零失败/警告，双面板1.5 pt对齐通过；
+各面板及整图在完整导出/100 dpi实际尺寸预览下检查通过。源点、provenance和QA在
+输出目录figures/。静态预检仅无TIFF提示：本轮为审阅包，不是期刊投稿导出。
+
+完成项目构建后，在仓库根目录使用uv环境复现代表轮（输出目录必须不存在）：
+
+```bash
+source .venv/bin/activate
+python contrib/satcompute/tests/integration/regression/run-n4c-baseline.py \
+  --output-dir=output/g3-v3-run11 --fault-mode=generate --audit \
+  --seed=1 --run=11 --f1-beta=10 --f1-gamma=1.5 \
+  --task-trace=contrib/satcompute/input/examples/leo-66-1000s-n4c-g3/task-trace.json \
+  --hotspot-manifest=contrib/satcompute/input/examples/leo-66-1000s-n4c-g3/placement-manifest.json
+```
+
+去掉audit即正常关闭诊断；none用新的输出目录和fault-mode=none，不能带audit。
+独立验证只改run=31/32/33和输出目录。重新生成输入须先做纯placement none，再用
+generate-task-workload.py的f3-from-none指定它，不能从generate状态选取目标；流程见
+[生成器说明](../../../contrib/satcompute/tools/generation/README.md)。
