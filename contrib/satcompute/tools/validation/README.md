@@ -31,7 +31,7 @@ generate 必须显式开启 probability audit；不插值、平滑或人工调�
 ## F1 参数标定
 
 `f1-calibration.cc` 构建为 `satcompute-f1-calibration`，直接调用正式 F1 模型，
-输出 beta=3/4/5/6 的升温 30 s、冷却 4 s 曲线（0.25 s 采样），核对物理时间与
+输出 beta=8/10 与 gamma=1.5/2 的四组升温 30 s、冷却 4 s 曲线（0.25 s 采样），核对物理时间与
 参考 1 s 概率，不创建网络、不抽随机数，不替代真实 C800 多 run 标定。
 
 ```bash

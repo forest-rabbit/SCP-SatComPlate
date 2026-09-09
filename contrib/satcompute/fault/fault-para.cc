@@ -39,6 +39,9 @@ GetDefaultFaultParameters()
     // 从 17 C 持续计算到 30 C 的秒数；指数时间常数由温度锚点派生。
     parameters.f1.temperature.heatingToCriticalSeconds = 30.0;
 
+    // 升温形状 gamma；1 保持旧曲线，G3 v3 仅比较 1.5/2，完成 pilot 后冻结。
+    parameters.f1.temperature.heatingShapeGamma = 1.0;
+
     // 从 30 C 线性冷却到 17 C 的秒数；实际 F1 恢复时长按故障温度派生。
     parameters.f1.temperature.coolingFromCriticalToBaseSeconds = 4.0;
 

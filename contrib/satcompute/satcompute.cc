@@ -207,8 +207,11 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Enable the built-in F3 source in generate mode",
                          faultParameters.f3.enabled);
     commandLine.AddValue("faultF1Beta",
-                        "F1 temperature probability shape; heating and cooling remain fixed",
+                        "F1 temperature-to-probability shape",
                         faultParameters.f1.temperature.growthFactor);
+    commandLine.AddValue("faultF1Gamma",
+                        "F1 heating shape; base-to-critical time remains fixed",
+                        faultParameters.f1.temperature.heatingShapeGamma);
     commandLine.AddValue("faultF3Mode", "F3 fixed_k, poisson or controlled",
                          faultParameters.f3.mode);
     commandLine.AddValue("faultF3Node", "Controlled F3 target, scheduler-only scenario truth",

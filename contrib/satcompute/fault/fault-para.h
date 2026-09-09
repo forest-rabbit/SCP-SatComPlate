@@ -11,7 +11,7 @@
 namespace ns3
 {
 
-/** F1 指数温度状态与温度风险参数。 */
+/** F1 温度动力学与温度风险参数。 */
 struct F1TemperatureParameters
 {
     double baseC{}; ///< 空闲状态热平衡温度，单位为摄氏度。
@@ -19,6 +19,7 @@ struct F1TemperatureParameters
     double riskC{}; ///< 温度风险曲线起点。
     double criticalC{}; ///< 确定性保护停机温度。
     double heatingToCriticalSeconds{}; ///< 从基础温度持续计算到临界温度的秒数。
+    double heatingShapeGamma{}; ///< 升温动力学形状；1 为一阶指数，候选为 1.5/2。
     double coolingFromCriticalToBaseSeconds{}; ///< 临界温度线性冷却到基础温度的秒数。
     double growthFactor{}; ///< 温度风险指数曲线形状参数。
 };

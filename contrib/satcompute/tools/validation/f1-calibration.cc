@@ -30,14 +30,19 @@ int main(int argc, char* argv[])
         std::filesystem::create_directories(root);
         std::ofstream csv(root / "n4b-f1-calibration.csv");
         if (!csv) throw std::runtime_error("cannot write F1 reference CSV");
-        csv << "beta,phase,elapsed_s,temperature_c,p_f1,recovery_duration_s\n";
+        csv << "beta,gamma,phase,elapsed_s,temperature_c,p_f1,recovery_duration_s\n";
         csv << std::setprecision(17);
         auto parameters = GetDefaultFaultParameters();
-        for (double beta : {3., 4., 5., 6.})
+        nlohmann::json coefficients = nlohmann::json::object();
+        for (double beta : {8., 10.})
         {
+          for (double gamma : {1.5, 2.})
+          {
             parameters.f1.temperature.growthFactor = beta;
+            parameters.f1.temperature.heatingShapeGamma = gamma;
             ValidateFaultParameters(parameters);
             const F1SelfStateFaultModel model(parameters.f1);
+            coefficients[std::to_string(gamma)] = model.GetHeatingCoefficient();
             auto state = model.CreateInitialSnapshot();
             const double heating = parameters.f1.temperature.heatingToCriticalSeconds;
             double previous = 0;
@@ -46,7 +51,7 @@ int main(int argc, char* argv[])
                 const double elapsed = std::min(i * .25, heating);
                 if (i) model.Update(state, true, elapsed - previous);
                 previous = elapsed;
-                csv << beta << ",heating," << elapsed << ',' << state.temperatureC << ','
+                csv << beta << ',' << gamma << ",heating," << elapsed << ',' << state.temperatureC << ','
                     << state.stepFailureProbability << ','
                     << model.GetRecoveryDurationSeconds(state.temperatureC) << '\n';
             }
@@ -58,19 +63,21 @@ int main(int argc, char* argv[])
                 const double elapsed = std::min(i * .25, cooling);
                 model.Update(state, false, elapsed - previous);
                 previous = elapsed;
-                csv << beta << ",cooling," << elapsed << ',' << state.temperatureC << ','
+                csv << beta << ',' << gamma << ",cooling," << elapsed << ',' << state.temperatureC << ','
                     << state.stepFailureProbability << ','
                     << model.GetRecoveryDurationSeconds(state.temperatureC) << '\n';
             }
+          }
         }
         const F1SelfStateFaultModel reference(GetDefaultFaultParameters().f1);
         const nlohmann::json summary = {
-            {"scope", "pure reference; C800 pilot determines the final beta"},
+            {"scope", "pure reference; C800 pilot determines the final beta/gamma pair"},
             {"heating_to_critical_s", parameters.f1.temperature.heatingToCriticalSeconds},
             {"cooling_from_critical_to_base_s", parameters.f1.temperature.coolingFromCriticalToBaseSeconds},
-            {"derived_heating_tau_s", reference.GetHeatingTauSeconds()},
+            {"derived_heating_coefficients_by_gamma", coefficients},
             {"derived_cooling_rate_c_per_s", reference.GetCoolingRate()},
-            {"beta_candidates", {3, 4, 5, 6}}, {"reference_probability_interval_s", 1}};
+            {"beta_candidates", {8, 10}}, {"gamma_candidates", {1.5, 2.0}},
+            {"reference_probability_interval_s", 1}};
         std::ofstream json(root / "n4b-f1-calibration-summary.json");
         json << summary.dump(2) << '\n';
         if (!csv || !json) throw std::runtime_error("F1 reference output failed");

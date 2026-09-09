@@ -90,14 +90,20 @@ F1 在任务开始/完成、故障开始/恢复和每个检查点，先按**上�
 副本。默认基础/风险/临界/热平衡温度为 17/20/30/35°C：
 
 ```text
-tau_h = heatingToCriticalSeconds / ln((T_sat-T_base)/(T_sat-T_crit))
-T_next = T_sat - (T_sat-T) * exp(-dt/tau_h)              # busy
+gamma = heatingShapeGamma
+dT/dt = k_h * (T_sat-T)^gamma                           # busy
+k_h = ln((T_sat-T_base)/(T_sat-T_crit)) / t_heat          # gamma = 1
+k_h = ((T_sat-T_crit)^(1-gamma) - (T_sat-T_base)^(1-gamma))
+      / ((gamma-1)*t_heat)                              # gamma > 1
 cooling_rate = (T_crit-T_base)/coolingFromCriticalToBaseSeconds
 T_next = max(T_base, T-cooling_rate*dt)                  # non-busy
 ```
 
-默认从 17°C 连续计算 30 秒到 30°C，派生 tau_h=23.420413 s；指数升温先快后慢，
-渐近温度仍是 35°C。非忙碌时统一按 3.25°C/s 线性降温，30°C 到 17°C 用 4 秒。
+从 17°C 连续计算 30 秒到 30°C，k_h 由此派生，不独立调参。gamma=1 为旧一阶指数，
+gamma>1 令前中期升温更快而仍在第30秒到30°C；渐近温度仍为35°C。
+实现采用当前温度与真实 elapsed time 的闭式更新，不用离散积分，不在新任务开始时重置。
+G3 v3 仅比较 gamma=1.5/2、beta=8/10，可用 --faultF1Gamma/--faultF1Beta 覆盖；
+正式选择见阶段报告。非忙碌时统一按 3.25°C/s 线性降温，30°C 到 17°C 用 4 秒。
 计算完成和恢复都不清零温度，DoD 只按真实 busy 时长累计，不在恢复时重置。
 
 温度直接映射为**当前参考 1 秒的条件故障概率**，不再使用最大强度 lambdaMax：

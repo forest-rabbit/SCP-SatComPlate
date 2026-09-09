@@ -53,8 +53,8 @@ class F1SelfStateFaultModel
     /** Advance using the previous busy state, then install the new state; never sample. */
     void AdvanceTo(F1SelfStateFaultSnapshot& snapshot, int64_t& lastUpdateNs,
                    int64_t nowNs, bool busy, double probabilityIntervalSeconds = 1.0) const;
-    /** @return Derived exponential heating time constant in seconds. */
-    double GetHeatingTauSeconds() const;
+    /** @return Derived k in dT/dt = k*(T_sat-T)^gamma, never independently tuned. */
+    double GetHeatingCoefficient() const;
     /** @return Derived linear cooling rate in degrees Celsius per second. */
     double GetCoolingRate() const;
     /** @return Time to base from the protected START temperature, in seconds. */

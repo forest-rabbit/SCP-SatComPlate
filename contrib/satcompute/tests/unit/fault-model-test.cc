@@ -61,6 +61,7 @@ CheckDefaults()
           "fault common defaults differ");
     Check(parameters.f1.enabled && parameters.f1.temperature.baseC == 17.0 &&
               parameters.f1.temperature.heatingToCriticalSeconds == 30.0 &&
+              parameters.f1.temperature.heatingShapeGamma == 1.0 &&
               parameters.f1.temperature.coolingFromCriticalToBaseSeconds == 4.0 &&
               parameters.f1.energy.initialDod == 0.25 &&
               parameters.f1.temperature.growthFactor == 3.0,
@@ -105,6 +106,13 @@ CheckInvalid()
     value.f1.temperature.heatingToCriticalSeconds =
         std::numeric_limits<double>::infinity();
     ExpectError(value, "F1.temperature.heating_to_critical_s", "non-finite-heating-tau");
+
+    for (double gamma : {0.5, std::numeric_limits<double>::infinity()})
+    {
+        value = GetDefaultFaultParameters();
+        value.f1.temperature.heatingShapeGamma = gamma;
+        ExpectError(value, "F1.temperature.heating_shape_gamma", "invalid-heating-shape");
+    }
 
     value = GetDefaultFaultParameters();
     value.f1.energy.initialDod = 0.4;
@@ -161,9 +169,10 @@ void
 CheckF1Model()
 {
     auto parameters = GetDefaultFaultParameters();
+    parameters.f1.temperature.heatingShapeGamma = 1.0;
     const F1SelfStateFaultModel model(parameters.f1);
-    Check(std::abs(model.GetHeatingTauSeconds() - 23.420413244821606) < 1e-12,
-          "heating tau must derive from the 30-second target");
+    Check(std::abs(model.GetHeatingCoefficient() - std::log(18. / 5.) / 30.) < 1e-14,
+          "exponential coefficient must derive from the 30-second target");
     Check(model.GetCoolingRate() == 3.25, "linear cooling rate differs");
     const std::array<double, 7> temperatures = {17, 20.460300806993335, 23.25539707649341,
         25.513167019494862, 27.336905676064468, 28.81005075790781, 30};
@@ -192,7 +201,7 @@ CheckF1Model()
     model.Update(state, false, duration / 2);
     Check(std::abs(state.temperatureC - 17) < 1e-12, "fractional cooling differs");
 
-    for (double beta : {3., 4., 5., 6.})
+    for (double beta : {3., 4., 5., 6., 8., 10.})
     {
         parameters.f1.temperature.growthFactor = beta;
         const F1SelfStateFaultModel candidate(parameters.f1);
@@ -255,6 +264,49 @@ CheckF1Model()
     model.Update(reference, true, 1);
     Check(std::abs(exact.stepFailureProbability - reference.stepFailureProbability) < 1e-14,
           "elapsed-time bookkeeping changed the probability interval");
+
+    for (double gamma : {1.0 + 1e-8, 1.5, 2.0})
+    {
+        parameters.f1.temperature.heatingShapeGamma = gamma;
+        const F1SelfStateFaultModel shaped(parameters.f1);
+        auto current = shaped.CreateInitialSnapshot();
+        auto exponential = model.CreateInitialSnapshot();
+        double lastRise = 100;
+        for (unsigned i = 1; i <= 120; ++i)
+        {
+            const double old = current.temperatureC;
+            shaped.Update(current, true, .25);
+            model.Update(exponential, true, .25);
+            const double rise = current.temperatureC - old;
+            Check(rise > 0 && rise < lastRise && current.temperatureC < 35,
+                  "shaped heating must increase monotonically with decreasing slope");
+            lastRise = rise;
+            if (i < 120)
+                Check(current.temperatureC > exponential.temperatureC,
+                      "gamma above one must heat faster before the shared critical endpoint");
+        }
+        Check(std::abs(current.temperatureC - 30) < 1e-10,
+              "shaped heating missed the 30-second endpoint");
+        shaped.Update(current, false, 4);
+        Check(std::abs(current.temperatureC - 17) < 1e-10,
+              "gamma must not change linear cooling");
+        for (double initial : {17., 23.125, 29.75, 35.})
+        {
+            auto whole = shaped.CreateInitialSnapshot();
+            whole.temperatureC = initial;
+            auto split = whole;
+            shaped.Update(whole, true, 7.85);
+            shaped.Update(split, true, 4.125);
+            shaped.Update(split, true, 3.725);
+            Check(std::abs(whole.temperatureC - split.temperatureC) < 1e-11 &&
+                      std::abs(whole.depthOfDischarge - split.depthOfDischarge) < 1e-14,
+                  "fractional shaped flow depends on event partition or resets temperature");
+        }
+        auto asymptote = shaped.CreateInitialSnapshot();
+        shaped.Update(asymptote, true, 1e6);
+        Check(asymptote.temperatureC > 34.99 && asymptote.temperatureC <= 35,
+              "shaped equilibrium must remain 35 degrees");
+    }
 }
 
 Vector

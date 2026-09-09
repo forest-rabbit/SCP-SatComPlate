@@ -53,10 +53,15 @@ F1SelfStateFaultModel::Update(F1SelfStateFaultSnapshot& snapshot,
     const F1TemperatureParameters& temperature = m_parameters.temperature;
     if (busy)
     {
-        snapshot.temperatureC =
-            temperature.saturationC -
-            (temperature.saturationC - snapshot.temperatureC) *
-                std::exp(-intervalSeconds / GetHeatingTauSeconds());
+        const double gap = std::max(0.0, temperature.saturationC - snapshot.temperatureC);
+        const double shape = temperature.heatingShapeGamma - 1.0;
+        const double coefficient = GetHeatingCoefficient();
+        // Exact autonomous flow from the current temperature, not from task age.
+        // log1p preserves the exponential limit when gamma is close to one.
+        const double decay = shape == 0.0
+            ? coefficient * intervalSeconds
+            : std::log1p(shape * coefficient * intervalSeconds * std::pow(gap, shape)) / shape;
+        snapshot.temperatureC = temperature.saturationC - gap * std::exp(-decay);
         snapshot.continuousBusySeconds += intervalSeconds;
     }
     else
@@ -78,11 +83,16 @@ F1SelfStateFaultModel::Update(F1SelfStateFaultSnapshot& snapshot,
 }
 
 double
-F1SelfStateFaultModel::GetHeatingTauSeconds() const
+F1SelfStateFaultModel::GetHeatingCoefficient() const
 {
     const auto& t = m_parameters.temperature;
-    return t.heatingToCriticalSeconds / std::log((t.saturationC - t.baseC) /
-                                               (t.saturationC - t.criticalC));
+    const double baseGap = t.saturationC - t.baseC;
+    const double logRatio = std::log(baseGap / (t.saturationC - t.criticalC));
+    const double shape = t.heatingShapeGamma - 1.0;
+    return shape == 0.0
+        ? logRatio / t.heatingToCriticalSeconds
+        : std::pow(baseGap, -shape) * std::expm1(shape * logRatio) /
+              (shape * t.heatingToCriticalSeconds);
 }
 
 void

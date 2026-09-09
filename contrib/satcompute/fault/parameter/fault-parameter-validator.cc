@@ -58,6 +58,11 @@ ValidateFaultParameters(const FaultParameters& parameters)
     RequireFinite(temperature.riskC, "F1.temperature.risk_c");
     RequireFinite(temperature.criticalC, "F1.temperature.critical_c");
     RequireFinite(temperature.heatingToCriticalSeconds, "F1.temperature.heating_to_critical_s");
+    RequireFinite(temperature.heatingShapeGamma, "F1.temperature.heating_shape_gamma");
+    if (temperature.heatingShapeGamma < 1.0)
+    {
+        Fail("F1.temperature.heating_shape_gamma", "must be at least one");
+    }
     RequireFinite(temperature.coolingFromCriticalToBaseSeconds, "F1.temperature.cooling_from_critical_to_base_s");
     RequireFinite(temperature.growthFactor, "F1.temperature.growth_factor");
     if (!(temperature.baseC < temperature.riskC &&

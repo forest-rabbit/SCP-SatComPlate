@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--run", type=int, default=1)
     parser.add_argument("--f1-beta", type=float)
+    parser.add_argument("--f1-gamma", type=float)
     parser.add_argument("--disable-f3", action="store_true")
     parser.add_argument("--hotspot-manifest", type=Path,
                         help="Offline controlled F3 target/time; never supplied to an online algorithm")
@@ -47,6 +48,8 @@ def main():
                       f"--faultProbabilityAudit={int(args.audit)}"]
         if args.f1_beta is not None:
             arguments += [f"--faultF1Beta={args.f1_beta}"]
+        if args.f1_gamma is not None:
+            arguments += [f"--faultF1Gamma={args.f1_gamma}"]
         if args.hotspot_manifest is not None and not args.disable_f3:
             f3 = json.loads(args.hotspot_manifest.read_text())["f3"]
             seconds, ns = divmod(f3["time_ns"], 10**9)
@@ -55,6 +58,7 @@ def main():
     command = [str(ROOT / "ns3"), "run", "--no-build", shlex.join(arguments)]
     identity = {"command": command, "seed": args.seed, "run": args.run, "fault_mode": args.fault_mode,
                 "task_trace": args.task_trace, "f1_beta_override": args.f1_beta,
+                "f1_gamma_override": args.f1_gamma,
                 "f3_disabled": args.disable_f3, "hotspot_manifest": str(args.hotspot_manifest),
                 "audit": args.audit,
                 "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
