@@ -77,6 +77,16 @@ PureChecks()
     Reject([&] { EstimateCatchUp(in, true, .7, .6); });
     Near(InitializationTime(in, 300000000), .802, "parallel input/state initialization");
     auto choice = SelectFrequency(in, false);
+    // Hand-substituted v4 toy: START delta=.01/n=7 has Rbar=.08871428571428572,
+    // Jstart=.0025 + .4*(.05+.002/.07) + .8*Rbar = .1049.
+    Near(in.pFinish * RecomputeCatchUp(in), 7.84, "hand toy J_OFF");
+    Check(choice.best->deltaPermille == 10 && choice.best->remoteEvery == 7,
+          "hand toy START optimum");
+    Near(choice.best->objective + in.costs.local + in.costs.remote, .1049, "hand toy J_START");
+    const auto onChoice = SelectFrequency(in, true);
+    Check(onChoice.best->deltaPermille == 10 && onChoice.best->remoteEvery == 6,
+          "hand toy ON optimum");
+    Near(onChoice.best->objective, .022888888888888893, "hand toy J_ON");
     Check(choice.best && choice.feasibleCount > 0, "enumeration finds candidate");
     Check(choice.best->deltaPermille >= 10 && choice.best->deltaPermille <= 100 &&
               choice.best->deltaPermille * choice.best->remoteEvery <= 1000,

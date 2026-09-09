@@ -109,7 +109,7 @@ def audit_score(row, task):
     j_off = p * (number(task, "input_bytes") / 1.25e9 + x * work / rate)
     near(number(row, "j_off_s"), j_off, "OFF objective")
     if not on:
-        start = best[0] + cl + cr < j_off and number(row, "t_init_s") < number(row, "remaining_compute_s")
+        start = (cl + cr) + best[0] < j_off and number(row, "t_init_s") < number(row, "remaining_compute_s")
         if truth(row, "start_triggered") != start: raise ValueError("strict START condition differs")
 
 
@@ -218,9 +218,14 @@ def summarize(shadow):
         near(number(row, "compfrr_total_waste_wu"), number(row, "normal_waste_wu") + number(row, "compfrr_recovery_waste_wu"), "lifecycle split")
     bins = (("<5%", 0, .05), ("5-10%", .05, .1), ("10-20%", .1, .2),
             ("20-30%", .2, .3), ("30-50%", .3, .5), (">=50%", .5, 1.000001))
+    by_id = {r["task_id"]: r for r in tasks}
+    def off_feasible(row):
+        remaining = (1 - number(row, "x_f")) * number(row, "work_units") / number(by_id[row["task_id"]], "compute_rate_wu_per_s")
+        return number(row, "T_catch_all_off") + remaining <= (int(row["deadline_time_ns"]) - int(row["fault_time"])) / 1e9
     return {"scope": "G4 analytical only; no actual task rescued", "virtual_audit": audit,
         "task_count": len(tasks), "never_started": len(tasks) - len(started),
         "start_count": len(started), "initialization_success_count": len(entered),
+        "initialization_attempted_s": distribution(number(r, "initialization_duration_attempted_s") for r in started),
         "initialization_fault_miss_count": sum(truth(r, "initialization_fault_miss") for r in tasks),
         "initialization_completion_abort_count": sum(truth(r, "initialization_completion_abort") for r in tasks),
         "start_rate": len(started) / len(tasks), "on_rate": len(entered) / len(tasks),
@@ -230,7 +235,7 @@ def summarize(shadow):
         "primary_direct_fault_count": len(primary),
         "primary_modes": dict(Counter(r["mode_at_fault"] for r in primary)),
         "primary_by_source": {p: dict(Counter(r["mode_at_fault"] for r in primary if r["fault_type"] == p))
-                              for p in sorted({r["fault_type"] for r in primary})},
+                              for p in ("F1", "F2", "F1+F2")},
         "start_to_fault_s": distribution(number(r, "start_to_fault_s") for r in primary if r["start_to_fault_s"]),
         "on_to_fault_s": distribution(number(r, "on_to_fault_s") for r in primary if r["on_to_fault_s"]),
         "on_frequencies": frequencies(decisions),
@@ -238,6 +243,10 @@ def summarize(shadow):
                                 for label, low, high in bins},
         "N_L": sum(int(r["N_L"]) for r in tasks), "N_R": sum(int(r["N_R"]) for r in tasks),
         "config_changes_per_task": distribution(number(r, "config_change_count") for r in tasks),
+        "config_changes_per_on_task": distribution(number(r, "config_change_count") for r in entered),
+        "virtual_storage_peak_per_task": {field: distribution(number(r, field) for r in tasks) for field in (
+            "peak_local_materialized_state_bytes", "peak_remote_materialized_state_bytes",
+            "peak_local_tail_bytes", "peak_replicated_input_bytes", "peak_remote_inflight_batches")},
         "delta_changes": sum(int(r["delta_change_count"]) for r in tasks),
         "n_changes": sum(int(r["n_change_count"]) for r in tasks),
         "normal_cost_s_all_tasks": sum(number(r, "normal_cost_s") for r in tasks),
@@ -255,10 +264,8 @@ def summarize(shadow):
             "recovery_saving_ratio": 1 - recovery / off_waste if off_waste else None,
             "net_lifecycle_saving_ratio": 1 - (normal + recovery) / off_waste if off_waste else None},
         "deadline_feasible_shadow": sum(truth(r, "deadline_feasible_shadow") for r in primary),
-        "deadline_feasible_all_off": sum(
-            number(r, "T_catch_all_off") + (1 - number(r, "x_f")) * number(r, "work_units") /
-                number(next(t for t in tasks if t["task_id"] == r["task_id"]), "compute_rate_wu_per_s") <=
-                (int(r["deadline_time_ns"]) - int(r["fault_time"])) / 1e9 for r in primary),
+        "deadline_feasible_all_off": sum(off_feasible(r) for r in primary),
+        "deadline_newly_feasible_shadow": sum(truth(r, "deadline_feasible_shadow") and not off_feasible(r) for r in primary),
         "f3_appendix": f3, "f3_excluded_from_primary_recovery": True,
         "normal_cost_denominator": "all tasks, including F3 victim normal maintenance",
         "limitations": ["Nonbinding candidate nodes, paths, and storage", "10 Gbps analytical transfer, no real congestion",
