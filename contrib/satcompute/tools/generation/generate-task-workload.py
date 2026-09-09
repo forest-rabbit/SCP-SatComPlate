@@ -993,7 +993,7 @@ def build_n4b_joint_validation_workload(satellite_ids, compute_nodes, seed):
 
 
 def build_n4c_c800_workload(satellite_ids, compute_nodes, seed, candidate="C800"):
-    """Package the approved G1 attributes with non-geographic G2 endpoints."""
+    """Package frozen G1 mappings or the G3 intensity variant with balanced endpoints."""
     if sorted(satellite_ids) != list(range(66)):
         raise ValueError("n4c-c800 requires satellite IDs 0..65")
     if (sorted(node["node_id"] for node in compute_nodes) != list(range(66)) or

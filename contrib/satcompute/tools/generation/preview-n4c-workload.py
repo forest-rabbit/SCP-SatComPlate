@@ -23,8 +23,8 @@ STABLE_VALUE = GENERATOR["deterministic_value"]
 ALLOCATE = GENERATOR["bounded_weighted_allocation"]
 LARGEST_REMAINDER = GENERATOR["largest_remainder"]
 TOTAL_INPUT_BYTES = 81_750_000_000
-# Only workload composition varies: total tasks, 1 GB count, 500 MB count.
-# The default remains a historical reference, not a selected G2 workload.
+# G1 composition variants retain 81.75 GB; C800-109G is an isolated G3 intensity variant.
+# Entries specify total tasks, 1 GB count, and 500 MB count.
 COMPOSITIONS = {"V2-1500": (1500, 15, 30), "C1000": (1000, 10, 20),
                 "C800": (800, 10, 20), "C600": (600, 10, 20), "C800-109G": (800, 10, 20)}
 REFERENCE_RATE = 100_000
@@ -361,7 +361,7 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True, help="New directory; existing paths are refused")
     parser.add_argument("--seed", default="n4c-g1-66")
     parser.add_argument("--candidate", choices=tuple(COMPOSITIONS), default="V2-1500",
-                        help="Offline composition only; V2-1500 is historical, no G2 candidate is selected")
+                        help="Offline budgets only; C800-109G is a G3 intensity variant, other candidates retain G1 budgets")
     parser.add_argument("--reference-rate", type=int, default=REFERENCE_RATE, help="Candidate WU/s per node")
     parser.add_argument("--llm-work-units-per-token", type=int, default=REFERENCE_LLM_WU_PER_TOKEN)
     args = parser.parse_args()
@@ -392,13 +392,15 @@ def main() -> int:
             "code_commit": head, "worktree_dirty": dirty, "python": sys.version,
             "command": [sys.executable, *sys.argv], "input_seed": args.seed,
             "workload_candidate": args.candidate,
-            "kind": "offline-g1-preview", "llm_config_source": QWEN_CONFIG_URL,
+            "kind": "offline-g3-stress-preview" if args.candidate == "C800-109G" else "offline-g1-preview",
+            "llm_config_source": QWEN_CONFIG_URL,
             "task_modeling_reference_commit": TASK_MODELING_COMMIT,
         }), encoding="utf-8")
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(2, f"ERROR: {error}\n")
+    gate = "G3 runtime validation still required" if args.candidate == "C800-109G" else "G1 approval still required"
     print(f"WROTE: {len(rows)} offline task budgets; INPUT={summary['total_input_bytes']} B; "
-          f"LLM time target={summary['llm_5_to_10_seconds_target_met']}; G1 approval still required")
+          f"LLM time target={summary['llm_5_to_10_seconds_target_met']}; {gate}")
     return 0
 
 
