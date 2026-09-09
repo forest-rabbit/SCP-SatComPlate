@@ -3,9 +3,9 @@ build_lib(
   SOURCE_FILES
     para.cc
     common/time-conversion.cc
-    protection/shadow/compfrr-shadow-model.cc
-    protection/shadow/compfrr-shadow-evaluator.cc
-    protection/shadow/compfrr-shadow-recorder.cc
+    tools/validation/compfrr-shadow/compfrr-shadow-model.cc
+    tools/validation/compfrr-shadow/compfrr-shadow-evaluator.cc
+    tools/validation/compfrr-shadow/compfrr-shadow-recorder.cc
     fault/fault-para.cc
     fault/model/compute-failure-predictor.cc
     fault/model/compute-fault-combination.cc
@@ -68,10 +68,10 @@ build_lib(
   HEADER_FILES
     para.h
     common/time-conversion.h
-    protection/shadow/compfrr-shadow-model.h
-    protection/shadow/compfrr-shadow-task-state.h
-    protection/shadow/compfrr-shadow-evaluator.h
-    protection/shadow/compfrr-shadow-recorder.h
+    tools/validation/compfrr-shadow/compfrr-shadow-model.h
+    tools/validation/compfrr-shadow/compfrr-shadow-task-state.h
+    tools/validation/compfrr-shadow/compfrr-shadow-evaluator.h
+    tools/validation/compfrr-shadow/compfrr-shadow-recorder.h
     fault/fault-para.h
     fault/model/compute-failure-predictor.h
     fault/model/compute-fault-combination.h

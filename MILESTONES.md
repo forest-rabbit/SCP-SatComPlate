@@ -28,10 +28,12 @@ annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移�
 或 N1-ECMP 已有的阶段冻结点。N3 使用新仓库的 ns-3.48 主线，但沿用并保留这些
 历史 tag。
 
-分支待集成引用（2026-09-09）：N4C G3正式场景已人工批准，冻结引用为`n4c-g3-frozen`，
-见[G3冻结索引](docs/n4c/reviews/G3-final-freeze.md)。当前仅在开发分支冻结，未合入main，
-不记作N4C整阶段主线完成。旧“N4C G4收口”的场景/文档收口由G3 Final Freeze接替；
-新G4专指CompFRR Shadow Decision Evaluation。PR合入和阶段CI尚未执行，G4/N5均未开始。
+分支待集成引用（2026-09-09）：N4C G3正式800任务场景与G4旁路解析评估已人工接受，
+清理后以`n4c-g4-frozen`冻结，见[G4冻结索引](docs/n4c/reviews/G4-final-freeze.md)。
+当前唯一默认为1300 s、66星、1 ms；G4为387 START、382 ON、77/82故障时已保护，
+解析net lifecycle saving为94.716%，不代表真实备份性能。
+历史`n4c-g3-frozen`不移动；尚未合入main、未运行阶段CI，N5A未开始，
+不记作N4C整阶段主线完成。
 
 ## N0：初始网络平台
 
@@ -424,8 +426,8 @@ SCP-TaskModeling 已完成三类图像任务的真实增量计量、5% / 10% / 2
 - 压力证据：[PR #86](https://github.com/forest-rabbit/SCP-SatComPlate/pull/86) / `a9bf4ad16`；[阶段 CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/34014479346) 通过
 - 参数口径、实验边界及待确定项：[N5 前置基础](docs/n5-prerequisites.md)；详细压力结果：[10 Gbps 基线](docs/pressure-10g-baseline.md)
 
-以上作为 N5 的前置依据，不表示备份算法已完成；WU 映射、最终 `sigma`、LLM
-参数及平台接入仍待确定。
+以上为当时的前置实验记录；后续WU映射、sigma/H、LLM预算与平台接入已在
+[N4C](docs/n4c/README.md)完成，真实备份执行仍未实现。
 
 ## ECMP 算法演进
 

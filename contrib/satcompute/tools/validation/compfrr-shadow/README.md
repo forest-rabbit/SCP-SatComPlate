@@ -1,17 +1,21 @@
 # CompFRR 旁路决策评估（G4）
 
 这里实现 `CompFRR_Backup_Frequency_Model_Simplified_v4.md` 的 shadow consumer。
+G4 validator 是模型预演和结果验证工具，不是 N5 production implementation。
+未来 N5 正式模块不得依赖本目录（包括通过 `ns3/compfrr-shadow-*.h` 间接依赖）；
+可以在测试中使用这里的纯模型作为 oracle，单向验证正式实现。
 只在真实任务 RUNNING 时评估保护决策、有效状态与资源成本；不发送备份包、不占用真实
 算力/链路、不修改任务完成状态、不参与故障随机抽样。真实备份执行属于后续 N5。
 
 ## 文件与边界
 
-| 文件（位于 `shadow/`） | 职责 |
+| 文件 | 职责 |
 |---|---|
 | `compfrr-shadow-model.h/.cc` | G1 字节/WU/合法边界映射、固定成本档位、START/ON 枚举、追赶和资源纯公式 |
 | `compfrr-shadow-task-state.h` | OFF → INITIALIZING → ON 状态、初始化终止、已完成 L1 与 remote 历史、成本计数 |
 | `compfrr-shadow-evaluator.h/.cc` | 只读任务事件观察、在线风险查询、虚拟事件和故障当刻记录 |
 | `compfrr-shadow-recorder.h/.cc` | 独立 CSV 写出；不适用的值为空，不伪造零概率 |
+| `summarize.py` | 真实输出一致性、虚拟账本审计、资源分账和 START/成本档位离线统计 |
 
 入口参数位于外层 `para.cc`：`--compfrr-shadow=1` 显式开启，默认关闭；输出默认位于
 `outputDir/shadow`，可用 `--compfrr-shadow-output=目录` 覆盖。要求在线 generate、
@@ -81,5 +85,5 @@ G4 候选节点/路径可用、存储不约束；记录本地/远端有效状态
 输出：`shadow-decisions.csv`、`shadow-task-summary.csv`、`shadow-faults.csv`、
 `shadow-events.csv`、`shadow-assumptions.json`。
 已有输出目录不会因关闭 shadow 被删除；比较实验请使用新目录，以免误读历史 CSV。
-测试指令与复现入口见[测试 README](../tests/README.md)，结果见
-[G4 审阅报告](../../../docs/n4c/reviews/G4-shadow-decision-evaluation.md)。
+测试指令与复现入口见[测试 README](../../../tests/README.md)，结果见
+[G4 审阅报告](../../../../../docs/n4c/reviews/G4-shadow-decision-evaluation.md)。

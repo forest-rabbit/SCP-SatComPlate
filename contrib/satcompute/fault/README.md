@@ -102,8 +102,8 @@ T_next = max(T_base, T-cooling_rate*dt)                  # non-busy
 从 17°C 连续计算 30 秒到 30°C，k_h 由此派生，不独立调参。gamma=1 为旧一阶指数，
 gamma>1 令前中期升温更快而仍在第30秒到30°C；渐近温度仍为35°C。
 实现采用当前温度与真实 elapsed time 的闭式更新，不用离散积分，不在新任务开始时重置。
-G3 v3 仅比较 gamma=1.5/2、beta=8/10，可用 --faultF1Gamma/--faultF1Beta 覆盖；
-正式选择见阶段报告。非忙碌时统一按 3.25°C/s 线性降温，30°C 到 17°C 用 4 秒。
+正式场景采用 gamma=1.5、beta=10，可用 --faultF1Gamma/--faultF1Beta 覆盖做独立实验；
+非忙碌时统一按 3.25°C/s 线性降温，30°C 到 17°C 用 4 秒。
 计算完成和恢复都不清零温度，DoD 只按真实 busy 时长累计，不在恢复时重置。
 
 温度直接映射为**当前参考 1 秒的条件故障概率**，不再使用最大强度 lambdaMax：
@@ -116,7 +116,7 @@ pF1_1s = min(1, pT * (1 + 0.1*energyPressure))
 ```
 
 能源项仅乘性修正，不能在低温时独立制造故障。当前 beta=10、gamma=1.5；同一温度下 beta 越小，概率越高；
-候选/冻结结果见 [G3 阶段证据](../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
+正式结果见 [G3 冻结索引](../../../docs/n4c/reviews/G3-final-freeze.md)。
 可用 `--faultF1Beta` 临时覆盖，其他参数仍集中在 [fault-para.cc](fault-para.cc)。
 若改变检查周期，则用 `q(dt)=1-(1-pF1_1s)^dt` 换算抽样概率；实际状态更新 dt 和
 概率参考周期不是同一个量。历史多步累计概率不参与当前抽样。

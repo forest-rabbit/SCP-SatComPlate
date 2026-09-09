@@ -91,7 +91,7 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 ## 参数边界
 
 G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评估，默认关闭。
-不创建真实备份或修改任务结果，详见 [protection 模块](protection/README.md)。
+不创建真实备份或修改任务结果，详见 [G4验证工具](tools/validation/compfrr-shadow/README.md)。
 
 人工设置的时长和间隔统一以秒传入，平台在组件边界转换为 ns-3 `Time` 或有符号
 整数纳秒。星座 CSV 只描述轨道结构，算力、任务和 Fault Trace 位于独立数据文件，
@@ -152,7 +152,7 @@ G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评�
 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
-| `--computeProfile` | `input/examples/leo-66-1000s-n4c/compute-profile.json` | 路径 | 默认每星 100,000 WU/s；自定义时必须与 `taskTrace` 成对提供 |
+| `--computeProfile` | `input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/compute-profile.json` | 路径 | 默认每星 100,000 WU/s；自定义时必须与 `taskTrace` 成对提供 |
 | `--taskTrace` | `input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json` | 路径 | 当前 800 任务；表中两条路径省略 `contrib/satcompute/` 前缀；成对设置 `none` 可禁用任务 |
 | `--computeDeadlineFactor` | `1.3` | 倍率 | 有限且至少为1；首次计算开始后的deadline预算倍率，语义见[任务模块](task/README.md) |
 | `--transferChunkMode` | `size-aware` | 枚举 | `fixed` 或 `size-aware` 分包 |

@@ -48,7 +48,7 @@ main()
                     config.ecmpHashSeed == 1,
                 "unexpected routing defaults");
         Require(config.computeProfile ==
-                    "contrib/satcompute/input/examples/leo-66-1000s-n4c/compute-profile.json" &&
+                    "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/compute-profile.json" &&
                     config.taskTrace ==
                     "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json",
                 "workload inputs must match the frozen scene");

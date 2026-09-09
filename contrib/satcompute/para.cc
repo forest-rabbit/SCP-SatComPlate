@@ -77,7 +77,7 @@ GetDefaultSatComputeConfig()
 
     // --computeProfile：每颗卫星的算力资源 JSON；必须与 taskTrace 同时提供。
     config.computeProfile =
-        "contrib/satcompute/input/examples/leo-66-1000s-n4c/compute-profile.json";
+        "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/compute-profile.json";
 
     // --computeDeadlineFactor: compute-stage deadline budget / reference service time.
     config.computeDeadlineFactor = 1.3;

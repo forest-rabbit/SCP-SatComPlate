@@ -52,7 +52,8 @@ PENDING
 
 N4C 的 `task_profile` 只接受 `dense-image`、`sparse-inference`、`compression`、`llm`；
 旧输入缺省时明确记为 `UNSPECIFIED`，不猜测类别。正式 C800 使用统一100,000 WU/s；
-旧示例的 ComputeProfile 不改。输入及生成命令见 [C800 示例](../input/examples/leo-66-1000s-n4c/README.md)。
+旧功能示例的 ComputeProfile 不改。输入和 S/W/K/RESULT、rho/sigma/H 合同见
+[正式任务生成器](../tools/generation/README.md)；当前默认是已冻结的1300秒场景。
 
 `computeDeadlineFactor` 默认1.3，有限且至少为1。预算为参考服务时间乘倍率后向上取整到ns；
 正式四类参考速率为100,000 WU/s，legacy任务沿用其输入节点速率。

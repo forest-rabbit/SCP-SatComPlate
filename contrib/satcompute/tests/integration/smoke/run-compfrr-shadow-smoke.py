@@ -11,7 +11,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT / "contrib/satcompute/tools/generation"))
 from task_workload_model import image_budget, llm_budget
-CHECK = runpy.run_path(str(ROOT / "contrib/satcompute/tools/validation/summarize-n4c-g4-shadow.py"))
+CHECK = runpy.run_path(str(ROOT / "contrib/satcompute/tools/validation/compfrr-shadow/summarize.py"))
 
 
 def run(output, trace, profile, shadow, audit=False, f3_time="63"):

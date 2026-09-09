@@ -1,11 +1,11 @@
 # N4C G4：CompFRR Shadow Decision Evaluation
 
-状态：**G4 本地门禁与唯一一次完整验证通过，STOP AT G4 REVIEW。**
+状态：**G4 人工审阅通过；冻结与清理索引见 [G4-final-freeze](G4-final-freeze.md)。**
 不进入 N5，不自动合并、运行阶段 CI 或清理当前功能分支。
 
 依据用户补充的 `CompFRR_Backup_Frequency_Model_Simplified_v4.md` 和
 `Codex_N4C_G4_CompFRR_Shadow_Decision_Evaluation_v2.md`。实现合同集中在
-[protection README](../../../contrib/satcompute/protection/README.md)，不复制两份任务书。
+[验证工具 README](../../../contrib/satcompute/tools/validation/compfrr-shadow/README.md)，不复制两份任务书。
 
 ## 实验基线
 
@@ -140,9 +140,9 @@ deadline what-if 新增可达 63 个，**不等于实际救回 63 个**；真实
 
 ```bash
 source .venv/bin/activate
-python contrib/satcompute/tests/integration/regression/run-n4c-baseline.py \
+python contrib/satcompute/tests/integration/regression/run-final-scenario.py \
   --output-dir=output/g4-shadow-review --audit --shadow
-python contrib/satcompute/tools/validation/summarize-n4c-g4-shadow.py \
+python contrib/satcompute/tools/validation/compfrr-shadow/summarize.py \
   --run-dir=output/g4-shadow-review \
   --reference-dir=output/n4c-g3-delay-1ms-20260909/fault-11
 ```
@@ -161,3 +161,29 @@ G4 正常保护成本覆盖全部 800 任务，主要恢复统计只含 F1/F2，
 完整运行 deterministic 的重复证据来自小场景，不为此重跑第二次完整场景。
 本地门禁无阻塞项；下一步只等待 G4 人工审阅。真实备份会引入资源竞争，也可能改变 F1
 温度与故障轨迹，不能把这次理想资源下的净收益直接当作 N5 的实际网络性能结论。
+
+## 冻结时补充的离线统计
+
+只读取上述既有 CSV，没有重新运行 ns-3。以下均为保护 START 当刻；剩余计算时间
+不包含 INPUT、排队或 RESULT。分位数采用线性插值，原始精度保留在本地 g4-summary.json。
+
+| 类别 | START数 | INPUT（十进制MB）：min / P10 / P50 / P90 / max | 剩余计算（s）：min / P10 / P50 / P90 / max |
+|---|---:|---|---|
+| 全部 | 387 | 0.000325 / 0.000783 / 277.700376 / 480.380721 / 1000.000000 | 0.25165 / 1.22563 / 3.58646 / 6.74377 / 15.00000 |
+| compression | 113 | 74.319208 / 139.466352 / 294.360016 / 502.907066 / 1000.000000 | 0.40479 / 1.27600 / 3.58646 / 6.54361 / 15.00000 |
+| dense | 93 | 69.687504 / 137.766570 / 285.201344 / 482.781320 / 1000.000000 | 0.25165 / 1.13894 / 3.22285 / 6.24980 / 15.00000 |
+| LLM | 43 | 0.000325 / 0.000377 / 0.000637 / 0.000767 / 0.000845 | 1.91600 / 3.54780 / 6.28300 / 8.15880 / 8.89100 |
+| sparse | 138 | 73.622997 / 146.647161 / 305.948564 / 465.412231 / 555.208967 | 0.42909 / 1.16363 / 3.46414 / 5.88792 / 8.01833 |
+
+LLM 的 INPUT 是小型请求，不是 KV-cache；其 325–845 B 与图像输入不能视为同一种数据表示。
+
+成本档位按完整 K（非 INPUT、非单次增量）划分，任务数包含未 START 的任务：
+
+| 完整 K 档位 | 任务数 | START | ON | 全部正常维护 WU |
+|---|---:|---:|---:|---:|
+| K<=100MB | 325 | 166 | 162 | 52210 |
+| 100MB<K<=500MB | 382 | 168 | 167 | 223600 |
+| K>500MB | 93 | 53 | 53 | 219000 |
+
+三档合计 800 / 387 / 382，正常维护合计 494810 WU，与已接受账本一致。
+本次原始 task/fault/transfer/shadow CSV 均保留；仅重生成可派生的离线汇总。

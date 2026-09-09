@@ -197,6 +197,31 @@ def audit_virtual(shadow):
             "event_count": event_count, "checked": "legal byte deltas, initialization, completed costs, retained pending batches, serial remote queue, no after-terminal decisions"}
 
 
+def start_workload_and_tiers(tasks, decisions):
+    """Offline START workload and full-K cost-tier accounting; no new model evaluation."""
+    started = {r["task_id"]: r for r in tasks if truth(r, "ever_start")}
+    starts = [r for r in decisions if truth(r, "start_triggered")]
+    if len(starts) != len(started) or {r["task_id"] for r in starts} != set(started):
+        raise ValueError("START task/decision records are missing or duplicated")
+    def describe(group):
+        return {"input_bytes": distribution(number(started[r["task_id"]], "input_bytes") for r in group),
+                "remaining_compute_s": distribution(number(r, "remaining_compute_s") for r in group)}
+    tiers = []
+    for label, low, high in (("K<=100MB", 0, 100_000_000),
+                             ("100MB<K<=500MB", 100_000_000, 500_000_000),
+                             ("K>500MB", 500_000_000, math.inf)):
+        group = [r for r in tasks if low < int(r["K_variable"]) <= high or
+                 (low == 0 and int(r["K_variable"]) == 0)]
+        tiers.append({"cost_tier": label, "task_count": len(group),
+                      "start_count": sum(truth(r, "ever_start") for r in group),
+                      "on_count": sum(truth(r, "init_complete") for r in group),
+                      "normal_waste_wu": sum(number(r, "normal_waste_wu") for r in group)})
+    return {"start_workload": describe(starts),
+            "start_workload_by_profile": {p: describe([r for r in starts if started[r["task_id"]]["task_profile"] == p])
+                for p in sorted({r["task_profile"] for r in tasks})},
+            "cost_tiers": tiers}
+
+
 def summarize(shadow):
     audit = audit_virtual(shadow)
     tasks = rows(shadow, "shadow-task-summary.csv")
@@ -223,6 +248,7 @@ def summarize(shadow):
         remaining = (1 - number(row, "x_f")) * number(row, "work_units") / number(by_id[row["task_id"]], "compute_rate_wu_per_s")
         return number(row, "T_catch_all_off") + remaining <= (int(row["deadline_time_ns"]) - int(row["fault_time"])) / 1e9
     return {"scope": "G4 analytical only; no actual task rescued", "virtual_audit": audit,
+        **start_workload_and_tiers(tasks, rows(shadow, "shadow-decisions.csv")),
         "task_count": len(tasks), "never_started": len(tasks) - len(started),
         "start_count": len(started), "initialization_success_count": len(entered),
         "initialization_attempted_s": distribution(number(r, "initialization_duration_attempted_s") for r in started),
