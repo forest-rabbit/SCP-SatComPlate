@@ -224,10 +224,12 @@ F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中
 G3 另提供 `--faultF3Mode=controlled --faultF3Node=N --faultF3Time=S` 单事件场景接口，
 秒制时间进入模型时转为整数 ns。仅调度器知道未来目标/时刻，在线风险查询不返回它们；
 fixed_k/poisson 保留。受控场景不屏蔽该卫星的 F1/F2，也不恢复 production replay。
-实验命令必须记录 F1 beta 的覆盖值。probability audit 开启时额外输出 `fault-model-state.csv`，
+实验命令必须记录 F1 beta/gamma 的覆盖值。probability audit 开启时额外输出 `fault-model-state.csv`，
 记录每次模型更新的温度、F1/F2 风险、位置及采样资格；普通运行不输出该诊断文件。
 
-F3 不依赖任务，只从完整的稳定卫星 ID 集合选择节点，并为每次事件写出：
+`fixed_k/poisson` 不依赖任务，从稳定卫星 ID 集合选择节点；G3 的离线 controlled
+计划则由 none 的真实业务时序确定大任务单 victim 窗口，不读取 F1/F2 风险。
+各模式均为每次事件写出：
 
 ```text
 fault_type = satellite
