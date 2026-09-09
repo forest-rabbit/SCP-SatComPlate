@@ -19,31 +19,9 @@ struct FaultControllerTestAccess
         controller->ConfigureGeneration(satelliteIds, durationNs);
         for (const auto& fault : faults)
         {
-            if (fault.noticeTimeNs)
-            {
-                auto notice = fault;
-                notice.faultOccurred = false;
-                notice.startTimeNs.reset();
-                notice.warningLeadTimeNs.reset();
-                notice.riskDurationNs.reset();
-                notice.durationNs.reset();
-                controller->m_batches[*fault.noticeTimeNs].push_back(
-                    {FaultEventType::NOTICE, notice});
-            }
-            if (!fault.faultOccurred)
-            {
-                const auto clear = fault.GetRiskClearTimeNs();
-                if (clear && *clear < durationNs)
-                {
-                    controller->m_batches[*clear].push_back({FaultEventType::NOTICE_CLEAR, fault});
-                }
-            }
-            else
-            {
-                controller->m_batches[fault.startTimeNs.value()].push_back(
-                    {FaultEventType::START, fault});
-                controller->ScheduleRecovery(fault);
-            }
+            controller->m_batches[fault.startTimeNs.value()].push_back(
+                {FaultEventType::START, fault});
+            controller->ScheduleRecovery(fault);
         }
         for (const auto& [timeNs, events] : controller->m_batches)
         {

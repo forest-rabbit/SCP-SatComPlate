@@ -27,11 +27,11 @@ fault/
 | `model/f2-radiation-fault-model.h/.cc` | 原生 ECEF 转经纬度、SAA 空间风险、SEU 映射、穿越统计与单步概率 |
 | `model/f3-debris-fault-model.h/.cc` | 以独立 ns-3 随机流生成 fixed-K 或 Poisson 永久整星事件 |
 | `runtime/compute-failure-probability-record.h` | 在线真值与独立审计预测共用的逐时刻概率字段合同 |
-| `runtime/fault-model-engine.h/.cc` | 在线读取状态、维护风险 episode、使用 ns-3 随机流判定事件 |
-| `runtime/fault-prediction-engine.h/.cc` | 按需在 generate 中维护独立的无随机数审计状态，并从已执行 NOTICE 和当前任务快照生成因果预测记录 |
+| `runtime/fault-model-engine.h/.cc` | 在线推进状态、使用独立 ns-3 随机流判定事件 |
+| `runtime/fault-prediction-engine.h/.cc` | 按需在 generate 中维护独立的无随机数审计状态，为所有可计算节点的 RUNNING 任务生成因果预测记录 |
 | `runtime/fault-state.h/.cc` | 每颗卫星的 satellite/communication/compute 可用性与活动故障集合 |
 | `runtime/fault-controller.h/.cc` | 在线事件批处理，以及任务、传输和有效拓扑联动 |
-| `trace/fault-definition.h/.cc` | compute/satellite 记录以及预警、恢复、风险结束和排序时间 |
+| `trace/fault-definition.h/.cc` | compute/satellite START、来源概率、温度和恢复时间 |
 | `trace/fault-trace.h/.cc` | v2 输出校验与 canonical writer；不提供生产 reader |
 
 ## 两种运行模式
@@ -52,7 +52,7 @@ generate
 `generate` 中确实会发生故障，并写出本轮实际执行的 trace。相同代码、星座、任务、
 参数及 seed/run/stream 的重复 generate 应得到相同事件与业务终态。trace 只作为输出。
 失败的旧任务不会在恢复时复活；恢复只允许后来
-到达的任务继续使用节点。generate 可启用 F1-only、F2-only 或 F1+F2；联合来源按
+到达或仍在排队的任务继续使用节点。generate 可启用 F1-only、F2-only 或 F1+F2；联合来源按
 独立竞争风险处理：F1/F2 分别抽样，平台只执行二者结果的逻辑或。F3 可单独运行，
 也可与两个计算来源共同运行。
 
@@ -85,33 +85,48 @@ generate
 
 ## F1 自身状态计算故障
 
-每个配置检查点读取上一时间段的 `ComputeService` 忙闲状态。忙碌时温度趋近
-`T_sat`，空闲或算力不可用时趋近 `T_base`：
+F1 在任务开始/完成、故障开始/恢复和每个检查点，先按**上一忙闲状态**推进实际经过
+的纳秒时长，再切换状态。同刻 FCFS 任务交接不制造虚假的冷却间隙；只读查询只外推
+副本。默认基础/风险/临界/热平衡温度为 17/20/30/35°C：
 
 ```text
-T_next = T_sat  - (T_sat  - T) * exp(-dt / tau_h)       # busy
-T_next = T_base + (T      - T_base) * exp(-dt / tau_c)  # idle
+gamma = heatingShapeGamma
+dT/dt = k_h * (T_sat-T)^gamma                           # busy
+k_h = ln((T_sat-T_base)/(T_sat-T_crit)) / t_heat          # gamma = 1
+k_h = ((T_sat-T_crit)^(1-gamma) - (T_sat-T_base)^(1-gamma))
+      / ((gamma-1)*t_heat)                              # gamma > 1
+cooling_rate = (T_crit-T_base)/coolingFromCriticalToBaseSeconds
+T_next = max(T_base, T-cooling_rate*dt)                  # non-busy
 ```
 
-计算结束不会清零温度。DoD 仅按计算增量功率、秒和 Wh 增长；能源项只作为小权重
-修正。温度风险在 `T_risk..T_crit` 内使用指数曲线，最终综合风险为：
+从 17°C 连续计算 30 秒到 30°C，k_h 由此派生，不独立调参。gamma=1 为旧一阶指数，
+gamma>1 令前中期升温更快而仍在第30秒到30°C；渐近温度仍为35°C。
+实现采用当前温度与真实 elapsed time 的闭式更新，不用离散积分，不在新任务开始时重置。
+G3 v3 仅比较 gamma=1.5/2、beta=8/10，可用 --faultF1Gamma/--faultF1Beta 覆盖；
+正式选择见阶段报告。非忙碌时统一按 3.25°C/s 线性降温，30°C 到 17°C 用 4 秒。
+计算完成和恢复都不清零温度，DoD 只按真实 busy 时长累计，不在恢复时重置。
+
+温度直接映射为**当前参考 1 秒的条件故障概率**，不再使用最大强度 lambdaMax：
 
 ```text
-R_F1 = 1 - (1 - R_T) * (1 - alpha_E * pressure_E)
-lambda_F1 = lambda_F1_max * R_F1
-q_F1 = 1 - exp(-lambda_F1 * dt)
+pT = 0                                          T <= 20
+pT = expm1(beta*(T-20)/10) / expm1(beta)          20 < T < 30
+pT = 1                                          T >= 30
+pF1_1s = min(1, pT * (1 + 0.1*energyPressure))
 ```
 
-达到 `T_crit` 时保留确定性保护停机，即当前步 `q_F1=1`。其他时间每个可计算节点
-每个可计算 tick 只从按稳定卫星 ID 分配的 ns-3 stream 取一个随机数；来源开关不会
-改变节点间的随机流分配。
+能源项仅乘性修正，不能在低温时独立制造故障。当前 beta=10、gamma=1.5；同一温度下 beta 越小，概率越高；
+候选/冻结结果见 [G3 阶段证据](../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
+可用 `--faultF1Beta` 临时覆盖，其他参数仍集中在 [fault-para.cc](fault-para.cc)。
+若改变检查周期，则用 `q(dt)=1-(1-pF1_1s)^dt` 换算抽样概率；实际状态更新 dt 和
+概率参考周期不是同一个量。历史多步累计概率不参与当前抽样。
 
-当前唯一参数入口是 [`fault-para.cc`](fault-para.cc)，修改后需要重新编译。公共参数
-使用秒，进入运行期后才严格换算为整数 ns；当前检查周期为 1 秒，可恢复计算故障
-持续 8 秒。`coolingTauSeconds=40` 是降温曲线的时间常数，8 秒则是保护停机时长，
-二者含义不同。F1 参数的校准证据见
-[`docs/calibration/n4b-f1`](../../../docs/calibration/n4b-f1/README.md)。这些数值面向
-1000 秒加速实验，不表示现实卫星热常数或故障率。
+F1 命中时按 START 温度派生恢复时长：
+`duration=(T_start-17)/3.25` 秒，向上取整到 ns，范围为 (0,4] 秒。
+检查点临界过冲会先钳位到 30°C，再采样/记录，因此不会生成超过 4 秒的 F1 停机。
+F2 独立固定 8 秒；同刻两者命中取两种时长的最大值。冷却可以早于 F2 恢复完成，
+但不能提前恢复算力。连续每秒抽样允许在低于 50% 的当前概率处发生真实故障；
+不能把“多数 START 概率超过 50%”作为验收条件。这是加速实验模型，不是实测热参数。
 
 ## F2 空间辐射故障
 
@@ -134,19 +149,19 @@ sigma_side = sigma_west, lon < lon_c
 lambda_SEU(t) = lambda_SEU_max * w_F2(t)
 lambda_F2(t) = rho_SF * lambda_SEU(t)
 q_F2(t) = 1 - exp(-lambda_F2(t) * dt)
-NOTICE when w_F2(t) >= theta_F2
+analysis high-risk region: w_F2(t) >= theta_F2
 ```
 
-`sigma_west < sigma_east` 令 NOTICE 区域相对热点呈现西侧较短、东侧较长的形状；
-`sigma_lat` 决定南北宽度。`theta_F2` 只决定 NOTICE 边界，`rho_SF` 表示模型化 SEU
+`sigma_west < sigma_east` 令高风险等值线区域相对热点呈现西侧较短、东侧较长的形状；
+`sigma_lat` 决定南北宽度。`theta_F2` 仅供独立暴露分析划分高风险边界，`rho_SF` 表示模型化 SEU
 到计算服务中断的场景级映射系数；它不是实测条件概率。SAA 外第一版令 `w_F2=0`。
-SAA 外围只要 `w_F2>0` 仍可能在 NOTICE 前发生故障；进入高风险区后也可能完整通过
-而只留下 risk-only 记录。
+SAA 内只要 `w_F2>0` 就可能发生故障；高风险穿越也不保证命中。生产不再产生
+NOTICE、NOTICE_CLEAR 或 risk-only 记录；保留的 spatialRiskThreshold 只用于独立绘图/暴露分类。
 
 连续暴露时间、累计 hazard 和一次穿越期间至少发生一次故障的累计概率仍保留为
-episode 统计量，但不参与当前 `lambda_F2`、`q_F2`、NOTICE 或随机采样。实际故障
+episode 统计量，但不参与当前 `lambda_F2`、`q_F2` 或随机采样。实际故障
 每步只按当前位置对应的 `q_F2(t)` 抽样。8 秒算力停机期间轨道继续演化，但暂停新的
-故障抽样；恢复只接纳后续任务。
+故障抽样；恢复按 FCFS 继续处理队列与后续任务。
 
 F1 与 F2 同时启用时，两者使用互不共享状态的 ns-3 随机流分别抽样：
 
@@ -173,7 +188,7 @@ seuToComputeFailureProbability = 0.5
 kappa_F2 = 0.0014295980555469494 s^-1
 ```
 
-在 `theta_F2=0.5` 下，NOTICE 等风险线相对热点约向西延伸 `14.13 deg`、向东延伸
+在 `theta_F2=0.5` 下，高风险等值线相对热点约向西延伸 `14.13 deg`、向东延伸
 `28.26 deg`，南北各延伸 `14.13 deg`。配置矩形仍是整个模型 exposure region，
 该等风险线只是其中的 active high-risk region。
 
@@ -206,12 +221,19 @@ F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中
 
 ## F3 致命碎片整星故障
 
-F3 不依赖任务，只从完整的稳定卫星 ID 集合选择节点，并为每次事件写出：
+G3 另提供 `--faultF3Mode=controlled --faultF3Node=N --faultF3Time=S` 单事件场景接口，
+秒制时间进入模型时转为整数 ns。仅调度器知道未来目标/时刻，在线风险查询不返回它们；
+fixed_k/poisson 保留。受控场景不屏蔽该卫星的 F1/F2，也不恢复 production replay。
+实验命令必须记录 F1 beta/gamma 的覆盖值。probability audit 开启时额外输出 `fault-model-state.csv`，
+记录每次模型更新的温度、F1/F2 风险、位置及采样资格；普通运行不输出该诊断文件。
+
+`fixed_k/poisson` 不依赖任务，从稳定卫星 ID 集合选择节点；G3 的离线 controlled
+计划则由 none 的真实业务时序确定大任务单 victim 窗口，不读取 F1/F2 风险。
+各模式均为每次事件写出：
 
 ```text
 fault_type = satellite
 fault_occurred = true
-notice_time_ns = null
 failure_probability = null
 duration_ns = null
 ```
@@ -229,138 +251,50 @@ Delta t ~ Exponential(Lambda_F3)
 失效的卫星。事件时间流与节点选择流彼此分离，也不改变 F1/F2 的随机序列。
 
 同节点同刻同时命中 F3 与 compute 故障时，只生成 F3。若 F3 到来时该节点正处于
-8 秒 compute 停机区间，平台会把 compute 恢复提前到 F3 时刻，再立即执行永久整星
+活动 compute 停机区间，平台会把 compute 恢复提前到 F3 时刻，再立即执行永久整星
 START；生成 trace 中两个区间首尾相接而不重叠，generate 的事件顺序均为
 `RECOVERY -> START`。永久失效后不再更新该节点的 F1/F2 状态或消耗其抽样随机数。
 
-## 事件标识与语义
+## 事件与概率审计
 
-平台没有名为 `COMPUTE_START` 的独立事件类型。文档中的 **compute START** 是
-`fault_type=compute` 与 `event_type=START` 的组合，用于区别整星故障的
-**satellite START**。各标识的含义为：
+生产事件仅保留 `START` / `RECOVERY`。compute START 表示真实计算故障，不是
+主动备份开关；satellite START 表示永久整星故障。旧预警阈值、risk episode、
+notice/lead/risk-duration 字段已移除。trace 与事件表保存 START **抽样当时**的
+`p_f1/p_f2/failure_probability=q_comp`、来源命中、温度及连续 busy 时长。
+RECOVERY 行携带的是对应 START 元数据，不表示恢复时的概率或温度。
 
-| 标识 | 产生条件 | 是否改变节点状态 |
-|---|---|---|
-| `NOTICE` | F1 或 F2 的风险首次达到或超过各自阈值，使联合风险从无效变为有效 | 否，仅开始记录风险 episode |
-| `NOTICE_CLEAR` | F1、F2 均回到各自阈值以下，或 F3 即将永久关闭卫星，且该 episode 未发生 compute 故障 | 否，仅结束风险-only episode |
-| compute `START` | F1、F2 独立抽样中至少一个真实命中 | 是，关闭目标节点的计算能力 |
-| compute `RECOVERY` | 可恢复 compute 故障到达结束时刻 | 是，重新允许后续任务使用计算能力 |
-| satellite `START` | F3 命中目标卫星 | 是，永久关闭整星、通信和计算能力 |
-
-因此，可以把 `NOTICE` 理解为“达到或超过任一 F1/F2 风险阈值”，把 compute `START` 理解为
-“实际触发计算故障”，但两者不是必然的先后关系。抽样命中可能早于阈值，因而允许
-没有 `NOTICE` 的 compute `START`；同一检查时刻既越过阈值又命中时，预警提前量为
-0。compute `START` 也不是主动备份开关；后续备份策略只会把风险与预测概率作为
-决策输入，再单独产生 `BACKUP_START`、`BACKUP_READY` 和 `TAKEOVER` 等事件。
-
-## 风险 episode
-
-F1、F2 各自判断风险阈值，再合并为节点级风险 episode：
+`faultProbabilityAudit=1` 才启用独立影子状态和逐任务 CSV。每个检查点对当前
+可计算节点的所有 RUNNING 任务，在实际抽样前准备预测，不由风险阈值门控：
 
 ```text
-risk_active = (R_F1 >= theta_F1) OR (w_F2 >= theta_F2)
+q_comp,k = 1 - (1-q_F1,k)*(1-q_F2,k)
+K = floor(remaining_compute_time/check_interval) + 1
+P_fail_before_finish = 1 - product(k=0..K-1, 1-q_comp,k)
 ```
 
-联合风险第一次由无效变为有效时产生一次 NOTICE，并把当时的单步联合概率
-`q_comp` 作为 trace 元数据保存。该值不冻结后续预测。若 F1 已经令 episode 有效，
-F2 随后越过阈值不会产生第二次 NOTICE；只有
-两个来源都回到阈值以下后，下一次达到阈值才会开始新的 episode：
+k=0 包含当前抽样点，后续点不越过任务预计完成时刻。F1 未来按“任务存活并持续
+计算”推进，F2 复用原生轨道只读外推，F3 不并入该概率。compute START 当刻保留
+最后一条抽样前记录；故障后、任务完成后不再为该任务预测。同刻永久 F3 优先时不
+输出该节点的 compute 预测。没有读取未来故障、未来队列或任何事后风险时长。
 
-```text
-无风险 -> 风险有效       NOTICE
-风险有效 -> 风险退出     NOTICE_CLEAR + fault_occurred=false
-风险有效 -> 实际故障     START + warning_lead_time
-无风险 -> 实际故障       START，notice/lead time 为 null
-```
-
-风险-only 记录只进入 trace 和事件证据，不改变节点可用性。仿真结束时仍未退出的风险
-episode 以仿真终点关闭。F1-only、F2-only 与 F1+F2 共用同一种 trace 记录，trace
-不暴露风险来源；联合模式的 `failure_probability` 保存 `q_comp`，而真实发生仍来自
-F1/F2 各自的独立随机判定。有预警故障记录
-`warning_lead_time_ns=start_time_ns-notice_time_ns`；未发生故障的风险-only 记录
-`risk_duration_ns=clear_time_ns-notice_time_ns`，二者不会同时出现。
-
-## 任务完成前的因果故障概率预测
-
-本节能力由 `faultProbabilityAudit=1` 按需启用；默认正式运行不承担预测滚动、概率
-记录或 CSV 写出开销。
-
-预测器在每个 F1/F2 检查点为所有正在计算的任务准备内部预测，但只有以下两个条件
-同时满足时才输出正式记录：目标节点已有一个尚未结束的 compute 风险 episode，且
-该节点当前正在计算任务。NOTICE 是输出门控和风险标识，不是预测模型的起点，也不
-改变 F1/F2 的故障抽样。因此 NOTICE 前仍允许真实故障；这种无预警 START 没有正式
-预测记录，应作为“未通知故障率”单独评价。
-
-generate 的可选审计器维护一份独立、无随机数的 F1/F2 状态。每个检查点先用
-当前忙闲状态和原生 ECEF 坐标推进影子状态，再复制快照并在任务剩余窗口内滚动：
-
-```text
-q_F1,k = F1(state_F1,k, busy=true | conditional survival)
-q_F2,k = F2(state_F2,k, native ECEF(t_k))
-q_comp,k = 1 - (1 - q_F1,k) * (1 - q_F2,k)
-
-K = floor(remaining_compute_time / check_interval) + 1
-P_fail_before_finish = 1 - product(k=0..K-1, 1 - q_comp,k)
-```
-
-`k=0` 是当前检查点；后续点不超过当前任务的预计完成时刻。F1 的未来分支是在“任务
-此前没有故障且继续忙碌”的条件下推进，F2 则直接调用 ns-3.48 原生 mobility 的
-只读按时刻坐标接口，不复制第二套轨道公式。达到 F1 临界温度时相应步概率为 1，
-累计概率也为 1。F3 不属于该 compute 联合概率。
-
-纯预测函数只修改局部状态副本，不消费 F1/F2 随机流，也不知道真实 START。运行期
-先准备当前时刻的模型轨迹，待同一时刻的控制器事件执行后再决定是否输出，因此：
-
-```text
-NOTICE 时刻且有运行任务       输出 risk_elapsed_time_ns = 0
-活动 NOTICE 的后续检查点       持续输出滚动概率
-同刻 NOTICE + compute START    输出一次，再由 START 关闭 episode
-无 NOTICE 的 compute START     不输出正式预测
-NOTICE_CLEAR / satellite START 关闭 episode，不输出该时刻记录
-```
-
-未来接入主动备份后，`BACKUP_START` 也将成为该任务本轮预测的终点：触发当刻冻结
-`q_F1/q_F2/q_comp/P_fail_before_finish`、任务完成度和剩余时间作为决策证据，随后由
-备份状态机接管，不再为同一 task/attempt 重复预测或启动第二份备份。N4B 只冻结这条
-生命周期合同，不创建 `BACKUP_START` 事件。
-
-预测记录中的 `risk_elapsed_time_ns=now-notice_time_ns` 是当前时刻已经观察到的风险
-持续时间；它不是 trace 在 episode 结束后才能确定的 `risk_duration_ns`。运行期还
-明确禁止读取未来的 compute START、`fault_occurred`、`warning_lead_time_ns` 或最终
-风险时长。相同输入及 seed/run 的两轮 generate，审计输出应逐字节一致。
-
-启用概率审计后，generate 的在线引擎还会在每次正式预测对应的随机抽样前，用真实
-F1/F2 状态计算同结构概率记录；独立审计器则从无随机数状态输出预测记录。验证工具按
-`(simulation_time_ns,node_id,task_id)` 比较 `q_F1`、`q_F2`、`q_comp` 和
-`P_fail_before_finish`，并报告 MAE、RMSE、最大绝对误差、缺失记录与上下文差异。
-真实模型概率文件只是离线验证证据，不写入 Fault Trace，也不是平台输入。
-
-这里验证的是模型实现和独立审计状态是否一致，不把一次随机故障结果当成概率真值，因而
-不生成二元观测标签，也不计算 Brier score。F1/F2 现实有效性仍需外部数据，事件数
-标定仍需固定配置下的多 seed/run，两者不能与实现一致性混为一种“准确率”。当前
-空间 F2 冻结场景中，F1-only、F2-only、F1+F2 分别匹配 41、126、126 条模型/预测
-记录；100 任务 F1/F2/F3 联合场景匹配 82 条，全部零缺失、上下文一致且最大绝对
-误差不超过 `1e-12`。
-输出只是后续主动备份的候选输入；本阶段不启动副本、不选择备份节点，也不产生
-`BACKUP_START`、`BACKUP_READY` 或 `TAKEOVER`。F1/F2 单步概率随状态变化的预测扩展
-已经完成，阈值/收益最优点仍必须以后续多次运行的校准证据为准，不能从单次轨迹
-推断。
+验证器按 `(simulation_time_ns,node_id,task_id)` 比较真实在线状态与独立影子状态的
+q_F1、q_F2、q_comp、P_fail_before_finish 和任务窗口上下文，容差 1e-12。
+它验证实现一致性，不把一次随机命中作为概率真值，也不计算 Brier score。
+正式运行默认关闭审计/CSV；在线 QueryComputeRisk 不依赖此开关。
+本阶段不实现主动备份阈值、checkpoint、BACKUP_START 或接管；这些留待 N5。
 
 ## 故障执行
 
 同一纳秒的事件固定按下列顺序、再按 `fault_id` 升序执行：
 
 ```text
-NOTICE -> NOTICE_CLEAR -> RECOVERY -> START
+RECOVERY -> START
 ```
 
-预测运行期采用同一纳秒内的两阶段顺序：先更新无随机数影子状态并准备轨迹，再让
-模型/控制器执行 NOTICE、NOTICE_CLEAR、RECOVERY、START，最后只依据已经执行的事件
-决定是否正式写出。这样首条记录可以位于 NOTICE 当刻，已通知的 START 当刻仍保留
-最后一条因果预测，同时不会提前读取 START 或把无预警故障伪装为命中预测。
-
 compute START 只令目标节点 `compute_available=false`，不会关闭 ISL 或重算路由。
-目标节点上尚未越过计算阶段的任务按 N4A 合同失败；有限恢复只接纳新任务。
+只直接中断 RUNNING 任务；QUEUED 保留，INPUT/新到达可继续传输入队，RESULT 不受影响。
+有限恢复后按原 FCFS 调度，旧 FAILED victim 不复活。停机期间仍更新模型状态，
+但不新增 F1/F2 抽样或重叠停机；同次 F1/F2 命中仅产生一次 compute START。
 
 satellite START 同时关闭整星、通信和计算，在精确时刻更新有效 ISL 并在边集合变化时
 立即重算 IPv4。恢复会读取当时的实时轨道位置，只恢复仍满足距离门限的固定候选；

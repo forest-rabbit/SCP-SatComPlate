@@ -34,7 +34,7 @@ topologyOnly                正式仿真
 7. 同时提供 ComputeProfile 与 TaskTrace 时，执行输入传输、FCFS 计算和结果传输；
 8. `faultMode=generate` 时在线更新模型、实际执行故障并写 v2 trace；
 9. 显式启用概率审计且存在 F1/F2 任务时，用同一模型的无随机数影子状态滚动计算
-    完成前故障概率，并只在 NOTICE 有效时输出正式记录；
+    完成前故障概率，为全部可计算节点的 RUNNING 任务输出记录；
 10. 仿真结束后写出网络、路由、任务和可选失败诊断指标。
 
 `topologyOnly=1` 使用相同轨道和候选链路实现，但不会创建 InternetStack、
@@ -181,13 +181,12 @@ F1/F2 来源共同使用；关闭时不创建预测器，也不采集在线模�
 
 `faultProbabilityAudit=1` 时，generate 在有任务输入且启用 F1/F2 的前提下
 共用同一套因果预测逻辑。预测器持续
-维护独立、无随机数的 F1/F2 影子状态；正式记录由 NOTICE 门控。对任务剩余窗口中
+维护独立、无随机数的 F1/F2 影子状态；对全部 RUNNING 任务在抽样前生成记录。对任务剩余窗口中
 每个检查点计算 `q_comp,k=1-(1-q_F1,k)(1-q_F2,k)`，再得到
-`P_fail_before_finish=1-product_k(1-q_comp,k)`。它不读取未来 START、最终
-`risk_duration_ns` 或 `fault_occurred`，不改变真实抽样，也不会在本阶段触发主动
+`P_fail_before_finish=1-product_k(1-q_comp,k)`。它不读取未来 START 或事后故障结果，不改变真实抽样，也不会在本阶段触发主动
 备份。完整边界见 [fault README](fault/README.md)。
 
-在线 `QueryComputeRisk` 直接查询真实节点状态，无需 NOTICE 或审计开关；默认预测未来
+在线 `QueryComputeRisk` 直接查询真实节点状态，无需风险阈值或审计开关；默认预测未来
 1 秒的 F1/F2 联合概率。不可用节点不返回零概率。详见 [fault README](fault/README.md#在线节点风险查询)。
 
 ### output

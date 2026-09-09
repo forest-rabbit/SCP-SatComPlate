@@ -1,10 +1,23 @@
 # 确定性任务生成器
 
+G3 使用同一入口的 `--profile=n4c-hotspot`，由 `n4c_hotspot.py` 只重排 G2 C800
+端点，不改变每任务类别/字节/WU/到达时刻。额外输入为 `--base-task-trace` 和
+`--position-slices`（原生 topology-only 的 1 秒节点切片目录）。
+`--hotspot-weight` 默认 4、背景为 1；`--regional-candidate-limit=0` 使用区域内全部节点，
+正整数则仅给各区域距中心最近的前 N 个候选加权，用于明确的负载集中度实验。
+北美/欧洲/东亚边界与权重、缺候选 fallback、每任务原生切片时刻都写入 workload summary。
+不指定 `--f3-from-none` 时生成纯placement，f3=null，不预留任何卫星。
+先跑这份输入的none，再用 `--f3-from-none=<none输出目录>` 从实际任务/队列/传输时序
+选取 INPUT>200MB、WU进度>50%的单victim窗口，优先60–80%，按固定哈希确定候选。
+不读取故障概率、温度或SAA风险，不屏蔽F1/F2；已到达但尚未开始的RESULT依赖也会排除。
+final输入在F3时刻前逐任务端点与none一致，之后才排除故障节点。必须重跑final none及
+联合故障验收；目标任务提前被F1/F2中断或进度不足会记录失败，不能换seed补救。
+
 `generate-task-workload.py` 根据一份 topology-only 节点切片和一份
 ComputeProfile 生成 TaskTrace。它不生成星座、坐标、链路或完整平台配置，也不在
 Python 中复制 ns-3.48 的轨道计算。
 
-脚本包含四个明确的生成档：默认 `stress` 用于可调规模压力任务；
+除 N4C 的正式任务/热点分配档外，脚本保留四个已有生成档：默认 `stress` 用于可调规模压力任务；
 `f1-validation` 固定生成 N4B 第一阶段的 66 星、20 任务输入；`f2-validation` 固定
 生成第二阶段的 66 星、8 任务输入；`n4b-joint-validation` 固定生成 N4B 最终联合
 验收的 66 星、100 任务输入。四者共用同一套输入闭集校验、稳定 ID 和 JSON writer，
@@ -15,7 +28,7 @@ Python 中复制 ns-3.48 的轨道计算。
 输入必须满足以下约束：
 
 - `--nodes-file` 是 `nodes_<time>s.json`，包含至少 3 颗 `sat` 节点及唯一
-  `node_id`；坐标字段可以存在，但只用于确认这是节点切片，不参与任务分配；
+  `node_id`；已有 stress/F1/F2/N4B 档不按坐标分配，N4C hotspot 则显式读取原生轨迹；
 - `--compute-profile` 是平台可直接读取的 ComputeProfile，其中所有算力节点都必须
   出现在节点切片中；
 - `stress` 档的字节、任务数量和时间边界均使用整数，时间参数单位为 ns；
@@ -60,8 +73,9 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --output-workload-summary=/tmp/f1-workload-summary.json
 ```
 
-该档固定产生 20 个任务：3 个热点节点分别包含连续负载与恢复后任务，1 个节点只
-形成风险 episode，2 个节点承载稀疏短任务。它只构造任务忙闲条件，不预先写故障；
+该档固定产生 20 个任务：3 个热点节点分别包含连续负载与后续任务，1 个节点为
+较短连续负载，2 个节点承载稀疏短任务。保留的历史角色元数据键 `risk_only` 不代表
+新模型保证无故障，也不会生成风险事件。它只构造任务忙闲条件，不预先写故障；
 是否发生故障仍由正式仿真中的 `FaultModelEngine` 根据实时状态判定。
 
 ## F2 验证档

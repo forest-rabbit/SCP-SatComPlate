@@ -77,11 +77,20 @@ struct FaultModelNodeSnapshot
     uint64_t f1OccurrenceCount{}; ///< Number of F1 source hits.
     uint64_t f2OccurrenceCount{}; ///< Number of F2 source hits.
     uint64_t computeFaultCount{}; ///< Number of coalesced compute faults.
-    bool riskEpisodeActive{}; ///< Whether a notice episode remains open.
     bool computeAvailable{true}; ///< Final N4A compute availability.
 };
 
 /** Evaluate fault models online and submit events to the N4A controller. */
+struct FaultModelStateRecord
+{
+    int64_t timeNs{}; ///< Actual model check time.
+    uint32_t nodeId{}; ///< Stable satellite ID.
+    F1SelfStateFaultSnapshot f1; ///< State after this check's thermal update.
+    F2RadiationFaultSnapshot f2; ///< Native position-driven state at this check.
+    bool samplingEligible{}; ///< False during compute outage or a same-time F3.
+};
+
+/** Evaluate fault models online and submit events to the controller. */
 class FaultModelEngine : public Object
 {
   public:
@@ -114,7 +123,7 @@ class FaultModelEngine : public Object
     /** Bind and initialize the shared native orbit source required by F2. */
     void BindOrbitConstellation(const OnlineOrbitConstellation& constellation);
 
-    /** Close open risk episodes and return the canonical generated trace. */
+    /** Return the canonical occurred-event trace. */
     const FaultTrace& Finalize();
 
     /** Return node snapshots in ascending stable-node-ID order. */
@@ -134,23 +143,17 @@ class FaultModelEngine : public Object
 
     /** @return Pre-sampling probabilities produced from live generate state. */
     const std::vector<ComputeFailureProbabilityRecord>& GetProbabilityRecords() const;
+    /** @return Optional state samples collected only with probability audit enabled. */
+    const std::vector<FaultModelStateRecord>& GetStateAuditRecords() const;
 
   private:
-    /** Notice metadata retained until risk exit or compute failure. */
-    struct RiskEpisode
-    {
-        uint64_t faultId{}; ///< Stable ID shared by notice and completion record.
-        int64_t noticeTimeNs{}; ///< Absolute risk-entry time.
-        double noticeProbability{}; ///< Single-step probability visible at notice.
-    };
-
     /** Online model, random stream, and compute-service binding for one node. */
     struct NodeState
     {
         F1SelfStateFaultSnapshot f1State; ///< Current pure F1 state.
         F2RadiationFaultSnapshot f2State; ///< Current pure F2 state.
         int64_t modelTimeNs{};            ///< Last completed physical model update.
-        std::optional<RiskEpisode> riskEpisode; ///< Open combined-risk episode.
+        int64_t thermalTimeNs{}; ///< Exact last busy/idle physical update.
         Ptr<UniformRandomVariable> f1Random; ///< Stable per-node F1 sampling stream.
         Ptr<UniformRandomVariable> f2Random; ///< Stable per-node F2 sampling stream.
         uint64_t f1SampleCount{}; ///< Independent F1 draws consumed.
@@ -162,17 +165,9 @@ class FaultModelEngine : public Object
         Ptr<ComputeService> computeService; ///< Live busy/idle source.
     };
 
-    /** Build a time-gated risk notice. */
-    FaultDefinition MakeNotice(uint32_t nodeId,
-                               const RiskEpisode& episode) const;
-    /** Build a completed risk-only trace record. */
-    FaultDefinition MakeRiskOnly(uint32_t nodeId,
-                                 const RiskEpisode& episode,
-                                 int64_t clearTimeNs) const;
     /** Build one occurred recoverable compute-fault record. */
     FaultDefinition MakeComputeFault(uint32_t nodeId,
                                      uint64_t faultId,
-                                     const std::optional<RiskEpisode>& episode,
                                      double currentProbability,
                                      int64_t startTimeNs) const;
     /** Build one permanent, unannounced F3 satellite fault. */
@@ -182,12 +177,14 @@ class FaultModelEngine : public Object
     /** End an active compute outage at a superseding F3 timestamp. */
     void ShortenActiveComputeFault(NodeState& state,
                                    int64_t simulationTimeNs);
-    /** Record one active-risk task forecast from live state before random draws. */
+    /** Record one running-task forecast from live state before random draws. */
     void RecordProbability(uint32_t nodeId,
                            const NodeState& state,
                            int64_t simulationTimeNs);
     /** Update periodic models and/or execute F3 events in one timestamp batch. */
     void ProcessTime(int64_t simulationTimeNs, bool updateComputeModels);
+    /** Observe exact service transitions without RNG or business mutations. */
+    void OnComputeStateChanged(uint32_t nodeId, bool busy);
     void DoDispose() override;
 
     bool m_configured{}; ///< Whether Configure completed.
@@ -206,6 +203,7 @@ class FaultModelEngine : public Object
     uint64_t m_nextFaultId{1}; ///< Next trace identity.
     FaultTrace m_trace; ///< Completed canonical trace records.
     std::vector<ComputeFailureProbabilityRecord> m_probabilityRecords; ///< Live probabilities.
+    std::vector<FaultModelStateRecord> m_stateAuditRecords; ///< Optional observed state, no RNG.
     std::vector<EventId> m_modelEvents; ///< Pre-scheduled model/F3 checks.
     Ptr<FaultController> m_faultController; ///< Sole runtime fault executor.
     Ptr<TaskCoordinator> m_taskCoordinator; ///< Bound task lifecycle owner.

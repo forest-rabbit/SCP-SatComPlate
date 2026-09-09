@@ -14,6 +14,7 @@
 #include "../traffic/network-transfer-engine.h"
 
 #include "ns3/object.h"
+#include "ns3/fault-definition.h"
 #include "ns3/ptr.h"
 
 #include <cstdint>
@@ -51,6 +52,22 @@ struct TaskFaultNodeChange
 {
     uint32_t nodeId{};
     TaskFaultKind kind{TaskFaultKind::COMPUTE};
+    FaultDefinition fault; ///< Observed fault identity; zero ID only for legacy test helpers.
+};
+
+/** Immutable task state captured when a fault has an observable impact. */
+struct FaultTaskImpactRecord
+{
+    FaultDefinition fault; ///< Observed START, duration and source hits.
+    uint64_t taskId{}; ///< Stable task identity.
+    int64_t impactTimeNs{}; ///< Observation time, possibly later than START.
+    TaskState stateBeforeImpact{TASK_PENDING}; ///< State before this observation.
+    std::string impactType; ///< Direct interruption or indirect outage exposure.
+    int64_t computeStartTimeNs{-1}; ///< First compute start known at impact time.
+    int64_t deadlineTimeNs{-1}; ///< Deadline known at impact time; never backfilled.
+    bool progressValid{}; ///< True only for the observed running task.
+    uint64_t completedWorkUnits{}; ///< Actual service work, not elapsed wall-clock fraction.
+    uint64_t remainingWorkUnits{}; ///< Total work minus completed work when valid.
 };
 
 /** Coordinate input transfer, FCFS compute, and result transfer lifecycles. */
@@ -79,6 +96,8 @@ class TaskCoordinator : public Object
     const std::vector<TaskRuntime>& GetTaskRuntimes() const;
     const std::vector<Ptr<ComputeService>>& GetComputeServices() const;
     const std::vector<TaskEventRecord>& GetTaskEvents() const;
+    /** @return Causal fault/task observations, independent of probability audit. */
+    const std::vector<FaultTaskImpactRecord>& GetFaultTaskImpacts() const;
     std::map<uint32_t, TaskFaultImpact> ApplyComputeFaultBatch(
         const std::vector<uint32_t>& recoveredNodeIds,
         const std::vector<uint32_t>& startedNodeIds);
@@ -115,6 +134,10 @@ class TaskCoordinator : public Object
     void HandleResultTransferComplete(uint64_t transferId, int64_t completionTimeNs);
     void HandleComputeDeadline(uint64_t taskId);
     void CancelComputeDeadline(uint64_t taskId);
+    /** Capture an impact before cancellation; never reads a future task execution. */
+    void RecordFaultTaskImpact(const TaskRuntime& task,
+                              uint32_t faultNodeId,
+                              const std::string& impactType);
     void DoDispose() override;
 
     bool m_initialized{};
@@ -126,6 +149,8 @@ class TaskCoordinator : public Object
     std::map<uint64_t, uint64_t> m_resultTransferTasks;
     std::set<uint32_t> m_unavailableSatelliteNodes;
     std::vector<TaskEventRecord> m_taskEvents;
+    std::map<uint32_t, FaultDefinition> m_activeFaults; ///< Only already observed STARTs.
+    std::vector<FaultTaskImpactRecord> m_faultTaskImpacts; ///< Sparse impact ledger.
     std::map<uint64_t, EventId> m_deadlineEvents;
     Ptr<NetworkTransferEngine> m_transferEngine;
 };

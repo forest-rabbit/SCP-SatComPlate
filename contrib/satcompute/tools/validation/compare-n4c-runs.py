@@ -13,8 +13,9 @@ CORE = (
     "capacity-aware-summary.json", "link-window-metrics.csv", "link-summary.csv",
     "network-link-window-metrics.csv",
 )
-FAULT = ("fault-events.csv", "fault-summary.json", "fault-trace.json")
-AUDIT = ("fault-model-probabilities.csv", "fault-predictions.csv", "fault-prediction-summary.json")
+FAULT = ("fault-events.csv", "fault-summary.json", "fault-trace.json", "fault-task-impact.csv")
+AUDIT = ("fault-model-probabilities.csv", "fault-predictions.csv", "fault-prediction-summary.json",
+         "fault-model-state.csv")
 
 
 def compare(left, right):

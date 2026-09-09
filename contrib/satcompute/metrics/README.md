@@ -6,6 +6,19 @@
 
 ## 代码结构
 
+G3 的 `fault-task-impact.csv` 在 generate 任务运行结束时输出，不依赖概率 audit。
+一行记录一个 `(fault_id, task_id, impact_type)`，同任务遭遇不同停机分别保留。
+`fault_type` 是该账本的来源标签 F1/F2/F1+F2/F3；旧 fault-events 的 compute/satellite
+资源类型不变，追加 `fault_source`。同次两来源命中只执行一次停机，联合 victim 按 task 去重。
+`fault_time_ns` 为 START，`impact_time_ns` 为实际观察（例如停机后新到达）；
+`task_state_before_fault` 对尚未到达任务为 NOT_ARRIVED，对未在 START 采集的其他状态
+为 NOT_CAPTURED，不能用后来的状态冒充历史。`task_state_before_impact` 保存观察前状态。
+仅 RUNNING 记录有效 WU 进度，使用真实速率乘已执行时间的 128-bit 整数计算；
+未开始的 progress/WU/deadline 使用无效标记。最终结果在结束时关联，未终结为 TRUNCATED。
+QUEUED_DELAYED 表示停机期间无法调度，不声称比 none 固定多等 8 s；额外等待需对照。
+`recoverable_outage_duration_ns` 保留 START 时已知的计划停机时长；若之后被 F3 抢占，
+实际区间以最终 Fault Trace / RECOVERY 事件为准，不把未来抢占时刻倒灌进因果快照。
+
 ```text
 metrics/
 ├── metrics.h / metrics.cc                         统一编排、交叉校验和旧文件清理
@@ -47,11 +60,13 @@ metrics/
 | 任务模式 | `task-events.csv` | 任务状态转换事件 |
 | 任务模式 | `task-summary.csv` | 每个任务的输入、计算、结果、最终状态、失败原因和失败时间 |
 | 任务模式 | `compute-node-summary.csv` | 各算力节点的任务数、忙碌时间和利用率 |
-| 提供 `faultTrace` | `fault-events.csv` | canonical NOTICE/START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
+| 提供 `faultTrace` | `fault-events.csv` | canonical START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
 | 提供 `faultTrace` | `fault-summary.json` | 故障类型/事件/活动故障、失败任务、FAILED/CANCELLED transfer 与故障路由重算计数 |
-| `faultProbabilityAudit=1` 的 generate | `fault-predictions.csv` | 活动风险中运行任务的逐检查点 F1/F2/联合因果概率和任务进度 |
-| `faultProbabilityAudit=1` 的 generate | `fault-prediction-summary.json` | 正式预测、风险 episode 和涉及任务的数量 |
+| generate 任务模式 | `fault-task-impact.csv` | 已发生故障的逐任务直接/间接影响、真实进度及最终结果 |
+| `faultProbabilityAudit=1` 的 generate | `fault-predictions.csv` | 全部可计算节点上 RUNNING 任务的逐检查点 F1/F2/联合因果概率和任务进度 |
+| `faultProbabilityAudit=1` 的 generate | `fault-prediction-summary.json` | 预测记录和涉及任务的数量 |
 | `faultProbabilityAudit=1` 的 generate | `fault-model-probabilities.csv` | 随机抽样前由真实在线 F1/F2 状态计算的同结构概率真值，仅用于验证 |
+| `faultProbabilityAudit=1` 的 generate | `fault-model-state.csv` | 逐节点检查时刻的忙闲、温度、F1/F2 风险、原生经纬度和实际采样资格；停机期间仍更新状态 |
 
 `run-summary.json` 同时保留便于脚本读取的顶层计数和按 `transfer`、`task` 分组的
 汇总。它记录实际使用的任务文件路径和关键运行参数，但不复制一份平台配置。
@@ -117,32 +132,35 @@ elapsed 记录计算开始到完成、失败或仿真截断的已过时间；初
 
 ```text
 simulation_time_ns, fault_id, node_id, fault_type, event_type,
-notice_time_ns, start_time_ns, duration_ns, failure_probability,
+start_time_ns, duration_ns, failure_probability,
 satellite_available_after, communication_available_after,
 compute_available_after, affected_task_count, affected_transfer_count,
-route_recomputed
+route_recomputed, fault_source, p_f1, p_f2, temperature_c, continuous_busy_s
 ```
 
 可选输入为 null 时对应 CSV 单元格为空，布尔值固定写作 `true/false`。一个整星
 timestamp 批次最多令一行 `route_recomputed=true`，因此逐行求和就是故障引起的
 路由重算次数。
 
-`fault-summary.json` 固定汇总 `fault_count`、两类 fault count、三类 event count、
+`fault_source` 在 START 行标记 F1/F2/F1+F2/F3；概率、温度和连续 busy 秒数是
+该故障 START 抽样时的元数据，RECOVERY 行复用这些值，不表示恢复时状态。
+F1 duration 由 START 温度派生，F2 固定 8 秒；同刻双来源取最大值，F3 可截短活动停机。
+
+`fault-summary.json` 固定汇总 `fault_count`、两类 fault count、START/RECOVERY 两类 event count、
 `active_fault_count_at_end`、`failed_task_count`、`failed_transfer_count`、
 `cancelled_transfer_count` 和 `route_recomputation_count_due_to_fault`。失败与取消计数
 来自仿真终点的稳定终态，不把仍在运行的对象误记为故障终态。
 
 ### 计算故障预测输出
 
-以下三个文件属于显式启用的概率审计输出。`faultProbabilityAudit` 默认 `false`；关闭
+以下概率文件以及 `fault-model-state.csv` 均属于显式审计输出。`faultProbabilityAudit` 默认 `false`；关闭
 时平台不创建预测器，并从复用的 `outputDir` 中删除陈旧概率审计文件。
 
-`fault-predictions.csv` 每行对应一次活动 compute 风险与一个正在运行任务的因果
+`fault-predictions.csv` 每行对应当前可计算节点上一个正在运行任务的因果
 预测，列为：
 
 ```text
-simulation_time_ns, fault_id, node_id, task_id, notice_time_ns,
-risk_elapsed_time_ns, task_compute_start_time_ns, task_service_time_ns,
+simulation_time_ns, node_id, task_id, task_compute_start_time_ns, task_service_time_ns,
 task_elapsed_time_ns, remaining_compute_time_ns,
 expected_compute_completion_time_ns, completion_ratio,
 f1_step_failure_probability, f2_step_failure_probability,
@@ -150,7 +168,7 @@ combined_step_failure_probability, horizon_step_count,
 failure_before_finish_probability
 ```
 
-所有字段均来自预测时刻已经可见的 NOTICE、任务快照和无随机数 F1/F2 影子模型。
+所有字段均来自预测时刻已经可见的任务快照和无随机数 F1/F2 影子模型。
 三个单步字段满足：
 
 ```text
@@ -160,13 +178,11 @@ P_fail_before_finish = 1 - product(k, 1 - q_comp,k)
 
 CSV 中的三个单步字段对应当前 `k=0`；累计概率还包含任务预计完成前的未来检查点。
 未来 F1 按任务在无故障条件下继续忙碌推进，未来 F2 使用 ns-3.48 原生轨道的按时刻
-ECEF 坐标，因此同一 episode 内的 `q_comp` 可以随温度、能源或空间区域变化，不是
-NOTICE 时冻结的常数。
+ECEF 坐标，因此 `q_comp` 随温度、能源和空间区域变化，不是冻结常数。
 
 `fault-prediction-summary.json` 固定包含：
 
 - `prediction_count`；
-- `risk_episode_count`；
 - `task_count`。
 
 平台不再把一次随机结果写成 `true/false` 预测标签，也不计算 Brier score。真实故障

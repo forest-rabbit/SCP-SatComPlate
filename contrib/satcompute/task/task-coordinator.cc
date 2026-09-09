@@ -213,10 +213,10 @@ TaskCoordinator::HandleTaskArrival(uint64_t taskId)
                                  "RESULT_SATELLITE_UNAVAILABLE_AT_ARRIVAL");
         return;
     }
-    if (!GetComputeService(task.definition.computeNodeId)->IsComputeAvailable())
+    if (!IsComputeAvailable(task.definition.computeNodeId))
     {
-        FailTaskForComputeNode(task, timeNs, "COMPUTE_NODE_UNAVAILABLE_AT_ARRIVAL");
-        return;
+        RecordFaultTaskImpact(task, task.definition.computeNodeId,
+                              "ARRIVAL_DURING_COMPUTE_OUTAGE");
     }
     TransitionTask(taskId,
                    TASK_INPUT_TRANSFERRING,
@@ -249,13 +249,6 @@ TaskCoordinator::HandleInputTransferComplete(uint64_t transferId, int64_t comple
                                  "COMPUTE_SATELLITE_UNAVAILABLE_AFTER_INPUT");
         return;
     }
-    if (!GetComputeService(task.definition.computeNodeId)->IsComputeAvailable())
-    {
-        FailTaskForComputeNode(task,
-                               completionTimeNs,
-                               "COMPUTE_NODE_UNAVAILABLE_AFTER_INPUT");
-        return;
-    }
     TransitionTask(task.definition.taskId,
                    TASK_QUEUED,
                    task.definition.computeNodeId,
@@ -265,6 +258,10 @@ TaskCoordinator::HandleInputTransferComplete(uint64_t transferId, int64_t comple
         ->SubmitTask(task.definition.taskId,
                      task.definition.computeWorkUnits,
                      completionTimeNs);
+    if (!IsComputeAvailable(task.definition.computeNodeId))
+    {
+        RecordFaultTaskImpact(task, task.definition.computeNodeId, "QUEUED_DELAYED");
+    }
 }
 
 void
@@ -431,6 +428,57 @@ TaskCoordinator::GetTaskEvents() const
     return m_taskEvents;
 }
 
+const std::vector<FaultTaskImpactRecord>&
+TaskCoordinator::GetFaultTaskImpacts() const
+{
+    return m_faultTaskImpacts;
+}
+
+void
+TaskCoordinator::RecordFaultTaskImpact(const TaskRuntime& task,
+                                       uint32_t faultNodeId,
+                                       const std::string& impactType)
+{
+    const auto active = m_activeFaults.find(faultNodeId);
+    if (active == m_activeFaults.end() || active->second.faultId == 0)
+    {
+        return;
+    }
+    const auto& fault = active->second;
+    const auto duplicate = std::find_if(m_faultTaskImpacts.begin(), m_faultTaskImpacts.end(),
+        [&](const auto& record) {
+            return record.fault.faultId == fault.faultId &&
+                   record.taskId == task.definition.taskId && record.impactType == impactType;
+        });
+    if (duplicate != m_faultTaskImpacts.end())
+    {
+        return;
+    }
+    FaultTaskImpactRecord record;
+    record.fault = fault;
+    record.taskId = task.definition.taskId;
+    record.impactTimeNs = Simulator::Now().GetNanoSeconds();
+    record.stateBeforeImpact = task.state;
+    record.impactType = impactType;
+    record.computeStartTimeNs = task.computeStartTimeNs;
+    record.deadlineTimeNs = task.computeDeadlineTimeNs;
+    if (task.state == TASK_RUNNING)
+    {
+        const auto service = GetComputeService(task.definition.computeNodeId);
+        const auto snapshot = service->GetRunningTaskSnapshot();
+        NS_ABORT_MSG_IF(!snapshot || snapshot->taskId != task.definition.taskId,
+                        "fault impact lost its running compute snapshot");
+        const unsigned __int128 work =
+            static_cast<unsigned __int128>(service->GetComputeRateWorkUnitsPerSecond()) *
+            static_cast<uint64_t>(snapshot->elapsedTimeNs) / 1000000000u;
+        record.progressValid = true;
+        record.completedWorkUnits = static_cast<uint64_t>(
+            std::min(work, static_cast<unsigned __int128>(task.definition.computeWorkUnits)));
+        record.remainingWorkUnits = task.definition.computeWorkUnits - record.completedWorkUnits;
+    }
+    m_faultTaskImpacts.push_back(record);
+}
+
 TaskFaultImpact
 TaskCoordinator::FailTaskForComputeNode(TaskRuntime& task,
                                         int64_t eventTimeNs,
@@ -524,6 +572,14 @@ TaskCoordinator::FailTaskForSatelliteNode(TaskRuntime& task,
     {
         return impact;
     }
+
+    const std::string permanentImpact =
+        fromState == TASK_RUNNING ? "RUNNING_INTERRUPTED_PERMANENT" :
+        fromState == TASK_QUEUED ? "QUEUED_INVALIDATED_PERMANENT" :
+        fromState == TASK_INPUT_TRANSFERRING ? "INPUT_TRANSFER_ABORTED_PERMANENT" :
+        fromState == TASK_RESULT_TRANSFERRING ? "RESULT_TRANSFER_ABORTED_PERMANENT" :
+        "ENDPOINT_UNAVAILABLE_PERMANENT";
+    RecordFaultTaskImpact(task, failedNodeId, permanentImpact);
 
     if (fromState == TASK_QUEUED)
     {
@@ -650,6 +706,7 @@ TaskCoordinator::ApplyFaultBatch(
     std::set<std::pair<uint32_t, TaskFaultKind>> recoveredKeys;
     for (const TaskFaultNodeChange& change : recoveredNodes)
     {
+        m_activeFaults.erase(change.nodeId);
         NS_ABORT_MSG_IF(!recoveredKeys.emplace(change.nodeId, change.kind).second,
                         "fault recovery batch contains a duplicate node and kind");
         if (change.kind == TaskFaultKind::SATELLITE)
@@ -672,6 +729,7 @@ TaskCoordinator::ApplyFaultBatch(
     std::map<uint32_t, TaskFaultImpact> impacts;
     for (const TaskFaultNodeChange& change : startedNodes)
     {
+        m_activeFaults[change.nodeId] = change.fault;
         NS_ABORT_MSG_IF(!startedKeys.emplace(change.nodeId, change.kind).second,
                         "fault start batch contains a duplicate node and kind");
         NS_ABORT_MSG_IF(impacts.contains(change.nodeId),
@@ -782,8 +840,17 @@ TaskCoordinator::ApplyFaultBatch(
             if (IsTerminalTaskState(task.state) ||
                 task.definition.computeNodeId != change.nodeId ||
                 task.state == TASK_RESULT_TRANSFERRING ||
-                (task.state == TASK_PENDING &&
-                 task.definition.arrivalTimeNs != eventTimeNs))
+                (task.state == TASK_PENDING && task.definition.arrivalTimeNs != eventTimeNs))
+            {
+                continue;
+            }
+            const std::string impactType =
+                task.state == TASK_RUNNING ? "RUNNING_INTERRUPTED" :
+                task.state == TASK_QUEUED ? "QUEUED_DELAYED" :
+                task.state == TASK_INPUT_TRANSFERRING ? "INPUT_CONTINUES_DURING_COMPUTE_OUTAGE" :
+                "ARRIVAL_DURING_COMPUTE_OUTAGE";
+            RecordFaultTaskImpact(task, change.nodeId, impactType);
+            if (task.state != TASK_RUNNING)
             {
                 continue;
             }

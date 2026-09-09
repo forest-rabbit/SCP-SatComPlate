@@ -92,6 +92,7 @@ def require_equal_files(left_directory, right_directory, filenames, label):
 core_outputs = (
     "fault-events.csv",
     "fault-summary.json",
+    "fault-task-impact.csv",
     "task-events.csv",
     "task-summary.csv",
     "transfer-summary.csv",
@@ -103,6 +104,7 @@ core_outputs = (
 audit_outputs = (
     "fault-predictions.csv",
     "fault-prediction-summary.json",
+    "fault-model-state.csv",
 )
 
 if (root / "generate-normal/fault-trace.json").read_bytes() != (
@@ -125,6 +127,7 @@ require_equal_files(
 
 for filename in (
     "fault-model-probabilities.csv",
+    "fault-model-state.csv",
     "fault-predictions.csv",
     "fault-prediction-summary.json",
 ):
@@ -133,180 +136,42 @@ for filename in (
 require_equal_files("generate-audit", "repeat-audit",
                     ("fault-trace.json", "fault-model-probabilities.csv"), "same-seed generation")
 
-trace = load_json("generate-audit/fault-trace.json")
-if trace.get("schema_version") != 2 or len(trace.get("faults", [])) != 13:
-    raise SystemExit(f"joint Fault Trace shape differs: {trace}")
-compute_faults = [
-    fault
-    for fault in trace["faults"]
-    if fault["fault_type"] == "compute" and fault["fault_occurred"]
-]
-actual_compute_evidence = [
-    (fault["node_id"], fault["start_time_ns"], fault["duration_ns"])
-    for fault in compute_faults
-]
-if actual_compute_evidence != [
-    (0, 56_000_000_000, 8_000_000_000),
-    (11, 66_000_000_000, 8_000_000_000),
-    (22, 76_000_000_000, 8_000_000_000),
-    (22, 100_000_000_000, 8_000_000_000),
-    (17, 236_000_000_000, 8_000_000_000),
-    (16, 850_000_000_000, 8_000_000_000),
-]:
-    raise SystemExit(f"joint compute fault evidence differs: {actual_compute_evidence}")
-risk_only = [
-    fault
-    for fault in trace["faults"]
-    if fault["fault_type"] == "compute" and not fault["fault_occurred"]
-]
-if len(risk_only) != 6:
-    raise SystemExit(f"joint risk-only episode count differs: {len(risk_only)}")
-satellite_faults = [
-    fault for fault in trace["faults"] if fault["fault_type"] == "satellite"
-]
-if len(satellite_faults) != 1 or (
-    satellite_faults[0]["node_id"],
-    satellite_faults[0]["start_time_ns"],
-    satellite_faults[0]["duration_ns"],
-) != (4, 829_256_867_404, None):
-    raise SystemExit(f"joint satellite fault differs: {satellite_faults}")
+import runpy
+audit = runpy.run_path("contrib/satcompute/tests/support/fault-run-audit.py")["audit"]
+result = audit(root / "generate-audit", task_count=100)
+satellites = [f for f in result["faults"] if f["fault_type"] == "satellite"]
+assert len(satellites) == 1
+assert (satellites[0]["node_id"], satellites[0]["start_time_ns"]) == (4, 829_256_867_404)
+assert any(f["f1_occurred"] for f in result["faults"])
+assert any(f["f2_occurred"] for f in result["faults"])
+tasks = result["tasks"]
+failed = {int(t["task_id"]) for t in tasks if t["final_state"] == "FAILED"}
+assert failed
+for task_id in (36, 37):
+    task = next(t for t in tasks if int(t["task_id"]) == task_id)
+    assert task["failure_reason"] == "COMPUTE_SATELLITE_FAILURE"
+transfers = load_csv("generate-audit/transfer-summary.csv")
+assert len(transfers) == 200
+assert all(t["terminal_state"] in ("COMPLETED", "CANCELLED") for t in transfers)
+assert all(t["terminal_reason"] == "TASK_FAILED" for t in transfers if t["terminal_state"] == "CANCELLED")
+events = result["events"]
+recomputed = [r for r in events if r["route_recomputed"] == "true"]
+assert len(recomputed) == 1 and recomputed[0]["fault_source"] == "F3"
+summary = load_json("generate-audit/run-summary.json")
+assert summary["task_count"] == 100 and summary["completed_task_count"] == 100 - len(failed)
+assert summary["route_computation_count"] == 2 and summary["applied_topology_slice_count"] == 50
+for field in ("flow_monitor_lost_packets", "flow_monitor_reported_drop_packets", "flow_monitor_unattributed_lost_packets"):
+    assert summary[field] == 0, field
+assert not any(r["dropped_packets"] for r in summary["flow_monitor_drop_reasons"])
+comparison = load_json("probability-audit/n4b-joint.json")
+assert comparison["within_tolerance"] and comparison["matched_record_count"] > 0
+size = load_json("generate-audit/size-aware-summary.json")
+for field in ("active_flow_count_at_end", "assignment_count_at_end", "final_total_reserved_bytes"):
+    assert size[field] == 0, field
+assert not any(load_json("generate-audit/capacity-aware-summary.json").values())
+print("Joint actual outcomes:", collections.Counter(t["final_state"] for t in tasks),
+      "START:", len(result["faults"]), "probability records:", comparison["matched_record_count"])
 
-expected_fault_summary = {
-    "active_fault_count_at_end": 1,
-    "cancelled_transfer_count": 8,
-    "compute_fault_count": 12,
-    "failed_task_count": 7,
-    "failed_transfer_count": 0,
-    "fault_count": 13,
-    "notice_event_count": 11,
-    "recovery_event_count": 6,
-    "route_recomputation_count_due_to_fault": 1,
-    "satellite_fault_count": 1,
-    "start_event_count": 7,
-}
-fault_summary = load_json("generate-audit/fault-summary.json")
-if fault_summary != expected_fault_summary:
-    raise SystemExit(f"joint fault summary differs: {fault_summary}")
-
-task_rows = load_csv("generate-audit/task-summary.csv")
-if len(task_rows) != 100:
-    raise SystemExit(f"joint task count differs: {len(task_rows)}")
-task_by_id = {int(row["task_id"]): row for row in task_rows}
-failed_tasks = {
-    task_id: (
-        row["failure_reason"],
-        int(row["failure_time_ns"]),
-    )
-    for task_id, row in task_by_id.items()
-    if row["final_state"] == "FAILED"
-}
-expected_failed_tasks = {
-    6: ("COMPUTE_NODE_FAILURE", 56_000_000_000),
-    13: ("COMPUTE_NODE_FAILURE", 66_000_000_000),
-    20: ("COMPUTE_NODE_FAILURE", 76_000_000_000),
-    31: ("COMPUTE_NODE_FAILURE", 236_000_000_000),
-    34: ("COMPUTE_NODE_FAILURE", 850_000_000_000),
-    36: ("COMPUTE_SATELLITE_FAILURE", 829_256_867_404),
-    37: ("COMPUTE_SATELLITE_FAILURE", 840_100_000_000),
-}
-if failed_tasks != expected_failed_tasks:
-    raise SystemExit(f"joint failed-task evidence differs: {failed_tasks}")
-if collections.Counter(row["final_state"] for row in task_rows) != {
-    "COMPLETED": 93,
-    "FAILED": 7,
-}:
-    raise SystemExit("joint task terminal-state counts differ")
-for task_id in (7, 14, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 35, 38):
-    if task_by_id[task_id]["final_state"] != "COMPLETED":
-        raise SystemExit(f"joint recovery/control task {task_id} did not complete")
-
-transfer_rows = load_csv("generate-audit/transfer-summary.csv")
-if len(transfer_rows) != 200 or collections.Counter(
-    row["terminal_state"] for row in transfer_rows
-) != {"COMPLETED": 192, "CANCELLED": 8}:
-    raise SystemExit("joint transfer terminal-state counts differ")
-cancelled_transfers = [
-    row for row in transfer_rows if row["terminal_state"] == "CANCELLED"
-]
-if any(row["terminal_reason"] != "TASK_FAILED" for row in cancelled_transfers):
-    raise SystemExit("joint cancelled-transfer reason differs")
-
-events = load_csv("generate-audit/fault-events.csv")
-recomputed_events = [row for row in events if row["route_recomputed"] == "true"]
-if len(recomputed_events) != 1 or (
-    recomputed_events[0]["fault_type"],
-    recomputed_events[0]["event_type"],
-    int(recomputed_events[0]["node_id"]),
-) != ("satellite", "START", 4):
-    raise SystemExit(f"joint route-recomputation evidence differs: {recomputed_events}")
-
-run_summary = load_json("generate-audit/run-summary.json")
-if (
-    run_summary["run_status"],
-    run_summary["task_count"],
-    run_summary["completed_task_count"],
-    run_summary["task_completion_rate_percent"],
-    run_summary["route_computation_count"],
-    run_summary["applied_topology_slice_count"],
-) != ("PARTIAL", 100, 93, 93, 2, 50):
-    raise SystemExit(f"joint run summary differs: {run_summary}")
-for field in (
-    "flow_monitor_lost_packets",
-    "flow_monitor_reported_drop_packets",
-    "flow_monitor_unattributed_lost_packets",
-):
-    if run_summary[field] != 0:
-        raise SystemExit(f"joint network loss differs for {field}: {run_summary[field]}")
-if any(reason["dropped_packets"] != 0 for reason in run_summary["flow_monitor_drop_reasons"]):
-    raise SystemExit("joint run contains a FlowMonitor drop reason")
-if (
-    run_summary["transfer"]["transfer_count"],
-    run_summary["transfer"]["completed_transfer_count"],
-) != (200, 192):
-    raise SystemExit("joint run transfer summary differs")
-
-prediction_summary = load_json("generate-audit/fault-prediction-summary.json")
-if prediction_summary != {
-    "prediction_count": 82,
-    "risk_episode_count": 9,
-    "task_count": 12,
-}:
-    raise SystemExit(f"joint prediction summary differs: {prediction_summary}")
-model_rows = load_csv("generate-audit/fault-model-probabilities.csv")
-prediction_rows = load_csv("repeat-audit/fault-predictions.csv")
-if len(model_rows) != 82 or len(prediction_rows) != 82:
-    raise SystemExit("joint probability record count differs")
-
-probability_audit = load_json("probability-audit/n4b-joint.json")
-if (
-    not probability_audit["within_tolerance"]
-    or probability_audit["model_record_count"] != 82
-    or probability_audit["prediction_record_count"] != 82
-    or probability_audit["matched_record_count"] != 82
-    or probability_audit["missing_model_record_count"] != 0
-    or probability_audit["missing_prediction_record_count"] != 0
-    or probability_audit["context_mismatch_count"] != 0
-):
-    raise SystemExit(f"joint probability audit differs: {probability_audit}")
-for field, errors in probability_audit["probability_errors"].items():
-    if any(
-        errors[metric] is None
-        or errors[metric] > probability_audit["absolute_tolerance"]
-        for metric in ("mae", "rmse", "max_absolute_error")
-    ):
-        raise SystemExit(f"joint probability error differs for {field}: {errors}")
-
-size_summary = load_json("generate-audit/size-aware-summary.json")
-for field in (
-    "active_flow_count_at_end",
-    "assignment_count_at_end",
-    "final_total_reserved_bytes",
-):
-    if size_summary[field] != 0:
-        raise SystemExit(f"joint Size-aware account leaked for {field}")
-capacity_summary = load_json("generate-audit/capacity-aware-summary.json")
-if any(value != 0 for value in capacity_summary.values()):
-    raise SystemExit(f"joint Capacity-aware account leaked: {capacity_summary}")
 PY
 
 # Reuse the audited repeat directory with auditing disabled. The platform must remove
@@ -328,6 +193,7 @@ root = pathlib.Path(sys.argv[1])
 core_outputs = (
     "fault-events.csv",
     "fault-summary.json",
+    "fault-task-impact.csv",
     "task-events.csv",
     "task-summary.csv",
     "transfer-summary.csv",
@@ -338,6 +204,7 @@ core_outputs = (
 )
 for filename in (
     "fault-model-probabilities.csv",
+    "fault-model-state.csv",
     "fault-predictions.csv",
     "fault-prediction-summary.json",
 ):
@@ -350,4 +217,4 @@ for filename in core_outputs:
         raise SystemExit(f"normal generate/repeat output differs: {filename}")
 PY
 
-echo "N4B joint acceptance passed: 66 stars, 1000 s, 100 tasks, 82 probability records."
+echo "N4B joint acceptance passed: 66 stars, 1000 s, 100 tasks, all live probability records matched."

@@ -206,6 +206,18 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("faultEnableF3",
                          "Enable the built-in F3 source in generate mode",
                          faultParameters.f3.enabled);
+    commandLine.AddValue("faultF1Beta",
+                        "F1 temperature-to-probability shape",
+                        faultParameters.f1.temperature.growthFactor);
+    commandLine.AddValue("faultF1Gamma",
+                        "F1 heating shape; base-to-critical time remains fixed",
+                        faultParameters.f1.temperature.heatingShapeGamma);
+    commandLine.AddValue("faultF3Mode", "F3 fixed_k, poisson or controlled",
+                         faultParameters.f3.mode);
+    commandLine.AddValue("faultF3Node", "Controlled F3 target, scheduler-only scenario truth",
+                         faultParameters.f3.controlledNodeId);
+    commandLine.AddValue("faultF3Time", "Controlled F3 START in seconds",
+                         faultParameters.f3.controlledStartSeconds);
     commandLine.AddValue("topologyOnly",
                          "Generate topology slices without network simulation",
                          config.topologyOnly);

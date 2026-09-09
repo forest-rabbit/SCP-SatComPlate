@@ -1,5 +1,20 @@
 # 验证与标定工具
 
+## N4C G3 故障压力
+
+`summarize-n4c-g3.py --run-dir=... --manifest=... [--expect-f3] [--none-dir=...]`
+核对 C800 业务、真实 START 来源、逐任务影响、整数 WU 进度、deadline 和末端账本，
+输出 `g3-summary.json`。event 数、去重 RUNNING victim 和 QUEUED/INPUT 间接影响
+分别统计；`--none-dir` 给出同任务实际 queue delay 差值，不推定每次停机增加 8 秒。
+`--expect-f3` 要求受控 F3 严格只有预定的一个运行中 victim，且不产生后续坏端点。
+
+`plot-n4c-g3.py --old-none=... --hotspot-none=... --generate=... --output-dir=...`
+从上述 summary 和原始 CSV 生成负载/温度图与原生 F2 暴露图，同时保存逐点 CSV。
+generate 必须显式开启 probability audit；不插值、平滑或人工调整计数，F2 色标表示
+模型空间风险而不是观测故障密度。输出为可编辑 PDF/SVG 及 PNG 预览。
+这些工具都按需手动运行，不进入平台正常路径或 CI；冻结参数和实测结果只维护于
+[G3 阶段证据](../../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
+
 ## 链路压力结果核验
 
 `summarize-pressure-baseline.py --run-dir=<正式运行目录>` 流式读取链路窗口，检查
@@ -15,32 +30,18 @@
 
 ## F1 参数标定
 
-`f1-calibration.cc` 构建为 `satcompute-f1-calibration`，直接调用
-`F1SelfStateFaultModel` 比较 `tau_h`、`tau_c` 和 `lambda_F1_max` 候选。它不建立
-卫星网络，不生成正式 Fault Trace，也不在 Python 中重新实现风险公式。
+`f1-calibration.cc` 构建为 `satcompute-f1-calibration`，直接调用正式 F1 模型，
+输出 beta=8/10 与 gamma=1.5/2 的四组升温 30 s、冷却 4 s 曲线（0.25 s 采样），核对物理时间与
+参考 1 s 概率，不创建网络、不抽随机数，不替代真实 C800 多 run 标定。
 
 ```bash
-./ns3 run "satcompute-f1-calibration \
-  --outputDir=/tmp/satcompute-f1-calibration"
+./ns3 run "satcompute-f1-calibration --outputDir=/tmp/satcompute-f1-calibration"
 ```
 
-| 参数 | 含义 |
-|---|---|
-| `--outputDir` | 必填；标定 CSV 和 summary 的输出目录 |
-
-工具直接读取并校验 `fault/fault-para.cc` 中的内置参数，避免平台运行和标定工具出现
-两套配置来源。若修改故障参数，必须重新编译后再运行标定。
-
-输出为：
-
-- `n4b-f1-calibration.csv`：升降温候选逐秒状态，以及四个强度候选各 30 个固定
-  run 的计数和分布；
-- `n4b-f1-calibration-summary.json`：候选汇总、选择参数、热时间、任务数量、平均
-  故障数、风险-only 数、故障温度和预警提前量。
-
-当前冻结输出与解释见
-[`docs/calibration/n4b-f1`](../../../../docs/calibration/n4b-f1/README.md)。这些结果
-属于 66 星/1000 秒功能场景标定，不代表客观航天器失效率。
+唯一工具参数是必填 outputDir。输出名保留 `n4b-f1-calibration.csv` 和
+`n4b-f1-calibration-summary.json`，当前不再扫描 lambdaMax 或生成 risk-only 统计。
+默认模型参数来自 fault-para.cc；修改后重新编译。旧 N4B 强度标定仅为历史，
+当前冻结参数与完整网络验收见 [G3 报告](../../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
 
 ## F2 空间风险标定
 
@@ -64,7 +65,7 @@
 | `--targetMeanFaultCount` | 选定功能窗口的解析目标均值，默认 2 |
 | `--sigmaLongitudeWest` / `--sigmaLongitudeEast` | 热点西侧/东侧经度标准差，单位为度；必须满足 west < east |
 | `--sigmaLatitude` | 高斯空间场纬度标准差，单位为度 |
-| `--spatialRiskThreshold` | 高风险 NOTICE 候选阈值 |
+| `--spatialRiskThreshold` | 独立空间分析的高风险分类阈值 |
 | `--referenceMaximumFailureIntensity` | 可选；以 66 星冻结的热点最大有效强度验证更大星座 |
 | `--outputDir` | 必填；episode CSV 和 summary 的输出目录 |
 
@@ -145,7 +146,7 @@ uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
 故障数为基底，并使用连续色阶；色标覆盖 0--13，仅标出 `2,5,8,11` 作为读数锚点。
 两个连续色标均按照历史版式竖置于各自面板右侧，长度与对应绘图区的高度一致。0 次
 网格、最低暴露掩码和 F2 矩形外都使用对应色谱的最深色。最终配色恢复首版方案：左图使用
-`viridis`，右图使用 `magma`；故障域矩形和 NOTICE 轮廓使用白色，左右热点分别使用
+`viridis`，右图使用 `magma`；故障域矩形和 高风险等值线使用白色，左右热点分别使用
 首版黄色和青色。图中按首版参数以空心白色圆圈叠加全部实际故障位置：`s=4`、线宽
 `0.25`、透明度 `0.4`。为避免事件轮廓遮挡网格颜色，最终将圆圈直径缩为该版本的
 `3/5`：Matplotlib 面积参数调整为 `s=1.44`，线宽同步调整为 `0.15`，透明度保持
@@ -158,7 +159,7 @@ uv run contrib/satcompute/tools/validation/plot-f2-spatial-validation.py \
 
 右图不做全局平滑、插值或空洞填补，但按固定顺序执行三阶段显示处理。第一阶段恢复
 局部低值平滑：只检查拥有完整 8 邻域且中心位于 `w_F2 >= 0.5` 的方格；原始计数必须
-比邻居原始计数中位数至少少 3、不高于中位数的 75%。普通 NOTICE 区要求至少 5 个
+比邻居原始计数中位数至少少 3、不高于中位数的 75%。普通高风险区要求至少 5 个
 邻居达到中位数，`w_F2 >= 0.75` 的高风险核心要求 4 个。命中时显示值替换为邻居中位数。
 
 第二阶段以平滑结果为输入，并找到离配置热点最近的经纬度网格交点。共享该交点的
@@ -196,8 +197,7 @@ python3 contrib/satcompute/tools/validation/compare-fault-probabilities.py \
   --summary=/tmp/audit/fault-probability-audit-summary.json
 ```
 
-脚本以 `(simulation_time_ns,node_id,task_id)` 为主键，要求 `fault_id`、NOTICE、任务
-进度和预测窗口上下文一致，再分别比较当前步 `q_F1`、`q_F2`、`q_comp` 以及任务
+脚本以 `(simulation_time_ns,node_id,task_id)` 为主键，要求任务进度和预测窗口上下文一致，再分别比较当前步 `q_F1`、`q_F2`、`q_comp` 以及任务
 完成前累计概率 `P_fail_before_finish`。summary 固定给出：
 
 - model、prediction、matched 与双向缺失记录数；
@@ -207,8 +207,8 @@ python3 contrib/satcompute/tools/validation/compare-fault-probabilities.py \
 
 `--absolute-tolerance` 默认 `1e-12`。没有匹配记录、键集合不同、上下文不同或任一
 最大误差超限时返回非零状态。N4B 回归分别在 66 星 F1-only、F2-only 和 F1+F2
-场景运行该工具；当前空间 F2 冻结场景分别匹配 41、126、126 条记录，100 任务
-F1/F2/F3 联合场景匹配 82 条记录。
+场景运行该工具；记录量随 RUNNING 时长和故障状态变化，不把旧 NOTICE 门控下的
+固定行数当成新合同。概率容差、全覆盖、业务不变和重复一致性由回归自动检查。
 
 ## 失败输出一致性检查
 

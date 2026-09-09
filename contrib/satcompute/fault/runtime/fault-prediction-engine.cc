@@ -15,6 +15,7 @@
 #include "ns3/abort.h"
 #include "ns3/simulator.h"
 
+#include <algorithm>
 #include <limits>
 #include <set>
 #include <string>
@@ -133,6 +134,7 @@ FaultPredictionEngine::BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator)
                     "FaultPredictionEngine compute node IDs must be unique");
             }
             node->second.computeService = service;
+            service->ConnectStateObserver(MakeCallback(&FaultPredictionEngine::OnComputeStateChanged, this));
         }
     }
     for (const auto& [nodeId, state] : m_nodes)
@@ -193,9 +195,13 @@ FaultPredictionEngine::PrepareTime(int64_t simulationTimeNs)
             const bool busy = controllerComputeAvailable &&
                               state.computeService->IsComputeAvailable() &&
                               state.computeService->HasRunningTask();
-            m_f1Model->Update(state.f1State,
-                              busy,
-                              m_parameters.checkIntervalSeconds);
+            m_f1Model->AdvanceTo(state.f1State, state.thermalTimeNs, simulationTimeNs,
+                                 busy, m_parameters.checkIntervalSeconds);
+            if (state.f1State.temperatureC >= m_parameters.f1.temperature.criticalC)
+            {
+                state.f1State.temperatureC = m_parameters.f1.temperature.criticalC;
+                m_f1Model->Evaluate(state.f1State, m_parameters.checkIntervalSeconds);
+            }
         }
         if (m_f2Model.has_value())
         {
@@ -256,100 +262,37 @@ FaultPredictionEngine::FinalizeTime(int64_t simulationTimeNs)
     NS_ABORT_MSG_IF(!m_configured || !m_bound ||
                         simulationTimeNs != Simulator::Now().GetNanoSeconds(),
                     "FaultPredictionEngine finalize state is invalid");
-    std::map<uint32_t, ActiveRisk> decisionRisks = m_activeRisks;
-    std::map<uint32_t, ActiveRisk> sameTickStartedRisks;
-    const std::vector<FaultRuntimeEventRecord>& events =
-        m_faultController->GetEvents();
-    NS_ABORT_MSG_IF(m_consumedFaultEventCount > events.size(),
-                    "FaultPredictionEngine consumed an invalid event prefix");
-    for (; m_consumedFaultEventCount < events.size();
-         ++m_consumedFaultEventCount)
-    {
-        const FaultRuntimeEventRecord& event = events[m_consumedFaultEventCount];
-        NS_ABORT_MSG_IF(event.simulationTimeNs > simulationTimeNs,
-                        "FaultPredictionEngine observed a future fault event");
-        if (event.eventType == FaultEventType::NOTICE)
-        {
-            NS_ABORT_MSG_IF(event.faultType != FaultType::COMPUTE ||
-                                !event.noticeTimeNs.has_value() ||
-                                event.noticeTimeNs.value() != event.simulationTimeNs ||
-                                m_activeRisks.contains(event.nodeId),
-                            "FaultPredictionEngine received an invalid NOTICE");
-            const ActiveRisk risk{event.faultId, event.noticeTimeNs.value()};
-            m_activeRisks.emplace(event.nodeId, risk);
-            decisionRisks[event.nodeId] = risk;
-            continue;
-        }
-        if (event.eventType == FaultEventType::NOTICE_CLEAR)
-        {
-            const auto active = m_activeRisks.find(event.nodeId);
-            if (active != m_activeRisks.end() &&
-                active->second.faultId == event.faultId)
-            {
-                m_activeRisks.erase(active);
-                decisionRisks.erase(event.nodeId);
-            }
-            continue;
-        }
-        if (event.eventType != FaultEventType::START)
-        {
-            continue;
-        }
-        const auto active = m_activeRisks.find(event.nodeId);
-        if (active == m_activeRisks.end())
-        {
-            continue;
-        }
-        const bool matchingComputeRisk =
-            event.faultType == FaultType::COMPUTE &&
-            active->second.faultId == event.faultId;
-        if (matchingComputeRisk && event.simulationTimeNs == simulationTimeNs)
-        {
-            sameTickStartedRisks[event.nodeId] = active->second;
-        }
-        if (matchingComputeRisk || event.faultType == FaultType::SATELLITE)
-        {
-            m_activeRisks.erase(active);
-            decisionRisks.erase(event.nodeId);
-        }
-    }
-
     for (const auto& [nodeId, prepared] : m_preparedPredictions)
     {
-        const auto started = sameTickStartedRisks.find(nodeId);
-        const auto active = decisionRisks.find(nodeId);
-        if (started == sameTickStartedRisks.end() && active == decisionRisks.end())
-        {
+        const auto& events = m_faultController->GetEvents();
+        const bool permanentStartNow = std::any_of(events.rbegin(), events.rend(),
+            [nodeId, simulationTimeNs](const FaultRuntimeEventRecord& event) {
+                return event.simulationTimeNs == simulationTimeNs && event.nodeId == nodeId &&
+                       event.eventType == FaultEventType::START && event.faultType == FaultType::SATELLITE;
+            });
+        if (permanentStartNow)
             continue;
-        }
-        const ActiveRisk& risk = started != sameTickStartedRisks.end()
-                                     ? started->second
-                                     : active->second;
-        NS_ABORT_MSG_IF(simulationTimeNs < risk.noticeTimeNs ||
-                            prepared.remainingTimeNs >
-                                std::numeric_limits<int64_t>::max() - simulationTimeNs,
-                        "FaultPredictionEngine record timing is invalid");
-        const ComputeFailurePrediction& prediction = prepared.prediction;
+        const auto& prediction = prepared.prediction;
         m_predictionRecords.push_back(
-            {simulationTimeNs,
-             risk.faultId,
-             nodeId,
-             prepared.taskId,
-             risk.noticeTimeNs,
-             simulationTimeNs - risk.noticeTimeNs,
-             prepared.taskStartTimeNs,
-             prepared.taskServiceTimeNs,
-             prepared.taskElapsedTimeNs,
-             prepared.remainingTimeNs,
-             simulationTimeNs + prepared.remainingTimeNs,
-             prepared.completionRatio,
-             prediction.f1StepFailureProbability,
-             prediction.f2StepFailureProbability,
-             prediction.combinedStepFailureProbability,
-             prediction.horizonStepCount,
+            {simulationTimeNs, nodeId, prepared.taskId,
+             prepared.taskStartTimeNs, prepared.taskServiceTimeNs,
+             prepared.taskElapsedTimeNs, prepared.remainingTimeNs,
+             simulationTimeNs + prepared.remainingTimeNs, prepared.completionRatio,
+             prediction.f1StepFailureProbability, prediction.f2StepFailureProbability,
+             prediction.combinedStepFailureProbability, prediction.horizonStepCount,
              prediction.predictedFailureProbability});
     }
     m_preparedPredictions.clear();
+}
+
+void
+FaultPredictionEngine::OnComputeStateChanged(uint32_t nodeId, bool busy)
+{
+    if (!m_f1Model)
+        return;
+    auto& state = m_nodes.at(nodeId);
+    m_f1Model->AdvanceTo(state.f1State, state.thermalTimeNs,
+                        Simulator::Now().GetNanoSeconds(), busy, m_parameters.checkIntervalSeconds);
 }
 
 const std::vector<ComputeFailureProbabilityRecord>&
@@ -373,8 +316,12 @@ FaultPredictionEngine::DoDispose()
             Simulator::Cancel(event);
         }
     }
+    for (auto& [nodeId, state] : m_nodes)
+    {
+        if (state.computeService)
+            state.computeService->DisconnectStateObserver(MakeCallback(&FaultPredictionEngine::OnComputeStateChanged, this));
+    }
     m_nodes.clear();
-    m_activeRisks.clear();
     m_preparedPredictions.clear();
     m_faultController = nullptr;
     m_taskCoordinator = nullptr;

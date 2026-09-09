@@ -151,14 +151,14 @@ CheckFaultSafeCancellation()
               "queued task was not removed precisely");
         Check(!service->RemoveQueuedTaskForFailure(2),
               "queued task was removed twice");
-        Check(!service->SubmitTask(3, 5, Simulator::Now().GetNanoSeconds()),
-              "unavailable compute service accepted new work");
+        Check(service->SubmitTask(3, 5, Simulator::Now().GetNanoSeconds()),
+              "temporary outage rejected queued work");
+        Check(service->GetQueueSize() == 1 && !service->HasRunningTask(),
+              "unavailable compute service dispatched queued work");
     });
     Simulator::Schedule(NanoSeconds(30), [service] {
         Check(service->SetComputeAvailable(true),
               "compute service did not recover");
-        Check(service->SubmitTask(3, 5, Simulator::Now().GetNanoSeconds()),
-              "recovered compute service rejected new work");
     });
     Simulator::Stop(NanoSeconds(100));
     Simulator::Run();

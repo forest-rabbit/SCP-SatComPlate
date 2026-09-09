@@ -28,6 +28,11 @@ annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移�
 或 N1-ECMP 已有的阶段冻结点。N3 使用新仓库的 ns-3.48 主线，但沿用并保留这些
 历史 tag。
 
+分支待集成引用（2026-09-09）：N4C G3正式场景已人工批准，冻结引用为`n4c-g3-frozen`，
+见[G3冻结索引](docs/n4c/reviews/G3-final-freeze.md)。当前仅在开发分支冻结，未合入main，
+不记作N4C整阶段主线完成。旧“N4C G4收口”的场景/文档收口由G3 Final Freeze接替；
+新G4专指CompFRR Shadow Decision Evaluation。PR合入和阶段CI尚未执行，G4/N5均未开始。
+
 ## N0：初始网络平台
 
 ### 2026-07-25：建立确定性的纯星上拓扑

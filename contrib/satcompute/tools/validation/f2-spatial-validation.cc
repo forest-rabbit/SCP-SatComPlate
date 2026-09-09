@@ -673,7 +673,7 @@ main(int argc, char* argv[])
                 "F2 spatial validation requires a one-second check interval");
         }
         const double recoveryDuration =
-            parameters.recoverableComputeDurationSeconds;
+            parameters.f2.recoveryDurationSeconds;
         if (!std::isfinite(recoveryDuration) || recoveryDuration <= 0.0 ||
             std::floor(recoveryDuration) != recoveryDuration)
         {

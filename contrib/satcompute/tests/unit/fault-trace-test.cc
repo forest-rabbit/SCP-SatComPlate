@@ -25,25 +25,15 @@ CheckWriter(const std::filesystem::path& directory)
     compute.faultId = 1;
     compute.nodeId = 1;
     compute.startTimeNs = 20;
-    compute.noticeTimeNs = 10;
     compute.failureProbability = 0.5;
-    compute.warningLeadTimeNs = 10;
     compute.durationNs = 5;
-    FaultDefinition risk = compute;
-    risk.faultId = 2;
-    risk.faultOccurred = false;
-    risk.noticeTimeNs = 30;
-    risk.startTimeNs.reset();
-    risk.warningLeadTimeNs.reset();
-    risk.durationNs.reset();
-    risk.riskDurationNs = 10;
     FaultDefinition satellite;
-    satellite.faultId = 3;
+    satellite.faultId = 2;
     satellite.nodeId = 5;
     satellite.faultType = FaultType::SATELLITE;
     satellite.startTimeNs = 60;
     FaultTrace trace;
-    trace.faults = {satellite, risk, compute};
+    trace.faults = {satellite, compute};
     const auto first = directory / "written-v2-a.json";
     const auto second = directory / "written-v2-b.json";
     WriteFaultTraceV2(first, trace);
@@ -54,14 +44,15 @@ CheckWriter(const std::filesystem::path& directory)
     const std::string bytesB((std::istreambuf_iterator<char>(b)), {});
     Check(bytesA == bytesB, "canonical output depends on input ordering");
     const auto json = nlohmann::json::parse(bytesA);
-    Check(json.at("schema_version") == 2 && json.at("faults").size() == 3, "writer root differs");
+    Check(json.at("schema_version") == 2 && json.at("faults").size() == 2, "writer root differs");
     const auto& entries = json.at("faults");
     for (std::size_t i = 0; i < entries.size(); ++i)
-        Check(entries[i].at("fault_id") == i + 1 && entries[i].size() == 10,
+        Check(entries[i].at("fault_id") == i + 1 && entries[i].size() == 13,
               "canonical order or output fields differ");
-    Check(entries[0].at("warning_lead_time_ns") == 10 && entries[1].at("start_time_ns").is_null() &&
-              entries[1].at("risk_duration_ns") == 10 && entries[2].at("duration_ns").is_null(),
-          "writer event metadata differs");
+    Check(entries[0].at("failure_probability") == .5 &&
+          entries[1].at("duration_ns").is_null() &&
+          !entries[0].contains("notice_time_ns") && !entries[0].contains("risk_duration_ns"),
+          "writer must contain only START metadata");
     auto invalid = [&](const std::function<void(FaultTrace&)>& mutate) {
         auto candidate = trace;
         mutate(candidate);
@@ -83,14 +74,10 @@ CheckWriter(const std::filesystem::path& directory)
         [](auto& t) { t.faults[0].failureProbability = std::numeric_limits<double>::quiet_NaN(); });
     invalid([](auto& t) { t.faults[0].durationNs.reset(); });
     invalid([](auto& t) { t.faults[0].durationNs = 0; });
-    invalid([](auto& t) { t.faults[0].warningLeadTimeNs = 9; });
-    invalid([](auto& t) { t.faults[0].riskDurationNs = 1; });
     invalid([](auto& t) { t.faults[0].startTimeNs = -1; });
     invalid([](auto& t) { t.faults[0].durationNs = std::numeric_limits<int64_t>::max(); });
-    invalid([](auto& t) { t.faults[1].riskDurationNs.reset(); });
-    invalid([](auto& t) { t.faults[1].startTimeNs = 31; });
-    invalid([](auto& t) { t.faults[2].durationNs = 5; });
-    invalid([](auto& t) { t.faults[2].noticeTimeNs = 1; });
+    invalid([](auto& t) { t.faults[0].faultOccurred = false; });
+    invalid([](auto& t) { t.faults[1].durationNs = 5; });
     invalid([](auto& t) {
         auto f = t.faults[0];
         f.faultId = 4;

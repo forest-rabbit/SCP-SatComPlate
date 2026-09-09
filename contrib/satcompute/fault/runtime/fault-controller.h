@@ -35,8 +35,6 @@ class FaultControllerError : public std::runtime_error
 
 enum class FaultEventType
 {
-    NOTICE,
-    NOTICE_CLEAR,
     START,
     RECOVERY
 };
@@ -46,7 +44,7 @@ const char* FaultEventTypeToString(FaultEventType eventType);
 /** One time-gated event submitted by the online fault generator. */
 struct GeneratedFaultEvent
 {
-    FaultEventType eventType{FaultEventType::NOTICE};
+    FaultEventType eventType{FaultEventType::START};
     FaultDefinition fault;
 };
 
@@ -57,13 +55,10 @@ struct FaultRuntimeEventRecord
     uint64_t faultId{};
     uint32_t nodeId{};
     FaultType faultType{FaultType::COMPUTE};
-    FaultEventType eventType{FaultEventType::NOTICE};
-    std::optional<int64_t> noticeTimeNs;
+    FaultEventType eventType{FaultEventType::START};
     std::optional<int64_t> startTimeNs;
     std::optional<int64_t> durationNs;
     std::optional<double> failureProbability;
-    std::optional<int64_t> warningLeadTimeNs;
-    std::optional<int64_t> riskDurationNs;
     bool satelliteAvailableAfter{true};
     bool communicationAvailableAfter{true};
     bool computeAvailableAfter{true};
@@ -72,7 +67,7 @@ struct FaultRuntimeEventRecord
     bool routeRecomputed{};
 };
 
-/** Schedule timestamp-batched deterministic fault notice/start/recovery events. */
+/** Schedule timestamp-batched deterministic fault start/recovery events. */
 class FaultController : public Object
 {
   public:
@@ -108,7 +103,7 @@ class FaultController : public Object
     friend struct FaultControllerTestAccess; ///< Test-only ns event injection, never a CLI mode.
     struct ScheduledFaultEvent
     {
-        FaultEventType eventType{FaultEventType::NOTICE};
+        FaultEventType eventType{FaultEventType::START};
         FaultDefinition fault;
     };
 

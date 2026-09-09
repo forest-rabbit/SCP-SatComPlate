@@ -1,5 +1,8 @@
 # N4C 工作量与恢复状态映射
 
+当前默认实验输入已由[G3 Final Freeze](reviews/G3-final-freeze.md)确定为193.527GB场景。
+下文81.75GB是G1的历史批准基线；其WU、RESULT、状态和sigma/H映射公式仍适用于当前场景。
+
 **G1 formally approved. C800 is frozen as the N4C workload baseline.**
 批准依据为 `Codex_N4C_G1_Final_Review_and_G2_Implementation.md`；正式 TaskTrace 接入属于 G2。
 冻结800 tasks（240/240/240/80）、81.75 GB INPUT、10个1 GB + 20个500 MB，

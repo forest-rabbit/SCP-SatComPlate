@@ -64,7 +64,7 @@ PredictComputeFailureBeforeFinish(const ComputeFailurePredictionInput& input)
         {
             if (input.f1Model != nullptr)
             {
-                input.f1Model->Update(f1State, true, intervalSeconds);
+                input.f1Model->Update(f1State, true, intervalSeconds, intervalSeconds);
             }
             if (input.f2Model != nullptr)
             {

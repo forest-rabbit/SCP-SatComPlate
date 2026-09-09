@@ -3,6 +3,7 @@
  */
 
 #include "f3-debris-fault-model.h"
+#include "../../common/time-conversion.h"
 
 #include "ns3/random-variable-stream.h"
 
@@ -59,9 +60,10 @@ F3DebrisFaultModel::F3DebrisFaultModel(const F3FaultParameters& parameters)
     {
         throw F3DebrisFaultModelError("F3 model requires enabled parameters");
     }
-    if (parameters.mode != "fixed_k" && parameters.mode != "poisson")
+    if (parameters.mode != "fixed_k" && parameters.mode != "poisson" &&
+        parameters.mode != "controlled")
     {
-        throw F3DebrisFaultModelError("F3 mode must be fixed_k or poisson");
+        throw F3DebrisFaultModelError("F3 mode must be fixed_k, poisson or controlled");
     }
 }
 
@@ -91,6 +93,17 @@ F3DebrisFaultModel::GenerateSchedule(
             "F3 fixed_count exceeds the satellite count");
     }
 
+    if (m_parameters.mode == "controlled")
+    {
+        const int64_t timeNs = SatComputeSecondsToNanoseconds(
+            m_parameters.controlledStartSeconds, "F3.controlledStartSeconds");
+        if (timeNs < 0 || timeNs >= simulationDurationNs ||
+            !std::binary_search(remaining.begin(), remaining.end(), m_parameters.controlledNodeId))
+        {
+            throw F3DebrisFaultModelError("controlled F3 target/time outside the scenario");
+        }
+        return {{timeNs, m_parameters.controlledNodeId}};
+    }
     Ptr<UniformRandomVariable> nodeRandom =
         CreateObject<UniformRandomVariable>();
     nodeRandom->SetStream(nodeSelectionStream);

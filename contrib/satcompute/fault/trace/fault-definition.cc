@@ -38,42 +38,11 @@ FaultDefinition::GetRecoveryTimeNs() const
     return startTimeNs.value() + durationNs.value();
 }
 
-std::optional<int64_t>
-FaultDefinition::GetWarningLeadTimeNs() const
-{
-    if (!noticeTimeNs.has_value() || !startTimeNs.has_value())
-    {
-        return std::nullopt;
-    }
-    NS_ABORT_MSG_IF(noticeTimeNs.value() < 0 ||
-                        noticeTimeNs.value() > startTimeNs.value(),
-                    "validated fault has an invalid notice time");
-    return startTimeNs.value() - noticeTimeNs.value();
-}
-
-std::optional<int64_t>
-FaultDefinition::GetRiskClearTimeNs() const
-{
-    if (!noticeTimeNs.has_value() || !riskDurationNs.has_value())
-    {
-        return std::nullopt;
-    }
-    NS_ABORT_MSG_IF(noticeTimeNs.value() < 0 || riskDurationNs.value() <= 0 ||
-                        noticeTimeNs.value() >
-                            std::numeric_limits<int64_t>::max() - riskDurationNs.value(),
-                    "validated fault has an invalid risk clear time");
-    return noticeTimeNs.value() + riskDurationNs.value();
-}
-
 int64_t
 FaultDefinition::GetAnchorTimeNs() const
 {
-    if (noticeTimeNs.has_value())
-    {
-        return noticeTimeNs.value();
-    }
     NS_ABORT_MSG_IF(!startTimeNs.has_value(),
-                    "validated fault has neither notice nor start time");
+                    "validated fault has no start time");
     return startTimeNs.value();
 }
 
