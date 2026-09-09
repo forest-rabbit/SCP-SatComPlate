@@ -48,6 +48,40 @@ def lifecycle_acceptance(tasks, network, unexpected_failed):
     return {"passed": not errors, "errors": errors, "truncated_task_ids": truncated}
 
 
+def check_horizon(run, manifest, windows):
+    """Validate duration against the candidate, not a historical 1000 s constant."""
+    horizon = manifest.get("simulation_duration_s", 1000)
+    require(run["simulation_duration_s"] == horizon, "run/manifest horizon differs")
+    require(max(float(w["window_end_s"]) for w in windows) == horizon,
+            "link metrics do not cover the simulation horizon")
+    return horizon
+
+
+def fault_pressure_diagnostics(states):
+    """Describe realized exposure, not a counterfactual ensemble failure count.
+
+    Probability sums use only eligible pre-draw samples. Outages and permanent
+    failures must not contribute probabilities for draws that never occurred.
+    """
+    eligible = [s for s in states if s["sampling_eligible"] == "1"]
+    busy = [s for s in eligible if s["busy"] == "1"]
+    return {"state_rows": len(states), "eligible_node_checks": len(eligible),
+        "eligible_busy_node_checks": len(busy),
+        "busy_temperature_c": distribution([float(s["temperature_c"]) for s in busy]),
+        "busy_continuous_seconds": distribution([float(s["continuous_busy_s"]) for s in busy]),
+        "f1_positive_probability_checks": sum(float(s["p_f1"]) > 0 for s in eligible),
+        "busy_f1_p_at_least_10_percent_checks": sum(float(s["p_f1"]) >= .1 for s in busy),
+        "busy_f1_p_at_least_20_percent_checks": sum(float(s["p_f1"]) >= .2 for s in busy),
+        "busy_f1_p_at_least_50_percent_checks": sum(float(s["p_f1"]) >= .5 for s in busy),
+        "eligible_saa_node_checks": sum(s["in_saa"] == "1" for s in eligible),
+        "eligible_busy_saa_node_checks": sum(s["in_saa"] == "1" for s in busy),
+        "eligible_probability_sums": {field: sum(float(s[field]) for s in eligible)
+                                      for field in ("p_f1", "p_f2", "p_compute")},
+        "eligible_busy_probability_sums": {field: sum(float(s[field]) for s in busy)
+                                           for field in ("p_f1", "p_f2", "p_compute")},
+        "interpretation": "conditional probability sums along the observed endogenous trajectory; not multi-seed validation or guaranteed failure counts"}
+
+
 def summarize(directory, manifest, expect_f3=False, none_directory=None, base_task_trace=None):
     tasks = rows(directory / "task-summary.csv")
     by_id = {int(t["task_id"]): t for t in tasks}
@@ -55,15 +89,20 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None, base_ta
     base = json.loads(base_path.read_text())["tasks"]
     require(len(base) == 800 and len({t["task_id"] for t in base}) == 800, "incomplete business baseline")
     candidate = manifest.get("workload_candidate", "C800")
-    require(candidate in ("C800", "C800-109G"), "unknown workload candidate")
+    truncnormal = candidate in ("C800-TruncNormal", "C800-TruncNormal-v3")
+    require(candidate in ("C800", "C800-109G", "C800-TruncNormal", "C800-TruncNormal-v3"), "unknown workload candidate")
     require(sum(t["input_bytes"] for t in base) ==
-            (109_000_000_000 if candidate == "C800-109G" else 81_750_000_000),
+            (manifest["total_input_bytes"] if truncnormal else
+             109_000_000_000 if candidate == "C800-109G" else 81_750_000_000),
             "explicit workload baseline does not match manifest")
     require(len(tasks) == len(by_id) == 800, "C800 task ledger incomplete")
     for original in base:
         actual = by_id[original["task_id"]]
         for field in ("input_bytes", "output_bytes", "compute_work_units", "arrival_time_ns"):
             require(int(actual[field]) == original[field], f"task business changed: {field}")
+        if truncnormal:
+            require(all(int(actual[k]) == original[k] for k in
+                        ("source_node_id", "compute_node_id", "result_node_id")), "frozen placement changed")
         require(actual["task_profile"] == original["task_profile"], "task profile changed")
         require(int(actual["compute_rate_work_units_per_second"]) == 100000, "compute rate changed")
         success = actual["compute_deadline_met"] == "1" and actual["result_delivered"] == "1"
@@ -212,9 +251,29 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None, base_ta
             "queue_s": distribution([int(t["queue_delay_ns"])/1e9 for t in subset if int(t["queue_delay_ns"]) >= 0])}
     state_path = directory / "fault-model-state.csv"
     state_summary = {}
+    pressure = None
     cooling_checks = 0
     if state_path.exists():
         state_rows = rows(state_path)
+        if truncnormal:
+            pressure = fault_pressure_diagnostics(state_rows)
+            horizon_s = manifest["simulation_duration_s"]
+            observed_times = {int(s["simulation_time_ns"]) for s in state_rows}
+            require(observed_times == set(range(10**9, horizon_s*10**9, 10**9)),
+                    "fault-state checks do not cover the full exclusive simulation horizon")
+            late_nodes = defaultdict(list)
+            for state in state_rows:
+                if int(state["simulation_time_ns"]) >= (1200 if candidate == "C800-TruncNormal-v3" else 1000)*10**9:
+                    late_nodes[state["node_id"]].append(state)
+            changed = sum(len({(s["latitude_deg"], s["longitude_deg"]) for s in group}) > 1
+                          for group in late_nodes.values())
+            require(changed == len(late_nodes) and changed >= 65, "late native F2 coordinates froze")
+            pressure["late_native_position_nodes_checked"] = changed
+            pressure["last_model_check_s"] = max(observed_times)/1e9
+            if candidate == "C800-TruncNormal-v3":
+                pressure["drain_eligible_checks"] = sum(s["sampling_eligible"] == "1" and
+                    int(s["simulation_time_ns"]) > 1050*10**9 for s in state_rows)
+                require(pressure["drain_eligible_checks"] > 0, "drain phase stopped fault sampling")
         states = {(int(s["simulation_time_ns"]), int(s["node_id"])): s for s in state_rows}
         for event in starts.values():
             if "F2" in event["fault_source"]:
@@ -276,6 +335,12 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None, base_ta
         for field in ("temperature_c", "p_f1", "continuous_busy_s")}
     f1_start_distributions["outage_duration_s"] = distribution([int(e["duration_ns"])/1e9 for e in f1_starts])
     f1_start_distributions["same_node_start_interval_s"] = distribution(intervals)
+    if candidate == "C800-TruncNormal-v3":
+        f1_start_distributions["p_f1_bins"] = {
+            label: sum(low <= float(e["p_f1"]) < high for e in f1_starts)
+            for label, low, high in (("lt_5_percent", 0, .05), ("5_to_10_percent", .05, .1),
+                ("10_to_20_percent", .1, .2), ("20_to_30_percent", .2, .3),
+                ("30_to_50_percent", .3, .5), ("at_least_50_percent", .5, 1.000000001))}
     f1_temperature_counts = {"starts": len(f1_starts),
         "medium_22_to_25_c": sum(22 <= float(e["temperature_c"]) <= 25 for e in f1_starts),
         "critical_29p9_to_30_c": sum(29.9 <= float(e["temperature_c"]) <= 30 for e in f1_starts)}
@@ -303,7 +368,8 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None, base_ta
     links = rows(directory / "link-summary.csv")
     windows = rows(directory / "link-window-metrics.csv")
     last = max(float(w["window_end_s"]) for w in windows)
-    require(last == 1000 and all(float(w["mean_reserved_rate_bps"]) == 0 and
+    horizon = check_horizon(run, manifest, windows)
+    require(last == horizon and all(float(w["mean_reserved_rate_bps"]) == 0 and
             int(w["max_queue_bytes"]) == 0 for w in windows if float(w["window_end_s"]) == last),
             "terminal link ledger did not drain")
     require(all(float(link["peak_reserved_rate_bps"]) <= 10_000_000_000 for link in links),
@@ -317,7 +383,7 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None, base_ta
         "terminal_link_ledger_drained": True}
     unexpected_failed = {int(t["task_id"]) for t in tasks if t["final_state"] == "FAILED"} - all_direct
     lifecycle = lifecycle_acceptance(tasks, network, unexpected_failed)
-    return {"events": source_events, "unique_direct_running": {
+    return {"simulation_duration_s": horizon, "events": source_events, "unique_direct_running": {
                 "F1": len(direct["F1"]), "F2": len(direct["F2"]), "F1_union_F2": len(compute_direct),
                 "F3": len(direct["F3"]), "total": len(all_direct)},
             "impact_types": dict(Counter(r["impact_type"] for r in impacts)),
@@ -330,6 +396,7 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None, base_ta
             "transfers": dict(Counter(t["terminal_state"] for t in transfers)),
             "network": network,
             "region_runtime": region_runtime, "node_state_audit": state_summary,
+            "fault_pressure_diagnostics": pressure,
             "by_fault_source": by_source, "f3_victim": victim_evidence,
             "f3_acceptance": {"passed": not f3_errors, "errors": f3_errors},
             "lifecycle_acceptance": lifecycle,

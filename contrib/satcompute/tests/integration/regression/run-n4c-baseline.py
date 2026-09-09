@@ -20,12 +20,19 @@ def main():
     parser.add_argument("--task-trace", default=f"{INPUT}/task-trace.json")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--run", type=int, default=1)
+    parser.add_argument("--simulation-seconds", type=int, default=1000)
     parser.add_argument("--f1-beta", type=float)
     parser.add_argument("--f1-gamma", type=float)
     parser.add_argument("--disable-f3", action="store_true")
     parser.add_argument("--hotspot-manifest", type=Path,
                         help="Offline controlled F3 target/time; never supplied to an online algorithm")
     args = parser.parse_args()
+    if args.simulation_seconds <= 0:
+        parser.error("simulation-seconds must be positive")
+    if args.hotspot_manifest is not None:
+        manifest = json.loads(args.hotspot_manifest.read_text())
+        if manifest.get("simulation_duration_s", 1000) != args.simulation_seconds:
+            parser.error("simulation horizon differs from hotspot manifest")
     if args.audit and args.fault_mode != "generate":
         parser.error("audit requires generate")
     f3 = None
@@ -37,7 +44,7 @@ def main():
     if output.exists():
         parser.error("refusing to overwrite an existing output directory")
     output.mkdir(parents=True)
-    arguments = ["satcompute", "--simulationDuration=1000", "--orbitStartOffset=0",
+    arguments = ["satcompute", f"--simulationDuration={args.simulation_seconds}", "--orbitStartOffset=0",
                  f"--computeProfile={INPUT}/compute-profile.json", f"--taskTrace={args.task_trace}",
                  "--constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv",
                  "--computeDeadlineFactor=1.3", "--islBandwidthBps=10000000000", "--linkMetrics=1",
@@ -64,7 +71,7 @@ def main():
                 "task_trace": args.task_trace, "f1_beta_override": args.f1_beta,
                 "f1_gamma_override": args.f1_gamma,
                 "f3_disabled": args.disable_f3, "hotspot_manifest": str(args.hotspot_manifest),
-                "audit": args.audit,
+                "audit": args.audit, "simulation_duration_s": args.simulation_seconds,
                 "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                 "worktree_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT))}
     (output / "execution.json").write_text(json.dumps(identity, indent=2) + "\n")
