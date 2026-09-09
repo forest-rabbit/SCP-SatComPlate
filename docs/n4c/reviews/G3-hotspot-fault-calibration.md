@@ -1,10 +1,11 @@
 # N4C G3：F1 升温形状、热点标定与大任务 F3
 
-最新：文末 **Final fault-scene candidate v3**（5×1GB、1050s到达、1300s仿真）已完成。
+最新：**G3 PASS / FROZEN**。人工接受v3（5×1GB、1050s到达、1300s仿真）为正式默认场景，
+冻结tag为`n4c-g3-frozen`；后续统一从[冻结索引](G3-final-freeze.md)读取输入和引用。
 none 800/800完成；单轮generate 717完成/83失败（82 F1、1 F3），零丢包，F3单受害通过。
-**停在G3人工审阅，尚未冻结，不代表多随机轮整体验收通过**。本轮仅1次none和1次generate，
-代码、候选输入和结果说明整理为分支审计提交；未重绘、未运行CI、未合并或清理历史，
-此前900/1200候选完整保留。大型原始运行输出仍按gitignore留在本地。
+冻结收口没有重跑仿真；未运行CI、未合并或清理历史，G4/N5均未开始。
+下文各候选的“待审阅/尚未冻结”描述保留为当时的历史状态，以文末Final Freeze为最新结论。
+大型原始运行输出仍按gitignore留在本地，不代表多随机轮整体验收通过。
 
 上一轮状态：109GB派生修订、有限筛选和六轮验证已完成，未通过G3整体验收。
 109GB确认/验证direct均值70.33/73.67，仍低于75–83；五轮F3单受害任务检查失败，
@@ -632,3 +633,38 @@ python contrib/satcompute/tests/integration/regression/run-n4c-baseline.py \
 及本报告；run-n4c-baseline.py沿用上一轮已完成的可配置时长改动，本次无需再次修改。
 **STOP AT G3 REVIEW**：实现和单轮验收完成，代码及报告整理提交供审计，场景尚未人工冻结；
 不启动G4/N5，不做CI、合并或历史清理，不改写旧场景结论。
+
+## G3 Final Freeze
+
+**Status: PASS / FROZEN**（2026-09-09）。人工批准当前v3作为后续实验的默认公共场景，
+并明确取消任务书的SHA-256清单要求；来源核对采用现有证据比较，不新增平台校验层。
+实现提交为`e37c00cbb66f05fbde2ae67d58ef4207db5990b2`，正式冻结引用是其后的
+`docs: Freeze N4C G3 fault scene`提交及annotated tag `n4c-g3-frozen`。
+完整freeze commit用`git rev-parse 'n4c-g3-frozen^{commit}'`解析，避免将实现提交误记为冻结提交。
+
+来源核对结论：**PASS（留存证据一致）**。
+
+- 核对开始时分支/HEAD与任务书一致，工作区干净；五份正式输入均与已审阅提交逐字节一致。
+- TaskTrace与`f3-task-trace-check.json`保存副本逐字节一致；none/generate共1600条任务账本
+  的全部输入字段逐项匹配，算力均为100,000 WU/s。base与正式TaskTrace仅有端点放置差异。
+- placement与F3 manifest除F3计划外一致，800条放置和到达时刻匹配TaskTrace；
+  workload-summary与本地审阅归档一致。实际星座/计算资源文件在运行基点与实现提交间不变。
+- 两次execution.json均记录父提交`839c0dfe2127a0d1cbc6156e4876cf1a11a9ec31`和
+  `worktree_dirty=true`；命令、时间窗口、seed/run及受控F3节点/时刻与冻结文件一致。
+- 从父提交到实现提交的变更仅涉及Python工具/测试、候选JSON及文档，没有C++或构建配置变更；
+  当前实现包含已提交的候选修订。没有当时的完整dirty源码/二进制快照，因此不声称补齐了这种强证明。
+- 故障参考文件87条记录与START事件的身份、节点、类型、时刻及可恢复持续时间匹配；
+  既有验收仍为none全完成、generate 717/83、F3单受害通过，3342条概率比较无缺失且误差为0。
+
+冻结的profile、TaskTrace、placement/F3 manifest、seed/run、模型参数、1050/1300s窗口、
+hotspot=64、计算/星座依赖、生成入口和本地证据目录统一列在[G3-final-freeze.md](G3-final-freeze.md)。
+主报告前述两次运行的结果不改写。本次实际仅执行只读文件/账本/命令/提交核对及Markdown链接检查，
+无新full ns-3、构建、单元测试、阶段CI或新运行输出；此前40项快速测试和两次运行的证据继续有效。
+
+这冻结的是正式场景和无备份generate参考realization，不声明单轮代表真实故障统计分布。
+当前没有生产replay；保留的fault-trace.json是参考证据，不能把未来文件回放说成已实现。
+改变备份负载后，即使同seed/run也不保证F1轨迹相同，后续对照方式单独审阅。
+G4新含义为CompFRR Shadow Decision Evaluation；旧G4的场景/文档收口由此接替，
+未执行的合入main与阶段CI不被视为已完成。历史生成器/中间文档清理留到独立提交，当前不删文件。
+
+**G3 STATUS = PASS / FROZEN；G4 STATUS = NOT STARTED；N5 STATUS = NOT STARTED。**
