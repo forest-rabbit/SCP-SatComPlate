@@ -3,6 +3,7 @@
  */
 
 #include "ns3/command-line.h"
+#include "ns3/compfrr-shadow-evaluator.h"
 #include "ns3/compute-profile.h"
 #include "ns3/constellation-definition.h"
 #include "ns3/circular-orbit-topology-policy.h"
@@ -32,6 +33,7 @@
 #include <filesystem>
 #include <initializer_list>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -197,6 +199,10 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("faultProbabilityAudit",
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
+    commandLine.AddValue("compfrr-shadow", "Opt-in G4 analytical decision observer (no real backup)",
+                         config.compfrrShadow);
+    commandLine.AddValue("compfrr-shadow-output", "Shadow CSV directory; default outputDir/shadow",
+                         config.compfrrShadowOutput);
     commandLine.AddValue("faultEnableF1",
                          "Enable F1 generation and optional probability audit",
                          faultParameters.f1.enabled);
@@ -333,6 +339,14 @@ ValidateConfig(const SatComputeConfig& config)
         }
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
+    if (config.compfrrShadow && (config.topologyOnly || !hasComputeProfile || config.faultMode != "generate"))
+    {
+        FailConfig("compfrr-shadow", "requires network tasks and faultMode=generate");
+    }
+    if (!config.compfrrShadow && !config.compfrrShadowOutput.empty())
+    {
+        FailConfig("compfrr-shadow-output", "requires compfrr-shadow=1");
+    }
     if (config.topologyOnly && hasComputeProfile)
     {
         FailConfig("topologyOnly", "cannot load task inputs");
@@ -350,6 +364,45 @@ ValidateConfig(const SatComputeConfig& config)
     }
 }
 
+// Apply mode-specific defaults without hiding explicit incompatible options.
+void
+ApplyModeDefaults(SatComputeConfig& config, int argc, char* argv[])
+{
+    const auto supplied = [argc, argv](std::string_view name) {
+        const std::string option = "--" + std::string(name);
+        for (int i = 1; i < argc; ++i)
+        {
+            const std::string_view value(argv[i]);
+            if (value == option || value.starts_with(option + "="))
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+    if (config.topologyOnly)
+    {
+        if (!supplied("computeProfile")) config.computeProfile.clear();
+        if (!supplied("taskTrace")) config.taskTrace.clear();
+        if (!supplied("faultMode")) config.faultMode = "none";
+        if (!supplied("linkMetrics")) config.linkMetrics = false;
+    }
+    // A custom workload must supply both files; never mix it with the frozen scene.
+    if (supplied("computeProfile") != supplied("taskTrace"))
+    {
+        if (!supplied("computeProfile")) config.computeProfile.clear();
+        if (!supplied("taskTrace")) config.taskTrace.clear();
+    }
+    // ns-3 CommandLine rejects empty string values; use an explicit sentinel.
+    if (config.computeProfile == "none") config.computeProfile.clear();
+    if (config.taskTrace == "none") config.taskTrace.clear();
+    if (config.faultMode == "generate" && config.faultTrace.empty())
+    {
+        config.faultTrace =
+            (std::filesystem::path(config.outputDirectory) / "fault-trace.json").string();
+    }
+}
+
 } // namespace
 
 int
@@ -363,6 +416,7 @@ main(int argc, char* argv[])
 
     try
     {
+        ApplyModeDefaults(inputConfig, argc, argv);
         ValidateConfig(inputConfig);
         if (inputConfig.faultProbabilityAudit &&
             !faultParameters.f1.enabled && !faultParameters.f2.enabled)
@@ -540,6 +594,15 @@ main(int argc, char* argv[])
                 faultModelEngine->BindTaskCoordinator(taskCoordinator);
             }
 
+            std::unique_ptr<compfrr::ShadowEvaluator> shadow;
+            if (config.compfrrShadow)
+            {
+                shadow = std::make_unique<compfrr::ShadowEvaluator>(taskCoordinator, faultModelEngine,
+                    *computeProfile, config.islBandwidthBps,
+                    config.compfrrShadowOutput.empty() ? outputDirectory / "shadow" :
+                        std::filesystem::path(config.compfrrShadowOutput));
+            }
+
             std::optional<LinkMetricsRecorder> linkMetrics;
             if (config.linkMetrics)
             {
@@ -556,6 +619,7 @@ main(int argc, char* argv[])
             const auto wallStart = std::chrono::steady_clock::now();
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
+            if (shadow) shadow->Finalize();
             if (linkMetrics)
             {
                 linkMetrics->Finalize();

@@ -32,6 +32,7 @@
   --routingMode=global-capacity-aware-hrw \
   --computeProfile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-compute-profile.json \
   --taskTrace=contrib/satcompute/input/examples/leo-66-100s-20tasks/task-trace.json \
+  --faultMode=none --taskCompletionPolicy=strict \
   --outputDir=/tmp/satcompute-66-100s-20tasks"
 ```
 

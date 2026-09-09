@@ -70,6 +70,7 @@ Run(bool queryEnabled, bool auditEnabled, bool computeSources = true, bool contr
         parameters.f1.enabled = computeSources;
         parameters.f2.enabled = computeSources;
         parameters.f3.enabled = true;
+        parameters.f3.mode = "fixed_k";
         if (controlledF3)
         {
             parameters.f3.mode = "controlled";

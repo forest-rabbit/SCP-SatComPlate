@@ -178,6 +178,19 @@ TaskCoordinator::TransitionTask(uint64_t taskId,
     const TaskState fromState = task.state;
     task.TransitionTo(requestedState, eventTimeNs, cause);
     m_taskEvents.push_back({eventTimeNs, taskId, fromState, requestedState, nodeId, cause});
+    m_taskTransition(m_taskEvents.back());
+}
+
+void
+TaskCoordinator::ConnectTaskObserver(Callback<void, const TaskEventRecord&> callback)
+{
+    m_taskTransition.ConnectWithoutContext(callback);
+}
+
+void
+TaskCoordinator::DisconnectTaskObserver(Callback<void, const TaskEventRecord&> callback)
+{
+    m_taskTransition.DisconnectWithoutContext(callback);
 }
 
 void
@@ -514,6 +527,7 @@ TaskCoordinator::FailTaskForComputeNode(TaskRuntime& task,
                             TASK_FAILED,
                             task.definition.computeNodeId,
                             cause});
+    m_taskTransition(m_taskEvents.back());
     impact.affectedTaskCount = 1;
 
     if (fromState == TASK_PENDING || fromState == TASK_INPUT_TRANSFERRING)
@@ -614,6 +628,7 @@ TaskCoordinator::FailTaskForSatelliteNode(TaskRuntime& task,
                             TASK_FAILED,
                             failedNodeId,
                             cause});
+    m_taskTransition(m_taskEvents.back());
     impact.affectedTaskCount = 1;
 
     const auto finalize = [this, &impact](uint64_t transferId,

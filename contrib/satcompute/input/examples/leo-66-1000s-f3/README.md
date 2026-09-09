@@ -1,7 +1,7 @@
 # 66 星、1000 秒 F3 永久整星故障闭环
 
 本示例验证 F3 本身，不运行任务：使用 66 星在线轨道与固定 ISL 候选，在
-`fault-para.cc` 默认的 `fixed_k`、`K=1` 条件下生成一颗永久失效卫星，重复运行核对事件一致性。F3 不依赖 ComputeProfile 或 TaskTrace，因此本目录没有伪造任务
+显式指定 `fixed_k`、`K=1` 条件下生成一颗永久失效卫星，重复运行核对事件一致性。F3 不依赖 ComputeProfile 或 TaskTrace，因此本目录没有伪造任务
 输入文件。
 
 ## Generate
@@ -21,6 +21,7 @@
   --islBandwidthBps=2000000000 \
   --routingMode=global-first \
   --faultMode=generate \
+  --computeProfile=none --taskTrace=none --faultF3Mode=fixed_k \
   --faultEnableF1=0 \
   --faultEnableF2=0 \
   --faultEnableF3=1 \

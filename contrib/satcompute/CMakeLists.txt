@@ -3,6 +3,9 @@ build_lib(
   SOURCE_FILES
     para.cc
     common/time-conversion.cc
+    protection/shadow/compfrr-shadow-model.cc
+    protection/shadow/compfrr-shadow-evaluator.cc
+    protection/shadow/compfrr-shadow-recorder.cc
     fault/fault-para.cc
     fault/model/compute-failure-predictor.cc
     fault/model/compute-fault-combination.cc
@@ -65,6 +68,10 @@ build_lib(
   HEADER_FILES
     para.h
     common/time-conversion.h
+    protection/shadow/compfrr-shadow-model.h
+    protection/shadow/compfrr-shadow-task-state.h
+    protection/shadow/compfrr-shadow-evaluator.h
+    protection/shadow/compfrr-shadow-recorder.h
     fault/fault-para.h
     fault/model/compute-failure-predictor.h
     fault/model/compute-fault-combination.h
@@ -205,6 +212,14 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-compfrr-shadow-model-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/compfrr-shadow-model-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-fault-risk-query-test
   EXECNAME_PREFIX satcompute_test_

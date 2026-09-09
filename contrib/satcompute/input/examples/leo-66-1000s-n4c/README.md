@@ -18,7 +18,7 @@ source .venv/bin/activate
   --computeDeadlineFactor=1.3 --faultMode=none --outputDir=output/n4c-none"
 ```
 
-默认10 Gbps ISL、size-aware分包、capacity-aware HRW；额外链路指标需显式 `--linkMetrics=1`。
+默认10 Gbps ISL、size-aware分包、capacity-aware HRW；链路指标当前默认开启，可用 `--linkMetrics=0` 关闭。
 输入重生成使用现有 `generate-task-workload.py --profile=n4c-c800`，提供原生66星的
 `--nodes-file`、本例 `--compute-profile`、`--seed=n4c-g1-66`，以及两个输出参数
 `--output-task-trace`、`--output-workload-summary`；不要覆盖已有实验结果。

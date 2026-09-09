@@ -215,7 +215,11 @@ kappa_F2 = 0.0014295980555469494 s^-1
 标定、原始证据和论文候选图见
 [`docs/calibration/n4b-f2`](../../../docs/calibration/n4b-f2/README.md)。
 
-F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中，默认关闭。
+F2 与 F3 参数都按独立分组保留在 [`fault-para.cc`](fault-para.cc) 中。当前默认与 G3 的
+1300 秒、800 任务、seed=1/run=11 场景对齐：F1/F2/F3 全启用，F3 使用 controlled、
+node62、1027.055770726 秒。此前 orbit-only 的 1000 秒标定并未重做；它不是当前场景
+必须恰好出现两个 F2 的保证。F1/F2 数值模型不变，固定链路时延已按用户确认改为 1 ms。
+独立单源小实验应显式关闭其他来源；旧随机 F3 实验需设置 `--faultF3Mode=fixed_k`。
 `f3.fixedCount` 是 `fixed_k` 压力测试中人工指定的永久撞击卫星数量，不属于任务
 输入，也不代表现实碰撞频率。
 

@@ -6,6 +6,8 @@ none 800/800完成；单轮generate 717完成/83失败（82 F1、1 F3），零�
 冻结收口没有重跑仿真；未运行CI、未合并或清理历史，G4/N5均未开始。
 下文各候选的“待审阅/尚未冻结”描述保留为当时的历史状态，以文末Final Freeze为最新结论。
 大型原始运行输出仍按gitignore留在本地，不代表多随机轮整体验收通过。
+后续已人工接受默认 1 ms，差异与新证据见[冻结索引](G3-final-freeze.md#已批准的默认时延更新1-ms)。
+下文保留原 8 ms 历史结果；用当前 wrapper 复现时须补 `--fixed-delay-seconds=0.008`。
 
 上一轮状态：109GB派生修订、有限筛选和六轮验证已完成，未通过G3整体验收。
 109GB确认/验证direct均值70.33/73.67，仍低于75–83；五轮F3单受害任务检查失败，
@@ -615,12 +617,12 @@ python contrib/satcompute/tests/integration/regression/run-n4c-baseline.py \
   --output-dir=output/n4c-g3-truncnormal-v3-20260909/none --fault-mode=none \
   --task-trace=contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json \
   --hotspot-manifest=contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/placement-manifest.json \
-  --simulation-seconds=1300 --seed=1 --run=11
+  --simulation-seconds=1300 --seed=1 --run=11 --fixed-delay-seconds=0.008
 python contrib/satcompute/tests/integration/regression/run-n4c-baseline.py \
   --output-dir=output/n4c-g3-truncnormal-v3-20260909/fault-11 --fault-mode=generate --audit \
   --task-trace=contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json \
   --hotspot-manifest=contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/f3-manifest.json \
-  --simulation-seconds=1300 --seed=1 --run=11
+  --simulation-seconds=1300 --seed=1 --run=11 --fixed-delay-seconds=0.008
 ```
 
 原生命令及returncode=0分别在none和fault-11的execution.json/execution-result.json中。

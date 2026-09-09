@@ -67,12 +67,17 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 ```bash
 ./ns3 configure --enable-modules=satcompute -G Ninja
 ./ns3 build
-./ns3 run "satcompute --simulationDuration=2"
+./ns3 run "satcompute --topologyOnly=1 --simulationDuration=2"
 ./ns3 run "satcompute --help"
 ```
 
-不带参数时，平台使用下表中的默认值运行 1000 秒。日常开发建议显式指定较短的
-`simulationDuration` 和独立的 `outputDir`。完整任务运行见
+不带参数时，平台运行当前 G3 场景：1300 秒、66 星（每星 100,000 WU/s）、800 任务、
+10 Gbps、1 ms、seed=1/run=11，在线生成 F1/F2 和 node62 在 1027.055770726 秒的受控 F3。
+概率审计仍默认关闭，链路吞吐/利用率统计默认开启。请使用独立 `outputDir` 保留实验结果。
+只缩短仿真时间不能截取完整任务文件；日常开发应提供一对小规模任务/算力输入，或使用
+`--topologyOnly=1`。无任务网络运行需显式设置
+`--computeProfile=none --taskTrace=none --faultMode=none`。
+历史小场景需显式指定故障开关、随机轮和完成策略；完整任务运行见
 [100 秒、66 星、20 任务示例](input/examples/leo-66-100s-20tasks/README.md)。
 F1 在线生成验证见
 [120 秒、66 星 F1 示例](input/examples/leo-66-120s-f1/README.md)。
@@ -85,6 +90,9 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 
 ## 参数边界
 
+G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评估，默认关闭。
+不创建真实备份或修改任务结果，详见 [protection 模块](protection/README.md)。
+
 人工设置的时长和间隔统一以秒传入，平台在组件边界转换为 ns-3 `Time` 或有符号
 整数纳秒。星座 CSV 只描述轨道结构，算力、任务和 Fault Trace 位于独立数据文件，
 故障内部参数位于 `fault-para.cc`；它们与 `para.cc` 不重复。
@@ -93,9 +101,9 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
-| `--simulationDuration` | `1000` | 秒 | 仿真持续时间；必须为可转换为正整数纳秒的有限值 |
+| `--simulationDuration` | `1300` | 秒 | 仿真持续时间；必须为可转换为正整数纳秒的有限值 |
 | `--randomSeed` | `1` | `uint32` | ns-3 全局随机 seed；必须大于 0 |
-| `--randomRun` | `1` | `uint64` | ns-3 独立运行编号；与 seed 共同固定随机流 |
+| `--randomRun` | `11` | `uint64` | ns-3 独立运行编号；与 seed 共同固定随机流 |
 
 ### topology
 
@@ -117,15 +125,17 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
 | `--delayMode` | `fixed` | 枚举 | `fixed` 或 `distance` |
-| `--fixedDelay` | `0.008` | 秒 | fixed 模式的单向链路时延；该模式下必须大于 0 |
+| `--fixedDelay` | `0.001` | 秒 | fixed 模式的单向链路时延，默认 1 ms；该模式下必须大于 0 |
 | `--islBandwidthBps` | `10000000000` | bit/s | 每条定向 ISL 的数据速率，默认 10 Gbps；必须大于 0 |
 | `--islMtuBytes` | `64028` | 字节 | ISL MTU；至少 68，size-aware 分包时至少 64028 |
 | `--islQueueBytes` | `1500000` | 字节 | 每条 ISL 队列容量；必须大于 0 |
-| `--linkMetrics` | `false` | 布尔 | 启用逐定向链路窗口统计；仅用于正式网络仿真 |
+| `--linkMetrics` | `true` | 布尔 | 启用逐定向链路窗口统计；仅用于正式网络仿真；topologyOnly 默认关闭 |
 | `--linkMetricsInterval` | `1.0` | 秒 | 链路统计窗口，必须大于 0，与拓扑更新周期独立 |
 
 `distance` 时延按当前 ECEF 直线距离除以光速并四舍五入到整数纳秒；
 `fixedDelay` 在该模式下不参与链路时延。
+统一 fixed 时延是实验抽象，不代表该星座的真实传播时延。原 8 ms 实验可显式使用
+`--fixedDelay=0.008`；当前 G3 场景及已接受的 1 ms 差异见[场景索引](../../docs/n4c/reviews/G3-final-freeze.md)。
 
 ### routing
 
@@ -142,13 +152,13 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
-| `--computeProfile` | 空 | 路径 | 卫星静态算力 JSON；必须与 `taskTrace` 同时提供 |
-| `--taskTrace` | 空 | 路径 | 任务到达 JSON；必须与 `computeProfile` 同时提供 |
+| `--computeProfile` | `input/examples/leo-66-1000s-n4c/compute-profile.json` | 路径 | 默认每星 100,000 WU/s；自定义时必须与 `taskTrace` 成对提供 |
+| `--taskTrace` | `input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json` | 路径 | 当前 800 任务；表中两条路径省略 `contrib/satcompute/` 前缀；成对设置 `none` 可禁用任务 |
 | `--computeDeadlineFactor` | `1.3` | 倍率 | 有限且至少为1；首次计算开始后的deadline预算倍率，语义见[任务模块](task/README.md) |
 | `--transferChunkMode` | `size-aware` | 枚举 | `fixed` 或 `size-aware` 分包 |
 | `--transferPayloadBytes` | `1024` | 字节 | fixed payload，范围 `1..65507`，加 28-byte IPv4/UDP 头后不能超过 MTU |
 | `--receiverRcvBufBytes` | `131072` | 字节 | 每个 UDP 接收 socket 的缓冲区；必须大于 0 |
-| `--taskCompletionPolicy` | `strict` | 枚举 | `strict` 对部分完成返回 3；`report` 只报告部分结果并返回 0 |
+| `--taskCompletionPolicy` | `report` | 枚举 | `strict` 对部分完成返回 3；`report` 只报告部分结果并返回 0 |
 
 size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload，此时
 `transferPayloadBytes` 不参与分包，但仍需位于合法整数范围。
@@ -157,12 +167,14 @@ size-aware 分包按声明传输大小选择 1024、8192 或 64000-byte payload�
 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
-| `--faultMode` | `none` | 枚举 | `none` 或 `generate` |
-| `--faultTrace` | 空 | 路径 | generate 事件输出路径 |
+| `--faultMode` | `generate` | 枚举 | `none` 或 `generate`；topologyOnly 默认 none |
+| `--faultTrace` | 空 | 路径 | generate 中省略时写入 `outputDir/fault-trace.json` |
 | `--faultProbabilityAudit` | `false` | bool | 是否按需运行预测器并输出概率一致性审计文件 |
 | `--faultEnableF1` | `true` | bool | generate 是否启用 F1 来源 |
-| `--faultEnableF2` | `false` | bool | generate 是否启用 F2 来源 |
-| `--faultEnableF3` | `false` | bool | generate 是否启用内置 F3 永久整星来源 |
+| `--faultEnableF2` | `true` | bool | generate 是否启用 F2 来源 |
+| `--faultEnableF3` | `true` | bool | generate 是否启用内置 F3 永久整星来源 |
+| `--faultF3Mode` | `controlled` | 枚举 | `controlled`、`fixed_k` 或 `poisson` |
+| `--faultF3Node` / `--faultF3Time` | `62` / `1027.055770726` | ID / 秒 | 当前固定单 victim 场景；仅供故障调度器，不向保护决策暴露未来 |
 
 `none` 要求 `faultTrace` 为空；`generate` 将它作为输出路径，不读取故障文件。故障内部参数集中在 `fault/fault-para.cc`，不再使用模型配置 JSON。
 `faultProbabilityAudit` 默认关闭，只能与 generate、任务输入和至少一个启用的

@@ -170,6 +170,34 @@ G3的 `test_n4c_hotspot.py` 检查地理权重、fallback和业务守恒；临�
 手动C800标定/验证不进入CI，命令和逐轮证据见
 [G3审阅报告](../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
 
+`integration/regression/run-n4c-baseline.py` 的单链路单向时延默认与平台一致，为
+`0.001` 秒；复现原 8 ms 实验时显式传入 `--fixed-delay-seconds=0.008`。
+默认场景为当前 1300 秒/800 任务、seed1/run11、generate、受控 F3；旧实验需显式指定
+任务、时长、随机轮和 manifest（或 `--disable-f3`）。默认不产生概率审计与 shadow 输出。
+该选项只覆盖本轮运行时延，不修改输入文件。每轮使用新的输出目录，并保持任务、
+seed/run、故障配置和其他运行参数一致；此类完整仿真不接入 CI。
+
+G4 的小测试沿用原测试目录：C++ 入口包含 `satcompute-compfrr-shadow-model-test`；
+`test_compfrr_shadow_layout.py` 对比全部 800 任务的 G1 合法状态映射，不运行网络；
+`integration/smoke/run-compfrr-shadow-smoke.py` 只用 8 个任务验证旁路无副作用、
+重复性、audit 独立性和同 ns 初始化中断。所有正常运行仍默认关闭 shadow。
+
+```bash
+source .venv/bin/activate
+python -m unittest discover -s contrib/satcompute/tests/unit -p 'test_compfrr_shadow*.py' -v
+python contrib/satcompute/tests/integration/smoke/run-compfrr-shadow-smoke.py
+
+# 手动完整 G4：输出目录必须未存在；不是 CI/日常 smoke。
+python contrib/satcompute/tests/integration/regression/run-n4c-baseline.py \
+  --output-dir=output/g4-shadow-review --audit --shadow
+python contrib/satcompute/tools/validation/summarize-n4c-g4-shadow.py \
+  --run-dir=output/g4-shadow-review \
+  --reference-dir=output/n4c-g3-delay-1ms-20260909/fault-11
+```
+
+汇总器先验证真实业务输出一致；不一致则保存差异并返回非零，不发布收益表。
+结果与范围见 [G4 审阅报告](../../../docs/n4c/reviews/G4-shadow-decision-evaluation.md)。
+
 GitHub 的 `SatCompute CI` 是手动阶段门禁：一个大阶段的 PR 全部合并到 `main` 后，
 只触发一次，通过并确认提交已合并后清理功能分支。阶段内的小提交和 PR 只运行
 与改动匹配的本地检查；最终

@@ -12,7 +12,7 @@ trap 'rm -rf "$regression_output"' EXIT
 run_platform() {
   local output_directory="$1"
   shift
-  ./ns3 run --no-build "satcompute --outputDir=$output_directory $*"
+  ./ns3 run --no-build "satcompute --faultMode=none --computeProfile=none --taskTrace=none --faultEnableF2=0 --faultEnableF3=0 --faultF3Mode=fixed_k --randomRun=1 --linkMetrics=0 --outputDir=$output_directory $*"
 }
 
 constellation="contrib/satcompute/tests/fixtures/constellation/connected-16.csv"

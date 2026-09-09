@@ -59,6 +59,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --taskTrace=contrib/satcompute/input/examples/leo-66-120s-f1/task-trace.json \
   --taskCompletionPolicy=report \
   --faultMode=generate \
+  --faultEnableF1=1 --faultEnableF2=0 --faultEnableF3=0 \
   --faultTrace=/tmp/satcompute-f1-generate/fault-trace.json \
   --outputDir=/tmp/satcompute-f1-generate"
 ```

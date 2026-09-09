@@ -17,11 +17,11 @@ GetDefaultSatComputeConfig()
     // simulation
 
     // --simulationDuration：仿真持续时间，单位为秒，必须是有限正数。
-    config.simulationDurationSeconds = 1000.0;
+    config.simulationDurationSeconds = 1300.0;
 
     // --randomSeed 和 --randomRun：固定 ns-3 随机过程以复现实验。
     config.randomSeed = 1;
-    config.randomRun = 1;
+    config.randomRun = 11;
 
     // topology
 
@@ -52,8 +52,8 @@ GetDefaultSatComputeConfig()
     // --delayMode：fixed 使用固定时延，distance 按当前卫星距离计算时延。
     config.delayMode = "fixed";
 
-    // --fixedDelay：fixed 模式的单向链路时延，单位为秒。
-    config.fixedDelaySeconds = 0.008;
+    // --fixedDelay：fixed 模式的单向链路时延，单位为秒；默认 1 ms。
+    config.fixedDelaySeconds = 0.001;
 
     // --islBandwidthBps：每条 ISL 的数据速率，单位为 bit/s。
     config.islBandwidthBps = 10'000'000'000;
@@ -76,13 +76,15 @@ GetDefaultSatComputeConfig()
     // workload
 
     // --computeProfile：每颗卫星的算力资源 JSON；必须与 taskTrace 同时提供。
-    config.computeProfile = "";
+    config.computeProfile =
+        "contrib/satcompute/input/examples/leo-66-1000s-n4c/compute-profile.json";
 
     // --computeDeadlineFactor: compute-stage deadline budget / reference service time.
     config.computeDeadlineFactor = 1.3;
 
     // --taskTrace：任务到达、输入字节、计算量和输出字节 JSON。
-    config.taskTrace = "";
+    config.taskTrace =
+        "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json";
 
     // --transferChunkMode：默认按传输大小选择 1024、8192 或 64000-byte payload。
     config.transferChunkMode = "size-aware";
@@ -94,18 +96,26 @@ GetDefaultSatComputeConfig()
     config.receiverRcvBufBytes = 131'072;
 
     // --taskCompletionPolicy：strict 对未完成任务返回非零，report 只报告结果。
-    config.taskCompletionPolicy = "strict";
+    config.taskCompletionPolicy = "report";
 
     // fault
 
     // --faultMode: none disables faults; generate samples and executes online.
-    config.faultMode = "none";
+    config.faultMode = "generate";
 
-    // --faultTrace: generated fault-event output path.
+    // --faultTrace: generated output; empty uses outputDir/fault-trace.json.
     config.faultTrace = "";
 
     // --faultProbabilityAudit：按需采集概率记录；正常运行默认关闭。
     config.faultProbabilityAudit = false;
+
+    // protection
+
+    // --compfrr-shadow：显式开启 G4 旁路评估，不影响任务、路由与故障抽样。
+    config.compfrrShadow = false;
+
+    // --compfrr-shadow-output：旁路 CSV 目录；空时使用 outputDir/shadow。
+    config.compfrrShadowOutput = "";
 
     // output
 
@@ -119,7 +129,7 @@ GetDefaultSatComputeConfig()
     config.diagnosticMode = "off";
 
     // --linkMetrics：按需输出实际链路占用、队列和带宽预留，不改变业务行为。
-    config.linkMetrics = false;
+    config.linkMetrics = true;
 
     // --linkMetricsInterval：统计窗口长度，单位为秒，与 networkUpdateInterval 独立。
     config.linkMetricsIntervalSeconds = 1.0;

@@ -1,7 +1,7 @@
 # G3 正式场景冻结索引
 
 **G3 STATUS = PASS / FROZEN**。人工批准日期：2026-09-09。
-当前 v3 是后续 G4/N5 及论文实验的默认公共场景；敏感性实验单独派生，不覆盖此基线。
+当前 v3 输入是后续 G4/N5 及论文实验的默认公共场景；默认时延已另行批准更新为 1 ms，见下。
 G4 STATUS = NOT STARTED；N5 STATUS = NOT STARTED。
 
 - 已审阅实现：`e37c00cbb66f05fbde2ae67d58ef4207db5990b2`。
@@ -10,7 +10,22 @@ G4 STATUS = NOT STARTED；N5 STATUS = NOT STARTED。
 - 冻结分支：`feature/n4c-g3-hotspot-fault-calibration`；尚未合入main、未运行阶段CI。
 - 详细验收及来源核对：[G3主报告](G3-hotspot-fault-calibration.md#g3-final-freeze)。
 
-## 正式输入与参数
+## 已批准的默认时延更新：1 ms
+
+2026-09-09 完成同输入、seed=1/run=11 的 none/generate 配对对照后，人工接受
+fixed 单向时延由 8 ms 调整为 **1 ms**。平台 `para.cc` 和 N4C runner 默认值同步；
+任务、算力、轨道、F1/F2 参数及 F3 节点/时刻不变。原 `n4c-g3-frozen` 标签及下文
+8 ms 参考证据不覆盖；复现旧轮次时显式指定 `--fixedDelay=0.008`，wrapper 使用
+`--fixed-delay-seconds=0.008`。其他默认参数与完整场景入口的统一不包含在本次时延改动中。
+
+1 ms 证据保存在 `output/n4c-g3-delay-1ms-20260909/`：none 800/800 完成；generate
+717 完成/83 失败，受害任务 ID 不变，F1/F2/F3 START 仍为 84/2/1。零丢包、无截断、
+账本归零，3338 条概率记录四项最大误差均 0。已明确接受 task456 的 F1 从 791 s
+提前到 789 s、故障时完成度 72.12%→30.15%、q_comp 64.06%→47.46%；F3 task120
+完成度变为 70.901215%。这不是逐事件完全相同或多 seed 统计等价性声明。
+完整差异见该目录的 `README.md`、`delay-comparison.json` 和 `fault-11-paired-fault-victims.csv`。
+
+## 正式输入与原 8 ms 冻结参数
 
 候选名保留为 `C800-TruncNormal-v3`，不因冻结而重新生成任务或改名。
 以下五份文件均位于
@@ -43,7 +58,7 @@ G4 STATUS = NOT STARTED；N5 STATUS = NOT STARTED。
 - F2保持原SAA参数、SEU强度0.002859196111093899/s、映射概率0.5、恢复8s。
 - F3 node62，1027.055770726s永久失效；参考受害task120、207,142,024 B、完成70.0000644%。
 
-## 固定参考结果与证据边界
+## 原 8 ms 固定参考结果与证据边界
 
 本地证据根目录：`output/n4c-g3-truncnormal-v3-20260909/`，仍由gitignore排除，未随tag上传。
 必须保留`none/`、`fault-11/`及审阅所引用的原始账本，清理前另行明确归档位置。
