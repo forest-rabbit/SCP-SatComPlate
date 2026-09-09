@@ -43,7 +43,7 @@ GetDefaultFaultParameters()
     parameters.f1.temperature.coolingFromCriticalToBaseSeconds = 4.0;
 
     // riskC 到 criticalC 区间内的参考 1 秒概率曲线 beta；越小则中温段概率越高。
-    parameters.f1.temperature.growthFactor = 4.0;
+    parameters.f1.temperature.growthFactor = 3.0;
 
     // 是否把能源压力作为 F1 风险的小权重修正。
     parameters.f1.energy.enabled = true;

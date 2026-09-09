@@ -109,7 +109,7 @@ pT = 1                                          T >= 30
 pF1_1s = min(1, pT * (1 + 0.1*energyPressure))
 ```
 
-能源项仅乘性修正，不能在低温时独立制造故障。beta 在同一温度下越小，概率越高；
+能源项仅乘性修正，不能在低温时独立制造故障。当前 beta=3；同一温度下 beta 越小，概率越高；
 候选/冻结结果见 [G3 阶段证据](../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
 可用 `--faultF1Beta` 临时覆盖，其他参数仍集中在 [fault-para.cc](fault-para.cc)。
 若改变检查周期，则用 `q(dt)=1-(1-pF1_1s)^dt` 换算抽样概率；实际状态更新 dt 和

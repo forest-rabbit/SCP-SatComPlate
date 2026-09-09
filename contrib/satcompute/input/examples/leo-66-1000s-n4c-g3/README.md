@@ -22,5 +22,6 @@ F3 计划仅供离线场景和故障调度器，不能作为未来在线算法�
 [G3 阶段证据](../../../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
 这是 no-backup 输入，不包含 checkpoint、接管、任务复活或 N5 算法。
 
-本轮按 `--faultF1Beta`（runner 的 `--f1-beta`）测试/冻结 beta，具体值见上述报告。
+本轮冻结 beta=3，也是当前 fault-para.cc 默认值；可用 `--faultF1Beta`
+（runner 的 `--f1-beta`）显式记录实验值。候选比较与限制见上述报告。
 日常运行无需 `--audit`；仅概率/温度/原生位置核验时打开，输出目录必须是新目录。

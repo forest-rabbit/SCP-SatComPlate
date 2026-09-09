@@ -63,7 +63,7 @@ CheckDefaults()
               parameters.f1.temperature.heatingToCriticalSeconds == 30.0 &&
               parameters.f1.temperature.coolingFromCriticalToBaseSeconds == 4.0 &&
               parameters.f1.energy.initialDod == 0.25 &&
-              parameters.f1.temperature.growthFactor == 4.0,
+              parameters.f1.temperature.growthFactor == 3.0,
           "F1 defaults differ");
     Check(!parameters.f2.enabled &&
               parameters.f2.longitudeMinDegrees == -90.0 &&

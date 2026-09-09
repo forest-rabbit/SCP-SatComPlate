@@ -6,6 +6,8 @@
 #include "ns3/fault-para.h"
 #include "ns3/fault-parameter-validator.h"
 #include "ns3/f1-self-state-fault-model.h"
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -37,18 +39,26 @@ int main(int argc, char* argv[])
             ValidateFaultParameters(parameters);
             const F1SelfStateFaultModel model(parameters.f1);
             auto state = model.CreateInitialSnapshot();
-            for (int i = 0; i <= 120; ++i)
+            const double heating = parameters.f1.temperature.heatingToCriticalSeconds;
+            double previous = 0;
+            for (int i = 0; i <= static_cast<int>(std::ceil(heating / .25)); ++i)
             {
-                if (i) model.Update(state, true, .25);
-                csv << beta << ",heating," << i * .25 << ',' << state.temperatureC << ','
+                const double elapsed = std::min(i * .25, heating);
+                if (i) model.Update(state, true, elapsed - previous);
+                previous = elapsed;
+                csv << beta << ",heating," << elapsed << ',' << state.temperatureC << ','
                     << state.stepFailureProbability << ','
                     << model.GetRecoveryDurationSeconds(state.temperatureC) << '\n';
             }
             state.temperatureC = parameters.f1.temperature.criticalC;
-            for (int i = 1; i <= 16; ++i)
+            const double cooling = parameters.f1.temperature.coolingFromCriticalToBaseSeconds;
+            previous = 0;
+            for (int i = 1; i <= static_cast<int>(std::ceil(cooling / .25)); ++i)
             {
-                model.Update(state, false, .25);
-                csv << beta << ",cooling," << i * .25 << ',' << state.temperatureC << ','
+                const double elapsed = std::min(i * .25, cooling);
+                model.Update(state, false, elapsed - previous);
+                previous = elapsed;
+                csv << beta << ",cooling," << elapsed << ',' << state.temperatureC << ','
                     << state.stepFailureProbability << ','
                     << model.GetRecoveryDurationSeconds(state.temperatureC) << '\n';
             }
@@ -56,7 +66,8 @@ int main(int argc, char* argv[])
         const F1SelfStateFaultModel reference(GetDefaultFaultParameters().f1);
         const nlohmann::json summary = {
             {"scope", "pure reference; C800 pilot determines the final beta"},
-            {"heating_to_critical_s", 30}, {"cooling_from_critical_to_base_s", 4},
+            {"heating_to_critical_s", parameters.f1.temperature.heatingToCriticalSeconds},
+            {"cooling_from_critical_to_base_s", parameters.f1.temperature.coolingFromCriticalToBaseSeconds},
             {"derived_heating_tau_s", reference.GetHeatingTauSeconds()},
             {"derived_cooling_rate_c_per_s", reference.GetCoolingRate()},
             {"beta_candidates", {3, 4, 5, 6}}, {"reference_probability_interval_s", 1}};
