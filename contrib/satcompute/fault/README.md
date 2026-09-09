@@ -196,9 +196,9 @@ kappa_F2 = 0.0014295980555469494 s^-1
 
 | 星座配置 | `orbitStartOffset` | 对应轨道窗口 | 加权暴露量 | 1000 秒解析期望故障数 |
 |---|---:|---:|---:|---:|
-| `synthetic-66.csv` | 302s | 302--1302s | 1398.9946 | 2.0000 |
-| `synthetic-351.csv` | 4704s | 4704--5704s | 7150.5901 | 10.2225 |
-| `synthetic-720.csv` | 3478s | 3478--4478s | 14463.6294 | 20.6772 |
+| `leo-66.csv` | 302s | 302--1302s | 1398.9946 | 2.0000 |
+| `leo-351.csv` | 4704s | 4704--5704s | 7150.5901 | 10.2225 |
+| `leo-720.csv` | 3478s | 3478--4478s | 14463.6294 | 20.6772 |
 
 `orbitStartOffset` 直接把仿真 `t=0` 映射到相应轨道 epoch，不会先空跑几千秒。
 351/720 星若也分别反调到平均 2 次，会破坏规模效应，因此正式实验必须继续使用表中
@@ -304,9 +304,37 @@ satellite START 同时关闭整星、通信和计算，在精确时刻更新有�
 立即重算 IPv4。恢复会读取当时的实时轨道位置，只恢复仍满足距离门限的固定候选；
 永久故障则没有 RECOVERY。
 
-完整 JSON 合同见 [`input/fault/README.md`](../input/fault/README.md)，运行指标见
+完整 JSON 合同见下文，运行指标见
 [`metrics/README.md`](../metrics/README.md)，可执行闭环见
-[`66 星 F1 示例`](../input/examples/leo-66-120s-f1/README.md)与
-[`66 星 F2 示例`](../input/examples/leo-66-1000s-f2/README.md)；不需要任务输入的
+[`66 星 F1 示例`](../tests/fixtures/fault/f1/README.md)与
+[`66 星 F2 示例`](../tests/fixtures/fault/f2/README.md)；不需要任务输入的
 F3 fixed-K 流程见
-[`66 星 F3 示例`](../input/examples/leo-66-1000s-f3/README.md)。
+[`66 星 F3 示例`](../tests/fixtures/fault/f3/README.md)。
+
+## 故障事件 JSON 输出合同
+
+FaultTrace 是 generate 的输出，不是生产回放输入。none 模式的 faultTrace 必须为空；
+generate 未指定路径时写入 outputDir/fault-trace.json。正式场景同时启用 F1/F2/F3。
+F1/F2 按独立随机流判断，同刻命中合为一次 compute START；永久 F3 同刻优先。
+临时停机保留 QUEUED，恢复不复活 FAILED，停机期间不新增 F1/F2 抽样。
+
+v2 容器只记录实际 START，RECOVERY 从 start+duration 派生；没有旧 NOTICE/risk-only 字段。
+F1 恢复按 START 温度计算，F2 固定 8 s，同刻命中取最大值；F3 可截短 compute 区间。
+每条记录的 13 个字段如下，独立审计 CSV 不属于 FaultTrace：
+
+| 字段 | 合同 |
+|---|---|
+| fault_id / node_id | 正唯一故障 ID / 稳定卫星 ID |
+| fault_type | compute 或 satellite |
+| fault_occurred | 始终 true |
+| start_time_ns | 实际 START 绝对 ns，非负且早于仿真终点 |
+| failure_probability | START 当次抽样的 q_comp；F3 为 null |
+| duration_ns | 正 compute 停机 ns；永久 F3 为 null |
+| p_f1 / p_f2 | START 当次的两个来源概率；F3 为 null |
+| f1_occurred / f2_occurred | 同次独立抽样的命中标志；F3 均 false |
+| temperature_c | F1 启用时的 START 温度，否则 null |
+| continuous_busy_s | F1 启用时已连续 busy 的秒数，否则 null |
+
+同一节点实际故障区间不重叠，可首尾相接。writer 按 start_time_ns、node_id、fault_id
+排序。相同输入、参数和 seed/run 的重复 generate 应逐字节一致。独立概率审计 CSV
+不是 Fault Trace，也不是平台输入。

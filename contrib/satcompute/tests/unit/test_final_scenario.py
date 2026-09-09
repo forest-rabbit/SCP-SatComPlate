@@ -1,5 +1,6 @@
 """Frozen scene integrity, deterministic generator and final-only runner contracts."""
 from collections import Counter
+import csv
 import contextlib
 import io
 import json
@@ -18,14 +19,14 @@ GENERATION = MODULE / "tools/generation"
 sys.path.insert(0, str(GENERATION))
 GEN = runpy.run_path(str(GENERATION / "generate-task-workload.py"))
 RUN = runpy.run_path(str(MODULE / "tests/integration/regression/run-final-scenario.py"))
-SCENE = MODULE / "input/examples/leo-66-1300s-n4c-g3-truncnormal-v3"
+SCENE = MODULE / "input/experiments/leo-66"
 
 
 class FinalScenarioTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tasks = json.loads((SCENE / "task-trace.json").read_text())["tasks"]
-        cls.profile = json.loads((SCENE / "compute-profile.json").read_text())["compute_nodes"]
+        cls.tasks = json.loads((SCENE / "workload/task-trace.json").read_text())["tasks"]
+        cls.profile = json.loads((SCENE / "compute/compute-profile.json").read_text())["compute_nodes"]
         cls.attributes = GEN["attributes"]()
 
     def test_frozen_counts_exact_budgets_and_window(self):
@@ -39,10 +40,17 @@ class FinalScenarioTests(unittest.TestCase):
         self.assertEqual(len(self.profile), 66)
         self.assertEqual({p["node_id"] for p in self.profile}, set(range(66)))
         self.assertEqual({p["compute_rate_work_units_per_second"] for p in self.profile}, {100000})
-        manifest = json.loads((SCENE / "f3-manifest.json").read_text())
+        with (SCENE / "topology/constellation.csv").open() as stream:
+            shells = list(csv.DictReader(line for line in stream if line.strip() and not line.startswith("#")))
+        self.assertEqual(len(shells), 1)
+        self.assertEqual(tuple(float(shells[0][key]) for key in
+                         ("altitudeKm", "inclinationDegrees", "numberOfPlanes",
+                          "numberOfSatellitesPerPlane", "phasingFactor", "raanSpanDeg")),
+                         (780, 86.4, 6, 11, 1, 180))
+        manifest = json.loads((SCENE / "fault/f3-manifest.json").read_text())
         self.assertEqual((manifest["simulation_duration_s"], manifest["f3"]["node_id"],
                           manifest["f3"]["time_ns"]), (1300, 62, 1027055770726))
-        placement = json.loads((SCENE / "placement-manifest.json").read_text())
+        placement = json.loads((SCENE / "placement/placement-manifest.json").read_text())
         self.assertEqual((placement["hotspot_weight"], placement["regional_candidate_limit"]), (64, 1))
         self.assertEqual(placement["arrival_window_s"], [1, 1050])
 
@@ -60,7 +68,7 @@ class FinalScenarioTests(unittest.TestCase):
         self.assertEqual(len(ordinary), 705)
         self.assertTrue(all(50_000_000 <= a["input_bytes"] < 1_000_000_000 for a in ordinary))
         self.assertEqual(Counter(a["input_bytes"] for a in anchors), {500_000_000: 10, 1_000_000_000: 5})
-        expected = json.loads((SCENE / "workload-summary.json").read_text())["truncated_normal"]["fixed_tail_task_ids"]
+        expected = json.loads((SCENE / "workload/workload-summary.json").read_text())["truncated_normal"]["fixed_tail_task_ids"]
         self.assertEqual({str(s): [a["task_id"] for a in anchors if a["input_bytes"] == s]
                           for s in (500_000_000, 1_000_000_000)}, expected)
 
@@ -90,13 +98,13 @@ class FinalScenarioTests(unittest.TestCase):
                 trace, summary = (Path(temporary) / f"{name}-{index}.json" for name in ("trace", "summary"))
                 subprocess.run([sys.executable, str(GENERATION / "generate-task-workload.py"),
                     f"--nodes-file={slices / 'nodes_0s.json'}", f"--position-slices={slices}",
-                    f"--compute-profile={SCENE / 'compute-profile.json'}", f"--output-task-trace={trace}",
+                    f"--compute-profile={SCENE / 'compute/compute-profile.json'}", f"--output-task-trace={trace}",
                     f"--output-workload-summary={summary}"], check=True, capture_output=True)
                 results.append((trace.read_bytes(), summary.read_bytes()))
             self.assertEqual(results[0], results[1])
-            self.assertEqual(results[0][0], (SCENE / "task-trace.json").read_bytes())
+            self.assertEqual(results[0][0], (SCENE / "workload/task-trace.json").read_bytes())
             current = json.loads(results[0][1])
-            frozen = json.loads((SCENE / "placement-manifest.json").read_text())
+            frozen = json.loads((SCENE / "placement/placement-manifest.json").read_text())
             self.assertEqual(current["placement"]["placements"], frozen["placements"])
 
     def test_generator_rejects_existing_output_and_obsolete_cli(self):
@@ -119,6 +127,10 @@ class FinalRunnerTests(unittest.TestCase):
     def test_fixed_defaults_and_modes_without_running_simulation(self):
         defaults = RUN["arguments"](Path("unused"))
         for flag in ("--simulationDuration=1300", "--fixedDelay=0.001", "--randomSeed=1", "--randomRun=11",
+                     "--islBandwidthBps=10000000000", "--computeDeadlineFactor=1.3",
+                     f"--constellationConfig={RUN['SCENE']}/topology/constellation.csv",
+                     f"--computeProfile={RUN['SCENE']}/compute/compute-profile.json",
+                     f"--taskTrace={RUN['SCENE']}/workload/task-trace.json",
                      "--faultF3Node=62", "--faultF3Time=1027.055770726", "--faultProbabilityAudit=0",
                      "--compfrr-shadow=0", "--taskCompletionPolicy=report"):
             self.assertIn(flag, defaults)

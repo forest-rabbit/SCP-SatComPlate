@@ -5,7 +5,7 @@
 Capacity-aware 路由；冻结 `orbitStartOffset=302`、`randomSeed=1`、
 `randomRun=16`，同时启用 F1、F2 和 F3。
 
-任务由统一生成器的 `n4b-joint-validation` 档产生，共 100 个：
+本目录保留的固定任务共 100 个：
 
 - 节点 0、11、22 各有 6 个连续 10 秒任务和 1 个恢复后 2 秒任务；
 - 节点 33 有 5 个连续 10 秒任务，形成临界边缘风险；
@@ -16,36 +16,12 @@ Capacity-aware 路由；冻结 `orbitStartOffset=302`、`randomSeed=1`、
 
 所有任务仅使用 4096-byte 输入和 2048-byte 输出，使验收重点保持在故障、任务、
 transfer、路由和概率审计的联合生命周期，而不是网络拥塞。
-`task-trace.json` 是正式平台输入；`workload-summary.json` 只记录可复查的生成角色和
+`task-trace.json` 是该测试的平台输入；`workload-summary.json` 只记录可复查的生成角色和
 冻结条件，不是第二份平台配置。
 
-## 重新生成输入
+## 固定测试输入
 
-先导出选定轨道窗口的节点切片：
-
-```bash
-./ns3 run "satcompute \
-  --simulationDuration=1 \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
-  --orbitStartOffset=302 \
-  --topologyOnly=1 \
-  --topologySliceInterval=1 \
-  --outputDir=/tmp/satcompute-n4b-joint-topology"
-```
-
-再生成确定性任务文件：
-
-```bash
-python3 contrib/satcompute/tools/generation/generate-task-workload.py \
-  --profile=n4b-joint-validation \
-  --nodes-file=/tmp/satcompute-n4b-joint-topology/topology/nodes_0s.json \
-  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
-  --seed=n4b-joint-66 \
-  --output-task-trace=contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/task-trace.json \
-  --output-workload-summary=contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/workload-summary.json
-```
-
-相同节点集合、算力文件和 seed 必须生成逐字节相同的两个 JSON。
+任务和生成角色摘要由 Git 保留，不再维护旧 profile 生成入口。该 fixture 用于回归，不是正式论文实验。
 
 ## 四轮联合验收
 
@@ -80,7 +56,7 @@ F1/F2 不重算路由，F3 引起一次即时重算；末端所有资源账本�
 
 审计覆盖所有 RUNNING 任务，模型与预测容差 1e-12。正常运行不生成或保留
 概率/状态审计文件；具体断言由 `tests/integration/regression/run-n4b-joint-acceptance.sh`
-维护，当前新模型结果见 [G3 冻结索引](../../../../../docs/n4c/reviews/G3-final-freeze.md)。
+维护，当前新模型结果见 [G3 冻结索引](../../../../../../docs/n4c/reviews/G3-final-freeze.md)。
 
 在仓库根目录构建后，可单独复现正式验收：
 

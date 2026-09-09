@@ -45,14 +45,23 @@ TN(240,130;50,1000) 十进制 MB；另有固定 ID 的 10×500 MB、5×1 GB。
 ```bash
 .venv/bin/python contrib/satcompute/tools/generation/generate-task-workload.py \
   --nodes-file=orbit/topology/nodes_0s.json --position-slices=orbit/topology \
-  --compute-profile=contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/compute-profile.json \
+  --compute-profile=contrib/satcompute/input/experiments/leo-66/compute/compute-profile.json \
   --output-task-trace=output/final-generated/task-trace.json \
   --output-workload-summary=output/final-generated/workload-summary.json
 ```
 
-切片由平台 topology-only 模式统一导出，不用 Python 重新实现轨道；
-首次导出可使用 `--topologyOnly=1 --simulationDuration=1051 --networkUpdateInterval=1`，
-其余星座、起始相位沿用正式默认。冻结清理阶段仅复用了已有切片，未重新运行该导出。
+切片由平台 topology-only 模式统一导出，不用 Python 重新实现轨道。首次需要时可运行：
+
+```bash
+./ns3 run "satcompute --topologyOnly=1 --simulationDuration=1051 \
+  --constellationConfig=contrib/satcompute/input/experiments/leo-66/topology/constellation.csv \
+  --orbitStartOffset=0 --networkUpdateInterval=1 --topologySliceInterval=1 \
+  --computeProfile=none --taskTrace=none --faultMode=none --linkMetrics=0 \
+  --outputDir=output/leo-66-orbit"
+```
+
+然后把生成命令的 `orbit/topology` 替换为 `output/leo-66-orbit/topology`。
+N4 收尾只复用已有切片，不重新执行该导出，位置切片不进入正式 input 目录。
 新摘要使用职责明确的名称；已提交旧摘要/manifest 是原始来源记录，不为清理改写。
 相同输入双次生成以及与正式 TaskTrace 的逐字节比较，见[测试说明](../../tests/README.md)。
 

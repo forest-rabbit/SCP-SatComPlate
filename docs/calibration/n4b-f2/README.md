@@ -104,7 +104,7 @@ lambda_SEU_max = kappa_F2 / rho_SF
 
 ```bash
 ./ns3 run "satcompute-f2-exposure-calibration \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --constellationConfig=contrib/satcompute/tests/fixtures/topology/leo-66.csv \
   --calibrationDuration=7200 \
   --windowDuration=1000 \
   --targetMeanFaultCount=2 \
@@ -115,14 +115,14 @@ lambda_SEU_max = kappa_F2 / rho_SF
 
 ```bash
 ./ns3 run "satcompute-f2-exposure-calibration \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-351.csv \
+  --constellationConfig=contrib/satcompute/tools/validation/f2/fixtures/topology/leo-351.csv \
   --calibrationDuration=7200 \
   --windowDuration=1000 \
   --referenceMaximumFailureIntensity=0.0014295980555469494 \
   --outputDir=/tmp/satcompute-f2-351"
 
 ./ns3 run "satcompute-f2-exposure-calibration \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-720.csv \
+  --constellationConfig=contrib/satcompute/tools/validation/f2/fixtures/topology/leo-720.csv \
   --calibrationDuration=7200 \
   --windowDuration=1000 \
   --referenceMaximumFailureIntensity=0.0014295980555469494 \
@@ -248,7 +248,7 @@ SAA 矩形外的理论风险严格为 0。该视窗裁剪只改变论文图的�
 
 ```bash
 ./ns3 run "satcompute-f2-spatial-validation \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --constellationConfig=contrib/satcompute/tests/fixtures/topology/leo-66.csv \
   --duration=1000000 \
   --orbitStartOffset=302 \
   --longitudeBin=2.5 \

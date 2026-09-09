@@ -27,7 +27,7 @@ GetDefaultSatComputeConfig()
 
     // --constellationConfig：ns-3.48 LeoOrbitalShell 六列 CSV。
     config.constellationConfig =
-        "contrib/satcompute/input/topology/constellations/synthetic-66.csv";
+        "contrib/satcompute/input/experiments/leo-66/topology/constellation.csv";
 
     // --orbitStartOffset：仿真 0 秒对应的轨道 epoch 偏移，单位为秒。
     config.orbitStartOffsetSeconds = 0.0;
@@ -77,14 +77,14 @@ GetDefaultSatComputeConfig()
 
     // --computeProfile：每颗卫星的算力资源 JSON；必须与 taskTrace 同时提供。
     config.computeProfile =
-        "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/compute-profile.json";
+        "contrib/satcompute/input/experiments/leo-66/compute/compute-profile.json";
 
     // --computeDeadlineFactor: compute-stage deadline budget / reference service time.
     config.computeDeadlineFactor = 1.3;
 
     // --taskTrace：任务到达、输入字节、计算量和输出字节 JSON。
     config.taskTrace =
-        "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json";
+        "contrib/satcompute/input/experiments/leo-66/workload/task-trace.json";
 
     // --transferChunkMode：默认按传输大小选择 1024、8192 或 64000-byte payload。
     config.transferChunkMode = "size-aware";

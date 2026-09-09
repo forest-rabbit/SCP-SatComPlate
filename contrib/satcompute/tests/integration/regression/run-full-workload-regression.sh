@@ -41,11 +41,11 @@ if [[ "$no_workload_result" != *'"status":"completed"'* ]]; then
   exit 1
 fi
 
-example_root="contrib/satcompute/input/examples/leo-66-100s-20tasks"
-example_profile="contrib/satcompute/input/topology/resources/workload/\
-xw-66sat-static-2g-compute-profile.json"
+example_root="contrib/satcompute/tests/fixtures/task/20tasks"
+example_profile="contrib/satcompute/tests/fixtures/task/\
+compute-profile-22.json"
 example_arguments="--simulationDuration=100 \
---constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+--constellationConfig=contrib/satcompute/tests/fixtures/topology/leo-66.csv \
 --delayMode=fixed --fixedDelay=0.008 --networkUpdateInterval=20 \
 --routingMode=global-capacity-aware-hrw \
 --computeProfile=$example_profile --taskTrace=$example_root/task-trace.json"

@@ -4,12 +4,12 @@ import json
 from pathlib import Path
 import unittest
 
-EXAMPLES = Path(__file__).resolve().parents[2] / "input/examples"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures/fault"
 
 
 class FaultWorkloadFixtures(unittest.TestCase):
     def read(self, name, count):
-        directory = EXAMPLES / name
+        directory = FIXTURES / name
         tasks = json.loads((directory / "task-trace.json").read_text())["tasks"]
         summary = json.loads((directory / "workload-summary.json").read_text())
         self.assertEqual(len(tasks), count)
@@ -19,20 +19,20 @@ class FaultWorkloadFixtures(unittest.TestCase):
         return tasks, summary
 
     def test_f1_roles(self):
-        tasks, summary = self.read("leo-66-120s-f1", 20)
+        tasks, summary = self.read("f1", 20)
         self.assertEqual(Counter(t["compute_node_id"] for t in tasks), {0: 5, 11: 5, 22: 5, 33: 3, 44: 1, 55: 1})
         self.assertEqual(summary["post_recovery_task_ids"], [5, 10, 15])
         self.assertEqual(summary["risk_only_task_ids"], [16, 17, 18])
 
     def test_f2_roles(self):
-        _, summary = self.read("leo-66-1000s-f2", 8)
+        _, summary = self.read("f2", 8)
         self.assertEqual(summary["orbit_start_offset_s"], 302)
         self.assertEqual(summary["long_task_compute_node_ids"], [17, 16])
         self.assertEqual(summary["follow_up_task_ids"], [2, 4])
         self.assertEqual(summary["control_task_ids"], [7, 8])
 
     def test_joint_roles(self):
-        tasks, summary = self.read("leo-66-1000s-n4b-joint", 100)
+        tasks, summary = self.read("joint", 100)
         counts = Counter(t["compute_node_id"] for t in tasks)
         self.assertEqual({n: counts[n] for n in (0, 11, 22, 33, 44)}, {0: 7, 11: 7, 22: 7, 33: 5, 44: 4})
         self.assertEqual(summary["post_recovery_task_ids"], [7, 14, 21])

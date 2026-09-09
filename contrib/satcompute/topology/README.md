@@ -26,8 +26,7 @@
 
 ## 星座与稳定身份
 
-星座输入只包含一个 shell，格式见
-[`input/topology/constellations/`](../input/topology/constellations/README.md)。若轨道面
+星座输入只包含一个 shell，字段见下文的星座 CSV 合同。若轨道面
 数量为 `P`、每面卫星数为 `S`，稳定 ID 为：
 
 ```text
@@ -125,9 +124,46 @@ service address 用于任务端点和 host route。当前拓扑模块只提供 I
 
 ## 输入、输出与测试
 
-- 星座与算力输入见 [`input/topology/`](../input/topology/README.md)；
+- 正式星座与算力输入见 [LEO-66](../input/experiments/leo-66/README.md)；
 - topology-only JSON 见 [`export/README.md`](export/README.md)；
 - `tests/unit/online-orbit-foundation-test.cc` 检查原生位置、轨道起始偏移和固定候选；
 - `tests/unit/online-topology-controller-test.cc` 检查门控、时延、tick 与路由重算；
 - `tests/unit/satellite-fault-execution-test.cc` 检查故障覆盖、即时路由和实时距离恢复；
 - `tests/integration/smoke/run-topology-smoke.sh` 检查切片合同和重复运行确定性。
+
+## 星座 CSV 合同
+
+星座输入只保存“这是什么星座”，不保存“这次实验怎么运行”。当前平台一次只接受
+一个 ns-3.48 `LeoOrbitalShell`。解析器只允许 UTF-8、空行、行首 `#` 注释、零或
+一行精确表头，以及恰好一行六列数值；任何其他行都会带路径和行号拒绝。
+
+CSV 固定为六列：
+
+| 列 | 单位/类型 | 约束 |
+|---|---|---|
+| `altitudeKm` | km，浮点 | 有限且 `> 0` |
+| `inclinationDegrees` | 度，浮点 | `[0, 180)` |
+| `numberOfPlanes` | 正整数 | `> 0` |
+| `numberOfSatellitesPerPlane` | 正整数 | `> 0` |
+| `phasingFactor` | 整数 | `[0, numberOfPlanes-1]` |
+| `raanSpanDeg` | 度，浮点 | `(0, 360]` |
+
+总卫星数不能超过 99999。`raanSpanDeg=180` 可表示 Walker Star，`360` 可表示
+Walker Delta；实际位置由 ns-3.48 原生 helper 与 mobility 计算。
+
+`maxIslDistance` 还必须满足 80 km 最低射线高度。校验使用与 ns-3.48
+`LeoCircularOrbitMobilityModel` 相同的 `6,371,000 m` 球形地球半径：
+
+```text
+R_orbit = R_earth + altitude
+R_clearance = R_earth + 80000 m
+maxIslDistance <= floor(2 * sqrt(R_orbit^2 - R_clearance^2))
+```
+
+因此默认 780 km shell 的上限为 `6,171,353 m`。该值与旧版 Hypatia/WGS72
+半径得到的 `6,174,589 m` 不同，当前主线以 ns-3.48 的实际坐标几何为准。
+
+
+正式 shell 位于 `input/experiments/leo-66/topology/constellation.csv`。
+小型/66星测试使用 tests/fixtures；351/720星 F2 标定使用 tools/validation/f2/fixtures，
+均不作为第二份正式实验。

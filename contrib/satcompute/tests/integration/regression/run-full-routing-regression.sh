@@ -15,7 +15,7 @@ run_platform() {
   ./ns3 run --no-build "satcompute --faultMode=none --computeProfile=none --taskTrace=none --linkMetrics=0 --taskCompletionPolicy=strict --outputDir=$output_directory $*"
 }
 
-constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.csv"
+constellation_66="contrib/satcompute/tests/fixtures/topology/leo-66.csv"
 constellation_16="contrib/satcompute/tests/fixtures/constellation/connected-16.csv"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 

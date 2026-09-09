@@ -13,9 +13,8 @@ ComputeProfile 与 TaskTrace，不根据网络拓扑生成任务，也不执行�
 | `compute-service.h/.cc` | 每颗计算卫星上的单服务台、非抢占 FCFS queue |
 | `task-coordinator.h/.cc` | 调度任务到达，连接输入传输、计算和结果传输回调 |
 
-JSON 的完整字段合同和正式输入文件见
-[`input/topology/`](../input/topology/README.md) 与
-[`input/traffic/`](../input/traffic/README.md)。两条 CLI 路径必须成对提供：
+正式输入见 [LEO-66](../input/experiments/leo-66/README.md)，字段合同见下文。
+两条 CLI 路径必须成对提供：
 
 ```bash
 --computeProfile=<compute-profile.json> --taskTrace=<task-trace.json>
@@ -152,3 +151,70 @@ receiver 完整接收。仿真结束时：
 - `metrics/README.md`：`task-events.csv`、`task-summary.csv` 与
   `compute-node-summary.csv`；其中 task summary 明确记录 `final_state`、
   `failure_reason` 和 `failure_time_ns`。
+
+## 输入 JSON 合同
+
+### ComputeProfile
+
+ComputeProfile 根对象只允许 `compute_nodes`：
+
+```json
+{
+  "compute_nodes": [
+    {
+      "node_id": 3,
+      "compute_rate_work_units_per_second": 1500000
+    }
+  ]
+}
+```
+
+| 字段 | 类型 | 约束 |
+|---|---|---|
+| `node_id` | `uint32` | 必须属于当前星座且在文件中唯一 |
+| `compute_rate_work_units_per_second` | `uint64` | 必须大于 0 |
+
+数组必须非空，不接受未知字段，也不包含 schema/version/hash。reader 会按 `node_id`
+排序，因此数组原始顺序不影响运行。
+
+
+### TaskTrace
+
+根对象只允许非空数组 `tasks`：
+
+```json
+{
+  "tasks": [
+    {
+      "task_id": 1,
+      "source_node_id": 0,
+      "compute_node_id": 3,
+      "result_node_id": 0,
+      "input_bytes": 4096,
+      "output_bytes": 2050,
+      "compute_work_units": 1000000,
+      "arrival_time_ns": 100000000
+    }
+  ]
+}
+```
+
+| 字段 | 类型 | 约束 |
+|---|---|---|
+| `task_id` | `uint64` | 唯一，范围 `1..UINT64_MAX/2` |
+| `source_node_id` | `uint32` | 当前星座中的卫星，且不同于计算节点 |
+| `compute_node_id` | `uint32` | 当前星座且存在于 ComputeProfile，且不同于结果节点 |
+| `result_node_id` | `uint32` | 当前星座中的卫星；允许与源节点相同 |
+| `input_bytes` | `uint64` | 必须大于 0 |
+| `output_bytes` | `uint64` | 必须大于 0；计算完成后实际发送的结果大小 |
+| `compute_work_units` | `uint64` | 必须大于 0 |
+| `arrival_time_ns` | 非负整数 | 必须严格早于 `simulationDuration` |
+| `task_profile` | 可选字符串 | `dense-image`、`sparse-inference`、`compression`、`llm`；缺省为内部 `UNSPECIFIED`，不接受显式 null/未知类别 |
+
+TaskTrace 是精确事件数据，因此到达时刻直接使用整数纳秒；平台级仿真时长和周期仍
+以秒传入 CLI。文件不接受未知字段，也不包含 schema/version/hash。reader 会按
+`task_id` 排序，数组顺序不影响运行。
+
+
+正式 800 任务全部包含 task_profile；旧功能 fixture 可缺省，表示 UNSPECIFIED。
+首次计算才建立的 deadline 不写入 TaskTrace。测试数据见[fixture 说明](../tests/fixtures/README.md)。

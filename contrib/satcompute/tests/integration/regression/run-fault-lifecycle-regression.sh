@@ -19,9 +19,9 @@ constellation="contrib/satcompute/tests/fixtures/constellation/connected-16.csv"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 profile="$task_inputs/compute-profile-single.json"
 fault_task="$task_inputs/task-fault-running.json"
-f1_example="contrib/satcompute/input/examples/leo-66-120s-f1"
-f2_example="contrib/satcompute/input/examples/leo-66-1000s-f2"
-all_compute_profile="contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json"
+f1_example="contrib/satcompute/tests/fixtures/fault/f1"
+f2_example="contrib/satcompute/tests/fixtures/fault/f2"
+all_compute_profile="contrib/satcompute/tests/fixtures/task/compute-profile-66.json"
 common="--simulationDuration=1 --constellationConfig=$constellation \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
@@ -80,11 +80,11 @@ repeat_f1_sampled_result="$(run_platform \
 --faultTrace=$regression_output/repeat-f1-sampled/fault-trace.json")"
 f1_66_trace="$regression_output/generate-f1-66/fault-trace.json"
 f1_66_common="--simulationDuration=120 \
---constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+--constellationConfig=contrib/satcompute/tests/fixtures/topology/leo-66.csv \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.008 \
 --networkUpdateInterval=20 --islBandwidthBps=2000000000 \
 --routingMode=global-capacity-aware-hrw \
---computeProfile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
+--computeProfile=contrib/satcompute/tests/fixtures/task/compute-profile-66.json \
 --taskTrace=$f1_example/task-trace.json --taskCompletionPolicy=report \
 $probability_audit"
 generate_f1_66_result="$(run_platform \
@@ -97,7 +97,7 @@ repeat_f1_66_result="$(run_platform \
 --faultTrace=$regression_output/repeat-f1-66/fault-trace.json")"
 f2_trace="$regression_output/generate-f2-66/fault-trace.json"
 f2_common="--simulationDuration=1000 --randomSeed=1 --randomRun=16 \
---constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+--constellationConfig=contrib/satcompute/tests/fixtures/topology/leo-66.csv \
 --orbitStartOffset=302 --maxIslDistance=6171353 --delayMode=fixed \
 --fixedDelay=0.008 --networkUpdateInterval=20 --islBandwidthBps=2000000000 \
 --routingMode=global-capacity-aware-hrw --computeProfile=$all_compute_profile \
@@ -132,7 +132,7 @@ repeat_combined_result="$(run_platform \
 --faultEnableF3=0 --faultTrace=$regression_output/repeat-combined-66/fault-trace.json")"
 f3_trace="$regression_output/generate-f3-66/fault-trace.json"
 f3_common="--simulationDuration=1000 --randomSeed=1 --randomRun=1 \
---constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+--constellationConfig=contrib/satcompute/tests/fixtures/topology/leo-66.csv \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.008 \
 --networkUpdateInterval=20 --islBandwidthBps=2000000000 \
 --routingMode=global-first"

@@ -9,7 +9,8 @@
 
 ## 实验基线
 
-当前 branch：`feature/n4c-g4-shadow-decision-evaluation`，从 `n4c-g3-frozen` 开始。
+历史开发 branch：`feature/n4c-g4-shadow-decision-evaluation`，从 G3 冻结提交
+`db51fe874ae8bd9dd375325063b2ada25c742152` 开始；已通过 PR #91 合入 n4c。
 该旧标签保留原 8 ms 历史，不移动。按用户随后确认，当前运行采用 **1 ms**，唯一真实行为
 参考为 `output/n4c-g3-delay-1ms-20260909/fault-11/`，不是旧 8 ms 结果。
 
