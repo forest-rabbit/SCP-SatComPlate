@@ -44,10 +44,10 @@ void
 ValidateFaultParameters(const FaultParameters& parameters)
 {
     RequireFinite(parameters.checkIntervalSeconds, "common.check_interval_s");
-    RequireFinite(parameters.recoverableComputeDurationSeconds,
-                  "common.recoverable_compute_duration_s");
+    RequireFinite(parameters.f2.recoveryDurationSeconds,
+                  "F2.recovery_duration_s");
     if (parameters.checkIntervalSeconds <= 0.0 ||
-        parameters.recoverableComputeDurationSeconds <= 0.0)
+        parameters.f2.recoveryDurationSeconds <= 0.0)
     {
         Fail("common", "time parameters must be positive");
     }
@@ -57,8 +57,8 @@ ValidateFaultParameters(const FaultParameters& parameters)
     RequireFinite(temperature.saturationC, "F1.temperature.saturation_c");
     RequireFinite(temperature.riskC, "F1.temperature.risk_c");
     RequireFinite(temperature.criticalC, "F1.temperature.critical_c");
-    RequireFinite(temperature.heatingTauSeconds, "F1.temperature.heating_tau_s");
-    RequireFinite(temperature.coolingTauSeconds, "F1.temperature.cooling_tau_s");
+    RequireFinite(temperature.heatingToCriticalSeconds, "F1.temperature.heating_to_critical_s");
+    RequireFinite(temperature.coolingFromCriticalToBaseSeconds, "F1.temperature.cooling_from_critical_to_base_s");
     RequireFinite(temperature.growthFactor, "F1.temperature.growth_factor");
     if (!(temperature.baseC < temperature.riskC &&
           temperature.riskC < temperature.criticalC &&
@@ -67,8 +67,8 @@ ValidateFaultParameters(const FaultParameters& parameters)
         Fail("F1.temperature",
              "must satisfy base_c < risk_c < critical_c < saturation_c");
     }
-    if (temperature.heatingTauSeconds <= 0.0 ||
-        temperature.coolingTauSeconds <= 0.0 || temperature.growthFactor <= 0.0)
+    if (temperature.heatingToCriticalSeconds <= 0.0 ||
+        temperature.coolingFromCriticalToBaseSeconds <= 0.0 || temperature.growthFactor <= 0.0)
     {
         Fail("F1.temperature", "time constants and growth must be positive");
     }
@@ -89,14 +89,6 @@ ValidateFaultParameters(const FaultParameters& parameters)
     {
         Fail("F1.energy", "battery and compute power are invalid");
     }
-    RequireRange(parameters.f1.riskThreshold, 0.0, 1.0, "F1.risk_threshold");
-    RequireFinite(parameters.f1.maxFailureIntensityPerSecond,
-                  "F1.max_failure_intensity_per_s");
-    if (parameters.f1.maxFailureIntensityPerSecond < 0.0)
-    {
-        Fail("F1.max_failure_intensity_per_s", "must be non-negative");
-    }
-
     const F2FaultParameters& f2 = parameters.f2;
     RequireRange(f2.longitudeMinDegrees, -180.0, 180.0, "F2.longitude_min_deg");
     RequireRange(f2.longitudeMaxDegrees, -180.0, 180.0, "F2.longitude_max_deg");

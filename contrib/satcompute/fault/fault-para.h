@@ -18,8 +18,8 @@ struct F1TemperatureParameters
     double saturationC{}; ///< 忙碌状态热平衡温度，单位为摄氏度。
     double riskC{}; ///< 温度风险曲线起点。
     double criticalC{}; ///< 确定性保护停机温度。
-    double heatingTauSeconds{}; ///< 指数升温时间常数，单位为秒。
-    double coolingTauSeconds{}; ///< 指数降温时间常数，单位为秒。
+    double heatingToCriticalSeconds{}; ///< 从基础温度持续计算到临界温度的秒数。
+    double coolingFromCriticalToBaseSeconds{}; ///< 临界温度线性冷却到基础温度的秒数。
     double growthFactor{}; ///< 温度风险指数曲线形状参数。
 };
 
@@ -41,14 +41,13 @@ struct F1FaultParameters
     bool enabled{}; ///< 是否启用 F1 在线判定。
     F1TemperatureParameters temperature; ///< 温度参数。
     F1EnergyParameters energy; ///< 能源风险修正参数。
-    double riskThreshold{}; ///< 综合风险通知阈值。
-    double maxFailureIntensityPerSecond{}; ///< F1 每秒最大故障强度。
 };
 
 /** F2 空间辐射风险与 SEU 映射参数。 */
 struct F2FaultParameters
 {
     bool enabled{}; ///< 是否启用 F2 在线判定。
+    double recoveryDurationSeconds{}; ///< F2 独立算力停机时间，单位为秒。
     double longitudeMinDegrees{}; ///< 西侧经度边界，单位为度。
     double longitudeMaxDegrees{}; ///< 东侧经度边界，单位为度。
     double latitudeMinDegrees{}; ///< 南侧纬度边界，单位为度。
@@ -58,7 +57,7 @@ struct F2FaultParameters
     double sigmaLongitudeWestDegrees{}; ///< 热点西侧高斯经度标准差，单位为度。
     double sigmaLongitudeEastDegrees{}; ///< 热点东侧高斯经度标准差，单位为度。
     double sigmaLatitudeDegrees{}; ///< 高斯空间风险的纬度标准差，单位为度。
-    double spatialRiskThreshold{}; ///< 触发风险通知的当前空间风险阈值。
+    double spatialRiskThreshold{}; ///< 仅用于独立暴露分析的高风险分类阈值，不触发通知。
     double referenceSeuIntensityPerSecond{}; ///< 热点中心的参考 SEU 强度。
     double seuToComputeFailureProbability{}; ///< SEU 映射为计算故障的条件概率。
 };
@@ -78,7 +77,6 @@ struct F3FaultParameters
 struct FaultParameters
 {
     double checkIntervalSeconds{}; ///< F1/F2 更新与采样周期，单位为秒。
-    double recoverableComputeDurationSeconds{}; ///< F1/F2 算力停机时间，单位为秒。
     F1FaultParameters f1; ///< F1 自身状态参数。
     F2FaultParameters f2; ///< F2 辐射暴露参数。
     F3FaultParameters f3; ///< F3 碎片撞击参数。

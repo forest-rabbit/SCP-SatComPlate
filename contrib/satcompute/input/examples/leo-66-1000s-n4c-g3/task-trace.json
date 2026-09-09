@@ -50,7 +50,7 @@
       "input_bytes": 92797584,
       "output_bytes": 92797584,
       "compute_work_units": 139197,
-      "source_node_id": 57,
+      "source_node_id": 55,
       "compute_node_id": 52,
       "result_node_id": 36,
       "arrival_time_ns": 530096993117
@@ -94,7 +94,7 @@
       "input_bytes": 44420832,
       "output_bytes": 44420832,
       "compute_work_units": 66632,
-      "source_node_id": 16,
+      "source_node_id": 15,
       "compute_node_id": 12,
       "result_node_id": 54,
       "arrival_time_ns": 386222166313
@@ -237,7 +237,7 @@
       "input_bytes": 109479224,
       "output_bytes": 59390432,
       "compute_work_units": 164219,
-      "source_node_id": 43,
+      "source_node_id": 42,
       "compute_node_id": 12,
       "result_node_id": 17,
       "arrival_time_ns": 471945437896
@@ -380,7 +380,7 @@
       "input_bytes": 46088992,
       "output_bytes": 46088992,
       "compute_work_units": 69134,
-      "source_node_id": 27,
+      "source_node_id": 26,
       "compute_node_id": 20,
       "result_node_id": 53,
       "arrival_time_ns": 141601944132
@@ -512,7 +512,7 @@
       "input_bytes": 152851483,
       "output_bytes": 285689,
       "compute_work_units": 229278,
-      "source_node_id": 15,
+      "source_node_id": 14,
       "compute_node_id": 42,
       "result_node_id": 52,
       "arrival_time_ns": 77173926799
@@ -589,7 +589,7 @@
       "input_bytes": 77784104,
       "output_bytes": 77784104,
       "compute_work_units": 116677,
-      "source_node_id": 51,
+      "source_node_id": 50,
       "compute_node_id": 52,
       "result_node_id": 10,
       "arrival_time_ns": 507033169531
@@ -622,7 +622,7 @@
       "input_bytes": 106142896,
       "output_bytes": 57580537,
       "compute_work_units": 159215,
-      "source_node_id": 13,
+      "source_node_id": 0,
       "compute_node_id": 42,
       "result_node_id": 48,
       "arrival_time_ns": 159119154408
@@ -919,7 +919,7 @@
       "input_bytes": 102806568,
       "output_bytes": 55770641,
       "compute_work_units": 154210,
-      "source_node_id": 11,
+      "source_node_id": 18,
       "compute_node_id": 12,
       "result_node_id": 41,
       "arrival_time_ns": 362667131736
@@ -1029,7 +1029,7 @@
       "input_bytes": 116151879,
       "output_bytes": 217095,
       "compute_work_units": 174228,
-      "source_node_id": 36,
+      "source_node_id": 15,
       "compute_node_id": 56,
       "result_node_id": 53,
       "arrival_time_ns": 82120511495
@@ -1084,7 +1084,7 @@
       "input_bytes": 377,
       "output_bytes": 29212,
       "compute_work_units": 748700,
-      "source_node_id": 55,
+      "source_node_id": 52,
       "compute_node_id": 8,
       "result_node_id": 29,
       "arrival_time_ns": 526410715778
@@ -1117,7 +1117,7 @@
       "input_bytes": 1000000000,
       "output_bytes": 1000000000,
       "compute_work_units": 1500000,
-      "source_node_id": 32,
+      "source_node_id": 31,
       "compute_node_id": 55,
       "result_node_id": 56,
       "arrival_time_ns": 275795615643
@@ -1128,7 +1128,7 @@
       "input_bytes": 62770632,
       "output_bytes": 62770632,
       "compute_work_units": 94156,
-      "source_node_id": 53,
+      "source_node_id": 47,
       "compute_node_id": 55,
       "result_node_id": 26,
       "arrival_time_ns": 480726491002
@@ -1172,7 +1172,7 @@
       "input_bytes": 57766144,
       "output_bytes": 57766144,
       "compute_work_units": 86650,
-      "source_node_id": 14,
+      "source_node_id": 15,
       "compute_node_id": 12,
       "result_node_id": 47,
       "arrival_time_ns": 133629565942
@@ -1216,7 +1216,7 @@
       "input_bytes": 500000000,
       "output_bytes": 271240653,
       "compute_work_units": 750000,
-      "source_node_id": 2,
+      "source_node_id": 4,
       "compute_node_id": 12,
       "result_node_id": 38,
       "arrival_time_ns": 447268530539
@@ -1249,7 +1249,7 @@
       "input_bytes": 24402869,
       "output_bytes": 45610,
       "compute_work_units": 36605,
-      "source_node_id": 40,
+      "source_node_id": 1,
       "compute_node_id": 46,
       "result_node_id": 13,
       "arrival_time_ns": 454980426550
@@ -1315,7 +1315,7 @@
       "input_bytes": 92797584,
       "output_bytes": 50340954,
       "compute_work_units": 139197,
-      "source_node_id": 63,
+      "source_node_id": 55,
       "compute_node_id": 53,
       "result_node_id": 30,
       "arrival_time_ns": 585690325747
@@ -1337,7 +1337,7 @@
       "input_bytes": 139506168,
       "output_bytes": 75679488,
       "compute_work_units": 209260,
-      "source_node_id": 36,
+      "source_node_id": 17,
       "compute_node_id": 47,
       "result_node_id": 36,
       "arrival_time_ns": 337214038161
@@ -1403,7 +1403,7 @@
       "input_bytes": 141174336,
       "output_bytes": 263863,
       "compute_work_units": 211762,
-      "source_node_id": 43,
+      "source_node_id": 53,
       "compute_node_id": 65,
       "result_node_id": 35,
       "arrival_time_ns": 426053923195
@@ -1414,7 +1414,7 @@
       "input_bytes": 129497184,
       "output_bytes": 129497184,
       "compute_work_units": 194246,
-      "source_node_id": 17,
+      "source_node_id": 13,
       "compute_node_id": 55,
       "result_node_id": 41,
       "arrival_time_ns": 325572325994
@@ -1425,7 +1425,7 @@
       "input_bytes": 377,
       "output_bytes": 21788,
       "compute_work_units": 569600,
-      "source_node_id": 60,
+      "source_node_id": 25,
       "compute_node_id": 8,
       "result_node_id": 20,
       "arrival_time_ns": 536436731356
@@ -1458,7 +1458,7 @@
       "input_bytes": 845,
       "output_bytes": 29420,
       "compute_work_units": 754500,
-      "source_node_id": 62,
+      "source_node_id": 63,
       "compute_node_id": 8,
       "result_node_id": 31,
       "arrival_time_ns": 590702180463
@@ -1524,7 +1524,7 @@
       "input_bytes": 96133913,
       "output_bytes": 179680,
       "compute_work_units": 144201,
-      "source_node_id": 58,
+      "source_node_id": 24,
       "compute_node_id": 12,
       "result_node_id": 8,
       "arrival_time_ns": 488075987333
@@ -1568,7 +1568,7 @@
       "input_bytes": 46088999,
       "output_bytes": 86143,
       "compute_work_units": 69134,
-      "source_node_id": 19,
+      "source_node_id": 57,
       "compute_node_id": 58,
       "result_node_id": 8,
       "arrival_time_ns": 293287865198
@@ -1722,7 +1722,7 @@
       "input_bytes": 377,
       "output_bytes": 33540,
       "compute_work_units": 856400,
-      "source_node_id": 5,
+      "source_node_id": 25,
       "compute_node_id": 42,
       "result_node_id": 10,
       "arrival_time_ns": 49810512529
@@ -1733,7 +1733,7 @@
       "input_bytes": 36080016,
       "output_bytes": 36080016,
       "compute_work_units": 54121,
-      "source_node_id": 42,
+      "source_node_id": 41,
       "compute_node_id": 12,
       "result_node_id": 10,
       "arrival_time_ns": 464524175542
@@ -1755,7 +1755,7 @@
       "input_bytes": 69443288,
       "output_bytes": 37671685,
       "compute_work_units": 104165,
-      "source_node_id": 57,
+      "source_node_id": 53,
       "compute_node_id": 41,
       "result_node_id": 35,
       "arrival_time_ns": 584179591927
@@ -1810,7 +1810,7 @@
       "input_bytes": 129497189,
       "output_bytes": 242038,
       "compute_work_units": 194246,
-      "source_node_id": 11,
+      "source_node_id": 12,
       "compute_node_id": 56,
       "result_node_id": 42,
       "arrival_time_ns": 125258550794
@@ -1876,7 +1876,7 @@
       "input_bytes": 142842496,
       "output_bytes": 77489384,
       "compute_work_units": 214264,
-      "source_node_id": 0,
+      "source_node_id": 8,
       "compute_node_id": 61,
       "result_node_id": 58,
       "arrival_time_ns": 392227566241
@@ -2019,7 +2019,7 @@
       "input_bytes": 161192296,
       "output_bytes": 87443807,
       "compute_work_units": 241789,
-      "source_node_id": 53,
+      "source_node_id": 52,
       "compute_node_id": 17,
       "result_node_id": 36,
       "arrival_time_ns": 569048559629
@@ -2195,7 +2195,7 @@
       "input_bytes": 121156370,
       "output_bytes": 226449,
       "compute_work_units": 181735,
-      "source_node_id": 45,
+      "source_node_id": 44,
       "compute_node_id": 52,
       "result_node_id": 15,
       "arrival_time_ns": 473884362210
@@ -2206,7 +2206,7 @@
       "input_bytes": 96133912,
       "output_bytes": 96133912,
       "compute_work_units": 144201,
-      "source_node_id": 27,
+      "source_node_id": 37,
       "compute_node_id": 42,
       "result_node_id": 55,
       "arrival_time_ns": 240342127283
@@ -2239,7 +2239,7 @@
       "input_bytes": 77784104,
       "output_bytes": 77784104,
       "compute_work_units": 116677,
-      "source_node_id": 0,
+      "source_node_id": 23,
       "compute_node_id": 12,
       "result_node_id": 4,
       "arrival_time_ns": 147638522174
@@ -2261,7 +2261,7 @@
       "input_bytes": 57766144,
       "output_bytes": 57766144,
       "compute_work_units": 86650,
-      "source_node_id": 64,
+      "source_node_id": 62,
       "compute_node_id": 8,
       "result_node_id": 0,
       "arrival_time_ns": 594022053612
@@ -2272,7 +2272,7 @@
       "input_bytes": 136169844,
       "output_bytes": 254510,
       "compute_work_units": 204255,
-      "source_node_id": 50,
+      "source_node_id": 7,
       "compute_node_id": 5,
       "result_node_id": 1,
       "arrival_time_ns": 399250134173
@@ -2283,7 +2283,7 @@
       "input_bytes": 49425320,
       "output_bytes": 49425320,
       "compute_work_units": 74138,
-      "source_node_id": 41,
+      "source_node_id": 40,
       "compute_node_id": 52,
       "result_node_id": 12,
       "arrival_time_ns": 459815347562
@@ -2338,7 +2338,7 @@
       "input_bytes": 22734706,
       "output_bytes": 42492,
       "compute_work_units": 34103,
-      "source_node_id": 17,
+      "source_node_id": 11,
       "compute_node_id": 56,
       "result_node_id": 44,
       "arrival_time_ns": 127080025394
@@ -2393,7 +2393,7 @@
       "input_bytes": 59434309,
       "output_bytes": 111086,
       "compute_work_units": 89152,
-      "source_node_id": 55,
+      "source_node_id": 54,
       "compute_node_id": 47,
       "result_node_id": 37,
       "arrival_time_ns": 485293091801
@@ -2613,7 +2613,7 @@
       "input_bytes": 141174336,
       "output_bytes": 141174336,
       "compute_work_units": 211762,
-      "source_node_id": 37,
+      "source_node_id": 36,
       "compute_node_id": 42,
       "result_node_id": 54,
       "arrival_time_ns": 231856770531
@@ -2668,7 +2668,7 @@
       "input_bytes": 146178824,
       "output_bytes": 79299279,
       "compute_work_units": 219269,
-      "source_node_id": 54,
+      "source_node_id": 53,
       "compute_node_id": 56,
       "result_node_id": 39,
       "arrival_time_ns": 43455782197
@@ -2690,7 +2690,7 @@
       "input_bytes": 44420835,
       "output_bytes": 83025,
       "compute_work_units": 66632,
-      "source_node_id": 32,
+      "source_node_id": 0,
       "compute_node_id": 55,
       "result_node_id": 5,
       "arrival_time_ns": 207698952251
@@ -2789,7 +2789,7 @@
       "input_bytes": 114483712,
       "output_bytes": 62105273,
       "compute_work_units": 171726,
-      "source_node_id": 50,
+      "source_node_id": 4,
       "compute_node_id": 42,
       "result_node_id": 19,
       "arrival_time_ns": 15534780361
@@ -2833,7 +2833,7 @@
       "input_bytes": 34411848,
       "output_bytes": 34411848,
       "compute_work_units": 51618,
-      "source_node_id": 14,
+      "source_node_id": 11,
       "compute_node_id": 12,
       "result_node_id": 51,
       "arrival_time_ns": 167724052205
@@ -2855,7 +2855,7 @@
       "input_bytes": 39416344,
       "output_bytes": 21382629,
       "compute_work_units": 59125,
-      "source_node_id": 61,
+      "source_node_id": 60,
       "compute_node_id": 22,
       "result_node_id": 21,
       "arrival_time_ns": 548750393288
@@ -2877,7 +2877,7 @@
       "input_bytes": 91129422,
       "output_bytes": 170326,
       "compute_work_units": 136695,
-      "source_node_id": 15,
+      "source_node_id": 16,
       "compute_node_id": 56,
       "result_node_id": 46,
       "arrival_time_ns": 131767308170
@@ -2910,7 +2910,7 @@
       "input_bytes": 151183319,
       "output_bytes": 282571,
       "compute_work_units": 226775,
-      "source_node_id": 16,
+      "source_node_id": 15,
       "compute_node_id": 17,
       "result_node_id": 52,
       "arrival_time_ns": 182734823749
@@ -2943,7 +2943,7 @@
       "input_bytes": 109479224,
       "output_bytes": 59390432,
       "compute_work_units": 164219,
-      "source_node_id": 25,
+      "source_node_id": 57,
       "compute_node_id": 8,
       "result_node_id": 25,
       "arrival_time_ns": 532507609600
@@ -2976,7 +2976,7 @@
       "input_bytes": 67775128,
       "output_bytes": 67775128,
       "compute_work_units": 101663,
-      "source_node_id": 26,
+      "source_node_id": 16,
       "compute_node_id": 12,
       "result_node_id": 55,
       "arrival_time_ns": 387375568782
@@ -3075,7 +3075,7 @@
       "input_bytes": 39416344,
       "output_bytes": 73671,
       "compute_work_units": 59125,
-      "source_node_id": 4,
+      "source_node_id": 9,
       "compute_node_id": 42,
       "result_node_id": 0,
       "arrival_time_ns": 1757165882
@@ -3086,7 +3086,7 @@
       "input_bytes": 104474728,
       "output_bytes": 56675587,
       "compute_work_units": 156713,
-      "source_node_id": 3,
+      "source_node_id": 53,
       "compute_node_id": 44,
       "result_node_id": 8,
       "arrival_time_ns": 244544655003
@@ -3108,7 +3108,7 @@
       "input_bytes": 500000000,
       "output_bytes": 271240653,
       "compute_work_units": 750000,
-      "source_node_id": 10,
+      "source_node_id": 19,
       "compute_node_id": 42,
       "result_node_id": 50,
       "arrival_time_ns": 73627506825
@@ -3119,7 +3119,7 @@
       "input_bytes": 34411848,
       "output_bytes": 34411848,
       "compute_work_units": 51618,
-      "source_node_id": 11,
+      "source_node_id": 12,
       "compute_node_id": 55,
       "result_node_id": 40,
       "arrival_time_ns": 166800944294
@@ -3152,7 +3152,7 @@
       "input_bytes": 500000000,
       "output_bytes": 271240653,
       "compute_work_units": 750000,
-      "source_node_id": 59,
+      "source_node_id": 58,
       "compute_node_id": 52,
       "result_node_id": 18,
       "arrival_time_ns": 492836548437
@@ -3218,7 +3218,7 @@
       "input_bytes": 94465749,
       "output_bytes": 176562,
       "compute_work_units": 141699,
-      "source_node_id": 27,
+      "source_node_id": 16,
       "compute_node_id": 42,
       "result_node_id": 53,
       "arrival_time_ns": 189111284634
@@ -3262,7 +3262,7 @@
       "input_bytes": 377,
       "output_bytes": 21252,
       "compute_work_units": 549600,
-      "source_node_id": 4,
+      "source_node_id": 8,
       "compute_node_id": 55,
       "result_node_id": 19,
       "arrival_time_ns": 443867203974
@@ -3273,7 +3273,7 @@
       "input_bytes": 21066536,
       "output_bytes": 21066536,
       "compute_work_units": 31600,
-      "source_node_id": 50,
+      "source_node_id": 59,
       "compute_node_id": 52,
       "result_node_id": 19,
       "arrival_time_ns": 493876331937
@@ -3328,7 +3328,7 @@
       "input_bytes": 166196792,
       "output_bytes": 166196792,
       "compute_work_units": 249296,
-      "source_node_id": 55,
+      "source_node_id": 35,
       "compute_node_id": 42,
       "result_node_id": 27,
       "arrival_time_ns": 291820745016
@@ -3350,7 +3350,7 @@
       "input_bytes": 41084504,
       "output_bytes": 41084504,
       "compute_work_units": 61627,
-      "source_node_id": 12,
+      "source_node_id": 18,
       "compute_node_id": 56,
       "result_node_id": 49,
       "arrival_time_ns": 123075482470
@@ -3460,7 +3460,7 @@
       "input_bytes": 142842496,
       "output_bytes": 142842496,
       "compute_work_units": 214264,
-      "source_node_id": 2,
+      "source_node_id": 3,
       "compute_node_id": 55,
       "result_node_id": 18,
       "arrival_time_ns": 254546945897
@@ -3581,7 +3581,7 @@
       "input_bytes": 41084504,
       "output_bytes": 22287575,
       "compute_work_units": 61627,
-      "source_node_id": 35,
+      "source_node_id": 34,
       "compute_node_id": 44,
       "result_node_id": 56,
       "arrival_time_ns": 220001507023
@@ -3636,7 +3636,7 @@
       "input_bytes": 154519640,
       "output_bytes": 83824016,
       "compute_work_units": 231780,
-      "source_node_id": 8,
+      "source_node_id": 26,
       "compute_node_id": 55,
       "result_node_id": 63,
       "arrival_time_ns": 390497926563
@@ -3658,7 +3658,7 @@
       "input_bytes": 111147384,
       "output_bytes": 111147384,
       "compute_work_units": 166722,
-      "source_node_id": 53,
+      "source_node_id": 27,
       "compute_node_id": 42,
       "result_node_id": 27,
       "arrival_time_ns": 244207111121
@@ -3702,7 +3702,7 @@
       "input_bytes": 52761648,
       "output_bytes": 52761648,
       "compute_work_units": 79143,
-      "source_node_id": 47,
+      "source_node_id": 43,
       "compute_node_id": 7,
       "result_node_id": 15,
       "arrival_time_ns": 426520242477
@@ -3834,7 +3834,7 @@
       "input_bytes": 52761648,
       "output_bytes": 28622207,
       "compute_work_units": 79143,
-      "source_node_id": 16,
+      "source_node_id": 17,
       "compute_node_id": 42,
       "result_node_id": 45,
       "arrival_time_ns": 131037533078
@@ -3944,7 +3944,7 @@
       "input_bytes": 72779620,
       "output_bytes": 136029,
       "compute_work_units": 109170,
-      "source_node_id": 57,
+      "source_node_id": 55,
       "compute_node_id": 42,
       "result_node_id": 35,
       "arrival_time_ns": 292980298305
@@ -4362,7 +4362,7 @@
       "input_bytes": 139506172,
       "output_bytes": 260745,
       "compute_work_units": 209260,
-      "source_node_id": 4,
+      "source_node_id": 5,
       "compute_node_id": 56,
       "result_node_id": 30,
       "arrival_time_ns": 59912666595
@@ -4373,7 +4373,7 @@
       "input_bytes": 21066536,
       "output_bytes": 21066536,
       "compute_work_units": 31600,
-      "source_node_id": 35,
+      "source_node_id": 32,
       "compute_node_id": 12,
       "result_node_id": 26,
       "arrival_time_ns": 290534450164
@@ -4406,7 +4406,7 @@
       "input_bytes": 62770632,
       "output_bytes": 34051894,
       "compute_work_units": 94156,
-      "source_node_id": 52,
+      "source_node_id": 51,
       "compute_node_id": 59,
       "result_node_id": 15,
       "arrival_time_ns": 567478306045
@@ -4428,7 +4428,7 @@
       "input_bytes": 94465744,
       "output_bytes": 94465744,
       "compute_work_units": 141699,
-      "source_node_id": 1,
+      "source_node_id": 2,
       "compute_node_id": 52,
       "result_node_id": 31,
       "arrival_time_ns": 450940879647
@@ -4450,7 +4450,7 @@
       "input_bytes": 147846984,
       "output_bytes": 80204225,
       "compute_work_units": 221771,
-      "source_node_id": 15,
+      "source_node_id": 12,
       "compute_node_id": 49,
       "result_node_id": 53,
       "arrival_time_ns": 382834726305
@@ -4494,7 +4494,7 @@
       "input_bytes": 152851480,
       "output_bytes": 82919070,
       "compute_work_units": 229278,
-      "source_node_id": 34,
+      "source_node_id": 36,
       "compute_node_id": 37,
       "result_node_id": 34,
       "arrival_time_ns": 338665134901
@@ -4527,7 +4527,7 @@
       "input_bytes": 585,
       "output_bytes": 27808,
       "compute_work_units": 719300,
-      "source_node_id": 0,
+      "source_node_id": 1,
       "compute_node_id": 29,
       "result_node_id": 10,
       "arrival_time_ns": 205773185729
@@ -4769,7 +4769,7 @@
       "input_bytes": 29407360,
       "output_bytes": 15952943,
       "compute_work_units": 44112,
-      "source_node_id": 51,
+      "source_node_id": 59,
       "compute_node_id": 52,
       "result_node_id": 14,
       "arrival_time_ns": 564052394773
@@ -4901,7 +4901,7 @@
       "input_bytes": 71111456,
       "output_bytes": 38576635,
       "compute_work_units": 106668,
-      "source_node_id": 26,
+      "source_node_id": 14,
       "compute_node_id": 28,
       "result_node_id": 59,
       "arrival_time_ns": 136045411966
@@ -4967,7 +4967,7 @@
       "input_bytes": 141174336,
       "output_bytes": 263863,
       "compute_work_units": 211762,
-      "source_node_id": 18,
+      "source_node_id": 35,
       "compute_node_id": 56,
       "result_node_id": 8,
       "arrival_time_ns": 98494868597
@@ -5066,7 +5066,7 @@
       "input_bytes": 149515152,
       "output_bytes": 149515152,
       "compute_work_units": 224273,
-      "source_node_id": 36,
+      "source_node_id": 35,
       "compute_node_id": 55,
       "result_node_id": 57,
       "arrival_time_ns": 221130479455
@@ -5165,7 +5165,7 @@
       "input_bytes": 66106960,
       "output_bytes": 35861790,
       "compute_work_units": 99161,
-      "source_node_id": 52,
+      "source_node_id": 51,
       "compute_node_id": 56,
       "result_node_id": 14,
       "arrival_time_ns": 29481834125
@@ -5198,7 +5198,7 @@
       "input_bytes": 76115944,
       "output_bytes": 41291476,
       "compute_work_units": 114174,
-      "source_node_id": 12,
+      "source_node_id": 13,
       "compute_node_id": 42,
       "result_node_id": 49,
       "arrival_time_ns": 162595762766
@@ -5352,7 +5352,7 @@
       "input_bytes": 89461256,
       "output_bytes": 48531059,
       "compute_work_units": 134192,
-      "source_node_id": 33,
+      "source_node_id": 32,
       "compute_node_id": 52,
       "result_node_id": 2,
       "arrival_time_ns": 209460173563
@@ -5363,7 +5363,7 @@
       "input_bytes": 89461256,
       "output_bytes": 89461256,
       "compute_work_units": 134192,
-      "source_node_id": 52,
+      "source_node_id": 53,
       "compute_node_id": 12,
       "result_node_id": 27,
       "arrival_time_ns": 483816388108
@@ -5528,7 +5528,7 @@
       "input_bytes": 67775128,
       "output_bytes": 36766740,
       "compute_work_units": 101663,
-      "source_node_id": 13,
+      "source_node_id": 19,
       "compute_node_id": 26,
       "result_node_id": 48,
       "arrival_time_ns": 316050855494
@@ -5539,7 +5539,7 @@
       "input_bytes": 47757160,
       "output_bytes": 25907366,
       "compute_work_units": 71636,
-      "source_node_id": 14,
+      "source_node_id": 10,
       "compute_node_id": 19,
       "result_node_id": 51,
       "arrival_time_ns": 73636282953
@@ -5594,7 +5594,7 @@
       "input_bytes": 92797584,
       "output_bytes": 50340954,
       "compute_work_units": 139197,
-      "source_node_id": 8,
+      "source_node_id": 37,
       "compute_node_id": 42,
       "result_node_id": 20,
       "arrival_time_ns": 196116927932
@@ -5792,7 +5792,7 @@
       "input_bytes": 129497189,
       "output_bytes": 242038,
       "compute_work_units": 194246,
-      "source_node_id": 25,
+      "source_node_id": 54,
       "compute_node_id": 42,
       "result_node_id": 36,
       "arrival_time_ns": 49101122160
@@ -5979,7 +5979,7 @@
       "input_bytes": 164528629,
       "output_bytes": 307514,
       "compute_work_units": 246793,
-      "source_node_id": 53,
+      "source_node_id": 52,
       "compute_node_id": 15,
       "result_node_id": 12,
       "arrival_time_ns": 423266210397
@@ -6023,7 +6023,7 @@
       "input_bytes": 37748176,
       "output_bytes": 20477679,
       "compute_work_units": 56623,
-      "source_node_id": 37,
+      "source_node_id": 36,
       "compute_node_id": 42,
       "result_node_id": 54,
       "arrival_time_ns": 83282300137
@@ -6034,7 +6034,7 @@
       "input_bytes": 77784104,
       "output_bytes": 42196422,
       "compute_work_units": 116677,
-      "source_node_id": 37,
+      "source_node_id": 27,
       "compute_node_id": 12,
       "result_node_id": 55,
       "arrival_time_ns": 192461827304
@@ -6056,7 +6056,7 @@
       "input_bytes": 142842496,
       "output_bytes": 77489384,
       "compute_work_units": 214264,
-      "source_node_id": 34,
+      "source_node_id": 44,
       "compute_node_id": 55,
       "result_node_id": 37,
       "arrival_time_ns": 430917773139
@@ -6122,7 +6122,7 @@
       "input_bytes": 122824534,
       "output_bytes": 229566,
       "compute_work_units": 184237,
-      "source_node_id": 18,
+      "source_node_id": 34,
       "compute_node_id": 12,
       "result_node_id": 58,
       "arrival_time_ns": 342090092317
@@ -6210,7 +6210,7 @@
       "input_bytes": 84456760,
       "output_bytes": 45816213,
       "compute_work_units": 126686,
-      "source_node_id": 47,
+      "source_node_id": 45,
       "compute_node_id": 55,
       "result_node_id": 14,
       "arrival_time_ns": 474346138326
@@ -6375,7 +6375,7 @@
       "input_bytes": 164528624,
       "output_bytes": 89253703,
       "compute_work_units": 246793,
-      "source_node_id": 51,
+      "source_node_id": 50,
       "compute_node_id": 12,
       "result_node_id": 14,
       "arrival_time_ns": 415059832893
@@ -6397,7 +6397,7 @@
       "input_bytes": 117820043,
       "output_bytes": 220213,
       "compute_work_units": 176731,
-      "source_node_id": 8,
+      "source_node_id": 34,
       "compute_node_id": 37,
       "result_node_id": 23,
       "arrival_time_ns": 438509452207
@@ -6551,7 +6551,7 @@
       "input_bytes": 162860465,
       "output_bytes": 304396,
       "compute_work_units": 244291,
-      "source_node_id": 24,
+      "source_node_id": 55,
       "compute_node_id": 12,
       "result_node_id": 34,
       "arrival_time_ns": 486904591376
@@ -6562,7 +6562,7 @@
       "input_bytes": 136169844,
       "output_bytes": 254510,
       "compute_work_units": 204255,
-      "source_node_id": 54,
+      "source_node_id": 52,
       "compute_node_id": 12,
       "result_node_id": 39,
       "arrival_time_ns": 484139118801
@@ -6606,7 +6606,7 @@
       "input_bytes": 126160856,
       "output_bytes": 68439906,
       "compute_work_units": 189242,
-      "source_node_id": 58,
+      "source_node_id": 65,
       "compute_node_id": 55,
       "result_node_id": 32,
       "arrival_time_ns": 559103599519
@@ -6815,7 +6815,7 @@
       "input_bytes": 637,
       "output_bytes": 28472,
       "compute_work_units": 728300,
-      "source_node_id": 44,
+      "source_node_id": 47,
       "compute_node_id": 18,
       "result_node_id": 22,
       "arrival_time_ns": 428482682880
@@ -6826,7 +6826,7 @@
       "input_bytes": 41084504,
       "output_bytes": 22287575,
       "compute_work_units": 61627,
-      "source_node_id": 52,
+      "source_node_id": 51,
       "compute_node_id": 12,
       "result_node_id": 19,
       "arrival_time_ns": 417853606417
@@ -6859,7 +6859,7 @@
       "input_bytes": 34411852,
       "output_bytes": 64317,
       "compute_work_units": 51618,
-      "source_node_id": 7,
+      "source_node_id": 3,
       "compute_node_id": 12,
       "result_node_id": 61,
       "arrival_time_ns": 398054565500
@@ -6870,7 +6870,7 @@
       "input_bytes": 54429816,
       "output_bytes": 29527157,
       "compute_work_units": 81645,
-      "source_node_id": 19,
+      "source_node_id": 18,
       "compute_node_id": 42,
       "result_node_id": 59,
       "arrival_time_ns": 64621163869
@@ -7046,7 +7046,7 @@
       "input_bytes": 56097982,
       "output_bytes": 104850,
       "compute_work_units": 84147,
-      "source_node_id": 31,
+      "source_node_id": 2,
       "compute_node_id": 7,
       "result_node_id": 62,
       "arrival_time_ns": 256184743547
@@ -7123,7 +7123,7 @@
       "input_bytes": 106142896,
       "output_bytes": 106142896,
       "compute_work_units": 159215,
-      "source_node_id": 44,
+      "source_node_id": 43,
       "compute_node_id": 55,
       "result_node_id": 16,
       "arrival_time_ns": 472274059010
@@ -7167,7 +7167,7 @@
       "input_bytes": 34411852,
       "output_bytes": 64317,
       "compute_work_units": 51618,
-      "source_node_id": 65,
+      "source_node_id": 61,
       "compute_node_id": 52,
       "result_node_id": 31,
       "arrival_time_ns": 551435883659
@@ -7387,7 +7387,7 @@
       "input_bytes": 37748176,
       "output_bytes": 20477679,
       "compute_work_units": 56623,
-      "source_node_id": 12,
+      "source_node_id": 11,
       "compute_node_id": 55,
       "result_node_id": 52,
       "arrival_time_ns": 364337578337
@@ -7607,7 +7607,7 @@
       "input_bytes": 26071033,
       "output_bytes": 48728,
       "compute_work_units": 39107,
-      "source_node_id": 34,
+      "source_node_id": 33,
       "compute_node_id": 12,
       "result_node_id": 65,
       "arrival_time_ns": 219037294375
@@ -7673,7 +7673,7 @@
       "input_bytes": 101138400,
       "output_bytes": 101138400,
       "compute_work_units": 151708,
-      "source_node_id": 3,
+      "source_node_id": 0,
       "compute_node_id": 51,
       "result_node_id": 7,
       "arrival_time_ns": 397235187037
@@ -7717,7 +7717,7 @@
       "input_bytes": 24402864,
       "output_bytes": 13238097,
       "compute_work_units": 36605,
-      "source_node_id": 51,
+      "source_node_id": 50,
       "compute_node_id": 42,
       "result_node_id": 10,
       "arrival_time_ns": 23331497365
@@ -7761,7 +7761,7 @@
       "input_bytes": 325,
       "output_bytes": 24148,
       "compute_work_units": 619800,
-      "source_node_id": 1,
+      "source_node_id": 8,
       "compute_node_id": 55,
       "result_node_id": 58,
       "arrival_time_ns": 200876205753
@@ -7838,7 +7838,7 @@
       "input_bytes": 31075525,
       "output_bytes": 58082,
       "compute_work_units": 46614,
-      "source_node_id": 55,
+      "source_node_id": 57,
       "compute_node_id": 41,
       "result_node_id": 37,
       "arrival_time_ns": 584993732483
@@ -7860,7 +7860,7 @@
       "input_bytes": 161192302,
       "output_bytes": 301278,
       "compute_work_units": 241789,
-      "source_node_id": 15,
+      "source_node_id": 14,
       "compute_node_id": 12,
       "result_node_id": 59,
       "arrival_time_ns": 180959795885
@@ -8003,7 +8003,7 @@
       "input_bytes": 41084507,
       "output_bytes": 76789,
       "compute_work_units": 61627,
-      "source_node_id": 18,
+      "source_node_id": 4,
       "compute_node_id": 29,
       "result_node_id": 1,
       "arrival_time_ns": 60638908101
@@ -8179,7 +8179,7 @@
       "input_bytes": 26071032,
       "output_bytes": 14143047,
       "compute_work_units": 39107,
-      "source_node_id": 59,
+      "source_node_id": 58,
       "compute_node_id": 52,
       "result_node_id": 33,
       "arrival_time_ns": 560431352383
@@ -8300,7 +8300,7 @@
       "input_bytes": 82788600,
       "output_bytes": 82788600,
       "compute_work_units": 124183,
-      "source_node_id": 53,
+      "source_node_id": 52,
       "compute_node_id": 39,
       "result_node_id": 15,
       "arrival_time_ns": 36097948225
@@ -8520,7 +8520,7 @@
       "input_bytes": 49425326,
       "output_bytes": 92379,
       "compute_work_units": 74138,
-      "source_node_id": 23,
+      "source_node_id": 27,
       "compute_node_id": 42,
       "result_node_id": 27,
       "arrival_time_ns": 146992546615
@@ -8597,7 +8597,7 @@
       "input_bytes": 19398376,
       "output_bytes": 10523256,
       "compute_work_units": 29098,
-      "source_node_id": 52,
+      "source_node_id": 51,
       "compute_node_id": 12,
       "result_node_id": 14,
       "arrival_time_ns": 522755083101
@@ -8729,7 +8729,7 @@
       "input_bytes": 59434304,
       "output_bytes": 32241998,
       "compute_work_units": 89152,
-      "source_node_id": 35,
+      "source_node_id": 37,
       "compute_node_id": 56,
       "result_node_id": 57,
       "arrival_time_ns": 98118179364

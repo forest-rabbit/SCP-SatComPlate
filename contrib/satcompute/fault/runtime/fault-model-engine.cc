@@ -16,6 +16,7 @@
 #include "ns3/simulator.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <set>
 #include <utility>
@@ -103,8 +104,8 @@ FaultModelEngine::Configure(const FaultParameters& parameters,
         parameters.checkIntervalSeconds,
         "fault.checkIntervalSeconds");
     m_recoveryDurationNs = SatComputeSecondsToNanoseconds(
-        parameters.recoverableComputeDurationSeconds,
-        "fault.recoverableComputeDurationSeconds");
+        parameters.f2.recoveryDurationSeconds,
+        "fault.f2.recoveryDurationSeconds");
     if (m_checkIntervalNs <= 0 || m_recoveryDurationNs <= 0)
     {
         throw FaultModelEngineError("fault intervals must convert to positive nanoseconds");
@@ -212,6 +213,7 @@ FaultModelEngine::BindTaskCoordinator(Ptr<TaskCoordinator> taskCoordinator)
             if (node != m_nodes.end())
             {
                 node->second.computeService = service;
+                service->ConnectStateObserver(MakeCallback(&FaultModelEngine::OnComputeStateChanged, this));
             }
         }
     }
@@ -251,35 +253,20 @@ FaultModelEngine::BindOrbitConstellation(
     m_constellation = &constellation;
 }
 
-FaultDefinition
-FaultModelEngine::MakeNotice(uint32_t nodeId,
-                                   const RiskEpisode& episode) const
+void
+FaultModelEngine::OnComputeStateChanged(uint32_t nodeId, bool busy)
 {
-    FaultDefinition notice;
-    notice.faultId = episode.faultId;
-    notice.nodeId = nodeId;
-    notice.faultType = FaultType::COMPUTE;
-    notice.faultOccurred = false;
-    notice.noticeTimeNs = episode.noticeTimeNs;
-    notice.failureProbability = episode.noticeProbability;
-    return notice;
-}
-
-FaultDefinition
-FaultModelEngine::MakeRiskOnly(uint32_t nodeId,
-                                     const RiskEpisode& episode,
-                                     int64_t clearTimeNs) const
-{
-    FaultDefinition riskOnly = MakeNotice(nodeId, episode);
-    riskOnly.riskDurationNs = clearTimeNs - episode.noticeTimeNs;
-    return riskOnly;
+    if (!m_f1Model || m_finalized)
+        return;
+    auto& state = m_nodes.at(nodeId);
+    m_f1Model->AdvanceTo(state.f1State, state.thermalTimeNs,
+                        Simulator::Now().GetNanoSeconds(), busy, m_parameters.checkIntervalSeconds);
 }
 
 FaultDefinition
 FaultModelEngine::MakeComputeFault(
     uint32_t nodeId,
     uint64_t faultId,
-    const std::optional<RiskEpisode>& episode,
     double currentProbability,
     int64_t startTimeNs) const
 {
@@ -291,12 +278,6 @@ FaultModelEngine::MakeComputeFault(
     fault.startTimeNs = startTimeNs;
     fault.failureProbability = currentProbability;
     fault.durationNs = m_recoveryDurationNs;
-    if (episode.has_value())
-    {
-        fault.noticeTimeNs = episode->noticeTimeNs;
-        fault.failureProbability = episode->noticeProbability;
-        fault.warningLeadTimeNs = startTimeNs - episode->noticeTimeNs;
-    }
     return fault;
 }
 
@@ -355,7 +336,7 @@ FaultModelEngine::RecordProbability(uint32_t nodeId,
                                     const NodeState& state,
                                     int64_t simulationTimeNs)
 {
-    if (!m_probabilityAuditEnabled || !state.riskEpisode.has_value() ||
+    if (!m_probabilityAuditEnabled ||
         !state.computeService->IsComputeAvailable())
     {
         return;
@@ -385,14 +366,10 @@ FaultModelEngine::RecordProbability(uint32_t nodeId,
     input.checkIntervalNs = m_checkIntervalNs;
     const ComputeFailurePrediction prediction =
         PredictComputeFailureBeforeFinish(input);
-    const RiskEpisode& risk = state.riskEpisode.value();
     m_probabilityRecords.push_back(
         {simulationTimeNs,
-         risk.faultId,
          nodeId,
          task->taskId,
-         risk.noticeTimeNs,
-         simulationTimeNs - risk.noticeTimeNs,
          task->startTimeNs,
          task->serviceTimeNs,
          task->elapsedTimeNs,
@@ -444,9 +421,13 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
             const bool busy =
                 computeAvailable && state.computeService->IsComputeAvailable() &&
                 state.computeService->HasRunningTask();
-            m_f1Model->Update(state.f1State,
-                              busy,
-                              m_parameters.checkIntervalSeconds);
+            m_f1Model->AdvanceTo(state.f1State, state.thermalTimeNs, simulationTimeNs,
+                                 busy, m_parameters.checkIntervalSeconds);
+            if (state.f1State.temperatureC >= m_parameters.f1.temperature.criticalC)
+            {
+                state.f1State.temperatureC = m_parameters.f1.temperature.criticalC;
+                m_f1Model->Evaluate(state.f1State, m_parameters.checkIntervalSeconds);
+            }
         }
         if (m_f2Model.has_value())
         {
@@ -465,37 +446,12 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
             continue;
         }
 
-        const bool f1RiskActive =
-            m_f1Model.has_value() && m_f1Model->IsRiskActive(state.f1State);
-        const bool f2RiskActive =
-            m_f2Model.has_value() && m_f2Model->IsRiskActive(state.f2State);
-        const bool riskActive = f1RiskActive || f2RiskActive;
         const double f1StepFailureProbability =
-            m_f1Model.has_value() ? state.f1State.stepFailureProbability : 0.0;
+            m_f1Model ? state.f1State.stepFailureProbability : 0.0;
         const double f2StepFailureProbability =
-            m_f2Model.has_value() ? state.f2State.stepFailureProbability : 0.0;
+            m_f2Model ? state.f2State.stepFailureProbability : 0.0;
         const double stepFailureProbability =
-            CombineComputeFaultProbabilities(f1StepFailureProbability,
-                                             f2StepFailureProbability);
-        if (riskActive && !state.riskEpisode.has_value())
-        {
-            NS_ABORT_MSG_IF(m_nextFaultId == std::numeric_limits<uint64_t>::max(),
-                            "generated fault ID overflow");
-            state.riskEpisode =
-                RiskEpisode{m_nextFaultId++,
-                            simulationTimeNs,
-                            stepFailureProbability};
-            events.push_back(
-                {FaultEventType::NOTICE, MakeNotice(nodeId, state.riskEpisode.value())});
-        }
-        else if (!riskActive && state.riskEpisode.has_value())
-        {
-            FaultDefinition riskOnly =
-                MakeRiskOnly(nodeId, state.riskEpisode.value(), simulationTimeNs);
-            events.push_back({FaultEventType::NOTICE_CLEAR, riskOnly});
-            completedRecords.push_back(riskOnly);
-            state.riskEpisode = std::nullopt;
-        }
+            CombineComputeFaultProbabilities(f1StepFailureProbability, f2StepFailureProbability);
 
         RecordProbability(nodeId, state, simulationTimeNs);
 
@@ -527,29 +483,33 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
         if (outcome.computeFaultOccurred)
         {
             ++state.computeFaultCount;
-            uint64_t faultId;
-            if (state.riskEpisode.has_value())
-            {
-                faultId = state.riskEpisode->faultId;
-            }
-            else
-            {
-                NS_ABORT_MSG_IF(m_nextFaultId == std::numeric_limits<uint64_t>::max(),
-                                "generated fault ID overflow");
-                faultId = m_nextFaultId++;
-            }
+            NS_ABORT_MSG_IF(m_nextFaultId == std::numeric_limits<uint64_t>::max(),
+                            "generated fault ID overflow");
+            const uint64_t faultId = m_nextFaultId++;
             FaultDefinition fault =
                 MakeComputeFault(nodeId,
                                  faultId,
-                                 state.riskEpisode,
                                  stepFailureProbability,
                                  simulationTimeNs);
             fault.f1Occurred = outcome.f1Occurred;
             fault.f2Occurred = outcome.f2Occurred;
+            fault.pF1 = f1StepFailureProbability;
+            fault.pF2 = f2StepFailureProbability;
+            if (m_f1Model)
+            {
+                fault.temperatureC = state.f1State.temperatureC;
+                fault.continuousBusySeconds = state.f1State.continuousBusySeconds;
+            }
+            if (outcome.f1Occurred)
+            {
+                const double duration = m_f1Model->GetRecoveryDurationSeconds(state.f1State.temperatureC);
+                const int64_t durationNs = static_cast<int64_t>(std::ceil(duration * 1e9));
+                NS_ABORT_MSG_IF(durationNs <= 0, "F1 thermal outage must have positive duration");
+                fault.durationNs = outcome.f2Occurred ? std::max(durationNs, m_recoveryDurationNs) : durationNs;
+            }
             events.push_back({FaultEventType::START, fault});
             completedRecords.push_back(fault);
             state.activeComputeFault = fault;
-            state.riskEpisode = std::nullopt;
         }
     }
 
@@ -561,17 +521,6 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
         if (node != m_nodes.end())
         {
             ShortenActiveComputeFault(node->second, simulationTimeNs);
-            if (node->second.riskEpisode.has_value())
-            {
-                const RiskEpisode episode = node->second.riskEpisode.value();
-                NS_ABORT_MSG_IF(episode.noticeTimeNs >= simulationTimeNs,
-                                "F3 cannot close a zero-duration risk episode");
-                FaultDefinition riskOnly =
-                    MakeRiskOnly(nodeId, episode, simulationTimeNs);
-                events.push_back({FaultEventType::NOTICE_CLEAR, riskOnly});
-                completedRecords.push_back(riskOnly);
-                node->second.riskEpisode = std::nullopt;
-            }
         }
         NS_ABORT_MSG_IF(m_nextFaultId == std::numeric_limits<uint64_t>::max(),
                         "generated fault ID overflow");
@@ -597,17 +546,6 @@ FaultModelEngine::Finalize()
         (m_parameters.f2.enabled && m_constellation == nullptr))
     {
         throw FaultModelEngineError("FaultModelEngine finalization is invalid");
-    }
-    for (auto& [nodeId, state] : m_nodes)
-    {
-        if (state.riskEpisode.has_value())
-        {
-            m_trace.faults.push_back(
-                MakeRiskOnly(nodeId,
-                             state.riskEpisode.value(),
-                             m_simulationDurationNs));
-            state.riskEpisode = std::nullopt;
-        }
     }
     m_faultController->FinalizeGeneratedTrace(m_trace);
     m_finalized = true;
@@ -643,7 +581,6 @@ FaultModelEngine::GetNodeSnapshots() const
              state.f1OccurrenceCount,
              state.f2OccurrenceCount,
              state.computeFaultCount,
-             state.riskEpisode.has_value(),
              m_faultController->GetState().IsComputeAvailable(nodeId)});
     }
     return snapshots;
@@ -685,17 +622,21 @@ FaultModelEngine::QueryComputeRisk(uint32_t nodeId, int64_t horizonNs) const
     auto f1 = state.f1State;
     auto f2 = state.f2State;
     const bool busy = state.computeService->HasRunningTask();
-    const int64_t endNs = result.asOfTimeNs + horizonNs;
     double p1 = 0.0;
     double p2 = 0.0;
-    // Project copies only. Catch up a pending current-time check without counting
-    // it in the future interval; never inspect queued tasks or future F3 events.
-    for (int64_t timeNs = state.modelTimeNs; timeNs <= endNs - m_checkIntervalNs;)
+    int64_t thermalTimeNs = state.thermalTimeNs;
+    if (m_f1Model)
+        m_f1Model->AdvanceTo(f1, thermalTimeNs, result.asOfTimeNs, busy,
+                             m_parameters.checkIntervalSeconds);
+    // Project copies onto the global check grid, never future workload or F3.
+    const int64_t firstOffset = m_checkIntervalNs - result.asOfTimeNs % m_checkIntervalNs;
+    for (int64_t offset = firstOffset; offset <= horizonNs;)
     {
-        timeNs += m_checkIntervalNs;
+        const int64_t timeNs = result.asOfTimeNs + offset;
         if (m_f1Model)
         {
-            m_f1Model->Update(f1, busy, m_parameters.checkIntervalSeconds);
+            m_f1Model->AdvanceTo(f1, thermalTimeNs, timeNs, busy,
+                                 m_parameters.checkIntervalSeconds);
         }
         if (m_f2Model)
         {
@@ -709,6 +650,9 @@ FaultModelEngine::QueryComputeRisk(uint32_t nodeId, int64_t horizonNs) const
             p1 = CombineComputeFaultProbabilities(p1, m_f1Model ? f1.stepFailureProbability : 0.0);
             p2 = CombineComputeFaultProbabilities(p2, m_f2Model ? f2.stepFailureProbability : 0.0);
         }
+        if (offset > horizonNs - m_checkIntervalNs)
+            break;
+        offset += m_checkIntervalNs;
     }
     result.pF1 = p1;
     result.pF2 = p2;
@@ -739,6 +683,8 @@ FaultModelEngine::DoDispose()
     for (auto& [nodeId, state] : m_nodes)
     {
         static_cast<void>(nodeId);
+        if (state.computeService)
+            state.computeService->DisconnectStateObserver(MakeCallback(&FaultModelEngine::OnComputeStateChanged, this));
         state.f1Random = nullptr;
         state.f2Random = nullptr;
         state.computeService = nullptr;

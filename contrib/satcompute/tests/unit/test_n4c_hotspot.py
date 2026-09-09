@@ -29,9 +29,13 @@ class HotspotTest(unittest.TestCase):
                              {k: base[task["task_id"]][k] for k in (*MODULE["BUSINESS"], "arrival_time_ns")})
             self.assertNotEqual(task["compute_node_id"], task["source_node_id"])
             self.assertNotEqual(task["compute_node_id"], task["result_node_id"])
-            if task["task_id"] != f3["victim_task_id"]:
+            if task["arrival_time_ns"] >= f3["time_ns"]:
                 self.assertNotIn(f3["node_id"], [task[k] for k in (
                     "source_node_id", "compute_node_id", "result_node_id")])
+        ordinary = next(t for t in trace["tasks"] if t["task_id"] == f3["ordinary_task_id"])
+        self.assertEqual(ordinary["source_node_id"], f3["node_id"])
+        self.assertLess(ordinary["arrival_time_ns"], f3["time_ns"])
+        self.assertNotEqual(ordinary["task_id"], f3["victim_task_id"])
         self.assertLess(manifest["maximum_position_age_ns"], 10**9)
 
     def test_weight_limit_and_fallback(self):

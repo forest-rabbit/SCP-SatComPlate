@@ -76,7 +76,6 @@ MakeTask(uint64_t taskId,
 FaultDefinition
 MakeComputeFault(uint64_t faultId,
                  int64_t startTimeNs,
-                 std::optional<int64_t> noticeTimeNs,
                  std::optional<double> failureProbability,
                  int64_t durationNs)
 {
@@ -85,23 +84,10 @@ MakeComputeFault(uint64_t faultId,
     fault.nodeId = COMPUTE_NODE_ID;
     fault.faultType = FaultType::COMPUTE;
     fault.startTimeNs = startTimeNs;
-    fault.noticeTimeNs = noticeTimeNs;
     fault.failureProbability = failureProbability;
-    fault.warningLeadTimeNs = fault.GetWarningLeadTimeNs();
     fault.durationNs = durationNs;
     fault.f1Occurred = true;
     return fault;
-}
-
-GeneratedFaultEvent
-MakeGeneratedNotice(const FaultDefinition& occurredFault)
-{
-    FaultDefinition notice = occurredFault;
-    notice.faultOccurred = false;
-    notice.startTimeNs = std::nullopt;
-    notice.warningLeadTimeNs = std::nullopt;
-    notice.durationNs = std::nullopt;
-    return {FaultEventType::NOTICE, notice};
 }
 
 const TaskRuntime&
@@ -147,9 +133,8 @@ std::string
 EncodePrediction(const ComputeFailureProbabilityRecord& prediction)
 {
     std::ostringstream output;
-    output << prediction.simulationTimeNs << ':' << prediction.faultId << ':'
+    output << prediction.simulationTimeNs << ':'
            << prediction.nodeId << ':' << prediction.taskId << ':'
-           << prediction.noticeTimeNs << ':' << prediction.riskElapsedTimeNs << ':'
            << prediction.remainingComputeTimeNs << ':'
            << prediction.horizonStepCount << ':'
            << prediction.f1StepFailureProbability << ':'
@@ -188,7 +173,7 @@ CheckFaultStateOverlay()
 {
     FaultState state;
     state.Initialize({0, 1});
-    FaultDefinition compute = MakeComputeFault(1, 10, std::nullopt, std::nullopt, 5);
+    FaultDefinition compute = MakeComputeFault(1, 10, std::nullopt, 5);
     compute.nodeId = 0;
     state.StartFault(compute);
     Check(state.IsSatelliteAvailable(0) && state.IsCommunicationAvailable(0) &&
@@ -213,46 +198,6 @@ CheckFaultStateOverlay()
     Check(state.IsSatelliteAvailable(1) && state.IsCommunicationAvailable(1) &&
               state.IsComputeAvailable(1),
           "satellite fault recovery overlay differs");
-}
-
-void
-CheckRiskOnlyInjection()
-{
-    FaultDefinition riskOnly;
-    riskOnly.faultId = 1;
-    riskOnly.nodeId = COMPUTE_NODE_ID;
-    riskOnly.faultType = FaultType::COMPUTE;
-    riskOnly.faultOccurred = false;
-    riskOnly.noticeTimeNs = 10 * MILLISECOND_NS;
-    riskOnly.failureProbability = 0.25;
-    riskOnly.riskDurationNs = 20 * MILLISECOND_NS;
-
-    FaultTrace trace;
-    trace.faults = {riskOnly};
-    Ptr<FaultController> controller = CreateObject<FaultController>();
-    FaultControllerTestAccess::Schedule(controller,
-                                        trace.faults,
-                                        {COMPUTE_NODE_ID},
-                                        SIMULATION_DURATION_NS);
-    Simulator::Stop(NanoSeconds(50 * MILLISECOND_NS));
-    Simulator::Run();
-
-    const std::vector<FaultRuntimeEventRecord>& events = controller->GetEvents();
-    Check(events.size() == 2 && events[0].eventType == FaultEventType::NOTICE &&
-              events[1].eventType == FaultEventType::NOTICE_CLEAR &&
-              events[0].simulationTimeNs == 10 * MILLISECOND_NS &&
-              events[1].simulationTimeNs == 30 * MILLISECOND_NS,
-          "risk-only NOTICE/NOTICE_CLEAR sequence differs");
-    Check(!events[0].startTimeNs.has_value() && !events[0].durationNs.has_value() &&
-              !events[0].warningLeadTimeNs.has_value() &&
-              !events[0].riskDurationNs.has_value() &&
-              events[0].failureProbability == 0.25,
-          "NOTICE leaked future risk-only outcome fields");
-    Check(!events[1].startTimeNs.has_value() &&
-              events[1].riskDurationNs == 20 * MILLISECOND_NS &&
-              controller->GetState().IsComputeAvailable(COMPUTE_NODE_ID),
-          "NOTICE_CLEAR changed availability or lost observed duration");
-    ResetSimulationGlobals();
 }
 
 ExecutionSignature
@@ -293,11 +238,9 @@ RunComputeFaultScenario(bool generateOnline)
         trace.faults = {
             MakeComputeFault(1,
                              100 * MILLISECOND_NS,
-                             90 * MILLISECOND_NS,
                              0.8,
                              100 * MILLISECOND_NS),
             MakeComputeFault(2,
-                             200 * MILLISECOND_NS,
                              200 * MILLISECOND_NS,
                              0.5,
                              50 * MILLISECOND_NS),
@@ -311,9 +254,8 @@ RunComputeFaultScenario(bool generateOnline)
         FaultParameters predictionParameters = GetDefaultFaultParameters();
         predictionParameters.checkIntervalSeconds = 0.01;
         predictionParameters.f1.temperature.riskC = 18.0;
-        predictionParameters.f1.temperature.heatingTauSeconds = 0.43;
-        predictionParameters.f1.temperature.coolingTauSeconds = 0.4;
-        predictionParameters.f1.maxFailureIntensityPerSecond = 0.5;
+        predictionParameters.f1.temperature.heatingToCriticalSeconds = 0.43;
+        predictionParameters.f1.temperature.coolingFromCriticalToBaseSeconds = 0.4;
         predictionParameters.f1.enabled = true;
         predictionParameters.f2.enabled = false;
         predictionParameters.f3.enabled = false;
@@ -329,12 +271,6 @@ RunComputeFaultScenario(bool generateOnline)
             const FaultDefinition firstFault = trace.faults[0];
             const FaultDefinition secondFault = trace.faults[1];
             Simulator::Schedule(
-                NanoSeconds(firstFault.noticeTimeNs.value()),
-                [controller, firstFault] {
-                    controller->SubmitGeneratedBatch(
-                        {MakeGeneratedNotice(firstFault)});
-                });
-            Simulator::Schedule(
                 NanoSeconds(firstFault.startTimeNs.value()),
                 [controller, firstFault] {
                     controller->SubmitGeneratedBatch(
@@ -344,8 +280,7 @@ RunComputeFaultScenario(bool generateOnline)
                 NanoSeconds(secondFault.startTimeNs.value()),
                 [controller, secondFault] {
                     controller->SubmitGeneratedBatch(
-                        {MakeGeneratedNotice(secondFault),
-                         {FaultEventType::START, secondFault}});
+                        {{FaultEventType::START, secondFault}});
                 });
         }
         else
@@ -408,12 +343,10 @@ RunComputeFaultScenario(bool generateOnline)
 
         const std::vector<FaultRuntimeEventRecord>& faultEvents =
             controller->GetEvents();
-        Check(faultEvents.size() == 6,
+        Check(faultEvents.size() == 4,
               "fault notice/start/recovery event count differs");
         const std::vector<std::string> expectedOrder = {
-            "90000000:1:NOTICE",
             "100000000:1:START",
-            "200000000:2:NOTICE",
             "200000000:1:RECOVERY",
             "200000000:2:START",
             "250000000:2:RECOVERY",
@@ -433,32 +366,21 @@ RunComputeFaultScenario(bool generateOnline)
         }
         const FaultRuntimeEventRecord& firstStart =
             FindFaultEvent(faultEvents, 1, FaultEventType::START);
-        const FaultRuntimeEventRecord& firstNotice =
-            FindFaultEvent(faultEvents, 1, FaultEventType::NOTICE);
-        Check(!firstNotice.startTimeNs.has_value() &&
-                  !firstNotice.durationNs.has_value() &&
-                  !firstNotice.warningLeadTimeNs.has_value() &&
-                  !firstNotice.riskDurationNs.has_value() &&
-                  firstNotice.failureProbability == 0.8,
-              "NOTICE leaked future occurred-fault fields");
         Check(firstStart.affectedTaskCount == 1 &&
                   firstStart.affectedTransferCount == 1 &&
                   !firstStart.computeAvailableAfter &&
                   firstStart.startTimeNs == 100 * MILLISECOND_NS,
               "first compute fault impact counts differ");
-        const FaultRuntimeEventRecord& secondNotice =
-            FindFaultEvent(faultEvents, 2, FaultEventType::NOTICE);
         const FaultRuntimeEventRecord& firstRecovery =
             FindFaultEvent(faultEvents, 1, FaultEventType::RECOVERY);
         const FaultRuntimeEventRecord& secondStart =
             FindFaultEvent(faultEvents, 2, FaultEventType::START);
-        Check(!secondNotice.computeAvailableAfter &&
-                  firstRecovery.computeAvailableAfter &&
+        Check(firstRecovery.computeAvailableAfter &&
                   !secondStart.computeAvailableAfter &&
                   secondStart.affectedTaskCount == 0 &&
                   secondStart.affectedTransferCount == 0,
               "adjacent recovery/start final availability differs");
-        Check(secondNotice.failureProbability == 0.5,
+        Check(secondStart.failureProbability == 0.5,
               "failure probability metadata changed at runtime");
         Check(controller->GetState().GetActiveFaultIds().empty() &&
                   controller->GetState().IsComputeAvailable(COMPUTE_NODE_ID) &&
@@ -572,22 +494,18 @@ RunComputeFaultScenario(bool generateOnline)
 
         const std::vector<ComputeFailureProbabilityRecord>& predictions =
             predictionEngine->GetPredictionRecords();
-        Check(predictions.size() == 2 &&
-                  predictions[0].simulationTimeNs == 90 * MILLISECOND_NS &&
-                  predictions[0].riskElapsedTimeNs == 0 &&
-                  predictions[1].simulationTimeNs == 100 * MILLISECOND_NS &&
-                  predictions[1].riskElapsedTimeNs == 10 * MILLISECOND_NS,
-              "causal compute failure prediction record differs");
+        Check(predictions.size() > 2 &&
+                  predictions.front().simulationTimeNs < 90 * MILLISECOND_NS &&
+                  predictions.back().simulationTimeNs == 100 * MILLISECOND_NS,
+              "audit must cover pre-failure running checks without NOTICE");
         for (const ComputeFailureProbabilityRecord& prediction : predictions)
         {
-            Check(prediction.faultId == 1 &&
-                      prediction.nodeId == COMPUTE_NODE_ID &&
+            Check(prediction.nodeId == COMPUTE_NODE_ID &&
                       prediction.taskId == 3 &&
-                      prediction.noticeTimeNs == 90 * MILLISECOND_NS &&
                       prediction.remainingComputeTimeNs > 0 &&
                       prediction.completionRatio > 0.0 &&
                       prediction.completionRatio < 1.0 &&
-                      prediction.f1StepFailureProbability > 0.0 &&
+                      prediction.f1StepFailureProbability >= 0.0 &&
                       prediction.f2StepFailureProbability == 0.0 &&
                       std::abs(prediction.combinedStepFailureProbability -
                                prediction.f1StepFailureProbability) < 1e-15 &&
@@ -602,8 +520,8 @@ RunComputeFaultScenario(bool generateOnline)
                       EncodePrediction(prediction));
             signature.predictions.push_back(EncodePrediction(prediction));
         }
-        Check(predictions[1].f1StepFailureProbability >
-                  predictions[0].f1StepFailureProbability &&
+        Check(predictions.back().f1StepFailureProbability >
+                  predictions.front().f1StepFailureProbability &&
                   predictions[1].horizonStepCount + 1 ==
                       predictions[0].horizonStepCount,
               "rolling F1 forecast did not advance with task progress");
@@ -631,7 +549,6 @@ main()
     try
     {
         CheckFaultStateOverlay();
-        CheckRiskOnlyInjection();
         const ExecutionSignature first = RunComputeFaultScenario(false);
         const ExecutionSignature second = RunComputeFaultScenario(false);
         Check(first == second,

@@ -89,8 +89,7 @@ WriteProbabilityRecords(const std::vector<ComputeFailureProbabilityRecord>& reco
     {
         throw std::runtime_error("cannot write " + filename);
     }
-    output << "simulation_time_ns,fault_id,node_id,task_id,notice_time_ns,"
-              "risk_elapsed_time_ns,task_compute_start_time_ns,task_service_time_ns,"
+    output << "simulation_time_ns,node_id,task_id,task_compute_start_time_ns,task_service_time_ns,"
               "task_elapsed_time_ns,remaining_compute_time_ns,"
               "expected_compute_completion_time_ns,completion_ratio,"
               "f1_step_failure_probability,f2_step_failure_probability,"
@@ -99,9 +98,8 @@ WriteProbabilityRecords(const std::vector<ComputeFailureProbabilityRecord>& reco
     output << std::setprecision(17) << std::boolalpha;
     for (const ComputeFailureProbabilityRecord& record : records)
     {
-        output << record.simulationTimeNs << ',' << record.faultId << ','
+        output << record.simulationTimeNs << ','
                << record.nodeId << ',' << record.taskId << ','
-               << record.noticeTimeNs << ',' << record.riskElapsedTimeNs << ','
                << record.taskComputeStartTimeNs << ','
                << record.taskServiceTimeNs << ','
                << record.taskElapsedTimeNs << ','
@@ -126,16 +124,13 @@ WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
                             "fault-predictions.csv",
                             outputDirectory);
 
-    std::set<uint64_t> episodeIds;
     std::set<uint64_t> taskIds;
     for (const ComputeFailureProbabilityRecord& prediction : predictions)
     {
-        episodeIds.insert(prediction.faultId);
         taskIds.insert(prediction.taskId);
     }
     const Json summary = {
         {"prediction_count", predictions.size()},
-        {"risk_episode_count", episodeIds.size()},
         {"task_count", taskIds.size()}};
     std::ofstream summaryOutput(
         OutputPath(outputDirectory, "fault-prediction-summary.json"),
@@ -242,18 +237,16 @@ WriteFaultMetrics(const FaultController& controller,
         throw std::runtime_error("cannot write fault-events.csv");
     }
     eventOutput << "simulation_time_ns,fault_id,node_id,fault_type,event_type,"
-                   "notice_time_ns,start_time_ns,duration_ns,failure_probability,"
+                   "start_time_ns,duration_ns,failure_probability,"
                    "satellite_available_after,communication_available_after,"
                    "compute_available_after,affected_task_count,affected_transfer_count,"
-                   "route_recomputed,fault_source\n";
+                   "route_recomputed,fault_source,p_f1,p_f2,temperature_c,continuous_busy_s\n";
     eventOutput << std::setprecision(17) << std::boolalpha;
     for (const FaultRuntimeEventRecord& event : events)
     {
         eventOutput << event.simulationTimeNs << ',' << event.faultId << ',' << event.nodeId
                     << ',' << FaultTypeToString(event.faultType) << ','
                     << FaultEventTypeToString(event.eventType) << ',';
-        WriteOptionalCsv(eventOutput, event.noticeTimeNs);
-        eventOutput << ',';
         WriteOptionalCsv(eventOutput, event.startTimeNs);
         eventOutput << ',';
         WriteOptionalCsv(eventOutput, event.durationNs);
@@ -264,7 +257,16 @@ WriteFaultMetrics(const FaultController& controller,
                     << event.computeAvailableAfter << ',' << event.affectedTaskCount << ','
                     << event.affectedTransferCount << ',' << event.routeRecomputed << ','
                     << (event.eventType == FaultEventType::START
-                            ? FaultSource(*faultById.at(event.faultId)) : "") << '\n';
+                            ? FaultSource(*faultById.at(event.faultId)) : "") << ',';
+        const auto& fault = *faultById.at(event.faultId);
+        WriteOptionalCsv(eventOutput, fault.pF1);
+        eventOutput << ',';
+        WriteOptionalCsv(eventOutput, fault.pF2);
+        eventOutput << ',';
+        WriteOptionalCsv(eventOutput, fault.temperatureC);
+        eventOutput << ',';
+        WriteOptionalCsv(eventOutput, fault.continuousBusySeconds);
+        eventOutput << '\n';
     }
 
     uint64_t computeFaultCount = 0;
@@ -280,7 +282,6 @@ WriteFaultMetrics(const FaultController& controller,
             ++satelliteFaultCount;
         }
     }
-    uint64_t noticeEventCount = 0;
     uint64_t startEventCount = 0;
     uint64_t recoveryEventCount = 0;
     uint64_t routeRecomputationCount = 0;
@@ -288,11 +289,6 @@ WriteFaultMetrics(const FaultController& controller,
     {
         switch (event.eventType)
         {
-        case FaultEventType::NOTICE:
-            ++noticeEventCount;
-            break;
-        case FaultEventType::NOTICE_CLEAR:
-            break;
         case FaultEventType::START:
             ++startEventCount;
             break;
@@ -335,7 +331,6 @@ WriteFaultMetrics(const FaultController& controller,
         {"fault_count", trace.faults.size()},
         {"compute_fault_count", computeFaultCount},
         {"satellite_fault_count", satelliteFaultCount},
-        {"notice_event_count", noticeEventCount},
         {"start_event_count", startEventCount},
         {"recovery_event_count", recoveryEventCount},
         {"active_fault_count_at_end", controller.GetState().GetActiveFaultIds().size()},
@@ -385,7 +380,7 @@ WriteFaultMetrics(const FaultController& controller,
             throw std::runtime_error("cannot write fault-model-state.csv");
         }
         states << "simulation_time_ns,node_id,busy,sampling_eligible,temperature_c,"
-                  "f1_risk,p_f1,latitude_deg,longitude_deg,in_saa,f2_spatial_risk,p_f2,p_compute\n";
+                  "f1_risk,p_f1,latitude_deg,longitude_deg,in_saa,f2_spatial_risk,p_f2,p_compute,continuous_busy_s\n";
         states << std::setprecision(17);
         for (const auto& r : modelEngine->GetStateAuditRecords())
         {
@@ -395,7 +390,7 @@ WriteFaultMetrics(const FaultController& controller,
                    << r.f2.longitudeDegrees << ',' << r.f2.inRegion << ',' << r.f2.spatialRisk
                    << ',' << r.f2.stepFailureProbability << ','
                    << CombineComputeFaultProbabilities(r.f1.stepFailureProbability,
-                                                       r.f2.stepFailureProbability) << '\n';
+                                                       r.f2.stepFailureProbability) << ',' << r.f1.continuousBusySeconds << '\n';
         }
     }
     else

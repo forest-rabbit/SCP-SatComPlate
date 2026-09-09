@@ -4,12 +4,11 @@
 星座使用 `synthetic-66.csv`，全部 66 颗卫星都具有 1,500,000 work-unit/s 算力。
 任务由统一的 `generate-task-workload.py --profile=f1-validation` 生成：
 
-- 节点 0、11、22 各连续处理 4 个 15 秒任务，分别在 56、66、76 秒达到临界温度；
-- 第 4、9、14 号任务正在计算时发生故障并失败，恢复时间均为 8 秒；
-- 第 5、10、15 号任务在各自恢复后到达并完成，证明失败的旧任务不会复活，但新任务
-  可以继续运行；
-- 节点 33 连续处理 3 个 15 秒任务，只形成风险 episode，不发生故障；
-- 第 19、20 号短任务分散到节点 44、55，作为不会过热的稀疏对照。
+- 节点 0、11、22 各有 4 个连续 15 秒任务及后续任务，验证温升、中断和恢复；
+- 节点 33 有 3 个连续 15 秒任务，节点 44、55 为短任务对照。
+
+这是保持不变的旧功能输入，不是当前 G3 的故障数量标定输入。新的 F1 直接概率与
+动态恢复会改变具体故障任务和时刻；不再承诺 task 4/9/14 故障或固定 8 秒恢复。
 
 `task-trace.json` 是平台输入，`workload-summary.json` 只记录生成角色和预期验证点。
 故障内部参数来自 [`fault-para.cc`](../../../fault/fault-para.cc)，本目录不再保存第二份
@@ -64,8 +63,7 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --outputDir=/tmp/satcompute-f1-generate"
 ```
 
-预期 trace 包含节点 0、11、22 的三次实际 compute 故障和节点 33 的一条风险-only
-记录。计算故障不会改变 ISL，也不会触发路由重算。
+trace 只记录本轮真实 compute START，不输出 risk-only。计算故障不会改变 ISL，也不会触发路由重算。
 
 ## 重复验证
 

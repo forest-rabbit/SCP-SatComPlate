@@ -112,6 +112,7 @@ ComputeService::SetComputeAvailable(bool available)
         return false;
     }
     m_computeAvailable = available;
+    NotifyComputeState();
     if (!available && m_dispatchEvent.IsPending())
     {
         Simulator::Cancel(m_dispatchEvent);
@@ -142,6 +143,7 @@ ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
                     "cancelled compute busy-time overflow");
     m_busyTimeNs += elapsed;
     m_hasCurrentTask = false;
+    NotifyComputeState();
     m_currentTask = {};
     m_currentTaskStartTimeNs = -1;
     m_currentTaskServiceTimeNs = 0;
@@ -206,6 +208,7 @@ ComputeService::StopApplication()
         m_busyTimeNs = GetBusyTimeNs();
     }
     m_isRunning = false;
+    NotifyComputeState();
     if (m_dispatchEvent.IsPending())
     {
         Simulator::Cancel(m_dispatchEvent);
@@ -243,6 +246,7 @@ ComputeService::DispatchNextTask()
     m_currentTaskServiceTimeNs = CalculateServiceTimeNs(
         m_currentTask.computeWorkUnits,
         m_computeRateWorkUnitsPerSecond);
+    NotifyComputeState();
     m_taskStartedCallback(m_currentTask.taskId, m_nodeId, m_currentTaskStartTimeNs);
     m_completionEvent = Simulator::Schedule(NanoSeconds(m_currentTaskServiceTimeNs),
                                             &ComputeService::CompleteCurrentTask,
@@ -269,6 +273,7 @@ ComputeService::CompleteCurrentTask()
 
     const uint64_t completedTaskId = m_currentTask.taskId;
     m_hasCurrentTask = false;
+    NotifyComputeState();
     m_currentTask = {};
     m_currentTaskStartTimeNs = -1;
     m_currentTaskServiceTimeNs = 0;
@@ -280,6 +285,24 @@ uint32_t
 ComputeService::GetNodeId() const
 {
     return m_nodeId;
+}
+
+void
+ComputeService::ConnectStateObserver(Callback<void, uint32_t, bool> callback)
+{
+    m_computeState.ConnectWithoutContext(callback);
+}
+
+void
+ComputeService::DisconnectStateObserver(Callback<void, uint32_t, bool> callback)
+{
+    m_computeState.DisconnectWithoutContext(callback);
+}
+
+void
+ComputeService::NotifyComputeState()
+{
+    m_computeState(m_nodeId, m_isRunning && m_computeAvailable && m_hasCurrentTask);
 }
 
 uint64_t

@@ -11,11 +11,8 @@ import sys
 
 FIELDS = (
     "simulation_time_ns",
-    "fault_id",
     "node_id",
     "task_id",
-    "notice_time_ns",
-    "risk_elapsed_time_ns",
     "task_compute_start_time_ns",
     "task_service_time_ns",
     "task_elapsed_time_ns",

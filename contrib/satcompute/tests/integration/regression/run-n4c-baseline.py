@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--task-trace", default=f"{INPUT}/task-trace.json")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--run", type=int, default=1)
-    parser.add_argument("--f1-intensity", type=float)
+    parser.add_argument("--f1-beta", type=float)
     parser.add_argument("--disable-f3", action="store_true")
     parser.add_argument("--hotspot-manifest", type=Path,
                         help="Offline controlled F3 target/time; never supplied to an online algorithm")
@@ -45,8 +45,8 @@ def main():
         arguments += [f"--faultTrace={output}/fault-trace.json", "--taskCompletionPolicy=report",
                       "--faultEnableF1=1", "--faultEnableF2=1", f"--faultEnableF3={int(not args.disable_f3)}",
                       f"--faultProbabilityAudit={int(args.audit)}"]
-        if args.f1_intensity is not None:
-            arguments += [f"--faultF1MaxIntensity={args.f1_intensity}"]
+        if args.f1_beta is not None:
+            arguments += [f"--faultF1Beta={args.f1_beta}"]
         if args.hotspot_manifest is not None and not args.disable_f3:
             f3 = json.loads(args.hotspot_manifest.read_text())["f3"]
             seconds, ns = divmod(f3["time_ns"], 10**9)
@@ -54,7 +54,7 @@ def main():
                           f"--faultF3Time={seconds}.{ns:09d}"]
     command = [str(ROOT / "ns3"), "run", "--no-build", shlex.join(arguments)]
     identity = {"command": command, "seed": args.seed, "run": args.run, "fault_mode": args.fault_mode,
-                "task_trace": args.task_trace, "f1_intensity_override": args.f1_intensity,
+                "task_trace": args.task_trace, "f1_beta_override": args.f1_beta,
                 "f3_disabled": args.disable_f3, "hotspot_manifest": str(args.hotspot_manifest),
                 "audit": args.audit,
                 "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),

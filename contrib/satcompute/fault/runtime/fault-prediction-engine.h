@@ -35,13 +35,9 @@ class FaultPredictionEngineError : public std::runtime_error
 };
 
 /**
- * Maintain deterministic F1/F2 shadow state and emit NOTICE-gated forecasts.
- *
- * Optional generation auditing uses the same pure kernels and parameters. The
- * engine never consumes a random stream and never mutates the live fault-model
- * state. It prepares a causal forecast before a fault check, then observes the
- * events that actually executed at that timestamp. A formal record is emitted
- * only while a compute NOTICE is active, including its NOTICE and START ticks.
+ * Maintain private F1/F2 state and audit every eligible running-task check.
+ * No random stream is consumed, no live model is mutated, and no notification
+ * or future fault schedule is read. The current pre-sampling check is included.
  */
 class FaultPredictionEngine : public Object
 {
@@ -78,17 +74,11 @@ class FaultPredictionEngine : public Object
     const std::vector<ComputeFailureProbabilityRecord>& GetPredictionRecords() const;
 
   private:
-    /** Minimal causal state retained from one executed compute NOTICE. */
-    struct ActiveRisk
-    {
-        uint64_t faultId{}; ///< Risk-episode identity.
-        int64_t noticeTimeNs{}; ///< Observed risk-entry time.
-    };
-
     /** Independent, deterministic model state for one compute node. */
     struct NodeState
     {
         F1SelfStateFaultSnapshot f1State; ///< Current F1 shadow state.
+        int64_t thermalTimeNs{}; ///< Exact physical update boundary.
         F2RadiationFaultSnapshot f2State; ///< Current F2 shadow state.
         Ptr<ComputeService> computeService; ///< Live task-state source.
     };
@@ -107,7 +97,9 @@ class FaultPredictionEngine : public Object
 
     /** Advance shadow state and prepare forecasts before same-time model events. */
     void PrepareTime(int64_t simulationTimeNs);
-    /** Consume same-time events and emit only NOTICE-gated formal records. */
+    /** Track actual busy/idle boundaries in the private shadow state. */
+    void OnComputeStateChanged(uint32_t nodeId, bool busy);
+    /** Emit prepared pre-sampling records without notification gating. */
     void FinalizeTime(int64_t simulationTimeNs);
     void DoDispose() override;
 
@@ -119,8 +111,6 @@ class FaultPredictionEngine : public Object
     std::optional<F1SelfStateFaultModel> m_f1Model; ///< Active F1 kernel.
     std::optional<F2RadiationFaultModel> m_f2Model; ///< Active F2 kernel.
     std::map<uint32_t, NodeState> m_nodes; ///< Shadow state by stable node ID.
-    std::size_t m_consumedFaultEventCount{}; ///< Visible controller-event prefix.
-    std::map<uint32_t, ActiveRisk> m_activeRisks; ///< Active NOTICE by node.
     std::map<uint32_t, PreparedPrediction> m_preparedPredictions; ///< Current tick.
     std::vector<ComputeFailureProbabilityRecord> m_predictionRecords; ///< Past output.
     std::vector<EventId> m_predictionEvents; ///< Pre-scheduled prepare checks.

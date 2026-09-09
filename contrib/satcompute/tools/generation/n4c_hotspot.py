@@ -73,7 +73,7 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
         return times[index], positions[times[index]]
 
     # Early small-request LLM: INPUT can finish well before a one-second offset.
-    # Reserve this worker for its first task; no prior task heating or queue.
+    # An early victim has no prior compute queue; other endpoint use remains normal.
     # Choose a northern native track, physically outside SAA before the event.
     victim = min((t for t in tasks if t["task_profile"] == "llm"),
                  key=lambda t: (t["arrival_time_ns"], t["task_id"]))
@@ -83,7 +83,11 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
     if not eligible:
         raise ValueError("no northern early controlled F3 candidate")
     f3_node = min(eligible, key=lambda n: (stable_hash(seed, "f3-node", n), n))
-    available = [n for n in range(66) if n != f3_node]
+    pre_tasks = [t for t in tasks if t["task_id"] != victim["task_id"]
+                 and victim["arrival_time_ns"] < t["arrival_time_ns"] < f3_time]
+    if not pre_tasks:
+        raise ValueError("no ordinary pre-F3 endpoint task; choose another deterministic window")
+    ordinary = min(pre_tasks, key=lambda t: (t["input_bytes"], t["arrival_time_ns"], t["task_id"]))
     counts = {role: Counter() for role in ("source", "result")}
     placements = []
     fallback = Counter()
@@ -91,6 +95,7 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
     region_totals = defaultdict(lambda: {"task_count": 0, "input_bytes": 0, "work_units": 0})
     for task in sorted(tasks, key=lambda t: (t["arrival_time_ns"], t["task_id"])):
         arrival = task["arrival_time_ns"]
+        available = [n for n in range(66) if arrival < f3_time or n != f3_node]
         if not 1_000_000_000 <= arrival <= 600_000_000_000:
             raise ValueError("arrival outside frozen window")
         slice_time, pos = sample(arrival)
@@ -108,18 +113,26 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
         if task["task_id"] == victim["task_id"]:
             compute = f3_node
         else:
-            weights = [hot_weight if n in hot else 1 for n in available]
+            # During the victim's controlled interval, avoid a second queued
+            # compute endpoint; source use is allowed and verified with none.
+            compute_options = [n for n in available if not
+                (n == f3_node and victim["arrival_time_ns"] <= arrival < f3_time)]
+            weights = [hot_weight if n in hot else 1 for n in compute_options]
             ticket = stable_hash(seed, task["task_id"], "compute") % sum(weights)
-            for n, weight in zip(available, weights):
+            for n, weight in zip(compute_options, weights):
                 if ticket < weight:
                     compute = n
                     break
                 ticket -= weight
         task["compute_node_id"] = compute
         for role in ("source", "result"):
-            options = [n for n in available if n != compute]
+            options = [n for n in available if n != compute and
+                       not (role == "result" and n == f3_node and
+                            arrival + (task["compute_work_units"] * 10**9 + 99999) // 100000 >= f3_time)]
             node = min(options, key=lambda n: (counts[role][n],
                        stable_hash(seed, task["task_id"], role, n), n))
+            if task["task_id"] == ordinary["task_id"] and role == "source":
+                node = f3_node
             task[role + "_node_id"] = node
             counts[role][node] += 1
         latitude, longitude = pos[compute]
@@ -151,6 +164,7 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
                 "fallback_rule": "remaining weighted candidates; background always available",
                 "business_attributes_and_arrivals_unchanged": True,
                 "f3": {"node_id": f3_node, "time_ns": f3_time, "victim_task_id": victim["task_id"],
-                       "construction": "first LLM, sole worker assignment, northern native track; no source shielding"},
+                       "ordinary_task_id": ordinary["task_id"], "ordinary_role": "source",
+                       "construction": "early LLM victim plus ordinary pre-F3 INPUT source; verify completed endpoint use in none and generate; no probability shielding"},
                 "by_region": dict(region_totals), "placements": placements}
     return output, manifest

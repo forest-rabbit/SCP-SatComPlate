@@ -27,85 +27,26 @@ START，并在同节点同刻优先。
 
 ## 运行期标识与 JSON 映射
 
-Fault Trace 汇总已观察到的 episode；在线模型产生事件，控制器按持续时间安排恢复。
-平台没有单独的 `COMPUTE_START` 枚举；常用的 **compute START** 表示
-`fault_type=compute` 与 `event_type=START` 的组合：
+只记录实际 START，恢复由 start+duration 派生，当前只保留 START/RECOVERY 两种事件。
+F1 恢复时间按 START 温度动态计算，F2 固定 8 秒，同刻两者命中取最大值；F3 可截短
+活动 compute 区间并永久关闭卫星。临时停机保留 QUEUED，恢复不复活 FAILED。
 
-| 运行期标识 | JSON 表达 | 含义 |
-|---|---|---|
-| `NOTICE` | compute 记录的 `notice_time_ns` | F1 或 F2 达到或超过各自阈值，联合风险 episode 开始；不代表已经故障 |
-| `NOTICE_CLEAR` | `fault_occurred=false` 且具有 `risk_duration_ns` | 两个来源均退出风险，或 F3 关闭该 episode；episode 内没有发生 compute 故障 |
-| compute `START` | `fault_type=compute`、`fault_occurred=true` 且具有 `start_time_ns` | F1/F2 独立抽样至少一个命中，实际计算故障开始 |
-| compute `RECOVERY` | 由 `start_time_ns + duration_ns` 派生 | 有限 compute 故障结束，只接纳后续任务 |
-| satellite `START` | `fault_type=satellite` 且具有 `start_time_ns` | 永久整星故障开始 |
-
-风险越过阈值和故障抽样是两套判定，因此 compute `START` 可以没有先行 `NOTICE`；
-两者同刻发生时 `warning_lead_time_ns=0`。这些标识只描述故障生命周期，不等同于
-未来主动备份阶段的 `BACKUP_START`、`BACKUP_READY` 或 `TAKEOVER`。
-
-## Fault Trace v2
-
-generate 只写 schema v2。根对象和每条记录都必须包含完整字段，即使值为 `null`：
-
-```json
-{
-  "schema_version": 2,
-  "faults": [
-    {
-      "fault_id": 1,
-      "node_id": 0,
-      "fault_type": "compute",
-      "fault_occurred": true,
-      "notice_time_ns": 44000000000,
-      "start_time_ns": 56000000000,
-      "failure_probability": 0.003119061056128215,
-      "warning_lead_time_ns": 12000000000,
-      "risk_duration_ns": null,
-      "duration_ns": 8000000000
-    },
-    {
-      "fault_id": 2,
-      "node_id": 33,
-      "fault_type": "compute",
-      "fault_occurred": false,
-      "notice_time_ns": 44000000000,
-      "start_time_ns": null,
-      "failure_probability": 0.003119061056128215,
-      "warning_lead_time_ns": null,
-      "risk_duration_ns": 2000000000,
-      "duration_ns": null
-    }
-  ]
-}
-```
-
-### 通用字段
+Fault Trace 仍是 v2 输出容器，但旧 NOTICE、风险-only、预警提前量和风险持续时间字段
+已移除；没有生产 reader，因此不提供旧输出回放兼容层。每条记录包含以下 13 个字段：
 
 | 字段 | 合同 |
 |---|---|
-| `fault_id` | 正 `uint64`，文件内唯一 |
-| `node_id` | 当前星座的稳定卫星 ID，不是全局 `Node::GetId()` |
-| `fault_type` | `compute` 或 `satellite` |
-| `fault_occurred` | 是否真正产生 START |
-| `notice_time_ns` | 风险首次达到阈值的绝对时刻，或 `null` |
-| `start_time_ns` | 实际故障开始的绝对时刻，或 `null` |
-| `failure_probability` | NOTICE 或无预警 START 当时的单步联合概率，或 `null` |
-| `warning_lead_time_ns` | `start-notice`，只用于有预警实际故障 |
-| `risk_duration_ns` | `clear-notice`，只用于风险-only episode |
-| `duration_ns` | 可恢复 compute 故障持续时间；永久整星故障为 `null` |
+| fault_id / node_id | 正唯一故障 ID / 稳定卫星 ID |
+| fault_type | compute 或 satellite |
+| fault_occurred | 始终 true |
+| start_time_ns | 实际 START 绝对 ns，非负且早于仿真终点 |
+| failure_probability | START 当次抽样的 q_comp；F3 为 null |
+| duration_ns | 正 compute 停机 ns；永久 F3 为 null |
+| p_f1 / p_f2 | START 当次的两个来源概率；F3 为 null |
+| f1_occurred / f2_occurred | 同次独立抽样的命中标志；F3 均 false |
+| temperature_c | F1 启用时的 START 温度，否则 null |
+| continuous_busy_s | F1 启用时已连续 busy 的秒数，否则 null |
 
-只允许四种记录组合：
-
-| 记录 | notice | start | probability | lead | risk duration | duration |
-|---|---|---|---|---|---|---|
-| 风险-only compute | 有 | null | 有 | null | 正数 | null |
-| 有预警 compute 故障 | 有 | 有 | 有 | `start-notice` | null | 正数 |
-| 无预警 compute 故障 | null | 有 | 有 | null | null | 正数 |
-| 永久 satellite 故障 | null | 有 | null | null | null | null |
-
-同一节点实际发生的故障区间不得重叠，恰好在上一恢复时刻开始除外。writer 按
-`anchor_time -> node_id -> fault_id` canonical 排序；anchor 优先使用 notice，否则
-使用 start。相同配置、seed、run 和任务输入重复 generate，应产生逐字节相同 trace。
-
-风险与故障统一写入这一份输出，不存在独立 `risk-trace.json`。旧 v1 读取和生产
-replay 仅保留在 Git 历史中，当前主线不再支持。
+同一节点实际故障区间不重叠，可首尾相接。writer 按 start_time_ns、node_id、fault_id
+排序。相同输入、参数和 seed/run 的重复 generate 应逐字节一致。独立概率审计 CSV
+不是 Fault Trace，也不是平台输入。完整物理模型与生命周期见 [fault README](../../fault/README.md)。

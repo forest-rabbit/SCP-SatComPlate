@@ -66,7 +66,7 @@ Run(bool queryEnabled, bool auditEnabled, bool computeSources = true, bool contr
         Check(model->QueryComputeRisk(3).status == ComputeRiskStatus::NOT_READY,
               "unconfigured query must not be ready");
         auto parameters = GetDefaultFaultParameters();
-        parameters.f1.temperature.heatingTauSeconds = 2.0;
+        parameters.f1.temperature.heatingToCriticalSeconds = 2.0;
         parameters.f1.enabled = computeSources;
         parameters.f2.enabled = computeSources;
         parameters.f3.enabled = true;
@@ -167,7 +167,7 @@ Run(bool queryEnabled, bool auditEnabled, bool computeSources = true, bool contr
                         Close(*q.pF2, f2.stepFailureProbability);
                         if (isBusy)
                             ++busy;
-                        else if (!live.riskEpisodeActive)
+                        else
                             ++idle;
                         auto longer = model->QueryComputeRisk(live.nodeId, 2000000000LL);
                         Check(longer.checkCount == (computeSources ? 2 : 0) &&
@@ -194,7 +194,6 @@ Run(bool queryEnabled, bool auditEnabled, bool computeSources = true, bool contr
                 {
                     Check(before[i].f1SampleCount == after[i].f1SampleCount &&
                               before[i].f2SampleCount == after[i].f2SampleCount &&
-                              before[i].riskEpisodeActive == after[i].riskEpisodeActive &&
                               before[i].f1State.temperatureC == after[i].f1State.temperatureC &&
                               before[i].combinedStepFailureProbability ==
                                   after[i].combinedStepFailureProbability,
@@ -245,6 +244,131 @@ Run(bool queryEnabled, bool auditEnabled, bool computeSources = true, bool contr
     Mac48Address::ResetAllocationIndex();
     return signature;
 }
+// Runtime boundaries: fractional thermal recovery, joint-source recovery, and F3 preemption.
+void
+RunRecoveryBoundary(bool joint, bool preempt)
+{
+    RngSeedManager::SetSeed(1);
+    RngSeedManager::SetRun(1);
+    {
+        constexpr int64_t durationNs = 60000000000LL;
+        auto config = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", durationNs,
+                                                            20000000000LL, 6171353.0L);
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+        ComputeProfile profile;
+        for (auto id : ids)
+            profile.nodes.push_back({id, 1000});
+        TaskTrace tasks;
+        tasks.tasks = {{1, 0, 3, 0, 1, 1, 100000, 0, 1, 2},
+                       {2, 0, 3, 0, 1, 1, 100000, 100000000, 3, 4}};
+        auto controller = CreateObject<FaultController>();
+        controller->ConfigureGeneration(ids, durationNs);
+        controller->BindTopology(topology);
+        auto parameters = GetDefaultFaultParameters();
+        parameters.f2.enabled = joint;
+        parameters.f3.enabled = preempt;
+        if (joint)
+        {
+            // Test-only certainty at t=1, without changing production parameters or RNG.
+            parameters.f1.temperature.heatingToCriticalSeconds = 0.01;
+            parameters.f2.longitudeMinDegrees = -180;
+            parameters.f2.longitudeMaxDegrees = 180;
+            parameters.f2.latitudeMinDegrees = -90;
+            parameters.f2.latitudeMaxDegrees = 90;
+            parameters.f2.sigmaLongitudeWestDegrees = 180;
+            parameters.f2.sigmaLongitudeEastDegrees = 181;
+            parameters.f2.sigmaLatitudeDegrees = 90;
+            parameters.f2.referenceSeuIntensityPerSecond = 1e6;
+        }
+        if (preempt)
+        {
+            parameters.f3.mode = "controlled";
+            parameters.f3.controlledNodeId = 3;
+            parameters.f3.controlledStartSeconds = 3.25;
+        }
+        auto model = CreateObject<FaultModelEngine>();
+        model->Configure(parameters, ids, ids, durationNs, controller, false);
+        if (joint)
+            model->BindOrbitConstellation(topology.GetConstellation());
+        auto coordinator = CreateObject<TaskCoordinator>();
+        coordinator->Initialize(profile, tasks, topology, "fixed", 1024,
+                                config.parameters.islMtuBytes,
+                                config.parameters.receiverRcvBufBytes, false, durationNs);
+        controller->BindTaskCoordinator(coordinator);
+        model->BindTaskCoordinator(coordinator);
+        bool observed = false, recovered = false;
+        for (int second = 1; second < 55; ++second)
+        {
+            Simulator::Schedule(Seconds(second) + NanoSeconds(1), [&] {
+                if (observed)
+                    return;
+                for (const auto& event : controller->GetEvents())
+                {
+                    if (event.nodeId != 3 || event.faultType != FaultType::COMPUTE ||
+                        event.eventType != FaultEventType::START)
+                        continue;
+                    observed = true;
+                    Check(event.affectedTaskCount == 1, "outage must interrupt only RUNNING");
+                    if (joint)
+                        Check(event.durationNs == 8000000000LL, "joint outage must use max(F1,F2)");
+                    else
+                        Check(*event.durationNs > 0 && *event.durationNs < 4000000000LL &&
+                                  *event.durationNs % 1000000000LL != 0,
+                              "fractional F1 recovery was not exercised");
+                    const int64_t end = *event.startTimeNs + *event.durationNs;
+                    Simulator::Schedule(NanoSeconds(end + 1 - Simulator::Now().GetNanoSeconds()),
+                                        [&] {
+                        if (preempt)
+                        {
+                            Check(!controller->GetState().IsSatelliteAvailable(3) &&
+                                      !coordinator->GetComputeServices().at(3)->HasRunningTask(),
+                                  "old recovery resurrected permanent F3 node");
+                        }
+                        else
+                        {
+                            Check(controller->GetState().IsComputeAvailable(3) &&
+                                      coordinator->GetComputeServices().at(3)->HasRunningTask(),
+                                  "queued task did not resume at exact recovery");
+                            for (const auto& state : model->GetNodeSnapshots())
+                                if (state.nodeId == 3)
+                                    Check(std::abs(state.f1State.temperatureC - 17) < 1e-7,
+                                          "recovery did not cool naturally to base");
+                        }
+                        recovered = true;
+                        Simulator::Stop();
+                    });
+                    break;
+                }
+            });
+        }
+        if (joint && !preempt)
+            Simulator::Schedule(Seconds(5) + NanoSeconds(1), [&] {
+                Check(!controller->GetState().IsComputeAvailable(3),
+                      "F1 cooling incorrectly ended joint F2 outage early");
+                for (const auto& state : model->GetNodeSnapshots())
+                    if (state.nodeId == 3)
+                        Close(state.f1State.temperatureC, 17);
+            });
+        Simulator::Stop(NanoSeconds(durationNs));
+        Simulator::Run();
+        model->Finalize();
+        Check(observed && recovered, "runtime recovery boundary was not exercised");
+        for (const auto& fault : controller->GetTrace().faults)
+            if (fault.nodeId == 3 && fault.faultType == FaultType::COMPUTE)
+            {
+                Check(fault.f1Occurred && fault.f2Occurred == joint,
+                      "joint source flags lost independent hits");
+                if (preempt)
+                    Check(fault.GetRecoveryTimeNs() == 3250000000LL,
+                          "F3 did not truncate the active compute outage");
+            }
+    }
+    Simulator::Destroy();
+    Ipv4AddressGenerator::Reset();
+    Mac48Address::ResetAllocationIndex();
+}
 } // namespace
 
 int
@@ -252,6 +376,9 @@ main()
 {
     try
     {
+        RunRecoveryBoundary(false, false);
+        RunRecoveryBoundary(true, false);
+        RunRecoveryBoundary(true, true);
         const auto control = Run(false, false);
         const auto queried = Run(true, false);
         const auto audited = Run(true, true);

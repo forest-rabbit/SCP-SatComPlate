@@ -206,9 +206,9 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("faultEnableF3",
                          "Enable the built-in F3 source in generate mode",
                          faultParameters.f3.enabled);
-    commandLine.AddValue("faultF1MaxIntensity",
-                         "Scenario F1 maximum intensity per second; thermal shape unchanged",
-                         faultParameters.f1.maxFailureIntensityPerSecond);
+    commandLine.AddValue("faultF1Beta",
+                        "F1 temperature probability shape; heating and cooling remain fixed",
+                        faultParameters.f1.temperature.growthFactor);
     commandLine.AddValue("faultF3Mode", "F3 fixed_k, poisson or controlled",
                          faultParameters.f3.mode);
     commandLine.AddValue("faultF3Node", "Controlled F3 target, scheduler-only scenario truth",

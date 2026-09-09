@@ -39,7 +39,9 @@
     "node_id": 9,
     "time_ns": 2130334420,
     "victim_task_id": 79,
-    "construction": "first LLM, sole worker assignment, northern native track; no source shielding"
+    "ordinary_task_id": 280,
+    "ordinary_role": "source",
+    "construction": "early LLM victim plus ordinary pre-F3 INPUT source; verify completed endpoint use in none and generate; no probability shielding"
   },
   "by_region": {
     "north-america": {
@@ -76,7 +78,7 @@
       "latitude_deg": 24.553509011054544,
       "longitude_deg": -88.35709551767228,
       "region": "north-america",
-      "weighted_hot_candidate": false
+      "weighted_hot_candidate": true
     },
     {
       "task_id": 280,

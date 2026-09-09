@@ -60,7 +60,7 @@ metrics/
 | 任务模式 | `task-events.csv` | 任务状态转换事件 |
 | 任务模式 | `task-summary.csv` | 每个任务的输入、计算、结果、最终状态、失败原因和失败时间 |
 | 任务模式 | `compute-node-summary.csv` | 各算力节点的任务数、忙碌时间和利用率 |
-| 提供 `faultTrace` | `fault-events.csv` | canonical NOTICE/START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
+| 提供 `faultTrace` | `fault-events.csv` | canonical START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
 | 提供 `faultTrace` | `fault-summary.json` | 故障类型/事件/活动故障、失败任务、FAILED/CANCELLED transfer 与故障路由重算计数 |
 | generate 任务模式 | `fault-task-impact.csv` | 已发生故障的逐任务直接/间接影响、真实进度及最终结果 |
 | `faultProbabilityAudit=1` 的 generate | `fault-predictions.csv` | 活动风险中运行任务的逐检查点 F1/F2/联合因果概率和任务进度 |
@@ -142,7 +142,7 @@ route_recomputed
 timestamp 批次最多令一行 `route_recomputed=true`，因此逐行求和就是故障引起的
 路由重算次数。
 
-`fault-summary.json` 固定汇总 `fault_count`、两类 fault count、三类 event count、
+`fault-summary.json` 固定汇总 `fault_count`、两类 fault count、START/RECOVERY 两类 event count、
 `active_fault_count_at_end`、`failed_task_count`、`failed_transfer_count`、
 `cancelled_transfer_count` 和 `route_recomputation_count_due_to_fault`。失败与取消计数
 来自仿真终点的稳定终态，不把仍在运行的对象误记为故障终态。
@@ -152,12 +152,11 @@ timestamp 批次最多令一行 `route_recomputed=true`，因此逐行求和就�
 以下三个文件属于显式启用的概率审计输出。`faultProbabilityAudit` 默认 `false`；关闭
 时平台不创建预测器，并从复用的 `outputDir` 中删除陈旧概率审计文件。
 
-`fault-predictions.csv` 每行对应一次活动 compute 风险与一个正在运行任务的因果
+`fault-predictions.csv` 每行对应当前可计算节点上一个正在运行任务的因果
 预测，列为：
 
 ```text
-simulation_time_ns, fault_id, node_id, task_id, notice_time_ns,
-risk_elapsed_time_ns, task_compute_start_time_ns, task_service_time_ns,
+simulation_time_ns, node_id, task_id, task_compute_start_time_ns, task_service_time_ns,
 task_elapsed_time_ns, remaining_compute_time_ns,
 expected_compute_completion_time_ns, completion_ratio,
 f1_step_failure_probability, f2_step_failure_probability,
@@ -165,7 +164,7 @@ combined_step_failure_probability, horizon_step_count,
 failure_before_finish_probability
 ```
 
-所有字段均来自预测时刻已经可见的 NOTICE、任务快照和无随机数 F1/F2 影子模型。
+所有字段均来自预测时刻已经可见的任务快照和无随机数 F1/F2 影子模型。
 三个单步字段满足：
 
 ```text
@@ -175,13 +174,11 @@ P_fail_before_finish = 1 - product(k, 1 - q_comp,k)
 
 CSV 中的三个单步字段对应当前 `k=0`；累计概率还包含任务预计完成前的未来检查点。
 未来 F1 按任务在无故障条件下继续忙碌推进，未来 F2 使用 ns-3.48 原生轨道的按时刻
-ECEF 坐标，因此同一 episode 内的 `q_comp` 可以随温度、能源或空间区域变化，不是
-NOTICE 时冻结的常数。
+ECEF 坐标，因此 `q_comp` 随温度、能源和空间区域变化，不是冻结常数。
 
 `fault-prediction-summary.json` 固定包含：
 
 - `prediction_count`；
-- `risk_episode_count`；
 - `task_count`。
 
 平台不再把一次随机结果写成 `true/false` 预测标签，也不计算 Brier score。真实故障

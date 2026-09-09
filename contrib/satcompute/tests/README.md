@@ -36,9 +36,9 @@ tests/
 | `compute-service-test.cc` | 整数服务时间、非抢占 FCFS、同刻 task ID tie-break 和因果运行任务快照 |
 | `fault-lifecycle-test.cc` | FAILED/CANCELLED 幂等终止、迟到包隔离和 reservation 归零 |
 | `fault-trace-test.cc` | 生成 trace 的字段、算术/区间校验和 canonical writer |
-| `fault-risk-query-test.cc` | 1 秒节点风险、NOTICE 前/空闲/故障状态、只读性、时间边界及 query/audit 不改变 RNG 与事件 |
+| `fault-risk-query-test.cc` | 1 秒节点风险、空闲/故障状态、动态恢复、双来源时长、F3 抢占、只读性、时间边界及 query/audit 不改变 RNG 与事件 |
 | `fault-model-test.cc` | 内置参数、F1/F2 状态、独立抽样、`q_comp`，共享模型状态滚动预测、原生未来位置、无状态/RNG 副作用，以及 F3 fixed-K/Poisson 数量、范围、无放回和确定性 |
-| `compute-fault-execution-test.cc` | 计算故障批处理、任务各阶段、恢复、通信不变、NOTICE/START 当刻模型预测和 生成事件与测试注入的一致性 |
+| `compute-fault-execution-test.cc` | 计算故障批处理、任务各阶段、恢复、通信不变、START 当刻抽样前预测和 生成事件与测试注入的一致性 |
 | `satellite-fault-execution-test.cc` | 整星端点语义、即时重路由、capacity 重准入和按实时距离恢复 |
 | `online-orbit-foundation-test.cc` | 原生 mobility、连续坐标、固定 plus-grid 候选和 canonical 顺序 |
 | `online-topology-controller-test.cc` | 距离门控、fixed/distance 时延、周期更新和按边集合重算路由 |
@@ -47,7 +47,7 @@ tests/
 以及缺失预测记录时的失败结果。`test_workload_generators.py` 检查 stress 任务
 生成器的确定性、总输入字节预算、
 结果大小和无版本/hash 字段合同；同时检查 F1 验证档的 66 星、20 任务，以及 F2
-验证档的 66 星、8 任务、热点故障、恢复后、风险-only/截断风险和稀疏对照角色；
+验证档的 66 星、8 任务、热点故障、恢复后、空间暴露和稀疏对照角色；
 N4B 联合档还检查 100 任务、5 个有界热点、F2/F3 窗口任务、62 个分布式对照和
 提交 fixture 的逐字节确定性。
 
@@ -71,21 +71,14 @@ N4B 联合档还检查 100 任务、5 个有界热点、F2/F3 窗口任务、62 
   size-aware 仿真和 66 星在线拓扑；
 - `run-full-workload-regression.sh`：运行任务确定性、无任务模式、strict/report、
   失败诊断，并执行正式的 100 秒/66 星/20 任务示例；
-- `run-fault-lifecycle-regression.sh`：覆盖 N4B F1 热校准，
-  以及 F2 轨道偏移、真实 ECEF 风险、risk-only、有/无预警实际
-  故障和 66 星小任务闭环；同时检查同 seed trace 一致、重复 generate 逐文件等价、
-  compute 故障不改变路由、故障中任务失败和恢复后新任务完成；预测部分检查滚动的
-  F1/F2/`q_comp`、动态 `P_fail_before_finish`、任务剩余时间、NOTICE 当刻输出、风险
-  已持续时间，以及 F1-only、F2-only、F1+F2 的 generate 抽样前模型真值与独立
-  预测逐时刻概率审计；这些场景显式开启 `faultProbabilityAudit`，并另行检查正常
-  重复 generate 默认不生成审计文件、复用目录时清理陈旧文件、无预警故障无正式
-  预测和无风险输出；F3 部分覆盖无任务 fixed-K 永久
-  整星故障、即时重路由、F3 抢占活动 compute 区间以及 F1/F2/F3 同开。
-- `run-n4b-joint-acceptance.sh`：冻结 66 星、1000 秒、100 任务的四轮联合验收；
-  比较正常/审计 generate 的 trace 与正式输出、审计 重复 generate 的事件和概率、
-  正常 重复 generate 的正式输出，并在复用输出目录后检查陈旧审计文件清理；
-  同时固定 93/100 任务终态、82 条概率记录、F1/F2/F3 事件、唯一 F3 重路由、零丢包
-  和账本归零。
+- `run-fault-lifecycle-regression.sh`：F1 热/概率曲线、动态恢复、F2 原生空间风险与
+  固定 8 秒恢复、小任务闭环、F3 永久断链；检查 RUNNING 中断、排队保留、通信不变、
+  同 seed 重复一致。审计涵盖全部 RUNNING 任务的逐秒概率与剩余窗口，容差 1e-12，
+  不依赖 NOTICE 或固定行数，并核对默认关闭/陈旧审计文件清理。
+- `run-n4b-joint-acceptance.sh`：复用 66 星/1000 s/100 任务输入，检查四轮
+  正常/审计/重复运行业务一致、联合来源、唯一 F3 重路由、零丢包、账本归零、
+  所有任务/传输终态与实际 START 合同。旧 93/100、82 行属于旧 F1/NOTICE 结果，
+  不再作为新模型固定 golden。
 
 ## 本地运行
 

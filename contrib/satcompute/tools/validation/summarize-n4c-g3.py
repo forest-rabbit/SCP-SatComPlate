@@ -49,6 +49,17 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
         require(success == (actual["task_success"] == "1") == (actual["final_state"] == "COMPLETED"),
                 "success/deadline/RESULT contract mismatch")
     placements = {p["task_id"]: p for p in manifest["placements"]}
+    f3_plan = manifest["f3"]
+    ordinary = by_id[f3_plan["ordinary_task_id"]]
+    require(int(ordinary["source_node_id"]) == f3_plan["node_id"] and
+            0 <= int(ordinary["arrival_time_ns"]) < int(ordinary["input_transfer_complete_time_ns"]) < f3_plan["time_ns"] and
+            int(ordinary["compute_node_id"]) != f3_plan["node_id"] and
+            int(ordinary["result_node_id"]) != f3_plan["node_id"],
+            "ordinary pre-F3 source was not actually used and released before F3")
+    ordinary_evidence = {"task_id": int(ordinary["task_id"]), "role": "source",
+        "arrival_time_ns": int(ordinary["arrival_time_ns"]),
+        "endpoint_release_time_ns": int(ordinary["input_transfer_complete_time_ns"]),
+        "fault_time_ns": f3_plan["time_ns"]}
     events = rows(directory / "fault-events.csv") if (directory / "fault-events.csv").exists() else []
     starts = {int(e["fault_id"]): e for e in events if e["event_type"] == "START"}
     impacts = rows(directory / "fault-task-impact.csv") if events else []
@@ -162,18 +173,12 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
                     "f1_risk": distribution([float(s["f1_risk"]) for s in subset])}
     source_counts = Counter(e["fault_source"] for e in starts.values())
     trace = json.loads((directory / "fault-trace.json").read_text())["faults"] if events else []
-    risk_only = [f for f in trace if f["fault_type"] == "compute" and not f["fault_occurred"]]
-    cleared = {int(e["fault_id"]) for e in events if e["event_type"] == "NOTICE_CLEAR"}
-    truncated_risk = [f for f in risk_only if f["fault_id"] not in cleared]
-    require(all(f["notice_time_ns"] + f["risk_duration_ns"] == 1000 * 10**9 for f in truncated_risk),
-            "risk-only record lacks either CLEAR or end-of-run truncation")
+    require(all(f["fault_occurred"] for f in trace), "risk-only trace record survived")
+    require(all(e["event_type"] in ("START", "RECOVERY") for e in events), "notification event survived")
     source_events = {"F1": source_counts["F1"] + source_counts["F1+F2"],
                      "F2": source_counts["F2"] + source_counts["F1+F2"],
                      "F1+F2_merged": source_counts["F1+F2"], "F3": source_counts["F3"],
-                     "compute_outages": sum(e["fault_type"] == "compute" for e in starts.values()),
-                     "risk_only_episodes": len(risk_only),
-                     "risk_only_closed_episodes": len(cleared),
-                     "risk_only_truncated_episodes": len(truncated_risk)}
+                     "compute_outages": sum(e["fault_type"] == "compute" for e in starts.values())}
     by_source = {}
     for source in ("F1", "F2", "F3"):
         selected = [r for r in impacts if int(r["task_id"]) in direct[source] and
@@ -185,6 +190,29 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
             "deadline_slack_s": distribution([int(r["deadline_slack_at_fault_ns"])/1e9 for r in selected]),
             "regions": dict(Counter(placements[int(r["task_id"])]["region"] for r in selected)),
             "outcomes": dict(Counter(r["final_task_state"] for r in selected))}
+    f1_starts = [e for e in starts.values() if "F1" in e["fault_source"]]
+    previous_by_node, intervals = {}, []
+    for event in sorted(f1_starts, key=lambda e: int(e["simulation_time_ns"])):
+        node, time = int(event["node_id"]), int(event["simulation_time_ns"])
+        if node in previous_by_node:
+            intervals.append((time - previous_by_node[node]) / 1e9)
+        previous_by_node[node] = time
+    f1_start_distributions = {
+        field: distribution([float(e[field]) for e in f1_starts])
+        for field in ("temperature_c", "p_f1", "continuous_busy_s")}
+    f1_start_distributions["outage_duration_s"] = distribution([int(e["duration_ns"])/1e9 for e in f1_starts])
+    f1_start_distributions["same_node_start_interval_s"] = distribution(intervals)
+    for event in f1_starts:
+        require(20 < float(event["temperature_c"]) <= 30 and 0 < float(event["p_f1"]) <= 1,
+                "F1 START probability/temperature outside new contract")
+        expected = (float(event["temperature_c"]) - 17) / 3.25
+        if "F2" in event["fault_source"]:
+            expected = max(expected, 8)
+        actual = int(event["duration_ns"]) / 1e9
+        preempted = any(f["node_id"] == int(event["node_id"]) and f["fault_type"] == "satellite" and
+                       f["start_time_ns"] == int(event["simulation_time_ns"]) + int(event["duration_ns"]) for f in trace)
+        require(abs(actual - expected) < 2e-9 or (preempted and actual < expected),
+                "F1 dynamic recovery or F1+F2 maximum duration differs")
     queue_delta = None
     if none_directory:
         none = {r["task_id"]: r for r in rows(none_directory / "task-summary.csv")}
@@ -224,6 +252,7 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
             "network": network,
             "region_runtime": region_runtime, "node_state_audit": state_summary,
             "by_fault_source": by_source, "f3_victim": victim_evidence,
+            "f3_pre_failure_participation": ordinary_evidence, "f1_start_distributions": f1_start_distributions,
             "queue_delta_vs_none_s": queue_delta, "node_busy_s": distribution([int(n["busy_time_ns"])/1e9 for n in node_rows]),
             "audit": "business, actual START, per-task impact, WU progress, deadline and terminal ledgers matched"}
 
