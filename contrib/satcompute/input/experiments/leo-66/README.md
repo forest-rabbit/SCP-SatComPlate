@@ -49,4 +49,4 @@ N4 release validation 只允许运行一次正式 generate+audit+shadow；不能
 
 [G4 验证器](../../../tools/validation/compfrr-shadow/README.md)只做解析/虚拟账本评估，
 不发送备份、不占实际计算或网络资源，不能将 shadow 指标称为真实备份性能。
-N4 最终验证证据入口见[N4C 索引](../../../../../docs/n4c/README.md)。
+N4 最终验证证据见[Release Validation](../../../../../docs/n4c/reviews/N4-final-release-validation.md)。

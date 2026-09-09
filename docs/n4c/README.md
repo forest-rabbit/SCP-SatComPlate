@@ -2,6 +2,7 @@
 
 当前唯一正式场景为 66 星、800 任务、1300 秒。G3 场景与 G4 解析评估均已人工接受；
 G3/G4 已经由 PR #90/#91 合入 n4c。当前进行 N4 最终收尾，尚未合入 main，
+唯一一次 [N4 release validation](reviews/N4-final-release-validation.md) 已通过；
 阶段 CI 和最终人工审阅通过前不声明 N4 COMPLETE。
 
 - 任务：240 dense / 240 sparse / 240 compression / 80 LLM，705 普通图像
