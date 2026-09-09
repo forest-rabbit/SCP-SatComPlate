@@ -91,4 +91,21 @@ PY
 
 diff -ru "$smoke_output/first/topology" "$smoke_output/second/topology"
 
+# Omit fixedDelay to check the platform default reaches exported link state.
+./ns3 run --no-build \
+  "satcompute --simulationDuration=1 --constellationConfig=$constellation \
+--topologyOnly=1 --outputDir=$smoke_output/fixed-default"
+
+python3 - "$smoke_output/fixed-default/topology" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+for filename in ("links_0s.json", "links_1s.json"):
+    links = json.loads((root / filename).read_text())["links"]
+    if not links or any(link["delay_ns"] != 1_000_000 for link in links):
+        raise SystemExit("default fixed delay is not 1 ms in exported link state")
+PY
+
 echo "SatCompute native topology-only smoke passed."

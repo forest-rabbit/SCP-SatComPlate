@@ -41,7 +41,7 @@ TaskTrace 是精确事件数据，因此到达时刻直接使用整数纳秒；�
 `task_id` 排序，数组顺序不影响运行。
 
 N4C 的 C800 全部显式给出 `task_profile`，使用全 66 星 100,000 WU/s 的
-[正式输入](../examples/leo-66-1000s-n4c/README.md)。旧文件缺省类别时保持原算力口径；
+[正式输入](../examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json)。旧文件缺省类别时保持原算力口径；
 首次计算才建立的绝对 deadline 不存入输入 JSON，属于运行时状态。
 
 ## 正式 workload

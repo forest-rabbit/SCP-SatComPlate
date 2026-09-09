@@ -12,7 +12,7 @@ trap 'rm -rf "$regression_output"' EXIT
 run_platform() {
   local output_directory="$1"
   shift
-  ./ns3 run --no-build "satcompute --outputDir=$output_directory $*"
+  ./ns3 run --no-build "satcompute --faultMode=none --computeProfile=none --taskTrace=none --linkMetrics=0 --taskCompletionPolicy=strict --outputDir=$output_directory $*"
 }
 
 constellation_66="contrib/satcompute/input/topology/constellations/synthetic-66.csv"

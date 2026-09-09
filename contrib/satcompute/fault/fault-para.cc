@@ -71,8 +71,8 @@ GetDefaultFaultParameters()
 
     // F2: spatial radiation-induced compute fault
 
-    // 默认运行仍保持 F2 关闭；F2-only 功能场景由平台运行参数显式启用。
-    parameters.f2.enabled = false;
+    // 当前冻结场景启用 F2；单源实验通过 CLI 显式关闭其他来源。
+    parameters.f2.enabled = true;
 
     // F2 固定算力停机时间，与 F1 散热参数无关，单位为秒。
     parameters.f2.recoveryDurationSeconds = 8.0;
@@ -115,11 +115,11 @@ GetDefaultFaultParameters()
 
     // F3: fatal debris impact
 
-    // 默认运行保持关闭；F3 功能场景由平台运行参数显式启用。
-    parameters.f3.enabled = false;
+    // 当前冻结场景启用一次受控永久整星故障。
+    parameters.f3.enabled = true;
 
-    // fixed_k 为人工指定数量，poisson 为按强度抽样。
-    parameters.f3.mode = "fixed_k";
+    // controlled 为固定节点/时刻；fixed_k 为指定数量，poisson 为按强度抽样。
+    parameters.f3.mode = "controlled";
 
     // fixed_k 下，一次仿真中人工设置的永久撞击卫星数量。
     parameters.f3.fixedCount = 1;
@@ -128,8 +128,8 @@ GetDefaultFaultParameters()
     parameters.f3.singleSatelliteIntensityPerSecond = 0.0;
 
     // controlled 模式只安排这一颗卫星和一个精确时刻；不是文件 replay。
-    parameters.f3.controlledNodeId = 0;
-    parameters.f3.controlledStartSeconds = 0.0;
+    parameters.f3.controlledNodeId = 62;
+    parameters.f3.controlledStartSeconds = 1027.055770726;
 
     return parameters;
 }

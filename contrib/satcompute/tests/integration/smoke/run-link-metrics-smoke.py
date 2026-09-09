@@ -22,13 +22,16 @@ def rows(directory, name):
 
 
 def run(directory, *, metrics=True, tasks=True, extra=(), expected=0):
-    args = ["satcompute", "--simulationDuration=2.5", "--taskLogMode=silent",
+    args = ["satcompute", "--faultMode=none", "--faultF3Mode=fixed_k", "--randomRun=1",
+            "--taskCompletionPolicy=strict", "--simulationDuration=2.5", "--taskLogMode=silent",
             "--constellationConfig=contrib/satcompute/tests/fixtures/constellation/connected-16.csv",
             "--fixedDelay=0.001", "--networkUpdateInterval=1",
             f"--linkMetrics={int(metrics)}", "--linkMetricsInterval=1", f"--outputDir={directory}"]
     if tasks:
         args += [f"--computeProfile={TASK}/compute-profile-single.json",
                  f"--taskTrace={TASK}/task-single.json"]
+    else:
+        args += ["--computeProfile=none", "--taskTrace=none"]
     completed = subprocess.run([str(ROOT / "ns3"), "run", "--no-build",
                                 shlex.join(args + list(extra))], cwd=ROOT,
                                text=True, capture_output=True)

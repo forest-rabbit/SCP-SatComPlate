@@ -1,217 +1,109 @@
-# 确定性任务生成器
+# 正式任务生成器
 
-G3 使用同一入口的 `--profile=n4c-hotspot`，由 `n4c_hotspot.py` 只重排 G2 C800
-端点，不改变每任务类别/字节/WU/到达时刻。额外输入为 `--base-task-trace` 和
-`--position-slices`（原生 topology-only 的 1 秒节点切片目录）。
-`--hotspot-weight` 默认 4、背景为 1；`--regional-candidate-limit=0` 使用区域内全部节点，
-正整数则仅给各区域距中心最近的前 N 个候选加权，用于明确的负载集中度实验。
-北美/欧洲/东亚边界与权重、缺候选 fallback、每任务原生切片时刻都写入 workload summary。
-不指定 `--f3-from-none` 时生成纯placement，f3=null，不预留任何卫星。
-先跑这份输入的none，再用 `--f3-from-none=<none输出目录>` 从实际任务/队列/传输时序
-选取 INPUT>200MB、WU进度>50%的单victim窗口，优先60–80%，按固定哈希确定候选。
-不读取故障概率、温度或SAA风险，不屏蔽F1/F2；已到达但尚未开始的RESULT依赖也会排除。
-final输入在F3时刻前逐任务端点与none一致，之后才排除故障节点。必须重跑final none及
-联合故障验收；目标任务提前被F1/F2中断或进度不足会记录失败，不能换seed补救。
+本目录只维护最终 **66 星、800 任务、1300 秒** 场景；不再提供历史候选或 F3 victim 搜索。
+生成任务不运行网络、故障、图像算法或 LLM，不导入 SCP-TaskModeling 仓库代码。
 
-`generate-task-workload.py` 根据一份 topology-only 节点切片和一份
-ComputeProfile 生成 TaskTrace。它不生成星座、坐标、链路或完整平台配置，也不在
-Python 中复制 ns-3.48 的轨道计算。
-
-除 N4C 的正式任务/热点分配档外，脚本保留四个已有生成档：默认 `stress` 用于可调规模压力任务；
-`f1-validation` 固定生成 N4B 第一阶段的 66 星、20 任务输入；`f2-validation` 固定
-生成第二阶段的 66 星、8 任务输入；`n4b-joint-validation` 固定生成 N4B 最终联合
-验收的 66 星、100 任务输入。四者共用同一套输入闭集校验、稳定 ID 和 JSON writer，
-不再维护独立的故障场景生成器。
-
-## 输入与输出
-
-输入必须满足以下约束：
-
-- `--nodes-file` 是 `nodes_<time>s.json`，包含至少 3 颗 `sat` 节点及唯一
-  `node_id`；已有 stress/F1/F2/N4B 档不按坐标分配，N4C hotspot 则显式读取原生轨迹；
-- `--compute-profile` 是平台可直接读取的 ComputeProfile，其中所有算力节点都必须
-  出现在节点切片中；
-- `stress` 档的字节、任务数量和时间边界均使用整数，时间参数单位为 ns；
-- `f1-validation` 要求节点切片恰好包含 66 星、ComputeProfile 至少包含 6 个节点；
-- `f2-validation` 要求节点切片恰好包含 66 星，并包含固定验证节点
-  `0/11/18/29/40/51` 的算力配置。
-- `n4b-joint-validation` 要求节点切片恰好包含 66 星，且全部卫星均具有算力配置。
-
-脚本写出两个 JSON：
-
-- `--output-task-trace`：平台可直接读取的 `{"tasks": [...]}`；
-- `--output-workload-summary`：stress 档记录分布与预算，F1/F2 验证档记录任务角色；
-  仅用于检查生成结果，不是平台输入。
-
-## stress 快速示例
-
-先用平台导出一个节点切片，再运行：
-
-```bash
-python3 contrib/satcompute/tools/generation/generate-task-workload.py \
-  --nodes-file=/tmp/satcompute-topology/topology/nodes_0s.json \
-  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-compute-profile.json \
-  --task-count=100 \
-  --total-input-bytes=500000000 \
-  --seed=example \
-  --arrival-start-ns=0 \
-  --arrival-end-ns=1000000000 \
-  --arrival-mode=uniform \
-  --output-task-trace=/tmp/tasks.json \
-  --output-workload-summary=/tmp/tasks-summary.json
-```
-
-## F1 验证档
-
-```bash
-python3 contrib/satcompute/tools/generation/generate-task-workload.py \
-  --profile=f1-validation \
-  --nodes-file=/tmp/satcompute-topology/topology/nodes_0s.json \
-  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
-  --seed=n4b-f1-66 \
-  --output-task-trace=/tmp/f1-task-trace.json \
-  --output-workload-summary=/tmp/f1-workload-summary.json
-```
-
-该档固定产生 20 个任务：3 个热点节点分别包含连续负载与后续任务，1 个节点为
-较短连续负载，2 个节点承载稀疏短任务。保留的历史角色元数据键 `risk_only` 不代表
-新模型保证无故障，也不会生成风险事件。它只构造任务忙闲条件，不预先写故障；
-是否发生故障仍由正式仿真中的 `FaultModelEngine` 根据实时状态判定。
-
-## F2 验证档
-
-先用 `--orbitStartOffset=302 --topologyOnly=1` 导出 66 星空间标定窗口的 0 秒节点切片，
-再运行：
-
-```bash
-python3 contrib/satcompute/tools/generation/generate-task-workload.py \
-  --profile=f2-validation \
-  --nodes-file=/tmp/satcompute-n4b-f2-topology/topology/nodes_0s.json \
-  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
-  --seed=n4b-f2-66 \
-  --output-task-trace=/tmp/f2-task-trace.json \
-  --output-workload-summary=/tmp/f2-workload-summary.json
-```
-
-该档固定产生 8 个轻量任务：两个 60 秒长任务、两个 10 秒后续任务、两个 20 秒
-中等任务和两个 5 秒对照任务。任务只为真实平台 Monte Carlo 提供完整执行环境，
-不再预先声明某个随机 run 必须在哪颗卫星、哪个时刻故障。完整命令见
-[`leo-66-1000s-f2`](../../input/examples/leo-66-1000s-f2/README.md)。任务仍只用于
-验证执行生命周期，F2 是否发生由正式平台的实时空间风险和 ns-3 随机流决定。
-
-## N4B 联合验收档
-
-```bash
-python3 contrib/satcompute/tools/generation/generate-task-workload.py \
-  --profile=n4b-joint-validation \
-  --nodes-file=/tmp/satcompute-n4b-joint-topology/topology/nodes_0s.json \
-  --compute-profile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json \
-  --seed=n4b-joint-66 \
-  --output-task-trace=/tmp/n4b-joint-task-trace.json \
-  --output-workload-summary=/tmp/n4b-joint-workload-summary.json
-```
-
-该档固定产生 100 个任务：30 个任务覆盖 3 个强热点、1 个临界热点和 1 个温热对照
-节点；8 个任务覆盖 F2/F3 故障、恢复和邻接对照窗口；其余 62 个 2–5 秒短任务分散
-到 56 个非保留计算节点。完整角色、冻结 seed/run 和四轮验收流程见
-[`leo-66-1000s-n4b-joint`](../../input/examples/leo-66-1000s-n4b-joint/README.md)。
-
-## 三规模压力输入准备
-
-`prepare-pressure-baseline.py` 调用平台导出原生节点切片，再调用本目录的任务生成器，
-不复制轨道计算或任务生成规则。它冻结 66/351/720 星的计算资源部署及 1500 任务预算，
-核对三规模逻辑任务和到达顺序一致，同时保留最早 20 个任务供预运行使用。
-`--output-root` 为必填的新输出目录，`--sizes` 可选，默认三种规模。
-本轮带宽为 10 Gbps，详细参数和命令见[手动压力测试](../../tests/README.md#手动压力测试10-gbps)。
-
-## 参数
-
-### 基本任务与到达过程
-
-| 参数 | 含义 |
+| 文件 | 职责 |
 |---|---|
-| `--profile` | `stress`（默认）、`f1-validation`、`f2-validation` 或 `n4b-joint-validation` |
-| `--nodes-file` | topology-only 节点切片 |
-| `--compute-profile` | 算力节点及其处理速率 |
-| `--task-count` | stress 必填；任务总数，任务 ID 固定为 `1..N` |
-| `--total-input-bytes` | stress 必填；所有任务 `input_bytes` 的精确总预算 |
-| `--seed` | 非空字符串；相同输入和参数生成相同结果 |
-| `--arrival-start-ns` | stress 必填；最早到达边界，含该时刻 |
-| `--arrival-end-ns` | stress 必填；最晚到达边界，含该时刻 |
-| `--arrival-mode` | stress 必填；`uniform` 均匀散布，`burst` 确定性突发到达 |
-| `--output-task-trace` | TaskTrace 输出路径 |
-| `--output-workload-summary` | 分布汇总输出路径 |
+| `generate-task-workload.py` | 固定任务构成、到达时刻、原生位置驱动的热点放置及生成摘要 |
+| `task_workload_model.py` | S/W/K/RESULT、rho/sigma/H、合法应用边界和字节守恒纯函数 |
 
-### stress 任务类别比例
+## 唯一正式场景
 
-比例使用 basis point（bp），`10000 bp = 100%`。四项之和必须为 10000。
+240 dense、240 sparse、240 compression、80 LLM。705 个普通图像使用
+TN(240,130;50,1000) 十进制 MB；另有固定 ID 的 10×500 MB、5×1 GB。
+500 MB 锚点为 compression 8/dense 2，1 GB 为 compression 4/dense 1。
+普通图像可自然超过 500 MB，必须按锚点 ID 区分，不能仅按大小分类。
 
-| 参数 | 默认值 | 类别 |
-|---|---:|---|
-| `--enhancement-share-bp` | 1500 | 图像增强 |
-| `--detection-share-bp` | 2500 | 图像检测 |
-| `--dnn-share-bp` | 3500 | DNN 推理 |
-| `--preprocess-share-bp` | 2500 | 预处理与压缩 |
+任务到达窗口为 1..1050 s，仿真至 1300 s；全部 66 星各 100000 WU/s。
+当前种子下 INPUT=193526895311 B、RESULT=99846517485 B、WU=351623833。
+正式输入与 F3 冻结输入见[场景索引](../../../../docs/n4c/reviews/G3-final-freeze.md)。
 
-脚本以最大余数法把比例转换为整数任务数。类别只用于生成不同的输入权重、计算量
-和结果大小，TaskTrace 本身仍保持平台的通用任务字段。
+| 输入参数 | 默认 / 含义 |
+|---|---|
+| `--workload-seed` | `n4c-g1-66`，任务类别、尺寸、合成 token 与到达时刻 |
+| `--placement-seed` | `n4c-g3-hotspot`，计算节点抽样及源/结果节点确定性排序 |
+| `--nodes-file` | 必填，原生 `nodes_0s.json`，稳定 ID 必须为 0..65 |
+| `--position-slices` | 必填，原生 ECEF 节点切片目录，覆盖到达窗口，间隔 1 s |
+| `--compute-profile` | 必填，正式场景中的 `compute-profile.json` |
+| `--output-task-trace` | 必填，不存在的新文件；不得覆盖正式输入 |
+| `--output-workload-summary` | 必填，另一个新文件；生成摘要不是平台完整配置 |
 
-### stress 大任务尾部与普通任务边界
+`hotspot_weight=64` 是热点选择权重，不是卫星编号/数量；背景权重为 1。
+`regional_candidate_limit=1` 表示北美、欧洲、东亚各最多一个热点候选，按区域归一化
+中心距离选取；无候选时保留背景节点。使用到达时刻之前、年龄小于 1 s 的原生位置。
+源/结果节点按已有分配计数、放置哈希、节点 ID 排序，与计算节点不同。
 
-| 参数 | 默认值 | 含义 |
-|---|---:|---|
-| `--large-1gb-count` | 0 | 最大场景中的 1 GB 任务数 |
-| `--large-500mb-count` | 0 | 最大场景中的 500 MB 任务数 |
-| `--scenario-scale-bp` | 10000 | 对上述两个数量应用的场景比例 |
-| `--tail-preprocess-share-bp` | 7500 | 大任务分给预处理类别的比例 |
-| `--tail-enhancement-share-bp` | 2500 | 大任务分给图像增强类别的比例 |
-| `--non-tail-min-input-bytes` | 1048576 | 普通任务最小输入字节数 |
-| `--non-tail-max-input-bytes` | 300000000 | 普通任务最大输入字节数 |
+两种生成种子与 ns-3 的 `randomSeed=1/randomRun=11` 独立。改变种子会得到不同任务；
+正式对照必须使用已提交输入，不重新搜索故障数量。受控 F3 固定读取独立 manifest，
+不参与任务生成或在线保护决策。原哈希 key 和锚点排名间隙均保留，不使用 SHA-256。
 
-两项尾部类别比例之和必须为 10000。大任务占用精确字节后，剩余输入预算按类别
-权重分给普通任务，并严格落在给定上下界中；预算不可满足时脚本直接报错。
+## 从已有位置切片重新生成
 
-## 生成规则
+以下命令只运行 Python；`orbit/topology` 是预先导出的原生节点切片目录：
 
-同一 `seed`、节点集合、ComputeProfile 和命令行参数会生成逐字节相同的两个输出。
-确定性来源不是 Python 的全局随机状态，而是脚本内对
-`seed + task_id + field_name` 执行的 FNV-1a 64-bit 映射。
+```bash
+.venv/bin/python contrib/satcompute/tools/generation/generate-task-workload.py \
+  --nodes-file=orbit/topology/nodes_0s.json --position-slices=orbit/topology \
+  --compute-profile=contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/compute-profile.json \
+  --output-task-trace=output/final-generated/task-trace.json \
+  --output-workload-summary=output/final-generated/workload-summary.json
+```
 
-stress 档的生成过程还保证：
+切片由平台 topology-only 模式统一导出，不用 Python 重新实现轨道；
+首次导出可使用 `--topologyOnly=1 --simulationDuration=1051 --networkUpdateInterval=1`，
+其余星座、起始相位沿用正式默认。冻结清理阶段仅复用了已有切片，未重新运行该导出。
+新摘要使用职责明确的名称；已提交旧摘要/manifest 是原始来源记录，不为清理改写。
+相同输入双次生成以及与正式 TaskTrace 的逐字节比较，见[测试说明](../../tests/README.md)。
 
-- compute 节点、source 节点和 result 节点按稳定 ID 尽量均衡分配；
-- 每个任务的 source 与 compute 不同，result 与 compute 不同；
-- `input_bytes` 的总和精确等于 `--total-input-bytes`；
-- `output_bytes` 按任务类别生成并显式写入，不由仿真时推导；
-- 同一类别内，较大的输入总体对应较大的 `compute_work_units`；
-- 到达时刻、任务数组和 summary 中按稳定 task ID 输出。
+## 工作量、状态与结果字节合同
 
-F1 验证档额外把热点节点、预期临界故障任务、恢复后任务、风险-only 节点及对照
-节点写入 summary。F2 验证档记录轨道起始偏移、固定 seed/run、热点、预期故障时刻、
-恢复后、风险-only 与对照任务。联合验收档记录分级热点、F2/F3 窗口任务和分散对照
-任务。三种 summary 都只供测试精确断言，不是平台输入。
+图像参考测量来自 SCP-TaskModeling 提交 `0dbc0c7b6281219e1356151fd640336cde885e7d`：
 
-主要函数按职责分为：输入闭集校验（`read_satellite_ids`、
-`read_compute_profile`）、整数预算分配（`largest_remainder`、
-`bounded_weighted_allocation`）、稳定节点/类别/时间分配，以及最终 TaskTrace 和
-summary 写出。对应单元测试见
-[test_workload_generators.py](../../tests/unit/test_workload_generators.py)。
+| profile | 参考 S（B） | payload（B） | index（B） | RESULT（B） | 固定头结构（B） |
+|---|---:|---:|---:|---:|---:|
+| dense-image | 52428800 | 52428800 | 400 | 52428800 | 44 |
+| sparse-inference | 26246291 | 48256 | 800 | 49056 | 48 |
+| compression | 52428800 | 28440844 | 800 | 28441644 | 44 |
 
-## N4C G1 离线建模候选
+```text
+W = ceil(3*S/2000)
+K_variable = floor(S*reference_variable_bytes/reference_input_bytes)
+K_payload = floor(S*reference_payload_bytes/reference_input_bytes)
+K_index = K_variable-K_payload
+RESULT = floor(S*reference_output_bytes/reference_input_bytes)
+rho_variable = reference_variable_bytes/reference_input_bytes
+sigma_variable = K_variable/W
+H = fixed_header_bytes + UTF-8 byte length of task label
+```
 
-`task_workload_model.py` 提供三类图像的字节/WU/状态预算、LLM token/KV公式和合法
-应用边界纯函数。图像只引用已有 TaskModeling 测量；LLM 不下载或运行模型。
-G1 v3保留v2的 `W=ceil(3*S/2000)`、100000 WU/s；LLM为100 WU/token与5000..10000 token。
-`preview-n4c-workload.py --candidate C1000/C800/C600`（三选一）按需生成构成候选的离线
-预算、短任务与服务需求统计；省略候选时仍为历史V2-1500，不代表最终选择。它不是新的
-正式 TaskTrace 生成档，不改变上面的四个档位、默认参数或运行时接口。
+dense/compression 的 S 是四波段 uint16 原始数组，sparse 是编码图像文件大小。
+按参考整数比例外推，不用展示舍入的 rho 计算；不按任务排名、压缩率或故障数量修改 W。
+50/100/500/1000 MB 对应参考计算 0.75/1.5/7.5/15 s，无最短时长填充。
+这是状态预算，不是每个合成任务真实序列化的测量。极小输入可能产生 0 RESULT，
+纯模型允许，但正式 TaskTrace 不接受；不得静默补成 1 B。
 
-所有候选参数、字节来源和命令见[工作量模型](../../../../docs/n4c/workload-mapping.md)。
-仅显式调用预览命令才会生成预算 CSV/JSON。G1已批准C800；正式生成器新增 `--profile=n4c-c800`，
-复用同一G1属性/预算函数，统一66星100,000 WU/s、1..600 s确定性到达、无地理偏置分配；
-输入示例和命令见 [C800](../../input/examples/leo-66-1000s-n4c/README.md)。
-`StateBudgetPoint` / `state_budget_points` 只作合法进度映射和5/10/20%守恒验证；
-`state-budget-checks.csv` 替代首版搜索网格输出。不生成 L1/batch/tail，不搜索 n/delta，
-也不统计 D_L/D_R 或指定 c_L/c_R。
-新三候选均为81.75 GB INPUT与10个1 GB+20个500 MB大图像；summary单独报告普通图像
-分位数、大图像类别归属/字节占比及各类总WU/K/RESULT。原v2输出不覆盖、不删除。
+K 包含变量索引、不含重复 H，H 也不含 IP/UDP 协议头。TaskModeling 的含头
+`sigma_bytes_per_work_unit` 与这里的 `sigma_variable_bytes_per_work_unit` 不混用。
+参考标签的 H 为 65/85/65 B，使用十进制任务 ID 时为对应固定头加 ID 字节数。
+
+## LLM 与合法进度
+
+只使用 Qwen3-0.6B 的公开结构参数（配置 revision
+`c1899de289a04d12100db370d81485cdf75e47ca`）：28 层、8 KV heads、
+head_dim=128、2 B/元素、最大缓存 40960 token。
+`N=P+G=5000..10000`、`P=128..256`，100 WU/token；
+`K=N*2*28*8*128*2=N*114688 B`，sigma=1146.88 B/WU，H=0 是预算简化。
+INPUT 是小型合成 JSON 请求的真实 UTF-8 字节数；P/G 不是 tokenizer 实测；
+RESULT 为 `4*G` B 的 uint32 token ID 预算。权重假定预部署，不加入 INPUT。
+不下载模型，不模拟真实 prefill/decode、EOS 或分页，也不声称 KV 足以恢复真实程序。
+
+`legal_unit_ends` 定义当前应用边界：dense/compression 为 524288 B tile（含尾块）；
+sparse 按参考 100 文件/26246291 B 推算数量后等分，余数优先给前面文件；
+LLM 为完整 token。这些是布局假设，不是实测 DOTA 文件边界。
+
+服务时间为 `ceil(W*1e9/rate)` ns。图像累计状态为 `floor(K*w/W)`，LLM 仅累计
+完整 token。预算点先向后继应用边界对齐，再映射 WU；同 WU 合并到最后合法位置。
+5/10/20% 划分的增量 WU/变量字节之和必须守恒，重复 H 单独统计。
+这些纯函数不执行 checkpoint；G4 使用独立[旁路验证器](../validation/compfrr-shadow/README.md)，
+真实保护执行仍属于 N5。

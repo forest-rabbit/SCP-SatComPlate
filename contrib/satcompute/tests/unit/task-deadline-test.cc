@@ -64,9 +64,10 @@ void
 CheckInputs(const std::filesystem::path& output)
 {
     Endpoints endpoints;
-    const std::filesystem::path root = "contrib/satcompute/input/examples/leo-66-1000s-n4c";
+    const std::filesystem::path root =
+        "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3";
     auto profile = ReadComputeProfile(root / "compute-profile.json", endpoints);
-    auto trace = ReadTaskTrace(root / "task-trace.json", 1000000000000, endpoints, profile);
+    auto trace = ReadTaskTrace(root / "task-trace.json", 1300000000000, endpoints, profile);
     Check(profile.nodes.size() == 66 && trace.tasks.size() == 800, "C800 input counts differ");
     uint64_t input = 0, work = 0, result = 0;
     std::map<TaskProfile, uint64_t> counts;
@@ -82,7 +83,7 @@ CheckInputs(const std::filesystem::path& output)
     Check(counts[TaskProfile::DENSE_IMAGE] == 240 && counts[TaskProfile::SPARSE_INFERENCE] == 240 &&
               counts[TaskProfile::COMPRESSION] == 240 && counts[TaskProfile::LLM] == 80,
           "C800 parsed task classes differ");
-    Check(input == 81750000000ULL && work == 183958466 && result == 44076569084ULL,
+    Check(input == 193526895311ULL && work == 351623833 && result == 99846517485ULL,
           "C800 parsed ledgers differ");
     nlohmann::json data;
     {
@@ -96,7 +97,7 @@ CheckInputs(const std::filesystem::path& output)
         file << data;
     };
     write();
-    const auto reordered = ReadTaskTrace(path, 1000000000000, endpoints, profile);
+    const auto reordered = ReadTaskTrace(path, 1300000000000, endpoints, profile);
     for (size_t i = 0; i < trace.tasks.size(); ++i)
         Check(trace.tasks[i].taskId == reordered.tasks[i].taskId &&
                   trace.tasks[i].taskProfile == reordered.tasks[i].taskProfile,
@@ -108,11 +109,11 @@ CheckInputs(const std::filesystem::path& output)
     {
         data["tasks"][0]["task_profile"] = bad;
         write();
-        Reject([&] { ReadTaskTrace(path, 1000000000000, endpoints, profile); });
+        Reject([&] { ReadTaskTrace(path, 1300000000000, endpoints, profile); });
     }
     data["tasks"][0].erase("task_profile");
     write();
-    const auto legacy = ReadTaskTrace(path, 1000000000000, endpoints, profile);
+    const auto legacy = ReadTaskTrace(path, 1300000000000, endpoints, profile);
     Check(legacy.tasks.back().taskProfile == TaskProfile::UNSPECIFIED,
           "legacy profile was guessed");
 }

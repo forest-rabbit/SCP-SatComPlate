@@ -80,7 +80,7 @@ F1/F2 不重算路由，F3 引起一次即时重算；末端所有资源账本�
 
 审计覆盖所有 RUNNING 任务，模型与预测容差 1e-12。正常运行不生成或保留
 概率/状态审计文件；具体断言由 `tests/integration/regression/run-n4b-joint-acceptance.sh`
-维护，当前新模型结果见 [G3 报告](../../../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
+维护，当前新模型结果见 [G3 冻结索引](../../../../../docs/n4c/reviews/G3-final-freeze.md)。
 
 在仓库根目录构建后，可单独复现正式验收：
 

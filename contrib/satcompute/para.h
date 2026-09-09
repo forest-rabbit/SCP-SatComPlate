@@ -58,11 +58,15 @@ struct SatComputeConfig
     std::string faultTrace;      ///< Generated fault trace output path.
     bool faultProbabilityAudit;  ///< 是否采集并输出概率一致性审计数据。
 
+    // protection
+    bool compfrrShadow; ///< G4 只读旁路决策评估，不创建真实备份。
+    std::string compfrrShadowOutput; ///< 空时写入 outputDir/shadow。
+
     // output
     std::string outputDirectory; ///< 结构化结果输出目录。
     std::string taskLogMode;     ///< 任务日志级别。
     std::string diagnosticMode;  ///< 失败诊断模式。
-    bool linkMetrics; ///< 是否启用定向链路窗口统计，正常运行默认关闭。
+    bool linkMetrics; ///< 是否启用定向链路窗口统计，冻结场景默认开启。
     double linkMetricsIntervalSeconds; ///< 链路统计窗口，单位为秒，与拓扑更新独立。
 };
 

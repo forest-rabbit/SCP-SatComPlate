@@ -283,3 +283,18 @@ def state_budget_points(budget: TaskBudget, unit_ends: Sequence[int],
         records.append(record)
         previous_work, previous_state = work, state
     return tuple(records)
+
+
+def legal_unit_ends(budget: TaskBudget) -> tuple[tuple[int, ...], str]:
+    """Freeze disclosed layout assumptions, not measurements of new images."""
+    if budget.task_profile == "llm":
+        return uniform_unit_ends(budget.extent, 1), "synthetic-completed-token"
+    if budget.task_profile == "sparse-inference":
+        # The reference has 100 files / 26,246,291 B. The final scene uses equal-sized
+        # synthetic files; an actual file list must supply its own legal ends.
+        reference = image_reference("sparse-inference")
+        count = min(budget.extent, ceil_div(budget.extent * 100, reference.input_bytes))
+        base, remainder = divmod(budget.extent, count)
+        ends = tuple(index * base + min(index, remainder) for index in range(1, count + 1))
+        return ends, "synthetic-equal-files-reference-mean-size"
+    return uniform_unit_ends(budget.extent, 524_288), "raw-524288-byte-tiles-with-final-edge"

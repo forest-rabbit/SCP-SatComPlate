@@ -66,7 +66,7 @@ CheckDefaults()
               parameters.f1.energy.initialDod == 0.25 &&
               parameters.f1.temperature.growthFactor == 10.0,
           "F1 defaults differ");
-    Check(!parameters.f2.enabled &&
+    Check(parameters.f2.enabled &&
               parameters.f2.longitudeMinDegrees == -90.0 &&
               parameters.f2.hotspotLongitudeDegrees == -60.0 &&
               parameters.f2.hotspotLatitudeDegrees == -28.0 &&
@@ -77,8 +77,10 @@ CheckDefaults()
               parameters.f2.referenceSeuIntensityPerSecond ==
                   0.002859196111093899 &&
               parameters.f2.seuToComputeFailureProbability == 0.5 &&
-              !parameters.f3.enabled &&
-              parameters.f3.mode == "fixed_k" && parameters.f3.fixedCount == 1,
+              parameters.f3.enabled &&
+              parameters.f3.mode == "controlled" && parameters.f3.fixedCount == 1 &&
+              parameters.f3.controlledNodeId == 62 &&
+              parameters.f3.controlledStartSeconds == 1027.055770726,
           "F2/F3 defaults differ");
 }
 
@@ -161,6 +163,7 @@ CheckInvalid()
 
     value = GetDefaultFaultParameters();
     value.f3.enabled = true;
+    value.f3.mode = "fixed_k";
     value.f3.fixedCount = 0;
     ExpectError(value, "F3", "enabled-empty-F3");
 }
