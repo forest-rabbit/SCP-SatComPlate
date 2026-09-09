@@ -9,8 +9,8 @@ Capacity-aware 路由；冻结 `orbitStartOffset=302`、`randomSeed=1`、
 
 - 节点 0、11、22 各有 6 个连续 10 秒任务和 1 个恢复后 2 秒任务；
 - 节点 33 有 5 个连续 10 秒任务，形成临界边缘风险；
-- 节点 44 有 4 个连续 8 秒任务，作为未达到风险阈值的温热对照；
-- 8 个窗口任务覆盖节点 17/16 的两次 F2 故障与恢复、节点 28 的 F2 risk-only、
+- 节点 44 有 4 个连续 8 秒任务，作为较短连续负载对照；
+- 8 个窗口任务覆盖节点 17/16 的两次 F2 故障与恢复、节点 28 的 F2 空间暴露、
   节点 4 的 F3 故障及节点 5 的邻星对照；
 - 其余 62 个 2–5 秒任务分散到 56 个非保留计算节点，覆盖完整仿真窗口。
 
@@ -73,24 +73,17 @@ faultEnableF3=1
 taskCompletionPolicy=report
 ```
 
-冻结结果应包含：100 个任务中 93 个完成、7 个按故障合同失败；节点 0/11/22 的
-设计内 F1、节点 22 恢复后仍热但未影响任务的一次额外 F1、节点 17/16 分别在
-`236000000000 ns` / `850000000000 ns` 的 F2 compute 故障，以及节点 4 在
-`829256867404 ns` 的永久 F3 整星故障。F1/F2 不重算路由，F3 只引起一次即时路由
-重算；仿真结束时 Capacity-aware 和 Size-aware 账本必须归零。
+旧 N4B 的 93/100 完成、82 条概率记录是旧 F1/NOTICE 下的历史结果，不再是
+当前运行的固定计数。输入继续保留，回归验证新模型真实事件对应的任务/传输终态。
+F2 的独立空间模型不变；F3 仍为节点 4 在 `829256867404 ns` 的永久故障。
+F1/F2 不重算路由，F3 引起一次即时重算；末端所有资源账本必须归零。
 
-概率审计开启时，generate 在线模型与 独立审计预测应匹配 82 条记录；正常运行
-不得生成或保留 `fault-model-probabilities.csv`、`fault-predictions.csv` 和
-`fault-prediction-summary.json`。具体断言由
-`tests/integration/regression/run-n4b-joint-acceptance.sh` 维护。
+审计覆盖所有 RUNNING 任务，模型与预测容差 1e-12。正常运行不生成或保留
+概率/状态审计文件；具体断言由 `tests/integration/regression/run-n4b-joint-acceptance.sh`
+维护，当前新模型结果见 [G3 报告](../../../../../docs/n4c/reviews/G3-hotspot-fault-calibration.md)。
 
 在仓库根目录构建后，可单独复现正式验收：
 
 ```bash
 contrib/satcompute/tests/integration/regression/run-n4b-joint-acceptance.sh
 ```
-
-空间 F2 阶段三的冻结验收中，四轮运行全部通过：normal/audit generate 的 Fault Trace
-逐字节相同，audit generate/重复 generate 的事件、任务、transfer、路由和 reservation 输出
-逐文件相同，82 条模型/预测概率零缺失且误差不超过 `1e-12`；最后一轮还证明复用
-目录不会残留三种审计文件。该 runner 已纳入 SatCompute 完整 regression 门禁。

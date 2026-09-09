@@ -155,6 +155,7 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
             "queue_s": distribution([int(t["queue_delay_ns"])/1e9 for t in subset if int(t["queue_delay_ns"]) >= 0])}
     state_path = directory / "fault-model-state.csv"
     state_summary = {}
+    cooling_checks = 0
     if state_path.exists():
         state_rows = rows(state_path)
         states = {(int(s["simulation_time_ns"]), int(s["node_id"])): s for s in state_rows}
@@ -165,6 +166,22 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
             if "F1" in event["fault_source"]:
                 state = states[(int(event["simulation_time_ns"]), int(event["node_id"]))]
                 require(float(state["p_f1"]) > 0, "F1 event without model probability")
+                start_ns, node = int(event["simulation_time_ns"]), int(event["node_id"])
+                end_ns = start_ns + int(event["duration_ns"])
+                for time_ns in range(start_ns + 10**9, end_ns, 10**9):
+                    sample = states.get((time_ns, node))
+                    if sample is not None:
+                        expected = max(17, float(event["temperature_c"]) -
+                                       3.25 * (time_ns - start_ns) / 1e9)
+                        require(abs(float(sample["temperature_c"]) - expected) < 1e-9,
+                                "actual outage state did not follow linear cooling")
+                        cooling_checks += 1
+            if event["fault_type"] == "compute":
+                state = states[(int(event["simulation_time_ns"]), int(event["node_id"]))]
+                require(all(abs(float(event[e]) - float(state[s])) < 1e-14 for e, s in
+                            (("p_f1", "p_f1"), ("p_f2", "p_f2"),
+                             ("failure_probability", "p_compute"))),
+                        "START probability differs from actual pre-draw state")
         for n in node_rows:
             subset = [s for s in state_rows if s["node_id"] == n["node_id"]]
             if subset:
@@ -238,6 +255,11 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
         "mean_available_utilization_percent": 100 * sum(float(w["available_busy_time_s"]) for w in network_windows) /
             sum(float(w["available_link_time_s"]) for w in network_windows),
         "terminal_link_ledger_drained": True}
+    require(all(t["final_state"] in ("COMPLETED", "FAILED") for t in tasks), "task truncated")
+    require({int(t["task_id"]) for t in tasks if t["final_state"] == "FAILED"} == all_direct,
+            "G3 has a failed task outside direct fault victims")
+    require(network["flow_monitor_lost_packets"] == 0 and network["link_queue_drops"] == 0,
+            "G3 has unexpected packet loss")
     return {"events": source_events, "unique_direct_running": {
                 "F1": len(direct["F1"]), "F2": len(direct["F2"]), "F1_union_F2": len(compute_direct),
                 "F3": len(direct["F3"]), "total": len(all_direct)},
@@ -253,6 +275,7 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None):
             "region_runtime": region_runtime, "node_state_audit": state_summary,
             "by_fault_source": by_source, "f3_victim": victim_evidence,
             "f3_pre_failure_participation": ordinary_evidence, "f1_start_distributions": f1_start_distributions,
+            "f1_outage_cooling_samples_checked": cooling_checks,
             "queue_delta_vs_none_s": queue_delta, "node_busy_s": distribution([int(n["busy_time_ns"])/1e9 for n in node_rows]),
             "audit": "business, actual START, per-task impact, WU progress, deadline and terminal ledgers matched"}
 

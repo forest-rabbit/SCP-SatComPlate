@@ -1,4 +1,9 @@
-# N4B F1 参数标定
+# N4B F1 参数标定（历史归档）
+
+以下保留旧模型的标定记录，不是当前默认值或可重跑的当前工具合同。
+G3 已移除 lambdaMax/NOTICE，改用直接 1 秒概率、指数升温和动态线性冷却恢复；
+当前模型见 [fault README](../../../contrib/satcompute/fault/README.md)，
+新结果见 [G3 报告](../../n4c/reviews/G3-hotspot-fault-calibration.md)。
 
 本目录保存 N4B 第一阶段自身状态计算故障的可复现标定证据。这里选择的是适配
 SatCompute 1000 秒实验窗口的功能场景参数，不是现实卫星热常数或真实故障率。
