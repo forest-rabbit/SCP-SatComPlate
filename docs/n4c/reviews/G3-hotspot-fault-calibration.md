@@ -1,11 +1,11 @@
 # N4C G3：F1 升温形状、热点标定与大任务 F3
 
-状态：v3 修订与验证已完成；109GB派生压力修订进行中，仍属于G3。
-下列81.75GB结果保留为历史基线，不覆盖G1或旧输入/输出。
-历史v3功能核验通过，**数量标定未达标**。
-F1∪F2 direct标定均值48.33、独立验证均值51，均低于75–83；不进入G4/N5。
-本轮不跑CI、不合并、不打标签。
-当前只更新本报告和既有两张图；批量原始结果在 `output/n4c-g3-v3-20260909`。
+状态：109GB派生修订、有限筛选和六轮验证已完成，**未通过G3整体验收，停在G3审阅**。
+109GB确认/验证direct均值70.33/73.67，仍低于75–83；五轮F3单受害任务检查失败，
+其中run42还出现95个在途UDP丢包和1个RESULT未完成。只有run41满足固定压力场景资格。
+不进入G4/N5，不跑CI、不合并、不打标签；本轮只更新本报告和既有两张图。
+下列81.75GB v3结果保留为历史基线（确认/验证均值48.33/51），不改写G1。
+旧原始结果在 `output/n4c-g3-v3-20260909`，新结果在 `output/n4c-g3-109g-20260909`。
 旧 beta=3、validation 21/22/23 保留在 Git 历史和
 `output/n4c-g3-revision-20260909`，不再作为本轮正式或 held-out 证据。
 
@@ -189,12 +189,14 @@ F1 victim类别dense/sparse/compression/LLM=11/9/15/12，区域北美/欧洲/东
   四种可选概率/状态输出均不存在。正常运行默认关闭，QueryComputeRisk无需CSV。
   概率相等验证的是同模型实现一致，不是现实世界“预测准确率100%”。
 
-## 实际数据图与复现
+## 当前109GB实际数据图与历史复现命令
 
 ![负载与热状态](figures/g3/load-thermal.png)
 
-左为66个配对节点的G2 none与本轮final none busy time；右为本轮calibration11的
-全部66个节点利用率/峰值温度，标记5个实际F1节点。均为单轮原始节点观测，不是seed均值。
+两图更新为109GB的预声明代表轮confirmation11，并非事后选中的run41。
+左为81.75GB/109GB final none的66个配对节点busy time，两场景逐任务端点完全一致；
+右为109GB run11的全部66个节点利用率/峰值温度，标记8个实际F1节点。
+均为单轮原始节点观测，不是seed均值；run11的F3验收失败也保留，不挑选更漂亮的轮。
 
 ![原生F2暴露](figures/g3/f2-native-exposure.png)
 
@@ -204,7 +206,8 @@ F1 victim类别dense/sparse/compression/LLM=11/9/15/12，区域北美/欧洲/东
 各面板及整图在完整导出/100 dpi实际尺寸预览下检查通过。源点、provenance和QA在
 输出目录figures/。静态预检仅无TIFF提示：本轮为审阅包，不是期刊投稿导出。
 
-完成项目构建后，在仓库根目录使用uv环境复现代表轮（输出目录必须不存在）：
+下面保留历史81.75GB代表轮的复现命令；109GB命令见文末。完成构建后，在仓库根目录
+使用uv环境执行（输出目录必须不存在）：
 
 ```bash
 source .venv/bin/activate
@@ -246,4 +249,138 @@ generate-task-workload.py的f3-from-none指定它，不能从generate状态选�
 已重新用109GB none的业务时序构造F3：16个合法大于200MB候选中，按尾部优先规则仍选中
 node41/task191（1GB compression），536.690531627–551.690531627 s计算，
 F3=547.190531627 s、70%WU。时刻恰与旧版相同是重新核验的结果，不是直接复用旧计划；
-ordinary task22的源端实际释放时间变为472.103968016 s。随后验证final none和六轮正式运行。
+ordinary task22的源端实际释放时间变为472.103968016 s。
+
+### 预算、配对与final none
+
+新输入独立存放在 `contrib/satcompute/input/examples/leo-66-1000s-n4c-g3-109g/`：
+`base-task-trace.json`是未做热点分配的业务基线，`task-trace.json`为最终placement；
+`workload-summary.json`记录派生预算，`placement-manifest.json`记录位置分配与F3 none证据。
+109GB是新的800任务压力变体，不等同于历史2000任务/109GB压力场景；GB/MB使用十进制。
+
+| 类别 | 任务数 | INPUT B | RESULT B | WU |
+|---|---:|---:|---:|---:|
+| dense | 240 | 34,313,774,584 | 34,313,774,584 | 51,470,782 |
+| sparse | 240 | 31,452,335,768 | 58,786,308 | 47,178,629 |
+| compression | 240 | 43,233,843,680 | 23,453,551,934 | 64,850,871 |
+| LLM | 80 | 45,968 | 2,392,496 | 61,333,200 |
+| 合计 | 800 | 109,000,000,000 | 57,828,505,322 | 224,833,482 |
+
+只改变690个普通image任务及其派生量；30个尾部ID/大小、LLM请求与token逐项不变。
+LLM字节从冻结records求和，不手写参与分配；普通图像合计88,999,954,032 B，
+最大242,353,107 B，仍低于300MB。G1公式重新派生WU/RESULT/K/rho/sigma/H；
+全任务变量状态合计128,168,194,909 B，只是解析预算，未执行checkpoint或备份。
+5%/10%/20%合法状态分割守恒通过；配对CSV和完整预算在输出目录，未改变G1历史。
+
+| 配对量 | 81.75GB | 109GB |
+|---|---:|---:|
+| 总服务需求 s（100,000 WU/s） | 1839.58466 | 2248.33482 |
+| 普通image大小median/P95/max MB | 86.125/161.192/167.865 | 124.114/232.701/242.353 |
+| 普通image计算median/P95/max s | 1.292/2.418/2.518 | 1.862/3.491/3.635 |
+| final none最忙节点busy s | 514.054 | 616.010 |
+| final none排队mean/P95/max s | 13.779/43.736/57.076 | 35.925/124.211/156.179 |
+| final none最后完成 s | 606.335 | 644.506 |
+| 确认11/12/13 direct均值 | 48.33 | 70.33 |
+
+总服务需求增加22.22%，而非INPUT的33.33%；LLM计算不变。最终800个任务的ID、类别、
+到达和三个端点也全部逐项配对一致。新final none从干净提交
+`d34afd780f29b37c5c06f0a3ac03659577671cad`启动，用时487.73 s，800任务/1600传输全完成，
+零deadline/endpoint失败、零丢包/queue drop/截断，capacity及末端链路账本清零。
+最终热点占比87.25%；平均链路利用率0.264616%，有效传输窗口聚合IP吞吐量2075.86 Mbps。
+compute deadline从首次RUNNING起算，排队变长不等同于违反这个deadline。
+
+### 六轮完整结果与失败证据
+
+全部正式仿真从同一干净提交d34afd780启动。先完成确认，再首次启动验证41/42/43；
+没有基于验证回调输入、模型、热点或F3。每次运行约466–485 s，原始输出均保留。
+
+| 组/run | F1/F2 START | F1∪F2 direct | F3 RUNNING direct | 完成/失败/未完成 | 场景资格 | 概率行 |
+|---|---:|---:|---:|---|---|---:|
+| confirmation 11 | 66/2 | 66 | 1 | 732/68/0 | 失败：额外QUEUED victim | 2074 |
+| confirmation 12 | 72/1 | 72 | 1 | 726/74/0 | 失败：额外QUEUED victim | 2088 |
+| confirmation 13 | 73/0 | 73 | 1 | 725/75/0 | 失败：额外QUEUED victim | 2106 |
+| validation 41 | 75/2 | 75 | 1 | 724/76/0 | 通过 | 2093 |
+| validation 42 | 73/2 | 73 | 2 | 724/75/1 | 失败：额外RUNNING victim及丢包/截断 | 2073 |
+| validation 43 | 73/0 | 73 | 1 | 725/75/0 | 失败：额外QUEUED victim | 2112 |
+
+确认direct均值70.33、样本SD3.79；验证均值73.67、SD1.15，均未达到75–83。
+统计包含全部预声明轮，未删除失败轮；验证组包含截断运行，只能作为完整观测结果，
+不能称为“通过的独立验收”。六轮F2 direct均为0，无同刻双来源。
+
+- 六轮191号任务都在70%WU时被F3中断，deadline余量9 s，F3均永久断星并重算路由一次。
+  但11/12/13/42/43中的411号任务仍依赖结果节点41：11/12/13/43中为QUEUED，
+  run42中已在节点52 RUNNING。none中411于545.023246212 s交付，距F3仅2.167285415 s；
+  故障运行的排队变化使该none安全窗口失效。run41中411于546.005158589 s交付，才通过。
+- run42的642号任务RESULT在547.112760574 s开始、547.179249326 s已发完，F3在
+  547.190531627 s关闭中继接口时仍有包在途。1299个UDP包只收到1204个，95个丢包全部
+  归因为INTERFACE_DOWN（无未知丢包），应用缺少6,036,112 B；至1000 s仍为
+  RESULT_TRANSFERRING/传输SENDER_FINISHED。路由重算不能重传既有UDP丢包。
+  本轮没有新增重传/超时机制，也没有把未完成任务改记成失败或完成。
+- run11的1532个transfer完成、68个取消；run42为1524完成、75取消、1个未完成。
+  其他五轮无丢包，全部六轮无queue drop且资源账本清空；**资源清空不等于全部任务终态**。
+
+汇总器原先遇到截断便抛异常；现补充独立`lifecycle_acceptance`，保留失败JSON和原始日志，
+F3/截断/丢包任一不合格仍返回非零，不放宽门槛。只重新读取已有输出，没有重跑或更换随机轮。
+
+### 故障时的概率、大小与完成度
+
+固定代表轮仍为confirmation11，统计66个F1 START及66个实际RUNNING victim；
+下表为min/P10/P50/P90/max，线性插值。LLM请求仅数百字节，因此不能将INPUT大小当作其计算量。
+
+| 量 | min | P10 | P50 | P90 | max |
+|---|---:|---:|---:|---:|---:|
+| START温度 °C | 25.835 | 27.133 | 28.643 | 29.227 | 29.794 |
+| pF1 %（本轮F1时q_comp相同） | 1.549 | 5.685 | 25.738 | 46.177 | 81.350 |
+| continuous busy s | 13.421 | 16.125 | 22.419 | 25.541 | 28.730 |
+| 恢复 s | 2.719 | 3.118 | 3.582 | 3.762 | 3.936 |
+| victim INPUT B | 351 | 585 | 126,526,931.5 | 1,000,000,000 | 1,000,000,000 |
+| victim WU | 41,389 | 124,639 | 338,193 | 1,500,000 | 1,500,000 |
+| victim完成度 % | 0.431 | 7.260 | 43.287 | 85.456 | 99.988 |
+| deadline余量 s | 0.266 | 0.766 | 3.469 | 10.993 | 15.876 |
+
+F1 victim类别dense/sparse/compression/LLM=16/18/13/19。代表轮22–25°C及29.9–30°C START
+均为0；其他轮偶发中温START仍原样保留。F2发生于263 s/node28、742 s/node17，
+pF2分别0.0240649%/0.1243540%，pF1=0；当时无RUNNING任务，无有效任务完成度。
+逐条概率、任务字节、WU进度和终态均可查fault-events.csv/fault-task-impact.csv。
+
+### 固定压力场景与验收边界
+
+按预声明有限池和硬验收过滤后，**只有seed1/run41合格**，因此冻结为
+selected fixed stress realization：F1/F2 START=75/2，联合direct=75，F3 direct=1，
+724完成/76失败、1524传输完成/76取消、零丢包/截断。选择记录及全部六轮结果在
+`fixed-stress-benchmark.json`；75不是平均值，也不是事后选择后仍无偏的held-out表现。
+这不掩盖另外五轮失败，不代表F3窗口在随机运行中稳健，也不表示G3整体验收通过。
+所选run41的F1概率P10/P50/P90为3.361%/12.725%/48.286%，温度中位27.939°C；
+其75个F1 victim的INPUT中位109,635,608 B，WU中位301,998，完成度中位43.733%。
+pF1中位低于20–30%的软形状参考，也如实保留，不因事后选定固定轮而再次调模型。
+未来N5改变busy状态仍可能改变F1，即使seed/run相同也不能保证故障时刻一致；本轮不恢复replay。
+
+43个Python、15个C++、6个smoke、4个维护regression通过；模块编译通过，无全局example/test或CI。
+六轮共12,546行四项概率全部匹配，缺失/上下文错配/MAE/RMSE/max error均为0；
+1245个实际停机冷却点通过。概率一致不等于场景验收通过或现实预测准确率100%。
+run11审计on/off的18项业务证据一致，off时四种可选输出不存在，正常运行仍默认关闭。
+两图继续使用Python原始观测；字体最低7 pt，对齐和PDF碰撞检查通过，完整图及各面板
+100 dpi实际尺寸检查通过。源数据、provenance及QA保留在新输出目录figures/。
+
+复现固定压力轮（目录必须不存在；去掉audit即正常运行）：
+
+```bash
+source .venv/bin/activate
+python contrib/satcompute/tests/integration/regression/run-n4c-baseline.py \
+  --output-dir=output/g3-109g-run41 --fault-mode=generate --audit \
+  --seed=1 --run=41 --f1-beta=10 --f1-gamma=1.5 \
+  --task-trace=contrib/satcompute/input/examples/leo-66-1000s-n4c-g3-109g/task-trace.json \
+  --hotspot-manifest=contrib/satcompute/input/examples/leo-66-1000s-n4c-g3-109g/placement-manifest.json
+python contrib/satcompute/tools/validation/summarize-n4c-g3.py \
+  --run-dir=output/g3-109g-run41 --expect-f3 \
+  --manifest=contrib/satcompute/input/examples/leo-66-1000s-n4c-g3-109g/placement-manifest.json \
+  --base-task-trace=contrib/satcompute/input/examples/leo-66-1000s-n4c-g3-109g/base-task-trace.json
+```
+
+生成器使用`--profile=n4c-c800-109g`产生纯业务基线，再用`--profile=n4c-hotspot`
+和`--workload-candidate=C800-109G`做placement；其他命令参数及逐阶段调用保留在
+输出目录experiment.py/各execution.json。验收必须显式提供上述base-task-trace，
+不能把默认81.75GB检查改成宽松总量检查。
+
+结论：109GB提高了自然故障压力，但数量目标和F3场景稳健性仍有缺口；下一步须人工审阅
+none安全窗口的余量及在途传输的故障收尾边界。本轮不继续选目标、调模型或扩充run pool。

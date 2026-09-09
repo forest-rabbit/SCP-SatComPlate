@@ -35,6 +35,19 @@ def distribution(values):
             "p90": quantile(.9), "p95": quantile(.95), "max": values[-1]}
 
 
+def lifecycle_acceptance(tasks, network, unexpected_failed):
+    """Preserve failed runs as evidence without weakening completion/loss gates."""
+    truncated = sorted(int(t["task_id"]) for t in tasks if t["final_state"] not in ("COMPLETED", "FAILED"))
+    errors = []
+    if truncated:
+        errors.append("task truncated")
+    if unexpected_failed:
+        errors.append("failed tasks outside RUNNING direct fault victims")
+    if network["flow_monitor_lost_packets"] or network["link_queue_drops"]:
+        errors.append("unexpected packet loss or queue drops")
+    return {"passed": not errors, "errors": errors, "truncated_task_ids": truncated}
+
+
 def summarize(directory, manifest, expect_f3=False, none_directory=None, base_task_trace=None):
     tasks = rows(directory / "task-summary.csv")
     by_id = {int(t["task_id"]): t for t in tasks}
@@ -302,12 +315,8 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None, base_ta
         "mean_available_utilization_percent": 100 * sum(float(w["available_busy_time_s"]) for w in network_windows) /
             sum(float(w["available_link_time_s"]) for w in network_windows),
         "terminal_link_ledger_drained": True}
-    require(all(t["final_state"] in ("COMPLETED", "FAILED") for t in tasks), "task truncated")
     unexpected_failed = {int(t["task_id"]) for t in tasks if t["final_state"] == "FAILED"} - all_direct
-    if not f3_errors:
-        require(not unexpected_failed, "G3 has a failed task outside direct fault victims")
-    require(network["flow_monitor_lost_packets"] == 0 and network["link_queue_drops"] == 0,
-            "G3 has unexpected packet loss")
+    lifecycle = lifecycle_acceptance(tasks, network, unexpected_failed)
     return {"events": source_events, "unique_direct_running": {
                 "F1": len(direct["F1"]), "F2": len(direct["F2"]), "F1_union_F2": len(compute_direct),
                 "F3": len(direct["F3"]), "total": len(all_direct)},
@@ -323,6 +332,7 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None, base_ta
             "region_runtime": region_runtime, "node_state_audit": state_summary,
             "by_fault_source": by_source, "f3_victim": victim_evidence,
             "f3_acceptance": {"passed": not f3_errors, "errors": f3_errors},
+            "lifecycle_acceptance": lifecycle,
             "unexpected_failed_task_ids": sorted(unexpected_failed),
             "f3_pre_failure_participation": ordinary_evidence, "f1_start_distributions": f1_start_distributions,
             "f1_start_temperature_bands": f1_temperature_counts,
@@ -331,7 +341,7 @@ def summarize(directory, manifest, expect_f3=False, none_directory=None, base_ta
             "last_task_completion_s": max(int(t["result_transfer_complete_time_ns"]) for t in tasks) / 1e9,
             "f1_outage_cooling_samples_checked": cooling_checks,
             "queue_delta_vs_none_s": queue_delta, "node_busy_s": distribution([int(n["busy_time_ns"])/1e9 for n in node_rows]),
-            "audit": "business, actual START, per-task impact, WU progress, deadline and terminal ledgers matched"}
+            "audit": "business, START, impact, WU progress and resource ledgers checked; F3/lifecycle acceptance reported separately"}
 
 
 def main():
@@ -346,7 +356,7 @@ def main():
                        args.base_task_trace)
     (args.run_dir / "g3-summary.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({k: result[k] for k in ("events", "unique_direct_running", "task_states", "failure_reasons", "f3_victim")}, indent=2))
-    return 0 if result["f3_acceptance"]["passed"] else 1
+    return 0 if result["f3_acceptance"]["passed"] and result["lifecycle_acceptance"]["passed"] else 1
 
 
 if __name__ == "__main__":
