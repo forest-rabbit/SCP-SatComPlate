@@ -15,9 +15,9 @@ run_platform() {
   ./ns3 run --no-build "satcompute --faultF3Mode=fixed_k --linkMetrics=0 --outputDir=$output_directory $*"
 }
 
-example="contrib/satcompute/input/examples/leo-66-1000s-n4b-joint"
-constellation="contrib/satcompute/input/topology/constellations/synthetic-66.csv"
-compute_profile="contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-all-compute-profile.json"
+example="contrib/satcompute/tests/fixtures/fault/joint"
+constellation="contrib/satcompute/tests/fixtures/topology/leo-66.csv"
+compute_profile="contrib/satcompute/tests/fixtures/task/compute-profile-66.json"
 task_trace="$example/task-trace.json"
 common="--simulationDuration=1000 --randomSeed=1 --randomRun=16 \
 --constellationConfig=$constellation --orbitStartOffset=302 \

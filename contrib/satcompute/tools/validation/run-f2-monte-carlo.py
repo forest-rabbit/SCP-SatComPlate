@@ -14,14 +14,14 @@ import tempfile
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 CONSTELLATION = Path(
-    "contrib/satcompute/input/topology/constellations/synthetic-66.csv"
+    "contrib/satcompute/tests/fixtures/topology/leo-66.csv"
 )
 COMPUTE_PROFILE = Path(
-    "contrib/satcompute/input/topology/resources/workload/"
-    "xw-66sat-static-2g-all-compute-profile.json"
+    "contrib/satcompute/tests/fixtures/task/"
+    "compute-profile-66.json"
 )
 TASK_TRACE = Path(
-    "contrib/satcompute/input/examples/leo-66-1000s-f2/task-trace.json"
+    "contrib/satcompute/tests/fixtures/fault/f2/task-trace.json"
 )
 
 

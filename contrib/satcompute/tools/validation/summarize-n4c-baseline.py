@@ -57,7 +57,7 @@ def summarize(directory):
     require(Counter(t["task_profile"] for t in tasks) ==
             {"dense-image": 240, "sparse-inference": 240, "compression": 240, "llm": 80}, "class counts differ")
     overall = population(tasks)
-    base_path = Path(__file__).resolve().parents[2] / "input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json"
+    base_path = Path(__file__).resolve().parents[2] / "input/experiments/leo-66/workload/task-trace.json"
     expected = {t["task_id"]: t for t in json.loads(base_path.read_text())["tasks"]}
     require({int(t["task_id"]) for t in tasks} == set(expected), "final task IDs differ")
     for task in tasks:

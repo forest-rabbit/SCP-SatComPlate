@@ -8,19 +8,19 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[5]
-SCENE = "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3"
+SCENE = "contrib/satcompute/input/experiments/leo-66"
 
 
 def arguments(output, fault_mode="generate", audit=False, shadow=False):
     if fault_mode not in ("none", "generate") or (fault_mode == "none" and (audit or shadow)):
         raise ValueError("audit/shadow require generate; only none/generate are supported")
-    manifest = json.loads((ROOT / SCENE / "f3-manifest.json").read_text())
+    manifest = json.loads((ROOT / SCENE / "fault/f3-manifest.json").read_text())
     f3 = manifest["f3"]
     if (manifest["simulation_duration_s"], f3["node_id"], f3["time_ns"]) != (1300, 62, 1027055770726):
         raise ValueError("frozen F3 node/time/horizon differs")
     result = ["satcompute", "--simulationDuration=1300", "--orbitStartOffset=0",
-              f"--computeProfile={SCENE}/compute-profile.json", f"--taskTrace={SCENE}/task-trace.json",
-              "--constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv",
+              f"--computeProfile={SCENE}/compute/compute-profile.json", f"--taskTrace={SCENE}/workload/task-trace.json",
+              f"--constellationConfig={SCENE}/topology/constellation.csv",
               "--computeDeadlineFactor=1.3", "--islBandwidthBps=10000000000", "--linkMetrics=1",
               "--delayMode=fixed", "--fixedDelay=0.001", "--networkUpdateInterval=20",
               "--routingMode=global-capacity-aware-hrw", "--transferChunkMode=size-aware",
@@ -55,7 +55,7 @@ def main():
         parser.error(str(error))
     output.mkdir(parents=True)
     identity = {"command": command, "seed": 1, "run": 11, "fault_mode": args.fault_mode,
-                "task_trace": f"{SCENE}/task-trace.json", "f3_manifest": f"{SCENE}/f3-manifest.json",
+                "task_trace": f"{SCENE}/workload/task-trace.json", "f3_manifest": f"{SCENE}/fault/f3-manifest.json",
                 "audit": args.audit, "shadow": args.shadow, "simulation_duration_s": 1300,
                 "fixed_delay_seconds": 0.001,
                 "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),

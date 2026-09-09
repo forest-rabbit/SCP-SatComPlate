@@ -65,9 +65,9 @@ CheckInputs(const std::filesystem::path& output)
 {
     Endpoints endpoints;
     const std::filesystem::path root =
-        "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3";
-    auto profile = ReadComputeProfile(root / "compute-profile.json", endpoints);
-    auto trace = ReadTaskTrace(root / "task-trace.json", 1300000000000, endpoints, profile);
+        "contrib/satcompute/input/experiments/leo-66";
+    auto profile = ReadComputeProfile(root / "compute/compute-profile.json", endpoints);
+    auto trace = ReadTaskTrace(root / "workload/task-trace.json", 1300000000000, endpoints, profile);
     Check(profile.nodes.size() == 66 && trace.tasks.size() == 800, "C800 input counts differ");
     uint64_t input = 0, work = 0, result = 0;
     std::map<TaskProfile, uint64_t> counts;
@@ -87,7 +87,7 @@ CheckInputs(const std::filesystem::path& output)
           "C800 parsed ledgers differ");
     nlohmann::json data;
     {
-        std::ifstream file(root / "task-trace.json");
+        std::ifstream file(root / "workload/task-trace.json");
         file >> data;
     }
     std::reverse(data["tasks"].begin(), data["tasks"].end());

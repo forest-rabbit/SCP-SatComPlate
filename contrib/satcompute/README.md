@@ -71,22 +71,22 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 ./ns3 run "satcompute --help"
 ```
 
-不带参数时，平台运行当前 G3 场景：1300 秒、66 星（每星 100,000 WU/s）、800 任务、
+不带参数时，平台运行 [LEO-66 正式实验](input/experiments/leo-66/README.md)：1300 秒、66 星（每星 100,000 WU/s）、800 任务、
 10 Gbps、1 ms、seed=1/run=11，在线生成 F1/F2 和 node62 在 1027.055770726 秒的受控 F3。
 概率审计仍默认关闭，链路吞吐/利用率统计默认开启。请使用独立 `outputDir` 保留实验结果。
 只缩短仿真时间不能截取完整任务文件；日常开发应提供一对小规模任务/算力输入，或使用
 `--topologyOnly=1`。无任务网络运行需显式设置
 `--computeProfile=none --taskTrace=none --faultMode=none`。
 历史小场景需显式指定故障开关、随机轮和完成策略；完整任务运行见
-[100 秒、66 星、20 任务示例](input/examples/leo-66-100s-20tasks/README.md)。
+[100 秒、66 星、20 任务示例](tests/fixtures/task/20tasks/README.md)。
 F1 在线生成验证见
-[120 秒、66 星 F1 示例](input/examples/leo-66-120s-f1/README.md)。
+[120 秒、66 星 F1 示例](tests/fixtures/fault/f1/README.md)。
 F2 在线生成验证见
-[1000 秒、66 星 F2 示例](input/examples/leo-66-1000s-f2/README.md)。
+[1000 秒、66 星 F2 示例](tests/fixtures/fault/f2/README.md)。
 F3 无任务永久整星生成验证见
-[1000 秒、66 星 F3 示例](input/examples/leo-66-1000s-f3/README.md)。
+[1000 秒、66 星 F3 示例](tests/fixtures/fault/f3/README.md)。
 F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
-[1000 秒、66 星、100 任务 N4B 验收场景](input/examples/leo-66-1000s-n4b-joint/README.md)。
+[1000 秒、66 星、100 任务 N4B 验收场景](tests/fixtures/fault/joint/README.md)。
 
 ## 参数边界
 
@@ -109,7 +109,7 @@ G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评�
 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
-| `--constellationConfig` | `input/topology/constellations/synthetic-66.csv` | 路径 | 一个原生 LEO shell CSV；不能为空且必须通过星座校验 |
+| `--constellationConfig` | `input/experiments/leo-66/topology/constellation.csv` | 路径 | 一个原生 LEO shell CSV；不能为空且必须通过星座校验 |
 | `--orbitStartOffset` | `0` | 秒 | 仿真 `t=0` 相对星座轨道 epoch 的确定性偏移；必须为有限非负值 |
 | `--maxIslDistance` | `6171353` | 米 | 候选 ISL 最大有效距离；不得超过对应轨道高度的 80 km clearance 上限 |
 | `--networkUpdateInterval` | `20` | 秒 | 正式仿真的链路状态/时延更新周期；必须大于 0 |
@@ -118,7 +118,7 @@ G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评�
 | `--includeFinalTopologyState` | `true` | bool | cadence 未覆盖终点时，是否额外输出仿真终点状态 |
 
 表中的星座默认路径相对于仓库根目录，完整值为
-`contrib/satcompute/input/topology/constellations/synthetic-66.csv`。
+`contrib/satcompute/input/experiments/leo-66/topology/constellation.csv`。
 
 ### link
 
@@ -152,8 +152,8 @@ G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评�
 
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
-| `--computeProfile` | `input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/compute-profile.json` | 路径 | 默认每星 100,000 WU/s；自定义时必须与 `taskTrace` 成对提供 |
-| `--taskTrace` | `input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json` | 路径 | 当前 800 任务；表中两条路径省略 `contrib/satcompute/` 前缀；成对设置 `none` 可禁用任务 |
+| `--computeProfile` | `input/experiments/leo-66/compute/compute-profile.json` | 路径 | 默认每星 100,000 WU/s；自定义时必须与 `taskTrace` 成对提供 |
+| `--taskTrace` | `input/experiments/leo-66/workload/task-trace.json` | 路径 | 当前 800 任务；表中两条路径省略 `contrib/satcompute/` 前缀；成对设置 `none` 可禁用任务 |
 | `--computeDeadlineFactor` | `1.3` | 倍率 | 有限且至少为1；首次计算开始后的deadline预算倍率，语义见[任务模块](task/README.md) |
 | `--transferChunkMode` | `size-aware` | 枚举 | `fixed` 或 `size-aware` 分包 |
 | `--transferPayloadBytes` | `1024` | 字节 | fixed payload，范围 `1..65507`，加 28-byte IPv4/UDP 头后不能超过 MTU |

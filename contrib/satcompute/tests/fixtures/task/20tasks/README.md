@@ -2,8 +2,8 @@
 
 本示例给出当前平台的一条完整可运行路径，但不复制星座和算力配置：
 
-- 星座：`input/topology/constellations/synthetic-66.csv`，6 个轨道面，每面 11 星；
-- 算力：`input/topology/resources/workload/xw-66sat-static-2g-compute-profile.json`，
+- 星座：`tests/fixtures/topology/leo-66.csv`，6 个轨道面，每面 11 星；
+- 算力：`tests/fixtures/task/compute-profile-22.json`，
   22 个计算节点；
 - 任务：本目录 `task-trace.json`，20 个任务、20,000,000 输入字节，任务在
   1–20 秒区间确定性到达；
@@ -25,13 +25,13 @@
 ```bash
 ./ns3 run "satcompute \
   --simulationDuration=100 \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --constellationConfig=contrib/satcompute/tests/fixtures/topology/leo-66.csv \
   --delayMode=fixed \
   --fixedDelay=0.008 \
   --networkUpdateInterval=20 \
   --routingMode=global-capacity-aware-hrw \
-  --computeProfile=contrib/satcompute/input/topology/resources/workload/xw-66sat-static-2g-compute-profile.json \
-  --taskTrace=contrib/satcompute/input/examples/leo-66-100s-20tasks/task-trace.json \
+  --computeProfile=contrib/satcompute/tests/fixtures/task/compute-profile-22.json \
+  --taskTrace=contrib/satcompute/tests/fixtures/task/20tasks/task-trace.json \
   --faultMode=none --taskCompletionPolicy=strict \
   --outputDir=/tmp/satcompute-66-100s-20tasks"
 ```
@@ -46,7 +46,7 @@
 ```bash
 ./ns3 run "satcompute \
   --simulationDuration=100 \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --constellationConfig=contrib/satcompute/tests/fixtures/topology/leo-66.csv \
   --topologyOnly=1 \
   --topologySliceInterval=1 \
   --includeFinalTopologyState=1 \

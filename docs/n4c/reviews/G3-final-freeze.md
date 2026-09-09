@@ -2,21 +2,22 @@
 
 **G3 STATUS = PASS / FROZEN**。人工批准日期：2026-09-09。
 当前唯一默认为已接受的 **fixed 单向 1 ms** 场景。
-历史标签 `n4c-g3-frozen` 指向 `db51fe874ae8bd9dd375325063b2ada25c742152`，
-保留 8 ms 历史，不移动；清理后的引用见[G4 冻结](G4-final-freeze.md)。
+历史冻结提交 `db51fe874ae8bd9dd375325063b2ada25c742152` 保留 8 ms 历史，
+已通过 [PR #90](https://github.com/forest-rabbit/SCP-SatComPlate/pull/90) 普通合入 n4c。
+内部冻结 tag 待 n4-complete 发布后删除，追溯使用上述 commit，不改写历史。
 
 ## 正式输入和生成
 
 全部文件位于
-[leo-66-1300s-n4c-g3-truncnormal-v3](../../../contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/)：
+[LEO-66 Final Experiment Scene](../../../contrib/satcompute/input/experiments/leo-66/)：
 
 | 文件 | 职责 |
 |---|---|
-| `task-trace.json` | 800 任务及源/计算/结果端点，实验直接读取 |
-| `compute-profile.json` | 66 星统一 100000 WU/s；从旧目录原样迁入 |
-| `placement-manifest.json` | 原生位置与热点放置来源 |
-| `f3-manifest.json` | controlled F3 节点/纳秒时刻及历史来源 |
-| `workload-summary.json` | 工作量、变量状态、固定锚点 ID 的原始预算摘要 |
+| `workload/task-trace.json` | 800 任务及源/计算/结果端点，实验直接读取 |
+| `compute/compute-profile.json` | 66 星统一 100000 WU/s；从旧目录原样迁入 |
+| `placement/placement-manifest.json` | 原生位置与热点放置来源 |
+| `fault/f3-manifest.json` | controlled F3 节点/纳秒时刻及历史来源 |
+| `workload/workload-summary.json` | 工作量、变量状态、固定锚点 ID 的原始预算摘要 |
 
 - 240 dense / 240 sparse / 240 compression / 80 LLM；705 普通图像
   TN(240,130;50,1000) MB，10×500 MB、5×1 GB 固定 ID。
@@ -30,7 +31,7 @@
 ## 平台参数与已接受结果
 
 [para.cc](../../../contrib/satcompute/para.cc)默认：
-原生 synthetic-66、orbitStartOffset=0、maxIslDistance=6171353 m、
+原生 LEO-66、orbitStartOffset=0、maxIslDistance=6171353 m、
 10 Gbps / 1 ms / 20 s 网络更新，1 s 指标；
 capacity-aware HRW、size-aware、MTU64028 B、队列1500000 B、receiver131072 B、
 deadline factor1.3、ecmpHashSeed1、randomSeed1/randomRun11。

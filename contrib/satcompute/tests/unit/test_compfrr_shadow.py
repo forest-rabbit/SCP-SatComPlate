@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[4]
 GEN = ROOT / "contrib/satcompute/tools/generation"
 sys.path.insert(0, str(GEN))
 from task_workload_model import image_budget, llm_budget, legal_unit_ends
-SCENE = ROOT / "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json"
+SCENE = ROOT / "contrib/satcompute/input/experiments/leo-66/workload/task-trace.json"
 
 
 class ShadowLayoutTest(unittest.TestCase):

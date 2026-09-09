@@ -14,7 +14,7 @@ trap 'rm -rf "$test_output"' EXIT
 
 ./ns3 run --no-build \
   "satcompute-constellation-definition-test \
---valid=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+--valid=contrib/satcompute/tests/fixtures/topology/leo-66.csv \
 --outputDir=$test_output/constellation"
 
 ./ns3 run --no-build "satcompute-routing-policy-factory-test"

@@ -13,7 +13,7 @@
   --simulationDuration=1000 \
   --randomSeed=1 \
   --randomRun=1 \
-  --constellationConfig=contrib/satcompute/input/topology/constellations/synthetic-66.csv \
+  --constellationConfig=contrib/satcompute/tests/fixtures/topology/leo-66.csv \
   --maxIslDistance=6171353 \
   --delayMode=fixed \
   --fixedDelay=0.008 \

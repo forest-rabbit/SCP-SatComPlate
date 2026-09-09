@@ -30,7 +30,7 @@ main()
         const ns3::SatComputeConfig config = ns3::GetDefaultSatComputeConfig();
         Require(config.simulationDurationSeconds == 1300.0, "unexpected duration");
         Require(config.constellationConfig ==
-                    "contrib/satcompute/input/topology/constellations/synthetic-66.csv",
+                    "contrib/satcompute/input/experiments/leo-66/topology/constellation.csv",
                 "unexpected constellation path");
         Require(config.orbitStartOffsetSeconds == 0.0,
                 "unexpected orbit start offset");
@@ -48,9 +48,9 @@ main()
                     config.ecmpHashSeed == 1,
                 "unexpected routing defaults");
         Require(config.computeProfile ==
-                    "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/compute-profile.json" &&
+                    "contrib/satcompute/input/experiments/leo-66/compute/compute-profile.json" &&
                     config.taskTrace ==
-                    "contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/task-trace.json",
+                    "contrib/satcompute/input/experiments/leo-66/workload/task-trace.json",
                 "workload inputs must match the frozen scene");
         Require(config.computeDeadlineFactor == 1.3, "unexpected compute deadline factor");
         Require(config.transferChunkMode == "size-aware" &&

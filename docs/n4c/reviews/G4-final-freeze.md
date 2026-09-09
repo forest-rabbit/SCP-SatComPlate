@@ -4,16 +4,17 @@
 人工接受及冻结日期：2026-09-09。分支：`feature/n4c-g4-shadow-decision-evaluation`。
 
 - 已审阅 HEAD：`8c3c27724a4723e9bba9abb2f99349566254af3d`。
-- Freeze tag：`n4c-g4-frozen`；cleanup/freeze commit 用
-  `git rev-parse 'n4c-g4-frozen^{commit}'` 获取，指向包含本索引的独立清理提交。
-- 当前 G3 参考为已接受的1 ms场景；`n4c-g3-frozen`保留8 ms历史，不移动。
-- 未合入main、未运行阶段CI。N5A须人工确认后另开分支，不由本轮自动启动。
+- Cleanup/freeze commit：`065ce9636971acce1dc701f4b6eadafb8a9e90e5`，
+  已通过 [PR #91](https://github.com/forest-rabbit/SCP-SatComPlate/pull/91) 普通合入 n4c。
+- 当前 G3 参考为已接受的1 ms场景；原8 ms冻结提交见[G3索引](G3-final-freeze.md)。
+- N4 最终发布后可删除内部冻结 tag，历史追溯使用 commit/PR，不依赖临时分支或标签。
+  发布状态见[N4C索引](../README.md)；N5 不由本轮自动启动。
 
 ## 唯一正式输入与验证器
 
-正式目录：[leo-66-1300s-n4c-g3-truncnormal-v3](../../../contrib/satcompute/input/examples/leo-66-1300s-n4c-g3-truncnormal-v3/)。
-包含`task-trace.json`、`compute-profile.json`、`placement-manifest.json`、
-`f3-manifest.json`、`workload-summary.json`；数值与原始输入一致，只有ComputeProfile路径迁移。
+正式目录：[LEO-66 Final Experiment Scene](../../../contrib/satcompute/input/experiments/leo-66/)。
+按 topology/compute/workload/placement/fault 自包含组织；
+星座、TaskTrace、ComputeProfile 与各 manifest/summary 数值均保持原样，N4 收尾只迁移路径。
 完整参数见[G3索引](G3-final-freeze.md)和[N4C合同](../README.md)。
 
 - [最终生成器](../../../contrib/satcompute/tools/generation/generate-task-workload.py)：
@@ -46,7 +47,8 @@ F3单列；本轮没有F2直接victim，不能由此估计F2保护覆盖率。
   G1/G2/G3中间审阅大报告及6份旧图导出；历史由Git保留，原始运行输出未删除。
 - 保留：通用task/routing/fault/network测试、F1/F2独立标定工具、F2论文图、功能fixture、
   原生轨道和TaskModeling派生的稳定映射；上游`src/`不改。
-- N4C文档只剩`README.md`与本目录三个文件：G3索引、G4索引、G4最终证据。
+- G4冻结时N4C文档收敛为`README.md`、G3索引、G4索引、G4最终证据；
+  后续N4收尾另有一份[最终release证据](N4-final-release-validation.md)。
 
 定向构建、16个C++测试程序、29项Python测试（原生切片复现实际执行、无skip）、
 8任务shadow off/on/重复/audit/同刻F3小型smoke、topology smoke和CLI help通过。
