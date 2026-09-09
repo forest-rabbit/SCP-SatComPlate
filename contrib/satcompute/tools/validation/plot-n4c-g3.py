@@ -43,6 +43,8 @@ def main():
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--figure-dir", type=Path, help="Optional separate directory for the six figure exports")
     parser.add_argument("--layout-qa-scripts", type=Path)
+    parser.add_argument("--old-none-label", default="G2 none busy time (s)")
+    parser.add_argument("--hotspot-none-label", default="G3 hotspot none busy time (s)")
     args = parser.parse_args()
     output = args.output_dir
     output.mkdir(parents=True, exist_ok=True)
@@ -73,8 +75,8 @@ def main():
                     color="#3888A3", alpha=.75, linewidths=0)
     limit = max(max(p["old_none_busy_s"], p["hotspot_none_busy_s"]) for p in points)*1.08
     axes[0].plot([0, limit], [0, limit], color="#888888", lw=.7, linestyle="--")
-    axes[0].set(xlim=(0, limit), ylim=(0, limit), xlabel="G2 none busy time (s)",
-                ylabel="G3 hotspot none busy time (s)", title=f"a   Matched nodes (n = {len(points)})")
+    axes[0].set(xlim=(0, limit), ylim=(0, limit), xlabel=args.old_none_label,
+                ylabel=args.hotspot_none_label, title=f"a   Matched nodes (n = {len(points)})")
     for observed, color, marker, label in ((0, "#8A949B", "o", "No F1 START"),
                                            (1, "#B95D42", "^", "F1 START observed")):
         selected = [p for p in points if p["f1_start_observed"] == observed]
@@ -127,6 +129,7 @@ def main():
     fig.colorbar(cloud, cax=color_ax, label="Model spatial risk (not event density)")
     save(fig, figure_dir / "f2-native-exposure")
     provenance = {"inputs": {k: str(getattr(args, k)) for k in ("old_none", "hotspot_none", "generate")},
+        "none_labels": {"old": args.old_none_label, "new": args.hotspot_none_label},
         "node_points": len(points), "saa_node_second_samples": len(exposure), "actual_f2_events": len(hits),
         "processing": "No smoothing, interpolation, invented samples, or manual count adjustment.",
         "interpretation": "Load/temperature are simulator observations; F2 colors are model risk, not fault density.",

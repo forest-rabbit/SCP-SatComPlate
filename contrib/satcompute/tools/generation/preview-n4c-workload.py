@@ -26,7 +26,7 @@ TOTAL_INPUT_BYTES = 81_750_000_000
 # Only workload composition varies: total tasks, 1 GB count, 500 MB count.
 # The default remains a historical reference, not a selected G2 workload.
 COMPOSITIONS = {"V2-1500": (1500, 15, 30), "C1000": (1000, 10, 20),
-                "C800": (800, 10, 20), "C600": (600, 10, 20)}
+                "C800": (800, 10, 20), "C600": (600, 10, 20), "C800-109G": (800, 10, 20)}
 REFERENCE_RATE = 100_000
 REFERENCE_LLM_WU_PER_TOKEN = LlmParameters().work_units_per_token
 COMPUTE_NODE_COUNT = 66
@@ -49,6 +49,7 @@ def preview_attributes(seed: str, candidate: str = "V2-1500") -> list[dict]:
     if not isinstance(candidate, str) or candidate not in COMPOSITIONS:
         raise ValueError("unknown workload composition candidate")
     task_count, one_gb_count, half_gb_count = COMPOSITIONS[candidate]
+    total_input_bytes = 109_000_000_000 if candidate == "C800-109G" else TOTAL_INPUT_BYTES
     counts = dict(zip(TASK_PROFILES, (task_count // 10 * ratio for ratio in (3, 3, 3, 1))))
     ids = sorted(range(1, task_count + 1), key=lambda tid: (STABLE_VALUE(seed, tid, "n4c-class"), tid))
     attributes = {}
@@ -90,7 +91,7 @@ def preview_attributes(seed: str, candidate: str = "V2-1500") -> list[dict]:
 
     ordinary = sorted(tid for tid, task in attributes.items()
                       if task["task_profile"] != "llm" and tid not in tail_ids)
-    remaining = TOTAL_INPUT_BYTES - sum(task.get("input_bytes", 0) for task in attributes.values())
+    remaining = total_input_bytes - sum(task.get("input_bytes", 0) for task in attributes.values())
     weights = [10 + STABLE_VALUE(seed, tid, "n4c-input-weight") % 91 for tid in ordinary]
     sizes = ALLOCATE(remaining, weights, 1 << 20, 300_000_000, ordinary)
     for tid, size in zip(ordinary, sizes):
@@ -114,7 +115,7 @@ def preview_attributes(seed: str, candidate: str = "V2-1500") -> list[dict]:
     if remainder:
         raise ValueError("raw-array alignment cannot preserve the input budget within file bounds")
     result = [attributes[tid] for tid in sorted(attributes)]
-    if sum(task["input_bytes"] for task in result) != TOTAL_INPUT_BYTES:
+    if sum(task["input_bytes"] for task in result) != total_input_bytes:
         raise AssertionError("preview input allocation lost bytes")
     return result
 
@@ -371,6 +372,8 @@ def main() -> int:
         summary, rows = summarize_attributes(attributes, args.reference_rate, args.llm_work_units_per_token)
         summary["input_seed"] = args.seed
         summary["workload_candidate"] = args.candidate
+        if args.candidate == "C800-109G":
+            summary["purpose"] = "offline-g3-stress-variant-not-runtime-validation"
         parameters = LlmParameters(work_units_per_token=args.llm_work_units_per_token)
         checks = state_budget_check_rows(parameters)
         representatives = [budget_row(label, budget) for label, budget in representative_budgets(parameters)]

@@ -992,7 +992,7 @@ def build_n4b_joint_validation_workload(satellite_ids, compute_nodes, seed):
     return {"tasks": tasks}, summary
 
 
-def build_n4c_c800_workload(satellite_ids, compute_nodes, seed):
+def build_n4c_c800_workload(satellite_ids, compute_nodes, seed, candidate="C800"):
     """Package the approved G1 attributes with non-geographic G2 endpoints."""
     if sorted(satellite_ids) != list(range(66)):
         raise ValueError("n4c-c800 requires satellite IDs 0..65")
@@ -1002,7 +1002,9 @@ def build_n4c_c800_workload(satellite_ids, compute_nodes, seed):
         raise ValueError("n4c-c800 requires all 66 nodes at 100000 WU/s")
     # Reuse the frozen G1 allocator and model; do not copy its byte/WU formulas.
     preview = runpy.run_path(str(Path(__file__).with_name("preview-n4c-workload.py")))
-    attributes = preview["preview_attributes"](seed, "C800")
+    if candidate not in ("C800", "C800-109G"):
+        raise ValueError("unsupported formal C800 candidate")
+    attributes = preview["preview_attributes"](seed, candidate)
     summary, budgets = preview["summarize_attributes"](attributes)
     ids = [task["task_id"] for task in attributes]
     nodes = sorted(satellite_ids)
@@ -1019,6 +1021,23 @@ def build_n4c_c800_workload(satellite_ids, compute_nodes, seed):
     summary.update(profile="n4c-c800", seed=seed, simulation_duration_s=1000,
                    arrival_window_s=[1, 600], endpoint_assignment="non-geographic-balanced",
                    state_metadata="G1 model/preview only; not runtime checkpoint objects")
+    if candidate == "C800-109G":
+        frozen = preview["preview_attributes"](seed, "C800")
+        for before, after in zip(frozen, attributes):
+            if {k: v for k, v in before.items() if k != "input_bytes"} != {
+                    k: v for k, v in after.items() if k != "input_bytes"}:
+                raise AssertionError("109 GB changed frozen task attributes")
+            if before["task_profile"] == "llm" or before["input_bytes"] >= 500_000_000:
+                if before != after:
+                    raise AssertionError("109 GB changed a frozen LLM or tail task")
+        frozen_llm_bytes = sum(t["input_bytes"] for t in frozen if t["task_profile"] == "llm")
+        if frozen_llm_bytes != sum(t["input_bytes"] for t in attributes if t["task_profile"] == "llm"):
+            raise AssertionError("LLM input budget changed")
+        summary.update(profile="n4c-c800-109g", workload_candidate=candidate,
+                       purpose="g3-stress-variant-derived-from-frozen-g1-model",
+                       frozen_llm_input_bytes=frozen_llm_bytes,
+                       ordinary_image_input_bytes=sum(t["input_bytes"] for t in attributes
+                           if t["task_profile"] != "llm" and t["input_bytes"] < 500_000_000))
     return {"tasks": tasks}, summary
 
 
@@ -1032,6 +1051,7 @@ def main():
             "f2-validation",
             "n4b-joint-validation",
             "n4c-c800",
+            "n4c-c800-109g",
             "n4c-hotspot",
         ),
         default="stress",
@@ -1045,6 +1065,8 @@ def main():
                         help="Frozen G2 C800 trace; hotspot changes placement only")
     parser.add_argument("--position-slices", type=Path, help="Native topology-only output directory")
     parser.add_argument("--hotspot-weight", type=positive_int, default=4)
+    parser.add_argument("--workload-candidate", choices=("C800", "C800-109G"), default="C800",
+                        help="Explicit business baseline for n4c-hotspot; defaults to historical C800")
     parser.add_argument("--regional-candidate-limit", type=non_negative_int, default=0)
     parser.add_argument("--f3-from-none", type=Path,
                         help="n4c-hotspot: select a large controlled victim from actual none business timing")
@@ -1137,21 +1159,23 @@ def main():
         trace, summary = hotspot["build_hotspot"](
             read_json(args.base_task_trace), hotspot["read_positions"](args.position_slices),
             args.seed, args.hotspot_weight, args.regional_candidate_limit,
-            f3_plan=f3_plan, none_tasks=none_tasks)
+            f3_plan=f3_plan, none_tasks=none_tasks, workload_candidate=args.workload_candidate)
         write_json(args.output_task_trace, trace)
         write_json(args.output_workload_summary, summary)
         print(json.dumps({k: v for k, v in summary.items() if k != "placements"}, indent=2))
         return
-    if args.profile == "n4c-c800":
-        for name, expected in (("task_count", 800), ("total_input_bytes", 81_750_000_000),
+    if args.profile in ("n4c-c800", "n4c-c800-109g"):
+        candidate = "C800-109G" if args.profile == "n4c-c800-109g" else "C800"
+        total = 109_000_000_000 if candidate == "C800-109G" else 81_750_000_000
+        for name, expected in (("task_count", 800), ("total_input_bytes", total),
                                ("arrival_start_ns", 1_000_000_000),
                                ("arrival_end_ns", 600_000_000_000), ("arrival_mode", "uniform")):
             if getattr(args, name) not in (None, expected):
-                raise ValueError(f"n4c-c800 freezes {name}={expected}")
-        trace, summary = build_n4c_c800_workload(satellite_ids, compute_nodes, args.seed)
+                raise ValueError(f"{args.profile} freezes {name}={expected}")
+        trace, summary = build_n4c_c800_workload(satellite_ids, compute_nodes, args.seed, candidate)
         write_json(args.output_task_trace, trace)
         write_json(args.output_workload_summary, summary)
-        print("PASS: generated formal G1 C800 TaskTrace (800 tasks)")
+        print(f"PASS: generated {candidate} TaskTrace (800 tasks)")
         return
     if args.profile == "f1-validation":
         trace, summary = build_f1_validation_workload(

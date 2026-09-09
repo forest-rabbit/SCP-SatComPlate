@@ -50,15 +50,26 @@ def population(tasks):
                                                for t in tasks if t["compute_deadline_met"] == "1"])}
 
 
-def summarize(directory):
+def summarize(directory, base_task_trace=None):
     network = PRESSURE["summarize"](directory)
     tasks = rows(directory / "task-summary.csv")
     require(len(tasks) == 800, "requires formal C800")
     require(Counter(t["task_profile"] for t in tasks) ==
             {"dense-image": 240, "sparse-inference": 240, "compression": 240, "llm": 80}, "class counts differ")
     overall = population(tasks)
-    require((overall["input_bytes"], overall["output_bytes"], overall["work_units"]) ==
-            (81_750_000_000, 44_076_569_084, 183_958_466), "G1 frozen ledgers differ")
+    if base_task_trace is None:
+        require((overall["input_bytes"], overall["output_bytes"], overall["work_units"]) ==
+                (81_750_000_000, 44_076_569_084, 183_958_466), "G1 frozen ledgers differ")
+    else:
+        base = json.loads(base_task_trace.read_text())["tasks"]
+        expected = {t["task_id"]: t for t in base}
+        require(len(base) == len(expected) == 800, "incomplete explicit baseline")
+        require({int(t["task_id"]) for t in tasks} == set(expected), "baseline task IDs differ")
+        for task in tasks:
+            original = expected[int(task["task_id"])]
+            require(all(int(task[k]) == original[k] for k in
+                        ("input_bytes", "output_bytes", "compute_work_units", "arrival_time_ns")) and
+                    task["task_profile"] == original["task_profile"], "frozen task business differs")
     require(overall["task_success"] == 800 and network["completed_transfers"] == 1600,
             "no-fault C800 did not fully complete")
     for task in tasks:
@@ -101,8 +112,9 @@ def summarize(directory):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
+    parser.add_argument("--base-task-trace", type=Path, help="Explicit frozen stress-variant business baseline")
     args = parser.parse_args()
-    result = summarize(args.run_dir)
+    result = summarize(args.run_dir, args.base_task_trace)
     (args.run_dir / "n4c-summary.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({"overall": result["overall"], "network": result["network"]}, indent=2))
 

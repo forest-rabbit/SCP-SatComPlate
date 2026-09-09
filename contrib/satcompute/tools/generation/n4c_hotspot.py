@@ -139,7 +139,11 @@ def select_f3_from_none(tasks, seed):
                 progress = min(work, (time_ns - start) * rate // 10**9) / work
                 if not .5 < progress < 1:
                     raise AssertionError("F3 candidate has invalid WU progress")
-                candidates.append((priority, stable_hash(seed, "f3-large-victim", task_id, node),
+                # With 109 GB, ordinary files can also exceed 200 MB. Explicitly
+                # prefer the frozen 500 MB / 1 GB tails, then dense/compression.
+                preference = (int(int(task["input_bytes"]) not in (500_000_000, 1_000_000_000)),
+                              int(task.get("task_profile") not in ("dense-image", "compression")), priority)
+                candidates.append((preference, stable_hash(seed, "f3-large-victim", task_id, node),
                                    task_id, abs(time_ns-target), time_ns, {
                     "node_id": node, "time_ns": time_ns, "victim_task_id": task_id,
                     "ordinary_task_id": ordinary[0], "ordinary_role": ordinary[1],
@@ -147,7 +151,7 @@ def select_f3_from_none(tasks, seed):
                     "compute_work_units": work, "none_compute_start_time_ns": start,
                     "none_compute_finish_time_ns": finish, "none_progress": progress,
                     "ordinary_release_time_ns": ordinary[2],
-                    "construction": "actual none business intervals; prefer 60-80% WU progress, then stable hash/task id; no risk input"}))
+                    "construction": "actual none business intervals; prefer frozen 500MB/1GB tails, dense/compression, 60-80% WU progress, then stable hash/task id; no risk input"}))
             if any(c[2] == task_id for c in candidates):
                 break
     if not candidates:
@@ -157,15 +161,18 @@ def select_f3_from_none(tasks, seed):
 
 
 def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions=REGIONS,
-                  f3_plan=None, none_tasks=None):
+                  f3_plan=None, none_tasks=None, workload_candidate="C800"):
     if not isinstance(hot_weight, int) or hot_weight < 1 or regional_limit < 0:
         raise ValueError("positive integer hotspot weight and non-negative regional limit required")
     tasks = [dict(t) for t in base["tasks"]]
     if len({t["task_id"] for t in tasks}) != 800 or len(tasks) != 800:
         raise ValueError("requires C800 with unique task IDs")
+    budgets = {"C800": 81_750_000_000, "C800-109G": 109_000_000_000}
+    if workload_candidate not in budgets:
+        raise ValueError("unknown C800 workload candidate")
     if Counter(t["task_profile"] for t in tasks) != {
         "dense-image": 240, "sparse-inference": 240, "compression": 240, "llm": 80
-    } or sum(t["input_bytes"] for t in tasks) != 81_750_000_000:
+    } or sum(t["input_bytes"] for t in tasks) != budgets[workload_candidate]:
         raise ValueError("C800 business budgets differ")
     times = sorted(positions)
 
@@ -258,4 +265,6 @@ def build_hotspot(base, positions, seed, hot_weight=4, regional_limit=0, regions
                 "business_attributes_and_arrivals_unchanged": True,
                 "f3": f3_plan,
                 "by_region": dict(region_totals), "placements": placements}
+    if workload_candidate != "C800":
+        manifest["workload_candidate"] = workload_candidate
     return output, manifest

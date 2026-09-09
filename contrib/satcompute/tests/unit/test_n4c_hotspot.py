@@ -75,6 +75,14 @@ class HotspotTest(unittest.TestCase):
         self.assertEqual(plan["victim_task_id"], 2)
         self.assertAlmostEqual(plan["none_progress"], .7)
         self.assertEqual(plan["ordinary_role"], "source")
+        # Ordinary images >200 MB must not displace an eligible frozen tail,
+        # regardless of deterministic tie-break ordering or input row order.
+        alternative = task(4, 1, 3, 2, 19, 20, 23.5, 240_000_000)
+        alternative["task_profile"] = "dense-image"
+        victim["task_profile"] = "compression"
+        for seed in ("test", "another", "third"):
+            selected = MODULE["select_f3_from_none"]([alternative, victim, ordinary], seed)
+            self.assertEqual(selected["victim_task_id"], 2)
         # RESULT is not active at F3 yet, but its already-arrived owner still needs node 4.
         future_result = task(3, 1, 5, 4, 10, 20, 22)
         queued = task(3, 1, 4, 2, 10, 18, 19)
@@ -99,6 +107,21 @@ class HotspotTest(unittest.TestCase):
             MODULE["build_hotspot"](self.base, {0: self.positions[0]}, "g3-test")
         with self.assertRaises(ValueError):
             self.build(hot_weight=0)
+
+    def test_109g_requires_explicit_budget_variant(self):
+        import sys
+        sys.path.insert(0, str(PLATFORM / "tools/generation"))
+        generator = runpy.run_path(str(PLATFORM / "tools/generation/generate-task-workload.py"))
+        profile = json.loads((PLATFORM / "input/examples/leo-66-1000s-n4c/compute-profile.json").read_text())["compute_nodes"]
+        base, _ = generator["build_n4c_c800_workload"](list(range(66)), profile, "n4c-g1-66", "C800-109G")
+        with self.assertRaisesRegex(ValueError, "business budgets"):
+            MODULE["build_hotspot"](base, self.positions, "g3-test")
+        trace, manifest = MODULE["build_hotspot"](base, self.positions, "g3-test", workload_candidate="C800-109G")
+        self.assertEqual(sum(t["input_bytes"] for t in trace["tasks"]), 109_000_000_000)
+        self.assertEqual(manifest["workload_candidate"], "C800-109G")
+        for before, after in zip(base["tasks"], trace["tasks"]):
+            self.assertEqual({k: v for k, v in before.items() if not k.endswith("node_id")},
+                             {k: v for k, v in after.items() if not k.endswith("node_id")})
 
 
 if __name__ == "__main__":

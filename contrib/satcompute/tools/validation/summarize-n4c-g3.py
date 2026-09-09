@@ -35,10 +35,17 @@ def distribution(values):
             "p90": quantile(.9), "p95": quantile(.95), "max": values[-1]}
 
 
-def summarize(directory, manifest, expect_f3=False, none_directory=None):
+def summarize(directory, manifest, expect_f3=False, none_directory=None, base_task_trace=None):
     tasks = rows(directory / "task-summary.csv")
     by_id = {int(t["task_id"]): t for t in tasks}
-    base = json.loads((PLATFORM / "input/examples/leo-66-1000s-n4c/task-trace.json").read_text())["tasks"]
+    base_path = base_task_trace or PLATFORM / "input/examples/leo-66-1000s-n4c/task-trace.json"
+    base = json.loads(base_path.read_text())["tasks"]
+    require(len(base) == 800 and len({t["task_id"] for t in base}) == 800, "incomplete business baseline")
+    candidate = manifest.get("workload_candidate", "C800")
+    require(candidate in ("C800", "C800-109G"), "unknown workload candidate")
+    require(sum(t["input_bytes"] for t in base) ==
+            (109_000_000_000 if candidate == "C800-109G" else 81_750_000_000),
+            "explicit workload baseline does not match manifest")
     require(len(tasks) == len(by_id) == 800, "C800 task ledger incomplete")
     for original in base:
         actual = by_id[original["task_id"]]
@@ -333,8 +340,10 @@ def main():
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--expect-f3", action="store_true")
     parser.add_argument("--none-dir", type=Path)
+    parser.add_argument("--base-task-trace", type=Path, help="Explicit frozen business baseline for a stress variant")
     args = parser.parse_args()
-    result = summarize(args.run_dir, json.loads(args.manifest.read_text()), args.expect_f3, args.none_dir)
+    result = summarize(args.run_dir, json.loads(args.manifest.read_text()), args.expect_f3, args.none_dir,
+                       args.base_task_trace)
     (args.run_dir / "g3-summary.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({k: result[k] for k in ("events", "unique_direct_running", "task_states", "failure_reasons", "f3_victim")}, indent=2))
     return 0 if result["f3_acceptance"]["passed"] else 1

@@ -1,6 +1,8 @@
 # N4C G3：F1 升温形状、热点标定与大任务 F3
 
-状态：v3 修订与验证已完成；功能核验通过，**数量标定未达标，停在 G3 审阅**。
+状态：v3 修订与验证已完成；109GB派生压力修订进行中，仍属于G3。
+下列81.75GB结果保留为历史基线，不覆盖G1或旧输入/输出。
+历史v3功能核验通过，**数量标定未达标**。
 F1∪F2 direct标定均值48.33、独立验证均值51，均低于75–83；不进入G4/N5。
 本轮不跑CI、不合并、不打标签。
 当前只更新本报告和既有两张图；批量原始结果在 `output/n4c-g3-v3-20260909`。
@@ -217,3 +219,16 @@ python contrib/satcompute/tests/integration/regression/run-n4c-baseline.py \
 独立验证只改run=31/32/33和输出目录。重新生成输入须先做纯placement none，再用
 generate-task-workload.py的f3-from-none指定它，不能从generate状态选取目标；流程见
 [生成器说明](../../../contrib/satcompute/tools/generation/README.md)。
+
+## 109GB workload-intensity revision
+
+预声明：只增加690个普通image任务字节，复用G1映射，保留800个ID、类别、到达、
+80个LLM及30个500MB/1GB任务的逐项属性。模型、算力、网络和deadline均不改。
+热点按64→96→128有限递进，none须先通过；run11/F3 off只筛选。
+重新从none业务时序构造F3，显式优先冻结的500MB/1GB尾部，再dense/compression，
+再60–80%WU进度；不读取风险、不屏蔽随机故障。
+确认轮11/12/13，未查看独立验证41/42/43；确认均值低于75才继续增压，超过83停止增加，
+128仍不足也停止。代表图固定确认轮11。
+固定压力场景只在上述六轮全部结束后，从通过F3及生命周期硬验收的轮中取F1∪F2 direct最大者，
+并列取最小run；全部结果保留，不扩充run pool，不把选中的最大值当均值或held-out表现。
+若没有合格轮，则不冻结固定压力场景。完成后STOP AT G3 REVIEW，不进入G4/N5。
