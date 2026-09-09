@@ -212,6 +212,18 @@ CheckF1Model()
         }
     }
     auto energy = model.CreateInitialSnapshot();
+    auto cadence = model.CreateInitialSnapshot();
+    cadence.temperatureC = 25;
+    model.Evaluate(cadence);
+    const double oneSecondProbability = cadence.stepFailureProbability;
+    for (double interval : {.25, 1., 2.})
+    {
+        model.Evaluate(cadence, interval);
+        Check(std::abs(cadence.stepFailureProbability -
+                       (-std::expm1(std::log1p(-oneSecondProbability) * interval))) < 1e-14 &&
+                  cadence.temperatureC == 25,
+              "sampling cadence must rescale the one-second probability without heating");
+    }
     energy.depthOfDischarge = parameters.f1.energy.criticalDod;
     for (double temperature : {17., 20., 25., 29., 30.})
     {

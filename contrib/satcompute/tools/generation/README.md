@@ -69,8 +69,9 @@ python3 contrib/satcompute/tools/generation/generate-task-workload.py \
   --output-workload-summary=/tmp/f1-workload-summary.json
 ```
 
-该档固定产生 20 个任务：3 个热点节点分别包含连续负载与恢复后任务，1 个节点只
-形成风险 episode，2 个节点承载稀疏短任务。它只构造任务忙闲条件，不预先写故障；
+该档固定产生 20 个任务：3 个热点节点分别包含连续负载与后续任务，1 个节点为
+较短连续负载，2 个节点承载稀疏短任务。保留的历史角色元数据键 `risk_only` 不代表
+新模型保证无故障，也不会生成风险事件。它只构造任务忙闲条件，不预先写故障；
 是否发生故障仍由正式仿真中的 `FaultModelEngine` 根据实时状态判定。
 
 ## F2 验证档

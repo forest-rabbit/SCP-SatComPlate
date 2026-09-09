@@ -63,8 +63,8 @@ metrics/
 | 提供 `faultTrace` | `fault-events.csv` | canonical START/RECOVERY 顺序、事件后可用性、影响数和路由证据 |
 | 提供 `faultTrace` | `fault-summary.json` | 故障类型/事件/活动故障、失败任务、FAILED/CANCELLED transfer 与故障路由重算计数 |
 | generate 任务模式 | `fault-task-impact.csv` | 已发生故障的逐任务直接/间接影响、真实进度及最终结果 |
-| `faultProbabilityAudit=1` 的 generate | `fault-predictions.csv` | 活动风险中运行任务的逐检查点 F1/F2/联合因果概率和任务进度 |
-| `faultProbabilityAudit=1` 的 generate | `fault-prediction-summary.json` | 正式预测、风险 episode 和涉及任务的数量 |
+| `faultProbabilityAudit=1` 的 generate | `fault-predictions.csv` | 全部可计算节点上 RUNNING 任务的逐检查点 F1/F2/联合因果概率和任务进度 |
+| `faultProbabilityAudit=1` 的 generate | `fault-prediction-summary.json` | 预测记录和涉及任务的数量 |
 | `faultProbabilityAudit=1` 的 generate | `fault-model-probabilities.csv` | 随机抽样前由真实在线 F1/F2 状态计算的同结构概率真值，仅用于验证 |
 | `faultProbabilityAudit=1` 的 generate | `fault-model-state.csv` | 逐节点检查时刻的忙闲、温度、F1/F2 风险、原生经纬度和实际采样资格；停机期间仍更新状态 |
 
@@ -132,15 +132,19 @@ elapsed 记录计算开始到完成、失败或仿真截断的已过时间；初
 
 ```text
 simulation_time_ns, fault_id, node_id, fault_type, event_type,
-notice_time_ns, start_time_ns, duration_ns, failure_probability,
+start_time_ns, duration_ns, failure_probability,
 satellite_available_after, communication_available_after,
 compute_available_after, affected_task_count, affected_transfer_count,
-route_recomputed
+route_recomputed, fault_source, p_f1, p_f2, temperature_c, continuous_busy_s
 ```
 
 可选输入为 null 时对应 CSV 单元格为空，布尔值固定写作 `true/false`。一个整星
 timestamp 批次最多令一行 `route_recomputed=true`，因此逐行求和就是故障引起的
 路由重算次数。
+
+`fault_source` 在 START 行标记 F1/F2/F1+F2/F3；概率、温度和连续 busy 秒数是
+该故障 START 抽样时的元数据，RECOVERY 行复用这些值，不表示恢复时状态。
+F1 duration 由 START 温度派生，F2 固定 8 秒；同刻双来源取最大值，F3 可截短活动停机。
 
 `fault-summary.json` 固定汇总 `fault_count`、两类 fault count、START/RECOVERY 两类 event count、
 `active_fault_count_at_end`、`failed_task_count`、`failed_transfer_count`、
@@ -149,7 +153,7 @@ timestamp 批次最多令一行 `route_recomputed=true`，因此逐行求和就�
 
 ### 计算故障预测输出
 
-以下三个文件属于显式启用的概率审计输出。`faultProbabilityAudit` 默认 `false`；关闭
+以下概率文件以及 `fault-model-state.csv` 均属于显式审计输出。`faultProbabilityAudit` 默认 `false`；关闭
 时平台不创建预测器，并从复用的 `outputDir` 中删除陈旧概率审计文件。
 
 `fault-predictions.csv` 每行对应当前可计算节点上一个正在运行任务的因果

@@ -104,6 +104,9 @@ def audit(directory, task_count=None, allow_truncated=False):
             require(elapsed + remaining == int(row["task_service_time_ns"]) and
                     int(row["expected_compute_completion_time_ns"]) == time + remaining,
                     "prediction progress/horizon differs")
-            require(0 <= float(row["combined_step_failure_probability"]) <=
-                    float(row["failure_before_finish_probability"]) <= 1, "invalid forecast probabilities")
+            q = float(row["combined_step_failure_probability"])
+            p = float(row["failure_before_finish_probability"])
+            # The log-survival round trip can differ by one ULP for a one-step horizon.
+            require(0 <= q <= 1 and 0 <= p <= 1 and q <= p + 1e-12,
+                    "invalid forecast probabilities")
     return {"faults": faults, "events": events, "tasks": tasks, "impacts": impacts}
