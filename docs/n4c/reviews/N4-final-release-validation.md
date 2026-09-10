@@ -1,6 +1,6 @@
 # N4 最终 Release Validation
 
-**RELEASE VALIDATION = PASS；N4 发布待主线集成、阶段 CI 与人工审阅；N5 NOT STARTED。**
+**RELEASE VALIDATION = PASS；N4 COMPLETE；N5 NOT STARTED。**
 日期：2026-09-09。本次不是重新标定，也不是 N5 真实备份性能实验。
 
 ## 运行身份
@@ -72,4 +72,9 @@ probability-comparison.csv/json 和 release-validation.json。输出由gitignore
 
 G4 仍是理想资源下的解析/旁路验证，没有实际 checkpoint、备份流量、CPU/存储预留或恢复执行。
 原平台的 FAILED 任务没有被救回；N5 正式运行不得依赖 G4 shadow API。
-阶段 CI 与最终人工审阅完成后才允许主线集成、创建 n4-complete 并清理内部分支/tag。
+2026-09-10，[完整阶段 CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/34422773581)
+在 `04d16dea85ddbcbc5ca8752eea1c16466173a3c5` 通过，包含全部功能回归；
+Python 中1项依赖本地原生切片的复现测试按既有条件跳过，该项此前已在本地执行通过。
+首次 CI 的日志查找工具依赖问题仅以 `rg -q` 改为 `grep -Fq` 修复，未改模型或输入。
+用户最终确认后，仅补齐发布状态文档，由 [PR #93](https://github.com/forest-rabbit/SCP-SatComPlate/pull/93)
+普通合入 main，annotated `n4-complete` 指向该集成提交。不重复 CI 或正式1300s仿真。

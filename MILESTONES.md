@@ -21,8 +21,8 @@ N0–N2 是 ns-3.33 版本的原始里程碑，相关 PR 位于旧 SatCompute �
 | N3：迁移到 ns-3.48 | 已完成 | [PR #72](https://github.com/forest-rabbit/SCP-SatComPlate/pull/72) / `n3-complete` / `b83bf646b` | 2026-08-05 |
 | N4A：确定性故障输入与执行基础 | 已完成 | PR #75–#80 / `n4a-complete` | 2026-08-05 |
 | N4B：统一故障建模与因果概率预测 | 已完成 | [PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81) / `n4b-complete` | 2026-08-31 |
-| N4C：最终计算场景与 CompFRR 决策预演 | G1–G4 与 release 验证完成，待主线发布 | PR #88–#91 / `a78ee0b4d` | 2026-09-09 |
-| N4：故障建模与保护决策前置阶段 | 待 CI、人工审阅和主线集成 | 目标 `n4-complete` | — |
+| N4C：最终计算场景与 CompFRR 决策预演 | 已完成 | PR #88–#93 / `n4-complete` | 2026-09-10 |
+| N4：故障建模与保护决策前置阶段 | 已完成 | [PR #93](https://github.com/forest-rabbit/SCP-SatComPlate/pull/93) / `n4-complete` | 2026-09-10 |
 | N5 前置：任务增量与压力基线 | 实验基础已完成，尚未实现备份算法 | 平台 PR #86 / TaskModeling PR #5 | 2026-09-06 |
 
 N2 的最终发布链固定为 `feature/n2-integration` 合入旧仓库 `main`，并以
@@ -30,10 +30,10 @@ annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移�
 或 N1-ECMP 已有的阶段冻结点。N3 使用新仓库的 ns-3.48 主线，但沿用并保留这些
 历史 tag。
 
-N4C G3/G4 已分别通过 PR #90/#91 普通合入 n4c；当前做 N4 最终收尾。
+N4C G3/G4 经 PR #90/#91、最终收尾经 PR #92 集成到 n4c，再由 PR #93 普通合入 main。
 正式入口为 [LEO-66](contrib/satcompute/input/experiments/leo-66/README.md)，
-冻结历史由 commit/PR 追溯，不依赖计划删除的内部标签。
-N4 的发布终点是 main 集成及 `n4-complete`；N5 未开始不影响 N4 独立完成。
+冻结历史由 commit/PR 追溯，不依赖内部标签。
+N4 = COMPLETE，正式标签为 main 集成提交上的 `n4-complete`；N5 尚未开始。
 
 ## N0：初始网络平台
 
@@ -444,7 +444,8 @@ G4 完成 Simplified v4 shadow、动态频率与资源/追赶时间评估，不�
   ALL-OFF/shadow全生命周期waste为25625072.100/1354096.228 WU_eq，净节省94.716%；
   平均catch-up为3.12501/0.10479s，仅为解析结果。
 - 输入重构与release证据见 [closeout PR #92](https://github.com/forest-rabbit/SCP-SatComPlate/pull/92)。
-  发布尚待main集成、完整阶段CI与人工审阅；最终tag必须为main合并提交上的n4-complete。
+  [完整阶段 CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/34422773581) 与最终人工审阅通过，
+  [PR #93](https://github.com/forest-rabbit/SCP-SatComPlate/pull/93) 完成 main 集成，以 `n4-complete` 发布。
   N5 starts after n4-complete，真实checkpoint/备份/恢复仍未开始。
 
 ## ECMP 算法演进

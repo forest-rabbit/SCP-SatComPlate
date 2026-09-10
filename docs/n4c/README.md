@@ -1,9 +1,10 @@
 # N4C 最终实验合同
 
 当前唯一正式场景为 66 星、800 任务、1300 秒。G3 场景与 G4 解析评估均已人工接受；
-G3/G4 已经由 PR #90/#91 合入 n4c。当前进行 N4 最终收尾，尚未合入 main，
-唯一一次 [N4 release validation](reviews/N4-final-release-validation.md) 已通过；
-阶段 CI 和最终人工审阅通过前不声明 N4 COMPLETE。
+G3/G4 与最终收尾经 PR #90–#92 集成到 n4c，再由
+[PR #93](https://github.com/forest-rabbit/SCP-SatComPlate/pull/93) 合入 main。
+唯一一次 [N4 release validation](reviews/N4-final-release-validation.md)、完整阶段 CI 与最终人工审阅通过；
+N4 COMPLETE，正式发布标签为 `n4-complete`。
 
 - 任务：240 dense / 240 sparse / 240 compression / 80 LLM，705 普通图像
   TN(240,130;50,1000) MB，10×500 MB 和 5×1 GB 固定锚点，到达 1..1050 s。
@@ -27,7 +28,7 @@ G3/G4 已经由 PR #90/#91 合入 n4c。当前进行 N4 最终收尾，尚未合
 [fault](../../contrib/satcompute/fault/README.md)。
 
 历史 G3 提交 db51fe874 保留 8 ms 来源；当前参考是已接受的 1 ms 场景。
-内部冻结 tag 仅为开发引用，最终发布后追溯使用 commit/PR 与 n4-complete。
+内部冻结 tag 已由正式发布取代，追溯使用 commit/PR 与 n4-complete。
 旧候选及审阅过程由 Git 保存，不再作为活文档维护。冻结输入与本地原始运行输出未改写，
 不使用 SHA-256。N5A 尚未开始：真实 checkpoint、备份流量、容量预留和恢复执行
 必须另行实现，正式 N5 模块不得依赖 G4 validation tool。
