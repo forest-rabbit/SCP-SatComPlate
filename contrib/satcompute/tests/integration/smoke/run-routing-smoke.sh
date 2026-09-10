@@ -12,7 +12,7 @@ trap 'rm -rf "$smoke_output"' EXIT
 constellation_16="contrib/satcompute/tests/fixtures/constellation/connected-16.csv"
 
 completed="$(./ns3 run --no-build \
-  "satcompute --simulationDuration=3 \
+"satcompute --faultMode=none --computeProfile=none --taskTrace=none --linkMetrics=0 --simulationDuration=3 \
 --constellationConfig=$constellation_16 \
 --maxIslDistance=6171353 --delayMode=fixed --fixedDelay=0.008 \
 --networkUpdateInterval=1 --islBandwidthBps=100000000 \

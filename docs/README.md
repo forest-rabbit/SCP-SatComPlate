@@ -1,21 +1,15 @@
-# 文档归档
+# 项目文档
 
-项目当前行为直接记录在根目录总览、SatCompute 运行手册和各模块 README 中，避免
-再维护一份容易与实现分离的阶段性规格。本目录保留已完成实验的记录，以及必要的
-[ns-3.48 上游资料](upstream/ns-3.48/README.md)：作者名单、API 变更记录和发行
-说明；它们不代表 SCP-SatComPlate 的贡献流程或发布记录。
+当前行为由[运行手册](../contrib/satcompute/README.md)和各模块 README 维护；
+本目录只保留最终实验依据及必要上游资料。
 
-当前项目文档入口：
+- [项目总览](../README.md)、[里程碑](../MILESTONES.md)。
+- [N4C 最终合同](n4c/README.md)：正式800任务场景、G3/G4冻结与N5边界。
+- [N5 前置测量](n5-prerequisites.md)：TaskModeling实测rho/H来源及历史压力依据。
+- [10 Gbps 历史压力基线](pressure-10g-baseline.md)：66/351/720星测量结果。
+- [F1 标定](calibration/n4b-f1/README.md)、[F2 标定及论文图](calibration/n4b-f2/README.md)。
+- [ns-3.48 上游资料](upstream/ns-3.48/README.md)。
 
-- [项目总览](../README.md)：环境、构建、完整示例和文档导航；
-- [项目里程碑](../MILESTONES.md)：已完成阶段、集成证据、验证结论和后续边界；
-- [SatCompute 运行手册](../contrib/satcompute/README.md)：执行流程、全部参数和
-  输入输出；
-- [模块文档](../contrib/satcompute/)：拓扑、路由、任务、传输、指标、工具与测试；
-- [N4B F1 标定](calibration/n4b-f1/README.md)：热模型与概率候选；
-- [N4B F2 标定](calibration/n4b-f2/README.md)：东西向非对称空间风险、66/351/720 星
-  加权暴露与真实平台 Monte Carlo；
-- [10 Gbps 压力基线](pressure-10g-baseline.md)：66/351/720 星各 1500 任务的链路、
-  吞吐量与运行成本证据，以及新旧输入的比较边界；
-- [N5 前置基础](n5-prerequisites.md)：SCP-TaskModeling 三类任务的增量比例、固定头
-  开销和测量边界，以及压力基线与后续备份算法之间尚需确定的内容。
+G4已人工接受并在开发分支冻结；N5A尚未开始。
+当前工作未合入main、未运行阶段CI，不能将冻结标签当作主线集成完成。
+旧候选及中间审阅记录通过Git历史查阅，不再作为当前接口来源。

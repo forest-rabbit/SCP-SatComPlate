@@ -10,5 +10,6 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 "$script_dir/run-diagnostics-smoke.sh"
 "$script_dir/run-topology-smoke.sh"
 python3 "$script_dir/run-link-metrics-smoke.py"
+python3 "$script_dir/run-compfrr-shadow-smoke.py"
 
 echo "SatCompute smoke suites passed."

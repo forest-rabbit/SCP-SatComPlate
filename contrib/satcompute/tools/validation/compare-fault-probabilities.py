@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare generate model probabilities with replay predictor probabilities."""
+"""Compare generate model probabilities with independent predictor probabilities."""
 
 import argparse
 import csv
@@ -11,11 +11,8 @@ import sys
 
 FIELDS = (
     "simulation_time_ns",
-    "fault_id",
     "node_id",
     "task_id",
-    "notice_time_ns",
-    "risk_elapsed_time_ns",
     "task_compute_start_time_ns",
     "task_service_time_ns",
     "task_elapsed_time_ns",
@@ -155,7 +152,7 @@ def compare(model_path, prediction_path, detail_path, summary_path, tolerance):
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Compare pre-sampling generate probabilities with replay predictor output"
+            "Compare pre-sampling generate probabilities with independent predictor output"
         )
     )
     parser.add_argument("--model", required=True, type=Path)
@@ -183,7 +180,7 @@ def main():
         print(f"FAIL: probability audit differs: {summary}", file=sys.stderr)
         return 1
     print(
-        "PASS: generate/replay probabilities agree "
+        "PASS: model/predictor probabilities agree "
         f"({summary['matched_record_count']} records)"
     )
     return 0

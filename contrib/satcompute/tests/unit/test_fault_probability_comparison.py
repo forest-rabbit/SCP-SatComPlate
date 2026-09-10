@@ -1,4 +1,4 @@
-"""Validation-tool tests for generate/replay probability comparisons."""
+"""Validation-tool tests for model/predictor probability comparisons."""
 
 import csv
 import json
@@ -13,11 +13,8 @@ MODULE_ROOT = Path(__file__).resolve().parents[2]
 TOOL = MODULE_ROOT / "tools" / "validation" / "compare-fault-probabilities.py"
 FIELDS = (
     "simulation_time_ns",
-    "fault_id",
     "node_id",
     "task_id",
-    "notice_time_ns",
-    "risk_elapsed_time_ns",
     "task_compute_start_time_ns",
     "task_service_time_ns",
     "task_elapsed_time_ns",
@@ -35,11 +32,8 @@ FIELDS = (
 def make_row(simulation_time_ns, probability):
     return {
         "simulation_time_ns": simulation_time_ns,
-        "fault_id": 1,
         "node_id": 3,
         "task_id": 7,
-        "notice_time_ns": 1_000_000_000,
-        "risk_elapsed_time_ns": simulation_time_ns - 1_000_000_000,
         "task_compute_start_time_ns": 0,
         "task_service_time_ns": 10_000_000_000,
         "task_elapsed_time_ns": simulation_time_ns,

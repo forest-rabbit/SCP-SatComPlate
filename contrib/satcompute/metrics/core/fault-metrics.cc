@@ -89,8 +89,7 @@ WriteProbabilityRecords(const std::vector<ComputeFailureProbabilityRecord>& reco
     {
         throw std::runtime_error("cannot write " + filename);
     }
-    output << "simulation_time_ns,fault_id,node_id,task_id,notice_time_ns,"
-              "risk_elapsed_time_ns,task_compute_start_time_ns,task_service_time_ns,"
+    output << "simulation_time_ns,node_id,task_id,task_compute_start_time_ns,task_service_time_ns,"
               "task_elapsed_time_ns,remaining_compute_time_ns,"
               "expected_compute_completion_time_ns,completion_ratio,"
               "f1_step_failure_probability,f2_step_failure_probability,"
@@ -99,9 +98,8 @@ WriteProbabilityRecords(const std::vector<ComputeFailureProbabilityRecord>& reco
     output << std::setprecision(17) << std::boolalpha;
     for (const ComputeFailureProbabilityRecord& record : records)
     {
-        output << record.simulationTimeNs << ',' << record.faultId << ','
+        output << record.simulationTimeNs << ','
                << record.nodeId << ',' << record.taskId << ','
-               << record.noticeTimeNs << ',' << record.riskElapsedTimeNs << ','
                << record.taskComputeStartTimeNs << ','
                << record.taskServiceTimeNs << ','
                << record.taskElapsedTimeNs << ','
@@ -126,16 +124,13 @@ WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
                             "fault-predictions.csv",
                             outputDirectory);
 
-    std::set<uint64_t> episodeIds;
     std::set<uint64_t> taskIds;
     for (const ComputeFailureProbabilityRecord& prediction : predictions)
     {
-        episodeIds.insert(prediction.faultId);
         taskIds.insert(prediction.taskId);
     }
     const Json summary = {
         {"prediction_count", predictions.size()},
-        {"risk_episode_count", episodeIds.size()},
         {"task_count", taskIds.size()}};
     std::ofstream summaryOutput(
         OutputPath(outputDirectory, "fault-prediction-summary.json"),
@@ -146,6 +141,75 @@ WritePredictionMetrics(const FaultPredictionEngine& predictionEngine,
             "cannot write fault-prediction-summary.json");
     }
     summaryOutput << summary.dump(2) << '\n';
+}
+
+const char*
+FaultSource(const FaultDefinition& fault)
+{
+    if (fault.faultType == FaultType::SATELLITE)
+    {
+        return "F3";
+    }
+    if (fault.f1Occurred && fault.f2Occurred)
+    {
+        return "F1+F2";
+    }
+    return fault.f1Occurred ? "F1" : fault.f2Occurred ? "F2" : "UNSPECIFIED";
+}
+
+void
+WriteTaskImpacts(const TaskCoordinator& coordinator, const std::string& outputDirectory)
+{
+    std::map<uint64_t, const TaskRuntime*> tasks;
+    for (const auto& task : coordinator.GetTaskRuntimes())
+    {
+        tasks.emplace(task.definition.taskId, &task);
+    }
+    std::ofstream output(OutputPath(outputDirectory, "fault-task-impact.csv"));
+    if (!output)
+    {
+        throw std::runtime_error("cannot write fault-task-impact.csv");
+    }
+    output << "fault_id,fault_type,fault_time_ns,impact_time_ns,fault_node_id,task_id,"
+              "task_profile,input_bytes,output_bytes,compute_work_units,task_state_before_fault,"
+              "task_state_before_impact,impact_type,compute_start_time_ns,"
+              "completed_work_units_at_fault,remaining_work_units_at_fault,compute_progress_at_fault,"
+              "progress_valid,baseline_compute_time_ns,compute_deadline_time_ns,"
+              "deadline_slack_at_fault_ns,recoverable_outage_duration_ns,final_task_state,"
+              "final_failure_reason\n";
+    output << std::setprecision(17);
+    for (const auto& record : coordinator.GetFaultTaskImpacts())
+    {
+        const auto& task = *tasks.at(record.taskId);
+        const auto& def = task.definition;
+        const auto& fault = record.fault;
+        const auto faultTime = fault.startTimeNs.value();
+        const char* atStart = record.impactTimeNs == faultTime
+            ? TaskStateToString(record.stateBeforeImpact)
+            : def.arrivalTimeNs > faultTime ? "NOT_ARRIVED" : "NOT_CAPTURED";
+        output << fault.faultId << ',' << FaultSource(fault) << ',' << faultTime << ','
+               << record.impactTimeNs << ',' << fault.nodeId << ',' << def.taskId << ','
+               << TaskProfileToString(def.taskProfile) << ',' << def.inputBytes << ','
+               << def.outputBytes << ',' << def.computeWorkUnits << ',' << atStart << ','
+               << TaskStateToString(record.stateBeforeImpact) << ',' << record.impactType << ','
+               << record.computeStartTimeNs << ',';
+        if (record.progressValid)
+        {
+            output << record.completedWorkUnits << ',' << record.remainingWorkUnits << ','
+                   << static_cast<double>(record.completedWorkUnits) / def.computeWorkUnits;
+        }
+        else
+        {
+            output << "-1,-1,-1";
+        }
+        output << ',' << static_cast<int>(record.progressValid) << ','
+               << task.baselineComputeTimeNs << ',' << record.deadlineTimeNs << ','
+               << (record.deadlineTimeNs < 0 ? -1 : record.deadlineTimeNs - faultTime) << ','
+               << fault.durationNs.value_or(-1) << ','
+               << (IsTerminalTaskState(task.state) ? TaskStateToString(task.state) : "TRUNCATED")
+               << ',' << (task.state == TASK_FAILED ? TaskFailureReasonToString(task.failureReason) : "")
+               << '\n';
+    }
 }
 
 } // namespace
@@ -160,6 +224,11 @@ WriteFaultMetrics(const FaultController& controller,
 {
     const FaultTrace& trace = controller.GetTrace();
     const std::vector<FaultRuntimeEventRecord>& events = controller.GetEvents();
+    std::map<uint64_t, const FaultDefinition*> faultById;
+    for (const auto& fault : trace.faults)
+    {
+        faultById.emplace(fault.faultId, &fault);
+    }
 
     std::ofstream eventOutput(OutputPath(outputDirectory, "fault-events.csv"),
                               std::ios::out | std::ios::trunc);
@@ -168,18 +237,16 @@ WriteFaultMetrics(const FaultController& controller,
         throw std::runtime_error("cannot write fault-events.csv");
     }
     eventOutput << "simulation_time_ns,fault_id,node_id,fault_type,event_type,"
-                   "notice_time_ns,start_time_ns,duration_ns,failure_probability,"
+                   "start_time_ns,duration_ns,failure_probability,"
                    "satellite_available_after,communication_available_after,"
                    "compute_available_after,affected_task_count,affected_transfer_count,"
-                   "route_recomputed\n";
+                   "route_recomputed,fault_source,p_f1,p_f2,temperature_c,continuous_busy_s\n";
     eventOutput << std::setprecision(17) << std::boolalpha;
     for (const FaultRuntimeEventRecord& event : events)
     {
         eventOutput << event.simulationTimeNs << ',' << event.faultId << ',' << event.nodeId
                     << ',' << FaultTypeToString(event.faultType) << ','
                     << FaultEventTypeToString(event.eventType) << ',';
-        WriteOptionalCsv(eventOutput, event.noticeTimeNs);
-        eventOutput << ',';
         WriteOptionalCsv(eventOutput, event.startTimeNs);
         eventOutput << ',';
         WriteOptionalCsv(eventOutput, event.durationNs);
@@ -188,7 +255,18 @@ WriteFaultMetrics(const FaultController& controller,
         eventOutput << ',' << event.satelliteAvailableAfter << ','
                     << event.communicationAvailableAfter << ','
                     << event.computeAvailableAfter << ',' << event.affectedTaskCount << ','
-                    << event.affectedTransferCount << ',' << event.routeRecomputed << '\n';
+                    << event.affectedTransferCount << ',' << event.routeRecomputed << ','
+                    << (event.eventType == FaultEventType::START
+                            ? FaultSource(*faultById.at(event.faultId)) : "") << ',';
+        const auto& fault = *faultById.at(event.faultId);
+        WriteOptionalCsv(eventOutput, fault.pF1);
+        eventOutput << ',';
+        WriteOptionalCsv(eventOutput, fault.pF2);
+        eventOutput << ',';
+        WriteOptionalCsv(eventOutput, fault.temperatureC);
+        eventOutput << ',';
+        WriteOptionalCsv(eventOutput, fault.continuousBusySeconds);
+        eventOutput << '\n';
     }
 
     uint64_t computeFaultCount = 0;
@@ -204,7 +282,6 @@ WriteFaultMetrics(const FaultController& controller,
             ++satelliteFaultCount;
         }
     }
-    uint64_t noticeEventCount = 0;
     uint64_t startEventCount = 0;
     uint64_t recoveryEventCount = 0;
     uint64_t routeRecomputationCount = 0;
@@ -212,11 +289,6 @@ WriteFaultMetrics(const FaultController& controller,
     {
         switch (event.eventType)
         {
-        case FaultEventType::NOTICE:
-            ++noticeEventCount;
-            break;
-        case FaultEventType::NOTICE_CLEAR:
-            break;
         case FaultEventType::START:
             ++startEventCount;
             break;
@@ -259,7 +331,6 @@ WriteFaultMetrics(const FaultController& controller,
         {"fault_count", trace.faults.size()},
         {"compute_fault_count", computeFaultCount},
         {"satellite_fault_count", satelliteFaultCount},
-        {"notice_event_count", noticeEventCount},
         {"start_event_count", startEventCount},
         {"recovery_event_count", recoveryEventCount},
         {"active_fault_count_at_end", controller.GetState().GetActiveFaultIds().size()},
@@ -274,6 +345,11 @@ WriteFaultMetrics(const FaultController& controller,
         throw std::runtime_error("cannot write fault-summary.json");
     }
     summaryOutput << summary.dump(2) << '\n';
+
+    if (taskCoordinator != nullptr)
+    {
+        WriteTaskImpacts(*taskCoordinator, outputDirectory);
+    }
 
     if (predictionEngine != nullptr)
     {
@@ -298,10 +374,29 @@ WriteFaultMetrics(const FaultController& controller,
         WriteProbabilityRecords(modelEngine->GetProbabilityRecords(),
                                 "fault-model-probabilities.csv",
                                 outputDirectory);
+        std::ofstream states(OutputPath(outputDirectory, "fault-model-state.csv"));
+        if (!states)
+        {
+            throw std::runtime_error("cannot write fault-model-state.csv");
+        }
+        states << "simulation_time_ns,node_id,busy,sampling_eligible,temperature_c,"
+                  "f1_risk,p_f1,latitude_deg,longitude_deg,in_saa,f2_spatial_risk,p_f2,p_compute,continuous_busy_s\n";
+        states << std::setprecision(17);
+        for (const auto& r : modelEngine->GetStateAuditRecords())
+        {
+            states << r.timeNs << ',' << r.nodeId << ',' << r.f1.busy << ','
+                   << r.samplingEligible << ',' << r.f1.temperatureC << ',' << r.f1.combinedRisk
+                   << ',' << r.f1.stepFailureProbability << ',' << r.f2.latitudeDegrees << ','
+                   << r.f2.longitudeDegrees << ',' << r.f2.inRegion << ',' << r.f2.spatialRisk
+                   << ',' << r.f2.stepFailureProbability << ','
+                   << CombineComputeFaultProbabilities(r.f1.stepFailureProbability,
+                                                       r.f2.stepFailureProbability) << ',' << r.f1.continuousBusySeconds << '\n';
+        }
     }
     else
     {
         RemoveOwnedFile(root / "fault-model-probabilities.csv");
+        RemoveOwnedFile(root / "fault-model-state.csv");
     }
 }
 
@@ -314,6 +409,8 @@ RemoveFaultMetrics(const std::string& outputDirectory)
     RemoveOwnedFile(root / "fault-predictions.csv");
     RemoveOwnedFile(root / "fault-prediction-summary.json");
     RemoveOwnedFile(root / "fault-model-probabilities.csv");
+    RemoveOwnedFile(root / "fault-task-impact.csv");
+    RemoveOwnedFile(root / "fault-model-state.csv");
 }
 
 } // namespace ns3

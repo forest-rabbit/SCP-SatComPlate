@@ -57,15 +57,16 @@ CheckDefaults()
 {
     const FaultParameters parameters = GetDefaultFaultParameters();
     Check(parameters.checkIntervalSeconds == 1.0 &&
-              parameters.recoverableComputeDurationSeconds == 8.0,
+              parameters.f2.recoveryDurationSeconds == 8.0,
           "fault common defaults differ");
     Check(parameters.f1.enabled && parameters.f1.temperature.baseC == 17.0 &&
-              parameters.f1.temperature.heatingTauSeconds == 43.0 &&
-              parameters.f1.temperature.coolingTauSeconds == 40.0 &&
+              parameters.f1.temperature.heatingToCriticalSeconds == 30.0 &&
+              parameters.f1.temperature.heatingShapeGamma == 1.5 &&
+              parameters.f1.temperature.coolingFromCriticalToBaseSeconds == 4.0 &&
               parameters.f1.energy.initialDod == 0.25 &&
-              parameters.f1.maxFailureIntensityPerSecond == 0.005,
+              parameters.f1.temperature.growthFactor == 10.0,
           "F1 defaults differ");
-    Check(!parameters.f2.enabled &&
+    Check(parameters.f2.enabled &&
               parameters.f2.longitudeMinDegrees == -90.0 &&
               parameters.f2.hotspotLongitudeDegrees == -60.0 &&
               parameters.f2.hotspotLatitudeDegrees == -28.0 &&
@@ -76,8 +77,10 @@ CheckDefaults()
               parameters.f2.referenceSeuIntensityPerSecond ==
                   0.002859196111093899 &&
               parameters.f2.seuToComputeFailureProbability == 0.5 &&
-              !parameters.f3.enabled &&
-              parameters.f3.mode == "fixed_k" && parameters.f3.fixedCount == 1,
+              parameters.f3.enabled &&
+              parameters.f3.mode == "controlled" && parameters.f3.fixedCount == 1 &&
+              parameters.f3.controlledNodeId == 62 &&
+              parameters.f3.controlledStartSeconds == 1027.055770726,
           "F2/F3 defaults differ");
 }
 
@@ -89,34 +92,33 @@ CheckInvalid()
     ExpectError(value, "common", "zero-check-interval");
 
     value = GetDefaultFaultParameters();
-    value.recoverableComputeDurationSeconds =
+    value.f2.recoveryDurationSeconds =
         std::numeric_limits<double>::infinity();
-    ExpectError(value, "common.recoverable", "non-finite-recovery");
+    ExpectError(value, "F2.recovery", "non-finite-recovery");
 
     value = GetDefaultFaultParameters();
     value.f1.temperature.riskC = 31.0;
     ExpectError(value, "F1.temperature", "temperature-order");
 
     value = GetDefaultFaultParameters();
-    value.f1.temperature.heatingTauSeconds = 0.0;
+    value.f1.temperature.heatingToCriticalSeconds = 0.0;
     ExpectError(value, "F1.temperature", "heating-tau");
 
     value = GetDefaultFaultParameters();
-    value.f1.temperature.heatingTauSeconds =
+    value.f1.temperature.heatingToCriticalSeconds =
         std::numeric_limits<double>::infinity();
-    ExpectError(value, "F1.temperature.heating_tau_s", "non-finite-heating-tau");
+    ExpectError(value, "F1.temperature.heating_to_critical_s", "non-finite-heating-tau");
+
+    for (double gamma : {0.5, std::numeric_limits<double>::infinity()})
+    {
+        value = GetDefaultFaultParameters();
+        value.f1.temperature.heatingShapeGamma = gamma;
+        ExpectError(value, "F1.temperature.heating_shape_gamma", "invalid-heating-shape");
+    }
 
     value = GetDefaultFaultParameters();
     value.f1.energy.initialDod = 0.4;
     ExpectError(value, "F1.energy", "dod-order");
-
-    value = GetDefaultFaultParameters();
-    value.f1.riskThreshold = 1.1;
-    ExpectError(value, "F1.risk_threshold", "risk-threshold");
-
-    value = GetDefaultFaultParameters();
-    value.f1.maxFailureIntensityPerSecond = -0.1;
-    ExpectError(value, "F1.max_failure_intensity_per_s", "negative-F1-intensity");
 
     value = GetDefaultFaultParameters();
     value.f2.longitudeMinDegrees = 10.0;
@@ -161,6 +163,7 @@ CheckInvalid()
 
     value = GetDefaultFaultParameters();
     value.f3.enabled = true;
+    value.f3.mode = "fixed_k";
     value.f3.fixedCount = 0;
     ExpectError(value, "F3", "enabled-empty-F3");
 }
@@ -168,122 +171,145 @@ CheckInvalid()
 void
 CheckF1Model()
 {
-    const FaultParameters parameters = GetDefaultFaultParameters();
+    auto parameters = GetDefaultFaultParameters();
+    parameters.f1.temperature.heatingShapeGamma = 1.0;
     const F1SelfStateFaultModel model(parameters.f1);
-
-    F1SelfStateFaultSnapshot unchanged = model.CreateInitialSnapshot();
-    const F1SelfStateFaultSnapshot initial = unchanged;
-    model.Update(unchanged, true, 0.0);
-    Check(unchanged.temperatureC == initial.temperatureC &&
-              unchanged.depthOfDischarge == initial.depthOfDischarge &&
-              unchanged.thermalRisk == initial.thermalRisk &&
-              unchanged.energyPressure == initial.energyPressure &&
-              unchanged.combinedRisk == initial.combinedRisk &&
-              unchanged.failureIntensityPerSecond ==
-                  initial.failureIntensityPerSecond &&
-              unchanged.stepFailureProbability ==
-                  initial.stepFailureProbability &&
-              unchanged.busy == initial.busy,
-          "zero-duration F1 update changed state");
-
-    F1SelfStateFaultSnapshot idle = model.CreateInitialSnapshot();
-    model.Update(idle, false, 120.0);
-    Check(idle.temperatureC == parameters.f1.temperature.baseC &&
-              idle.depthOfDischarge == parameters.f1.energy.initialDod &&
-              idle.combinedRisk == 0.0 && idle.stepFailureProbability == 0.0 &&
-              !model.IsRiskActive(idle),
-          "idle F1 state changed from its baseline");
-
-    F1SelfStateFaultSnapshot singleTask = model.CreateInitialSnapshot();
-    model.Update(singleTask, true, 10.0);
-    Check(singleTask.temperatureC > 20.0 && singleTask.temperatureC < 21.0 &&
-              singleTask.temperatureC < parameters.f1.temperature.criticalC &&
-              !model.IsRiskActive(singleTask) &&
-              singleTask.stepFailureProbability < singleTask.combinedRisk,
-          "one representative task produced an invalid F1 state");
-    const double taskEndTemperature = singleTask.temperatureC;
-    model.Update(singleTask, false, 1.0);
-    Check(singleTask.temperatureC < taskEndTemperature &&
-              singleTask.temperatureC > parameters.f1.temperature.baseC,
-          "task completion reset F1 temperature instead of cooling continuously");
-
-    F1SelfStateFaultSnapshot continuous = model.CreateInitialSnapshot();
-    for (int second = 0; second < 55; ++second)
+    Check(std::abs(model.GetHeatingCoefficient() - std::log(18. / 5.) / 30.) < 1e-14,
+          "exponential coefficient must derive from the 30-second target");
+    Check(model.GetCoolingRate() == 3.25, "linear cooling rate differs");
+    const std::array<double, 7> temperatures = {17, 20.460300806993335, 23.25539707649341,
+        25.513167019494862, 27.336905676064468, 28.81005075790781, 30};
+    auto state = model.CreateInitialSnapshot();
+    double previousRise = 100;
+    for (unsigned i = 1; i < temperatures.size(); ++i)
     {
-        model.Update(continuous, true, 1.0);
+        const double previous = state.temperatureC;
+        model.Update(state, true, 5);
+        Check(std::abs(state.temperatureC - temperatures[i]) < 1e-11, "heating reference differs");
+        const double rise = state.temperatureC - previous;
+        Check(rise > 0 && rise < previousRise, "heating must be fast then slow");
+        previousRise = rise;
     }
-    const double expectedTemperature =
-        parameters.f1.temperature.saturationC -
-        (parameters.f1.temperature.saturationC -
-         parameters.f1.temperature.baseC) *
-            std::exp(-55.0 / parameters.f1.temperature.heatingTauSeconds);
-    Check(std::abs(continuous.temperatureC - expectedTemperature) < 1e-12 &&
-              continuous.temperatureC > 29.8 && continuous.temperatureC < 30.1 &&
-              model.IsRiskActive(continuous) &&
-              continuous.stepFailureProbability > 0.0 &&
-              continuous.stepFailureProbability <= 1.0,
-          "55-second continuous load missed the calibrated F1 target");
-    Check(continuous.depthOfDischarge > parameters.f1.energy.initialDod &&
-              continuous.energyPressure == 0.0,
-          "small F1 energy correction changed too quickly");
+    Check(state.stepFailureProbability > 1 - 1e-12, "critical probability must be one");
+    Check(std::abs(model.GetRecoveryDurationSeconds(state.temperatureC) - 4) < 1e-12,
+          "critical recovery duration differs");
+    Check(model.GetRecoveryDurationSeconds(31) == 4, "protected overshoot recovery exceeds four seconds");
+    model.Update(state, false, 4);
+    Check(state.temperatureC == 17 && state.stepFailureProbability == 0,
+          "critical cooling must reach base naturally");
+    state.temperatureC = 25;
+    const double duration = model.GetRecoveryDurationSeconds(25);
+    Check(duration > 2.46 && duration < 2.47, "dynamic recovery differs");
+    model.Update(state, false, duration / 2);
+    model.Update(state, false, duration / 2);
+    Check(std::abs(state.temperatureC - 17) < 1e-12, "fractional cooling differs");
 
-    model.Update(continuous, true, 5.0);
-    Check(continuous.temperatureC >= parameters.f1.temperature.criticalC &&
-              continuous.stepFailureProbability == 1.0,
-          "critical F1 temperature did not force deterministic shutdown");
-
-    F1SelfStateFaultSnapshot recovery = model.CreateInitialSnapshot();
-    recovery.temperatureC = parameters.f1.temperature.criticalC;
-    model.Update(recovery, false, parameters.recoverableComputeDurationSeconds);
-    Check(recovery.temperatureC > 27.6 && recovery.temperatureC < 27.7 &&
-              recovery.combinedRisk < parameters.f1.riskThreshold &&
-              !model.IsRiskActive(recovery),
-          "8-second recovery did not cool F1 below its notice threshold");
-
-    model.Update(continuous, false, 120.0);
-    Check(continuous.temperatureC < parameters.f1.temperature.riskC &&
-              !model.IsRiskActive(continuous) &&
-              continuous.stepFailureProbability == 0.0,
-          "F1 cooling did not leave the risk region");
-
-    F1SelfStateFaultSnapshot monotonic = model.CreateInitialSnapshot();
-    double previousTemperature = monotonic.temperatureC;
-    double previousRisk = monotonic.thermalRisk;
-    for (int second = 0; second < 60; ++second)
+    for (double beta : {3., 4., 5., 6., 8., 10.})
     {
-        model.Update(monotonic, true, 1.0);
-        Check(monotonic.temperatureC >= previousTemperature &&
-                  monotonic.temperatureC <=
-                      parameters.f1.temperature.saturationC &&
-                  monotonic.thermalRisk >= previousRisk &&
-                  monotonic.thermalRisk >= 0.0 && monotonic.thermalRisk <= 1.0 &&
-                  monotonic.combinedRisk >= 0.0 && monotonic.combinedRisk <= 1.0,
-              "F1 heating or risk is not bounded and monotonic");
-        previousTemperature = monotonic.temperatureC;
-        previousRisk = monotonic.thermalRisk;
+        parameters.f1.temperature.growthFactor = beta;
+        const F1SelfStateFaultModel candidate(parameters.f1);
+        double previous = -1;
+        for (int k = 0; k <= 100; ++k)
+        {
+            auto sample = candidate.CreateInitialSnapshot();
+            sample.temperatureC = 20 + k / 10.;
+            candidate.Evaluate(sample);
+            const double expected = std::expm1(beta * k / 100.) / std::expm1(beta);
+            Check(std::abs(sample.stepFailureProbability - expected) < 1e-13,
+                  "temperature one-second probability differs");
+            Check(sample.stepFailureProbability >= previous &&
+                  sample.stepFailureProbability >= 0 && sample.stepFailureProbability <= 1,
+                  "probability must be monotonic and bounded");
+            previous = sample.stepFailureProbability;
+        }
     }
+    auto energy = model.CreateInitialSnapshot();
+    auto cadence = model.CreateInitialSnapshot();
+    cadence.temperatureC = 25;
+    model.Evaluate(cadence);
+    const double oneSecondProbability = cadence.stepFailureProbability;
+    for (double interval : {.25, 1., 2.})
+    {
+        model.Evaluate(cadence, interval);
+        Check(std::abs(cadence.stepFailureProbability -
+                       (-std::expm1(std::log1p(-oneSecondProbability) * interval))) < 1e-14 &&
+                  cadence.temperatureC == 25,
+              "sampling cadence must rescale the one-second probability without heating");
+    }
+    energy.depthOfDischarge = parameters.f1.energy.criticalDod;
+    for (double temperature : {17., 20., 25., 29., 30.})
+    {
+        energy.temperatureC = temperature;
+        model.Evaluate(energy);
+        Check(std::abs(energy.combinedRisk - std::min(1., energy.thermalRisk * 1.1)) < 1e-14,
+              "energy must only multiply thermal probability");
+        if (temperature <= 20)
+            Check(energy.stepFailureProbability == 0, "energy-only low-temperature fault");
+    }
+    const double dod = energy.depthOfDischarge;
+    model.Update(energy, false, 4);
+    Check(energy.depthOfDischarge == dod, "cooling reset accumulated energy");
 
-    FaultParameters noEnergyParameters = parameters;
-    noEnergyParameters.f1.energy.enabled = false;
-    const F1SelfStateFaultModel noEnergyModel(noEnergyParameters.f1);
-    F1SelfStateFaultSnapshot noEnergy = noEnergyModel.CreateInitialSnapshot();
-    noEnergyModel.Update(noEnergy, true, 30.0);
-    Check(noEnergy.energyPressure == 0.0 &&
-              std::abs(noEnergy.combinedRisk - noEnergy.thermalRisk) < 1e-15,
-          "disabled F1 energy term changed thermal risk");
+    auto exact = model.CreateInitialSnapshot();
+    int64_t last = 0;
+    model.AdvanceTo(exact, last, 750000000, true);
+    model.AdvanceTo(exact, last, 2250000000, false);
+    auto reference = model.CreateInitialSnapshot();
+    model.Update(reference, true, 1.5);
+    Check(std::abs(exact.temperatureC - reference.temperatureC) < 1e-12 &&
+          std::abs(exact.depthOfDischarge - reference.depthOfDischarge) < 1e-15,
+          "transition used new busy state for elapsed interval");
+    model.AdvanceTo(exact, last, 2500000000, true);
+    model.Update(reference, false, .25);
+    Check(std::abs(exact.temperatureC - reference.temperatureC) < 1e-12,
+          "fractional idle interval missing");
+    model.AdvanceTo(exact, last, 3500000000, true);
+    model.Update(reference, true, 1);
+    Check(std::abs(exact.stepFailureProbability - reference.stepFailureProbability) < 1e-14,
+          "elapsed-time bookkeeping changed the probability interval");
 
-    FaultParameters energyParameters = parameters;
-    energyParameters.f1.energy.initialDod = 0.30;
-    energyParameters.f1.energy.riskDod = 0.30;
-    const F1SelfStateFaultModel energyModel(energyParameters.f1);
-    F1SelfStateFaultSnapshot energy = energyModel.CreateInitialSnapshot();
-    energyModel.Update(energy, true, 3600.0);
-    const double expectedDod =
-        energyParameters.f1.energy.initialDod +
-        energyParameters.f1.energy.incrementalComputePowerW /
-            energyParameters.f1.energy.batteryWh;
-    Check(std::abs(energy.depthOfDischarge - expectedDod) < 1e-12,
-          "F1 W/Wh/s energy conversion differs");
+    for (double gamma : {1.0 + 1e-8, 1.5, 2.0})
+    {
+        parameters.f1.temperature.heatingShapeGamma = gamma;
+        const F1SelfStateFaultModel shaped(parameters.f1);
+        auto current = shaped.CreateInitialSnapshot();
+        auto exponential = model.CreateInitialSnapshot();
+        double lastRise = 100;
+        for (unsigned i = 1; i <= 120; ++i)
+        {
+            const double old = current.temperatureC;
+            shaped.Update(current, true, .25);
+            model.Update(exponential, true, .25);
+            const double rise = current.temperatureC - old;
+            Check(rise > 0 && rise < lastRise && current.temperatureC < 35,
+                  "shaped heating must increase monotonically with decreasing slope");
+            lastRise = rise;
+            if (i < 120)
+                Check(current.temperatureC > exponential.temperatureC,
+                      "gamma above one must heat faster before the shared critical endpoint");
+        }
+        Check(std::abs(current.temperatureC - 30) < 1e-10,
+              "shaped heating missed the 30-second endpoint");
+        shaped.Update(current, false, 4);
+        Check(std::abs(current.temperatureC - 17) < 1e-10,
+              "gamma must not change linear cooling");
+        for (double initial : {17., 23.125, 29.75, 35.})
+        {
+            auto whole = shaped.CreateInitialSnapshot();
+            whole.temperatureC = initial;
+            auto split = whole;
+            shaped.Update(whole, true, 7.85);
+            shaped.Update(split, true, 4.125);
+            shaped.Update(split, true, 3.725);
+            Check(std::abs(whole.temperatureC - split.temperatureC) < 1e-11 &&
+                      std::abs(whole.depthOfDischarge - split.depthOfDischarge) < 1e-14,
+                  "fractional shaped flow depends on event partition or resets temperature");
+        }
+        auto asymptote = shaped.CreateInitialSnapshot();
+        shaped.Update(asymptote, true, 1e6);
+        Check(asymptote.temperatureC > 34.99 && asymptote.temperatureC <= 35,
+              "shaped equilibrium must remain 35 degrees");
+    }
 }
 
 Vector
@@ -585,8 +611,7 @@ CheckComputeFailurePrediction()
     {
         f1Model.Update(f1State, true, 1.0);
     }
-    Check(f1Model.IsRiskActive(f1State),
-          "F1 forecast fixture did not reach NOTICE state");
+    Check(f1State.stepFailureProbability > 0, "F1 forecast fixture has no probability");
     const double currentTemperatureC = f1State.temperatureC;
     const ComputeFailurePrediction f1Prediction =
         PredictComputeFailureBeforeFinish(
@@ -726,6 +751,37 @@ CheckComputeFailurePrediction()
 void
 CheckF3Model()
 {
+    auto controlled = GetDefaultFaultParameters();
+    controlled.f3.enabled = true;
+    controlled.f3.mode = "controlled";
+    controlled.f3.controlledNodeId = 9;
+    controlled.f3.controlledStartSeconds = 1.23456789;
+    ValidateFaultParameters(controlled);
+    const F3DebrisFaultModel controlledModel(controlled.f3);
+    const auto schedule = controlledModel.GenerateSchedule({3, 9}, 2000000000, 11, 12);
+    Check(schedule.size() == 1 && schedule[0].nodeId == 9 &&
+              schedule[0].startTimeNs == 1234567890,
+          "controlled F3 changed its exact target/time");
+    bool rejected = false;
+    try
+    {
+        controlledModel.GenerateSchedule({3, 8}, 2000000000, 11, 12);
+    }
+    catch (const F3DebrisFaultModelError&)
+    {
+        rejected = true;
+    }
+    Check(rejected, "controlled F3 accepted an unknown satellite");
+    rejected = false;
+    try
+    {
+        controlledModel.GenerateSchedule({3, 9}, 1000000000, 11, 12);
+    }
+    catch (const F3DebrisFaultModelError&)
+    {
+        rejected = true;
+    }
+    Check(rejected, "controlled F3 accepted a time beyond the simulation end");
     FaultParameters parameters = GetDefaultFaultParameters();
     parameters.f3.enabled = true;
     parameters.f3.mode = "fixed_k";

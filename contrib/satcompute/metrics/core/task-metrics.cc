@@ -98,7 +98,9 @@ WriteTaskEvents(const TaskCoordinator& coordinator, const std::string& outputDir
 }
 
 void
-WriteTaskSummaries(const TaskCoordinator& coordinator, const std::string& outputDirectory)
+WriteTaskSummaries(const TaskCoordinator& coordinator,
+                   const std::string& outputDirectory,
+                   int64_t simulationDurationNs)
 {
     std::map<uint32_t, uint64_t> ratesByNodeId;
     for (const Ptr<ComputeService>& service : coordinator.GetComputeServices())
@@ -124,7 +126,9 @@ WriteTaskSummaries(const TaskCoordinator& coordinator, const std::string& output
               "result_transfer_start_time_ns,result_transfer_complete_time_ns,"
               "input_transfer_delay_ns,queue_delay_ns,compute_service_time_ns,"
               "result_transfer_delay_ns,end_to_end_completion_delay_ns,final_state,"
-              "failure_reason,failure_time_ns\n";
+              "failure_reason,failure_time_ns,task_profile,baseline_compute_time_ns,"
+              "compute_deadline_budget_ns,compute_deadline_time_ns,compute_deadline_met,"
+              "result_delivered,task_success,compute_stage_elapsed_time_ns\n";
     for (const TaskRuntime& task : coordinator.GetTaskRuntimes())
     {
         const auto rate = ratesByNodeId.find(task.definition.computeNodeId);
@@ -136,12 +140,11 @@ WriteTaskSummaries(const TaskCoordinator& coordinator, const std::string& output
                << task.definition.computeNodeId << ',' << task.definition.resultNodeId << ','
                << task.definition.inputBytes << ',' << task.definition.outputBytes << ','
                << task.definition.computeWorkUnits << ',' << rate->second << ','
-               << task.definition.inputTransferId << ',' << task.definition.resultTransferId
-               << ',' << task.definition.arrivalTimeNs << ','
-               << task.inputTransferCompleteTimeNs << ',' << task.queueEnterTimeNs << ','
-               << task.computeStartTimeNs << ',' << task.computeCompleteTimeNs << ','
-               << task.resultTransferStartTimeNs << ',' << task.resultTransferCompleteTimeNs
-               << ','
+               << task.definition.inputTransferId << ',' << task.definition.resultTransferId << ','
+               << task.definition.arrivalTimeNs << ',' << task.inputTransferCompleteTimeNs << ','
+               << task.queueEnterTimeNs << ',' << task.computeStartTimeNs << ','
+               << task.computeCompleteTimeNs << ',' << task.resultTransferStartTimeNs << ','
+               << task.resultTransferCompleteTimeNs << ','
                << OptionalDifference(task.inputTransferCompleteTimeNs,
                                      task.definition.arrivalTimeNs,
                                      "input_transfer_delay_ns",
@@ -167,8 +170,19 @@ WriteTaskSummaries(const TaskCoordinator& coordinator, const std::string& output
                                      "end_to_end_completion_delay_ns",
                                      task.definition.taskId)
                << ',' << TaskStateToString(task.state) << ','
-               << TaskFailureReasonToString(task.failureReason) << ','
-               << task.failureTimeNs << '\n';
+               << TaskFailureReasonToString(task.failureReason) << ',' << task.failureTimeNs << ','
+               << TaskProfileToString(task.definition.taskProfile) << ','
+               << task.baselineComputeTimeNs << ',' << task.computeDeadlineBudgetNs << ','
+               << task.computeDeadlineTimeNs << ',' << task.ComputeDeadlineMet() << ','
+               << task.ResultDelivered() << ',' << task.TaskSucceeded() << ','
+               << OptionalDifference(
+                      task.computeCompleteTimeNs >= 0
+                          ? task.computeCompleteTimeNs
+                          : (task.failureTimeNs >= 0 ? task.failureTimeNs : simulationDurationNs),
+                      task.computeStartTimeNs,
+                      "compute_stage_elapsed_time_ns",
+                      task.definition.taskId)
+               << '\n';
     }
 }
 
@@ -188,9 +202,33 @@ WriteComputeNodeSummaries(const TaskCoordinator& coordinator,
         throw std::runtime_error("cannot write compute-node-summary.csv");
     }
     output << "node_id,compute_rate_work_units_per_second,enqueued_tasks,completed_tasks,"
-              "busy_time_ns,max_queue_length,utilization_percent\n";
+              "busy_time_ns,max_queue_length,utilization_percent,task_count,total_work_units,"
+              "total_queue_wait_ns,cancelled_running_tasks,removed_queued_tasks\n";
     for (const Ptr<ComputeService>& service : coordinator.GetComputeServices())
     {
+        uint64_t assigned = 0;
+        uint64_t demand = 0;
+        uint64_t queueWait = 0;
+        for (const TaskRuntime& task : coordinator.GetTaskRuntimes())
+        {
+            if (task.definition.computeNodeId != service->GetNodeId())
+                continue;
+            ++assigned;
+            demand = CheckedAdd(demand, task.definition.computeWorkUnits, "node WU demand");
+            if (task.queueEnterTimeNs >= 0)
+            {
+                const int64_t end =
+                    task.computeStartTimeNs >= 0
+                        ? task.computeStartTimeNs
+                        : (task.failureTimeNs >= 0 ? task.failureTimeNs : simulationDurationNs);
+                queueWait = CheckedAdd(queueWait,
+                                       NonNegativeDifference(end,
+                                                             task.queueEnterTimeNs,
+                                                             "node queue wait",
+                                                             task.definition.taskId),
+                                       "node queue wait");
+            }
+        }
         if (service->GetBusyTimeNs() > static_cast<uint64_t>(simulationDurationNs))
         {
             throw std::runtime_error("ComputeService busy time exceeds simulation duration");
@@ -200,9 +238,11 @@ WriteComputeNodeSummaries(const TaskCoordinator& coordinator,
             static_cast<long double>(simulationDurationNs);
         output << std::setprecision(15) << service->GetNodeId() << ','
                << service->GetComputeRateWorkUnitsPerSecond() << ','
-               << service->GetEnqueuedTaskCount() << ',' << service->GetCompletedTaskCount()
-               << ',' << service->GetBusyTimeNs() << ',' << service->GetMaxQueueLength() << ','
-               << static_cast<double>(utilization) << '\n';
+               << service->GetEnqueuedTaskCount() << ',' << service->GetCompletedTaskCount() << ','
+               << service->GetBusyTimeNs() << ',' << service->GetMaxQueueLength() << ','
+               << static_cast<double>(utilization) << ',' << assigned << ',' << demand << ','
+               << queueWait << ',' << service->GetCancelledRunningTaskCount() << ','
+               << service->GetRemovedQueuedTaskCount() << '\n';
     }
 }
 
@@ -268,7 +308,7 @@ WriteTaskMetricsNs(const TaskCoordinator& coordinator,
                    const std::string& outputDirectory)
 {
     WriteTaskEvents(coordinator, outputDirectory);
-    WriteTaskSummaries(coordinator, outputDirectory);
+    WriteTaskSummaries(coordinator, outputDirectory, simulationDurationNs);
     WriteComputeNodeSummaries(coordinator, simulationDurationNs, outputDirectory);
 }
 

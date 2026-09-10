@@ -30,9 +30,12 @@ Do not enable ns-3's global examples or test suites in SatCompute configuration
 or GitHub CI, and do not run `test.py` or upstream example tests there. Project
 verification consists of the targeted module build plus the maintained tests
 under `contrib/satcompute/tests/`. GitHub CI is a manual phase gate: run it once
-after all pull requests for a major development phase have merged to `main`, not
-for every commit or pull request. Focused local builds and tests remain required
-for every increment.
+on the final integration branch before merging the major phase into `main`, not
+for every commit or pull request and not again after the merge. Keep the existing
+full regression suites enabled. The separately authorized formal release run is
+not repeated by CI. Require passing checks and the user's final manual review
+before the phase integration merge; do not bypass repository-required checks.
+Focused local builds and tests remain required for every increment.
 
 The current platform contract is documented next to the implementation:
 `contrib/satcompute/README.md` defines execution and parameters, while each

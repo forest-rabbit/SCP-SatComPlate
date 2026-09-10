@@ -17,6 +17,7 @@
 #include "ns3/task-coordinator.h"
 
 #include "../support/config-factory.h"
+#include "../support/fault-injection.h"
 
 #include <algorithm>
 #include <cmath>
@@ -96,7 +97,6 @@ MakeSatelliteFault(uint64_t faultId,
                    uint32_t nodeId,
                    int64_t startTimeNs,
                    int64_t durationNs,
-                   std::optional<int64_t> noticeTimeNs = std::nullopt,
                    std::optional<double> probability = std::nullopt)
 {
     FaultDefinition fault;
@@ -104,7 +104,6 @@ MakeSatelliteFault(uint64_t faultId,
     fault.nodeId = nodeId;
     fault.faultType = FaultType::SATELLITE;
     fault.startTimeNs = startTimeNs;
-    fault.noticeTimeNs = noticeTimeNs;
     fault.failureProbability = probability;
     fault.durationNs = durationNs;
     return fault;
@@ -211,7 +210,6 @@ RunTaskAndTopologyCase()
                                3,
                                100 * MILLISECOND_NS,
                                150 * MILLISECOND_NS,
-                               90 * MILLISECOND_NS,
                                0.9),
             MakeSatelliteFault(2,
                                0,
@@ -223,9 +221,10 @@ RunTaskAndTopologyCase()
                                100 * MILLISECOND_NS),
         };
         Ptr<FaultController> controller = CreateObject<FaultController>();
-        controller->Configure(trace,
-                              topology.GetIdMap().GetCanonicalSatelliteIds(),
-                              TASK_SIMULATION_DURATION_NS);
+        FaultControllerTestAccess::Schedule(controller,
+                                            trace.faults,
+                                            topology.GetIdMap().GetCanonicalSatelliteIds(),
+                                            TASK_SIMULATION_DURATION_NS);
         controller->BindTopology(topology);
 
         Ptr<TaskCoordinator> coordinator = CreateObject<TaskCoordinator>();
@@ -294,15 +293,12 @@ RunTaskAndTopologyCase()
               "fault events waited for a network tick or did not restore fixed topology");
 
         const auto& faultEvents = controller->GetEvents();
-        Check(faultEvents.size() == 7,
-              "satellite notice/start/recovery event count differs");
+        Check(faultEvents.size() == 6,
+              "satellite start/recovery event count differs");
         for (const FaultRuntimeEventRecord& event : faultEvents)
         {
-            if (event.eventType != FaultEventType::NOTICE)
-            {
-                Check(event.routeRecomputed,
-                      "edge-changing satellite event recorded no route recomputation");
-            }
+            Check(event.routeRecomputed,
+                  "edge-changing satellite event recorded no route recomputation");
         }
         const FaultRuntimeEventRecord& firstStart =
             FindFaultEvent(*controller, 1, FaultEventType::START);
@@ -509,9 +505,10 @@ RunCapacityMiddleNodeCase()
                                30 * MILLISECOND_NS),
         };
         Ptr<FaultController> controller = CreateObject<FaultController>();
-        controller->Configure(trace,
-                              topology.GetIdMap().GetCanonicalSatelliteIds(),
-                              durationNs);
+        FaultControllerTestAccess::Schedule(controller,
+                                            trace.faults,
+                                            topology.GetIdMap().GetCanonicalSatelliteIds(),
+                                            durationNs);
         controller->BindTopology(topology);
 
         bool startReAdmissionObserved = false;
@@ -664,9 +661,10 @@ RunRecoveryDistanceGateCase()
                                            1000000000LL,
                                            recoveryTimeNs - 1000000000LL)};
         Ptr<FaultController> controller = CreateObject<FaultController>();
-        controller->Configure(trace,
-                              topology.GetIdMap().GetCanonicalSatelliteIds(),
-                              durationNs);
+        FaultControllerTestAccess::Schedule(controller,
+                                            trace.faults,
+                                            topology.GetIdMap().GetCanonicalSatelliteIds(),
+                                            durationNs);
         controller->BindTopology(topology);
 
         bool stayedDownAtRecovery = false;
@@ -716,9 +714,10 @@ RunPermanentSatelliteFaultCase()
         FaultTrace trace;
         trace.faults = {firstPermanent, secondPermanent};
         Ptr<FaultController> controller = CreateObject<FaultController>();
-        controller->Configure(trace,
-                              topology.GetIdMap().GetCanonicalSatelliteIds(),
-                              durationNs);
+        FaultControllerTestAccess::Schedule(controller,
+                                            trace.faults,
+                                            topology.GetIdMap().GetCanonicalSatelliteIds(),
+                                            durationNs);
         controller->BindTopology(topology);
         Simulator::Stop(NanoSeconds(durationNs));
         Simulator::Run();

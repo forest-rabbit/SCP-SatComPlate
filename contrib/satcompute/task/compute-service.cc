@@ -89,10 +89,7 @@ ComputeService::SubmitTask(uint64_t taskId,
     NS_ABORT_MSG_IF(queueEnterTimeNs < 0 ||
                         queueEnterTimeNs != Simulator::Now().GetNanoSeconds(),
                     "queue entry time must equal the current simulation time");
-    if (!m_computeAvailable)
-    {
-        return false;
-    }
+    // Temporary compute outages stop dispatch, not admission to the FCFS queue.
     NS_ABORT_MSG_IF(!m_knownTaskIds.insert(taskId).second,
                     "ComputeService received a duplicate task ID");
 
@@ -115,6 +112,7 @@ ComputeService::SetComputeAvailable(bool available)
         return false;
     }
     m_computeAvailable = available;
+    NotifyComputeState();
     if (!available && m_dispatchEvent.IsPending())
     {
         Simulator::Cancel(m_dispatchEvent);
@@ -138,7 +136,14 @@ ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
     {
         Simulator::Cancel(m_completionEvent);
     }
+    const auto elapsed =
+        static_cast<uint64_t>(Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs);
+    NS_ABORT_MSG_IF(elapsed > static_cast<uint64_t>(m_currentTaskServiceTimeNs) ||
+                        m_busyTimeNs > std::numeric_limits<uint64_t>::max() - elapsed,
+                    "cancelled compute busy-time overflow");
+    m_busyTimeNs += elapsed;
     m_hasCurrentTask = false;
+    NotifyComputeState();
     m_currentTask = {};
     m_currentTaskStartTimeNs = -1;
     m_currentTaskServiceTimeNs = 0;
@@ -147,6 +152,21 @@ ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
                     "ComputeService running-task cancellation counter overflow");
     ++m_cancelledRunningTaskCount;
     RequestDispatch();
+    return true;
+}
+
+bool
+ComputeService::CompleteTaskIfDue(uint64_t taskId)
+{
+    if (!m_isRunning || !m_computeAvailable || !m_hasCurrentTask ||
+        m_currentTask.taskId != taskId ||
+        Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs != m_currentTaskServiceTimeNs)
+    {
+        return false;
+    }
+    if (m_completionEvent.IsPending())
+        Simulator::Cancel(m_completionEvent);
+    CompleteCurrentTask();
     return true;
 }
 
@@ -183,7 +203,12 @@ ComputeService::StartApplication()
 void
 ComputeService::StopApplication()
 {
+    if (m_isRunning && m_hasCurrentTask)
+    {
+        m_busyTimeNs = GetBusyTimeNs();
+    }
     m_isRunning = false;
+    NotifyComputeState();
     if (m_dispatchEvent.IsPending())
     {
         Simulator::Cancel(m_dispatchEvent);
@@ -221,6 +246,7 @@ ComputeService::DispatchNextTask()
     m_currentTaskServiceTimeNs = CalculateServiceTimeNs(
         m_currentTask.computeWorkUnits,
         m_computeRateWorkUnitsPerSecond);
+    NotifyComputeState();
     m_taskStartedCallback(m_currentTask.taskId, m_nodeId, m_currentTaskStartTimeNs);
     m_completionEvent = Simulator::Schedule(NanoSeconds(m_currentTaskServiceTimeNs),
                                             &ComputeService::CompleteCurrentTask,
@@ -247,6 +273,7 @@ ComputeService::CompleteCurrentTask()
 
     const uint64_t completedTaskId = m_currentTask.taskId;
     m_hasCurrentTask = false;
+    NotifyComputeState();
     m_currentTask = {};
     m_currentTaskStartTimeNs = -1;
     m_currentTaskServiceTimeNs = 0;
@@ -258,6 +285,24 @@ uint32_t
 ComputeService::GetNodeId() const
 {
     return m_nodeId;
+}
+
+void
+ComputeService::ConnectStateObserver(Callback<void, uint32_t, bool> callback)
+{
+    m_computeState.ConnectWithoutContext(callback);
+}
+
+void
+ComputeService::DisconnectStateObserver(Callback<void, uint32_t, bool> callback)
+{
+    m_computeState.DisconnectWithoutContext(callback);
+}
+
+void
+ComputeService::NotifyComputeState()
+{
+    m_computeState(m_nodeId, m_isRunning && m_computeAvailable && m_hasCurrentTask);
 }
 
 uint64_t
@@ -281,7 +326,10 @@ ComputeService::GetCompletedTaskCount() const
 uint64_t
 ComputeService::GetBusyTimeNs() const
 {
-    return m_busyTimeNs;
+    return m_busyTimeNs + (m_isRunning && m_hasCurrentTask
+                               ? static_cast<uint64_t>(Simulator::Now().GetNanoSeconds() -
+                                                       m_currentTaskStartTimeNs)
+                               : 0);
 }
 
 uint32_t

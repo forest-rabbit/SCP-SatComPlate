@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace ns3
 {
@@ -40,7 +41,8 @@ F1SelfStateFaultModel::CreateInitialSnapshot() const
 void
 F1SelfStateFaultModel::Update(F1SelfStateFaultSnapshot& snapshot,
                             bool busy,
-                            double intervalSeconds) const
+                            double intervalSeconds,
+                            double probabilityIntervalSeconds) const
 {
     NS_ABORT_MSG_IF(!std::isfinite(intervalSeconds) || intervalSeconds < 0.0,
                     "F1 update interval must be finite and non-negative");
@@ -51,17 +53,22 @@ F1SelfStateFaultModel::Update(F1SelfStateFaultSnapshot& snapshot,
     const F1TemperatureParameters& temperature = m_parameters.temperature;
     if (busy)
     {
-        snapshot.temperatureC =
-            temperature.saturationC -
-            (temperature.saturationC - snapshot.temperatureC) *
-                std::exp(-intervalSeconds / temperature.heatingTauSeconds);
+        const double gap = std::max(0.0, temperature.saturationC - snapshot.temperatureC);
+        const double shape = temperature.heatingShapeGamma - 1.0;
+        const double coefficient = GetHeatingCoefficient();
+        // Exact autonomous flow from the current temperature, not from task age.
+        // log1p preserves the exponential limit when gamma is close to one.
+        const double decay = shape == 0.0
+            ? coefficient * intervalSeconds
+            : std::log1p(shape * coefficient * intervalSeconds * std::pow(gap, shape)) / shape;
+        snapshot.temperatureC = temperature.saturationC - gap * std::exp(-decay);
+        snapshot.continuousBusySeconds += intervalSeconds;
     }
     else
     {
         snapshot.temperatureC =
-            temperature.baseC +
-            (snapshot.temperatureC - temperature.baseC) *
-                std::exp(-intervalSeconds / temperature.coolingTauSeconds);
+            std::max(temperature.baseC, snapshot.temperatureC - GetCoolingRate() * intervalSeconds);
+        snapshot.continuousBusySeconds = 0.0;
     }
 
     if (m_parameters.energy.enabled && busy)
@@ -71,6 +78,57 @@ F1SelfStateFaultModel::Update(F1SelfStateFaultSnapshot& snapshot,
             (3600.0 * m_parameters.energy.batteryWh);
     }
 
+    snapshot.busy = busy;
+    Evaluate(snapshot, probabilityIntervalSeconds);
+}
+
+double
+F1SelfStateFaultModel::GetHeatingCoefficient() const
+{
+    const auto& t = m_parameters.temperature;
+    const double baseGap = t.saturationC - t.baseC;
+    const double logRatio = std::log(baseGap / (t.saturationC - t.criticalC));
+    const double shape = t.heatingShapeGamma - 1.0;
+    return shape == 0.0
+        ? logRatio / t.heatingToCriticalSeconds
+        : std::pow(baseGap, -shape) * std::expm1(shape * logRatio) /
+              (shape * t.heatingToCriticalSeconds);
+}
+
+void
+F1SelfStateFaultModel::AdvanceTo(F1SelfStateFaultSnapshot& snapshot,
+                                int64_t& lastUpdateNs, int64_t nowNs, bool busy,
+                                double probabilityIntervalSeconds) const
+{
+    NS_ABORT_MSG_IF(nowNs < lastUpdateNs, "F1 physical state cannot move backward");
+    Update(snapshot, snapshot.busy, static_cast<double>(nowNs - lastUpdateNs) / 1e9,
+           probabilityIntervalSeconds);
+    snapshot.busy = busy;
+    lastUpdateNs = nowNs;
+    Evaluate(snapshot, probabilityIntervalSeconds);
+}
+
+double
+F1SelfStateFaultModel::GetCoolingRate() const
+{
+    const auto& t = m_parameters.temperature;
+    return (t.criticalC - t.baseC) / t.coolingFromCriticalToBaseSeconds;
+}
+
+double
+F1SelfStateFaultModel::GetRecoveryDurationSeconds(double temperatureC) const
+{
+    const auto& t = m_parameters.temperature;
+    return (std::clamp(temperatureC, t.baseC, t.criticalC) - t.baseC) / GetCoolingRate();
+}
+
+void
+F1SelfStateFaultModel::Evaluate(F1SelfStateFaultSnapshot& snapshot,
+                               double probabilityIntervalSeconds) const
+{
+    NS_ABORT_MSG_IF(!std::isfinite(probabilityIntervalSeconds) || probabilityIntervalSeconds <= 0,
+                    "F1 probability interval must be finite and positive");
+    const auto& temperature = m_parameters.temperature;
     const double thermalPosition = ClampUnit(
         (snapshot.temperatureC - temperature.riskC) /
         (temperature.criticalC - temperature.riskC));
@@ -94,25 +152,13 @@ F1SelfStateFaultModel::Update(F1SelfStateFaultSnapshot& snapshot,
             ? ClampUnit((snapshot.depthOfDischarge - m_parameters.energy.riskDod) /
                         (m_parameters.energy.criticalDod - m_parameters.energy.riskDod))
             : 0.0;
-    snapshot.combinedRisk =
-        1.0 - (1.0 - snapshot.thermalRisk) *
-                  (1.0 - m_parameters.energy.correctionWeight * snapshot.energyPressure);
+    snapshot.combinedRisk = snapshot.thermalRisk *
+        (1.0 + m_parameters.energy.correctionWeight * snapshot.energyPressure);
     snapshot.combinedRisk = ClampUnit(snapshot.combinedRisk);
-    snapshot.failureIntensityPerSecond =
-        m_parameters.maxFailureIntensityPerSecond * snapshot.combinedRisk;
-    snapshot.stepFailureProbability =
-        -std::expm1(-snapshot.failureIntensityPerSecond * intervalSeconds);
-    if (snapshot.temperatureC >= temperature.criticalC)
-    {
-        snapshot.stepFailureProbability = 1.0;
-    }
-    snapshot.busy = busy;
-}
-
-bool
-F1SelfStateFaultModel::IsRiskActive(const F1SelfStateFaultSnapshot& snapshot) const
-{
-    return snapshot.combinedRisk >= m_parameters.riskThreshold;
+    snapshot.failureIntensityPerSecond = snapshot.combinedRisk == 1.0
+        ? std::numeric_limits<double>::infinity() : -std::log1p(-snapshot.combinedRisk);
+    snapshot.stepFailureProbability = snapshot.combinedRisk == 1.0
+        ? 1.0 : -std::expm1(-snapshot.failureIntensityPerSecond * probabilityIntervalSeconds);
 }
 
 } // namespace ns3

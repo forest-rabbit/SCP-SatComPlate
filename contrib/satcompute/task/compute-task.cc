@@ -5,8 +5,14 @@
 // Keep the task lifecycle linear and timestamp-monotonic.
 
 #include "compute-task.h"
+#include "compute-service.h"
 
 #include "ns3/abort.h"
+
+#include <charconv>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
 
 namespace ns3
 {
@@ -86,6 +92,8 @@ TaskFailureReasonToString(TaskFailureReason reason)
         return "INPUT_TRANSFER_FAILED";
     case TaskFailureReason::RESULT_TRANSFER_FAILED:
         return "RESULT_TRANSFER_FAILED";
+    case TaskFailureReason::COMPUTE_DEADLINE_EXCEEDED:
+        return "COMPUTE_DEADLINE_EXCEEDED";
     }
     return "UNKNOWN";
 }
@@ -94,6 +102,124 @@ TaskRuntime::TaskRuntime(const TaskDefinition& taskDefinition)
     : definition(taskDefinition)
 {
     NS_ABORT_MSG_IF(definition.taskId == 0, "TaskRuntime requires a positive task ID");
+}
+
+int64_t
+CalculateComputeDeadlineBudgetNs(int64_t baselineTimeNs, double factor)
+{
+    if (baselineTimeNs <= 0 || !std::isfinite(factor) || factor < 1)
+    {
+        throw std::invalid_argument("invalid compute deadline baseline/factor");
+    }
+    if (factor > static_cast<double>(std::numeric_limits<int64_t>::max()))
+    {
+        throw std::overflow_error("compute deadline budget exceeds int64 ns");
+    }
+    // Decimal 1.3 must not turn an exact 19.5 s budget into 19.5 s + 1 ns
+    // merely because its binary floating-point representation is slightly larger.
+    char buffer[64];
+    const auto converted = std::to_chars(buffer, buffer + sizeof(buffer), factor);
+    if (converted.ec != std::errc{})
+    {
+        throw std::invalid_argument("cannot represent compute deadline factor");
+    }
+    const std::string decimal(buffer, converted.ptr);
+    const auto exponentAt = decimal.find_first_of("eE");
+    const int exponent =
+        exponentAt == std::string::npos ? 0 : std::stoi(decimal.substr(exponentAt + 1));
+    unsigned __int128 numerator = 0;
+    unsigned __int128 denominator = 1;
+    int fractionalDigits = 0;
+    bool fractional = false;
+    for (char digit : decimal.substr(0, exponentAt))
+    {
+        if (digit == '.')
+        {
+            fractional = true;
+            continue;
+        }
+        numerator = numerator * 10 + (digit - '0');
+        fractionalDigits += fractional ? 1 : 0;
+    }
+    for (int i = 0; i < fractionalDigits - exponent; ++i)
+        denominator *= 10;
+    for (int i = 0; i < exponent - fractionalDigits; ++i)
+        numerator *= 10;
+    const auto scaled = static_cast<unsigned __int128>(baselineTimeNs) * numerator;
+    const auto result = scaled / denominator + (scaled % denominator != 0);
+    if (result > static_cast<unsigned __int128>(std::numeric_limits<int64_t>::max()))
+    {
+        throw std::overflow_error("compute deadline budget exceeds int64 ns");
+    }
+    return static_cast<int64_t>(result);
+}
+
+void
+TaskRuntime::ConfigureComputeDeadline(uint64_t referenceRate, double factor)
+{
+    if (baselineComputeTimeNs >= 0)
+    {
+        throw std::logic_error("compute deadline is already configured");
+    }
+    baselineComputeTimeNs =
+        ComputeService::CalculateServiceTimeNs(definition.computeWorkUnits, referenceRate);
+    computeDeadlineBudgetNs = CalculateComputeDeadlineBudgetNs(baselineComputeTimeNs, factor);
+}
+
+bool
+TaskRuntime::EstablishComputeDeadline(int64_t firstStartTimeNs)
+{
+    if (computeDeadlineTimeNs >= 0)
+        return false;
+    const int64_t start = computeStartTimeNs >= 0 ? computeStartTimeNs : firstStartTimeNs;
+    if (firstStartTimeNs < 0 || computeDeadlineBudgetNs <= 0 ||
+        start > std::numeric_limits<int64_t>::max() - computeDeadlineBudgetNs)
+    {
+        throw std::overflow_error("invalid absolute compute deadline");
+    }
+    if (computeStartTimeNs < 0)
+        computeStartTimeNs = firstStartTimeNs;
+    computeDeadlineTimeNs = computeStartTimeNs + computeDeadlineBudgetNs;
+    return true;
+}
+
+bool
+TaskRuntime::ComputeDeadlineMet() const
+{
+    return computeCompleteTimeNs >= 0 && computeDeadlineTimeNs >= 0 &&
+           computeCompleteTimeNs <= computeDeadlineTimeNs;
+}
+
+bool
+TaskRuntime::ResultDelivered() const
+{
+    return resultTransferCompleteTimeNs >= 0;
+}
+
+bool
+TaskRuntime::TaskSucceeded() const
+{
+    return state == TASK_COMPLETED && ComputeDeadlineMet() && ResultDelivered();
+}
+
+const char*
+TaskProfileToString(TaskProfile profile)
+{
+    switch (profile)
+    {
+    case TaskProfile::UNSPECIFIED:
+        return "UNSPECIFIED";
+    case TaskProfile::DENSE_IMAGE:
+        return "dense-image";
+    case TaskProfile::SPARSE_INFERENCE:
+        return "sparse-inference";
+    case TaskProfile::COMPRESSION:
+        return "compression";
+    case TaskProfile::LLM:
+        return "llm";
+    }
+    NS_ABORT_MSG("unknown task profile");
+    return "UNKNOWN";
 }
 
 void
@@ -121,7 +247,10 @@ TaskRuntime::TransitionTo(TaskState requestedState,
         queueEnterTimeNs = eventTimeNs;
         break;
     case TASK_RUNNING:
-        computeStartTimeNs = eventTimeNs;
+        if (computeStartTimeNs < 0)
+            computeStartTimeNs = eventTimeNs;
+        if (computeDeadlineBudgetNs > 0)
+            EstablishComputeDeadline(eventTimeNs);
         break;
     case TASK_RESULT_TRANSFERRING:
         computeCompleteTimeNs = eventTimeNs;

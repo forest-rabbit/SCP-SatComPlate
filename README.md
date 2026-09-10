@@ -21,11 +21,11 @@ SCP-SatComPlate 是基于官方 ns-3.48 的纯星上动态网络与计算仿真�
 - 支持 global-first、逐流 hash、HRW、size-aware HRW 和 capacity-aware HRW；
 - 支持输入传输、非抢占 FCFS 计算和结果传输的完整任务闭环；
 - 支持确定性 compute/整星故障的预警、开始、有限恢复、任务/传输终止与即时重路由；
-- 支持 `none/generate/replay`，可按实时计算负载生成 F1 温度/能源风险，也可按实时
+- 支持 `none/generate`，可按实时计算负载生成 F1 温度/能源风险，也可按实时
   ECEF 位置生成 F2 空间 SEU 风险；两者都能产生可恢复 compute 故障和可确定性
-  重放的统一 trace；
+  核查的事件 trace；
 - 支持独立 F3 fixed-K/Poisson 永久整星故障，并在冲突时优先于可恢复 compute 故障；
-- 可按需启用 F1/F2 因果概率预测与 generate/replay 一致性审计；正常运行默认关闭
+- 可按需启用 F1/F2 因果概率预测与 独立模型一致性审计；正常运行默认关闭
   预测采集、审计 CSV 和对比；
 - topology-only 模式可输出每个切片的卫星 `x/y/z` 与候选链路状态。
 
@@ -75,27 +75,31 @@ uv 只管理 Python 工具环境，不能替代 C++ 编译器和系统库。SatC
 ```bash
 ./ns3 configure --enable-modules=satcompute -G Ninja
 ./ns3 build
-./ns3 run "satcompute --simulationDuration=2"
+./ns3 run "satcompute --topologyOnly=1 --simulationDuration=2"
 ./ns3 run "satcompute --help"
 ```
 
 该配置只构建 SatCompute 及其依赖，不启用 ns-3 上游 examples、全局 tests，也不
 运行 `test.py`。SatCompute 自有检查仍作为普通 executable 构建。
 
-## 完整示例
+## 正式实验与测试示例
+
+当前正式实验入口为 [LEO-66 Final Experiment Scene](contrib/satcompute/input/experiments/leo-66/README.md)：
+66 星、800 任务、1300 s、每星 100000 WU/s、10 Gbps、1 ms；正式输入自包含，
+测试数据统一放在 `contrib/satcompute/tests/fixtures/`。
 
 仓库提供一组已经纳入回归测试的
-[100 秒、66 星、20 任务示例](contrib/satcompute/input/examples/leo-66-100s-20tasks/README.md)。
-它复用正式星座与算力文件，展示完整任务仿真和同周期 topology-only 切片生成。
+[100 秒、66 星、20 任务示例](contrib/satcompute/tests/fixtures/task/20tasks/README.md)。
+它使用独立测试星座与算力 fixture，展示完整任务仿真和同周期 topology-only 切片生成。
 F1 在线故障闭环见
-[120 秒、66 星热点任务示例](contrib/satcompute/input/examples/leo-66-120s-f1/README.md)。
+[120 秒、66 星热点任务示例](contrib/satcompute/tests/fixtures/fault/f1/README.md)。
 F2 的纯轨道暴露标定和真实平台闭环分别见
 [F2 标定证据](docs/calibration/n4b-f2/README.md)与
-[1000 秒、66 星、8 任务示例](contrib/satcompute/input/examples/leo-66-1000s-f2/README.md)。
+[1000 秒、66 星、8 任务示例](contrib/satcompute/tests/fixtures/fault/f2/README.md)。
 F3 无任务永久整星闭环见
-[1000 秒、66 星 fixed-K 示例](contrib/satcompute/input/examples/leo-66-1000s-f3/README.md)。
+[1000 秒、66 星 fixed-K 示例](contrib/satcompute/tests/fixtures/fault/f3/README.md)。
 F1/F2/F3、任务、路由和概率审计的最终联合闭环见
-[1000 秒、66 星、100 任务 N4B 验收场景](contrib/satcompute/input/examples/leo-66-1000s-n4b-joint/README.md)。
+[1000 秒、66 星、100 任务 N4B 验收场景](contrib/satcompute/tests/fixtures/fault/joint/README.md)。
 
 只生成 0–20 秒、每秒一个拓扑切片：
 

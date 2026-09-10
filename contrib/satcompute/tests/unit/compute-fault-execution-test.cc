@@ -13,6 +13,7 @@
 #include "ns3/task-coordinator.h"
 
 #include "../support/config-factory.h"
+#include "../support/fault-injection.h"
 
 #include <algorithm>
 #include <cmath>
@@ -75,7 +76,6 @@ MakeTask(uint64_t taskId,
 FaultDefinition
 MakeComputeFault(uint64_t faultId,
                  int64_t startTimeNs,
-                 std::optional<int64_t> noticeTimeNs,
                  std::optional<double> failureProbability,
                  int64_t durationNs)
 {
@@ -84,22 +84,10 @@ MakeComputeFault(uint64_t faultId,
     fault.nodeId = COMPUTE_NODE_ID;
     fault.faultType = FaultType::COMPUTE;
     fault.startTimeNs = startTimeNs;
-    fault.noticeTimeNs = noticeTimeNs;
     fault.failureProbability = failureProbability;
-    fault.warningLeadTimeNs = fault.GetWarningLeadTimeNs();
     fault.durationNs = durationNs;
+    fault.f1Occurred = true;
     return fault;
-}
-
-GeneratedFaultEvent
-MakeGeneratedNotice(const FaultDefinition& occurredFault)
-{
-    FaultDefinition notice = occurredFault;
-    notice.faultOccurred = false;
-    notice.startTimeNs = std::nullopt;
-    notice.warningLeadTimeNs = std::nullopt;
-    notice.durationNs = std::nullopt;
-    return {FaultEventType::NOTICE, notice};
 }
 
 const TaskRuntime&
@@ -145,9 +133,8 @@ std::string
 EncodePrediction(const ComputeFailureProbabilityRecord& prediction)
 {
     std::ostringstream output;
-    output << prediction.simulationTimeNs << ':' << prediction.faultId << ':'
+    output << prediction.simulationTimeNs << ':'
            << prediction.nodeId << ':' << prediction.taskId << ':'
-           << prediction.noticeTimeNs << ':' << prediction.riskElapsedTimeNs << ':'
            << prediction.remainingComputeTimeNs << ':'
            << prediction.horizonStepCount << ':'
            << prediction.f1StepFailureProbability << ':'
@@ -186,7 +173,7 @@ CheckFaultStateOverlay()
 {
     FaultState state;
     state.Initialize({0, 1});
-    FaultDefinition compute = MakeComputeFault(1, 10, std::nullopt, std::nullopt, 5);
+    FaultDefinition compute = MakeComputeFault(1, 10, std::nullopt, 5);
     compute.nodeId = 0;
     state.StartFault(compute);
     Check(state.IsSatelliteAvailable(0) && state.IsCommunicationAvailable(0) &&
@@ -211,43 +198,6 @@ CheckFaultStateOverlay()
     Check(state.IsSatelliteAvailable(1) && state.IsCommunicationAvailable(1) &&
               state.IsComputeAvailable(1),
           "satellite fault recovery overlay differs");
-}
-
-void
-CheckRiskOnlyReplay()
-{
-    FaultDefinition riskOnly;
-    riskOnly.faultId = 1;
-    riskOnly.nodeId = COMPUTE_NODE_ID;
-    riskOnly.faultType = FaultType::COMPUTE;
-    riskOnly.faultOccurred = false;
-    riskOnly.noticeTimeNs = 10 * MILLISECOND_NS;
-    riskOnly.failureProbability = 0.25;
-    riskOnly.riskDurationNs = 20 * MILLISECOND_NS;
-
-    FaultTrace trace;
-    trace.faults = {riskOnly};
-    Ptr<FaultController> controller = CreateObject<FaultController>();
-    controller->Configure(trace, {COMPUTE_NODE_ID}, SIMULATION_DURATION_NS);
-    Simulator::Stop(NanoSeconds(50 * MILLISECOND_NS));
-    Simulator::Run();
-
-    const std::vector<FaultRuntimeEventRecord>& events = controller->GetEvents();
-    Check(events.size() == 2 && events[0].eventType == FaultEventType::NOTICE &&
-              events[1].eventType == FaultEventType::NOTICE_CLEAR &&
-              events[0].simulationTimeNs == 10 * MILLISECOND_NS &&
-              events[1].simulationTimeNs == 30 * MILLISECOND_NS,
-          "risk-only NOTICE/NOTICE_CLEAR sequence differs");
-    Check(!events[0].startTimeNs.has_value() && !events[0].durationNs.has_value() &&
-              !events[0].warningLeadTimeNs.has_value() &&
-              !events[0].riskDurationNs.has_value() &&
-              events[0].failureProbability == 0.25,
-          "NOTICE leaked future risk-only outcome fields");
-    Check(!events[1].startTimeNs.has_value() &&
-              events[1].riskDurationNs == 20 * MILLISECOND_NS &&
-              controller->GetState().IsComputeAvailable(COMPUTE_NODE_ID),
-          "NOTICE_CLEAR changed availability or lost observed duration");
-    ResetSimulationGlobals();
 }
 
 ExecutionSignature
@@ -288,24 +238,24 @@ RunComputeFaultScenario(bool generateOnline)
         trace.faults = {
             MakeComputeFault(1,
                              100 * MILLISECOND_NS,
-                             90 * MILLISECOND_NS,
                              0.8,
                              100 * MILLISECOND_NS),
             MakeComputeFault(2,
-                             200 * MILLISECOND_NS,
                              200 * MILLISECOND_NS,
                              0.5,
                              50 * MILLISECOND_NS),
         };
         Ptr<FaultController> controller = CreateObject<FaultController>();
+        trace.faults[0].f2Occurred = true;
+        trace.faults[1].f1Occurred = false;
+        trace.faults[1].f2Occurred = true;
         Ptr<FaultPredictionEngine> predictionEngine =
             CreateObject<FaultPredictionEngine>();
         FaultParameters predictionParameters = GetDefaultFaultParameters();
         predictionParameters.checkIntervalSeconds = 0.01;
         predictionParameters.f1.temperature.riskC = 18.0;
-        predictionParameters.f1.temperature.heatingTauSeconds = 0.43;
-        predictionParameters.f1.temperature.coolingTauSeconds = 0.4;
-        predictionParameters.f1.maxFailureIntensityPerSecond = 0.5;
+        predictionParameters.f1.temperature.heatingToCriticalSeconds = 0.43;
+        predictionParameters.f1.temperature.coolingFromCriticalToBaseSeconds = 0.4;
         predictionParameters.f1.enabled = true;
         predictionParameters.f2.enabled = false;
         predictionParameters.f3.enabled = false;
@@ -321,12 +271,6 @@ RunComputeFaultScenario(bool generateOnline)
             const FaultDefinition firstFault = trace.faults[0];
             const FaultDefinition secondFault = trace.faults[1];
             Simulator::Schedule(
-                NanoSeconds(firstFault.noticeTimeNs.value()),
-                [controller, firstFault] {
-                    controller->SubmitGeneratedBatch(
-                        {MakeGeneratedNotice(firstFault)});
-                });
-            Simulator::Schedule(
                 NanoSeconds(firstFault.startTimeNs.value()),
                 [controller, firstFault] {
                     controller->SubmitGeneratedBatch(
@@ -336,15 +280,15 @@ RunComputeFaultScenario(bool generateOnline)
                 NanoSeconds(secondFault.startTimeNs.value()),
                 [controller, secondFault] {
                     controller->SubmitGeneratedBatch(
-                        {MakeGeneratedNotice(secondFault),
-                         {FaultEventType::START, secondFault}});
+                        {{FaultEventType::START, secondFault}});
                 });
         }
         else
         {
-            controller->Configure(trace,
-                                  topology.GetIdMap().GetCanonicalSatelliteIds(),
-                                  SIMULATION_DURATION_NS);
+            FaultControllerTestAccess::Schedule(controller,
+                                                trace.faults,
+                                                topology.GetIdMap().GetCanonicalSatelliteIds(),
+                                                SIMULATION_DURATION_NS);
         }
 
         Ptr<TaskCoordinator> coordinator = CreateObject<TaskCoordinator>();
@@ -378,6 +322,17 @@ RunComputeFaultScenario(bool generateOnline)
                                 phasesChecked = true;
                             });
 
+        Simulator::Schedule(NanoSeconds(199 * MILLISECOND_NS), [coordinator] {
+            for (const uint64_t id : std::vector<uint64_t>{1, 2, 6, 8})
+            {
+                const auto& task = FindTask(*coordinator, id);
+                Check(task.state == TASK_QUEUED && task.computeStartTimeNs == -1 &&
+                          task.computeDeadlineTimeNs == -1,
+                      "outage did not retain unstarted queue without a deadline");
+            }
+            Check(!coordinator->GetComputeServices().front()->HasRunningTask(),
+                  "outage dispatched work");
+        });
         Simulator::Stop(NanoSeconds(SIMULATION_DURATION_NS));
         Simulator::Run();
         if (generateOnline)
@@ -388,12 +343,10 @@ RunComputeFaultScenario(bool generateOnline)
 
         const std::vector<FaultRuntimeEventRecord>& faultEvents =
             controller->GetEvents();
-        Check(faultEvents.size() == 6,
+        Check(faultEvents.size() == 4,
               "fault notice/start/recovery event count differs");
         const std::vector<std::string> expectedOrder = {
-            "90000000:1:NOTICE",
             "100000000:1:START",
-            "200000000:2:NOTICE",
             "200000000:1:RECOVERY",
             "200000000:2:START",
             "250000000:2:RECOVERY",
@@ -413,32 +366,21 @@ RunComputeFaultScenario(bool generateOnline)
         }
         const FaultRuntimeEventRecord& firstStart =
             FindFaultEvent(faultEvents, 1, FaultEventType::START);
-        const FaultRuntimeEventRecord& firstNotice =
-            FindFaultEvent(faultEvents, 1, FaultEventType::NOTICE);
-        Check(!firstNotice.startTimeNs.has_value() &&
-                  !firstNotice.durationNs.has_value() &&
-                  !firstNotice.warningLeadTimeNs.has_value() &&
-                  !firstNotice.riskDurationNs.has_value() &&
-                  firstNotice.failureProbability == 0.8,
-              "NOTICE leaked future occurred-fault fields");
-        Check(firstStart.affectedTaskCount == 4 &&
-                  firstStart.affectedTransferCount == 6 &&
+        Check(firstStart.affectedTaskCount == 1 &&
+                  firstStart.affectedTransferCount == 1 &&
                   !firstStart.computeAvailableAfter &&
                   firstStart.startTimeNs == 100 * MILLISECOND_NS,
               "first compute fault impact counts differ");
-        const FaultRuntimeEventRecord& secondNotice =
-            FindFaultEvent(faultEvents, 2, FaultEventType::NOTICE);
         const FaultRuntimeEventRecord& firstRecovery =
             FindFaultEvent(faultEvents, 1, FaultEventType::RECOVERY);
         const FaultRuntimeEventRecord& secondStart =
             FindFaultEvent(faultEvents, 2, FaultEventType::START);
-        Check(!secondNotice.computeAvailableAfter &&
-                  firstRecovery.computeAvailableAfter &&
+        Check(firstRecovery.computeAvailableAfter &&
                   !secondStart.computeAvailableAfter &&
                   secondStart.affectedTaskCount == 0 &&
                   secondStart.affectedTransferCount == 0,
               "adjacent recovery/start final availability differs");
-        Check(secondNotice.failureProbability == 0.5,
+        Check(secondStart.failureProbability == 0.5,
               "failure probability metadata changed at runtime");
         Check(controller->GetState().GetActiveFaultIds().empty() &&
                   controller->GetState().IsComputeAvailable(COMPUTE_NODE_ID) &&
@@ -446,25 +388,42 @@ RunComputeFaultScenario(bool generateOnline)
               "finite compute fault did not recover cleanly");
 
         for (const uint64_t taskId :
-             std::vector<uint64_t>{1, 2, 3, 6, 8})
+             std::vector<uint64_t>{3})
         {
             const TaskRuntime& task = FindTask(*coordinator, taskId);
             Check(task.state == TASK_FAILED &&
                       task.failureReason == TaskFailureReason::COMPUTE_NODE_FAILURE,
                   "compute fault did not leave task in permanent FAILED state");
         }
-        for (const uint64_t taskId : std::vector<uint64_t>{4, 5, 7})
+        for (const uint64_t taskId : std::vector<uint64_t>{1, 2, 4, 5, 6, 7, 8})
         {
             Check(FindTask(*coordinator, taskId).state == TASK_COMPLETED,
                   "unaffected or post-recovery task did not complete");
         }
-        Check(FindTask(*coordinator, 8).failureTimeNs == 100 * MILLISECOND_NS &&
-                  FindTask(*coordinator, 6).failureTimeNs == 150 * MILLISECOND_NS,
-              "same-time or in-outage arrival failure time differs");
+        for (const uint64_t taskId : std::vector<uint64_t>{1, 2, 6, 8})
+        {
+            Check(FindTask(*coordinator, taskId).computeStartTimeNs >=
+                      250 * MILLISECOND_NS,
+                  "queued or in-outage arrival task started before recovery");
+        }
+        std::vector<const TaskRuntime*> resumed;
+        for (const uint64_t id : std::vector<uint64_t>{1, 2, 6, 8})
+        {
+            resumed.push_back(&FindTask(*coordinator, id));
+        }
+        std::sort(resumed.begin(), resumed.end(), [](const auto* left, const auto* right) {
+            return std::tie(left->queueEnterTimeNs, left->definition.taskId) <
+                   std::tie(right->queueEnterTimeNs, right->definition.taskId);
+        });
+        for (std::size_t i = 1; i < resumed.size(); ++i)
+        {
+            Check(resumed[i - 1]->computeStartTimeNs < resumed[i]->computeStartTimeNs,
+                  "recovery changed FCFS order");
+        }
 
         Ptr<NetworkTransferEngine> transferEngine = coordinator->GetTransferEngine();
         for (const uint64_t transferId :
-             std::vector<uint64_t>{1, 2, 4, 6, 11, 12, 15, 16})
+             std::vector<uint64_t>{6})
         {
             Check(transferEngine->GetTransferState(transferId) ==
                           TransferRuntimeState::CANCELLED &&
@@ -479,7 +438,7 @@ RunComputeFaultScenario(bool generateOnline)
                       TransferRuntimeState::COMPLETED,
               "completed input transfer history was not preserved");
         for (const uint64_t transferId :
-             std::vector<uint64_t>{7, 8, 9, 10, 13, 14})
+             std::vector<uint64_t>{1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
         {
             Check(transferEngine->GetTransferState(transferId) ==
                       TransferRuntimeState::COMPLETED,
@@ -487,12 +446,47 @@ RunComputeFaultScenario(bool generateOnline)
         }
 
         const Ptr<ComputeService> service = coordinator->GetComputeServices().front();
+        const auto& impacts = coordinator->GetFaultTaskImpacts();
+        std::size_t interrupted = 0;
+        bool sawLaterArrival = false;
+        bool sawRepeatedQueue = false;
+        for (const auto& record : impacts)
+        {
+            if (record.impactType == "RUNNING_INTERRUPTED")
+            {
+                ++interrupted;
+                const auto& task = FindTask(*coordinator, record.taskId);
+                Check(record.taskId == 3 && record.fault.f1Occurred && record.fault.f2Occurred &&
+                          record.progressValid && record.impactTimeNs == 100 * MILLISECOND_NS &&
+                          record.completedWorkUnits == static_cast<uint64_t>(
+                              record.impactTimeNs - task.computeStartTimeNs) &&
+                          record.completedWorkUnits + record.remainingWorkUnits ==
+                              task.definition.computeWorkUnits &&
+                          record.deadlineTimeNs == task.computeDeadlineTimeNs,
+                      "direct impact source/progress/deadline snapshot differs");
+            }
+            else
+            {
+                Check(!record.progressValid && record.computeStartTimeNs == -1 &&
+                          record.deadlineTimeNs == -1,
+                      "indirect impact fabricated running progress or future deadline");
+            }
+            sawLaterArrival |= record.taskId == 6 &&
+                record.impactType == "ARRIVAL_DURING_COMPUTE_OUTAGE" &&
+                record.impactTimeNs == 150 * MILLISECOND_NS &&
+                record.fault.startTimeNs == 100 * MILLISECOND_NS;
+            sawRepeatedQueue |= record.taskId == 2 && record.fault.faultId == 2 &&
+                record.impactType == "QUEUED_DELAYED";
+        }
+        Check(interrupted == 1 && sawLaterArrival && sawRepeatedQueue,
+              "fault/task ledger lost source union, later admission, or a repeated impact");
         Check(service->IsComputeAvailable() && service->IsIdle() &&
-                  service->GetEnqueuedTaskCount() == 5 &&
-                  service->GetCompletedTaskCount() == 3 &&
+                  service->GetEnqueuedTaskCount() == 8 && service->GetCompletedTaskCount() == 7 &&
                   service->GetCancelledRunningTaskCount() == 1 &&
-                  service->GetRemovedQueuedTaskCount() == 1 &&
-                  service->GetBusyTimeNs() == 3,
+                  service->GetRemovedQueuedTaskCount() == 0 &&
+                  service->GetBusyTimeNs() ==
+                      7 + static_cast<uint64_t>(FindTask(*coordinator, 3).failureTimeNs -
+                                                FindTask(*coordinator, 3).computeStartTimeNs),
               "compute fault service accounting differs");
         Check(topology.GetRouteComputationCount() == routeComputationsBefore &&
                   topology.GetLinkState().GetActiveLinks() == activeLinksBefore,
@@ -500,22 +494,18 @@ RunComputeFaultScenario(bool generateOnline)
 
         const std::vector<ComputeFailureProbabilityRecord>& predictions =
             predictionEngine->GetPredictionRecords();
-        Check(predictions.size() == 2 &&
-                  predictions[0].simulationTimeNs == 90 * MILLISECOND_NS &&
-                  predictions[0].riskElapsedTimeNs == 0 &&
-                  predictions[1].simulationTimeNs == 100 * MILLISECOND_NS &&
-                  predictions[1].riskElapsedTimeNs == 10 * MILLISECOND_NS,
-              "causal compute failure prediction record differs");
+        Check(predictions.size() > 2 &&
+                  predictions.front().simulationTimeNs < 90 * MILLISECOND_NS &&
+                  predictions.back().simulationTimeNs == 100 * MILLISECOND_NS,
+              "audit must cover pre-failure running checks without NOTICE");
         for (const ComputeFailureProbabilityRecord& prediction : predictions)
         {
-            Check(prediction.faultId == 1 &&
-                      prediction.nodeId == COMPUTE_NODE_ID &&
+            Check(prediction.nodeId == COMPUTE_NODE_ID &&
                       prediction.taskId == 3 &&
-                      prediction.noticeTimeNs == 90 * MILLISECOND_NS &&
                       prediction.remainingComputeTimeNs > 0 &&
                       prediction.completionRatio > 0.0 &&
                       prediction.completionRatio < 1.0 &&
-                      prediction.f1StepFailureProbability > 0.0 &&
+                      prediction.f1StepFailureProbability >= 0.0 &&
                       prediction.f2StepFailureProbability == 0.0 &&
                       std::abs(prediction.combinedStepFailureProbability -
                                prediction.f1StepFailureProbability) < 1e-15 &&
@@ -530,8 +520,8 @@ RunComputeFaultScenario(bool generateOnline)
                       EncodePrediction(prediction));
             signature.predictions.push_back(EncodePrediction(prediction));
         }
-        Check(predictions[1].f1StepFailureProbability >
-                  predictions[0].f1StepFailureProbability &&
+        Check(predictions.back().f1StepFailureProbability >
+                  predictions.front().f1StepFailureProbability &&
                   predictions[1].horizonStepCount + 1 ==
                       predictions[0].horizonStepCount,
               "rolling F1 forecast did not advance with task progress");
@@ -559,14 +549,13 @@ main()
     try
     {
         CheckFaultStateOverlay();
-        CheckRiskOnlyReplay();
         const ExecutionSignature first = RunComputeFaultScenario(false);
         const ExecutionSignature second = RunComputeFaultScenario(false);
         Check(first == second,
               "identical compute fault runs produced different lifecycle ordering");
         const ExecutionSignature generated = RunComputeFaultScenario(true);
         Check(first == generated,
-              "online generated compute faults differ from deterministic replay");
+              "online generated compute faults differ from test-only event injection");
         std::cout << "SatCompute compute fault execution tests passed." << std::endl;
         return 0;
     }

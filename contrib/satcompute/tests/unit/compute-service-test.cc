@@ -151,14 +151,14 @@ CheckFaultSafeCancellation()
               "queued task was not removed precisely");
         Check(!service->RemoveQueuedTaskForFailure(2),
               "queued task was removed twice");
-        Check(!service->SubmitTask(3, 5, Simulator::Now().GetNanoSeconds()),
-              "unavailable compute service accepted new work");
+        Check(service->SubmitTask(3, 5, Simulator::Now().GetNanoSeconds()),
+              "temporary outage rejected queued work");
+        Check(service->GetQueueSize() == 1 && !service->HasRunningTask(),
+              "unavailable compute service dispatched queued work");
     });
     Simulator::Schedule(NanoSeconds(30), [service] {
         Check(service->SetComputeAvailable(true),
               "compute service did not recover");
-        Check(service->SubmitTask(3, 5, Simulator::Now().GetNanoSeconds()),
-              "recovered compute service rejected new work");
     });
     Simulator::Stop(NanoSeconds(100));
     Simulator::Run();
@@ -171,11 +171,9 @@ CheckFaultSafeCancellation()
               recorder.completions[0].timeNs == 35,
           "cancelled compute task completed or recovered work did not complete");
     Check(service->IsComputeAvailable() && service->IsIdle() &&
-              service->GetEnqueuedTaskCount() == 3 &&
-              service->GetCompletedTaskCount() == 1 &&
+              service->GetEnqueuedTaskCount() == 3 && service->GetCompletedTaskCount() == 1 &&
               service->GetCancelledRunningTaskCount() == 1 &&
-              service->GetRemovedQueuedTaskCount() == 1 &&
-              service->GetBusyTimeNs() == 5,
+              service->GetRemovedQueuedTaskCount() == 1 && service->GetBusyTimeNs() == 15,
           "fault-safe compute counters or busy-time accounting differ");
     Simulator::Destroy();
 }

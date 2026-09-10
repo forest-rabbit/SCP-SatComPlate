@@ -14,11 +14,8 @@ namespace ns3
 struct ComputeFailureProbabilityRecord
 {
     int64_t simulationTimeNs{}; ///< Time represented by this observation.
-    uint64_t faultId{}; ///< Active risk-episode identity.
     uint32_t nodeId{}; ///< Stable compute-satellite ID.
     uint64_t taskId{}; ///< Stable running-task ID.
-    int64_t noticeTimeNs{}; ///< Already observed risk-entry time.
-    int64_t riskElapsedTimeNs{}; ///< simulation_time - notice_time.
     int64_t taskComputeStartTimeNs{}; ///< Already observed compute-dispatch time.
     int64_t taskServiceTimeNs{}; ///< Fixed task compute duration.
     int64_t taskElapsedTimeNs{}; ///< Known compute progress in nanoseconds.

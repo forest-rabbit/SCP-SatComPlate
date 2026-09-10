@@ -13,9 +13,9 @@ constellation="contrib/satcompute/tests/fixtures/constellation/connected-16.csv"
 task_inputs="contrib/satcompute/tests/fixtures/task"
 
 completed="$(./ns3 run --no-build \
-  "satcompute --simulationDuration=5 \
+"satcompute --faultMode=none --linkMetrics=0 --taskCompletionPolicy=strict --simulationDuration=5 \
 --constellationConfig=$constellation --maxIslDistance=6171353 \
---delayMode=fixed --fixedDelay=0.001 \
+--delayMode=fixed \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --routingMode=global-size-aware-hrw \
 --computeProfile=$task_inputs/compute-profile-single.json \

@@ -13,9 +13,8 @@ ComputeProfile 与 TaskTrace，不根据网络拓扑生成任务，也不执行�
 | `compute-service.h/.cc` | 每颗计算卫星上的单服务台、非抢占 FCFS queue |
 | `task-coordinator.h/.cc` | 调度任务到达，连接输入传输、计算和结果传输回调 |
 
-JSON 的完整字段合同和正式输入文件见
-[`input/topology/`](../input/topology/README.md) 与
-[`input/traffic/`](../input/traffic/README.md)。两条 CLI 路径必须成对提供：
+正式输入见 [LEO-66](../input/experiments/leo-66/README.md)，字段合同见下文。
+两条 CLI 路径必须成对提供：
 
 ```bash
 --computeProfile=<compute-profile.json> --taskTrace=<task-trace.json>
@@ -50,6 +49,18 @@ PENDING
 
 ## FCFS 计算模型
 
+N4C 的 `task_profile` 只接受 `dense-image`、`sparse-inference`、`compression`、`llm`；
+旧输入缺省时明确记为 `UNSPECIFIED`，不猜测类别。正式 C800 使用统一100,000 WU/s；
+旧功能示例的 ComputeProfile 不改。输入和 S/W/K/RESULT、rho/sigma/H 合同见
+[正式任务生成器](../tools/generation/README.md)；当前默认是已冻结的1300秒场景。
+
+`computeDeadlineFactor` 默认1.3，有限且至少为1。预算为参考服务时间乘倍率后向上取整到ns；
+正式四类参考速率为100,000 WU/s，legacy任务沿用其输入节点速率。
+绝对deadline只在首次RUNNING时建立，不包含初始INPUT/排队或RESULT传输，不重置。
+超时未算完立即以 `COMPUTE_DEADLINE_EXCEEDED` 终止，释放计算占用；同ns完成优先。
+任务成功必须同时按时算完并完整送达RESULT，已算完的RESULT不受compute deadline影响。
+超时不使卫星故障、不改变FCFS排序；busy time包含失败前已执行及仿真截断前的计算时间。
+
 每个 ComputeProfile 节点创建一个 `ComputeService`。队列排序键是：
 
 ```text
@@ -71,20 +82,22 @@ service_time_ns = ceil(
 
 `ComputeService` 还提供计算可用性开关，以及精确取消 running task、移除 queued
 task 的幂等接口。被取消的运行任务不会触发原 completion event，也不会计入正常
-完成数或成功计算 busy time；节点恢复后只调度队列中仍合法的任务。
+完成数，但取消前实际执行时间仍计入 busy time；节点恢复后只调度队列中仍合法的任务。
 
 compute 故障开始时，`TaskCoordinator` 按当前阶段处理目标节点任务：
 
 | 当前状态 | 处理 |
 |---|---|
-| `PENDING` 且恰在同纳秒到达 | 任务失败，INPUT/RESULT 都取消 |
-| `INPUT_TRANSFERRING` | 任务失败，活动 INPUT 与未启动 RESULT 都取消 |
-| `QUEUED` | 从 FCFS 队列精确移除，任务失败，保留已完成 INPUT，取消 RESULT |
+| `PENDING` / 停机期间新到达 | 整星端点存活时照常启动 INPUT |
+| `INPUT_TRANSFERRING` | INPUT 继续，收齐后可在停机期间入队 |
+| `QUEUED` | 保留原 FCFS 队列，恢复后继续调度，不建立首次计算 deadline |
 | `RUNNING` | 取消 completion event，任务失败，保留已完成 INPUT，取消 RESULT |
 | `RESULT_TRANSFERRING` / `COMPLETED` | 计算阶段已越过，不受 compute 故障影响 |
 
-故障期间后来到达的任务同样立即失败。有限恢复只令 service 接受新任务，既不恢复
-旧 `FAILED` 任务，也不创建迁移、重放或新的 attempt。
+F1/F2 是临时计算服务停机，假设输入数据和队列保留；恢复后继续原 FCFS 调度。
+已被打断的 RUNNING 任务仍为 `FAILED`，不自动恢复、重计算、迁移或创建新 attempt。
+停机造成的排队受阻单独记录，不直接等同于额外增加整个停机时长；初始等待不消耗
+compute deadline，结束时未完成仍属于截断。F3 永久整星失效不适用队列保留规则。
 
 整星故障还检查任务当前仍需要的三个端点：
 
@@ -138,3 +151,70 @@ receiver 完整接收。仿真结束时：
 - `metrics/README.md`：`task-events.csv`、`task-summary.csv` 与
   `compute-node-summary.csv`；其中 task summary 明确记录 `final_state`、
   `failure_reason` 和 `failure_time_ns`。
+
+## 输入 JSON 合同
+
+### ComputeProfile
+
+ComputeProfile 根对象只允许 `compute_nodes`：
+
+```json
+{
+  "compute_nodes": [
+    {
+      "node_id": 3,
+      "compute_rate_work_units_per_second": 1500000
+    }
+  ]
+}
+```
+
+| 字段 | 类型 | 约束 |
+|---|---|---|
+| `node_id` | `uint32` | 必须属于当前星座且在文件中唯一 |
+| `compute_rate_work_units_per_second` | `uint64` | 必须大于 0 |
+
+数组必须非空，不接受未知字段，也不包含 schema/version/hash。reader 会按 `node_id`
+排序，因此数组原始顺序不影响运行。
+
+
+### TaskTrace
+
+根对象只允许非空数组 `tasks`：
+
+```json
+{
+  "tasks": [
+    {
+      "task_id": 1,
+      "source_node_id": 0,
+      "compute_node_id": 3,
+      "result_node_id": 0,
+      "input_bytes": 4096,
+      "output_bytes": 2050,
+      "compute_work_units": 1000000,
+      "arrival_time_ns": 100000000
+    }
+  ]
+}
+```
+
+| 字段 | 类型 | 约束 |
+|---|---|---|
+| `task_id` | `uint64` | 唯一，范围 `1..UINT64_MAX/2` |
+| `source_node_id` | `uint32` | 当前星座中的卫星，且不同于计算节点 |
+| `compute_node_id` | `uint32` | 当前星座且存在于 ComputeProfile，且不同于结果节点 |
+| `result_node_id` | `uint32` | 当前星座中的卫星；允许与源节点相同 |
+| `input_bytes` | `uint64` | 必须大于 0 |
+| `output_bytes` | `uint64` | 必须大于 0；计算完成后实际发送的结果大小 |
+| `compute_work_units` | `uint64` | 必须大于 0 |
+| `arrival_time_ns` | 非负整数 | 必须严格早于 `simulationDuration` |
+| `task_profile` | 可选字符串 | `dense-image`、`sparse-inference`、`compression`、`llm`；缺省为内部 `UNSPECIFIED`，不接受显式 null/未知类别 |
+
+TaskTrace 是精确事件数据，因此到达时刻直接使用整数纳秒；平台级仿真时长和周期仍
+以秒传入 CLI。文件不接受未知字段，也不包含 schema/version/hash。reader 会按
+`task_id` 排序，数组顺序不影响运行。
+
+
+正式 800 任务全部包含 task_profile；旧功能 fixture 可缺省，表示 UNSPECIFIED。
+首次计算才建立的 deadline 不写入 TaskTrace。测试数据见[fixture 说明](../tests/fixtures/README.md)。

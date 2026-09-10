@@ -13,15 +13,13 @@ tests/
 │   └── regression/          五种路由与完整任务回归
 ├── fixtures/
 │   ├── constellation/       4/16 星轻量星座
-│   ├── fault/               合法 replay 故障轨迹
 │   ├── topology/            最小节点切片
 │   └── task/                合法与非法算力/任务输入
 └── support/                 C++/Python 测试公共构造
 ```
 
-日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动启动的三规模压力
-测试是例外：输入和原始指标保存在 `.gitignore` 排除的本地 `output/` 目录，便于
-后续备份可行性分析；大规模压力测试不接入 `run-all.sh` 或 GitHub CI。
+日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动正式场景的原始指标
+保存在 gitignore 排除的本地 `output/`，完整800任务运行不接入 `run-all.sh` 或 GitHub CI。
 
 ## Unit
 
@@ -36,20 +34,31 @@ tests/
 | `task-input-test.cc` | ComputeProfile/TaskTrace closed-world 校验、canonical 排序和派生传输 ID |
 | `compute-service-test.cc` | 整数服务时间、非抢占 FCFS、同刻 task ID tie-break 和因果运行任务快照 |
 | `fault-lifecycle-test.cc` | FAILED/CANCELLED 幂等终止、迟到包隔离和 reservation 归零 |
-| `fault-trace-test.cc` | v1/v2 closed-world 字段、四类记录、算术/区间校验和 canonical writer |
+| `fault-trace-test.cc` | 生成 trace 的字段、算术/区间校验和 canonical writer |
+| `fault-risk-query-test.cc` | 1 秒节点风险、空闲/故障状态、动态恢复、双来源时长、F3 抢占、只读性、时间边界及 query/audit 不改变 RNG 与事件 |
 | `fault-model-test.cc` | 内置参数、F1/F2 状态、独立抽样、`q_comp`，共享模型状态滚动预测、原生未来位置、无状态/RNG 副作用，以及 F3 fixed-K/Poisson 数量、范围、无放回和确定性 |
-| `compute-fault-execution-test.cc` | 计算故障批处理、任务各阶段、恢复、通信不变、NOTICE/START 当刻模型预测和 generate/replay 预测一致性 |
+| `compute-fault-execution-test.cc` | 计算故障批处理、任务各阶段、恢复、通信不变、START 当刻抽样前预测和 生成事件与测试注入的一致性 |
 | `satellite-fault-execution-test.cc` | 整星端点语义、即时重路由、capacity 重准入和按实时距离恢复 |
 | `online-orbit-foundation-test.cc` | 原生 mobility、连续坐标、固定 plus-grid 候选和 canonical 顺序 |
 | `online-topology-controller-test.cc` | 距离门控、fixed/distance 时延、周期更新和按边集合重算路由 |
 
-`test_fault_probability_comparison.py` 检查概率审计工具对完全一致输入的零误差报告，
-以及缺失 replay 记录时的失败结果。`test_workload_generators.py` 检查 stress 任务
-生成器的确定性、总输入字节预算、
-结果大小和无版本/hash 字段合同；同时检查 F1 验证档的 66 星、20 任务，以及 F2
-验证档的 66 星、8 任务、热点故障、恢复后、风险-only/截断风险和稀疏对照角色；
-N4B 联合档还检查 100 任务、5 个有界热点、F2/F3 窗口任务、62 个分布式对照和
-提交 fixture 的逐字节确定性。
+长期 Python 测试收敛为：
+
+| 文件 | 覆盖 |
+|---|---|
+| `test_task_workload_model.py` | 精确S/W/K/RESULT、rho/sigma/H、LLM、合法边界及5/10/20%守恒 |
+| `test_final_scenario.py` | 冻结输入、两类种子、固定锚点、缺失切片/非法CLI、正式runner；可选原生切片逐字节复现 |
+| `test_compfrr_shadow.py` | 全800任务跨语言布局、虚拟账本、资源分账、证据差异与离线统计 |
+| `test_fault_probability_comparison.py` | 概率对概率一致性及缺失记录拒绝 |
+| `test_fault_workload_fixtures.py` | 保留F1/F2/N4B固定fixture的角色与分布，不再依赖旧生成profile |
+| `test_link_metrics_report.py` | 通用链路统计分位数 |
+
+C++另保留 `task-deadline-test.cc`（当前正式输入和deadline边界）以及
+`compfrr-shadow-model-test.cc`（成本分档、严格START、初始化不双计、频率枚举、
+OFF/ON追赶与状态边界）。通用task/routing/fault/network测试未删除。
+
+测试内部的 `support/fault-injection.h` 只安排直接 ns 事件，保留同刻排序、任务中断和
+拓扑恢复边界覆盖；不读取生产故障文件，也不提供用户 replay 模式。
 
 ## Smoke
 
@@ -60,6 +69,7 @@ N4B 联合档还检查 100 任务、5 个有界热点、F2/F3 窗口任务、62 
 | `run-task-smoke.sh` | 输入传输、FCFS 计算、结果传输的单任务闭环 |
 | `run-diagnostics-smoke.sh` | strict 部分完成、队列丢包和失败诊断文件 |
 | `run-topology-smoke.sh` | topology-only 切片、终点采样、XYZ 演化和逐字节确定性 |
+| `run-compfrr-shadow-smoke.py` | 8任务off/on、重复、audit独立性、字节/队列账本及同纳秒F3/初始化顺序 |
 | `run-link-metrics-smoke.py` | 指标开关不改变业务、空闲/丢包/故障、窗口汇总和陈旧文件清理 |
 
 ## Regression
@@ -68,25 +78,18 @@ N4B 联合档还检查 100 任务、5 个有界热点、F2/F3 窗口任务、62 
   size-aware 仿真和 66 星在线拓扑；
 - `run-full-workload-regression.sh`：运行任务确定性、无任务模式、strict/report、
   失败诊断，并执行正式的 100 秒/66 星/20 任务示例；
-- `run-fault-lifecycle-regression.sh`：覆盖 N4A compute/整星 replay、N4B F1 热校准，
-  以及 F2 轨道偏移、真实 ECEF 暴露、100-run 概率标定、风险-only、有/无预警实际
-  故障和 66 星小任务闭环；同时检查同 seed trace 一致、generate/replay 逐文件等价、
-  compute 故障不改变路由、故障中任务失败和恢复后新任务完成；预测部分检查滚动的
-  F1/F2/`q_comp`、动态 `P_fail_before_finish`、任务剩余时间、NOTICE 当刻输出、风险
-  已持续时间，以及 F1-only、F2-only、F1+F2 的 generate 抽样前模型真值与 replay
-  预测逐时刻概率审计；这些场景显式开启 `faultProbabilityAudit`，并另行检查正常
-  generate/replay 默认不生成审计文件、复用目录时清理陈旧文件、无预警故障无正式
-  预测和无风险输出；F3 部分覆盖无任务 fixed-K 永久
-  整星故障、即时重路由、F3 抢占活动 compute 区间以及 F1/F2/F3 同开。
-- `run-n4b-joint-acceptance.sh`：冻结 66 星、1000 秒、100 任务的四轮联合验收；
-  比较正常/审计 generate 的 trace 与正式输出、审计 generate/replay 的事件和概率、
-  正常 generate/replay 的正式输出，并在复用 replay 目录后检查陈旧审计文件清理；
-  同时固定 93/100 任务终态、82 条概率记录、F1/F2/F3 事件、唯一 F3 重路由、零丢包
-  和账本归零。
+- `run-fault-lifecycle-regression.sh`：F1 热/概率曲线、动态恢复、F2 原生空间风险与
+  固定 8 秒恢复、小任务闭环、F3 永久断链；检查 RUNNING 中断、排队保留、通信不变、
+  同 seed 重复一致。审计涵盖全部 RUNNING 任务的逐秒概率与剩余窗口，容差 1e-12，
+  不依赖 NOTICE 或固定行数，并核对默认关闭/陈旧审计文件清理。
+- `run-n4b-joint-acceptance.sh`：复用 66 星/1000 s/100 任务输入，检查四轮
+  正常/审计/重复运行业务一致、联合来源、唯一 F3 重路由、零丢包、账本归零、
+  所有任务/传输终态与实际 START 合同。旧 93/100、82 行属于旧 F1/NOTICE 结果，
+  不再作为新模型固定 golden。
 
 ## 本地运行
 
-首次运行先在仓库根目录配置并构建：
+首次运行先启用项目 uv 环境（`source .venv/bin/activate`），在仓库根目录配置并构建：
 
 ```bash
 ./ns3 configure --enable-modules=satcompute -G Ninja
@@ -96,7 +99,7 @@ N4B 联合档还检查 100 任务、5 个有界热点、F2/F3 窗口任务、62 
 随后依次执行完整本地门禁：
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover \
   -s contrib/satcompute/tests/unit -p 'test_*.py' -v
 contrib/satcompute/tests/unit/run-cpp-tests.sh
 contrib/satcompute/tests/integration/smoke/run-all.sh
@@ -106,55 +109,45 @@ contrib/satcompute/tests/integration/regression/run-all.sh
 定位失败时可直接运行对应具名 shell 脚本或 C++ executable。各 runner 默认使用
 `./ns3 run --no-build`，因此修改 C++ 后必须先重新执行 `./ns3 build`。
 
-## 手动压力测试：10 Gbps
+## 最终生成器的原生切片复现
 
-已完成的三规模结果见[压力基线记录](../../../docs/pressure-10g-baseline.md)。
-
-本轮是无故障、无备份的资源基线。保留旧 75% 档的 **1500 任务、81,750,000,000
-字节 INPUT、15 个 1 GB 和 30 个 500 MB 大任务**，使用当前 FNV 任务生成器及
-原生轨道；不是旧 SHA-256 工作负载或旧 2 Gbps 仿真的逐项复现。75% 是任务档位，
-不代表网络利用率。任务类别暂不改为后续的三种图像加 LLM。
-
-| 星座 | 计算节点 | 仿真时长 | 到达窗口 |
-|---|---:|---:|---:|
-| 66 | 66 | 1000 s | 1--600 s |
-| 351 | 117 | 600 s | 1--340 s |
-| 720 | 240 | 300 s | 1--165 s |
-
-运行器显式冻结：10 Gbps、8 ms 单向时延、20 s 拓扑更新、1 s 链路统计、MTU
-65,535 字节、每方向队列 64,000,000 字节、socket 缓冲 131,072 字节；路由为
-`global-capacity-aware-hrw`，分包为 `size-aware`，ns-3 随机 seed/run 和路由 seed 均为 1，
-任务生成器 seed 固定为 `20260726`。
-压力测试队列沿用历史 64 MB 档，**不改变 `para.cc` 的正常队列默认值**。
-
-在项目 uv 环境中完成构建后，选择一个不存在的输出目录：
+不启动网络仿真，复用已经导出的0..1050 s、间隔1 s原生节点切片：
 
 ```bash
-source .venv/bin/activate
-python3 contrib/satcompute/tools/generation/prepare-pressure-baseline.py \
-  --output-root=output/pressure-10g-new
-
-python3 contrib/satcompute/tests/integration/regression/run-pressure-baseline.py \
-  --input-root=output/pressure-10g-new --size=66 --stage=smoke
-python3 contrib/satcompute/tests/integration/regression/run-pressure-baseline.py \
-  --input-root=output/pressure-10g-new --size=66 --stage=full
-python3 contrib/satcompute/tools/validation/summarize-pressure-baseline.py \
-  --run-dir=output/pressure-10g-new/66/full
+SATCOMPUTE_POSITION_SLICES=output/n4c-g3-truncnormal-v3-20260909/orbit/topology \
+.venv/bin/python -m unittest discover -s contrib/satcompute/tests/unit -p 'test_final_scenario.py' -v
 ```
 
-66 星通过后，依次把 `--size` 改为 351、720，每个规模均先 smoke 再 full 和汇总。
-smoke 使用正式输入最早到达的 20 个任务、30 s 仿真，并对照指标关闭的运行；full
-要求已有 smoke 验证通过。重复实验应使用新目录或 `--label` 指定新的结果子目录，
-运行器拒绝覆盖既有输入和结果。
+该检查两次生成TaskTrace/摘要，比较双次字节一致及正式TaskTrace逐字节一致；
+也核对全部原生放置记录。未提供该环境变量时仅跳过原生切片复现项，并明确显示skip；
+其他固定输入、模型、合成位置和CLI测试仍执行。生成器不会读取正式TaskTrace作为生成源。
+冻结验收必须提供已有切片并实际通过，不能用skip宣称复现完成。
 
-输出保留 `preflight.json`、`execution.json`（代码提交及命令）、`execution-result.json`、
-`run.log`、`time.txt` 及正式指标；汇总器核对窗口/逐链路/全网总量、序列化完整性、
-带宽和队列上限，产生 `pressure-summary.json`。活跃期结果使用覆盖任务活动的完整
-统计窗口，避免将整段仿真末尾空闲纳入活跃期平均；不能当作实际加备份后的保证。
+## 手动正式运行与 G4 验证
 
-## CI 规则
+`integration/regression/run-final-scenario.py`仅支持当前场景的none、generate、
+generate+shadow。默认为generate；概率CSV审计和shadow均默认关闭。
+输出必须是新目录，默认1300 s、800任务、66星、10 Gbps、1 ms、seed1/run11。
 
-GitHub 的 `SatCompute CI` 是手动阶段门禁：一个大阶段的 PR 全部合并到 `main` 后，
-只触发一次，通过并确认提交已合并后清理功能分支。阶段内的小提交和 PR 只运行
-与改动匹配的本地检查；最终
-仍需通过上面的完整 SatCompute 门禁。
+```bash
+# 手动完整运行；不是日常短测试
+.venv/bin/python contrib/satcompute/tests/integration/regression/run-final-scenario.py \
+  --output-dir=output/final-generate
+.venv/bin/python contrib/satcompute/tests/integration/regression/run-final-scenario.py \
+  --fault-mode=none --output-dir=output/final-none
+.venv/bin/python contrib/satcompute/tests/integration/regression/run-final-scenario.py \
+  --audit --shadow --output-dir=output/final-shadow
+
+# 仅分析现有输出，不运行仿真
+.venv/bin/python contrib/satcompute/tools/validation/compfrr-shadow/summarize.py \
+  --run-dir=output/final-shadow --reference-dir=output/final-generate
+```
+
+比较双方必须采用相同概率审计开关（上例若用于逐文件比较，generate也加`--audit`）。
+可选文件缺失不能静默忽略。none账本可用`tools/validation/summarize-n4c-baseline.py`分析。
+通用CLI仍支持自定义实验参数，但正式runner不保留历史候选/调参兼容入口。
+
+G4清理冻结只允许构建、unit、小型shadow/拓扑smoke与现有CSV离线分析；
+**没有重新运行上述完整场景，也没有触发阶段CI。**
+[最终验收](../../../docs/n4c/reviews/G4-final-freeze.md)与[解析结果](../../../docs/n4c/reviews/G4-shadow-decision-evaluation.md)
+不代表真实备份、带宽/存储占用或故障任务被救回。
