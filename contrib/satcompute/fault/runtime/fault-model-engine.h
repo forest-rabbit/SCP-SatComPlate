@@ -8,6 +8,7 @@
 #include "fault-controller.h"
 
 #include "ns3/compute-failure-probability-record.h"
+#include "ns3/compute-failure-predictor.h"
 #include "ns3/fault-para.h"
 #include "ns3/compute-fault-combination.h"
 #include "ns3/f1-self-state-fault-model.h"
@@ -31,6 +32,23 @@ namespace ns3
 class ComputeService;
 class OnlineOrbitConstellation;
 class TaskCoordinator;
+
+/** Causal pre-sample task state. No outcome, schedule, or future workload is exposed. */
+struct FaultEpochInput
+{
+    uint32_t nodeId{}; ///< Stable compute node.
+    uint64_t taskId{}; ///< Currently executing task.
+    double currentSampleProbability{}; ///< Exact probability used by the current sampler.
+    ComputeFailurePredictionInput prediction; ///< Canonical predictor input from live state.
+};
+
+/** Observed result delivered only after the complete same-time fault batch is applied. */
+struct FaultEpochOutcome
+{
+    uint32_t nodeId{}; ///< Stable compute node.
+    uint64_t taskId{}; ///< Pre-sample executing task.
+    bool sampled{}, faultHit{}; ///< F1/F2 sampling eligibility and actual current node hit.
+};
 
 /** Availability of a read-only node-level forecast. */
 enum class ComputeRiskStatus
@@ -123,6 +141,10 @@ class FaultModelEngine : public Object
     /** Bind and initialize the shared native orbit source required by F2. */
     void BindOrbitConstellation(const OnlineOrbitConstellation& constellation);
 
+    /** Optional synchronous observer pair; absent in off/fixed modes. Never owns RNG. */
+    void SetEpochObservers(std::function<void(const FaultEpochInput&)> before,
+                           std::function<void(int64_t, const std::vector<FaultEpochOutcome>&)> after);
+
     /** Return the canonical occurred-event trace. */
     const FaultTrace& Finalize();
 
@@ -181,6 +203,11 @@ class FaultModelEngine : public Object
     void RecordProbability(uint32_t nodeId,
                            const NodeState& state,
                            int64_t simulationTimeNs);
+    /** Shared immutable input for audit and the causal pre-sample observer. */
+    ComputeFailurePredictionInput PredictionInput(uint32_t nodeId,
+                                                   const NodeState& state,
+                                                   int64_t timeNs,
+                                                   int64_t remainingNs) const;
     /** Update periodic models and/or execute F3 events in one timestamp batch. */
     void ProcessTime(int64_t simulationTimeNs, bool updateComputeModels);
     /** Observe exact service transitions without RNG or business mutations. */
@@ -208,6 +235,9 @@ class FaultModelEngine : public Object
     Ptr<FaultController> m_faultController; ///< Sole runtime fault executor.
     Ptr<TaskCoordinator> m_taskCoordinator; ///< Bound task lifecycle owner.
     const OnlineOrbitConstellation* m_constellation{}; ///< Shared native F2 positions.
+    std::function<void(const FaultEpochInput&)> m_beforeEpoch; ///< Pre-draw, read-only proposal.
+    std::function<void(int64_t, const std::vector<FaultEpochOutcome>&)> m_afterEpoch;
+    ///< Post-application commit boundary; no reliance on event UID.
 };
 
 } // namespace ns3

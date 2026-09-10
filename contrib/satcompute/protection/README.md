@@ -4,7 +4,7 @@ N5A 回答“怎样执行保护”，N5B 才决定启动/频率，N5C 才优化�
 当前接入单次故障恢复闭环和 **G4 planned/actual 资源账本**：真实备份路径、故障快照、
 恢复服务预留、TAIL / REMOTE_REDO / RECOMPUTE 和 winning RESULT。cL/cR 不占用主 ComputeService。
 FIXED 正式场景仅为执行验收，不代表 CompFRR 算法效果。N5A 已合入 n5；
-N5B-G1 增加独立纯策略，尚未接入真实运行时；N5C 未实现。
+N5B-G2 已将独立频率策略接入在线故障与真实 checkpoint；尚未开展 G3 正式算法对比，N5C 未实现。
 
 ## 文件与职责
 
@@ -23,6 +23,9 @@ N5B-G1 增加独立纯策略，尚未接入真实运行时；N5C 未实现。
 | `mechanism/checkpoint/checkpoint-progress.h/.cc` | 不发包的纯进度合同：生成延迟、连续接收、融合提交及同纳秒历史查询 |
 | `mechanism/checkpoint/checkpoint-manager.h/.cc` | 初始化、L1、batch 真实传输、存储预留/提交及停止清理 |
 | `runtime/fixed-protection-controller.h/.cc` | 只读任务事件接线、候选快照、固定策略/机制分发 |
+| `runtime/frequency-protection-controller.h/.cc` | generate 检查点前提案、故障执行后提交，FFP/路径/算力适配及实际机制调用 |
+| `runtime/frequency-storage-estimator.h/.cc` | 按合法状态与真实库存计算保守的额外存储峰值 |
+| `../metrics/core/frequency-metrics.cc` | 独立逐 epoch 决策 CSV；不混入 N5A actual 成本账本 |
 | `runtime/recovery-controller.h/.cc` | 故障裁决、一次恢复、真实输入/尾部/计算/结果及终态清理 |
 | `runtime/protection-transfer-key.h` | 同纳秒请求的稳定排序键与不回绕的保护流编号 |
 | `../traffic/local-delivery.h/.cc` | 同星逻辑交付；不创建 UDP，不计网络字节 |
@@ -38,7 +41,7 @@ N5B-G1 增加独立纯策略，尚未接入真实运行时；N5C 未实现。
 
 | 参数 | 默认 | 说明 |
 |---|---:|---|
-| `protectionMode` | `off` | 保持 N4；`fixed` 支持无故障与在线 generate，要求网络任务、shadow 关闭 |
+| `protectionMode` | `off` | `fixed` 固定保护；`compfrr` 动态频率，仅允许 generate 且启用 F1/F2 至少一个来源；保护模式均要求网络任务、shadow 关闭 |
 | `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
@@ -48,15 +51,15 @@ off 不创建保护池、流或 CSV；fixed 对每个首次主计算启动执行
 remote 为排除主星/local 后的最小可行 ID。候选可行不等于存储/带宽已经预留。
 多个任务竞争同一候选时，由共享备份池与网络容量准入处理；恢复接管时额外原子锁定空闲服务。
 
-## N5B-G1：频率策略合同（未启用生产模式）
+## N5B：频率策略与在线接线
 
-正式算法后续组合 `CompFrrFrequencyPolicy + FFP`，LRL 不进入 N5B 主实验。
+`compfrr` 组合 `CompFrrFrequencyPolicy + FFP`，LRL 不进入 N5B 主实验。
 频率求解器独立实现数学公式，不调用验证目录；只有测试将同输入送入旧 shadow 比较。
 `FrequencyInput` 是当前状态的只读数值快照，FFP 先给出节点，G2 适配层再提供主/恢复算力、
 输入/备份路径估计和 storage headroom。cL/cR 从唯一 `GetProtectionCosts(Kvar)` 取得。
 每个候选的额外 local/remote 峰值由必填的纯 `storageDemand` 提供，和真实池 free bytes 比较；
 不得重复扣除当前已用/已预留状态。未提供估计器会拒绝输入，不默认当成容量无限。
-G1 只验证该约束接口；真实 pending/初始化/融合/H 的峰值估计与池快照接线是 G2 门禁。
+G1 验证纯接口，G2 将实际库存和池快照接入同一求解器。
 
 - OFF：`Joff=P_finish*(S/B_I+xW/muB)`；
   `Jstart=cL+cR+min[(1-x)*(cL/delta+cR/(n*delta))+P_finish*Rbar]`。
@@ -71,17 +74,50 @@ G1 只验证该约束接口；真实 pending/初始化/融合/H 的峰值估计�
 horizon 和 endpoint 语义；与故障侧提供的本轮联合 q 逐值核对。不用 next-1s 查询替代当前 q，
 不重写预测器、成本表或故障抽样。F1/F2 仍分别抽样，F3 不进入策略风险输入。
 
-决策网格对齐 fault-check，而非 task-start 的独立1秒定时器。G2 将按
+决策网格对齐 fault-check，而非 task-start 的独立1秒定时器。在线按
 `更新因果状态 -> q/P_finish -> 提出决策 -> 执行本轮故障 -> 存活且仍计算才提交`
-接入。当前 START 遇到同轮故障仍视为 OFF；新 delta/n 不能改变当前故障前状态。
+执行。任务启动只注册 OFF；下次检查前已经完成的任务不做决策。当前 START 遇到同轮故障仍视为 OFF；新 delta/n 不能改变当前故障前状态。
 `FrequencyDecisionGate` 只维护单任务策略状态，真实初始化、记录、批次和故障仍由 N5A 执行。
 新 delta 从实际完成/上次触发边界向前取合法 target；新 n 只消费尚未组批的记录，已建批次不可变。
 ON 无可行候选时保留状态、暂停新 target 和新 batch，已有操作继续；不允许 ON→OFF。
 
 N5B-G2/G3 正式接入和算法比较采用在线 **generate**。固定输入和配对 seed/run 不保证不同策略
 得到同一故障序列：恢复计算改变负载与温度是 F1 闭环的一部分。N5A 的 validation-replay
-仅保留执行验收用途，不增加回放预测器，不覆盖已有 G4 输出。当前 CLI 仍只有 off/fixed，
-不会悄悄启用频率决策或新增 CSV。详见 [N5B-G1 报告](../../../docs/n5/reviews/N5B-G1-frequency-policy.md)。
+仅保留执行验收用途，不增加回放预测器，不覆盖已有 G4 输出。默认仍为 off；
+仅显式 `protectionMode=compfrr` 输出 `frequency-decisions.csv`，不依赖 `faultProbabilityAudit`。
+
+### G2 运行时边界与存储估计
+
+故障引擎提供成对的同步回调：当前 q 产生后、独立 F1/F2 抽样前提出决策；
+整个同纳秒故障批次、节点与路由状态应用后才 Resolve。F3 时间表不传给策略；
+同轮 F3 仍遵守原有“不抽 F1/F2”的规则，在决策记录中标记 `actual_fault_sampled=0`。
+START 存活才调用实际初始化，只有物理初始化对象完成融合才进入 ON；预测 T_init 不调度 ON。
+
+FFP 的 OFF 候选不预留资源，START 存活后固定节点对；ON 不换节点。
+节点当下不健康、不空闲或所需路径不可用时暂停新操作。
+路径取当前稳定接口顺序的路由、残余瓶颈带宽及传播时延；恢复速率读 remote 的 ComputeService。
+source=remote 的 INPUT 重算沿用 LocalDelivery，分析带宽用最大有限值表示零序列化极限，实际不发 UDP。
+
+库存快照包含 r/l、已捕获记录及 H、是否分配/接收、当前 remote state 和不可变 batch。
+估计器只输出与 **free bytes** 比较的新增峰值：
+
+- OFF 至少覆盖 INIT_BASE + INIT_STATE 的临时峰值及实际 CommittedStateBytes；
+- local 保守计入现有尚未分配记录与剩余合法捕获，不提前抵扣将来网络何时释放空间；
+- remote 考虑未来 batch 的实际记录字节和 state 融合峰值，扣除已经计入 used/reserved 的 state/batch；
+- OFF 的初始化完成时刻可能受队列影响，因此额外使用剩余变量状态的上界。
+
+这是安全偏保守的容量筛选，不是容量最优估计，也不读取未来队列完成时刻。
+真实预留、拒绝、发送和清理由 N5A 账本执行；预测通过不等于资源已预留。
+新 delta 只替换未触发目标；delta 不变时不推迟已有目标。新 n 只作用于尚未组批记录。
+PAUSE 只停新目标/新 batch，不取消已有生成、传输或融合；UPDATE 可恢复。
+
+`frequency-decisions.csv` 分开记录当前/提议/实际提交的 delta/n、q/P_finish、FFP/空闲字节/速率、
+J、Rbar、Rmax、初始化估计、额外存储峰值、实际故障和提交结果。不适用字段留空；
+OFF 的 NONE 仍可包含最优候选用于解释为何不启动。真实网络字节、cL/cR、恢复及 W_waste
+仍只在既有 protection/recovery 账本中统计。
+
+阶段证据：[G1](../../../docs/n5/reviews/N5B-G1-frequency-policy.md)、
+[G2](../../../docs/n5/reviews/N5B-G2-dynamic-frequency-runtime.md)。
 
 ## 最终时序合同
 

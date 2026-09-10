@@ -16,8 +16,11 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-progress.cc
     protection/mechanism/checkpoint/checkpoint-manager.cc
     protection/runtime/fixed-protection-controller.cc
+    protection/runtime/frequency-protection-controller.cc
+    protection/runtime/frequency-storage-estimator.cc
     protection/runtime/recovery-controller.cc
     metrics/core/recovery-metrics.cc
+    metrics/core/frequency-metrics.cc
     metrics/core/protection-metrics.cc
     tools/validation/compfrr-shadow/compfrr-shadow-model.cc
     tools/validation/compfrr-shadow/compfrr-shadow-evaluator.cc
@@ -98,6 +101,8 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-progress.h
     protection/mechanism/checkpoint/checkpoint-manager.h
     protection/runtime/fixed-protection-controller.h
+    protection/runtime/frequency-protection-controller.h
+    protection/runtime/frequency-storage-estimator.h
     protection/runtime/recovery-controller.h
     protection/runtime/protection-transfer-key.h
     metrics/core/protection-metrics.h
@@ -245,6 +250,14 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-frequency-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/frequency-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-n5b-policy-test
   EXECNAME_PREFIX satcompute_test_

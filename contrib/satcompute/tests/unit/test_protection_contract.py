@@ -19,7 +19,7 @@ class ProtectionConfigTests(unittest.TestCase):
     def test_fixed_rejects_shadow_execution(self):
         result = self.run_cli("--protectionMode=fixed --compfrr-shadow=1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("fixed requires network tasks and shadow off", result.stdout)
+        self.assertIn("protection requires network tasks and shadow off", result.stdout)
 
     def test_fixed_generate_passes_mode_guard_without_running_default_scene(self):
         result = self.run_cli("--protectionMode=fixed --faultMode=generate --fixedProtectionDelta=0")
@@ -27,9 +27,16 @@ class ProtectionConfigTests(unittest.TestCase):
         self.assertIn("fixedProtectionDelta", result.stdout)
 
     def test_invalid_mode_is_rejected(self):
-        result = self.run_cli("--protectionMode=compfrr")
+        result = self.run_cli("--protectionMode=unsupported")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("protectionMode has an unsupported value", result.stdout)
+
+    def test_frequency_requires_generate_and_compute_sources(self):
+        for options in ("--faultMode=none", "--faultMode=generate --faultEnableF1=0 --faultEnableF2=0"):
+            with self.subTest(options=options):
+                result = self.run_cli(f"--protectionMode=compfrr {options}")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("protectionMode", result.stdout)
 
     def test_validation_replay_requires_explicit_input_and_no_online_audit(self):
         for options in ("--faultMode=validation-replay",

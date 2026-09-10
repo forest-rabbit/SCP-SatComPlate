@@ -15,6 +15,7 @@
 #include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
 #include "ns3/fixed-protection-controller.h"
+#include "ns3/frequency-protection-controller.h"
 #include "ns3/protection-metrics.h"
 #include "ns3/link-metrics-recorder.h"
 #include "ns3/online-orbit-constellation.h"
@@ -207,7 +208,7 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
     commandLine.AddValue("protectionMode",
-                         "off; fixed enables checkpoint protection and single-attempt recovery",
+                         "off / fixed / compfrr: checkpoint protection and single-attempt recovery",
                          config.protectionMode);
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
@@ -367,12 +368,14 @@ ValidateConfig(const SatComputeConfig& config)
         }
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
-    RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed"});
-    if (config.protectionMode == "fixed" &&
+    RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr"});
+    if (config.protectionMode != "off" &&
         (config.topologyOnly || !hasComputeProfile || config.compfrrShadow))
     {
-        FailConfig("protectionMode", "fixed requires network tasks and shadow off");
+        FailConfig("protectionMode", "protection requires network tasks and shadow off");
     }
+    if (config.protectionMode == "compfrr" && config.faultMode != "generate")
+        FailConfig("protectionMode", "compfrr requires online faultMode=generate");
     if (!std::isfinite(config.fixedProtectionDelta) || config.fixedProtectionDelta <= 0 ||
         config.fixedProtectionDelta > 1 ||
         std::abs(config.fixedProtectionDelta * 1000 -
@@ -466,6 +469,9 @@ main(int argc, char* argv[])
     {
         ApplyModeDefaults(inputConfig, argc, argv);
         ValidateConfig(inputConfig);
+        if (inputConfig.protectionMode == "compfrr" &&
+            !faultParameters.f1.enabled && !faultParameters.f2.enabled)
+            FailConfig("protectionMode", "compfrr requires F1 or F2 fault-check epochs");
         if (inputConfig.faultProbabilityAudit &&
             !faultParameters.f1.enabled && !faultParameters.f2.enabled)
         {
@@ -662,6 +668,8 @@ main(int argc, char* argv[])
 
             std::unique_ptr<compfrr::ShadowEvaluator> shadow;
             std::unique_ptr<protection::FixedProtectionController> protection;
+            std::unique_ptr<protection::FrequencyProtectionController> frequency;
+            std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
             if (config.protectionMode == "fixed")
             {
                 protection = std::make_unique<protection::FixedProtectionController>(
@@ -672,6 +680,12 @@ main(int argc, char* argv[])
                     static_cast<uint32_t>(std::round(config.fixedProtectionDelta * 1000)),
                     config.fixedProtectionBatchN,
                     config.faultMode != "none");
+            }
+            else if (config.protectionMode == "compfrr")
+            {
+                frequency = std::make_unique<protection::FrequencyProtectionController>(
+                    taskCoordinator, topology, faultModelEngine,
+                    config.backupStorageBytesPerNode, simulationDurationNs);
             }
             else
             {
@@ -702,6 +716,13 @@ main(int argc, char* argv[])
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
             if (shadow) shadow->Finalize();
+            if (frequency)
+            {
+                frequency->Finalize();
+                WriteProtectionMetrics(frequency->Manager(), *transferEngine, outputDirectory);
+                frequency->Recovery()->WriteMetrics(outputDirectory);
+                frequency->WriteDecisions(outputDirectory);
+            }
             if (protection)
             {
                 protection->Finalize();

@@ -13,5 +13,6 @@ python3 "$script_dir/run-link-metrics-smoke.py"
 python3 "$script_dir/run-compfrr-shadow-smoke.py"
 python3 "$script_dir/run-protection-smoke.py"
 python3 "$script_dir/run-recovery-smoke.py"
+python3 "$script_dir/run-frequency-smoke.py"
 
 echo "SatCompute smoke suites passed."

@@ -122,17 +122,18 @@ CheckpointManager::Live(State& state)
     return true;
 }
 
-void
+EventId
 CheckpointManager::Later(State& state, int64_t at, std::function<void()> callback)
 {
     Require(at >= Now(), "protection event scheduled in the past");
     if (at >= m_stopNs)
-        return;
+        return {};
     state.timers.push_back(Simulator::Schedule(NanoSeconds(at - Now()),
                                                [this, &state, callback = std::move(callback)] {
                                                    if (Live(state))
                                                        callback();
                                                }));
+    return state.timers.back();
 }
 
 void
@@ -488,12 +489,20 @@ CheckpointManager::InitializationReceived(State& state)
 void
 CheckpointManager::ScheduleCapture(State& state)
 {
+    state.nextTarget.reset();
+    if (state.futurePaused)
+        return;
     auto next = state.layout.Next(Actual(state), state.triggered, state.config.deltaPermille);
     if (!next || *next >= state.layout.Work())
         return;
     const auto at =
         state.task.computeStartTimeNs + ComputeService::CalculateServiceTimeNs(*next, state.rate);
-    Later(state, at, [this, &state, work = *next] { Capture(state, work); });
+    state.captureEvent = Later(state, at, [this, &state, work = *next] {
+        state.nextTarget.reset();
+        Capture(state, work);
+    });
+    if (state.captureEvent.IsPending())
+        state.nextTarget = next;
 }
 
 void
@@ -527,7 +536,7 @@ CheckpointManager::Capture(State& state, uint64_t work)
 void
 CheckpointManager::TryBatch(State& state)
 {
-    if (state.batchInFlight || state.batchBlocked)
+    if (state.futurePaused || state.batchInFlight || state.batchBlocked)
         return;
     const auto snapshot = state.progress.Current();
     uint64_t bytes = 0, work = 0;
@@ -617,6 +626,9 @@ CheckpointManager::FinishPhysicalCommit(State& state, bool initialization)
     if (initialization)
     {
         state.initObject = 0;
+        state.initialized = true;
+        if (m_initialized)
+            m_initialized(state.summary.taskId);
         ScheduleCapture(state);
     }
     else
@@ -639,6 +651,73 @@ CheckpointManager::FinishPhysicalCommit(State& state, bool initialization)
         }
         TryBatch(state);
     }
+}
+
+bool
+CheckpointManager::UpdateFutureConfiguration(uint64_t id, uint32_t delta, uint32_t n)
+{
+    Require(delta && delta <= 1000 && n && n <= 1000 / delta, "invalid future cadence");
+    auto found = m_states.find(id);
+    if (found == m_states.end() || !Live(*found->second) || !found->second->initialized)
+        return false;
+    auto& state = *found->second;
+    const bool reschedule = state.futurePaused || state.config.deltaPermille != delta;
+    state.config.deltaPermille = delta;
+    state.config.batchN = n;
+    state.futurePaused = false;
+    state.batchBlocked = false;
+    if (reschedule)
+    {
+        Simulator::Cancel(state.captureEvent);
+        ScheduleCapture(state);
+    }
+    Log(state, "FREQUENCY_UPDATED");
+    TryBatch(state);
+    return true;
+}
+
+bool
+CheckpointManager::PauseFutureProtection(uint64_t id)
+{
+    auto found = m_states.find(id);
+    if (found == m_states.end() || !Live(*found->second) || !found->second->initialized)
+        return false;
+    auto& state = *found->second;
+    state.futurePaused = true;
+    Simulator::Cancel(state.captureEvent);
+    state.nextTarget.reset();
+    Log(state, "FREQUENCY_PAUSED");
+    return true;
+}
+
+std::optional<CheckpointInventory>
+CheckpointManager::Inventory(uint64_t id) const
+{
+    auto found = m_states.find(id);
+    if (found == m_states.end())
+        return std::nullopt;
+    const auto& state = *found->second;
+    CheckpointInventory result;
+    result.config = state.config;
+    result.progress = state.progress.Current();
+    result.actual = Actual(state);
+    result.triggered = state.triggered;
+    const auto& remote = *m_pools.at(state.config.remoteNode);
+    if (const auto base = remote.Find(state.baseObject))
+        result.baseBytes = base->bytes;
+    if (const auto batch = remote.Find(state.batchObject))
+        result.batchBytes = batch->bytes;
+    result.batchWork = state.batchWork;
+    result.active = state.active;
+    result.initialized = state.initialized;
+    result.paused = state.futurePaused;
+    result.batchInFlight = state.batchInFlight;
+    result.nextTarget = state.nextTarget;
+    for (const auto& [work, record] : state.records)
+        result.records.push_back({record.from, work, record.bytes,
+                                  m_pools.at(state.config.localNode)->Find(record.object) != nullptr,
+                                  record.received});
+    return result;
 }
 
 void
