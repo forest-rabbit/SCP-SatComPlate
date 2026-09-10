@@ -349,7 +349,7 @@ if ./ns3 run --no-build "satcompute --faultMode=replay --outputDir=$regression_o
   echo "removed replay mode was accepted" >&2
   exit 1
 fi
-if ! rg -q 'faultMode has an unsupported value: replay' "$regression_output/rejected.log"; then
+if ! grep -Fq 'faultMode has an unsupported value: replay' "$regression_output/rejected.log"; then
   echo "removed mode was not rejected by configuration validation" >&2
   exit 1
 fi
