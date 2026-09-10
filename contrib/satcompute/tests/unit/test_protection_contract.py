@@ -1,4 +1,4 @@
-"""N5A-G1 entry-point guards; no network simulation or production protection activation."""
+"""Protection entry-point guards; no network simulation or fault-recovery activation."""
 from pathlib import Path
 import subprocess
 import sys
@@ -16,10 +16,10 @@ class ProtectionConfigTests(unittest.TestCase):
             timeout=30, check=False,
         )
 
-    def test_fixed_is_not_silently_enabled_before_g2(self):
+    def test_fixed_does_not_silently_enable_fault_recovery_before_g3(self):
         result = self.run_cli("--protectionMode=fixed")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("fixed data path is not connected in N5A-G1", result.stdout)
+        self.assertIn("N5A-G2 fixed requires no-fault network tasks", result.stdout)
 
     def test_invalid_mode_is_rejected(self):
         result = self.run_cli("--protectionMode=compfrr")

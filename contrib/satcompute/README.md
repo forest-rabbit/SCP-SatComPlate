@@ -52,7 +52,7 @@ NetDevice、路由、FlowMonitor 或任务对象。
 | [`task/`](task/README.md) | ComputeProfile、TaskTrace、FCFS 服务和任务协调 |
 | [`traffic/`](traffic/README.md) | 任务内部的 UDP 输入/结果传输 |
 | [`fault/`](fault/README.md) | 故障参数、统一 trace、在线判定、状态覆盖与批处理执行 |
-| [`protection/`](protection/README.md) | N5A-G1 独立保护接口与存储合同，尚未接入真实备份/恢复数据流 |
+| [`protection/`](protection/README.md) | N5A-G2 无故障固定备份流、检查点与存储合同；恢复留给 G3 |
 | [`metrics/`](metrics/README.md) | 网络、路由、任务和失败诊断输出 |
 | [`input/`](input/README.md) | 星座、算力、任务、故障与组合示例 |
 | [`tools/`](tools/README.md) | 任务生成与输出校验工具 |
@@ -91,8 +91,8 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 
 ## 参数边界
 
-N5A-G1 新增保护参数及纯逻辑组件，`protectionMode=off` 默认保持现有行为；
-`fixed` 真实数据流尚未接入，显式选择会报错。10 GB 备份池与固定 delta/n 的参数说明见
+`protectionMode=off` 默认保持现有行为；N5A-G2 的 `fixed` 接入真实备份数据流，
+仅允许无故障网络任务且 shadow 关闭。10 GB 备份池与固定 delta/n 的参数说明见
 [protection README](protection/README.md)，不修改正式场景输入或故障参数。
 
 G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评估，默认关闭。

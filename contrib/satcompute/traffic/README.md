@@ -93,6 +93,13 @@ stale，不会重新完成旧 transfer，也不会影响同一 receiver 上的�
 
 ## 对应测试与输出
 
+G2 通过 `RegisterRuntimePlan` 在运行中追加正字节保护流，保留普通 INPUT/RESULT 的
+ID/源端口，新流延续每源端口序列。新增 receiver/sender 完成同纳秒启动后才参与准入；
+`SetTerminalObserver` 在统一 finalizer 写入终态、释放网络资源后通知保护机制清理存储。
+动态注册的流由 `IsRuntimeTransfer` 区分，普通任务完成判断忽略保护流的取消状态；
+网络、容量与链路指标仍统计全部实际流。`protection-transfers.csv` 单独记录备份流，
+普通 `transfer-summary.csv` 保持 INPUT/RESULT 口径，详见 [protection](../protection/README.md)。
+
 - `tests/integration/smoke/run-task-smoke.sh` 检查两次传输的任务闭环；
 - `tests/integration/smoke/run-capacity-aware-smoke.sh` 检查完整路径准入与释放；
 - `tests/integration/smoke/run-diagnostics-smoke.sh` 检查真实 UDP/queue Drop；

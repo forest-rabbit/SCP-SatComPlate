@@ -14,6 +14,8 @@
 #include "ns3/fault-prediction-engine.h"
 #include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
+#include "ns3/fixed-protection-controller.h"
+#include "ns3/protection-metrics.h"
 #include "ns3/link-metrics-recorder.h"
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/para.h"
@@ -200,7 +202,7 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
     commandLine.AddValue("protectionMode",
-                         "off; fixed data path is not connected in N5A-G1",
+                         "off; fixed enables the N5A-G2 no-fault checkpoint data path",
                          config.protectionMode);
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
@@ -352,9 +354,10 @@ ValidateConfig(const SatComputeConfig& config)
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
     RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed"});
-    if (config.protectionMode != "off")
+    if (config.protectionMode == "fixed" &&
+        (config.faultMode != "none" || config.topologyOnly || !hasComputeProfile || config.compfrrShadow))
     {
-        FailConfig("protectionMode", "fixed data path is not connected in N5A-G1; use off");
+        FailConfig("protectionMode", "N5A-G2 fixed requires no-fault network tasks and shadow off");
     }
     if (!std::isfinite(config.fixedProtectionDelta) || config.fixedProtectionDelta <= 0 ||
         config.fixedProtectionDelta > 1 ||
@@ -626,6 +629,18 @@ main(int argc, char* argv[])
             }
 
             std::unique_ptr<compfrr::ShadowEvaluator> shadow;
+            std::unique_ptr<protection::FixedProtectionController> protection;
+            if (config.protectionMode == "fixed")
+            {
+                protection = std::make_unique<protection::FixedProtectionController>(
+                    taskCoordinator, topology, config.backupStorageBytesPerNode, simulationDurationNs,
+                    static_cast<uint32_t>(std::round(config.fixedProtectionDelta * 1000)),
+                    config.fixedProtectionBatchN);
+            }
+            else
+            {
+                RemoveProtectionMetrics(outputDirectory);
+            }
             if (config.compfrrShadow)
             {
                 shadow = std::make_unique<compfrr::ShadowEvaluator>(taskCoordinator, faultModelEngine,
@@ -651,6 +666,11 @@ main(int argc, char* argv[])
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
             if (shadow) shadow->Finalize();
+            if (protection)
+            {
+                protection->Finalize();
+                WriteProtectionMetrics(protection->Manager(), *transferEngine, outputDirectory);
+            }
             if (linkMetrics)
             {
                 linkMetrics->Finalize();

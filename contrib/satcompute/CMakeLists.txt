@@ -9,6 +9,9 @@ build_lib(
     protection/runtime/protection-runtime.cc
     protection/policy/fixed/fixed-protection-policy.cc
     protection/mechanism/checkpoint/checkpoint-progress.cc
+    protection/mechanism/checkpoint/checkpoint-manager.cc
+    protection/runtime/fixed-protection-controller.cc
+    metrics/core/protection-metrics.cc
     tools/validation/compfrr-shadow/compfrr-shadow-model.cc
     tools/validation/compfrr-shadow/compfrr-shadow-evaluator.cc
     tools/validation/compfrr-shadow/compfrr-shadow-recorder.cc
@@ -80,6 +83,10 @@ build_lib(
     protection/runtime/protection-runtime.h
     protection/policy/fixed/fixed-protection-policy.h
     protection/mechanism/checkpoint/checkpoint-progress.h
+    protection/mechanism/checkpoint/checkpoint-manager.h
+    protection/runtime/fixed-protection-controller.h
+    protection/runtime/protection-transfer-key.h
+    metrics/core/protection-metrics.h
     tools/validation/compfrr-shadow/compfrr-shadow-model.h
     tools/validation/compfrr-shadow/compfrr-shadow-task-state.h
     tools/validation/compfrr-shadow/compfrr-shadow-evaluator.h
@@ -228,6 +235,14 @@ build_exec(
   EXECNAME satcompute-protection-contract-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/protection-contract-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-protection-path-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/protection-path-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )

@@ -41,7 +41,7 @@ class ProtectionMechanism
     virtual void OnTaskTerminal(uint64_t taskId) = 0;
 };
 
-/** Small dispatcher, not a plugin framework; unbound in the production G1 executable. */
+/** Small dispatcher, not a plugin framework; fixed no-fault task wiring is provided by G2. */
 class ProtectionRuntime
 {
   public:

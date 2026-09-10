@@ -1,9 +1,9 @@
 # 保护与恢复模块（N5A）
 
 N5A 回答“怎样执行保护”，N5B 才决定启动/频率，N5C 才优化节点选择。
-当前停在 **G1 架构与存储合同**：以下组件可以独立编译、测试，但尚未绑定
-TaskCoordinator、ComputeService 或 NetworkTransferEngine，不声称已经救回真实任务。
-G2 接真实无故障备份流，G3 接故障恢复，G4 集成验收；每个门禁后等待用户确认。
+当前为 **G2 无故障固定备份数据路径**：已绑定 TaskCoordinator 的只读事件与
+NetworkTransferEngine 的真实 UDP，cL/cR 不占用主 ComputeService。
+尚未接故障恢复，不声称已救回任务；G3 接恢复，G4 集成验收，每个门禁后等待确认。
 
 ## 文件与职责
 
@@ -15,8 +15,11 @@ G2 接真实无故障备份流，G3 接故障恢复，G4 集成验收；每个�
 | `runtime/protection-runtime.h/.cc` | Policy/Mechanism 窄接口、动作分发、故障接管机会和清理通知 |
 | `policy/fixed/fixed-protection-policy.h/.cc` | 首次主计算启动时的一次固定保护、稳定 ID 放置、失败时重算后备动作 |
 | `mechanism/checkpoint/checkpoint-progress.h/.cc` | 不发包的纯进度合同：生成延迟、连续接收、融合提交及同纳秒历史查询 |
+| `mechanism/checkpoint/checkpoint-manager.h/.cc` | 初始化、L1、batch 真实传输、存储预留/提交及停止清理 |
+| `runtime/fixed-protection-controller.h/.cc` | 只读任务事件接线、候选快照、固定策略/机制分发 |
+| `runtime/protection-transfer-key.h` | 同纳秒请求的稳定排序键与不回绕的保护流编号 |
 
-不建空目录或完整插件框架。G2/G3 才实现具体 checkpoint/recompute executor。
+不建空目录或完整插件框架；recompute executor 留给 G3。
 未来 1+1/Multi-tree 增加 mechanism/action，复用 runtime、attempt、真实服务与资源账本。
 生产文件不引用 `tools/validation/compfrr-shadow`；测试可单向使用它核对旧布局，
 不能拿旧 shadow 的理想网络耗时要求真实备份时序完全一致。
@@ -27,15 +30,15 @@ G2 接真实无故障备份流，G3 接故障恢复，G4 集成验收；每个�
 
 | 参数 | 默认 | 说明 |
 |---|---:|---|
-| `protectionMode` | `off` | 保持 N4；G1 显式拒绝 `fixed`，避免未接数据流却报告已保护 |
+| `protectionMode` | `off` | 保持 N4；`fixed` 仅支持 `faultMode=none`、网络任务、shadow 关闭 |
 | `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
 
-G1 不实际创建每星池、备份流或额外 CSV。FixedPolicy 的 selected 标记来自测试上下文；
+off 不创建保护池、流或 CSV；fixed 对每个首次主计算启动执行一次固定策略，
 不做动态概率决策。local 为最小稳定 ID 的健康、空闲（含队列为空）、可达一跳节点；
 remote 为排除主星/local 后的最小可行 ID。候选可行不等于存储/带宽已经预留。
-多个任务竞争同一候选时，G2/G3 的真实准入仍必须重新检查，不能靠 Pre-N5 的独立存在性替代。
+多个任务竞争同一候选时，G2 由共享备份池与网络容量准入处理；恢复服务的重新检查/锁定留给 G3。
 
 ## 最终时序合同
 
@@ -64,10 +67,13 @@ cL/cR 同时是等效资源成本和异步逻辑时间，不进入普通 Compute
 不得把失败/取消操作冒充已提交保护。真实网络传播、序列化与排队不再额外加一份解析时延。
 
 不实现网络 ACK、重传或第二套网络。RemoteCommit 是内部零字节事件。
-G2 将在既有 `NetworkTransferEngine` 中增加运行期注册入口，沿用普通 INPUT/RESULT 的 ID；
-额外 transfer 从 `max_normal_transfer_id+1` 按确定性事件创建顺序分配，检查 uint64 耗尽，
-并关联 `(task_id,attempt_generation,kind,sequence)`。种类区分 INIT_BASE、INIT_STATE、L1、
-REMOTE_BATCH、RECOVERY_TAIL、RECOVERY_INPUT；不能把备份流混进业务吞吐/完成数。
+`NetworkTransferEngine::RegisterRuntimePlan` 沿用普通 INPUT/RESULT 的 ID/端口；
+额外 transfer 从 `max_normal_transfer_id+1` 单调分配，检查 uint64 耗尽。
+同一请求纳秒按 `(task_id,attempt_generation,kind,sequence)` 排序，在下一纳秒统一注册，
+固定 1 ns 注册等待用于消除 UID 顺序依赖，不计作 cL/cR；注册前重新检查任务资格。
+kind 顺序为 INIT_BASE、INIT_STATE、L1、REMOTE_BATCH；sequence 使用捕获/覆盖的整数 WU，
+初始化 sequence=0。源端口沿用每源递增的 10000–65535 范围，不复用，耗尽显式停止保护。
+RECOVERY_TAIL/RECOVERY_INPUT 留给 G3，G2 不创建；备份流不混进业务吞吐/完成数。
 sender finished、reservation、部分接收都不是有效状态；L1 乱序收齐也不能跨越前驱缺口。
 G1 的 CheckpointProgress 由单元测试显式驱动时刻，不自己调度仿真事件或模拟 UDP。
 
@@ -106,7 +112,31 @@ remote 融合峰值为 `old committed + batch`，原地 Merge 后仅剩一个新
 不分配第三份完整对象。LLM 的新状态可能等于该峰值，不能假定每次 commit 都会减少 used。
 初始化用 base 和初始状态临时对象，commit 后同样收敛为单一状态。
 接管时恢复对象转为 active task state，从备份池释放；任务终态清理全部 used/reserved。
-G1 测试分别验证池与进度合同，真实回调中的跨组件原子编排属于 G2/G3。
+G2 在注册/发包之前预留接收端对象；收到完整流才转 used。
+初始化预留失败停止本次保护；L1 预留或传输失败留下不可跳过的缺口；batch 失败保持
+已有 local 和 r，并停止后续 batch 尝试，无隐式重试。主计算继续，计算结束即取消在途流、
+生成/融合定时器并清空该任务的所有 used/reserved。仿真结束也显式执行同样清理。
+
+## G2 输出与小规模复现
+
+四个输出由 `metrics/core/protection-metrics.h/.cc` 写入普通 outputDir，仅 fixed 开启：
+
+| 文件 | 内容 |
+|---|---|
+| `protection-events.csv` | START、初始化、捕获/生成、接收、commit、清理；每行含 l/r/x 与存储对象身份/池快照 |
+| `protection-transfers.csv` | 真实保护流类型、稳定 ID/端口、请求/启动/发送完成/接收/终态时间及实际字节 |
+| `protection-task-summary.csv` | 放置、S/W/K、delta/n、cL/cR、有效进度、生成/提交计数和停止原因 |
+| `protection-node-storage-summary.csv` | 各计算星备份池容量、used/reserved、各类峰值及容量拒绝次数 |
+
+`transfer-summary.csv` 与 run-summary 的业务应用字节/完成数仅含 INPUT/RESULT；
+FlowMonitor、链路负载及路由容量账本仍包含所有真实保护包。真实 sender-finished 时间从
+发送器的完成字节/最后发送时刻取得，接收完成与其分列；没有网络 ACK。
+
+四类 fixture 位于 `tests/fixtures/protection/`：16 星、计算星均为 100000 WU/s，
+4 个任务依次在主星 3 计算，固定 local=2、remote=0，15 s 仿真、10 Gbit/s、1 ms。
+任务 1 为 dense-image：S=52428800 B、W=78644 WU、Kvar=52429200 B，
+delta=5%、n=4、每星额外池 10 GB；其余为 sparse-inference、compression、5000-token LLM。
+fixture 仅用于执行验收，不改变正式 800 任务场景或 para 默认保护关闭。
 
 ## Attempt 与恢复接口
 
@@ -137,4 +167,5 @@ G2/G3 接线时还必须确保实际对象不会在本轮故障取快照前被�
 同 ns 的主计算完成/故障、模型推进/抽样、接管锁定沿用任务书顺序，用专门测试固定，不能依赖偶然 UID。
 
 测试与指令见 [tests](../tests/README.md)，本门禁证据见
-[N5A-G1](../../../docs/n5/reviews/N5A-G1-architecture-storage.md)。
+[N5A-G1](../../../docs/n5/reviews/N5A-G1-architecture-storage.md)、
+[N5A-G2](../../../docs/n5/reviews/N5A-G2-fixed-backup-path.md)。

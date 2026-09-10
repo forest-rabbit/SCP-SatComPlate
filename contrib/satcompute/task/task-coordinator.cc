@@ -382,7 +382,7 @@ bool
 TaskCoordinator::IsComplete() const
 {
     NS_ABORT_MSG_IF(!m_initialized, "TaskCoordinator is not initialized");
-    return m_transferEngine->AreAllTransfersCompleted() &&
+    return m_transferEngine->AreAllTransfersCompleted(false) &&
            std::all_of(m_tasks.begin(), m_tasks.end(), [](const TaskRuntime& task) {
                return task.state == TASK_COMPLETED;
            });
@@ -401,7 +401,7 @@ TaskCoordinator::ValidateCompleted() const
                             !m_transferEngine->IsCompleted(task.definition.resultTransferId),
                         "TaskCoordinator has an incomplete task transfer");
     }
-    NS_ABORT_MSG_IF(!m_transferEngine->AreAllTransfersCompleted(),
+    NS_ABORT_MSG_IF(!m_transferEngine->AreAllTransfersCompleted(false),
                     "TaskCoordinator has incomplete network transfers");
     NS_ABORT_MSG_IF(m_taskEvents.size() != m_tasks.size() * 5,
                     "every completed task must have exactly five state transitions");
