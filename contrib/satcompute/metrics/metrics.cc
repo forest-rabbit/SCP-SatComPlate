@@ -236,7 +236,7 @@ MetricsRecorder::Record()
     if (transferEngine != nullptr)
     {
         std::erase_if(transfers, [&](const auto& row) {
-            return transferEngine->IsRuntimeTransfer(row.transferId);
+            return transferEngine->IsProtectionTransfer(row.transferId);
         });
     }
     const TransferAggregate transferAggregate = CollectTransferAggregate(transfers);
@@ -253,7 +253,8 @@ MetricsRecorder::Record()
     const bool transfersSettled =
         allTransferAggregate.terminalTransferCount == allTransferAggregate.transferCount;
     const bool tasksComplete = taskAggregate.completedTaskCount == taskAggregate.taskCount;
-    const bool complete = transfersComplete && tasksComplete;
+    const bool complete =
+        taskCoordinator ? taskCoordinator->IsComplete() : transfersComplete && tasksComplete;
     if (transfersSettled && context.flowRouteRegistry != nullptr &&
         (context.flowRouteRegistry->GetActiveFlowCount() != 0 ||
          context.flowRouteRegistry->GetAssignmentCount() != 0 ||

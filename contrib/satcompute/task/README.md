@@ -22,7 +22,7 @@ ComputeProfile 与 TaskTrace，不根据网络拓扑生成任务，也不执行�
 
 ## 任务生命周期
 
-每个任务严格经过五次状态转换：
+保护关闭时，每个成功任务严格经过五次状态转换：
 
 ```text
 PENDING
@@ -34,7 +34,9 @@ PENDING
 ```
 
 任一非终态还可以进入 `FAILED`，并固定记录失败时刻与原因。`FAILED` 和
-`COMPLETED` 都不可恢复；当前阶段不创建迁移、备份或新的执行 attempt。
+`COMPLETED` 都不可恢复。保护开启时，在 logical FAILED 前允许一次恢复机会：
+`RUNNING -> RECOVERING -> RUNNING_BACKUP -> RESULT_TRANSFERRING -> COMPLETED`。
+它使用 generation=1 和实际恢复节点；旧 generation=0 回调不能完成新 attempt，原 deadline 不变。
 
 流程如下：
 
@@ -45,7 +47,7 @@ PENDING
 5. receiver 收齐结果后标记任务完成。
 
 所有转换时间必须单调不减，并且必须等于当前 ns-3 仿真时刻。完整任务应产生恰好
-五条 `TaskEventRecord`。
+五条 `TaskEventRecord`（仅保护关闭或未触发恢复时）；恢复会产生额外转换。
 
 ## FCFS 计算模型
 
@@ -84,7 +86,7 @@ service_time_ns = ceil(
 task 的幂等接口。被取消的运行任务不会触发原 completion event，也不会计入正常
 完成数，但取消前实际执行时间仍计入 busy time；节点恢复后只调度队列中仍合法的任务。
 
-compute 故障开始时，`TaskCoordinator` 按当前阶段处理目标节点任务：
+保护关闭时，compute 故障开始后 `TaskCoordinator` 按以下规则处理目标节点任务：
 
 | 当前状态 | 处理 |
 |---|---|
@@ -95,7 +97,10 @@ compute 故障开始时，`TaskCoordinator` 按当前阶段处理目标节点任
 | `RESULT_TRANSFERRING` / `COMPLETED` | 计算阶段已越过，不受 compute 故障影响 |
 
 F1/F2 是临时计算服务停机，假设输入数据和队列保留；恢复后继续原 FCFS 调度。
-已被打断的 RUNNING 任务仍为 `FAILED`，不自动恢复、重计算、迁移或创建新 attempt。
+保护关闭时，已被打断的 RUNNING 任务仍为 `FAILED`，不自动恢复。
+fixed 恢复采用独立的 reserved-idle 服务锁，接管等待不计 busy time；已接受的恢复 attempt
+不因后续 F1/F2 停止，但不清除节点故障，也不使普通队列获得免疫。F3 仍终止恢复。
+完整合同见 [protection](../protection/README.md)。
 停机造成的排队受阻单独记录，不直接等同于额外增加整个停机时长；初始等待不消耗
 compute deadline，结束时未完成仍属于截断。F3 永久整星失效不适用队列保留规则。
 
@@ -125,6 +130,10 @@ result_transfer_id = 2*T
 
 这要求 `task_id` 位于 `1..UINT64_MAX/2`。输入数组顺序不会影响派生 ID；reader 会
 按 task ID canonical 排序。
+
+恢复后的 RESULT 从实际执行节点发出，原 `2*T` 保留取消历史，跨星新 RESULT 属于业务流；
+同星交付则没有网络流，仍记录真实 `output_bytes` 与 logical completion。
+成功判定使用 winning RESULT，而不是要求已废弃的旧 RESULT 也完成。
 
 ## 完成与部分完成
 

@@ -8,11 +8,14 @@ FixedProtectionController::FixedProtectionController(Ptr<TaskCoordinator> tasks,
                                                      uint64_t capacity,
                                                      int64_t stopNs,
                                                      uint32_t deltaPermille,
-                                                     uint32_t batchN)
+                                                     uint32_t batchN,
+                                                     bool enableRecovery)
     : m_tasks(tasks), m_topology(topology), m_manager(tasks, topology, capacity, stopNs),
       m_policy(deltaPermille, batchN), m_runtime(m_policy, {&m_manager})
 {
     m_tasks->ConnectTaskObserver(MakeCallback(&FixedProtectionController::OnTask, this));
+    if (enableRecovery)
+        m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, m_policy);
 }
 
 FixedProtectionController::~FixedProtectionController()
@@ -50,7 +53,7 @@ FixedProtectionController::OnTask(const TaskEventRecord& event)
         }
         m_runtime.OnTaskComputeStart(context);
     }
-    if (event.toState == TASK_RESULT_TRANSFERRING)
+    if (event.toState == TASK_RESULT_TRANSFERRING && event.fromState != TASK_RUNNING_BACKUP)
         m_runtime.OnTaskComputeComplete({event.taskId, 0});
     if (IsTerminalTaskState(event.toState))
         m_runtime.OnTaskTerminal(event.taskId);
@@ -59,6 +62,8 @@ FixedProtectionController::OnTask(const TaskEventRecord& event)
 void
 FixedProtectionController::Finalize()
 {
+    if (m_recovery)
+        m_recovery->Finalize();
     m_manager.Finalize();
 }
 } // namespace ns3::protection

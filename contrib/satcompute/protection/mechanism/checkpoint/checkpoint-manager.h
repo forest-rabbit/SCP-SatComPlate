@@ -12,6 +12,22 @@
 
 namespace ns3::protection
 {
+/** Immutable fault-time state; identifiers refer to retained physical objects, not predictions. */
+struct RecoverySnapshot
+{
+    uint64_t taskId{}, actualWork{}, localWork{}, remoteWork{}, remoteObject{}, remoteBytes{},
+        tailBytes{}; ///< Fault-time WU and exact backing bytes including record H.
+    uint32_t localNode{}, remoteNode{}; ///< Frozen checkpoint placement.
+    std::string phase{"OFF"};           ///< OFF, INITIALIZING or ON before quiescence.
+    int64_t faultNs{}, deadlineNs{}, localCostNs{},
+        remoteCostNs{};                        ///< Original causal times/costs.
+    std::map<uint64_t, uint64_t> localObjects; ///< Covered WU -> retained used pool identity.
+    uint64_t pendingRecords{}, inFlightFlows{},
+        pendingRemoteObject{}; ///< Discarded non-valid work.
+    std::vector<uint64_t> pendingLocalWorks, inFlightLocalTransfers,
+        inFlightRemoteTransfers; ///< Exact pending boundaries and real in-flight identities.
+    bool remoteMergePending{};   ///< Received but not fault-usable cR/commit operation.
+};
 /** Exact transition evidence, separate from ordinary task/transfer statistics. */
 struct ProtectionEvent
 {
@@ -47,7 +63,7 @@ struct ProtectionTaskSummary
     std::string stopReason; ///< First protection-stop reason.
 };
 
-/** Real no-fault G2 checkpoint mechanism. Never mutates primary compute/task state. */
+/** Real checkpoint data path and retained fault snapshots; never mutates primary compute. */
 class CheckpointManager : public ProtectionMechanism
 {
   public:
@@ -69,6 +85,40 @@ class CheckpointManager : public ProtectionMechanism
     void OnTaskTerminal(uint64_t taskId) override;
     /** Idempotently stop all remaining protection after Simulator::Run. */
     void Finalize();
+
+    /** Enable strict fault-time object retention; no-fault G2 timing stays unchanged. */
+    void EnableRecoveryRetention()
+    {
+        m_recoveryRetention = true;
+    }
+
+    /** Freeze before stopping any primary/protection operation. */
+    RecoverySnapshot FreezeRecoverySnapshot(uint64_t taskId, int64_t faultNs);
+    /** Quiesce generation/flows while retaining only snapshot backing objects. */
+    void QuiesceForRecovery(const RecoverySnapshot& snapshot);
+    /** Explicit recovery ownership handoff/terminal cleanup; never evicts other tasks. */
+    void ReleaseRecoveryState(uint64_t taskId);
+    /** Append a G3 event with its frozen progress and current pool accounting. */
+    void RecordRecoveryEvent(const RecoverySnapshot& snapshot,
+                             const std::string& event,
+                             uint64_t bytes,
+                             uint64_t transferId);
+
+    /** Shared pool for recovery temporary reservations and in-place merges. */
+    BackupStoragePool& Pool(uint32_t node)
+    {
+        return *m_pools.at(node);
+    }
+
+    /** Queue a cross-node recovery flow through the same canonical ID allocator. */
+    void QueueRecovery(ProtectionTransferKey key,
+                       uint32_t source,
+                       uint32_t destination,
+                       uint64_t bytes,
+                       uint64_t work,
+                       uint64_t object,
+                       std::function<bool()> live,
+                       std::function<void(uint64_t)> registered);
 
     /** @return Causal event history including storage identities and snapshots. */
     const std::vector<ProtectionEvent>& Events() const
@@ -98,6 +148,7 @@ class CheckpointManager : public ProtectionMechanism
         uint64_t from{}, work{}, bytes{},
             object{};    ///< Captured endpoints, byte budget and pool ID.
         bool received{}; ///< True only after receiver-complete.
+        int64_t receivedNs{-1}; ///< Strict validity boundary for same-ns faults.
     };
 
     /** One primary checkpoint lifecycle; address remains stable until manager destruction. */
@@ -121,6 +172,7 @@ class CheckpointManager : public ProtectionMechanism
         bool active{true}, batchInFlight{}, batchBlocked{}; ///< Terminal and no-retry guards.
         std::map<uint64_t, Record> records; ///< Captured records ordered by completed WU.
         std::vector<EventId> timers;        ///< Task-scoped cancellable generation/merge events.
+        std::optional<std::pair<int64_t, bool>> physicalCommit; ///< Nominal time and init flag.
     };
 
     /** Reserved positive-byte request awaiting canonical next-ns registration. */
@@ -130,6 +182,8 @@ class CheckpointManager : public ProtectionMechanism
         uint32_t source{}, destination{};   ///< Actual satellite endpoints.
         uint64_t bytes{}, work{}, object{}; ///< Reserved immutable payload.
         int64_t requestedNs{};              ///< Original creation ns, not event UID.
+        std::function<bool()> live; ///< Recovery attempt guard; empty for primary protection.
+        std::function<void(uint64_t)> registered; ///< Install terminal observer before start.
     };
 
     /** Check owning primary service; inclusive compute end takes precedence over callbacks. */
@@ -165,6 +219,7 @@ class CheckpointManager : public ProtectionMechanism
     void Capture(State& state, uint64_t work);      ///< Freeze bytes and schedule cL completion.
     void TryBatch(State& state); ///< Reserve/send exactly n contiguous received records.
     void Commit(State& state, bool initialization); ///< Atomic storage/progress commit and cleanup.
+    void FinishPhysicalCommit(State& state, bool initialization); ///< Deferred same-ns retention.
     void Stop(State& state,
               const std::string& reason); ///< Cancel and release all task-owned state.
     Ptr<TaskCoordinator> m_tasks;         ///< Existing ordinary runtime owner.
@@ -179,6 +234,7 @@ class CheckpointManager : public ProtectionMechanism
     std::map<uint64_t, size_t> m_flowIndexes; ///< Terminal callback lookup.
     std::vector<ProtectionEvent> m_events;    ///< Append-only causal evidence.
     std::vector<ProtectionFlow> m_flows;      ///< Append-only real flow metadata.
+    bool m_recoveryRetention{};               ///< Explicit G3 fault-enabled phase ordering.
 };
 } // namespace ns3::protection
 #endif

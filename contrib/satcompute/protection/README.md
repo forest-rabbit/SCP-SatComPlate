@@ -1,9 +1,9 @@
 # 保护与恢复模块（N5A）
 
 N5A 回答“怎样执行保护”，N5B 才决定启动/频率，N5C 才优化节点选择。
-当前为 **G2 无故障固定备份数据路径**：已绑定 TaskCoordinator 的只读事件与
-NetworkTransferEngine 的真实 UDP，cL/cR 不占用主 ComputeService。
-尚未接故障恢复，不声称已救回任务；G3 接恢复，G4 集成验收，每个门禁后等待确认。
+当前接入 **G3 单次故障恢复闭环**：G2 的真实备份路径不变，增加故障快照、恢复服务预留、
+TAIL / REMOTE_REDO / RECOMPUTE 和 winning RESULT。cL/cR 不占用主 ComputeService。
+本门禁仅做受控小规模正确性验证；G4 集成验收仍需单独确认。
 
 ## 文件与职责
 
@@ -17,9 +17,11 @@ NetworkTransferEngine 的真实 UDP，cL/cR 不占用主 ComputeService。
 | `mechanism/checkpoint/checkpoint-progress.h/.cc` | 不发包的纯进度合同：生成延迟、连续接收、融合提交及同纳秒历史查询 |
 | `mechanism/checkpoint/checkpoint-manager.h/.cc` | 初始化、L1、batch 真实传输、存储预留/提交及停止清理 |
 | `runtime/fixed-protection-controller.h/.cc` | 只读任务事件接线、候选快照、固定策略/机制分发 |
+| `runtime/recovery-controller.h/.cc` | 故障裁决、一次恢复、真实输入/尾部/计算/结果及终态清理 |
 | `runtime/protection-transfer-key.h` | 同纳秒请求的稳定排序键与不回绕的保护流编号 |
+| `../traffic/local-delivery.h/.cc` | 同星逻辑交付；不创建 UDP，不计网络字节 |
 
-不建空目录或完整插件框架；recompute executor 留给 G3。
+不建空目录或完整插件框架。
 未来 1+1/Multi-tree 增加 mechanism/action，复用 runtime、attempt、真实服务与资源账本。
 生产文件不引用 `tools/validation/compfrr-shadow`；测试可单向使用它核对旧布局，
 不能拿旧 shadow 的理想网络耗时要求真实备份时序完全一致。
@@ -30,7 +32,7 @@ NetworkTransferEngine 的真实 UDP，cL/cR 不占用主 ComputeService。
 
 | 参数 | 默认 | 说明 |
 |---|---:|---|
-| `protectionMode` | `off` | 保持 N4；`fixed` 仅支持 `faultMode=none`、网络任务、shadow 关闭 |
+| `protectionMode` | `off` | 保持 N4；`fixed` 支持无故障与在线 generate，要求网络任务、shadow 关闭 |
 | `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
@@ -38,7 +40,7 @@ NetworkTransferEngine 的真实 UDP，cL/cR 不占用主 ComputeService。
 off 不创建保护池、流或 CSV；fixed 对每个首次主计算启动执行一次固定策略，
 不做动态概率决策。local 为最小稳定 ID 的健康、空闲（含队列为空）、可达一跳节点；
 remote 为排除主星/local 后的最小可行 ID。候选可行不等于存储/带宽已经预留。
-多个任务竞争同一候选时，G2 由共享备份池与网络容量准入处理；恢复服务的重新检查/锁定留给 G3。
+多个任务竞争同一候选时，由共享备份池与网络容量准入处理；恢复接管时额外原子锁定空闲服务。
 
 ## 最终时序合同
 
@@ -73,7 +75,8 @@ cL/cR 同时是等效资源成本和异步逻辑时间，不进入普通 Compute
 固定 1 ns 注册等待用于消除 UID 顺序依赖，不计作 cL/cR；注册前重新检查任务资格。
 kind 顺序为 INIT_BASE、INIT_STATE、L1、REMOTE_BATCH；sequence 使用捕获/覆盖的整数 WU，
 初始化 sequence=0。源端口沿用每源递增的 10000–65535 范围，不复用，耗尽显式停止保护。
-RECOVERY_TAIL/RECOVERY_INPUT 留给 G3，G2 不创建；备份流不混进业务吞吐/完成数。
+G3 追加 RECOVERY_TAIL、RECOVERY_INPUT、RECOVERY_RESULT（后者仅共享编号，属于业务流）；
+备份/输入重放流不混进业务吞吐/完成数。
 sender finished、reservation、部分接收都不是有效状态；L1 乱序收齐也不能跨越前驱缺口。
 G1 的 CheckpointProgress 由单元测试显式驱动时刻，不自己调度仿真事件或模拟 UDP。
 
@@ -140,9 +143,9 @@ fixture 仅用于执行验收，不改变正式 800 任务场景或 para 默认�
 
 ## Attempt 与恢复接口
 
-logical task 保持原 task ID、INPUT/RESULT 和首次建立的 deadline；execution attempt 用
+logical task 保持原 task ID、输入/结果字节与首次建立的 deadline；execution attempt 用
 `(task_id,generation)` 区分 PRIMARY=0 / RECOVERY=1。G1 独立守卫不是旧 TaskRuntime 状态机的替代。
-G3 在真正 TaskCoordinator 中接入：主失败先提供恢复机会，再决定 logical FAILED；
+TaskCoordinator 中主失败先提供恢复机会，再决定 logical FAILED；
 旧 attempt 的完成/包/事件不能复活任务。唯一合法计算完成进入 RESULT，唯一 RESULT 交付完成任务。
 deadline 不因恢复重置，同 ns 算完按既有合同视为按时；过期失败，恢复仍需实际服务时间与队列统计。
 
@@ -150,22 +153,50 @@ deadline 不因恢复重置，同 ns 算完按既有合同视为按时；过期�
 RECOMPUTE fallback。没有远端 base（含 INITIALIZING 未完成）时，local 增量不能独自恢复。
 有远端 base 时，只比较当前可知的 tail/redo 估计；tail 严格更小才选它，相等选择 redo。
 只执行一条；估计和实际耗时分列，不能事后取两个实际结果的最小值冒充执行结果。
-G1 只接收已算好的估计值；真实路径/带宽估计与输入重放在 G3 接入，不读取未来网络或 F3 日程。
+估计沿当前可达路径的稳定接口顺序，使用当前传播时延、剩余瓶颈容量和 payload 序列化时间；
+不预测未来队列释放，不保证与实际 UDP 耗时相等。tail 加 cR 和 `(xf-lf)/恢复速率`，
+redo 为 `(xf-rf)/恢复速率`；无可用远端对象时才回退到原 source 的 INPUT 重放。
+
+remote 优先使用原固定备份节点；不可接受时按稳定 ID 选非主星的健康、空闲、可达节点重算。
+不会为了产生 UDP 排除 source 或 result。接受后等待 INPUT/tail/cR 时处于 reserved-idle，
+普通任务可入队但不能抢占；该等待不计 compute busy。catchup 是真实服务达到故障时 xf 的事件，
+并非“开始恢复”或“算完整个任务”。重做 WU 与 catchup 后的正常剩余 WU 分列。
+
+### 同星 LocalDelivery 与 RESULT
+
+- `source == recovery`：RECOVERY_INPUT 本地就绪，不创建 UDP、transfer ID 或网络开销。
+- `recovery == result`：计算完成后本地交付实际 `output_bytes`，记录 LOCAL、交付时刻与 logical completion。
+- 其余情况全部走原 NetworkTransferEngine；该引擎仍拒绝同星传输，未放宽其异星合同。
+- 原 `2*T` RESULT 保留取消历史；跨星 winning RESULT 使用新确定性业务 ID，从实际 recovery node 发出。
+  业务 transfer 表保留物理历史，因此旧 RESULT 的取消不代表已恢复的 logical task 失败。
+
+同星交付采用 1 ns 因果阶段边界以重新检查 attempt/F3；它不是 UDP 时延，也不计 cL/cR 或网络成本。
+`recovery-summary.csv` 记录真实结果字节、delivery mode、logical completion；本地交付的 transfer ID 留空。
+`recovery-events.csv` 保存逐事件交付方式；G3 事件也进入 `protection-events.csv` 的 generation=1 行。
+快照含有效对象 ID、pending/in-flight 身份、cR-pending 状态、原 deadline；不适用的时刻/估计留空。
+`task-summary.csv` 中恢复任务的 compute service 是两次 attempt 的实际服务之和，不含恢复等待；
+compute stage elapsed 仍是从首次开始到完成/失败的墙钟时间。
 
 接管前必须在聚合同 ns 故障后重新检查节点健康和空闲并锁定真实恢复服务；只“选中”不免疫。
 Accepted recovery 的 RECOVERING/RUNNING_BACKUP 仅忽略后续 F1/F2 对该 attempt 的中断。
 故障模型、温度、轨道、RNG 和真实故障事件仍推进，普通排队任务不获得免疫。
 F3 始终终止恢复，不做二次恢复。计算完成立即结束免疫，RESULT 遵循原通信与整星故障规则。
-G3 必须把 attempt 的执行资格与节点对普通队列的可用性分开，不能通过清除节点故障实现免疫。
+attempt 的执行资格与节点对普通队列的可用性分开，不能通过清除节点故障实现免疫。
 
 ## 同纳秒与取消
 
 `BeforeFault(t)` 只返回严格早于 t 的有效状态，L1/初始化/RemoteCommit 在 t 时生效的记录
 不计入 t 时故障恢复，即使回调恰好先执行。Stop 后取消未完成逻辑操作，迟到回调不推进状态。
-G2/G3 接线时还必须确保实际对象不会在本轮故障取快照前被不可逆清理：统一 phase 编排，
-或在同刻裁决结束前保留旧对象。G1 历史查询只证明进度选择，不代替真实数据生命周期测试。
-同 ns 的主计算完成/故障、模型推进/抽样、接管锁定沿用任务书顺序，用专门测试固定，不能依赖偶然 UID。
+G3 将 RemoteCommit 的物理融合/旧记录清理延后 1 ns，名义有效时间不变；同刻故障因此仍持有
+旧 committed 与完整旧 tail，既不额外复制整份状态，也不只回滚数字。G3 的 commit 事件行可能仍显示
+清理前的池占用；G2 无故障路径仍原时刻融合并记录清理后占用。
+故障先冻结并保留所有可能使用的对象、quiesce 旧操作，再在下一纳秒（通信 overlay 已应用）
+锁定恢复节点并释放最终不需要的对象。这 1 ns 裁决阶段不读取未来故障日程。
+正常完成/保护放弃走 Stop 全清理；QuiesceForRecovery 不清空有效备份。
+受控测试反转同纳秒 fault/commit UID，检查相同实体对象、有效进度和最终结果时间；
+另检查同 ns deadline 完成与 stale primary 回调。
 
 测试与指令见 [tests](../tests/README.md)，本门禁证据见
 [N5A-G1](../../../docs/n5/reviews/N5A-G1-architecture-storage.md)、
-[N5A-G2](../../../docs/n5/reviews/N5A-G2-fixed-backup-path.md)。
+[N5A-G2](../../../docs/n5/reviews/N5A-G2-fixed-backup-path.md)、
+[N5A-G3](../../../docs/n5/reviews/N5A-G3-recovery-loop.md)。

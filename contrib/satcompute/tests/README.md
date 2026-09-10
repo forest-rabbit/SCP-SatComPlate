@@ -30,6 +30,7 @@ tests/
 | `para-test.cc` | `para.cc` 默认值、分组和关键压力测试默认项 |
 | `protection-contract-test.cc` | N5A-G1 独立架构、存储守恒、状态大小、L1/RemoteCommit 时序、attempt 隔离与恢复选择；不发真实备份流 |
 | `protection-path-test.cc` | N5A-G2 真实 UDP 动态注册/乱序接收、ID、存储不足、非零初始化、取消与同纳秒计算结束 |
+| `recovery-runtime-test.cc` | G3 受控 FaultController→备份/网络/计算/任务闭环，LocalDelivery、服务锁、F1/F2 免疫、F3、deadline、同纳秒实体快照和旧回调 |
 | `link-window-test.cc` | 10 Gbps、空闲、双向独立、跨窗/尾窗、可用性、队列与预留时间积分 |
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
 | `routing-policy-factory-test.cc` | 五种路由名到 next-hop/path policy 的映射 |
@@ -54,7 +55,7 @@ tests/
 | `test_fault_probability_comparison.py` | 概率对概率一致性及缺失记录拒绝 |
 | `test_fault_workload_fixtures.py` | 保留F1/F2/N4B固定fixture的角色与分布，不再依赖旧生成profile |
 | `test_link_metrics_report.py` | 通用链路统计分位数 |
-| `test_protection_contract.py` | 保护入口参数拒绝非法值/G2 未接入的故障恢复组合，以及生产模块无 shadow 依赖 |
+| `test_protection_contract.py` | 保护入口拒绝非法值与 shadow 混跑、generate 通过模式校验，以及生产模块无 shadow 依赖 |
 
 C++另保留 `task-deadline-test.cc`（当前正式输入和deadline边界）以及
 `compfrr-shadow-model-test.cc`（成本分档、严格START、初始化不双计、频率枚举、
@@ -71,14 +72,17 @@ N5A 定向验证（需要先构建；使用项目 uv 环境）：
 ./ns3 run --no-build "satcompute-protection-contract-test"
 ./ns3 run --no-build "satcompute-protection-contract-test --traceInput=contrib/satcompute/input/experiments/leo-66/workload/task-trace.json"
 ./ns3 run --no-build "satcompute-protection-path-test"
+./ns3 run --no-build "satcompute-recovery-runtime-test --outputDir=output/n5a-g3/controlled"
 .venv/bin/python contrib/satcompute/tests/integration/smoke/run-protection-smoke.py --output-root output/n5a-g2/smoke
+.venv/bin/python contrib/satcompute/tests/integration/smoke/run-recovery-smoke.py --output-root output/n5a-g3/smoke
 ```
 
 第二条只核对800份任务的字节/WU/合法边界，与 G4 oracle 单向比较，不运行800任务网络仿真。
 可加 `--sizingOutput=<新输出文件>` 保存四类代表性状态表；普通平台运行不输出这些验证数据。
 G2 smoke 为 16 星/4 类任务/15 s 的 off、fixed、重复、容量不足四次运行，输出可留在上述目录；
 不提供 `--output-root` 时自动使用临时目录。核对精确字节、cL/cR、l/r/x、存储、普通计算时间
-及普通业务统计隔离；不是正式 800 任务/1300 s 实验。恢复尚未接入，详见 [protection](../protection/README.md)。
+及普通业务统计隔离；G3 新增受控恢复与平台入口 F3 对照，不是正式 800 任务/1300 s 实验。
+详见 [protection](../protection/README.md)。
 
 | 脚本 | 主要覆盖 |
 |---|---|
@@ -89,6 +93,7 @@ G2 smoke 为 16 星/4 类任务/15 s 的 off、fixed、重复、容量不足四�
 | `run-topology-smoke.sh` | topology-only 切片、终点采样、XYZ 演化和逐字节确定性 |
 | `run-compfrr-shadow-smoke.py` | 8任务off/on、重复、audit独立性、字节/队列账本及同纳秒F3/初始化顺序 |
 | `run-protection-smoke.py` | G2 四类真实固定备份流、receiver/commit/存储守恒、off 计算对照和确定性 |
+| `run-recovery-smoke.py` | G3 16 星/4 任务/15 s 受控 F3，off/fixed/重复运行，同星 RESULT 的实际字节与零网络流 |
 | `run-link-metrics-smoke.py` | 指标开关不改变业务、空闲/丢包/故障、窗口汇总和陈旧文件清理 |
 
 ## Regression

@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <optional>
 #include <set>
+#include <utility>
 
 namespace ns3
 {
@@ -72,6 +73,25 @@ class ComputeService : public Application
     /** @return Current task progress, or null when the service is not running a task. */
     std::optional<RunningComputeTaskSnapshot> GetRunningTaskSnapshot() const;
     bool IsIdle() const;
+    /** Reserve an idle service for one recovery attempt; ordinary arrivals remain queued. */
+    bool ReserveRecovery(uint64_t taskId, uint64_t generation);
+    /** Release a matching non-running reservation; never affects another attempt. */
+    bool ReleaseRecovery(uint64_t taskId, uint64_t generation);
+    /** True while a recovery owns the slot, including reserved-idle wait. */
+    bool HasRecoveryReservation() const;
+    /** Execute real remaining work in this service, retaining F1/F2 attempt immunity.
+     * All callbacks carry task, generation, node and observed ns. Catchup is an actual
+     * service milestone, not a second compute simulation or full task completion.
+     */
+    bool StartRecovery(uint64_t taskId,
+                       uint64_t generation,
+                       uint64_t workUnits,
+                       uint64_t catchupWorkUnits,
+                       Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+                       Callback<void, uint64_t, uint64_t, uint32_t, int64_t> catchup,
+                       Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed);
+    /** Cancel only the matching recovery; F3/deadline cleanup, not F1/F2 availability. */
+    bool CancelRecovery(uint64_t taskId, uint64_t generation);
     uint64_t GetCancelledRunningTaskCount() const;
     uint64_t GetRemovedQueuedTaskCount() const;
 
@@ -96,6 +116,7 @@ class ComputeService : public Application
     void CompleteCurrentTask();
     /** Notify observers after a service-state transition, before dependent dispatch. */
     void NotifyComputeState();
+    void RecoveryCatchup(uint64_t taskId, uint64_t generation); ///< Guarded service milestone.
 
     uint32_t m_nodeId{};
     uint64_t m_computeRateWorkUnitsPerSecond{};
@@ -110,6 +131,11 @@ class ComputeService : public Application
     std::set<uint64_t> m_knownTaskIds;
     EventId m_dispatchEvent;
     EventId m_completionEvent;
+    std::optional<std::pair<uint64_t, uint64_t>> m_recoveryOwner; ///< Reserved task/generation.
+    bool m_runningRecovery{}; ///< Only this attempt ignores compute availability.
+    EventId m_catchupEvent;   ///< Cancelled with the owning recovery.
+    Callback<void, uint64_t, uint64_t, uint32_t, int64_t> m_recoveryCatchup;
+    Callback<void, uint64_t, uint64_t, uint32_t, int64_t> m_recoveryCompleted;
     TaskEventCallback m_taskStartedCallback;
     TaskEventCallback m_taskCompletedCallback;
     TracedCallback<uint32_t, bool> m_computeState; ///< Node ID and effective busy state.

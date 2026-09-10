@@ -202,7 +202,7 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
     commandLine.AddValue("protectionMode",
-                         "off; fixed enables the N5A-G2 no-fault checkpoint data path",
+                         "off; fixed enables checkpoint protection and single-attempt recovery",
                          config.protectionMode);
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
@@ -355,9 +355,9 @@ ValidateConfig(const SatComputeConfig& config)
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
     RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed"});
     if (config.protectionMode == "fixed" &&
-        (config.faultMode != "none" || config.topologyOnly || !hasComputeProfile || config.compfrrShadow))
+        (config.topologyOnly || !hasComputeProfile || config.compfrrShadow))
     {
-        FailConfig("protectionMode", "N5A-G2 fixed requires no-fault network tasks and shadow off");
+        FailConfig("protectionMode", "fixed requires network tasks and shadow off");
     }
     if (!std::isfinite(config.fixedProtectionDelta) || config.fixedProtectionDelta <= 0 ||
         config.fixedProtectionDelta > 1 ||
@@ -633,9 +633,13 @@ main(int argc, char* argv[])
             if (config.protectionMode == "fixed")
             {
                 protection = std::make_unique<protection::FixedProtectionController>(
-                    taskCoordinator, topology, config.backupStorageBytesPerNode, simulationDurationNs,
+                    taskCoordinator,
+                    topology,
+                    config.backupStorageBytesPerNode,
+                    simulationDurationNs,
                     static_cast<uint32_t>(std::round(config.fixedProtectionDelta * 1000)),
-                    config.fixedProtectionBatchN);
+                    config.fixedProtectionBatchN,
+                    config.faultMode != "none");
             }
             else
             {
@@ -670,6 +674,11 @@ main(int argc, char* argv[])
             {
                 protection->Finalize();
                 WriteProtectionMetrics(protection->Manager(), *transferEngine, outputDirectory);
+                if (protection->Recovery())
+                    protection->Recovery()->WriteMetrics(outputDirectory);
+                else
+                    for (const auto name : {"recovery-summary.csv", "recovery-events.csv"})
+                        std::filesystem::remove(outputDirectory / name);
             }
             if (linkMetrics)
             {

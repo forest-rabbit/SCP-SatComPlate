@@ -59,7 +59,7 @@ struct SatComputeConfig
     bool faultProbabilityAudit;  ///< 是否采集并输出概率一致性审计数据。
 
     // protection
-    std::string protectionMode; ///< off / fixed; fixed 为 G2 无故障真实备份数据流。
+    std::string protectionMode; ///< off / fixed; fixed 启用真实备份数据流和一次故障恢复。
     uint64_t backupStorageBytesPerNode; ///< 每计算星额外备份存储容量，十进制字节。
     double fixedProtectionDelta; ///< 固定 checkpoint 进度间隔，0.05 表示 5%。
     uint32_t fixedProtectionBatchN; ///< 每个 remote batch 包含的 L1 record 数。

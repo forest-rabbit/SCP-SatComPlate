@@ -16,10 +16,15 @@ class ProtectionConfigTests(unittest.TestCase):
             timeout=30, check=False,
         )
 
-    def test_fixed_does_not_silently_enable_fault_recovery_before_g3(self):
-        result = self.run_cli("--protectionMode=fixed")
+    def test_fixed_rejects_shadow_execution(self):
+        result = self.run_cli("--protectionMode=fixed --compfrr-shadow=1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("N5A-G2 fixed requires no-fault network tasks", result.stdout)
+        self.assertIn("fixed requires network tasks and shadow off", result.stdout)
+
+    def test_fixed_generate_passes_mode_guard_without_running_default_scene(self):
+        result = self.run_cli("--protectionMode=fixed --faultMode=generate --fixedProtectionDelta=0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("fixedProtectionDelta", result.stdout)
 
     def test_invalid_mode_is_rejected(self):
         result = self.run_cli("--protectionMode=compfrr")

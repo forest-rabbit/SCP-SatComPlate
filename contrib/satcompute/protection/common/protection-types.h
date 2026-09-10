@@ -39,7 +39,8 @@ enum class ProtectionTransferKind
     L1,
     REMOTE_BATCH,
     RECOVERY_TAIL,
-    RECOVERY_INPUT
+    RECOVERY_INPUT,
+    RECOVERY_RESULT ///< Business output; shares canonical IDs, never protection byte totals.
 };
 
 /** Logical-task attempt role; future replicas do not reuse primary identity. */

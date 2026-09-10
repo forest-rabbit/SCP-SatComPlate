@@ -221,7 +221,7 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
 }
 
 void
-NetworkTransferEngine::RegisterRuntimePlan(NetworkTransfer plan)
+NetworkTransferEngine::RegisterRuntimePlan(NetworkTransfer plan, bool businessResult)
 {
     const int64_t now = Simulator::Now().GetNanoSeconds();
     if (!m_registered || now < 0 || now >= m_simulationDurationNs ||
@@ -288,6 +288,8 @@ NetworkTransferEngine::RegisterRuntimePlan(NetworkTransfer plan)
     }
     m_planIndexes.emplace(plan.transferId, m_plans.size());
     m_runtimeTransfers.insert(plan.transferId);
+    if (businessResult)
+        m_businessResults.insert(plan.transferId);
     ++m_nextSourceOrdinal[plan.sourceSatelliteId];
     m_plans.push_back(plan);
     m_senders.push_back(sender);
@@ -315,6 +317,25 @@ bool
 NetworkTransferEngine::IsRuntimeTransfer(uint64_t transferId) const
 {
     return m_runtimeTransfers.count(transferId) != 0;
+}
+
+bool
+NetworkTransferEngine::IsProtectionTransfer(uint64_t transferId) const
+{
+    return IsRuntimeTransfer(transferId) && !m_businessResults.contains(transferId);
+}
+
+uint64_t
+NetworkTransferEngine::GetResidualRateBps(uint32_t source, const EcmpRouteCandidate& route) const
+{
+    const auto rate = m_topology->GetIslDataRateBps(source, route.outputInterface);
+    return m_capacityReservationState
+               ? m_capacityReservationState->GetResidualRateBps(
+                     {source,
+                      m_topology->GetNextHopSatelliteId(source, route.outputInterface),
+                      route,
+                      rate})
+               : rate;
 }
 
 void

@@ -47,8 +47,12 @@ class NetworkTransferEngine : public Object
                    int64_t simulationDurationNs);
     void RegisterPlans(std::vector<NetworkTransfer> plans);
     /** Append one positive-byte runtime flow; ordinary plan IDs/ports remain unchanged. */
-    void RegisterRuntimePlan(NetworkTransfer plan);
+    void RegisterRuntimePlan(NetworkTransfer plan, bool businessResult = false);
     bool IsRuntimeTransfer(uint64_t transferId) const;
+    /** Runtime recovery RESULT is business traffic, unlike backup/input replay traffic. */
+    bool IsProtectionTransfer(uint64_t transferId) const;
+    /** Current directed-link residual capacity for causal recovery estimates; reserves nothing. */
+    uint64_t GetResidualRateBps(uint32_t source, const EcmpRouteCandidate& route) const;
     void SetTerminalObserver(uint64_t transferId, Callback<void, uint64_t, int64_t> observer);
     uint64_t GetReceivedBytes(uint64_t transferId) const;
     void StartTransferNow(uint64_t transferId,
@@ -122,6 +126,7 @@ class NetworkTransferEngine : public Object
     std::map<uint32_t, uint32_t> m_nextSourceOrdinal;
     std::map<uint32_t, Ptr<NetworkTransferReceiver>> m_receiversBySatellite;
     std::set<uint64_t> m_runtimeTransfers;
+    std::set<uint64_t> m_businessResults;
     std::set<uint64_t> m_runtimeStarting;
     std::map<uint64_t, Callback<void, uint64_t, int64_t>> m_terminalObservers;
 };

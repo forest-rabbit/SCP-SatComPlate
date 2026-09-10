@@ -111,7 +111,7 @@ GetDefaultSatComputeConfig()
 
     // protection
 
-    // --protectionMode：默认 off 保持 N4 行为；fixed 真实数据流尚待 G2 接入。
+    // --protectionMode：默认 off 保持 N4 行为；fixed 启用真实检查点与一次故障恢复。
     config.protectionMode = "off";
 
     // --backupStorageBytesPerNode：独立额外备份池，10 GB 为实验参数而非实测容量。

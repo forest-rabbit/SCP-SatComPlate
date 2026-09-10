@@ -314,6 +314,38 @@ CheckpointManager::Flush(int64_t time)
     // All causal creations at time have run. Sorted key order is invariant to their UIDs.
     for (const auto& [key, request] : requests.mapped())
     {
+        if (request.live)
+        {
+            if (!request.live())
+                continue;
+            const auto id = m_ids.Next();
+            NetworkTransfer plan;
+            plan.transferId = id;
+            plan.sourceSatelliteId = request.source;
+            plan.destinationSatelliteId = request.destination;
+            plan.sizeBytes = request.bytes;
+            try
+            {
+                m_network->RegisterRuntimePlan(plan,
+                                               key.kind == ProtectionTransferKind::RECOVERY_RESULT);
+            }
+            catch (const NetworkTransferConfigError&)
+            {
+                request.registered(0); // Explicit rejected registration, not a synthetic flow.
+                continue;
+            }
+            if (key.kind != ProtectionTransferKind::RECOVERY_RESULT)
+                m_flows.push_back({key,
+                                   id,
+                                   request.bytes,
+                                   request.work,
+                                   request.object,
+                                   request.destination,
+                                   time});
+            request.registered(id);
+            m_network->StartTransferNow(id);
+            continue;
+        }
         auto& state = *m_states.at(key.taskId);
         if (!Live(state))
             continue;
@@ -416,6 +448,7 @@ CheckpointManager::TransferTerminal(uint64_t id, int64_t at)
         break;
     case ProtectionTransferKind::L1:
         state.records.at(flow.work).received = true;
+        state.records.at(flow.work).receivedNs = at;
         Require(state.progress.ReceiveLocal(flow.work, at), "duplicate local receiver commit");
         ++state.summary.localCommits;
         Log(state, "L1_COMMITTED_LOCAL", flow.work, flow.bytes);
@@ -529,27 +562,57 @@ void
 CheckpointManager::Commit(State& state, bool initialization)
 {
     const uint64_t work = initialization ? state.initial : state.batchWork;
+    const auto committed = state.progress.CommitRemote(Now());
+    Require(committed && *committed == work, "remote progress/merge target mismatch");
+    ++state.summary.remoteCommits;
+    if (initialization)
+        state.summary.initializationNs = Now();
+    if (m_recoveryRetention)
+    {
+        Log(state,
+            initialization ? "INIT_COMPLETE" : "REMOTE_COMMIT",
+            work,
+            state.layout.CommittedStateBytes(work));
+        if (initialization)
+            Log(state, "ON", work);
+        state.physicalCommit = std::pair{Now(), initialization};
+        Later(state, Now() + 1, [this, &state, initialization] {
+            if (state.physicalCommit)
+                FinishPhysicalCommit(state, initialization);
+        });
+    }
+    else
+        FinishPhysicalCommit(state, initialization);
+}
+
+void
+CheckpointManager::FinishPhysicalCommit(State& state, bool initialization)
+{
+    const uint64_t work = initialization ? state.initial : state.batchWork;
     auto& remote = *m_pools.at(state.config.remoteNode);
     Require(remote.Merge(state.baseObject,
                          initialization ? state.initObject : state.batchObject,
                          state.layout.CommittedStateBytes(work)),
             "remote in-place merge failed");
-    const auto committed = state.progress.CommitRemote(Now());
-    Require(committed && *committed == work, "remote progress/merge target mismatch");
-    ++state.summary.remoteCommits;
+    state.physicalCommit.reset();
+    if (!m_recoveryRetention)
+    {
+        Log(state,
+            initialization ? "INIT_COMPLETE" : "REMOTE_COMMIT",
+            work,
+            state.layout.CommittedStateBytes(work));
+        if (initialization)
+            Log(state, "ON", work);
+    }
     if (initialization)
     {
         state.initObject = 0;
-        state.summary.initializationNs = Now();
-        Log(state, "INIT_COMPLETE", work, state.layout.CommittedStateBytes(work));
-        Log(state, "ON", work);
         ScheduleCapture(state);
     }
     else
     {
         state.batchObject = 0;
         state.batchInFlight = false;
-        Log(state, "REMOTE_COMMIT", work, state.layout.CommittedStateBytes(work));
         auto& local = *m_pools.at(state.config.localNode);
         for (auto it = state.records.begin(); it != state.records.end() && it->first <= work;)
         {
@@ -585,7 +648,7 @@ CheckpointManager::Stop(State& state, const std::string& reason)
         });
     std::vector<uint64_t> transfers;
     for (const auto& flow : m_flows)
-        if (flow.key.taskId == state.summary.taskId)
+        if (flow.key.taskId == state.summary.taskId && flow.key.attemptGeneration == 0)
             transfers.push_back(flow.transferId);
     m_network->FinalizeTransfersIfActive(
         transfers,
@@ -616,13 +679,17 @@ CheckpointManager::OnTaskTerminal(uint64_t id)
     const auto state = m_states.find(id);
     if (state != m_states.end())
         Stop(*state->second, "TASK_TERMINAL");
+    ReleaseRecoveryState(id);
 }
 
 void
 CheckpointManager::Finalize()
 {
     for (auto& [id, state] : m_states)
+    {
         Stop(*state, "SIMULATION_ENDED");
+        ReleaseRecoveryState(id);
+    }
     for (auto& [time, event] : m_flushEvents)
         Simulator::Cancel(event);
     m_flushEvents.clear();
@@ -636,5 +703,188 @@ CheckpointManager::Summaries() const
     for (const auto& [id, state] : m_states)
         result.push_back(state->summary);
     return result;
+}
+
+RecoverySnapshot
+CheckpointManager::FreezeRecoverySnapshot(uint64_t id, int64_t at)
+{
+    RecoverySnapshot result;
+    result.taskId = id;
+    result.faultNs = at;
+    const auto task = std::find_if(m_tasks->GetTaskRuntimes().begin(),
+                                   m_tasks->GetTaskRuntimes().end(),
+                                   [id](const auto& t) { return t.definition.taskId == id; });
+    Require(task != m_tasks->GetTaskRuntimes().end() && task->state == TASK_RUNNING && at == Now(),
+            "snapshot requires the live primary at fault time");
+    result.deadlineNs = task->computeDeadlineTimeNs;
+    for (auto service : m_tasks->GetComputeServices())
+        if (service->GetNodeId() == task->definition.computeNodeId)
+            result.actualWork = static_cast<uint64_t>(std::min<unsigned __int128>(
+                task->definition.computeWorkUnits,
+                static_cast<unsigned __int128>(at - task->computeStartTimeNs) *
+                    service->GetComputeRateWorkUnitsPerSecond() / 1000000000));
+    auto found = m_states.find(id);
+    if (found == m_states.end() ||
+        (!found->second->active && found->second->summary.stopReason != "QUIESCE_FOR_RECOVERY"))
+        return result;
+    auto& state = *found->second;
+    if (state.physicalCommit && state.physicalCommit->first < at)
+        FinishPhysicalCommit(state, state.physicalCommit->second);
+    const auto before = state.progress.BeforeFault(at);
+    result.phase = before.initialized ? "ON" : "INITIALIZING";
+    result.localNode = state.config.localNode;
+    result.remoteNode = state.config.remoteNode;
+    result.localWork = before.localWork;
+    result.remoteWork = before.remoteWork;
+    result.localCostNs = state.summary.localCostNs;
+    result.remoteCostNs = state.summary.remoteCostNs;
+    result.pendingRemoteObject = state.batchObject;
+    const auto batch =
+        state.batchObject ? Pool(result.remoteNode).Find(state.batchObject) : nullptr;
+    result.remoteMergePending =
+        (batch && !batch->reserved) ||
+        (!before.initialized && state.baseReceivedNs >= 0 && state.stateReceivedNs >= 0);
+    if (before.initialized && m_tasks->IsSatelliteAvailable(result.remoteNode))
+    {
+        const auto base = Pool(result.remoteNode).Find(state.baseObject);
+        Require(base && !base->reserved &&
+                    base->bytes == state.layout.CommittedStateBytes(before.remoteWork),
+                "strict fault snapshot lost its physical remote version");
+        result.remoteObject = state.baseObject;
+        result.remoteBytes = base->bytes;
+        for (const auto& [work, record] : state.records)
+            if (m_tasks->IsSatelliteAvailable(result.localNode) && work > before.remoteWork &&
+                work <= before.localWork && record.received && record.receivedNs < at)
+            {
+                const auto entry = Pool(result.localNode).Find(record.object);
+                Require(entry && !entry->reserved && entry->bytes == record.bytes,
+                        "strict fault snapshot lost a local tail record");
+                result.localObjects.emplace(work, record.object);
+                result.tailBytes += record.bytes;
+            }
+    }
+    for (const auto& [work, record] : state.records)
+        if (!record.received || record.receivedNs >= at)
+        {
+            ++result.pendingRecords;
+            result.pendingLocalWorks.push_back(work);
+        }
+    for (const auto& flow : m_flows)
+        if (flow.key.taskId == id && !m_network->IsTerminal(flow.transferId))
+        {
+            ++result.inFlightFlows;
+            if (flow.key.kind == ProtectionTransferKind::L1)
+                result.inFlightLocalTransfers.push_back(flow.transferId);
+            else
+                result.inFlightRemoteTransfers.push_back(flow.transferId);
+        }
+    Require(result.remoteWork <= result.localWork && result.localWork <= result.actualWork,
+            "fault snapshot violates r <= l <= x");
+    Log(state, "FAULT_SNAPSHOT", result.actualWork, result.tailBytes);
+    return result;
+}
+
+void
+CheckpointManager::QuiesceForRecovery(const RecoverySnapshot& snapshot)
+{
+    const auto found = m_states.find(snapshot.taskId);
+    if (found == m_states.end())
+        return;
+    auto& state = *found->second;
+    state.active = false;
+    state.summary.stopNs = Now();
+    state.summary.stopReason = "QUIESCE_FOR_RECOVERY";
+    for (auto timer : state.timers)
+        Simulator::Cancel(timer);
+    state.physicalCommit.reset();
+    state.progress.Stop();
+    for (auto& [time, requests] : m_requests)
+        std::erase_if(requests, [&](const auto& item) {
+            return item.first.taskId == snapshot.taskId && item.first.attemptGeneration == 0;
+        });
+    std::vector<uint64_t> transfers;
+    for (const auto& flow : m_flows)
+        if (flow.key.taskId == snapshot.taskId && flow.key.attemptGeneration == 0)
+            transfers.push_back(flow.transferId);
+    m_network->FinalizeTransfersIfActive(transfers,
+                                         TransferTerminalState::CANCELLED,
+                                         TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+    for (auto& [node, pool] : m_pools)
+    {
+        std::set<uint64_t> keep;
+        if (node == snapshot.remoteNode && snapshot.remoteObject)
+            keep.insert(snapshot.remoteObject);
+        if (node == snapshot.localNode)
+            for (const auto& [work, object] : snapshot.localObjects)
+                keep.insert(object);
+        pool->ReleaseTaskExcept(snapshot.taskId, keep);
+    }
+    Log(state, "QUIESCE_FOR_RECOVERY", snapshot.actualWork, snapshot.tailBytes);
+}
+
+void
+CheckpointManager::ReleaseRecoveryState(uint64_t id)
+{
+    for (auto& [node, pool] : m_pools)
+        pool->ReleaseTask(id);
+}
+
+void
+CheckpointManager::RecordRecoveryEvent(const RecoverySnapshot& s,
+                                       const std::string& event,
+                                       uint64_t bytes,
+                                       uint64_t transferId)
+{
+    ProtectionEvent row;
+    row.taskId = s.taskId;
+    row.generation = 1;
+    row.timeNs = Now();
+    row.event = event;
+    row.localNode = s.localNode;
+    row.remoteNode = s.remoteNode;
+    row.bytes = bytes;
+    row.localWork = s.localWork;
+    row.remoteWork = s.remoteWork;
+    row.actualWork = s.actualWork;
+    row.transferId = transferId;
+    if (s.phase != "OFF")
+    {
+        row.localUsed = Pool(s.localNode).Used();
+        row.localReserved = Pool(s.localNode).Reserved();
+        row.remoteUsed = Pool(s.remoteNode).Used();
+        row.remoteReserved = Pool(s.remoteNode).Reserved();
+    }
+    m_events.push_back(std::move(row));
+}
+
+void
+CheckpointManager::QueueRecovery(ProtectionTransferKey key,
+                                 uint32_t source,
+                                 uint32_t destination,
+                                 uint64_t bytes,
+                                 uint64_t work,
+                                 uint64_t object,
+                                 std::function<bool()> live,
+                                 std::function<void(uint64_t)> registered)
+{
+    Require(key.attemptGeneration == 1 && source != destination && bytes && live && registered,
+            "recovery network request requires real cross-node bytes and attempt guards");
+    const auto time = Now();
+    Require(m_requests[time]
+                .emplace(key,
+                         Request{key,
+                                 source,
+                                 destination,
+                                 bytes,
+                                 work,
+                                 object,
+                                 time,
+                                 std::move(live),
+                                 std::move(registered)})
+                .second,
+            "duplicate recovery request");
+    if (!m_flushEvents.contains(time))
+        m_flushEvents.emplace(
+            time, Simulator::Schedule(NanoSeconds(1), &CheckpointManager::Flush, this, time));
 }
 } // namespace ns3::protection

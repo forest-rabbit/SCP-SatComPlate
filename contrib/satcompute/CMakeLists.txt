@@ -4,6 +4,7 @@ build_lib(
     para.cc
     common/time-conversion.cc
     protection/common/protection-types.cc
+    traffic/local-delivery.cc
     protection/common/task-state-adapter.cc
     protection/storage/backup-storage-pool.cc
     protection/runtime/protection-runtime.cc
@@ -11,6 +12,8 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-progress.cc
     protection/mechanism/checkpoint/checkpoint-manager.cc
     protection/runtime/fixed-protection-controller.cc
+    protection/runtime/recovery-controller.cc
+    metrics/core/recovery-metrics.cc
     metrics/core/protection-metrics.cc
     tools/validation/compfrr-shadow/compfrr-shadow-model.cc
     tools/validation/compfrr-shadow/compfrr-shadow-evaluator.cc
@@ -78,6 +81,7 @@ build_lib(
     para.h
     common/time-conversion.h
     protection/common/protection-types.h
+    traffic/local-delivery.h
     protection/common/task-state-adapter.h
     protection/storage/backup-storage-pool.h
     protection/runtime/protection-runtime.h
@@ -85,6 +89,7 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-progress.h
     protection/mechanism/checkpoint/checkpoint-manager.h
     protection/runtime/fixed-protection-controller.h
+    protection/runtime/recovery-controller.h
     protection/runtime/protection-transfer-key.h
     metrics/core/protection-metrics.h
     tools/validation/compfrr-shadow/compfrr-shadow-model.h
@@ -243,6 +248,14 @@ build_exec(
   EXECNAME satcompute-protection-path-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/protection-path-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-recovery-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/recovery-runtime-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )

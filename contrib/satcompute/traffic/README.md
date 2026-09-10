@@ -1,8 +1,9 @@
 # 任务内部传输模块
 
-`traffic/` 只执行任务的输入传输与结果传输，不提供独立 NetworkTransfer workload，
-也没有 `--transferTrace`。所有 transfer plan 都由 `TaskCoordinator` 从 TaskTrace
-确定性派生。
+`traffic/` 执行任务输入/结果与保护模块的真实跨星传输，不提供独立 NetworkTransfer workload，
+也没有 `--transferTrace`。原 INPUT/RESULT 从 TaskTrace 派生，保护/恢复流在运行中确定性注册。
+`local-delivery.h/.cc` 统一处理同星 RECOVERY_INPUT/RESULT：无 UDP、无网络字节，
+保留实际逻辑字节与 LOCAL 完成记录；跨星传输引擎仍拒绝相同源/目的星。
 
 ## 文件与职责
 
@@ -75,8 +76,8 @@ transfer 完成必须由 receiver 收齐声明字节。链路/队列丢包可能
 
 内部状态明确区分 `REGISTERED`、`WAITING_ADMISSION`、`ACTIVE`、
 `PAUSED_ROUTE`、`SENDER_FINISHED`，以及 `COMPLETED`、`FAILED`、
-`CANCELLED` 三种终态。本阶段没有 `SUPERSEDED`；该状态只应在后续确实创建备份或
-恢复实例时加入。
+`CANCELLED` 三种终态。恢复中废弃的原 RESULT 保留
+`CANCELLED/TASK_NO_LONGER_REQUIRES_TRANSFER` 历史，不增加冗余 SUPERSEDED 状态。
 
 `FinalizeTransferIfActive()` 是唯一终止入口。首次调用会停止 sender、清除正常完成
 回调、隔离接收端未完成数据、移除 pending admission，并幂等释放完整路径、逐跳
@@ -96,7 +97,8 @@ stale，不会重新完成旧 transfer，也不会影响同一 receiver 上的�
 G2 通过 `RegisterRuntimePlan` 在运行中追加正字节保护流，保留普通 INPUT/RESULT 的
 ID/源端口，新流延续每源端口序列。新增 receiver/sender 完成同纳秒启动后才参与准入；
 `SetTerminalObserver` 在统一 finalizer 写入终态、释放网络资源后通知保护机制清理存储。
-动态注册的流由 `IsRuntimeTransfer` 区分，普通任务完成判断忽略保护流的取消状态；
+动态注册的流由 `IsRuntimeTransfer` 区分；`IsProtectionTransfer` 进一步排除业务 recovery RESULT。
+普通任务完成判断忽略保护流和已废弃 RESULT 的取消状态，使用 winning attempt 的实际交付；
 网络、容量与链路指标仍统计全部实际流。`protection-transfers.csv` 单独记录备份流，
 普通 `transfer-summary.csv` 保持 INPUT/RESULT 口径，详见 [protection](../protection/README.md)。
 

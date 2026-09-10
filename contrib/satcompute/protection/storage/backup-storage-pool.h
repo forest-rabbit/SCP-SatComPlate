@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <set>
 
 namespace ns3::protection
 {
@@ -50,6 +51,8 @@ class BackupStoragePool
     bool Merge(uint64_t stateId, uint64_t batchId, uint64_t committedBytes);
     /** Release all used/reserved entries of a terminal task; return object count. */
     uint64_t ReleaseTask(uint64_t taskId);
+    /** Release unneeded state after recovery has explicitly retained its backing identities. */
+    uint64_t ReleaseTaskExcept(uint64_t taskId, const std::set<uint64_t>& retained);
     /** Read an entry without creating it. */
     const StorageEntry* Find(uint64_t id) const;
 

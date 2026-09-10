@@ -3,10 +3,11 @@
 #define SATCOMPUTE_FIXED_PROTECTION_CONTROLLER_H
 #include "../mechanism/checkpoint/checkpoint-manager.h"
 #include "../policy/fixed/fixed-protection-policy.h"
+#include "recovery-controller.h"
 
 namespace ns3::protection
 {
-/** Read-only primary task-event adapter; G2 does not intercept faults or recovery. */
+/** Fixed-policy primary event adapter with optional fault-enabled recovery arbitration. */
 class FixedProtectionController
 {
   public:
@@ -23,7 +24,8 @@ class FixedProtectionController
                               uint64_t capacity,
                               int64_t stopNs,
                               uint32_t deltaPermille,
-                              uint32_t batchN);
+                              uint32_t batchN,
+                              bool enableRecovery = false);
     ~FixedProtectionController();
     void Finalize(); ///< Release remaining protection after simulation stop.
 
@@ -33,6 +35,12 @@ class FixedProtectionController
         return m_manager;
     }
 
+    /** Optional fault-enabled G3 recovery evidence; null in the no-fault G2 path. */
+    const RecoveryController* Recovery() const
+    {
+        return m_recovery.get();
+    }
+
   private:
     void OnTask(const TaskEventRecord& event); ///< Observe, never mutate ordinary task state.
     Ptr<TaskCoordinator> m_tasks;              ///< Retained coordinator, outlives event binding.
@@ -40,6 +48,7 @@ class FixedProtectionController
     CheckpointManager m_manager;               ///< Sole G2 checkpoint executor.
     FixedProtectionPolicy m_policy;            ///< Explicit fixed policy, no probability query.
     ProtectionRuntime m_runtime;               ///< Policy/mechanism dispatcher.
+    std::unique_ptr<RecoveryController> m_recovery; ///< Optional G3 fault/recovery adapter.
 };
 } // namespace ns3::protection
 #endif

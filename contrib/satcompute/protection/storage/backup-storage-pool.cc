@@ -117,10 +117,16 @@ BackupStoragePool::Merge(uint64_t stateId, uint64_t batchId, uint64_t committedB
 uint64_t
 BackupStoragePool::ReleaseTask(uint64_t taskId)
 {
+    return ReleaseTaskExcept(taskId, {});
+}
+
+uint64_t
+BackupStoragePool::ReleaseTaskExcept(uint64_t taskId, const std::set<uint64_t>& retained)
+{
     uint64_t count = 0;
     for (auto it = m_entries.begin(); it != m_entries.end();)
     {
-        if (it->second.taskId != taskId)
+        if (it->second.taskId != taskId || retained.contains(it->first))
         {
             ++it;
             continue;

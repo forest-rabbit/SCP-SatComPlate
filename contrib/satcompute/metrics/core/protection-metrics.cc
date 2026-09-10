@@ -34,6 +34,8 @@ Kind(protection::ProtectionTransferKind kind)
         return "RECOVERY_TAIL";
     case K::RECOVERY_INPUT:
         return "RECOVERY_INPUT";
+    case K::RECOVERY_RESULT:
+        throw std::logic_error("business RESULT must not enter protection metrics");
     }
     throw std::logic_error("unknown protection flow kind");
 }
@@ -101,7 +103,9 @@ WriteProtectionMetrics(const protection::CheckpointManager& manager,
 void
 RemoveProtectionMetrics(const std::filesystem::path& directory)
 {
-    for (const auto name : {"protection-events.csv",
+    for (const auto name : {"recovery-summary.csv",
+                            "recovery-events.csv",
+                            "protection-events.csv",
                             "protection-transfers.csv",
                             "protection-task-summary.csv",
                             "protection-node-storage-summary.csv"})
