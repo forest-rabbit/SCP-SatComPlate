@@ -121,7 +121,8 @@ OFF 的 NONE 仍可包含最优候选用于解释为何不启动。真实网络�
 仍只在既有 protection/recovery 账本中统计。
 
 阶段证据：[G1](../../../docs/n5/reviews/N5B-G1-frequency-policy.md)、
-[G2](../../../docs/n5/reviews/N5B-G2-dynamic-frequency-runtime.md)。
+[G2](../../../docs/n5/reviews/N5B-G2-dynamic-frequency-runtime.md)、
+[G3 正式对照](../../../docs/n5/reviews/N5B-G3-frequency-evaluation.md)。
 
 ### G3 placement 与诊断口径
 
