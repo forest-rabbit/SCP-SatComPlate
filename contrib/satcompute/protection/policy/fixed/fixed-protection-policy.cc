@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "fixed-protection-policy.h"
-#include <algorithm>
 #include <stdexcept>
 
 namespace ns3::protection
@@ -19,24 +18,11 @@ FixedProtectionPolicy::OnTaskComputeStart(const ProtectionContext& context)
         !context.taskSelected || context.phase != ProtectionPhase::OFF ||
         !m_started.insert(context.attempt.taskId).second)
         return {};
-    auto nodes = context.candidates;
-    std::sort(nodes.begin(), nodes.end(), [](const auto& a, const auto& b) {
-        return a.nodeId < b.nodeId;
-    });
-    const auto feasible = [&](const auto& node) {
-        return node.nodeId != context.primaryNode && node.healthy && node.idle && node.reachable;
-    };
-    auto local = std::find_if(
-        nodes.begin(), nodes.end(), [&](const auto& n) { return feasible(n) && n.oneHop; });
-    if (local == nodes.end())
-        return {};
-    auto remote = std::find_if(nodes.begin(), nodes.end(), [&](const auto& n) {
-        return feasible(n) && n.nodeId != local->nodeId;
-    });
-    if (remote == nodes.end())
+    const auto pair = m_placement.Select({context.primaryNode, context.candidates});
+    if (!pair)
         return {};
     return {ActionKind::START_CHECKPOINT,
-            CheckpointConfiguration{m_delta, m_batchN, local->nodeId, remote->nodeId}};
+            CheckpointConfiguration{m_delta, m_batchN, pair->localNode, pair->remoteNode}};
 }
 
 ProtectionAction

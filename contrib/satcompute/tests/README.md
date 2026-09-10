@@ -48,6 +48,7 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 |---|---|
 | `para-test.cc` | `para.cc` 默认值、分组和关键压力测试默认项 |
 | `protection-contract-test.cc` | N5A-G1 独立架构、存储守恒、状态大小、L1/RemoteCommit 时序、attempt 隔离与恢复选择；不发真实备份流 |
+| `n5b-policy-test.cc` | FFP 原规则穷举对照、LRL 合成诊断、频率纯求解与 shadow 锚点、当前概率/同轮提交/前向配置合同；不接入真实频率运行时 |
 | `protection-path-test.cc` | N5A-G2 真实 UDP 动态注册/乱序接收、ID、存储不足、非零初始化、取消与同纳秒计算结束 |
 | `recovery-runtime-test.cc` | G3 受控 FaultController→备份/网络/计算/任务闭环，LocalDelivery、服务锁、F1/F2 免疫、F3、deadline、同纳秒实体快照和旧回调 |
 | `link-window-test.cc` | 10 Gbps、空闲、双向独立、跨窗/尾窗、可用性、队列与预留时间积分 |

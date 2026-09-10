@@ -92,6 +92,10 @@ struct BackupCandidate
     bool idle{};       ///< No running task AND empty queue.
     bool reachable{};  ///< Current route exists; not a bandwidth guarantee.
     bool oneHop{};     ///< Eligible as local by the fixed placement rule.
+    uint64_t queueDepth{}; ///< Causal queue length; idle remains the admission predicate.
+    uint64_t storageFreeBytes{}; ///< Current free backup bytes, not a reservation.
+    uint64_t backupAssignmentCount{}; ///< Active backup assignments, diagnostic input.
+    uint64_t activeRecoveryCount{}; ///< Accepted nonterminal recovery ownership count.
 };
 
 /** Read-only event context for policy; no access to future faults or oracle results. */

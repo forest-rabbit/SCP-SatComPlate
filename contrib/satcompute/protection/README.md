@@ -1,9 +1,10 @@
-# 保护与恢复模块（N5A）
+# 保护与恢复模块
 
 N5A 回答“怎样执行保护”，N5B 才决定启动/频率，N5C 才优化节点选择。
 当前接入单次故障恢复闭环和 **G4 planned/actual 资源账本**：真实备份路径、故障快照、
 恢复服务预留、TAIL / REMOTE_REDO / RECOMPUTE 和 winning RESULT。cL/cR 不占用主 ComputeService。
-FIXED 正式场景仅为执行验收，不代表 CompFRR 算法效果；N5B/N5C 尚未接入。
+FIXED 正式场景仅为执行验收，不代表 CompFRR 算法效果。N5A 已合入 n5；
+N5B-G1 增加独立纯策略，尚未接入真实运行时；N5C 未实现。
 
 ## 文件与职责
 
@@ -13,7 +14,12 @@ FIXED 正式场景仅为执行验收，不代表 CompFRR 算法效果；N5B/N5C 
 | `common/task-state-adapter.h/.cc` | 独立的生产 G1 布局、整数 WU/状态/H/合法边界映射及唯一生产成本档位 |
 | `storage/backup-storage-pool.h/.cc` | 每节点额外备份容量、used/reserved、原地融合、按任务清理及峰值 |
 | `runtime/protection-runtime.h/.cc` | Policy/Mechanism 窄接口、动作分发、故障接管机会和清理通知 |
-| `policy/fixed/fixed-protection-policy.h/.cc` | 首次主计算启动时的一次固定保护、稳定 ID 放置、失败时重算后备动作 |
+| `policy/fixed/fixed-protection-policy.h/.cc` | 首次主计算启动时的一次固定保护、组合 FFP、失败时重算后备动作 |
+| `policy/placement-policy.h` | PlacementContext/Decision/Policy，基础可行性与因果候选输入 |
+| `policy/baseline/first-feasible-placement/` | FFP：稳定 ID 的首个可行 local/remote，保持 N5A 原行为 |
+| `policy/experimental/least-recovery-load/` | LRL：assignment + weight×active recovery，仅纯单测诊断 |
+| `policy/compfrr/frequency/compfrr-frequency-policy.h/.cc` | 独立 J_OFF/J_START/J_ON 求解、可行域、当前 q/完成前预测接口 |
+| `policy/compfrr/frequency/frequency-decision-gate.h/.cc` | 每任务纯 proposal/commit 合同、前向 target/batch 规则；无仿真接线 |
 | `mechanism/checkpoint/checkpoint-progress.h/.cc` | 不发包的纯进度合同：生成延迟、连续接收、融合提交及同纳秒历史查询 |
 | `mechanism/checkpoint/checkpoint-manager.h/.cc` | 初始化、L1、batch 真实传输、存储预留/提交及停止清理 |
 | `runtime/fixed-protection-controller.h/.cc` | 只读任务事件接线、候选快照、固定策略/机制分发 |
@@ -41,6 +47,41 @@ off 不创建保护池、流或 CSV；fixed 对每个首次主计算启动执行
 不做动态概率决策。local 为最小稳定 ID 的健康、空闲（含队列为空）、可达一跳节点；
 remote 为排除主星/local 后的最小可行 ID。候选可行不等于存储/带宽已经预留。
 多个任务竞争同一候选时，由共享备份池与网络容量准入处理；恢复接管时额外原子锁定空闲服务。
+
+## N5B-G1：频率策略合同（未启用生产模式）
+
+正式算法后续组合 `CompFrrFrequencyPolicy + FFP`，LRL 不进入 N5B 主实验。
+频率求解器独立实现数学公式，不调用验证目录；只有测试将同输入送入旧 shadow 比较。
+`FrequencyInput` 是当前状态的只读数值快照，FFP 先给出节点，G2 适配层再提供主/恢复算力、
+输入/备份路径估计和 storage headroom。cL/cR 从唯一 `GetProtectionCosts(Kvar)` 取得。
+每个候选的额外 local/remote 峰值由必填的纯 `storageDemand` 提供，和真实池 free bytes 比较；
+不得重复扣除当前已用/已预留状态。未提供估计器会拒绝输入，不默认当成容量无限。
+G1 只验证该约束接口；真实 pending/初始化/融合/H 的峰值估计与池快照接线是 G2 门禁。
+
+- OFF：`Joff=P_finish*(S/B_I+xW/muB)`；
+  `Jstart=cL+cR+min[(1-x)*(cL/delta+cR/(n*delta))+P_finish*Rbar]`。
+- ON：`Jon=Delta_t*(muP/W)*(cL/delta+cR/(n*delta))+q_current_sample*Rbar`。
+- `Rbar=Kvar*(n-1)*delta/(2B)+cR*(n-1)/n+W*delta/(2muB)`。
+- `Rmax=deadline-now-W*(1-x)/muB`；候选要求 `Rbar<=Rmax` 并通过存储约束。
+- 初始化估计 `max(Tbase,cL+Tstate)+cR<Tremaining`；严格 `Jstart<Joff` 才提出 START。
+- 枚举 delta=1%..10%、步长0.1个百分点，n=1..100，n×delta≤1；精确同分按
+  `(objective,delta_permille,n)` 升序，不增加 epsilon 或新的同分目标。
+
+`MakeFrequencyRisk` 调用现有 `PredictComputeFailureBeforeFinish`，保留它的当前检查点、整数
+horizon 和 endpoint 语义；与故障侧提供的本轮联合 q 逐值核对。不用 next-1s 查询替代当前 q，
+不重写预测器、成本表或故障抽样。F1/F2 仍分别抽样，F3 不进入策略风险输入。
+
+决策网格对齐 fault-check，而非 task-start 的独立1秒定时器。G2 将按
+`更新因果状态 -> q/P_finish -> 提出决策 -> 执行本轮故障 -> 存活且仍计算才提交`
+接入。当前 START 遇到同轮故障仍视为 OFF；新 delta/n 不能改变当前故障前状态。
+`FrequencyDecisionGate` 只维护单任务策略状态，真实初始化、记录、批次和故障仍由 N5A 执行。
+新 delta 从实际完成/上次触发边界向前取合法 target；新 n 只消费尚未组批的记录，已建批次不可变。
+ON 无可行候选时保留状态、暂停新 target 和新 batch，已有操作继续；不允许 ON→OFF。
+
+N5B-G2/G3 正式接入和算法比较采用在线 **generate**。固定输入和配对 seed/run 不保证不同策略
+得到同一故障序列：恢复计算改变负载与温度是 F1 闭环的一部分。N5A 的 validation-replay
+仅保留执行验收用途，不增加回放预测器，不覆盖已有 G4 输出。当前 CLI 仍只有 off/fixed，
+不会悄悄启用频率决策或新增 CSV。详见 [N5B-G1 报告](../../../docs/n5/reviews/N5B-G1-frequency-policy.md)。
 
 ## 最终时序合同
 

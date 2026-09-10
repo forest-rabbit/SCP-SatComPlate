@@ -61,6 +61,19 @@ class ProtectionConfigTests(unittest.TestCase):
             with self.subTest(path=path.name):
                 self.assertNotIn("compfrr-shadow-", path.read_text())
 
+    def test_n5b_probability_interface_keeps_canonical_causal_inputs(self):
+        frequency = ROOT / "contrib/satcompute/protection/policy/compfrr/frequency"
+        implementation = (frequency / "compfrr-frequency-policy.cc").read_text()
+        self.assertIn("PredictComputeFailureBeforeFinish(in)", implementation)
+        self.assertIn("currentSamplerQ != prediction.combinedStepFailureProbability", implementation)
+        for path in frequency.glob("*.*"):
+            if path.suffix not in (".h", ".cc"):
+                continue
+            for forbidden in ("QueryComputeRisk", "FaultTrace", "F3FaultParameters",
+                              "GetValue(", "ReadValidationFaultTrace"):
+                with self.subTest(path=path.name, forbidden=forbidden):
+                    self.assertNotIn(forbidden, path.read_text())
+
 
 if __name__ == "__main__":
     unittest.main()

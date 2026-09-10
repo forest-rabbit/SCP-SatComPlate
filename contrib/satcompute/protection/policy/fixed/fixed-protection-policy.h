@@ -2,6 +2,7 @@
 #ifndef SATCOMPUTE_FIXED_PROTECTION_POLICY_H
 #define SATCOMPUTE_FIXED_PROTECTION_POLICY_H
 #include "../../runtime/protection-runtime.h"
+#include "../baseline/first-feasible-placement/first-feasible-placement-policy.h"
 #include <set>
 
 namespace ns3::protection
@@ -19,6 +20,7 @@ class FixedProtectionPolicy : public ProtectionPolicy
     void OnTaskTerminal(uint64_t taskId) override;
 
   private:
+    FirstFeasiblePlacementPolicy m_placement; ///< Unchanged N5A pair selection, now independent.
     uint32_t m_delta;             ///< Fixed interval in per mille.
     uint32_t m_batchN;            ///< Fixed batch count.
     std::set<uint64_t> m_started; ///< Exactly-once first-dispatch policy bookkeeping.

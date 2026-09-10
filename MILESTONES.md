@@ -35,7 +35,8 @@ N4C G3/G4 经 PR #90/#91、最终收尾经 PR #92 集成到 n4c，再由 PR #93 
 冻结历史由 commit/PR 追溯，不依赖内部标签。
 N4 = COMPLETE，正式标签为 main 集成提交上的 `n4-complete`。
 N5 集成线已由该标签建立；[Pre-N5 审计 PR #94](https://github.com/forest-rabbit/SCP-SatComPlate/pull/94)
-已合入 `n5`，Gate A/B 通过。N5A-G1 开发中，真实备份/恢复尚未接入，未改动 main 冻结结果。
+已合入 `n5`，Gate A/B 通过。N5A 经 [PR #95](https://github.com/forest-rabbit/SCP-SatComPlate/pull/95)
+完成真实备份/恢复与资源验收；N5B-G1 纯策略已实现并通过本地验证、等待审阅，main 冻结结果不变。
 
 ## N0：初始网络平台
 

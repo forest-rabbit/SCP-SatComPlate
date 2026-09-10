@@ -9,6 +9,10 @@ build_lib(
     protection/storage/backup-storage-pool.cc
     protection/runtime/protection-runtime.cc
     protection/policy/fixed/fixed-protection-policy.cc
+    protection/policy/compfrr/frequency/compfrr-frequency-policy.cc
+    protection/policy/compfrr/frequency/frequency-decision-gate.cc
+    protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.cc
+    protection/policy/experimental/least-recovery-load/least-recovery-load-placement-policy.cc
     protection/mechanism/checkpoint/checkpoint-progress.cc
     protection/mechanism/checkpoint/checkpoint-manager.cc
     protection/runtime/fixed-protection-controller.cc
@@ -86,6 +90,11 @@ build_lib(
     protection/storage/backup-storage-pool.h
     protection/runtime/protection-runtime.h
     protection/policy/fixed/fixed-protection-policy.h
+    protection/policy/compfrr/frequency/compfrr-frequency-policy.h
+    protection/policy/compfrr/frequency/frequency-decision-gate.h
+    protection/policy/placement-policy.h
+    protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.h
+    protection/policy/experimental/least-recovery-load/least-recovery-load-placement-policy.h
     protection/mechanism/checkpoint/checkpoint-progress.h
     protection/mechanism/checkpoint/checkpoint-manager.h
     protection/runtime/fixed-protection-controller.h
@@ -236,6 +245,14 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-n5b-policy-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/n5b-policy-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-protection-contract-test
   EXECNAME_PREFIX satcompute_test_
