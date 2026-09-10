@@ -32,6 +32,10 @@ IsNextTaskState(TaskState currentState, TaskState requestedState)
     case TASK_QUEUED:
         return requestedState == TASK_RUNNING;
     case TASK_RUNNING:
+        return requestedState == TASK_RESULT_TRANSFERRING || requestedState == TASK_RECOVERING;
+    case TASK_RECOVERING:
+        return requestedState == TASK_RUNNING_BACKUP;
+    case TASK_RUNNING_BACKUP:
         return requestedState == TASK_RESULT_TRANSFERRING;
     case TASK_RESULT_TRANSFERRING:
         return requestedState == TASK_COMPLETED;
@@ -63,6 +67,10 @@ TaskStateToString(TaskState state)
         return "COMPLETED";
     case TASK_FAILED:
         return "FAILED";
+    case TASK_RECOVERING:
+        return "RECOVERING";
+    case TASK_RUNNING_BACKUP:
+        return "RUNNING_BACKUP";
     }
     return "UNKNOWN";
 }
@@ -94,6 +102,8 @@ TaskFailureReasonToString(TaskFailureReason reason)
         return "RESULT_TRANSFER_FAILED";
     case TaskFailureReason::COMPUTE_DEADLINE_EXCEEDED:
         return "COMPUTE_DEADLINE_EXCEEDED";
+    case TaskFailureReason::SIMULATION_ENDED:
+        return "SIMULATION_ENDED";
     }
     return "UNKNOWN";
 }
@@ -102,6 +112,8 @@ TaskRuntime::TaskRuntime(const TaskDefinition& taskDefinition)
     : definition(taskDefinition)
 {
     NS_ABORT_MSG_IF(definition.taskId == 0, "TaskRuntime requires a positive task ID");
+    activeComputeNodeId = definition.computeNodeId;
+    winningResultTransferId = definition.resultTransferId;
 }
 
 int64_t
@@ -241,6 +253,8 @@ TaskRuntime::TransitionTo(TaskState requestedState,
     switch (requestedState)
     {
     case TASK_INPUT_TRANSFERRING:
+    case TASK_RECOVERING:
+    case TASK_RUNNING_BACKUP:
         break;
     case TASK_QUEUED:
         inputTransferCompleteTimeNs = eventTimeNs;

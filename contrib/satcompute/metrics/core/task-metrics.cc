@@ -155,10 +155,11 @@ WriteTaskSummaries(const TaskCoordinator& coordinator,
                                      "queue_delay_ns",
                                      task.definition.taskId)
                << ','
-               << OptionalDifference(task.computeCompleteTimeNs,
-                                     task.computeStartTimeNs,
-                                     "compute_service_time_ns",
-                                     task.definition.taskId)
+               << (task.attemptGeneration ? static_cast<int64_t>(task.actualComputeServiceNs)
+                                          : OptionalDifference(task.computeCompleteTimeNs,
+                                                               task.computeStartTimeNs,
+                                                               "compute_service_time_ns",
+                                                               task.definition.taskId))
                << ','
                << OptionalDifference(task.resultTransferCompleteTimeNs,
                                      task.resultTransferStartTimeNs,

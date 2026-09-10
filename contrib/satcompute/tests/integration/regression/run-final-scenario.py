@@ -11,9 +11,18 @@ ROOT = Path(__file__).resolve().parents[5]
 SCENE = "contrib/satcompute/input/experiments/leo-66"
 
 
-def arguments(output, fault_mode="generate", audit=False, shadow=False):
-    if fault_mode not in ("none", "generate") or (fault_mode == "none" and (audit or shadow)):
-        raise ValueError("audit/shadow require generate; only none/generate are supported")
+def arguments(output, fault_mode="generate", audit=False, shadow=False,
+              validation_trace=None, protection_mode="off"):
+    if fault_mode not in ("none", "generate", "validation-replay") or (fault_mode != "generate" and (audit or shadow)):
+        raise ValueError("audit/shadow require generate")
+    if (fault_mode == "validation-replay") != (validation_trace is not None):
+        raise ValueError("validation-replay requires an explicit frozen trace")
+    if validation_trace is not None:
+        validation_trace = Path(validation_trace).resolve()
+        if not validation_trace.is_file():
+            raise ValueError("BLOCKED: frozen evidence missing; never generate a replacement")
+        if output.resolve() == validation_trace.parent:
+            raise ValueError("refusing to overwrite frozen evidence")
     manifest = json.loads((ROOT / SCENE / "fault/f3-manifest.json").read_text())
     f3 = manifest["f3"]
     if (manifest["simulation_duration_s"], f3["node_id"], f3["time_ns"]) != (1300, 62, 1027055770726):
@@ -33,28 +42,39 @@ def arguments(output, fault_mode="generate", audit=False, shadow=False):
         result += [f"--faultTrace={output}/fault-trace.json", "--taskCompletionPolicy=report",
                    "--faultEnableF1=1", "--faultEnableF2=1", "--faultEnableF3=1",
                    "--faultF3Mode=controlled", "--faultF3Node=62", "--faultF3Time=1027.055770726"]
+    elif fault_mode == "validation-replay":
+        result += [f"--validationFaultTrace={validation_trace}", f"--faultTrace={output}/fault-trace.json",
+                   "--taskCompletionPolicy=report"]
     else:
         result += ["--taskCompletionPolicy=strict"]
+    if protection_mode != "off":
+        result += [f"--protectionMode={protection_mode}", "--backupStorageBytesPerNode=10000000000",
+                   "--fixedProtectionDelta=0.05", "--fixedProtectionBatchN=4"]
     return result
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", required=True, type=Path)
-    parser.add_argument("--fault-mode", choices=("none", "generate"), default="generate")
+    parser.add_argument("--fault-mode", choices=("none", "generate", "validation-replay"), default="generate")
+    parser.add_argument("--validation-trace", type=Path)
+    parser.add_argument("--protection-mode", choices=("off", "fixed"), default="off")
     parser.add_argument("--audit", action="store_true")
     parser.add_argument("--shadow", action="store_true", help="Read-only G4 validation, not real backup")
     args = parser.parse_args()
     output = args.output_dir.resolve()
     try:
         command = [str(ROOT / "ns3"), "run", "--no-build",
-                   shlex.join(arguments(output, args.fault_mode, args.audit, args.shadow))]
+                   shlex.join(arguments(output, args.fault_mode, args.audit, args.shadow,
+                                        args.validation_trace, args.protection_mode))]
         if output.exists():
             raise ValueError("refusing to overwrite an existing output directory")
     except (ValueError, OSError, KeyError) as error:
         parser.error(str(error))
     output.mkdir(parents=True)
     identity = {"command": command, "seed": 1, "run": 11, "fault_mode": args.fault_mode,
+                "validation_fault_trace": str(args.validation_trace.resolve()) if args.validation_trace else None,
+                "protection_mode": args.protection_mode,
                 "task_trace": f"{SCENE}/workload/task-trace.json", "f3_manifest": f"{SCENE}/fault/f3-manifest.json",
                 "audit": args.audit, "shadow": args.shadow, "simulation_duration_s": 1300,
                 "fixed_delay_seconds": 0.001,

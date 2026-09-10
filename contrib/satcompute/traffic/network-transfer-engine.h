@@ -22,6 +22,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -45,11 +46,24 @@ class NetworkTransferEngine : public Object
                    bool collectUdpSocketDrops,
                    int64_t simulationDurationNs);
     void RegisterPlans(std::vector<NetworkTransfer> plans);
+    /** Append one positive-byte runtime flow; ordinary plan IDs/ports remain unchanged. */
+    void RegisterRuntimePlan(NetworkTransfer plan, bool businessResult = false);
+    bool IsRuntimeTransfer(uint64_t transferId) const;
+    /** Runtime recovery RESULT is business traffic, unlike backup/input replay traffic. */
+    bool IsProtectionTransfer(uint64_t transferId) const;
+    /** Current directed-link residual capacity for causal recovery estimates; reserves nothing. */
+    uint64_t GetResidualRateBps(uint32_t source, const EcmpRouteCandidate& route) const;
+    void SetTerminalObserver(uint64_t transferId, Callback<void, uint64_t, int64_t> observer);
+    uint64_t GetReceivedBytes(uint64_t transferId) const;
     void StartTransferNow(uint64_t transferId,
                           Callback<void, uint64_t, int64_t> completionCallback = {});
     bool FinalizeTransferIfActive(uint64_t transferId,
                                   TransferTerminalState state,
                                   TransferTerminalReason reason);
+    /** Finalize a group before admitting any newly unblocked flows; returns terminalized count. */
+    uint64_t FinalizeTransfersIfActive(const std::vector<uint64_t>& transferIds,
+                                       TransferTerminalState state,
+                                       TransferTerminalReason reason);
 
     bool IsCompleted(uint64_t transferId) const;
     bool IsTerminal(uint64_t transferId) const;
@@ -58,7 +72,7 @@ class NetworkTransferEngine : public Object
     int64_t GetTerminalTimeNs(uint64_t transferId) const;
     uint64_t GetStalePacketCount(uint64_t transferId) const;
     int64_t GetCapacityWaitingTimeNs(uint64_t transferId) const;
-    bool AreAllTransfersCompleted() const;
+    bool AreAllTransfersCompleted(bool includeRuntime = true) const;
     const std::vector<NetworkTransfer>& GetPlans() const;
 
     ApplicationMetrics CollectApplicationMetrics() const;
@@ -75,6 +89,7 @@ class NetworkTransferEngine : public Object
     uint32_t GetPlanIndex(uint64_t transferId) const;
     EcmpFlowKey GetFlowKey(uint32_t index) const;
     void ActivateTransfer(uint64_t transferId);
+    void RuntimeApplicationsReady(uint64_t transferId);
     bool TryActivateCapacityAwareTransfer(uint64_t transferId);
     void TryActivatePendingCapacityAwareTransfers();
     void HandleTopologyRouteUpdate();
@@ -91,6 +106,7 @@ class NetworkTransferEngine : public Object
     bool m_configured{};
     bool m_registered{};
     bool m_capacityAwareRouting{};
+    uint32_t m_finalizationBatchDepth{};
     Ptr<FlowRouteRegistry> m_flowRouteRegistry;
     std::unique_ptr<PathPolicy> m_capacityPathPolicy;
     std::unique_ptr<CapacityReservationState> m_capacityReservationState;
@@ -107,6 +123,12 @@ class NetworkTransferEngine : public Object
     std::vector<Callback<void, uint64_t, int64_t>> m_completionCallbacks;
     std::vector<uint64_t> m_pendingCapacityTransfers;
     std::map<uint64_t, uint32_t> m_planIndexes;
+    std::map<uint32_t, uint32_t> m_nextSourceOrdinal;
+    std::map<uint32_t, Ptr<NetworkTransferReceiver>> m_receiversBySatellite;
+    std::set<uint64_t> m_runtimeTransfers;
+    std::set<uint64_t> m_businessResults;
+    std::set<uint64_t> m_runtimeStarting;
+    std::map<uint64_t, Callback<void, uint64_t, int64_t>> m_terminalObservers;
 };
 
 } // namespace ns3

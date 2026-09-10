@@ -1,0 +1,8 @@
+{
+  "tasks": [
+    {"task_id": 1, "task_profile": "dense-image", "source_node_id": 0, "compute_node_id": 3, "result_node_id": 0, "input_bytes": 52428800, "output_bytes": 52428800, "compute_work_units": 78644, "arrival_time_ns": 1000000000},
+    {"task_id": 2, "task_profile": "sparse-inference", "source_node_id": 0, "compute_node_id": 3, "result_node_id": 0, "input_bytes": 26246291, "output_bytes": 49056, "compute_work_units": 39370, "arrival_time_ns": 3000000000},
+    {"task_id": 3, "task_profile": "compression", "source_node_id": 0, "compute_node_id": 3, "result_node_id": 0, "input_bytes": 52428800, "output_bytes": 28441644, "compute_work_units": 78644, "arrival_time_ns": 5000000000},
+    {"task_id": 4, "task_profile": "llm", "source_node_id": 0, "compute_node_id": 3, "result_node_id": 0, "input_bytes": 400, "output_bytes": 4000, "compute_work_units": 500000, "arrival_time_ns": 7000000000}
+  ]
+}

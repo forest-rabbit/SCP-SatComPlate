@@ -62,6 +62,15 @@ pull requests. After a PR is merged and its head is confirmed reachable from
 `main`, delete the corresponding local and remote branch. Never delete
 `legacy/ns-3.33`.
 
+N5 stage exception (user-approved N5A contract): use `n5`, created from
+`main@n4-complete`, as the integration base for Pre-N5 and all N5 feature PRs.
+After an approved feature PR is merged, verify its head is reachable from `n5`
+before deleting that feature branch. Keep `main` unchanged until the full N5
+phase passes review and phase CI. N5A uses one `feature/n5a-protection-runtime`
+branch and stops after each G1/G2/G3/G4 gate for user approval. The active
+contract is summarized in `contrib/satcompute/protection/README.md`; cL is an
+asynchronous generation delay and equivalent cost, never a primary compute pause.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.

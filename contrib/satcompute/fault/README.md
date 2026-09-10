@@ -57,6 +57,12 @@ generate
 也可与两个计算来源共同运行。
 
 正式模式不再接受 replay，旧 reader、文件调度入口和文件回放 fixture 已移除。
+N5A-G4 经用户批准增加独立的 `faultMode=validation-replay` 验收入口，需显式指定
+`validationFaultTrace` 冻结 v2 输入；`faultTrace` 仍为另一路径的输出，禁止覆盖输入证据目录。
+该模式不创建在线模型/随机抽样/概率审计/shadow，只把冻结 START 及派生 RECOVERY
+交给同一个 FaultController。正常 none/generate 不允许携带该输入参数。
+这用于保证 OFF/FIXED 接收同一故障序列，不把历史温度/概率称为 FIXED 当前负载的在线预测，
+也不让保护策略读取未来 trace。不是恢复旧的生产 replay 合同。
 测试允许通过 `tests/support/fault-injection.h` 直接安排 ns 事件，覆盖共用执行器的
 故障/恢复和同刻边界；这不是生产运行模式，也不读取故障文件。
 

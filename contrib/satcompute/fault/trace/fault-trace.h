@@ -32,6 +32,11 @@ struct FaultTrace
 /** Write a canonical unified Fault Trace v2 file. */
 void WriteFaultTraceV2(const std::filesystem::path& filename, const FaultTrace& trace);
 
+/** Read frozen v2 evidence for execution validation, never for online prediction. */
+FaultTrace ReadValidationFaultTrace(const std::filesystem::path& filename,
+                                    const std::vector<uint32_t>& satelliteIds,
+                                    int64_t durationNs);
+
 } // namespace ns3
 
 #endif // SATCOMPUTE_FAULT_TRACE_H

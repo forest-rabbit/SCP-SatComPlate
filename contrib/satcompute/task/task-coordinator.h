@@ -19,6 +19,7 @@
 #include "ns3/traced-callback.h"
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -92,6 +93,8 @@ class TaskCoordinator : public Object
                     double computeDeadlineFactor = 1.3);
 
     bool IsComplete() const;
+    /** Explicit fixed-runtime finalizer; leaves legacy off-mode truncation semantics unchanged. */
+    void FinalizeSimulation();
     void ValidateCompleted() const;
     Ptr<NetworkTransferEngine> GetTransferEngine() const;
     const std::vector<TaskRuntime>& GetTaskRuntimes() const;
@@ -111,8 +114,22 @@ class TaskCoordinator : public Object
         const std::vector<TaskFaultNodeChange>& startedNodes);
     bool IsComputeAvailable(uint32_t nodeId) const;
     bool IsSatelliteAvailable(uint32_t nodeId) const;
+    /** Fixed-protection fault arbitration only; empty preserves the legacy lifecycle. */
+    void SetRecoveryHandler(
+        std::function<bool(const TaskRuntime&, const TaskFaultNodeChange&)> handler);
+    /** Cancel the primary attempt without failing its logical task or resetting its deadline. */
+    bool BeginRecovery(uint64_t taskId);
+    /** Generation-guarded recovery transitions. */
+    bool RecoveryStarted(uint64_t taskId, uint64_t generation, uint32_t node);
+    bool RecoveryComputed(uint64_t taskId, uint64_t generation, uint64_t serviceNs);
+    bool RecoveryResult(uint64_t taskId, uint64_t generation, uint64_t transferId, bool local);
+    bool FailRecovery(uint64_t taskId,
+                      const std::string& cause,
+                      TaskFailureReason reason = TaskFailureReason::COMPUTE_NODE_FAILURE);
 
   private:
+    friend struct TaskCoordinatorRecoveryTestAccess; ///< Stale-callback fixture access, not runtime
+                                                     ///< API.
     uint32_t GetTaskIndex(uint64_t taskId) const;
     TaskRuntime& GetTask(uint64_t taskId);
     const TaskRuntime& GetTask(uint64_t taskId) const;
@@ -159,6 +176,7 @@ class TaskCoordinator : public Object
     std::vector<FaultTaskImpactRecord> m_faultTaskImpacts; ///< Sparse impact ledger.
     std::map<uint64_t, EventId> m_deadlineEvents;
     Ptr<NetworkTransferEngine> m_transferEngine;
+    std::function<bool(const TaskRuntime&, const TaskFaultNodeChange&)> m_recoveryHandler;
 };
 
 } // namespace ns3

@@ -27,6 +27,9 @@ CheckWriter(const std::filesystem::path& directory)
     compute.startTimeNs = 20;
     compute.failureProbability = 0.5;
     compute.durationNs = 5;
+    compute.pF1 = .5;
+    compute.pF2 = 0;
+    compute.f1Occurred = true;
     FaultDefinition satellite;
     satellite.faultId = 2;
     satellite.nodeId = 5;
@@ -43,6 +46,34 @@ CheckWriter(const std::filesystem::path& directory)
     const std::string bytesA((std::istreambuf_iterator<char>(a)), {});
     const std::string bytesB((std::istreambuf_iterator<char>(b)), {});
     Check(bytesA == bytesB, "canonical output depends on input ordering");
+    const auto read = ReadValidationFaultTrace(first, {1, 5}, 100);
+    WriteFaultTraceV2(directory / "validation-roundtrip.json", read);
+    std::ifstream roundtrip(directory / "validation-roundtrip.json");
+    Check(std::string((std::istreambuf_iterator<char>(roundtrip)), {}) == bytesA,
+          "frozen evidence roundtrip differs");
+    for (const auto& nodes : {std::vector<uint32_t>{1}, std::vector<uint32_t>{5}})
+    {
+        bool rejected = false;
+        try
+        {
+            ReadValidationFaultTrace(first, nodes, 100);
+        }
+        catch (const FaultTraceError&)
+        {
+            rejected = true;
+        }
+        Check(rejected, "validation accepted unknown satellite");
+    }
+    bool outside = false;
+    try
+    {
+        ReadValidationFaultTrace(first, {1, 5}, 60);
+    }
+    catch (const FaultTraceError&)
+    {
+        outside = true;
+    }
+    Check(outside, "validation accepted START at simulation endpoint");
     const auto json = nlohmann::json::parse(bytesA);
     Check(json.at("schema_version") == 2 && json.at("faults").size() == 2, "writer root differs");
     const auto& entries = json.at("faults");

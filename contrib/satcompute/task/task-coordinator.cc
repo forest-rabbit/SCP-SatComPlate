@@ -281,6 +281,8 @@ void
 TaskCoordinator::HandleComputeStart(uint64_t taskId, uint32_t nodeId, int64_t startTimeNs)
 {
     const TaskRuntime& task = GetTask(taskId);
+    if (task.attemptGeneration != 0)
+        return;
     NS_ABORT_MSG_IF(task.definition.computeNodeId != nodeId,
                     "compute-start node does not match the task definition");
     if (IsTerminalTaskState(task.state))
@@ -314,6 +316,15 @@ TaskCoordinator::HandleComputeDeadline(uint64_t taskId)
     TaskRuntime& task = GetTask(taskId);
     if (IsTerminalTaskState(task.state) || task.computeCompleteTimeNs >= 0)
         return;
+    if (task.attemptGeneration)
+    {
+        if (task.state == TASK_RUNNING_BACKUP &&
+            GetComputeService(task.activeComputeNodeId)->CompleteTaskIfDue(taskId))
+            return;
+        FailRecovery(
+            taskId, "COMPUTE_DEADLINE_EXCEEDED", TaskFailureReason::COMPUTE_DEADLINE_EXCEEDED);
+        return;
+    }
     if (GetComputeService(task.definition.computeNodeId)->CompleteTaskIfDue(taskId))
         return;
     FailTaskForComputeNode(task,
@@ -337,6 +348,8 @@ TaskCoordinator::HandleComputeComplete(uint64_t taskId,
                                        int64_t completionTimeNs)
 {
     TaskRuntime& task = GetTask(taskId);
+    if (task.attemptGeneration != 0)
+        return;
     NS_ABORT_MSG_IF(task.definition.computeNodeId != nodeId,
                     "compute-completion node does not match the task definition");
     if (IsTerminalTaskState(task.state))
@@ -366,7 +379,7 @@ TaskCoordinator::HandleResultTransferComplete(uint64_t transferId,
     TaskRuntime& task = GetTask(mapping->second);
     NS_ABORT_MSG_IF(task.definition.resultTransferId != transferId,
                     "TaskCoordinator result-transfer mapping is inconsistent");
-    if (IsTerminalTaskState(task.state))
+    if (task.attemptGeneration || IsTerminalTaskState(task.state))
     {
         return;
     }
@@ -382,7 +395,10 @@ bool
 TaskCoordinator::IsComplete() const
 {
     NS_ABORT_MSG_IF(!m_initialized, "TaskCoordinator is not initialized");
-    return m_transferEngine->AreAllTransfersCompleted() &&
+    const bool hasRecovery = std::any_of(m_tasks.begin(), m_tasks.end(), [](const auto& task) {
+        return task.attemptGeneration != 0;
+    });
+    return (hasRecovery || m_transferEngine->AreAllTransfersCompleted(false)) &&
            std::all_of(m_tasks.begin(), m_tasks.end(), [](const TaskRuntime& task) {
                return task.state == TASK_COMPLETED;
            });
@@ -398,19 +414,24 @@ TaskCoordinator::ValidateCompleted() const
                         "TaskCoordinator has an incomplete task_id="
                             << task.definition.taskId);
         NS_ABORT_MSG_IF(!m_transferEngine->IsCompleted(task.definition.inputTransferId) ||
-                            !m_transferEngine->IsCompleted(task.definition.resultTransferId),
+                            (!task.localResultDelivered &&
+                             !m_transferEngine->IsCompleted(task.winningResultTransferId)),
                         "TaskCoordinator has an incomplete task transfer");
     }
-    NS_ABORT_MSG_IF(!m_transferEngine->AreAllTransfersCompleted(),
+    const bool hasRecovery = std::any_of(m_tasks.begin(), m_tasks.end(), [](const auto& task) {
+        return task.attemptGeneration != 0;
+    });
+    NS_ABORT_MSG_IF(!hasRecovery && !m_transferEngine->AreAllTransfersCompleted(false),
                     "TaskCoordinator has incomplete network transfers");
-    NS_ABORT_MSG_IF(m_taskEvents.size() != m_tasks.size() * 5,
+    NS_ABORT_MSG_IF(!hasRecovery && m_taskEvents.size() != m_tasks.size() * 5,
                     "every completed task must have exactly five state transitions");
     for (const Ptr<ComputeService>& service : m_computeServices)
     {
         NS_ABORT_MSG_IF(!service->IsIdle(),
                         "TaskCoordinator has a non-idle compute service at simulation end");
         NS_ABORT_MSG_IF(service->GetEnqueuedTaskCount() !=
-                            service->GetCompletedTaskCount(),
+                            service->GetCompletedTaskCount() +
+                                (hasRecovery ? service->GetCancelledRunningTaskCount() : 0),
                         "compute-service enqueue and completion counts differ");
     }
 }
@@ -581,6 +602,9 @@ TaskCoordinator::FailTaskForSatelliteNode(TaskRuntime& task,
     case TASK_COMPLETED:
     case TASK_FAILED:
         break;
+    case TASK_RECOVERING:
+    case TASK_RUNNING_BACKUP:
+        NS_ABORT_MSG("recovery satellite faults must use recovery arbitration");
     }
     if (!affected)
     {
@@ -687,6 +711,9 @@ TaskCoordinator::FailTaskForSatelliteNode(TaskRuntime& task,
     case TASK_COMPLETED:
     case TASK_FAILED:
         NS_ABORT_MSG("terminal task reached satellite failure cleanup");
+    case TASK_RECOVERING:
+    case TASK_RUNNING_BACKUP:
+        NS_ABORT_MSG("recovery task reached legacy satellite cleanup");
     }
     return impact;
 }
@@ -744,6 +771,13 @@ TaskCoordinator::ApplyFaultBatch(
     std::map<uint32_t, TaskFaultImpact> impacts;
     for (const TaskFaultNodeChange& change : startedNodes)
     {
+        // In fixed mode, exact compute completion precedes same-ns primary failure.
+        if (m_recoveryHandler)
+        {
+            auto service = FindComputeService(change.nodeId);
+            if (service && service->HasRunningTask())
+                service->CompleteTaskIfDue(service->GetRunningTaskId());
+        }
         m_activeFaults[change.nodeId] = change.fault;
         NS_ABORT_MSG_IF(!startedKeys.emplace(change.nodeId, change.kind).second,
                         "fault start batch contains a duplicate node and kind");
@@ -767,6 +801,24 @@ TaskCoordinator::ApplyFaultBatch(
     }
 
     const int64_t eventTimeNs = Simulator::Now().GetNanoSeconds();
+    if (m_recoveryHandler)
+    {
+        for (auto& task : m_tasks)
+            for (const auto& change : startedNodes)
+            {
+                if (IsTerminalTaskState(task.state))
+                    break;
+                if (!task.attemptGeneration && task.state == TASK_RUNNING &&
+                    task.definition.computeNodeId == change.nodeId)
+                    RecordFaultTaskImpact(task,
+                                          change.nodeId,
+                                          change.kind == TaskFaultKind::SATELLITE
+                                              ? "RUNNING_INTERRUPTED_PERMANENT"
+                                              : "RUNNING_INTERRUPTED");
+                if (m_recoveryHandler(task, change))
+                    ++impacts.at(change.nodeId).affectedTaskCount;
+            }
+    }
     std::set<uint32_t> satelliteStarts;
     for (const TaskFaultNodeChange& change : startedNodes)
     {
@@ -777,9 +829,8 @@ TaskCoordinator::ApplyFaultBatch(
     }
     for (TaskRuntime& task : m_tasks)
     {
-        if (IsTerminalTaskState(task.state) ||
-            (task.state == TASK_PENDING &&
-             task.definition.arrivalTimeNs != eventTimeNs))
+        if (task.attemptGeneration || IsTerminalTaskState(task.state) ||
+            (task.state == TASK_PENDING && task.definition.arrivalTimeNs != eventTimeNs))
         {
             continue;
         }
@@ -829,6 +880,9 @@ TaskCoordinator::ApplyFaultBatch(
         case TASK_COMPLETED:
         case TASK_FAILED:
             break;
+        case TASK_RECOVERING:
+        case TASK_RUNNING_BACKUP:
+            NS_ABORT_MSG("recovery task reached legacy fault selection");
         }
         if (failedNodeId.has_value())
         {
@@ -852,7 +906,7 @@ TaskCoordinator::ApplyFaultBatch(
         TaskFaultImpact& nodeImpact = impacts.at(change.nodeId);
         for (TaskRuntime& task : m_tasks)
         {
-            if (IsTerminalTaskState(task.state) ||
+            if (task.attemptGeneration || IsTerminalTaskState(task.state) ||
                 task.definition.computeNodeId != change.nodeId ||
                 task.state == TASK_RESULT_TRANSFERRING ||
                 (task.state == TASK_PENDING && task.definition.arrivalTimeNs != eventTimeNs))
@@ -886,12 +940,162 @@ TaskCoordinator::IsComputeAvailable(uint32_t nodeId) const
     return GetComputeService(nodeId)->IsComputeAvailable();
 }
 
+void
+TaskCoordinator::SetRecoveryHandler(
+    std::function<bool(const TaskRuntime&, const TaskFaultNodeChange&)> handler)
+{
+    m_recoveryHandler = std::move(handler);
+}
+
+bool
+TaskCoordinator::BeginRecovery(uint64_t id)
+{
+    auto& task = GetTask(id);
+    if (task.attemptGeneration || task.state != TASK_RUNNING)
+        return false;
+    auto service = GetComputeService(task.definition.computeNodeId);
+    const auto running = service->GetRunningTaskSnapshot();
+    NS_ABORT_MSG_IF(!running || running->taskId != id, "recovery lost primary service");
+    task.actualComputeServiceNs = running->elapsedTimeNs;
+    service->CancelRunningTaskForFailure(id);
+    task.attemptGeneration = 1;
+    TransitionTask(id,
+                   TASK_RECOVERING,
+                   task.activeComputeNodeId,
+                   Simulator::Now().GetNanoSeconds(),
+                   "PRIMARY_FAULT_RECOVERY_PENDING");
+    m_transferEngine->FinalizeTransferIfActive(task.definition.resultTransferId,
+                                             TransferTerminalState::CANCELLED,
+                                             TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+    return true;
+}
+
+bool
+TaskCoordinator::RecoveryStarted(uint64_t id, uint64_t generation, uint32_t node)
+{
+    auto& task = GetTask(id);
+    if (generation != 1 || task.attemptGeneration != generation || task.state != TASK_RECOVERING)
+        return false;
+    task.activeComputeNodeId = node;
+    TransitionTask(id,
+                   TASK_RUNNING_BACKUP,
+                   node,
+                   Simulator::Now().GetNanoSeconds(),
+                   "RECOVERY_COMPUTE_STARTED");
+    return true;
+}
+
+bool
+TaskCoordinator::RecoveryComputed(uint64_t id, uint64_t generation, uint64_t serviceNs)
+{
+    auto& task = GetTask(id);
+    if (generation != 1 || task.attemptGeneration != generation ||
+        task.state != TASK_RUNNING_BACKUP)
+        return false;
+    if (Simulator::Now().GetNanoSeconds() > task.computeDeadlineTimeNs)
+        return FailRecovery(
+                   id, "COMPUTE_DEADLINE_EXCEEDED", TaskFailureReason::COMPUTE_DEADLINE_EXCEEDED),
+               false;
+    task.actualComputeServiceNs += serviceNs;
+    CancelComputeDeadline(id);
+    TransitionTask(id,
+                   TASK_RESULT_TRANSFERRING,
+                   task.activeComputeNodeId,
+                   Simulator::Now().GetNanoSeconds(),
+                   "RECOVERY_COMPUTE_COMPLETE");
+    return true;
+}
+
+bool
+TaskCoordinator::RecoveryResult(uint64_t id, uint64_t generation, uint64_t transferId, bool local)
+{
+    auto& task = GetTask(id);
+    if (generation != 1 || task.attemptGeneration != generation ||
+        task.state != TASK_RESULT_TRANSFERRING || !task.ComputeDeadlineMet() ||
+        !IsSatelliteAvailable(task.activeComputeNodeId) ||
+        !IsSatelliteAvailable(task.definition.resultNodeId))
+        return false;
+    NS_ABORT_MSG_IF(local ? (transferId || task.activeComputeNodeId != task.definition.resultNodeId)
+                          : (!transferId || !m_transferEngine->IsCompleted(transferId)),
+                    "recovery result is not actually delivered");
+    task.winningResultTransferId = transferId;
+    task.localResultDelivered = local;
+    TransitionTask(id,
+                   TASK_COMPLETED,
+                   task.definition.resultNodeId,
+                   Simulator::Now().GetNanoSeconds(),
+                   local ? "RESULT_LOCAL_DELIVERY_COMPLETE" : "RECOVERY_RESULT_COMPLETE");
+    return true;
+}
+
+bool
+TaskCoordinator::FailRecovery(uint64_t id, const std::string& cause, TaskFailureReason reason)
+{
+    auto& task = GetTask(id);
+    if (task.attemptGeneration != 1 || IsTerminalTaskState(task.state))
+        return false;
+    const auto before = task.state;
+    if (before == TASK_RUNNING_BACKUP)
+    {
+        const auto running = GetComputeService(task.activeComputeNodeId)->GetRunningTaskSnapshot();
+        if (running && running->taskId == id)
+            task.actualComputeServiceNs += running->elapsedTimeNs;
+    }
+    CancelComputeDeadline(id);
+    task.FailIfActive(Simulator::Now().GetNanoSeconds(), reason, cause);
+    m_taskEvents.push_back({Simulator::Now().GetNanoSeconds(),
+                            id,
+                            before,
+                            TASK_FAILED,
+                            task.activeComputeNodeId,
+                            cause});
+    m_taskTransition(m_taskEvents.back());
+    return true;
+}
+
 bool
 TaskCoordinator::IsSatelliteAvailable(uint32_t nodeId) const
 {
     NS_ABORT_MSG_IF(!m_initialized,
                     "TaskCoordinator is not initialized for satellite availability");
     return !m_unavailableSatelliteNodes.contains(nodeId);
+}
+
+void
+TaskCoordinator::FinalizeSimulation()
+{
+    for (auto& task : m_tasks)
+    {
+        if (IsTerminalTaskState(task.state))
+            continue;
+        const auto id = task.definition.taskId;
+        if (task.attemptGeneration == 1)
+        {
+            FailRecovery(id, "SIMULATION_ENDED", TaskFailureReason::SIMULATION_ENDED);
+            continue;
+        }
+        const auto before = task.state;
+        auto service = GetComputeService(task.definition.computeNodeId);
+        if (before == TASK_RUNNING)
+            service->CancelRunningTaskForFailure(id);
+        if (before == TASK_QUEUED)
+            service->RemoveQueuedTaskForFailure(id);
+        CancelComputeDeadline(id);
+        task.FailIfActive(Simulator::Now().GetNanoSeconds(),
+                          TaskFailureReason::SIMULATION_ENDED,
+                          "SIMULATION_ENDED");
+        m_taskEvents.push_back({Simulator::Now().GetNanoSeconds(),
+                                id,
+                                before,
+                                TASK_FAILED,
+                                task.definition.computeNodeId,
+                                "SIMULATION_ENDED"});
+        m_taskTransition(m_taskEvents.back());
+        m_transferEngine->FinalizeTransfersIfActive(
+            {task.definition.inputTransferId, task.definition.resultTransferId},
+            TransferTerminalState::CANCELLED,
+            TransferTerminalReason::SIMULATION_ENDED);
+    }
 }
 
 } // namespace ns3

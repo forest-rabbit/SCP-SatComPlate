@@ -21,6 +21,25 @@ tests/
 日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动正式场景的原始指标
 保存在 gitignore 排除的本地 `output/`，完整800任务运行不接入 `run-all.sh` 或 GitHub CI。
 
+N5A-G4 的冻结故障验收仍复用 `integration/regression/run-final-scenario.py`，
+只在明确授权后手动运行；原始 N4 输出不可覆盖。例：
+
+```bash
+.venv/bin/python contrib/satcompute/tests/integration/regression/run-final-scenario.py \
+  --output-dir output/n5a-g4/off-replay --fault-mode validation-replay \
+  --validation-trace output/n4-release-validation/fault-trace.json
+# FIXED 使用另一个新目录，并追加 --protection-mode fixed。
+.venv/bin/python contrib/satcompute/tests/integration/regression/analyze-protection-accounting.py \
+  --run output/n5a-g4/off-replay --reference output/n4-release-validation
+# FIXED 分析只传 --run；不要求其业务输出等同 OFF。
+```
+
+缺少冻结 trace 必须停止，不重新 generate 替代。OFF 比较13份业务 CSV 与5份 JSON，
+仅忽略 run-summary 的 wall_clock_ns/s；在线模型概率审计和旧 shadow 不属于回放输出。
+会产生离线 `protection-accounting.json` 与逐任务 CSV，正常平台运行不自动执行该分析。
+`recovery-runtime-test.cc` 覆盖 planned/actual、失败前缀、预留等待和三个人工核算锚点；
+recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 截断清理。
+
 ## Unit
 
 `unit/run-cpp-tests.sh` 按固定顺序运行以下普通 executable：
@@ -28,6 +47,9 @@ tests/
 | 文件 | 主要覆盖 |
 |---|---|
 | `para-test.cc` | `para.cc` 默认值、分组和关键压力测试默认项 |
+| `protection-contract-test.cc` | N5A-G1 独立架构、存储守恒、状态大小、L1/RemoteCommit 时序、attempt 隔离与恢复选择；不发真实备份流 |
+| `protection-path-test.cc` | N5A-G2 真实 UDP 动态注册/乱序接收、ID、存储不足、非零初始化、取消与同纳秒计算结束 |
+| `recovery-runtime-test.cc` | G3 受控 FaultController→备份/网络/计算/任务闭环，LocalDelivery、服务锁、F1/F2 免疫、F3、deadline、同纳秒实体快照和旧回调 |
 | `link-window-test.cc` | 10 Gbps、空闲、双向独立、跨窗/尾窗、可用性、队列与预留时间积分 |
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
 | `routing-policy-factory-test.cc` | 五种路由名到 next-hop/path policy 的映射 |
@@ -52,6 +74,7 @@ tests/
 | `test_fault_probability_comparison.py` | 概率对概率一致性及缺失记录拒绝 |
 | `test_fault_workload_fixtures.py` | 保留F1/F2/N4B固定fixture的角色与分布，不再依赖旧生成profile |
 | `test_link_metrics_report.py` | 通用链路统计分位数 |
+| `test_protection_contract.py` | 保护入口拒绝非法值与 shadow 混跑、generate 通过模式校验，以及生产模块无 shadow 依赖 |
 
 C++另保留 `task-deadline-test.cc`（当前正式输入和deadline边界）以及
 `compfrr-shadow-model-test.cc`（成本分档、严格START、初始化不双计、频率枚举、
@@ -62,6 +85,24 @@ OFF/ON追赶与状态边界）。通用task/routing/fault/network测试未删除
 
 ## Smoke
 
+N5A 定向验证（需要先构建；使用项目 uv 环境）：
+
+```bash
+./ns3 run --no-build "satcompute-protection-contract-test"
+./ns3 run --no-build "satcompute-protection-contract-test --traceInput=contrib/satcompute/input/experiments/leo-66/workload/task-trace.json"
+./ns3 run --no-build "satcompute-protection-path-test"
+./ns3 run --no-build "satcompute-recovery-runtime-test --outputDir=output/n5a-g3/controlled"
+.venv/bin/python contrib/satcompute/tests/integration/smoke/run-protection-smoke.py --output-root output/n5a-g2/smoke
+.venv/bin/python contrib/satcompute/tests/integration/smoke/run-recovery-smoke.py --output-root output/n5a-g3/smoke
+```
+
+第二条只核对800份任务的字节/WU/合法边界，与 G4 oracle 单向比较，不运行800任务网络仿真。
+可加 `--sizingOutput=<新输出文件>` 保存四类代表性状态表；普通平台运行不输出这些验证数据。
+G2 smoke 为 16 星/4 类任务/15 s 的 off、fixed、重复、容量不足四次运行，输出可留在上述目录；
+不提供 `--output-root` 时自动使用临时目录。核对精确字节、cL/cR、l/r/x、存储、普通计算时间
+及普通业务统计隔离；G3 新增受控恢复与平台入口 F3 对照，不是正式 800 任务/1300 s 实验。
+详见 [protection](../protection/README.md)。
+
 | 脚本 | 主要覆盖 |
 |---|---|
 | `run-routing-smoke.sh` | 在线 IPv4、更新次数以及未变边集合不重复重算 |
@@ -70,6 +111,8 @@ OFF/ON追赶与状态边界）。通用task/routing/fault/network测试未删除
 | `run-diagnostics-smoke.sh` | strict 部分完成、队列丢包和失败诊断文件 |
 | `run-topology-smoke.sh` | topology-only 切片、终点采样、XYZ 演化和逐字节确定性 |
 | `run-compfrr-shadow-smoke.py` | 8任务off/on、重复、audit独立性、字节/队列账本及同纳秒F3/初始化顺序 |
+| `run-protection-smoke.py` | G2 四类真实固定备份流、receiver/commit/存储守恒、off 计算对照和确定性 |
+| `run-recovery-smoke.py` | G3 16 星/4 任务/15 s 受控 F3，off/fixed/重复运行，同星 RESULT 的实际字节与零网络流 |
 | `run-link-metrics-smoke.py` | 指标开关不改变业务、空闲/丢包/故障、窗口汇总和陈旧文件清理 |
 
 ## Regression

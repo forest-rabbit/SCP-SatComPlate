@@ -19,7 +19,9 @@ enum TaskState
     TASK_RUNNING,
     TASK_RESULT_TRANSFERRING,
     TASK_COMPLETED,
-    TASK_FAILED
+    TASK_FAILED,
+    TASK_RECOVERING,
+    TASK_RUNNING_BACKUP
 };
 
 const char* TaskStateToString(TaskState state);
@@ -34,7 +36,8 @@ enum class TaskFailureReason
     RESULT_SATELLITE_FAILURE,
     INPUT_TRANSFER_FAILED,
     RESULT_TRANSFER_FAILED,
-    COMPUTE_DEADLINE_EXCEEDED
+    COMPUTE_DEADLINE_EXCEEDED,
+    SIMULATION_ENDED
 };
 
 const char* TaskFailureReasonToString(TaskFailureReason reason);
@@ -100,6 +103,11 @@ struct TaskRuntime
     int64_t resultTransferCompleteTimeNs{-1};
     int64_t failureTimeNs{-1};
     TaskFailureReason failureReason{TaskFailureReason::NONE};
+    uint64_t attemptGeneration{};       ///< Primary 0, sole recovery 1; never reset.
+    uint32_t activeComputeNodeId{};     ///< Actual executing node, not immutable placement.
+    uint64_t winningResultTransferId{}; ///< Zero only for a local recovery result.
+    bool localResultDelivered{};        ///< Logical bytes delivered without a network flow.
+    uint64_t actualComputeServiceNs{}; ///< Sum of interrupted and winning service, excluding waits.
 };
 
 } // namespace ns3
