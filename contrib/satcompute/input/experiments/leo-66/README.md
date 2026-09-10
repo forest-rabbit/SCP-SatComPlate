@@ -13,9 +13,10 @@
 | `placement/` | `placement-manifest.json`：原生位置放置的可追溯记录，不用于在线读入拓扑 |
 | `fault/` | `f3-manifest.json`：controlled F3 节点及纳秒时刻，由正式 runner 校验 |
 
-任务共 800 个：240 dense-image、240 sparse-inference、240 compression、80 LLM。
+任务共 801 个：240 dense-image、240 sparse-inference、241 compression、80 LLM。
 705 个普通图像任务使用 TN(240,130;50,1000) 十进制 MB；另有 10×500 MB、5×1 GB
-固定任务 ID 锚点。INPUT=193526895311 B，RESULT=99846517485 B，WU=351623833。
+固定任务 ID 锚点；N5B-G3R2 另增 400 MB compression 任务 801。
+INPUT=193926895311 B，RESULT=100063510008 B，WU=352223833。
 到达窗口 1..1050 s，仿真至 1300 s；compute deadline 为首次开始时参考服务时间的 1.3 倍。
 
 - 网络：每 ISL 10 Gbps、fixed 单向 1 ms、每 20 s 更新；capacity-aware HRW、size-aware 分包。
@@ -25,7 +26,12 @@
 - 故障：F1/F2/F3 均开启，F1 beta=10、gamma=1.5；F2 使用现有空间模型及既定参数；
   F3 固定 node62、1027.055770726 s。详细数值与语义见[故障模块](../../../fault/README.md)。
 
-文件数值原样迁移。G3 原始冻结使用 8 ms，进入 G4 时人工批准改为当前正式 1 ms。
+原有 800 个任务的定义完全保留。任务 801 使用任务 120 的 source54/compute62/result33，
+到达时刻提前 6.2 s、600000 WU（参考计算 6 s），通过真实任务使 node62 留有余温；
+不直接设置温度、不预知 F3，也不强制保护成功。原 F3 节点/时刻和其他参数不变。
+新场景不能与历史 800 任务 A 结果作严格配对比较。
+
+G3 原始冻结使用 8 ms，进入 G4 时人工批准改为当前正式 1 ms。
 manifest 中旧 8 ms none-source 或旧生成路径仅为历史来源，不是当前 runtime reference。
 生成摘要不是配置，正式任务已固化端点与事件时间。
 

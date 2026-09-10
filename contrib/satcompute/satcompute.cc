@@ -677,6 +677,7 @@ main(int argc, char* argv[])
             std::unique_ptr<protection::FrequencyProtectionController> frequency;
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
             std::filesystem::remove(outputDirectory / "frequency-pause-intervals.csv");
+            std::filesystem::remove(outputDirectory / "frequency-capacity-waits.csv");
             std::filesystem::remove(outputDirectory / "f3-compute-risk-snapshots.csv");
             if (config.protectionMode == "fixed")
             {

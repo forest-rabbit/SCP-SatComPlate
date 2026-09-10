@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the final 66-satellite / 800-task scene from native position slices."""
+"""Generate 800 frozen business tasks plus one real F3 warm-up task (801 total)."""
 import argparse
 from bisect import bisect_right
 from collections import Counter, defaultdict
@@ -19,6 +19,11 @@ REGIONAL_CANDIDATE_LIMIT = 1
 ARRIVAL_WINDOW_NS = (1_000_000_000, 1_050_000_000_000)
 SIMULATION_SECONDS = 1300
 COMPUTE_RATE = 100_000
+WARMUP_TASK_ID = 801
+WARMUP_INPUT_BYTES = 400_000_000
+# Six seconds of real compute. The extra 0.2 s compensates the larger INPUT transfer;
+# it is a workload arrival offset, never a callback tied to a future fault or task start.
+WARMUP_LEAD_NS = 6_200_000_000
 REGIONS = (
     ("north-america", -130, -60, 20, 55),
     ("europe", -10, 40, 35, 60),
@@ -282,6 +287,24 @@ def build_final_workload(satellite_ids, compute_nodes, positions,
                   source_node_id=0, compute_node_id=0, result_node_id=0, arrival_time_ns=times[a["task_id"]])
              for a, b in zip(attrs, budgets)]
     placement = place_tasks(tasks, positions, placement_seed)
+    target = next(t for t in tasks if t["task_id"] == 120)
+    warm = image_budget("compression", WARMUP_INPUT_BYTES, str(WARMUP_TASK_ID))
+    predecessor = dict(task_id=WARMUP_TASK_ID, task_profile=warm.task_profile,
+                       input_bytes=warm.input_bytes, output_bytes=warm.output_bytes,
+                       compute_work_units=warm.compute_work_units,
+                       source_node_id=target["source_node_id"], compute_node_id=target["compute_node_id"],
+                       result_node_id=target["result_node_id"],
+                       arrival_time_ns=target["arrival_time_ns"]-WARMUP_LEAD_NS)
+    tasks.append(predecessor)
+    budgets.append(warm)
+    warmup = dict(task_id=WARMUP_TASK_ID, predecessor_of=120, input_bytes=WARMUP_INPUT_BYTES,
+                  compute_work_units=warm.compute_work_units, lead_ns=WARMUP_LEAD_NS,
+                  compute_node_id=target["compute_node_id"],
+                  rule="real compression task; same source/compute/result as task 120; normal faults and FCFS")
+    placement["warmup"] = warmup
+    placement["placements"].append(dict(task_id=WARMUP_TASK_ID,
+        arrival_time_ns=predecessor["arrival_time_ns"], compute_node_id=target["compute_node_id"],
+        assignment_rule="explicit predecessor of task 120; not another geographic draw"))
     anchors = {str(size): [t["task_id"] for t in attrs if t.get("fixed_tail_anchor") and t["input_bytes"] == size]
                for size in (500_000_000, 1_000_000_000)}
     summary = dict(workload_seed=workload_seed, placement_seed=placement_seed, task_count=len(tasks),
@@ -293,7 +316,9 @@ def build_final_workload(satellite_ids, compute_nodes, positions,
                    total_compute_work_units=sum(b.compute_work_units for b in budgets),
                    total_variable_state_bytes=sum(b.k_variable_bytes for b in budgets),
                    llm_parameters=asdict(LlmParameters()),
-                   truncated_normal={"mu_mb": 240, "sigma_mb": 130, "lower_mb": 50, "upper_exclusive_mb": 1000},
+                   warmup=warmup,
+                   truncated_normal={"mu_mb": 240, "sigma_mb": 130, "lower_mb": 50,
+                                     "upper_exclusive_mb": 1000, "fixed_tail_task_ids": anchors},
                    placement=placement)
     return {"tasks": tasks}, summary
 

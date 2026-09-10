@@ -39,6 +39,7 @@ struct FrequencyRuntimeTestAccess
     {
         return c.m_manager;
     }
+    static void Released(FrequencyProtectionController& c) { c.CapacityReleased(); }
 };
 } // namespace ns3::protection
 
@@ -582,6 +583,174 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
     }
     Reset();
 }
+/** Real capacity reservations, sub-epoch releases and fresh online predictions. */
+struct RetryDriver
+{
+    Ptr<TaskCoordinator> tasks;
+    Ptr<FaultModelEngine> engine;
+    FrequencyProtectionController& controller;
+    std::vector<uint64_t> blockers;
+    bool terminal{}, sawStart{};
+    int64_t dispatch{};
+
+    void OnTask(const TaskEventRecord& event)
+    {
+        if (event.taskId != 1 || event.toState != TASK_RUNNING) return;
+        dispatch = event.simulationTimeNs;
+        const auto& row = controller.Decisions().back();
+        Check(row.resourceReason == "NO_CAPACITY_NOW" && row.waitingAfter &&
+              row.phaseAfter == ProtectionPhase::OFF && controller.Manager().Summaries().empty(),
+              "all paths blocked must wait OFF without allocating checkpoint state");
+        if (terminal)
+            Simulator::Schedule(NanoSeconds(2000000), [&] { tasks->FinalizeSimulation(); });
+        Simulator::Schedule(NanoSeconds(3000000), [&] {
+            // An unrelated release leaves every primary egress blocked.
+            tasks->GetTransferEngine()->FinalizeTransfersIfActive({9000},
+                TransferTerminalState::CANCELLED, TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+        });
+        Simulator::Schedule(NanoSeconds(5000000), [&] {
+            const auto before = engine->GetNodeSnapshots();
+            tasks->GetTransferEngine()->FinalizeTransfersIfActive(blockers,
+                TransferTerminalState::CANCELLED, TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+            FrequencyRuntimeTestAccess::Released(controller);
+            FrequencyRuntimeTestAccess::Released(controller);
+            Simulator::ScheduleNow([&, before] {
+                const auto after = engine->GetNodeSnapshots();
+                for (size_t i = 0; i < before.size(); ++i)
+                    Check(before[i].f1SampleCount == after[i].f1SampleCount &&
+                          before[i].f2SampleCount == after[i].f2SampleCount &&
+                          before[i].f1State.temperatureC == after[i].f1State.temperatureC,
+                          "capacity retry consumed samples or mutated thermal state");
+                uint64_t count = 0;
+                for (const auto& r : controller.Decisions())
+                    if (r.trigger == "CAPACITY_RELEASE" && r.input.risk.epochNs == dispatch+5000000)
+                    {
+                        ++count;
+                        Check(r.committed && !r.sampled && !r.faultHit && r.capacityRetrySuccess &&
+                              r.phaseAfter == ProtectionPhase::INITIALIZING &&
+                              r.reason == "START_AFTER_CAPACITY_RELEASE" && r.progressWork > 0 &&
+                              r.firstSampleNs == 100000000 && !r.waitingAfter,
+                              "release retry did not perform fresh causal START before next fault epoch");
+                        const auto live = tasks->GetComputeServices();
+                        std::optional<RunningComputeTaskSnapshot> running;
+                        for (auto s : live) if (s->GetNodeId() == 3) running = s->GetRunningTaskSnapshot();
+                        Check(running.has_value(), "retry primary lost running task");
+                        const auto prediction = engine->QueryTaskPrediction(3, running->remainingTimeNs);
+                        Check(prediction && PredictComputeFailureBeforeFinish(*prediction).predictedFailureProbability ==
+                              r.input.risk.pFailBeforeFinish, "retry reused stale prediction");
+                        sawStart = true;
+                    }
+                Check(count == (terminal ? 0u : 1u), "same-ns releases not coalesced or terminal retried");
+            });
+        });
+        Simulator::Schedule(NanoSeconds(20000000), [&] {
+            FrequencyRuntimeTestAccess::Released(controller);
+            Simulator::ScheduleNow([&] {
+                Check(std::none_of(controller.Decisions().begin(), controller.Decisions().end(), [&](const auto& r) {
+                    return r.trigger == "CAPACITY_RELEASE" && r.input.risk.epochNs == dispatch+20000000;
+                }), "INITIALIZING/terminal task received OFF retry");
+            });
+        });
+    }
+};
+
+void CapacityRetry(const std::filesystem::path& output, bool terminal = false, bool lrl = false)
+{
+    RngSeedManager::SetSeed(1);
+    RngSeedManager::SetRun(11);
+    {
+        auto config = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        config.parameters.routingMode = "global-capacity-aware-hrw";
+        config.parameters.fixedDelaySeconds = .001;
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+        auto executor = CreateObject<FaultController>();
+        executor->ConfigureGeneration(ids, END);
+        executor->BindTopology(topology);
+        auto engine = CreateObject<FaultModelEngine>();
+        auto fp = GetDefaultFaultParameters();
+        fp.checkIntervalSeconds = .1;
+        fp.f1.temperature.heatingToCriticalSeconds = .8;
+        fp.f2.enabled = fp.f3.enabled = false;
+        engine->Configure(fp, ids, {0,2,3,4}, END, executor, true);
+        auto task = Definition(TaskProfile::SPARSE_INFERENCE);
+        task.sourceNodeId = 1;
+        task.arrivalTimeNs = 20000000;
+        auto tasks = CreateObject<TaskCoordinator>();
+        tasks->Initialize(ComputeProfile{{{0,100000},{2,100000},{3,100000},{4,100000}}},
+            TaskTrace{{task}}, topology, "size-aware", 1024, config.parameters.islMtuBytes,
+            config.parameters.receiverRcvBufBytes, false, END, 1.3);
+        executor->BindTaskCoordinator(tasks);
+        engine->BindTaskCoordinator(tasks);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            lrl ? std::make_unique<LeastRecoveryLoadPlacementPolicy>(1) : std::unique_ptr<PlacementPolicy>{});
+        // Ranking must skip a path-feasible pair rejected by real storage, not stop at it.
+        auto& pool = FrequencyRuntimeTestAccess::Manager(controller).Pool(0);
+        std::optional<uint64_t> storageBlock;
+        if (lrl)
+        {
+            storageBlock = pool.TryReserve(999, StorageKind::REMOTE_BATCH, pool.Free());
+            Check(storageBlock.has_value(), "hard-rejection storage blocker missing");
+        }
+        RetryDriver driver{tasks, engine, controller, {}, terminal};
+        tasks->ConnectTaskObserver(MakeCallback(&RetryDriver::OnTask, &driver));
+        Simulator::Schedule(NanoSeconds(1000000), [&] {
+            auto block = [&](uint64_t id, uint32_t source, uint32_t destination) {
+                NetworkTransfer transfer;
+                transfer.transferId = id;
+                transfer.sourceSatelliteId = source;
+                transfer.destinationSatelliteId = destination;
+                transfer.sizeBytes = 1000000000;
+                tasks->GetTransferEngine()->RegisterRuntimePlan(transfer);
+                tasks->GetTransferEngine()->StartTransferNow(id);
+            };
+            for (auto node : ids)
+            {
+                if (node == 3) continue;
+                const auto routes = topology.GetEcmpRouteCandidates(3, node);
+                if (std::any_of(routes.begin(), routes.end(), [&](const auto& route) {
+                    return topology.GetNextHopSatelliteId(3, route.outputInterface) == node;
+                }))
+                {
+                    driver.blockers.push_back(9100+node);
+                    block(9100+node,3,node);
+                }
+            }
+            block(9000,6,7);
+        });
+        Simulator::Stop(NanoSeconds(END));
+        Simulator::Run();
+        controller.Finalize();
+        engine->Finalize();
+        Check(driver.dispatch > 0 && driver.sawStart != terminal, "capacity scenario not exercised");
+        if (lrl)
+        {
+            const auto start = std::find_if(controller.Decisions().begin(), controller.Decisions().end(),
+                [](const auto& r) { return r.capacityRetrySuccess; });
+            Check(start != controller.Decisions().end() && start->pairSkipStorage > 0 &&
+                  start->pairHardChecked > 1 && start->pair->remoteNode != 0,
+                  "first storage-infeasible pair prevented selecting a later feasible pair");
+            pool.ReleaseReservation(*storageBlock);
+        }
+        if (!terminal)
+        {
+            auto partial = std::find_if(controller.Decisions().begin(), controller.Decisions().end(), [&](const auto& r) {
+                return r.trigger == "CAPACITY_RELEASE" && r.input.risk.epochNs == driver.dispatch+3000000;
+            });
+            Check(partial != controller.Decisions().end() && partial->waitingAfter && !partial->committed,
+                  "still blocked retry did not retain waiting interest");
+            const auto summaries = controller.Manager().Summaries();
+            Check(std::any_of(summaries.begin(), summaries.end(),
+                [](const auto& r) { return r.initCommitted > 0; }), "retry initialization never physically committed");
+        }
+        controller.WriteDecisions(output);
+        Check(controller.Manager().IsQuiescent(), "capacity retry leaked checkpoint resources");
+        Check(controller.PlacementLoads().Empty(), "capacity retry leaked placement ownership");
+        tasks->DisconnectTaskObserver(MakeCallback(&RetryDriver::OnTask, &driver));
+    }
+    Reset();
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -593,6 +762,17 @@ int main(int argc, char** argv)
     try
     {
         Storage();
+        CapacityRetry(std::filesystem::path(output) / "capacity-retry");
+        CapacityRetry(std::filesystem::path(output) / "capacity-retry-repeat");
+        CapacityRetry(std::filesystem::path(output) / "capacity-retry-lrl", false, true);
+        CapacityRetry(std::filesystem::path(output) / "capacity-retry-terminal", true);
+        for (const auto& name : {"frequency-decisions.csv", "frequency-capacity-waits.csv"})
+        {
+            std::ifstream a(std::filesystem::path(output) / "capacity-retry" / name);
+            std::ifstream b(std::filesystem::path(output) / "capacity-retry-repeat" / name);
+            Check(a.good() && b.good() && std::string(std::istreambuf_iterator<char>(a), {}) ==
+                  std::string(std::istreambuf_iterator<char>(b), {}), "capacity retry repeat differs");
+        }
         for (auto profile : {TaskProfile::DENSE_IMAGE,
                              TaskProfile::SPARSE_INFERENCE,
                              TaskProfile::COMPRESSION,

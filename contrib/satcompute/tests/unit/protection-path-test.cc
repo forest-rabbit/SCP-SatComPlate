@@ -4,6 +4,7 @@
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
 #include "ns3/online-topology-controller.h"
+#include "ns3/placement-policy.h"
 #include "ns3/protection-transfer-key.h"
 #include "ns3/simulator.h"
 #include <algorithm>
@@ -468,6 +469,19 @@ AdmissionPreview()
             Check(preview.admissible && preview.reachable && preview.failureReason.empty() &&
                       preview.path.hops.front().destinationSatelliteId != blockedHop,
                   "blocked first route hid admissible alternate");
+            const auto local = preview.path.hops.front().destinationSatelliteId;
+            PlacementContext context{source, {{local, true, true, true, true},
+                                               {destination, true, true, true, false}}};
+            auto probe = [&](auto a, auto b) {
+                const auto path = engine->EstimateAdmissiblePath(a, b);
+                return PlacementPathAvailability{path.reachable, path.admissible, path.failureReason};
+            };
+            const auto pairs = BuildFeasiblePlacementPairs(context, probe);
+            Check(pairs.pairs == std::vector<PlacementDecision>{{local, destination}},
+                  "pair builder discarded admissible alternate ECMP path");
+            std::reverse(context.candidates.begin(), context.candidates.end());
+            Check(BuildFeasiblePlacementPairs(context, probe).pairs == pairs.pairs,
+                  "reordered pair enumeration changed real admission");
             const auto after = engine->CollectCapacityAwareSummary();
             Check(before.activePathCountAtEnd == after.activePathCountAtEnd &&
                       before.totalReservedRateBpsAtEnd == after.totalReservedRateBpsAtEnd,

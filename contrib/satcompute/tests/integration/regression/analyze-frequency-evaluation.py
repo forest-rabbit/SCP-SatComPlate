@@ -15,6 +15,35 @@ PROFILES = ACCOUNTING["PROFILES"]
 NS = 10**9
 
 
+def verify_pair_retries(decisions, waits):
+    retries = set()
+    for r in decisions:
+        if not r.get("pair_candidates_total"):
+            continue  # Historical rows and fixed-ON pair records.
+        n = lambda k: int(r[k])
+        require(n("pair_candidates_total") == n("pair_node_feasible") + n("pair_skip_node"), "node pair counts differ")
+        require(n("pair_node_feasible") == n("pair_path_feasible") + sum(n(k) for k in
+                ("pair_skip_no_route", "pair_skip_no_capacity", "pair_skip_other")), "path pair counts differ")
+        require(n("pair_hard_checked") == n("pair_hard_feasible") + n("pair_skip_storage") + n("pair_skip_deadline")
+                and n("pair_hard_checked") <= n("pair_path_feasible") and n("pair_hard_feasible") <= 1,
+                "hard-feasibility ranked prefix differs")
+        if r.get("decision_trigger") == "CAPACITY_RELEASE":
+            key = (r["task_id"], r["fault_epoch_time_ns"])
+            require(key not in retries and r["phase_before"] == "OFF" and
+                    r["actual_fault_sampled"] == r["actual_fault_hit"] == "0", "invalid or duplicate capacity retry")
+            retries.add(key)
+            require((r["capacity_retry_success"] == "1") ==
+                    (r["decision_committed"] == "1" and r["proposed_action"] == "START"), "retry success differs")
+    intervals = defaultdict(list)
+    for r in waits:
+        a, b = int(r["start_time_ns"]), int(r["end_time_ns"])
+        require(b - a == int(r["duration_ns"]) >= 0, "invalid protection capacity wait")
+        intervals[r["task_id"]].append((a, b))
+    for values in intervals.values():
+        values.sort()
+        require(all(a[1] <= b[0] for a, b in zip(values, values[1:])), "overlapping capacity waits")
+
+
 def stats(values):
     values = sorted(values)
     def quantile(p):
@@ -88,6 +117,11 @@ def active_weight(configurations, start, stop, pauses):
 def frequency(root, task_profiles, protected, recoveries):
     decisions = rows(root, "frequency-decisions.csv", True)
     intervals = rows(root, "frequency-pause-intervals.csv", True)
+    capacity_waits = rows(root, "frequency-capacity-waits.csv", True)
+    verify_pair_retries(decisions, capacity_waits)
+    for r in capacity_waits:
+        require(int(r["end_time_ns"]) - int(r["start_time_ns"]) == int(r["duration_ns"]) >= 0,
+                "invalid protection capacity wait")
     on = {r["task_id"]: int(r["time_ns"]) for r in rows(root, "protection-events.csv")
           if r["event"] == "INIT_COST_COMMITTED" and r["attempt_generation"] == "0"}
     pauses, configs = defaultdict(list), defaultdict(list)
@@ -144,6 +178,13 @@ def frequency(root, task_profiles, protected, recoveries):
             "start_off_unavailable": sum(not r["j_off"] for r in starts),
             "task_start_decisions": sum(r.get("decision_trigger") == "TASK_RUNNING" for r in ds),
             "immediate_starts": sum(r.get("decision_trigger") == "TASK_RUNNING" for r in starts),
+            "start_by_trigger": dict(Counter(r.get("decision_trigger") for r in starts)),
+            "capacity_retry_count": sum(r.get("decision_trigger") == "CAPACITY_RELEASE" for r in ds),
+            "capacity_retry_success": sum(r.get("capacity_retry_success") == "1" for r in ds),
+            "capacity_wait_tasks": len({r["task_id"] for r in capacity_waits if r["task_id"] in ids}),
+            "capacity_wait_ns": stats([int(r["duration_ns"]) for r in capacity_waits if r["task_id"] in ids]),
+            "pair_counts_at_off_decisions": {k: stats([int(r[k]) for r in ds if r.get(k)]) for k in
+                ("pair_candidates_total", "pair_node_feasible", "pair_path_feasible", "pair_hard_checked", "pair_hard_feasible")},
             "proposal_reasons": dict(reasons),
             "tasks_ever_storage_rejected": len({r["task_id"] for r in ds if r["proposal_reason"] == "STORAGE_INFEASIBLE"}),
         }
@@ -207,8 +248,10 @@ def analyze(root):
 
 def fairness(runs):
     identities = [r["execution"] for r in runs]
-    require([(r["protection_mode"], r["placement_mode"]) for r in identities] ==
-            [("fixed", "ffp"), ("compfrr", "ffp"), ("compfrr", "lrl")], "A/B/C policies differ")
+    expected = [("compfrr", "ffp"), ("compfrr", "lrl")]
+    if len(runs) == 3: expected.insert(0, ("fixed", "ffp"))
+    require([(r["protection_mode"], r["placement_mode"]) for r in identities] == expected,
+            "paired policies differ")
     ignored = {"outputDir", "faultTrace", "protectionMode", "placementMode"}
     commands = []
     for r in identities:
@@ -217,20 +260,22 @@ def fairness(runs):
         commands.append({arg.split("=", 1)[0][2:]: arg.split("=", 1)[1]
                          for arg in shlex.split(r["command"][-1])[1:]
                          if arg.split("=", 1)[0][2:] not in ignored})
-    require(commands[0] == commands[1] == commands[2], "unpaired scenario arguments")
+    require(all(c == commands[0] for c in commands), "unpaired scenario arguments")
     require(len({r["commit"] for r in identities}) == 1, "formal runs use different code")
-    require(all(r["execution_result"]["returncode"] == 0 and r["summary"]["tasks"] == 800
+    count = 801 if len(runs) == 2 else 800
+    require(all(r["execution_result"]["returncode"] == 0 and r["summary"]["tasks"] == count
                 and r["execution"]["simulation_duration_s"] == 1300 for r in runs), "formal run incomplete")
     return {"same_code_and_arguments_except_policy_and_output": True,
-            "same_fault_trace_required": False, "lambda": 1, "seed": 1, "run": 11}
+            "same_fault_trace_required": False, "lambda": 1, "seed": 1, "run": 11,
+            "task_count": count, "groups": "B/C" if len(runs) == 2 else "A/B/C"}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runs", nargs="+", required=True, type=Path, help="A B C, or one diagnostic run")
+    parser.add_argument("--runs", nargs="+", required=True, type=Path, help="B C (801 tasks), historical A B C (800), or one diagnostic run")
     args = parser.parse_args()
     runs = [analyze(root) for root in args.runs]
-    paired = fairness(runs) if len(runs) == 3 else None
+    paired = fairness(runs) if len(runs) in (2, 3) else None
     for root, result in zip(args.runs, runs):
         (root / "frequency-evaluation.json").write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps({"run": str(root), "summary": result["summary"], "faults": result["fault_identity"]}))

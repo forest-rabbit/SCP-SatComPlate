@@ -34,6 +34,7 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
     faults->SetEpochObservers(
         [this](const auto& epoch) { BeforeEpoch(epoch); },
         [this](auto time, const auto& outcomes) { AfterEpoch(time, outcomes); });
+    tasks->GetTransferEngine()->SetCapacityReleaseObserver([this] { CapacityReleased(); });
     m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, *this);
     m_recovery->SetLoadObserver([this](auto task, auto node, bool active) {
         m_loads.Recovery(task, node, active, Simulator::Now().GetNanoSeconds());
@@ -42,6 +43,8 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
 
 FrequencyProtectionController::~FrequencyProtectionController()
 {
+    m_tasks->GetTransferEngine()->SetCapacityReleaseObserver({});
+    if (m_capacityDrain.IsPending()) Simulator::Cancel(m_capacityDrain);
     m_faults->SetEpochObservers({}, {});
     m_tasks->DisconnectTaskObserver(MakeCallback(&FrequencyProtectionController::OnTask, this));
 }
@@ -94,12 +97,60 @@ void FrequencyProtectionController::OnTask(const TaskEventRecord& event)
         m_manager.OnTaskTerminal(event.taskId);
     if (terminal || recovery || complete)
     {
+        CloseCapacityWait(event.taskId, state, event.simulationTimeNs, "TASK_LEFT_PRIMARY_COMPUTE");
         ClosePause(event.taskId, state, event.simulationTimeNs);
         const auto phase = recovery ? ProtectionPhase::RECOVERING : ProtectionPhase::DONE;
         if (state.pending)
             state.stopped = phase;
         else
             state.gate.Stop(phase);
+    }
+}
+
+void FrequencyProtectionController::CloseCapacityWait(uint64_t id, State& state, int64_t time,
+                                                      const std::string& reason)
+{
+    if (state.capacityWaitStart)
+    {
+        m_capacityWaits.push_back({id, *state.capacityWaitStart, time, reason});
+        state.capacityWaitStart.reset();
+    }
+    m_waitingCapacity.erase(id);
+}
+
+void FrequencyProtectionController::CapacityReleased()
+{
+    if (!m_finalized && !m_waitingCapacity.empty() && !m_capacityDrain.IsPending())
+        m_capacityDrain = Simulator::ScheduleNow(&FrequencyProtectionController::DrainCapacityRetries, this);
+}
+
+void FrequencyProtectionController::DrainCapacityRetries()
+{
+    if (m_finalized) return;
+    // Stable IDs, fresh snapshots, no old proposal and no synthetic fault sample.
+    const auto waiting = m_waitingCapacity;
+    const auto now = Simulator::Now().GetNanoSeconds();
+    for (const auto id : waiting)
+    {
+        auto& state = m_states.at(id);
+        const auto& task = Task(id);
+        if (task.state != TASK_RUNNING || task.attemptGeneration ||
+            state.gate.Phase() != ProtectionPhase::OFF)
+        {
+            CloseCapacityWait(id, state, now, "NOT_WAITING_OFF");
+            continue;
+        }
+        if (state.lastCapacityDecisionNs == now) continue;
+        const auto live = Service(task.definition.computeNodeId)->GetRunningTaskSnapshot();
+        if (!live || live->taskId != id) continue;
+        const auto prediction = m_faults->QueryTaskPrediction(task.definition.computeNodeId,
+                                                             live->remainingTimeNs);
+        if (!prediction) continue;
+        const auto q = CombineComputeFaultProbabilities(
+            prediction->f1Model ? prediction->f1State.stepFailureProbability : 0,
+            prediction->f2Model ? prediction->f2State.stepFailureProbability : 0);
+        Evaluate({task.definition.computeNodeId, id, q, *prediction}, "CAPACITY_RELEASE");
+        AfterEpoch(now, {{task.definition.computeNodeId, id, false, false}});
     }
 }
 
@@ -180,7 +231,7 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
                                                    State& state)
 {
     auto& input = row.input;
-    row.pair = state.pair ? state.pair
+    row.pair = row.pair ? row.pair : state.pair ? state.pair
                           : m_placement->Select({task.definition.computeNodeId,
                                                 Candidates(task.definition.computeNodeId)});
     if (!row.pair)
@@ -231,6 +282,48 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
     return true;
 }
 
+void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& row,
+                                                      const TaskRuntime& task, State& state)
+{
+    const PlacementContext context{task.definition.computeNodeId,
+                                   Candidates(task.definition.computeNodeId)};
+    row.pairStats = BuildFeasiblePlacementPairs(context, [&](auto source, auto destination) {
+        const auto p = m_tasks->GetTransferEngine()->EstimateAdmissiblePath(source, destination);
+        return PlacementPathAvailability{p.reachable, p.admissible, p.failureReason};
+    });
+    auto pairs = std::move(row.pairStats.pairs);
+    row.pairPathFeasible = pairs.size();
+    m_placement->RankPairs(pairs, context);
+    if (pairs.empty())
+    {
+        row.resourceReason = row.pairStats.reason;
+        row.proposal.phase = ProtectionPhase::OFF;
+        row.proposal.epochNs = row.input.risk.epochNs;
+        row.proposal.reason = row.resourceReason;
+        return;
+    }
+    // Feasibility before ranking, then first frequency-hard-feasible pair. Never shop by J.
+    for (const auto& pair : pairs)
+    {
+        row.pair = pair;
+        row.resourceReason.clear();
+        if (!BuildResources(row, task, state))
+            throw std::logic_error("read-only pair preview changed within one decision");
+        ++row.pairHardChecked;
+        row.proposal = m_policy.Evaluate(row.input);
+        const auto& reason = row.proposal.reason;
+        if (reason == "STORAGE_INFEASIBLE") ++row.pairSkipStorage;
+        else if (reason == "DEADLINE_INFEASIBLE" || reason == "INITIALIZATION_TOO_LATE")
+            ++row.pairSkipDeadline;
+        else
+        {
+            ++row.pairHardFeasible;
+            return;
+        }
+        row.resourceReason = reason == "INITIALIZATION_TOO_LATE" ? "DEADLINE_INFEASIBLE" : reason;
+    }
+}
+
 void FrequencyProtectionController::BeforeEpoch(const FaultEpochInput& epoch)
 {
     Evaluate(epoch, "FAULT_EPOCH");
@@ -243,7 +336,8 @@ FrequencyProtectionController::Evaluate(const FaultEpochInput& epoch, const std:
     if (found == m_states.end())
         return;
     auto& state = found->second;
-    if (state.lastDecisionNs == epoch.prediction.predictionTimeNs)
+    const bool retry = trigger == "CAPACITY_RELEASE";
+    if ((retry ? state.lastCapacityDecisionNs : state.lastDecisionNs) == epoch.prediction.predictionTimeNs)
         return;
     const auto& task = Task(epoch.taskId);
     if (task.state != TASK_RUNNING || task.attemptGeneration ||
@@ -261,6 +355,14 @@ FrequencyProtectionController::Evaluate(const FaultEpochInput& epoch, const std:
         return;
     FrequencyDecisionRecord row;
     row.trigger = trigger;
+    row.waitingBefore = state.capacityWaitStart.has_value();
+    row.capacityWaitStartNs = state.capacityWaitStart.value_or(-1);
+    if (retry)
+    {
+        ++state.capacityRetryCount;
+        state.lastCapacityDecisionNs = epoch.prediction.predictionTimeNs;
+    }
+    row.capacityRetryCount = state.capacityRetryCount;
     row.pF1 = epoch.prediction.f1Model ? epoch.prediction.f1State.stepFailureProbability : 0;
     row.pF2 = epoch.prediction.f2Model ? epoch.prediction.f2State.stepFailureProbability : 0;
     row.firstSampleNs =
@@ -283,7 +385,9 @@ FrequencyProtectionController::Evaluate(const FaultEpochInput& epoch, const std:
     in.inputBytes = task.definition.inputBytes;
     in.variableBytes = TaskStateAdapter(task.definition).VariableBytes();
     in.costs = GetProtectionCosts(static_cast<uint64_t>(in.variableBytes));
-    if (BuildResources(row, task, state))
+    if (phase == ProtectionPhase::OFF)
+        EvaluateOffPairs(row, task, state);
+    else if (BuildResources(row, task, state))
         row.proposal = m_policy.Evaluate(in);
     else
     {
@@ -293,8 +397,21 @@ FrequencyProtectionController::Evaluate(const FaultEpochInput& epoch, const std:
             phase == ProtectionPhase::ON ? FrequencyAction::PAUSE : FrequencyAction::NONE;
         row.proposal.reason = "PLACEMENT_UNAVAILABLE";
     }
+    if (phase == ProtectionPhase::OFF && row.resourceReason == "NO_CAPACITY_NOW" &&
+        in.risk.pFailBeforeFinish > 0)
+    {
+        if (!state.capacityWaitStart) state.capacityWaitStart = in.risk.epochNs;
+        m_waitingCapacity.insert(epoch.taskId);
+        row.capacityWaitStartNs = *state.capacityWaitStart;
+    }
+    else if (state.capacityWaitStart)
+    {
+        row.capacityWaitEndNs = in.risk.epochNs;
+        CloseCapacityWait(epoch.taskId, state, in.risk.epochNs, row.proposal.reason);
+    }
+    row.waitingAfter = state.capacityWaitStart.has_value();
     in.storageDemand = {};
-    state.gate.Propose(row.proposal);
+    state.gate.Propose(row.proposal, retry);
     state.pending = m_decisions.size();
     state.lastDecisionNs = in.risk.epochNs;
     m_decisions.push_back(std::move(row));
@@ -326,6 +443,15 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
         row.reason = outcome.faultHit ? "CURRENT_FAULT_HIT"
                      : !running       ? "POST_FAULT_UNAVAILABLE"
                                       : row.proposal.reason;
+        if (row.committed && row.proposal.action == FrequencyAction::START)
+        {
+            row.reason = row.trigger == "CAPACITY_RELEASE" ? "START_AFTER_CAPACITY_RELEASE"
+                       : row.trigger == "TASK_RUNNING" ? "START_TASK_RUNNING" : "START_FAULT_EPOCH";
+            row.capacityRetrySuccess = row.trigger == "CAPACITY_RELEASE";
+        }
+        row.waitingAfter = state.capacityWaitStart.has_value();
+        if (!row.waitingAfter && row.capacityWaitStartNs >= 0 && row.capacityWaitEndNs < 0)
+            row.capacityWaitEndNs = time;
         if (row.committed)
         {
             if (row.proposal.action == FrequencyAction::PAUSE)
@@ -384,10 +510,17 @@ ProtectionAction FrequencyProtectionController::OnComputeFault(const ProtectionC
 
 void FrequencyProtectionController::Finalize()
 {
+    m_finalized = true;
+    m_tasks->GetTransferEngine()->SetCapacityReleaseObserver({});
+    if (m_capacityDrain.IsPending()) Simulator::Cancel(m_capacityDrain);
     m_recovery->Finalize();
     m_tasks->FinalizeSimulation();
     m_manager.Finalize();
-    for (auto& [id, state] : m_states) ClosePause(id, state, Simulator::Now().GetNanoSeconds());
+    for (auto& [id, state] : m_states)
+    {
+        ClosePause(id, state, Simulator::Now().GetNanoSeconds());
+        CloseCapacityWait(id, state, Simulator::Now().GetNanoSeconds(), "FINALIZE");
+    }
     if (!m_loads.Empty()) throw std::logic_error("frequency placement ownership leaked");
 }
 

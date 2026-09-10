@@ -102,8 +102,8 @@ G3R 在 primary `TASK_RUNNING` 时立即评估 OFF→START，不等待下一个�
 该只读预测从下一真实全局抽样点开始，不新增抽样；同刻检查尚未开始则包含当前点，
 已开始则排除，预计完成时刻不再抽样。未启动的任务仍在后续检查点重新评估。
 即时 START 只进入 INITIALIZING；同纳秒重复决策被去重。ON 的 UPDATE/PAUSE 仍沿用上述
-提案→抽样→存活提交合同。`decision_trigger` 区分 TASK_RUNNING / FAULT_EPOCH；
-前者 `q_current_sample` 留空，风险写入 `p_f1_snapshot/p_f2_snapshot/q_comp_snapshot`。
+提案→抽样→存活提交合同。`decision_trigger` 区分 TASK_RUNNING / FAULT_EPOCH / CAPACITY_RELEASE；
+两个非抽样触发的 `q_current_sample` 留空，风险写入 `p_f1_snapshot/p_f2_snapshot/q_comp_snapshot`。
 F3 实际时刻的 F1/F2 因果快照另写 `f3-compute-risk-snapshots.csv`，不额外抽样。
 
 FFP 的 OFF 候选不预留资源，START 存活后固定节点对；ON 不换节点。
@@ -114,6 +114,19 @@ primary→remote、primary→local、local→remote 是 START 的硬路径条件
 source→remote 的 INPUT 重放仅用于 OFF 成本比较：不可用时显式记录 `replay_available=0` 和
 原因，不虚构带宽/等待时间；P_finish>0 且 START 本身可行时允许启动，P_finish=0 不强制保护。
 source=remote 的 INPUT 重算沿用 LocalDelivery，分析带宽用最大有限值表示零序列化极限，实际不发 UDP。
+
+G3R2 的 FFP/LRL 共享同一时刻的全部可行节点对：健康、空闲、local 一跳且三条硬路径
+均获上述只读准入。FFP 按 (local ID, remote ID)；LRL 按 (local load, ID, remote load, ID)。
+依次跳过存储/deadline/初始化硬约束失败的节点对；遇到第一组频率硬约束可行的节点对就
+比较 J_start/J_off，不按 J 搜索其他节点对。`NO_FEASIBLE_NODE_PAIR`、`NO_ROUTE`、
+`NO_CAPACITY_NOW` 分开记录。候选数/路径数为全量；`pair_hard_checked/feasible` 与
+storage/deadline skip 仅统计实际检查过的排序前缀，不声称检查了后续所有频率组合。
+
+OFF 且 P_finish>0、所有可用硬路径暂被容量阻塞时登记等待兴趣，不预留资源。
+实际传输释放容量后 ScheduleNow 按任务 ID 重评，同一任务每纳秒最多一次；重新读取进度、
+下一真实抽样网格的预测、路径和负载，不复用旧提案、不额外抽故障。成功仍须真实初始化，
+INIT/ON/恢复/终态不做 OFF 重试。`frequency-capacity-waits.csv` 单独记录等待区间，
+不混入 ON pause、reserved-idle 或 W_waste；START 原因区分任务开始、故障检查及容量释放。
 
 库存快照包含 r/l、已捕获记录及 H、是否分配/接收、当前 remote state 和不可变 batch。
 估计器只输出与 **free bytes** 比较的新增峰值：
@@ -258,7 +271,7 @@ FlowMonitor、链路负载及路由容量账本仍包含所有真实保护包。
 4 个任务依次在主星 3 计算，固定 local=2、remote=0，15 s 仿真、10 Gbit/s、1 ms。
 任务 1 为 dense-image：S=52428800 B、W=78644 WU、Kvar=52429200 B，
 delta=5%、n=4、每星额外池 10 GB；其余为 sparse-inference、compression、5000-token LLM。
-fixture 仅用于执行验收，不改变正式 800 任务场景或 para 默认保护关闭。
+fixture 仅用于执行验收，不改变正式任务场景或 para 默认保护关闭。
 
 ## Attempt 与恢复接口
 

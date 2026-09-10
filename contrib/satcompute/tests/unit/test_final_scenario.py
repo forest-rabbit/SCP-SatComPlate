@@ -30,12 +30,12 @@ class FinalScenarioTests(unittest.TestCase):
         cls.attributes = GEN["attributes"]()
 
     def test_frozen_counts_exact_budgets_and_window(self):
-        self.assertEqual([t["task_id"] for t in self.tasks], list(range(1, 801)))
+        self.assertEqual([t["task_id"] for t in self.tasks], list(range(1, 802)))
         self.assertEqual(Counter(t["task_profile"] for t in self.tasks),
-                         {"dense-image": 240, "sparse-inference": 240, "compression": 240, "llm": 80})
+                         {"dense-image": 240, "sparse-inference": 240, "compression": 241, "llm": 80})
         self.assertEqual(tuple(sum(t[k] for t in self.tasks) for k in
                               ("input_bytes", "output_bytes", "compute_work_units")),
-                         (193526895311, 99846517485, 351623833))
+                         (193926895311, 100063510008, 352223833))
         self.assertTrue(all(10**9 <= t["arrival_time_ns"] <= 1050*10**9 for t in self.tasks))
         self.assertEqual(len(self.profile), 66)
         self.assertEqual({p["node_id"] for p in self.profile}, set(range(66)))
@@ -71,6 +71,16 @@ class FinalScenarioTests(unittest.TestCase):
         expected = json.loads((SCENE / "workload/workload-summary.json").read_text())["truncated_normal"]["fixed_tail_task_ids"]
         self.assertEqual({str(s): [a["task_id"] for a in anchors if a["input_bytes"] == s]
                           for s in (500_000_000, 1_000_000_000)}, expected)
+
+    def test_real_warmup_is_additive_and_not_a_temperature_override(self):
+        target, warm = self.tasks[119], self.tasks[800]
+        self.assertEqual((warm["task_id"], warm["input_bytes"], warm["compute_work_units"]),
+                         (801, 400_000_000, 600_000))
+        self.assertEqual(warm["arrival_time_ns"], target["arrival_time_ns"] - 6_200_000_000)
+        for key in ("source_node_id", "compute_node_id", "result_node_id"):
+            self.assertEqual(warm[key], target[key])
+        self.assertEqual(warm["compute_node_id"], 62)
+        self.assertEqual(warm["task_profile"], "compression")
 
     def test_synthetic_placement_deterministic_and_missing_slices_rejected(self):
         positions = {t*10**9: {n: (40., (-95., 15., 120., 70.)[n % 4]) for n in range(66)}

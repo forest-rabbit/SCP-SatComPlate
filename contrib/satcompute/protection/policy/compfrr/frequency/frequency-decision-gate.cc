@@ -5,10 +5,13 @@
 
 namespace ns3::protection
 {
-void FrequencyDecisionGate::Propose(const FrequencyDecision& decision)
+void FrequencyDecisionGate::Propose(const FrequencyDecision& decision, bool capacityRetry)
 {
     const bool off = m_phase == ProtectionPhase::OFF;
-    if (m_proposal || decision.epochNs <= m_lastEpoch || decision.phase != m_phase ||
+    const bool sameTimeRetry = capacityRetry && off && decision.epochNs == m_lastEpoch &&
+                               decision.epochNs > m_lastCapacityEpoch;
+    if (m_proposal || (decision.epochNs <= m_lastEpoch && !sameTimeRetry) ||
+        (capacityRetry && (!off || decision.epochNs <= m_lastCapacityEpoch)) || decision.phase != m_phase ||
         (!off && m_phase != ProtectionPhase::ON))
         throw std::invalid_argument("stale, duplicate or wrong-phase frequency proposal");
     if ((off && decision.action != FrequencyAction::NONE &&
@@ -25,6 +28,7 @@ void FrequencyDecisionGate::Propose(const FrequencyDecision& decision)
             throw std::invalid_argument("frequency proposal outside search grid");
     }
     m_proposal = decision;
+    if (capacityRetry) m_lastCapacityEpoch = decision.epochNs;
     m_lastEpoch = decision.epochNs;
 }
 

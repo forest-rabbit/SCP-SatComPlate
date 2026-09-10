@@ -12,6 +12,7 @@ build_lib(
     protection/policy/compfrr/frequency/compfrr-frequency-policy.cc
     protection/policy/compfrr/frequency/frequency-decision-gate.cc
     protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.cc
+    protection/policy/feasible-placement-pairs.cc
     protection/policy/experimental/least-recovery-load/least-recovery-load-placement-policy.cc
     protection/mechanism/checkpoint/checkpoint-progress.cc
     protection/mechanism/checkpoint/checkpoint-manager.cc

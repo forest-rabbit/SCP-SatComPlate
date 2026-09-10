@@ -2,6 +2,7 @@
 #ifndef SATCOMPUTE_PLACEMENT_POLICY_H
 #define SATCOMPUTE_PLACEMENT_POLICY_H
 #include "../common/protection-types.h"
+#include <functional>
 
 namespace ns3::protection
 {
@@ -20,6 +21,25 @@ struct PlacementDecision
     bool operator==(const PlacementDecision&) const = default;
 };
 
+/** One causal path preview. No capacity is acquired while enumerating pairs. */
+struct PlacementPathAvailability
+{
+    bool reachable{}, admissible{};
+    std::string reason;
+};
+
+/** Exhaustive node/path counts; frequency hard constraints are checked in ranking order. */
+struct FeasiblePlacementPairs
+{
+    std::vector<PlacementDecision> pairs;
+    uint64_t total{}, nodeFeasible{}, skipNode{}, skipNoRoute{}, skipNoCapacity{}, skipOther{};
+    std::string reason;
+};
+
+FeasiblePlacementPairs BuildFeasiblePlacementPairs(
+    const PlacementContext& context,
+    const std::function<PlacementPathAvailability(uint32_t, uint32_t)>& preview);
+
 /** Placement ranks candidates only; runtime owns real admission and execution. */
 class PlacementPolicy
 {
@@ -28,6 +48,9 @@ class PlacementPolicy
     virtual const char* Name() const = 0; ///< Stable diagnostic name, not an eligibility rule.
     /** Return a complete pair, or no decision if either role cannot be placed. */
     virtual std::optional<PlacementDecision> Select(const PlacementContext& context) const = 0;
+    /** Rank only the common prefiltered set; no objective/risk optimization here. */
+    virtual void RankPairs(std::vector<PlacementDecision>& pairs,
+                           const PlacementContext& context) const = 0;
 };
 
 /** Shared baseline predicates, deliberately not storage/load optimization. */

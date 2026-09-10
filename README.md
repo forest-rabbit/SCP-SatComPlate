@@ -85,7 +85,7 @@ uv 只管理 Python 工具环境，不能替代 C++ 编译器和系统库。SatC
 ## 正式实验与测试示例
 
 当前正式实验入口为 [LEO-66 Final Experiment Scene](contrib/satcompute/input/experiments/leo-66/README.md)：
-66 星、800 任务、1300 s、每星 100000 WU/s、10 Gbps、1 ms；正式输入自包含，
+66 星、801 任务、1300 s、每星 100000 WU/s、10 Gbps、1 ms；正式输入自包含，
 测试数据统一放在 `contrib/satcompute/tests/fixtures/`。
 
 仓库提供一组已经纳入回归测试的

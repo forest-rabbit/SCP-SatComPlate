@@ -9,6 +9,7 @@
 #include "placement-load-ledger.h"
 
 #include <filesystem>
+#include <set>
 
 namespace ns3::protection
 {
@@ -30,6 +31,12 @@ struct FrequencyDecisionRecord
     std::string trigger{"FAULT_EPOCH"};      ///< TASK_RUNNING is a policy event, never a draw.
     double pF1{}, pF2{};     ///< Current model snapshot, not an observed failure label.
     int64_t firstSampleNs{}; ///< First real check included by the predictor.
+    FeasiblePlacementPairs pairStats; ///< Exhaustive node/path feasibility, without storing pairs.
+    uint64_t pairPathFeasible{}, pairHardChecked{}, pairHardFeasible{}, pairSkipStorage{}, pairSkipDeadline{};
+    bool waitingBefore{}, waitingAfter{};
+    uint64_t capacityRetryCount{};
+    bool capacityRetrySuccess{};
+    int64_t capacityWaitStartNs{-1}, capacityWaitEndNs{-1};
 };
 
 /** Online generate integration. Owns no fault model, RNG, state bytes or second network. */
@@ -99,6 +106,9 @@ class FrequencyProtectionController : public ProtectionPolicy
         std::optional<int64_t> pauseStart; ///< Beginning of the current reason-specific interval.
         std::string pauseReason; ///< Current effective pause cause.
         int64_t lastDecisionNs{-1}; ///< Avoid duplicate policy evaluation at a coincident check.
+        int64_t lastCapacityDecisionNs{-1}; ///< At most one capacity retry per task/timestamp.
+        std::optional<int64_t> capacityWaitStart;
+        uint64_t capacityRetryCount{};
     };
     struct PauseInterval
     {
@@ -113,6 +123,9 @@ class FrequencyProtectionController : public ProtectionPolicy
     };
 
     void OnTask(const TaskEventRecord& event);      ///< Immediate OFF decision at primary dispatch.
+    void CapacityReleased();
+    void DrainCapacityRetries();
+    void CloseCapacityWait(uint64_t taskId, State& state, int64_t timeNs, const std::string& reason);
     void BeforeEpoch(const FaultEpochInput& epoch); ///< Pure proposal before random draws.
     void Evaluate(const FaultEpochInput& epoch, const std::string& trigger);
     void AfterEpoch(int64_t timeNs, const std::vector<FaultEpochOutcome>& outcomes);
@@ -127,6 +140,7 @@ class FrequencyProtectionController : public ProtectionPolicy
                                      std::string* reason = nullptr) const;
     ///< Current deterministic route, never future queue completion.
     bool BuildResources(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
+    void EvaluateOffPairs(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
     ///< Adapt actual placement, legal inventory, pools, rates and paths.
     Ptr<TaskCoordinator> m_tasks;                     ///< Business lifecycle owner.
     SatelliteRuntimeView& m_topology;                 ///< Shared network view.
@@ -139,6 +153,10 @@ class FrequencyProtectionController : public ProtectionPolicy
     std::map<uint64_t, State> m_states;               ///< Per-primary frequency lifecycle.
     std::vector<FrequencyDecisionRecord> m_decisions; ///< Proposal/resolution audit.
     std::vector<PauseInterval> m_pauses;               ///< Actual committed PAUSE intervals.
+    std::set<uint64_t> m_waitingCapacity;
+    std::vector<PauseInterval> m_capacityWaits; ///< Not a compute reservation or actual waste.
+    EventId m_capacityDrain;
+    bool m_finalized{};
 };
 } // namespace ns3::protection
 #endif

@@ -11,6 +11,7 @@ class FirstFeasiblePlacementPolicy : public PlacementPolicy
   public:
     const char* Name() const override { return "ffp"; }
     std::optional<PlacementDecision> Select(const PlacementContext& context) const override;
+    void RankPairs(std::vector<PlacementDecision>& pairs, const PlacementContext&) const override;
 };
 } // namespace ns3::protection
 #endif

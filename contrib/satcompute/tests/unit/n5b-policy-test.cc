@@ -160,6 +160,62 @@ void PlacementChecks()
     Check(loads.Empty() && loads.Get(1).peakRecovery == 1, "load counters leak/underflow");
 }
 
+void FeasiblePairChecks()
+{
+    PlacementContext c{3, {{0, true, true, true, true}, {1, true, true, true, true},
+                           {2, true, true, true, false}, {3, true, true, true, true}}};
+    FirstFeasiblePlacementPolicy ffp;
+    LeastRecoveryLoadPlacementPolicy lrl(1);
+    uint64_t probes = 0;
+    auto probe = [&](uint32_t s, uint32_t d) {
+        ++probes;
+        const bool blocked = s == 0 && d == 1;
+        return PlacementPathAvailability{true, !blocked, blocked ? "NO_ADMISSIBLE_PATH" : ""};
+    };
+    auto set = BuildFeasiblePlacementPairs(c, probe);
+    Check(set.total == 6 && set.nodeFeasible == 4 && set.pairs.size() == 3 &&
+          set.skipNoCapacity == 1 && set.skipNode == 2, "pair counts/node/path filters wrong");
+    Check(probes <= 7, "shared same-time path probes were not memoized");
+    auto a = set.pairs, b = set.pairs;
+    ffp.RankPairs(a, c);
+    lrl.RankPairs(b, c);
+    Check(a.front() == PlacementDecision{0, 2} && b.front() == PlacementDecision{0, 2},
+          "blocked first pair prevented trying second feasible pair");
+    c.candidates[0].backupAssignmentCount = 8;
+    lrl.RankPairs(b, c);
+    Check(b.front() == PlacementDecision{1, 2}, "LRL ranking changed common eligibility");
+    ffp.RankPairs(b, c);
+    Check(a == b, "policies did not consume identical feasible sets");
+    std::reverse(c.candidates.begin(), c.candidates.end());
+    auto reversed = BuildFeasiblePlacementPairs(c, probe).pairs;
+    ffp.RankPairs(reversed, c);
+    Check(reversed == a, "pair input order changed deterministic feasible set");
+    for (const auto& blocked : {std::pair{3u,0u}, std::pair{3u,2u}, std::pair{0u,2u}})
+    {
+        auto result = BuildFeasiblePlacementPairs(c, [&](auto s, auto d) {
+            const bool route = std::pair{s,d} != blocked;
+            return PlacementPathAvailability{route, route, route ? "" : "NO_ROUTE"};
+        });
+        Check(std::find(result.pairs.begin(), result.pairs.end(), PlacementDecision{0,2}) == result.pairs.end(),
+              "required primary/local/remote route was not hard checked");
+    }
+    auto capacity = BuildFeasiblePlacementPairs(c, [](auto,auto) {
+        return PlacementPathAvailability{true,false,"NO_ADMISSIBLE_PATH"};
+    });
+    Check(capacity.reason == "NO_CAPACITY_NOW", "temporary exhaustion misclassified");
+    auto disconnected = BuildFeasiblePlacementPairs(c, [](auto,auto) {
+        return PlacementPathAvailability{false,false,"NO_ROUTE"};
+    });
+    Check(disconnected.reason == "NO_ROUTE", "no topology route misclassified");
+    for (auto& node : c.candidates)
+    {
+        node.healthy = node.nodeId != 0;
+        node.idle = node.nodeId != 1;
+    }
+    Check(BuildFeasiblePlacementPairs(c, probe).reason == "NO_FEASIBLE_NODE_PAIR",
+          "unhealthy/busy/non-one-hop nodes admitted");
+}
+
 /** Explicit unbounded scalar oracle fixture, not a production resource adapter. */
 FrequencyInput Toy()
 {
@@ -438,6 +494,21 @@ void GateChecks()
     Reject([&] { hit.Resolve(start.epochNs, false, true); });
     Reject([&] { hit.Propose(start); });
 
+    FrequencyDecisionGate retry;
+    auto none = start;
+    none.action = FrequencyAction::NONE;
+    none.selected.reset();
+    retry.Propose(none);
+    Check(!retry.Resolve(none.epochNs, false, true), "blocked dispatch stays OFF");
+    Reject([&] { retry.Propose(start); });
+    retry.Propose(start, true);
+    Check(retry.Resolve(start.epochNs, false, true), "same-ns resource release permits one fresh OFF retry");
+    Reject([&] { retry.Propose(start, true); });
+    FrequencyDecisionGate stillBlocked;
+    stillBlocked.Propose(none, true);
+    Check(!stillBlocked.Resolve(none.epochNs, false, true), "capacity interest is not START");
+    Reject([&] { stillBlocked.Propose(none, true); });
+
     FrequencyDecisionGate gate;
     gate.Propose(start);
     Check(gate.Resolve(start.epochNs, false, true), "survive permits START commit");
@@ -523,6 +594,7 @@ int main()
     try
     {
         PlacementChecks();
+        FeasiblePairChecks();
         SolverChecks();
         ProbabilityChecks();
         GateChecks();

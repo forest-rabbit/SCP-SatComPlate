@@ -2,9 +2,18 @@
 #include "first-feasible-placement-policy.h"
 
 #include <algorithm>
+#include <tuple>
 
 namespace ns3::protection
 {
+void FirstFeasiblePlacementPolicy::RankPairs(std::vector<PlacementDecision>& pairs,
+                                           const PlacementContext&) const
+{
+    std::sort(pairs.begin(), pairs.end(), [](const auto& a, const auto& b) {
+        return std::tie(a.localNode, a.remoteNode) < std::tie(b.localNode, b.remoteNode);
+    });
+}
+
 std::optional<PlacementDecision> FirstFeasiblePlacementPolicy::Select(
     const PlacementContext& context) const
 {

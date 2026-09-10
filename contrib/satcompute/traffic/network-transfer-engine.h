@@ -19,6 +19,7 @@
 #include "ns3/ptr.h"
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -66,6 +67,11 @@ class NetworkTransferEngine : public Object
     /** Preview the next runtime flow's current policy; actual registration rechecks admission. */
     AdmissiblePathEstimate EstimateAdmissiblePath(uint32_t source, uint32_t destination) const;
     void SetTerminalObserver(uint64_t transferId, Callback<void, uint64_t, int64_t> observer);
+    /** Notification only; subscribers defer decisions until the releasing event completes. */
+    void SetCapacityReleaseObserver(std::function<void()> observer)
+    {
+        m_capacityReleaseObserver = std::move(observer);
+    }
     uint64_t GetReceivedBytes(uint64_t transferId) const;
     void StartTransferNow(uint64_t transferId,
                           Callback<void, uint64_t, int64_t> completionCallback = {});
@@ -107,6 +113,7 @@ class NetworkTransferEngine : public Object
     void HandleTopologyRouteUpdate();
     void HandleSenderComplete(uint64_t transferId, int64_t sendTimeNs);
     void HandleTransferComplete(uint64_t transferId, int64_t completionTimeNs);
+    void ReleaseCapacity(uint64_t transferId);
 
     SatelliteRuntimeView* m_topology{};
     std::string m_chunkMode;
@@ -141,6 +148,7 @@ class NetworkTransferEngine : public Object
     std::set<uint64_t> m_businessResults;
     std::set<uint64_t> m_runtimeStarting;
     std::map<uint64_t, Callback<void, uint64_t, int64_t>> m_terminalObservers;
+    std::function<void()> m_capacityReleaseObserver;
 };
 
 } // namespace ns3

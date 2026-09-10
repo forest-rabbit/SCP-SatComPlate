@@ -19,7 +19,7 @@ tests/
 ```
 
 日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动正式场景的原始指标
-保存在 gitignore 排除的本地 `output/`，完整800任务运行不接入 `run-all.sh` 或 GitHub CI。
+保存在 gitignore 排除的本地 `output/`，完整正式场景运行不接入 `run-all.sh` 或 GitHub CI。
 
 N5A-G4 的冻结故障验收仍复用 `integration/regression/run-final-scenario.py`，
 只在明确授权后手动运行；原始 N4 输出不可覆盖。例：
@@ -72,7 +72,7 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 |---|---|
 | `test_task_workload_model.py` | 精确S/W/K/RESULT、rho/sigma/H、LLM、合法边界及5/10/20%守恒 |
 | `test_final_scenario.py` | 冻结输入、两类种子、固定锚点、缺失切片/非法CLI、正式runner；可选原生切片逐字节复现 |
-| `test_compfrr_shadow.py` | 全800任务跨语言布局、虚拟账本、资源分账、证据差异与离线统计 |
+| `test_compfrr_shadow.py` | 全部正式任务跨语言布局、虚拟账本、资源分账、证据差异与离线统计 |
 | `test_fault_probability_comparison.py` | 概率对概率一致性及缺失记录拒绝 |
 | `test_fault_workload_fixtures.py` | 保留F1/F2/N4B固定fixture的角色与分布，不再依赖旧生成profile |
 | `test_link_metrics_report.py` | 通用链路统计分位数 |
@@ -98,7 +98,7 @@ N5A 定向验证（需要先构建；使用项目 uv 环境）：
 .venv/bin/python contrib/satcompute/tests/integration/smoke/run-recovery-smoke.py --output-root output/n5a-g3/smoke
 ```
 
-第二条只核对800份任务的字节/WU/合法边界，与 G4 oracle 单向比较，不运行800任务网络仿真。
+第二条只核对全部正式任务的字节/WU/合法边界，与 G4 oracle 单向比较，不运行正式网络仿真。
 可加 `--sizingOutput=<新输出文件>` 保存四类代表性状态表；普通平台运行不输出这些验证数据。
 G2 smoke 为 16 星/4 类任务/15 s 的 off、fixed、重复、容量不足四次运行，输出可留在上述目录；
 不提供 `--output-root` 时自动使用临时目录。核对精确字节、cL/cR、l/r/x、存储、普通计算时间
@@ -173,9 +173,15 @@ SATCOMPUTE_POSITION_SLICES=output/n4c-g3-truncnormal-v3-20260909/orbit/topology 
 
 `integration/regression/run-final-scenario.py`支持当前场景的none、generate、
 generate+shadow，以及仅供 N5A 验收的显式 validation-replay。默认为generate；概率CSV审计和shadow均默认关闭。
-输出必须是新目录，默认1300 s、800任务、66星、10 Gbps、1 ms、seed1/run11。
+输出必须是新目录，当前1300 s、801任务、66星、10 Gbps、1 ms、seed1/run11。
 
-N5B-G3 在同一构建下手动各运行一次：A 使用 `--protection-mode=fixed`，B 使用
+G3R2 仅手动重跑 B/C：原 800 个任务不变，另加 400 MB 前置任务 801。
+用 `analyze-frequency-evaluation.py --runs B目录 C目录` 核对当前配对账本；旧 A 仅为历史参考。
+`run-warm-predecessor-check.py --output-dir=新目录` 单独验证任务 801/120 的真实计算、
+间隙、余温和固定 F3 时刻，启用概率 CSV 仅用于该两任务检查，不纳入日常或正式运行。
+可行节点对、5 ms 释放、重复/部分释放、终态清理和无额外抽样测试位于既有 policy/runtime 单测。
+
+历史 N5B-G3 的 800 任务在同一构建下手动各运行一次：A 使用 `--protection-mode=fixed`，B 使用
 `--protection-mode=compfrr`，C 再加 `--placement-mode=lrl`。三者均为在线 generate，
 不自动加入 smoke/regression/CI。LRL lambda 固定 1，无扫描。输出目录约定为
 `output/n5b-g3/{A-ffp-fixed,B-ffp-compfrr-frequency,C-lrl-compfrr-frequency}`。

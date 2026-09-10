@@ -14,7 +14,7 @@ class FrequencyDecisionGate
 {
   public:
     /** Stage one decision without changing current config or effective phase. */
-    void Propose(const FrequencyDecision& decision);
+    void Propose(const FrequencyDecision& decision, bool capacityRetry = false);
     /** Consume exactly one same-epoch proposal after fault execution/liveness resolution. */
     bool Resolve(int64_t epochNs, bool currentFaultHit, bool primaryStillRunning);
     /** External physical initialization commit, never caused by a policy proposal. */
@@ -51,6 +51,7 @@ class FrequencyDecisionGate
     std::optional<FrequencyConfiguration> m_current; ///< Committed configuration.
     std::optional<FrequencyDecision> m_proposal;     ///< No effective side effects before Resolve.
     int64_t m_lastEpoch{-1};                         ///< Reject duplicate or stale decisions.
+    int64_t m_lastCapacityEpoch{-1}; ///< Allow one fresh OFF resource decision after same-ns NONE.
     bool m_paused{}; ///< Suppresses both new targets and new batches, never deletes state.
 };
 } // namespace ns3::protection

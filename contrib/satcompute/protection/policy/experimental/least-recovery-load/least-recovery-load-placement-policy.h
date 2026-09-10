@@ -13,6 +13,8 @@ class LeastRecoveryLoadPlacementPolicy : public PlacementPolicy
     /** Explicit nonnegative integer weight, frozen before a diagnostic experiment. */
     explicit LeastRecoveryLoadPlacementPolicy(uint32_t recoveryWeight);
     std::optional<PlacementDecision> Select(const PlacementContext& context) const override;
+    void RankPairs(std::vector<PlacementDecision>& pairs,
+                   const PlacementContext& context) const override;
 
   private:
     uint32_t m_recoveryWeight; ///< Diagnostic weight, never an N5B main-scene setting.

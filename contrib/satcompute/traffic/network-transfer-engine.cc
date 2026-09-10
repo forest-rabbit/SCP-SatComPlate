@@ -383,7 +383,7 @@ NetworkTransferEngine::EstimateAdmissiblePath(uint32_t source, uint32_t destinat
     const auto ordinal = it == m_nextSourceOrdinal.end() ? 0 : it->second;
     if (ordinal > std::numeric_limits<uint16_t>::max() - NETWORK_TRANSFER_FIRST_SOURCE_PORT)
     {
-        out.failureReason = "NO_ADMISSIBLE_PATH";
+        out.failureReason = "SOURCE_PORT_EXHAUSTED";
         return out;
     }
     preview.sourcePort = NETWORK_TRANSFER_FIRST_SOURCE_PORT + ordinal;
@@ -665,7 +665,7 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
         m_flowRouteRegistry->ReleaseAssignmentsForRouteUpdate(
             flowKey,
             m_topology->GetRouteEpoch(m_plans[index].sourceSatelliteId));
-        m_capacityReservationState->Release(transferId);
+        ReleaseCapacity(transferId);
     }
 
     if (invalidTransfers.empty())
@@ -704,6 +704,12 @@ NetworkTransferEngine::HandleSenderComplete(uint64_t transferId, int64_t sendTim
         m_flowRouteRegistry->FinishSending(GetFlowKey(index));
     }
     m_states[index] = TransferRuntimeState::SENDER_FINISHED;
+}
+
+void NetworkTransferEngine::ReleaseCapacity(uint64_t transferId)
+{
+    m_capacityReservationState->Release(transferId);
+    if (m_capacityReleaseObserver) m_capacityReleaseObserver();
 }
 
 void
@@ -789,7 +795,7 @@ NetworkTransferEngine::FinalizeTransferIfActive(uint64_t transferId,
     if (m_capacityAwareRouting &&
         m_capacityReservationState->HasActivePath(transferId))
     {
-        m_capacityReservationState->Release(transferId);
+        ReleaseCapacity(transferId);
     }
 
     const EcmpFlowKey flowKey = GetFlowKey(index);

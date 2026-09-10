@@ -45,7 +45,7 @@ def verify(root):
     probabilities = {(r["task_id"], r["simulation_time_ns"]): r
                      for r in rows(audit, "fault-model-probabilities.csv")}
     for r in decisions:
-        if r.get("decision_trigger") == "TASK_RUNNING":
+        if r.get("decision_trigger") in ("TASK_RUNNING", "CAPACITY_RELEASE"):
             assert r["actual_fault_sampled"] == r["actual_fault_hit"] == "0"
             assert int(r["first_sample_time_ns"]) > int(r["fault_epoch_time_ns"])
             if r["decision_committed"] == "1":
@@ -63,7 +63,8 @@ def verify(root):
     for name in ("frequency-decisions.csv", "protection-events.csv", "protection-transfers.csv",
                  "protection-task-summary.csv", "protection-node-storage-summary.csv",
                  "recovery-summary.csv", "recovery-events.csv", "fault-trace.json",
-                 "placement-load-events.csv", "placement-node-summary.csv", "frequency-pause-intervals.csv"):
+                 "placement-load-events.csv", "placement-node-summary.csv", "frequency-pause-intervals.csv",
+                 "frequency-capacity-waits.csv"):
         assert (plain / name).read_bytes() == (audit / name).read_bytes(), name
     for event in rows(audit, "protection-events.csv"):
         assert int(event["remote_work_units"]) <= int(event["local_work_units"]) <= int(event["actual_work_units"])
@@ -84,7 +85,8 @@ def verify(root):
     assert not (off / "frequency-decisions.csv").exists()
     run(plain, mode="off")
     assert not (plain / "frequency-decisions.csv").exists(), "stale frequency audit survived off"
-    for name in ("placement-load-events.csv", "placement-node-summary.csv", "frequency-pause-intervals.csv"):
+    for name in ("placement-load-events.csv", "placement-node-summary.csv", "frequency-pause-intervals.csv",
+                 "frequency-capacity-waits.csv"):
         assert not (plain / name).exists(), name
     for name in ("task-summary.csv", "transfer-summary.csv", "fault-trace.json"):
         assert (off / name).read_bytes() == (plain / name).read_bytes(), name

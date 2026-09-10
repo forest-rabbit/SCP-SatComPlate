@@ -63,7 +63,11 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
            "bytes,placement_mode,resource_reason,local_active_backup_assignments,"
            "remote_active_backup_assignments,local_active_recoveries,remote_active_recoveries,"
            "decision_trigger,first_sample_time_ns,p_f1_snapshot,p_f2_snapshot,q_comp_snapshot,"
-           "replay_available,replay_reason\n";
+           "replay_available,replay_reason,waiting_capacity_before,waiting_capacity_after,"
+           "pair_candidates_total,pair_node_feasible,pair_path_feasible,pair_hard_checked,"
+           "pair_hard_feasible,pair_skip_node,pair_skip_no_route,pair_skip_no_capacity,pair_skip_other,"
+           "pair_skip_storage,pair_skip_deadline,pair_hard_rejection_reason,capacity_retry_count,"
+           "capacity_retry_success,capacity_wait_start_ns,capacity_wait_end_ns,capacity_wait_duration_ns\n";
     auto number = [&](const auto& value) {
         if (value)
             out << *value;
@@ -119,13 +123,35 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
                 << r.localLoad.activeRecovery << ',' << r.remoteLoad.activeRecovery;
         else out << ",,,";
         out << ',' << r.trigger << ',' << r.firstSampleNs << ',' << r.pF1 << ',' << r.pF2 << ','
-            << in.risk.qCurrentSample << ',' << in.replayAvailable << ',' << r.replayReason << '\n';
+            << in.risk.qCurrentSample << ',' << in.replayAvailable << ',' << r.replayReason << ','
+            << r.waitingBefore << ',' << r.waitingAfter << ',';
+        if (in.phase == ProtectionPhase::OFF)
+            out << r.pairStats.total << ',' << r.pairStats.nodeFeasible << ',' << r.pairPathFeasible
+                << ',' << r.pairHardChecked << ',' << r.pairHardFeasible << ',' << r.pairStats.skipNode
+                << ',' << r.pairStats.skipNoRoute << ',' << r.pairStats.skipNoCapacity << ','
+                << r.pairStats.skipOther << ',' << r.pairSkipStorage << ',' << r.pairSkipDeadline;
+        else out << ",,,,,,,,,,";
+        out << ',';
+        if (r.pairSkipStorage || r.pairSkipDeadline)
+            out << "PAIR_REJECTED_BY_FREQUENCY_HARD_CONSTRAINT";
+        out << ',' << r.capacityRetryCount << ',' << r.capacityRetrySuccess << ',';
+        number(r.capacityWaitStartNs >= 0 ? std::optional(r.capacityWaitStartNs) : std::nullopt);
+        number(r.capacityWaitEndNs >= 0 ? std::optional(r.capacityWaitEndNs) : std::nullopt);
+        if (r.capacityWaitStartNs >= 0 && r.capacityWaitEndNs >= 0)
+            out << r.capacityWaitEndNs - r.capacityWaitStartNs;
+        out << '\n';
     }
     std::ofstream pauses(directory / "frequency-pause-intervals.csv");
     pauses.exceptions(std::ios::badbit | std::ios::failbit);
     pauses << "task_id,start_time_ns,end_time_ns,duration_ns,reason\n";
     for (const auto& p : m_pauses)
         pauses << p.taskId << ',' << p.startNs << ',' << p.endNs << ',' << p.endNs-p.startNs << ',' << p.reason << '\n';
+    std::ofstream waits(directory / "frequency-capacity-waits.csv");
+    waits.exceptions(std::ios::badbit | std::ios::failbit);
+    waits << "task_id,start_time_ns,end_time_ns,duration_ns,reason\n";
+    for (const auto& w : m_capacityWaits)
+        waits << w.taskId << ',' << w.startNs << ',' << w.endNs << ',' << w.endNs-w.startNs
+              << ',' << w.reason << '\n';
     std::ofstream risks(directory / "f3-compute-risk-snapshots.csv");
     risks.exceptions(std::ios::badbit | std::ios::failbit);
     risks << std::setprecision(17)
