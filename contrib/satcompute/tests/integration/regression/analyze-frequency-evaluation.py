@@ -262,7 +262,8 @@ def fairness(runs):
                          if arg.split("=", 1)[0][2:] not in ignored})
     require(all(c == commands[0] for c in commands), "unpaired scenario arguments")
     require(len({r["commit"] for r in identities}) == 1, "formal runs use different code")
-    count = 801 if len(runs) == 2 else 800
+    count = runs[0]["summary"]["tasks"]
+    require(count in (800, 801), "unexpected formal task count")
     require(all(r["execution_result"]["returncode"] == 0 and r["summary"]["tasks"] == count
                 and r["execution"]["simulation_duration_s"] == 1300 for r in runs), "formal run incomplete")
     return {"same_code_and_arguments_except_policy_and_output": True,
@@ -272,7 +273,7 @@ def fairness(runs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--runs", nargs="+", required=True, type=Path, help="B C (801 tasks), historical A B C (800), or one diagnostic run")
+    parser.add_argument("--runs", nargs="+", required=True, type=Path, help="B C, A B C (same scene required), or one diagnostic run")
     args = parser.parse_args()
     runs = [analyze(root) for root in args.runs]
     paired = fairness(runs) if len(runs) in (2, 3) else None

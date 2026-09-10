@@ -1,14 +1,14 @@
 {
   "workload_seed": "n4c-g1-66",
   "placement_seed": "n4c-g3-hotspot",
-  "task_count": 801,
+  "task_count": 800,
   "class_counts": {
     "sparse-inference": 240,
     "dense-image": 240,
-    "compression": 241,
+    "compression": 240,
     "llm": 80
   },
-  "ordinary_image_count": 705,
+  "ordinary_image_count": 704,
   "fixed_tail_task_ids": {
     "500000000": [
       97,
@@ -36,10 +36,10 @@
   ],
   "simulation_duration_s": 1300,
   "compute_rate_work_units_per_second": 100000,
-  "total_input_bytes": 193926895311,
-  "total_output_bytes": 100063510008,
-  "total_compute_work_units": 352223833,
-  "total_variable_state_bytes": 170403419215,
+  "total_input_bytes": 194119753287,
+  "total_output_bytes": 100168131855,
+  "total_compute_work_units": 352513119,
+  "total_variable_state_bytes": 170508041062,
   "llm_parameters": {
     "layers": 28,
     "kv_heads": 8,
@@ -49,14 +49,11 @@
     "header_bytes": 0,
     "max_cached_tokens": 40960
   },
-  "warmup": {
-    "task_id": 801,
-    "predecessor_of": 120,
-    "input_bytes": 400000000,
-    "compute_work_units": 600000,
-    "lead_ns": 6200000000,
-    "compute_node_id": 62,
-    "rule": "real compression task; same source/compute/result as task 120; normal faults and FCFS"
+  "controlled_f3_task": {
+    "task_id": 120,
+    "original_input_bytes": 207142024,
+    "input_bytes": 800000000,
+    "rule": "B-only size-selected controlled F3 protection case; not an unbiased performance sample"
   },
   "truncated_normal": {
     "mu_mb": 240,
@@ -86,7 +83,7 @@
     }
   },
   "placement_manifest": "../placement/placement-manifest.json",
-  "purpose": "N5B-G3R2: unchanged 800 business tasks plus one real 400 MB predecessor",
+  "purpose": "Final 800-task scene: B-selected 800 MB task 120; other 799 tasks unchanged; no predecessor",
   "node_compute_work_units": {
     "0": 1387247,
     "1": 1837121,
@@ -150,7 +147,7 @@
     "59": 383109,
     "60": 911984,
     "61": 1953037,
-    "62": 910714,
+    "62": 1200000,
     "63": 1111787,
     "64": 1147138,
     "65": 2082294

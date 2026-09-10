@@ -28,7 +28,7 @@ class FrequencyEvaluationTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 check([{**row, key: value}], [])
 
-    def test_bc_pair_identity_requires_new_scene_and_clean_same_code(self):
+    def test_bc_pair_identity_requires_same_scene_and_clean_same_code(self):
         runs = []
         for placement in ("ffp", "lrl"):
             runs.append({"execution": dict(protection_mode="compfrr", placement_mode=placement,
@@ -40,6 +40,8 @@ class FrequencyEvaluationTests(unittest.TestCase):
         changed[1]["summary"]["tasks"] = 800
         with self.assertRaises(ValueError):
             EVAL["fairness"](changed)
+        changed[0]["summary"]["tasks"] = 800
+        self.assertEqual(EVAL["fairness"](changed)["task_count"], 800)
 
     def test_percentiles_include_zeros(self):
         s = EVAL["stats"]([0, 0, 10, 30])

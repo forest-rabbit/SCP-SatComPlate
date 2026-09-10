@@ -173,12 +173,16 @@ SATCOMPUTE_POSITION_SLICES=output/n4c-g3-truncnormal-v3-20260909/orbit/topology 
 
 `integration/regression/run-final-scenario.py`支持当前场景的none、generate、
 generate+shadow，以及仅供 N5A 验收的显式 validation-replay。默认为generate；概率CSV审计和shadow均默认关闭。
-输出必须是新目录，当前1300 s、801任务、66星、10 Gbps、1 ms、seed1/run11。
+输出必须是新目录，当前1300 s、800任务、66星、10 Gbps、1 ms、seed1/run11。
 
-G3R2 仅手动重跑 B/C：原 800 个任务不变，另加 400 MB 前置任务 801。
-用 `analyze-frequency-evaluation.py --runs B目录 C目录` 核对当前配对账本；旧 A 仅为历史参考。
-`run-warm-predecessor-check.py --output-dir=新目录` 单独验证任务 801/120 的真实计算、
-间隙、余温和固定 F3 时刻，启用概率 CSV 仅用于该两任务检查，不纳入日常或正式运行。
+当前最终场景移除前置任务 801，仅增大任务 120 到 800 MB；本次仅授权正式 B 组，
+使用 `--protection-mode=compfrr --placement-mode=ffp`，不追加 A/C 或 CI。
+`run-f3-protection-check.py --output-dir=新目录 --input-bytes 700000000 800000000`
+是保留真实故障模型/轨道的 B 组单任务大小初筛；首次通过后停止，完整负载仍须单独验收。
+`run-f3-protection-check.py --inspect-run=B目录` 只读检查：node62 在 F3 前无 F1/F2、
+START 有收益、F3 前真实 ON、使用有效非零进度检查点且按期完成；仅完成或仅 START 不算通过。
+`analyze-frequency-evaluation.py --runs B目录` 生成本次单组账本。
+历史 G3R2 的 801 任务 B/C 结果保留，不能与本次或旧 A 严格配对；双组分析也要求同场景、同代码。
 可行节点对、5 ms 释放、重复/部分释放、终态清理和无额外抽样测试位于既有 policy/runtime 单测。
 
 历史 N5B-G3 的 800 任务在同一构建下手动各运行一次：A 使用 `--protection-mode=fixed`，B 使用

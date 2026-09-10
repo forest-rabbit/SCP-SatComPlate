@@ -1,5 +1,5 @@
 {
-  "evidence_scope": "Historical 800-task F3 selection evidence below; node/time remain frozen. Current 801-task workload adds real 400 MB predecessor task 801; see workload/workload-summary.json. Historical none progress and placement statistics are not current runtime measurements.",
+  "evidence_scope": "Historical original-800-task F3 selection evidence below; only node/time remain the runtime contract. Current final 800-task workload enlarges task 120 to 800 MB, with no predecessor. See workload/workload-summary.json. Historical none progress, input/work values and placement statistics are not current runtime measurements.",
   "profile": "n4c-hotspot",
   "seed": "n4c-g3-hotspot",
   "regions": [
@@ -44,8 +44,8 @@
     "ordinary_role": "result",
     "ordinary_release_time_ns": 281763802422,
     "large_victim": true,
-    "input_bytes": 207142024,
-    "compute_work_units": 310714,
+    "historical_input_bytes": 207142024,
+    "historical_compute_work_units": 310714,
     "none_compute_start_time_ns": 1024880770726,
     "none_compute_finish_time_ns": 1027987910726,
     "none_progress": 0.7000006436787528,

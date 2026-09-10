@@ -72,7 +72,7 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 ./ns3 run "satcompute --help"
 ```
 
-不带参数时，平台运行 [LEO-66 正式实验](input/experiments/leo-66/README.md)：1300 秒、66 星（每星 100,000 WU/s）、801 任务、
+不带参数时，平台运行 [LEO-66 正式实验](input/experiments/leo-66/README.md)：1300 秒、66 星（每星 100,000 WU/s）、800 任务、
 10 Gbps、1 ms、seed=1/run=11，在线生成 F1/F2 和 node62 在 1027.055770726 秒的受控 F3。
 概率审计仍默认关闭，链路吞吐/利用率统计默认开启。请使用独立 `outputDir` 保留实验结果。
 只缩短仿真时间不能截取完整任务文件；日常开发应提供一对小规模任务/算力输入，或使用
@@ -159,7 +159,7 @@ G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评�
 | CLI | 默认值 | 类型/单位 | 含义与约束 |
 |---|---:|---|---|
 | `--computeProfile` | `input/experiments/leo-66/compute/compute-profile.json` | 路径 | 默认每星 100,000 WU/s；自定义时必须与 `taskTrace` 成对提供 |
-| `--taskTrace` | `input/experiments/leo-66/workload/task-trace.json` | 路径 | 当前 801 任务；表中两条路径省略 `contrib/satcompute/` 前缀；成对设置 `none` 可禁用任务 |
+| `--taskTrace` | `input/experiments/leo-66/workload/task-trace.json` | 路径 | 当前 800 任务；表中两条路径省略 `contrib/satcompute/` 前缀；成对设置 `none` 可禁用任务 |
 | `--computeDeadlineFactor` | `1.3` | 倍率 | 有限且至少为1；首次计算开始后的deadline预算倍率，语义见[任务模块](task/README.md) |
 | `--transferChunkMode` | `size-aware` | 枚举 | `fixed` 或 `size-aware` 分包 |
 | `--transferPayloadBytes` | `1024` | 字节 | fixed payload，范围 `1..65507`，加 28-byte IPv4/UDP 头后不能超过 MTU |
