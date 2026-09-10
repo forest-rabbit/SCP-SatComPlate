@@ -105,6 +105,24 @@ execution ratio 平均0.973609、P50/P90均为1；分位数用线性插值，pla
 合计 **4128814.9765 WU**，除以原始351623833 WU为 **1.17421363%**。
 post-catchup 正常剩余计算不加进 waste；4个失败恢复的 planned/actual 差1403996 WU没有虚增计费。
 
+### Recovery concentration under first-feasible placement
+
+4个 deadline 失败任务114/252/456/475的 remote 均为卫星0。故障当刻，它分别正在执行
+普通任务158、恢复任务734、恢复任务722、恢复任务493，不能立即接管。已有 committed
+state 不会自动迁移到其他节点，因此回退到空闲节点完整重算，且原 deadline 不重置。
+
+| 卫星 | 原始任务数 | 接受恢复任务数 | 全程计算利用率 |
+|---|---:|---:|---:|
+| 0 | 3 | 49 | 13.42% |
+| 1 | 3 | 26 | 6.90% |
+| 2 | 5 | 8 | 2.64% |
+
+原始 workload 热点是卫星12/8/11，任务数分别为110/105/103；不是这些低 ID 恢复节点。
+当前按 stable ID 选择首个可行节点的 **FFP（First-Feasible Placement）** 自身造成了恢复集中。
+这是 placement baseline 的限制，留给 N5C 研究 backup assignment / recovery pressure，
+不在 N5A 调参或修改恢复机制。低全程利用率不保证故障当刻空闲。
+证据来自本次 fixed-final 的 task-summary、task-events、recovery-summary 和 compute-node-summary。
+
 ### 四类任务
 
 | profile | tasks / STARTed | ON / INITIALIZING at fault | 恢复成功 / 尝试 | deadline met | TAIL / REDO / RECOMPUTE |
@@ -150,7 +168,7 @@ sparse 264048/555473015、compression 138795477/1138795477、LLM 251166720/89146
 正常成本为事件完成等效计费而非额外 CPU 暂停；失败恢复可能执行不足一个整数 WU的时间，
 时间照实保留，actual WU向下取整。固定策略的性能不能解释为 N5B/N5C 算法结论。
 本正式场景没有F2直接 RUNNING victim，不能据此声称其恢复覆盖率；F2语义由受控测试覆盖。
-验收允许4个真实 deadline 失败，没有为救回率调参。N5A实现与G4验收可提交最终人工审阅；
-建议用户批准后再将 PR #95 转 Ready、合入 n5，当前不执行这些操作。
-
-**STOPPED AT N5A-G4。** PR #95 保持 Draft，不合并、不打 tag、不运行阶段 CI、不清理分支、不进入 N5B。
+验收允许4个真实 deadline 失败，没有为救回率调参。用户最终审阅确认 **G1/G2/G3/G4 PASS，
+N5A COMPLETE**，授权 PR #95 合入 n5 并清理功能分支；main 保持不变，不运行 N5 阶段 CI、
+不打 n5-complete tag。后续 N5B 仅推进 G1，正式算法实验采用在线 generate；本次冻结回放
+仍只作为执行验收，不扩展为生产预测入口。
