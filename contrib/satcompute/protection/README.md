@@ -4,7 +4,7 @@ N5A 回答“怎样执行保护”，N5B 才决定启动/频率，N5C 才优化�
 当前接入单次故障恢复闭环和 **G4 planned/actual 资源账本**：真实备份路径、故障快照、
 恢复服务预留、TAIL / REMOTE_REDO / RECOMPUTE 和 winning RESULT。cL/cR 不占用主 ComputeService。
 FIXED 正式场景仅为执行验收，不代表 CompFRR 算法效果。N5A 已合入 n5；
-N5B-G2 已将独立频率策略接入在线故障与真实 checkpoint；尚未开展 G3 正式算法对比，N5C 未实现。
+N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比固定/动态频率与 LRL 诊断，N5C 未实现。
 
 ## 文件与职责
 
@@ -17,7 +17,7 @@ N5B-G2 已将独立频率策略接入在线故障与真实 checkpoint；尚未�
 | `policy/fixed/fixed-protection-policy.h/.cc` | 首次主计算启动时的一次固定保护、组合 FFP、失败时重算后备动作 |
 | `policy/placement-policy.h` | PlacementContext/Decision/Policy，基础可行性与因果候选输入 |
 | `policy/baseline/first-feasible-placement/` | FFP：稳定 ID 的首个可行 local/remote，保持 N5A 原行为 |
-| `policy/experimental/least-recovery-load/` | LRL：assignment + weight×active recovery，仅纯单测诊断 |
+| `policy/experimental/least-recovery-load/` | LRL：当前 remote assignment + weight×active recovery，G3 节点集中度诊断 |
 | `policy/compfrr/frequency/compfrr-frequency-policy.h/.cc` | 独立 J_OFF/J_START/J_ON 求解、可行域、当前 q/完成前预测接口 |
 | `policy/compfrr/frequency/frequency-decision-gate.h/.cc` | 每任务纯 proposal/commit 合同、前向 target/batch 规则；无仿真接线 |
 | `mechanism/checkpoint/checkpoint-progress.h/.cc` | 不发包的纯进度合同：生成延迟、连续接收、融合提交及同纳秒历史查询 |
@@ -25,6 +25,8 @@ N5B-G2 已将独立频率策略接入在线故障与真实 checkpoint；尚未�
 | `runtime/fixed-protection-controller.h/.cc` | 只读任务事件接线、候选快照、固定策略/机制分发 |
 | `runtime/frequency-protection-controller.h/.cc` | generate 检查点前提案、故障执行后提交，FFP/路径/算力适配及实际机制调用 |
 | `runtime/frequency-storage-estimator.h/.cc` | 按合法状态与真实库存计算保守的额外存储峰值 |
+| `runtime/placement-load-ledger.h/.cc` | 有效 remote 分配/恢复所有权、累计次数、峰值及真实释放 |
+| `../metrics/core/placement-load-metrics.cc` | 节点集中度和每次负载变更 CSV |
 | `../metrics/core/frequency-metrics.cc` | 独立逐 epoch 决策 CSV；不混入 N5A actual 成本账本 |
 | `runtime/recovery-controller.h/.cc` | 故障裁决、一次恢复、真实输入/尾部/计算/结果及终态清理 |
 | `runtime/protection-transfer-key.h` | 同纳秒请求的稳定排序键与不回绕的保护流编号 |
@@ -45,6 +47,8 @@ N5B-G2 已将独立频率策略接入在线故障与真实 checkpoint；尚未�
 | `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
+| `placementMode` | `ffp` | `lrl` 仅允许配合 compfrr，作为 G3 placement 诊断 |
+| `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
 off 不创建保护池、流或 CSV；fixed 对每个首次主计算启动执行一次固定策略，
 不做动态概率决策。local 为最小稳定 ID 的健康、空闲（含队列为空）、可达一跳节点；
@@ -53,7 +57,7 @@ remote 为排除主星/local 后的最小可行 ID。候选可行不等于存储
 
 ## N5B：频率策略与在线接线
 
-`compfrr` 组合 `CompFrrFrequencyPolicy + FFP`，LRL 不进入 N5B 主实验。
+`compfrr` 默认组合 `CompFrrFrequencyPolicy + FFP`；A/B 为频率主比较，C 才切换 LRL。
 频率求解器独立实现数学公式，不调用验证目录；只有测试将同输入送入旧 shadow 比较。
 `FrequencyInput` 是当前状态的只读数值快照，FFP 先给出节点，G2 适配层再提供主/恢复算力、
 输入/备份路径估计和 storage headroom。cL/cR 从唯一 `GetProtectionCosts(Kvar)` 取得。
@@ -118,6 +122,30 @@ OFF 的 NONE 仍可包含最优候选用于解释为何不启动。真实网络�
 
 阶段证据：[G1](../../../docs/n5/reviews/N5B-G1-frequency-policy.md)、
 [G2](../../../docs/n5/reviews/N5B-G2-dynamic-frequency-runtime.md)。
+
+### G3 placement 与诊断口径
+
+LRL 仅将 FFP 的稳定 ID 排序换成 `(activeRemoteAssignments + lambda*activeRecoveries, nodeId)`；
+local 先选、remote 排除 primary/local，同样要求健康、空闲、可达和 local 一跳。
+两者使用相同频率求解器、存储/路径/deadline 准入。lambda 在正式实验前固定为 1。
+硬约束中的空闲通常已排除恢复中的节点，因此当前主要由有效 remote assignment 驱动分散；
+local-first 和一跳集合仍会影响分布，不保证每节点均匀。
+
+有效分配在真实 INIT_BASE 预留成功后加一，实际状态释放后减一；故障快照保留的 remote state
+在恢复使用完并释放时才撤销分配。恢复负载在实际 accepted（含 reserved-idle）加一，计算完成、
+失败或清理后减一，RESULT 传输期间不再占用恢复计算服务。重复清理不重复扣数。
+`placement-node-summary.csv` 含所有计算星（包括零负载星）的累计次数/活动峰值/最终值；
+`placement-load-events.csv` 保留实际变更顺序，最终所有活动计数必须归零。
+
+`frequency-decisions.csv` 的节点字段统一为 `local_node/remote_node`，附 placement mode 和当前负载。
+`frequency-pause-intervals.csv` 记录暂停区间及原因；原因改变会分段，总次数按相邻区间合并，
+持续时间在真实 protection stop 截止。delta/n 分位数按已提交 START/UPDATE 样本计算；
+时间加权只计物理 ON 且未 PAUSE 的时间，初始化期间不计。
+
+`recovery-summary.csv` 附 checkpoint 是否存在、故障回调时 remote 是否可用/忙以及回退原因：
+`REMOTE_BUSY / REMOTE_UNAVAILABLE / REMOTE_F3 / STATE_MISSING / PATH_UNAVAILABLE / OTHER`。
+故障回调时节点健康已更新，但同批路由 overlay 尚未应用；实际 fallback 原因取下一纳秒的
+恢复裁决状态。两者时间点不同，不将它们强行视作同一个可行性快照，也不改变原恢复裁决。
 
 ## 最终时序合同
 

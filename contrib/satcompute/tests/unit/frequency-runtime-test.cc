@@ -3,6 +3,7 @@
 
 #include "ns3/command-line.h"
 #include "ns3/frequency-protection-controller.h"
+#include "ns3/least-recovery-load-placement-policy.h"
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
 #include "ns3/online-topology-controller.h"
@@ -423,14 +424,28 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         parameters.f3.mode = "controlled";
         parameters.f3.controlledNodeId = 3;
         parameters.f3.controlledStartSeconds = 0.1;
-        engine->Configure(parameters, ids, {0, 2, 3, 4}, END, executor, true);
+        const bool paired = mode == "ffp-two" || mode == "lrl-two";
+        const std::vector<uint32_t> computeNodes = paired ? ids : std::vector<uint32_t>{0, 2, 3, 4};
+        engine->Configure(parameters, ids, computeNodes, END, executor, true);
         engine->BindOrbitConstellation(topology.GetConstellation());
         auto tasks = CreateObject<TaskCoordinator>();
         auto definition = Definition(TaskProfile::LLM);
         if (mode == "short")
             definition.computeWorkUnits = 100;
-        tasks->Initialize(ComputeProfile{{{0, 100000}, {2, 100000}, {3, 100000}, {4, 100000}}},
-                          TaskTrace{{definition}},
+        ComputeProfile compute;
+        for (auto node : computeNodes) compute.nodes.push_back({node, 100000});
+        TaskTrace workload{{definition}};
+        if (paired)
+        {
+            auto next = definition;
+            next.taskId = 2;
+            next.inputTransferId = 3;
+            next.resultTransferId = 4;
+            next.computeNodeId = 5;
+            next.arrivalTimeNs = 150000000;
+            workload.tasks.push_back(next);
+        }
+        tasks->Initialize(compute, workload,
                           topology,
                           "size-aware",
                           1024,
@@ -440,7 +455,9 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
                           END);
         executor->BindTaskCoordinator(tasks);
         engine->BindTaskCoordinator(tasks);
-        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            mode == "lrl-two" ? std::make_unique<LeastRecoveryLoadPlacementPolicy>(1)
+                               : std::unique_ptr<PlacementPolicy>{});
         Simulator::Stop(NanoSeconds(END));
         Simulator::Run();
         controller.Finalize();
@@ -484,7 +501,29 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         if (mode == "normal")
             Check(hit && start && update && !trace.faults.empty(),
                   "online generate missed start/update/actual hit");
+        if (paired)
+        {
+            std::map<uint64_t, uint32_t> selected;
+            for (const auto& row : controller.Decisions())
+                if (row.proposal.action == FrequencyAction::START && row.committed)
+                {
+                    selected[row.taskId] = row.pair->remoteNode;
+                    if (row.taskId == 2)
+                        Check(row.remoteLoad.activeBackup == (mode == "ffp-two" ? 1 : 0),
+                              "LRL ranking did not use live remote assignments");
+                }
+            Check(selected.size() == 2 && selected.at(1) == 0 &&
+                  selected.at(2) == (mode == "ffp-two" ? 0 : 1),
+                  "paired runtime did not separate stable-ID and least-load ranking");
+        }
+        Check(controller.PlacementLoads().Empty(), "live placement counter leaked");
+        uint64_t accepted = 0;
+        for (const auto& [node, load] : controller.PlacementLoads().Nodes()) accepted += load.totalRecovery;
+        const auto summaries = controller.Recovery()->Summaries();
+        Check(accepted == static_cast<uint64_t>(std::count_if(summaries.begin(), summaries.end(),
+              [](const auto& r) { return r.recoveryNode.has_value(); })), "actual recovery count mismatch");
         controller.WriteDecisions(output);
+        controller.PlacementLoads().WriteMetrics(output);
         WriteProtectionMetrics(controller.Manager(), *tasks->GetTransferEngine(), output);
         controller.Recovery()->WriteMetrics(output);
         Check(controller.Manager().IsQuiescent(), "online generate leaked resources");
@@ -519,6 +558,16 @@ int main(int argc, char** argv)
         Online(std::filesystem::path(output) / "online-generate");
         Online(std::filesystem::path(output) / "online-short", "short");
         Online(std::filesystem::path(output) / "online-f3", "f3");
+        Online(std::filesystem::path(output) / "online-ffp-two", "ffp-two");
+        Online(std::filesystem::path(output) / "online-lrl-two", "lrl-two");
+        Online(std::filesystem::path(output) / "online-lrl-repeat", "lrl-two");
+        for (const auto& name : {"frequency-decisions.csv", "placement-load-events.csv", "placement-node-summary.csv"})
+        {
+            std::ifstream a(std::filesystem::path(output) / "online-lrl-two" / name);
+            std::ifstream b(std::filesystem::path(output) / "online-lrl-repeat" / name);
+            Check(std::string(std::istreambuf_iterator<char>(a), {}) ==
+                  std::string(std::istreambuf_iterator<char>(b), {}), "LRL repeated output differs");
+        }
         std::cout << "frequency-runtime: PASS (" << checks << " checks)\n";
     }
     catch (const std::exception& error)

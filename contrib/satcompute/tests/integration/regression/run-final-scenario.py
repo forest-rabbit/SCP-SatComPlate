@@ -12,7 +12,15 @@ SCENE = "contrib/satcompute/input/experiments/leo-66"
 
 
 def arguments(output, fault_mode="generate", audit=False, shadow=False,
-              validation_trace=None, protection_mode="off"):
+              validation_trace=None, protection_mode="off", placement_mode="ffp", lrl_weight=1):
+    if protection_mode not in ("off", "fixed", "compfrr") or placement_mode not in ("ffp", "lrl"):
+        raise ValueError("unsupported protection/placement mode")
+    if placement_mode == "lrl" and protection_mode != "compfrr":
+        raise ValueError("LRL is a CompFRR placement diagnostic only")
+    if lrl_weight != 1:
+        raise ValueError("G3 freezes LRL lambda=1; no weight sweep")
+    if protection_mode == "compfrr" and fault_mode != "generate":
+        raise ValueError("CompFRR formal evaluation requires online generate")
     if fault_mode not in ("none", "generate", "validation-replay") or (fault_mode != "generate" and (audit or shadow)):
         raise ValueError("audit/shadow require generate")
     if (fault_mode == "validation-replay") != (validation_trace is not None):
@@ -49,7 +57,8 @@ def arguments(output, fault_mode="generate", audit=False, shadow=False,
         result += ["--taskCompletionPolicy=strict"]
     if protection_mode != "off":
         result += [f"--protectionMode={protection_mode}", "--backupStorageBytesPerNode=10000000000",
-                   "--fixedProtectionDelta=0.05", "--fixedProtectionBatchN=4"]
+                   "--fixedProtectionDelta=0.05", "--fixedProtectionBatchN=4",
+                   f"--placementMode={placement_mode}", f"--lrlRecoveryWeight={lrl_weight}"]
     return result
 
 
@@ -58,7 +67,8 @@ def main():
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--fault-mode", choices=("none", "generate", "validation-replay"), default="generate")
     parser.add_argument("--validation-trace", type=Path)
-    parser.add_argument("--protection-mode", choices=("off", "fixed"), default="off")
+    parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr"), default="off")
+    parser.add_argument("--placement-mode", choices=("ffp", "lrl"), default="ffp")
     parser.add_argument("--audit", action="store_true")
     parser.add_argument("--shadow", action="store_true", help="Read-only G4 validation, not real backup")
     args = parser.parse_args()
@@ -66,7 +76,7 @@ def main():
     try:
         command = [str(ROOT / "ns3"), "run", "--no-build",
                    shlex.join(arguments(output, args.fault_mode, args.audit, args.shadow,
-                                        args.validation_trace, args.protection_mode))]
+                                        args.validation_trace, args.protection_mode, args.placement_mode))]
         if output.exists():
             raise ValueError("refusing to overwrite an existing output directory")
     except (ValueError, OSError, KeyError) as error:
@@ -75,6 +85,7 @@ def main():
     identity = {"command": command, "seed": 1, "run": 11, "fault_mode": args.fault_mode,
                 "validation_fault_trace": str(args.validation_trace.resolve()) if args.validation_trace else None,
                 "protection_mode": args.protection_mode,
+                "placement_mode": args.placement_mode, "lrl_recovery_weight": 1,
                 "task_trace": f"{SCENE}/workload/task-trace.json", "f3_manifest": f"{SCENE}/fault/f3-manifest.json",
                 "audit": args.audit, "shadow": args.shadow, "simulation_duration_s": 1300,
                 "fixed_delay_seconds": 0.001,

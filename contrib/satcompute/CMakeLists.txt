@@ -18,6 +18,8 @@ build_lib(
     protection/runtime/fixed-protection-controller.cc
     protection/runtime/frequency-protection-controller.cc
     protection/runtime/frequency-storage-estimator.cc
+    protection/runtime/placement-load-ledger.cc
+    metrics/core/placement-load-metrics.cc
     protection/runtime/recovery-controller.cc
     metrics/core/recovery-metrics.cc
     metrics/core/frequency-metrics.cc
@@ -103,6 +105,7 @@ build_lib(
     protection/runtime/fixed-protection-controller.h
     protection/runtime/frequency-protection-controller.h
     protection/runtime/frequency-storage-estimator.h
+    protection/runtime/placement-load-ledger.h
     protection/runtime/recovery-controller.h
     protection/runtime/protection-transfer-key.h
     metrics/core/protection-metrics.h

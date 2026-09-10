@@ -24,6 +24,9 @@ struct RecoverySummary
     uint64_t actualCatchupRedoWu{}, actualPostCatchupWu{}, actualTotalRecoveryWu{}, recoveryRate{},
         primaryRate{};         ///< Observed WU, with explicit rates for equivalent cost.
     int64_t actualServiceNs{}; ///< Actual service prefix, not wall-clock stage duration.
+    bool checkpointStateExists{}, remoteEligibleAtFault{}, remoteBusyAtFault{};
+    ///< Read-only fault-time diagnostic, not recovery admission overrides.
+    std::string checkpointFallbackReason; ///< Why actual decision cannot use checkpoint state.
 };
 
 /** One recovery event, including local logical deliveries which have no transfer ID. */
@@ -68,6 +71,9 @@ class RecoveryController : public ProtectionMechanism
 
     /** Dedicated output; never created for protection off. */
     void WriteMetrics(const std::filesystem::path& directory) const;
+    /** Observe accepted/finished execution ownership; no change to recovery scheduling. */
+    void SetLoadObserver(std::function<void(uint64_t, uint32_t, bool)> observer)
+    { m_loadObserver = std::move(observer); }
 
   private:
     /** Stable heap-owned attempt and asynchronous resources. */
@@ -122,6 +128,7 @@ class RecoveryController : public ProtectionMechanism
     std::map<uint64_t, std::unique_ptr<State>> m_states; ///< Sole recovery per task.
     std::map<uint64_t, std::pair<uint64_t, ProtectionTransferKind>> m_flows; ///< Real callbacks.
     std::vector<RecoveryEvent> m_events; ///< Append-only causal history.
+    std::function<void(uint64_t, uint32_t, bool)> m_loadObserver; ///< Current recovery load sink.
 };
 } // namespace ns3::protection
 #endif

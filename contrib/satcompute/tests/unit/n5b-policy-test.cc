@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "ns3/backup-storage-pool.h"
+#include "ns3/placement-load-ledger.h"
 #include "ns3/checkpoint-progress.h"
 #include "ns3/compfrr-frequency-policy.h"
 #include "ns3/compfrr-shadow-model.h" // Independent test oracle only.
@@ -83,6 +84,20 @@ void PlacementChecks()
         }
         const auto expected = LegacyPair(c);
         Check(ffp.Select(c) == expected, "FFP differs from N5A pair rule");
+        const auto ranked = LeastRecoveryLoadPlacementPolicy(1).Select(c);
+        Check(bool(ranked) == bool(expected), "LRL/FFP hard-feasible sets differ");
+        if (ranked)
+        {
+            const auto get = [&](uint32_t node) -> const BackupCandidate& {
+                return *std::find_if(c.candidates.begin(), c.candidates.end(),
+                                     [node](const auto& a) { return a.nodeId == node; });
+            };
+            Check(IsPlacementCandidate(get(ranked->localNode), c.primaryNode) &&
+                      get(ranked->localNode).oneHop &&
+                      IsPlacementCandidate(get(ranked->remoteNode), c.primaryNode) &&
+                      ranked->localNode != ranked->remoteNode,
+                  "LRL violated shared hard feasibility");
+        }
         FixedProtectionPolicy fixed(50, 4);
         ProtectionContext context;
         context.attempt = {1, 0};
@@ -116,14 +131,33 @@ void PlacementChecks()
     {
         const auto pair = *lrl.Select(c);
         for (auto& a : c.candidates)
-            a.backupAssignmentCount += a.nodeId == pair.localNode || a.nodeId == pair.remoteNode;
+            a.backupAssignmentCount += a.nodeId == pair.remoteNode;
     }
     for (const auto& a : c.candidates)
-        Check(a.backupAssignmentCount == 20, "LRL balanced equal synthetic candidates");
+        // Local-first keeps node 0 as local here; only the other three can accumulate remote load.
+        Check(a.backupAssignmentCount == (a.nodeId == 0 ? 0 : a.nodeId == 1 ? 14 : 13),
+              "LRL remote-only synthetic assignment distribution");
     for (auto& a : c.candidates)
         a.backupAssignmentCount = a.nodeId == 0 ? std::numeric_limits<uint64_t>::max() : 0;
     c.candidates[0].activeRecoveryCount = std::numeric_limits<uint64_t>::max();
     Check(lrl.Select(c)->localNode != c.candidates[0].nodeId, "LRL weighted count overflow");
+
+    PlacementLoadLedger loads;
+    loads.RegisterNode(0);
+    loads.RegisterNode(1);
+    loads.Assignment(1, 0, true, 0);
+    loads.Assignment(2, 0, true, 1);
+    loads.Assignment(1, 0, false, 2);
+    loads.Assignment(1, 0, false, 2);
+    Check(loads.Get(0).activeBackup == 1 && loads.Get(0).totalBackup == 2 &&
+          loads.Get(0).peakBackup == 2, "assignment current/total/release mismatch");
+    loads.Recovery(1, 1, true, 3);
+    Check(loads.Get(1).activeRecovery == 1 && loads.Get(1).totalRecovery == 1,
+          "accepted recovery not counted");
+    loads.Recovery(1, 1, false, 4);
+    loads.Recovery(1, 1, false, 4);
+    loads.Assignment(2, 0, false, 4);
+    Check(loads.Empty() && loads.Get(1).peakRecovery == 1, "load counters leak/underflow");
 }
 
 /** Explicit unbounded scalar oracle fixture, not a production resource adapter. */

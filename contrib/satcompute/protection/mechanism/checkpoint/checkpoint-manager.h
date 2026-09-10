@@ -73,6 +73,7 @@ struct CheckpointInventory
     CheckpointSnapshot progress; ///< Current received/committed prefixes.
     uint64_t actual{}, triggered{}, baseBytes{}, batchBytes{}, batchWork{}; ///< Exact ledger values.
     bool active{}, initialized{}, paused{}, batchInFlight{}; ///< Actual mechanism state.
+    int64_t stopNs{-1}; ///< Actual quiescence/stop, for ending diagnostic intervals exactly.
     std::optional<uint64_t> nextTarget; ///< Already scheduled, not yet captured boundary.
     struct Record
     {
@@ -116,6 +117,9 @@ class CheckpointManager : public ProtectionMechanism
     {
         m_initialized = std::move(observer);
     }
+    /** Observe established/released remote ownership without changing admission or storage. */
+    void SetAssignmentObserver(std::function<void(uint64_t, uint32_t, bool)> observer)
+    { m_assignmentObserver = std::move(observer); }
 
     /** Enable strict fault-time object retention; no-fault G2 timing stays unchanged. */
     void EnableRecoveryRetention()
@@ -272,6 +276,7 @@ class CheckpointManager : public ProtectionMechanism
     std::vector<ProtectionFlow> m_flows;      ///< Append-only real flow metadata.
     bool m_recoveryRetention{};               ///< Explicit G3 fault-enabled phase ordering.
     std::function<void(uint64_t)> m_initialized; ///< Optional physical init notification.
+    std::function<void(uint64_t, uint32_t, bool)> m_assignmentObserver; ///< Read-only load ledger.
 };
 } // namespace ns3::protection
 #endif

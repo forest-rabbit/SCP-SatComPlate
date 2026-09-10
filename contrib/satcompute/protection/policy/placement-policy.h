@@ -25,6 +25,7 @@ class PlacementPolicy
 {
   public:
     virtual ~PlacementPolicy() = default;
+    virtual const char* Name() const = 0; ///< Stable diagnostic name, not an eligibility rule.
     /** Return a complete pair, or no decision if either role cannot be placed. */
     virtual std::optional<PlacementDecision> Select(const PlacementContext& context) const = 0;
 };

@@ -116,6 +116,13 @@ GetDefaultSatComputeConfig()
     // --protectionMode：默认 off 保持 N4 行为；fixed 启用真实检查点与一次故障恢复。
     config.protectionMode = "off";
 
+    // --placementMode：FFP 为默认基线；LRL 仅在 compfrr 模式作负载集中度诊断。
+    config.placementMode = "ffp";
+
+    // --lrlRecoveryWeight：L = active backup assignments + weight * active recoveries。
+    // G3 在看到 A/B/C 结果之前预先冻结为 1，不扫描、不按结果调整。
+    config.lrlRecoveryWeight = 1;
+
     // --backupStorageBytesPerNode：独立额外备份池，10 GB 为实验参数而非实测容量。
     config.backupStorageBytesPerNode = 10'000'000'000;
 

@@ -242,6 +242,8 @@ CheckpointManager::Execute(const ProtectionContext& context, const ProtectionAct
         return;
     }
     state.baseObject = *base;
+    if (m_assignmentObserver)
+        m_assignmentObserver(state.summary.taskId, config.remoteNode, true);
     Queue(state,
           ProtectionTransferKind::INIT_BASE,
           0,
@@ -709,6 +711,7 @@ CheckpointManager::Inventory(uint64_t id) const
         result.batchBytes = batch->bytes;
     result.batchWork = state.batchWork;
     result.active = state.active;
+    result.stopNs = state.summary.stopNs;
     result.initialized = state.initialized;
     result.paused = state.futurePaused;
     result.batchInFlight = state.batchInFlight;
@@ -748,6 +751,8 @@ CheckpointManager::Stop(State& state, const std::string& reason)
         pool->ReleaseTask(state.summary.taskId);
     state.records.clear();
     Log(state, "PROTECTION_STOP");
+    if (m_assignmentObserver)
+        m_assignmentObserver(state.summary.taskId, state.config.remoteNode, false);
 }
 
 void
@@ -944,6 +949,8 @@ CheckpointManager::QuiesceForRecovery(const RecoverySnapshot& snapshot)
         pool->ReleaseTaskExcept(snapshot.taskId, keep);
     }
     Log(state, "QUIESCE_FOR_RECOVERY", snapshot.actualWork, snapshot.tailBytes);
+    if (m_assignmentObserver && !snapshot.remoteObject)
+        m_assignmentObserver(snapshot.taskId, state.config.remoteNode, false);
 }
 
 void
@@ -951,6 +958,9 @@ CheckpointManager::ReleaseRecoveryState(uint64_t id)
 {
     for (auto& [node, pool] : m_pools)
         pool->ReleaseTask(id);
+    const auto found = m_states.find(id);
+    if (found != m_states.end() && m_assignmentObserver)
+        m_assignmentObserver(id, found->second->config.remoteNode, false);
 }
 
 void

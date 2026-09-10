@@ -6,6 +6,7 @@
 #include "../policy/compfrr/frequency/frequency-decision-gate.h"
 #include "frequency-storage-estimator.h"
 #include "recovery-controller.h"
+#include "placement-load-ledger.h"
 
 #include <filesystem>
 
@@ -23,6 +24,8 @@ struct FrequencyDecisionRecord
     bool sampled{}, faultHit{}, committed{}; ///< Observed current outcome and gate result.
     ProtectionPhase phaseAfter{};            ///< Effective phase after current fault application.
     std::string reason;                      ///< Resolution, distinct from solver reason.
+    std::string resourceReason; ///< Diagnostic hard-resource cause; never changes solver scoring.
+    PlacementNodeLoad localLoad, remoteLoad; ///< Causal load snapshots before ranking/admission.
 };
 
 /** Online generate integration. Owns no fault model, RNG, state bytes or second network. */
@@ -34,12 +37,15 @@ class FrequencyProtectionController : public ProtectionPolicy
                                   SatelliteRuntimeView& topology,
                                   Ptr<FaultModelEngine> faults,
                                   uint64_t capacity,
-                                  int64_t stopNs);
+                                  int64_t stopNs,
+                                  std::unique_ptr<PlacementPolicy> placement = nullptr);
     ~FrequencyProtectionController() override;
     /** Finish the same actual ledgers as fixed protection. */
     void Finalize();
     /** Write only decision/prediction audit, not actual metrics. */
     void WriteDecisions(const std::filesystem::path& directory) const;
+    const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
+    ///< Live ownership used by LRL and the same diagnostic output for FFP.
 
     const CheckpointManager& Manager() const
     {
@@ -86,7 +92,13 @@ class FrequencyProtectionController : public ProtectionPolicy
         std::optional<PlacementDecision> pair; ///< Fixed only after START survives.
         std::optional<size_t> pending; ///< Decision retained through synchronous fault observers.
         std::optional<ProtectionPhase> stopped; ///< Deferred gate stop until proposal resolves.
+        std::optional<int64_t> pauseStart; ///< Beginning of the current reason-specific interval.
+        std::string pauseReason; ///< Current effective pause cause.
     };
+    struct PauseInterval
+    {
+        uint64_t taskId{}; int64_t startNs{}, endNs{}; std::string reason;
+    }; ///< Nonoverlapping intervals ending on resume, reason change, stop or finalization.
 
     struct Path
     {
@@ -100,6 +112,7 @@ class FrequencyProtectionController : public ProtectionPolicy
     void AfterEpoch(int64_t timeNs, const std::vector<FaultEpochOutcome>& outcomes);
     ///< Sole post-fault decision application boundary.
     void Initialized(uint64_t taskId);                ///< Real physical initialization callback.
+    void ClosePause(uint64_t taskId, State& state, int64_t timeNs); ///< Close only observed time.
     const TaskRuntime& Task(uint64_t taskId) const;   ///< Stable logical task lookup.
     Ptr<ComputeService> Service(uint32_t node) const; ///< Actual compute profile owner.
     std::vector<BackupCandidate> Candidates(uint32_t primary) const; ///< Causal FFP inputs.
@@ -110,12 +123,14 @@ class FrequencyProtectionController : public ProtectionPolicy
     Ptr<TaskCoordinator> m_tasks;                     ///< Business lifecycle owner.
     SatelliteRuntimeView& m_topology;                 ///< Shared network view.
     Ptr<FaultModelEngine> m_faults;                   ///< Online epoch producer only.
+    PlacementLoadLedger m_loads;                      ///< Live remote assignment/recovery counts.
     CheckpointManager m_manager;                      ///< Sole actual checkpoint mechanism.
-    FirstFeasiblePlacementPolicy m_placement;         ///< Fixed N5B placement baseline.
+    std::unique_ptr<PlacementPolicy> m_placement;      ///< FFP baseline or explicitly injected LRL.
     CompFrrFrequencyPolicy m_policy;                  ///< Pure production solver.
     std::unique_ptr<RecoveryController> m_recovery;   ///< Reused N5A recovery.
     std::map<uint64_t, State> m_states;               ///< Per-primary frequency lifecycle.
     std::vector<FrequencyDecisionRecord> m_decisions; ///< Proposal/resolution audit.
+    std::vector<PauseInterval> m_pauses;               ///< Actual committed PAUSE intervals.
 };
 } // namespace ns3::protection
 #endif

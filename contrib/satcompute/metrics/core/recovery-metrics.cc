@@ -58,7 +58,8 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
             "recovery_reserved_idle_eq_wu,recovery_catchup_actual_wu,w_waste_actual,"
             "normal_protection_cost_ns,terminal_"
             "time_ns,"
-            "terminal_state,terminal_reason\n";
+            "terminal_state,terminal_reason,checkpoint_state_exists,remote_eligible_at_fault,"
+            "remote_busy_at_fault,checkpoint_fallback_reason\n";
     file << std::setprecision(17);
     for (const auto& r : Summaries())
     {
@@ -102,7 +103,8 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
              << ',' << r.primaryRate << ',' << r.recoveryRate << ',' << normal << ',' << idle << ','
              << r.actualCatchupRedoWu << ',' << normal + idle + r.actualCatchupRedoWu << ','
              << r.normalProtectionCostNs << ',' << Time(r.terminalNs) << ',' << r.terminalState
-             << ',' << r.reason << '\n';
+             << ',' << r.reason << ',' << r.checkpointStateExists << ',' << r.remoteEligibleAtFault
+             << ',' << r.remoteBusyAtFault << ',' << r.checkpointFallbackReason << '\n';
     }
     std::ofstream events(directory / "recovery-events.csv");
     events.exceptions(std::ios::failbit | std::ios::badbit);

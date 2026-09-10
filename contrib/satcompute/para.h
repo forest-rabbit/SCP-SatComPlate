@@ -62,6 +62,8 @@ struct SatComputeConfig
 
     // protection
     std::string protectionMode; ///< off / fixed / compfrr；真实保护与恢复，compfrr 按在线故障 epoch 决策。
+    std::string placementMode; ///< ffp / lrl；LRL 仅为 N5B-G3 的排名诊断。
+    uint32_t lrlRecoveryWeight; ///< 当前恢复数量的整数权重，正式首轮固定 1，不扫描。
     uint64_t backupStorageBytesPerNode; ///< 每计算星额外备份存储容量，十进制字节。
     double fixedProtectionDelta; ///< 固定 checkpoint 进度间隔，0.05 表示 5%。
     uint32_t fixedProtectionBatchN; ///< 每个 remote batch 包含的 L1 record 数。

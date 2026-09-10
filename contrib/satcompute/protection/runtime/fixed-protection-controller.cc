@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "fixed-protection-controller.h"
+#include "ns3/simulator.h"
+#include <stdexcept>
 
 namespace ns3::protection
 {
@@ -13,9 +15,18 @@ FixedProtectionController::FixedProtectionController(Ptr<TaskCoordinator> tasks,
     : m_tasks(tasks), m_topology(topology), m_manager(tasks, topology, capacity, stopNs),
       m_policy(deltaPermille, batchN), m_runtime(m_policy, {&m_manager})
 {
+    for (auto service : tasks->GetComputeServices()) m_loads.RegisterNode(service->GetNodeId());
+    m_manager.SetAssignmentObserver([this](auto task, auto node, bool active) {
+        m_loads.Assignment(task, node, active, Simulator::Now().GetNanoSeconds());
+    });
     m_tasks->ConnectTaskObserver(MakeCallback(&FixedProtectionController::OnTask, this));
     if (enableRecovery)
+    {
         m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, m_policy);
+        m_recovery->SetLoadObserver([this](auto task, auto node, bool active) {
+            m_loads.Recovery(task, node, active, Simulator::Now().GetNanoSeconds());
+        });
+    }
 }
 
 FixedProtectionController::~FixedProtectionController()
@@ -66,5 +77,6 @@ FixedProtectionController::Finalize()
         m_recovery->Finalize();
     m_tasks->FinalizeSimulation();
     m_manager.Finalize();
+    if (!m_loads.Empty()) throw std::logic_error("fixed placement ownership leaked");
 }
 } // namespace ns3::protection

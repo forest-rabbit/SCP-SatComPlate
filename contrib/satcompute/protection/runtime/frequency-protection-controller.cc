@@ -17,20 +17,29 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
                                                              SatelliteRuntimeView& topology,
                                                              Ptr<FaultModelEngine> faults,
                                                              uint64_t capacity,
-                                                             int64_t stopNs)
+    int64_t stopNs,
+    std::unique_ptr<PlacementPolicy> placement)
     : m_tasks(tasks),
       m_topology(topology),
       m_faults(faults),
-      m_manager(tasks, topology, capacity, stopNs)
+      m_manager(tasks, topology, capacity, stopNs),
+      m_placement(placement ? std::move(placement) : std::make_unique<FirstFeasiblePlacementPolicy>())
 {
     if (!faults)
         throw std::invalid_argument("frequency protection requires online generate epochs");
+    for (auto service : tasks->GetComputeServices()) m_loads.RegisterNode(service->GetNodeId());
+    m_manager.SetAssignmentObserver([this](auto task, auto node, bool active) {
+        m_loads.Assignment(task, node, active, Simulator::Now().GetNanoSeconds());
+    });
     tasks->ConnectTaskObserver(MakeCallback(&FrequencyProtectionController::OnTask, this));
     m_manager.SetInitializationObserver([this](uint64_t id) { Initialized(id); });
     faults->SetEpochObservers(
         [this](const auto& epoch) { BeforeEpoch(epoch); },
         [this](auto time, const auto& outcomes) { AfterEpoch(time, outcomes); });
     m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, *this);
+    m_recovery->SetLoadObserver([this](auto task, auto node, bool active) {
+        m_loads.Recovery(task, node, active, Simulator::Now().GetNanoSeconds());
+    });
 }
 
 FrequencyProtectionController::~FrequencyProtectionController()
@@ -72,11 +81,25 @@ void FrequencyProtectionController::OnTask(const TaskEventRecord& event)
         m_manager.OnTaskTerminal(event.taskId);
     if (terminal || recovery || complete)
     {
+        ClosePause(event.taskId, state, event.simulationTimeNs);
         const auto phase = recovery ? ProtectionPhase::RECOVERING : ProtectionPhase::DONE;
         if (state.pending)
             state.stopped = phase;
         else
             state.gate.Stop(phase);
+    }
+}
+
+void FrequencyProtectionController::ClosePause(uint64_t task, State& state, int64_t time)
+{
+    if (state.pauseStart)
+    {
+        const auto inventory = m_manager.Inventory(task);
+        if (inventory && !inventory->active && inventory->stopNs >= *state.pauseStart)
+            time = std::min(time, inventory->stopNs);
+        m_pauses.push_back({task, *state.pauseStart, time, state.pauseReason});
+        state.pauseStart.reset();
+        state.pauseReason.clear();
     }
 }
 
@@ -105,7 +128,9 @@ std::vector<BackupCandidate> FrequencyProtectionController::Candidates(uint32_t 
                           !routes.empty(),
                           oneHop,
                           0,
-                          m_manager.Pools().at(node)->Free()});
+                          m_manager.Pools().at(node)->Free(),
+                          m_loads.Get(node).activeBackup,
+                          m_loads.Get(node).activeRecovery});
     }
     return result;
 }
@@ -158,12 +183,17 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
 {
     auto& input = row.input;
     row.pair = state.pair ? state.pair
-                          : m_placement.Select({task.definition.computeNodeId,
+                          : m_placement->Select({task.definition.computeNodeId,
                                                 Candidates(task.definition.computeNodeId)});
     if (!row.pair)
+    {
+        row.resourceReason = "PLACEMENT_UNAVAILABLE";
         return false;
+    }
     const auto pair = *row.pair;
     auto local = Service(pair.localNode), remote = Service(pair.remoteNode);
+    row.localLoad = m_loads.Get(pair.localNode);
+    row.remoteLoad = m_loads.Get(pair.remoteNode);
     input.localFreeBytes = m_manager.Pools().at(pair.localNode)->Free();
     input.remoteFreeBytes = m_manager.Pools().at(pair.remoteNode)->Free();
     input.recoveryRate = remote->GetComputeRateWorkUnitsPerSecond();
@@ -171,13 +201,21 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
                           m_tasks->IsSatelliteAvailable(pair.localNode) && local->IsIdle() &&
                           m_tasks->IsComputeAvailable(pair.remoteNode) &&
                           m_tasks->IsSatelliteAvailable(pair.remoteNode) && remote->IsIdle();
+    if (!m_tasks->IsComputeAvailable(pair.localNode) || !m_tasks->IsSatelliteAvailable(pair.localNode) ||
+        !m_tasks->IsComputeAvailable(pair.remoteNode) || !m_tasks->IsSatelliteAvailable(pair.remoteNode))
+        row.resourceReason = "PLACEMENT_UNAVAILABLE";
+    else if (!local->IsIdle()) row.resourceReason = "LOCAL_BUSY";
+    else if (!remote->IsIdle()) row.resourceReason = "REMOTE_BUSY";
     const auto replay = EstimatePath(task.definition.sourceNodeId, pair.remoteNode);
     const auto base = EstimatePath(task.definition.computeNodeId, pair.remoteNode);
     const auto l1 = EstimatePath(task.definition.computeNodeId, pair.localNode);
     const auto tail = EstimatePath(pair.localNode, pair.remoteNode);
     input.pathAvailable = replay && base && l1 && tail;
     if (!input.pathAvailable)
+    {
+        if (row.resourceReason.empty()) row.resourceReason = "PATH_UNAVAILABLE";
         return false;
+    }
     input.inputBandwidth = replay->bytesPerSecond;
     input.backupBandwidth = std::min(l1->bytesPerSecond, tail->bytesPerSecond);
     TaskStateAdapter layout(task.definition);
@@ -204,7 +242,10 @@ void FrequencyProtectionController::BeforeEpoch(const FaultEpochInput& epoch)
         return;
     const auto inventory = m_manager.Inventory(epoch.taskId);
     if (inventory && !inventory->active)
+    {
+        ClosePause(epoch.taskId, state, epoch.prediction.predictionTimeNs);
         state.gate.Stop(ProtectionPhase::DONE);
+    }
     const auto phase = state.gate.Phase();
     if (phase != ProtectionPhase::OFF && phase != ProtectionPhase::ON)
         return;
@@ -271,6 +312,17 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
                                       : row.proposal.reason;
         if (row.committed)
         {
+            if (row.proposal.action == FrequencyAction::PAUSE)
+            {
+                const auto reason = row.resourceReason.empty() ? row.proposal.reason : row.resourceReason;
+                if (!state.pauseStart || state.pauseReason != reason)
+                {
+                    ClosePause(row.taskId, state, time);
+                    state.pauseStart = time;
+                    state.pauseReason = reason;
+                }
+            }
+            else ClosePause(row.taskId, state, time);
             const auto config = state.gate.CurrentConfig();
             if (row.proposal.action == FrequencyAction::START)
             {
@@ -319,6 +371,8 @@ void FrequencyProtectionController::Finalize()
     m_recovery->Finalize();
     m_tasks->FinalizeSimulation();
     m_manager.Finalize();
+    for (auto& [id, state] : m_states) ClosePause(id, state, Simulator::Now().GetNanoSeconds());
+    if (!m_loads.Empty()) throw std::logic_error("frequency placement ownership leaked");
 }
 
 } // namespace ns3::protection

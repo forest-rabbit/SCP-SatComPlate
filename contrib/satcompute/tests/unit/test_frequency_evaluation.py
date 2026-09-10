@@ -1,0 +1,41 @@
+"""G3 descriptive accounting: exact hand anchors, not algorithm efficacy assertions."""
+from pathlib import Path
+import runpy
+import unittest
+
+ROOT = Path(__file__).resolve().parents[4]
+REGRESSION = ROOT / "contrib/satcompute/tests/integration/regression"
+EVAL = runpy.run_path(str(REGRESSION / "analyze-frequency-evaluation.py"))
+RUN = runpy.run_path(str(REGRESSION / "run-final-scenario.py"))
+
+
+class FrequencyEvaluationTests(unittest.TestCase):
+    def test_percentiles_include_zeros(self):
+        s = EVAL["stats"]([0, 0, 10, 30])
+        self.assertEqual((s["p10"], s["p50"], s["p90"]), (0, 5, 24.000000000000004))
+        self.assertEqual(s["sum"], 40)
+        self.assertIsNone(EVAL["stats"]([])["p50"])
+
+    def test_weight_uses_physical_on_and_excludes_pause(self):
+        # START at 0, ON at 2; UPDATE at 10, STOP at 20; pause [5,12].
+        w, d, n = EVAL["active_weight"]([(0, .05, 4), (10, .1, 8)], 2, 20, [(5, 12)])
+        self.assertEqual(w, 11)
+        self.assertAlmostEqual(d, .95)
+        self.assertEqual(n, 76)
+
+    def test_weight_ignores_initialization_failure(self):
+        self.assertEqual(EVAL["active_weight"]([(0, .05, 4)], 20, 10, []), (0, 0, 0))
+
+    def test_runner_freezes_weight_and_formal_modes(self):
+        for kwargs in ({"lrl_weight": 2}, {"placement_mode": "lrl"},
+                       {"protection_mode": "compfrr", "fault_mode": "none"}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                RUN["arguments"](Path("output/not-run"), **kwargs)
+        a = RUN["arguments"](Path("output/not-run"), protection_mode="compfrr", placement_mode="lrl")
+        self.assertIn("--lrlRecoveryWeight=1", a)
+        self.assertIn("--simulationDuration=1300", a)
+        self.assertIn("--faultMode=generate", a)
+
+
+if __name__ == "__main__":
+    unittest.main()

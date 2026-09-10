@@ -9,6 +9,7 @@ namespace ns3::protection
 class FirstFeasiblePlacementPolicy : public PlacementPolicy
 {
   public:
+    const char* Name() const override { return "ffp"; }
     std::optional<PlacementDecision> Select(const PlacementContext& context) const override;
 };
 } // namespace ns3::protection

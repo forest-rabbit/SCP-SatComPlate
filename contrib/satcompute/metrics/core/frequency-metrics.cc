@@ -52,7 +52,7 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
     out << std::setprecision(17);
     out << "task_id,task_profile,fault_epoch_time_ns,phase_before,q_current_sample,p_fail_before_"
            "finish,"
-           "progress_work,progress_ratio,ffp_local_node,ffp_remote_node,local_free_bytes,remote_"
+           "progress_work,progress_ratio,local_node,remote_node,local_free_bytes,remote_"
            "free_bytes,"
            "recovery_rate,input_bandwidth_bytes_per_s,backup_bandwidth_bytes_per_s,j_off,j_start,"
            "selected_score,predicted_recovery_s,predicted_normal_s,rmax_s,t_init_s,"
@@ -60,7 +60,8 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
            "actual_fault_sampled,actual_fault_hit,decision_committed,committed_delta_permille,"
            "committed_n,"
            "phase_after,reason,proposal_reason,local_additional_peak_bytes,remote_additional_peak_"
-           "bytes\n";
+           "bytes,placement_mode,resource_reason,local_active_backup_assignments,"
+           "remote_active_backup_assignments,local_active_recoveries,remote_active_recoveries\n";
     auto number = [&](const auto& value) {
         if (value)
             out << *value;
@@ -106,7 +107,17 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
         number(d.selected ? std::optional(d.selected->storage.localAdditionalBytes) : std::nullopt);
         if (d.selected)
             out << d.selected->storage.remoteAdditionalBytes;
+        out << ',' << m_placement->Name() << ',' << r.resourceReason << ',';
+        if (r.pair)
+            out << r.localLoad.activeBackup << ',' << r.remoteLoad.activeBackup << ','
+                << r.localLoad.activeRecovery << ',' << r.remoteLoad.activeRecovery;
+        else out << ",,,";
         out << '\n';
     }
+    std::ofstream pauses(directory / "frequency-pause-intervals.csv");
+    pauses.exceptions(std::ios::badbit | std::ios::failbit);
+    pauses << "task_id,start_time_ns,end_time_ns,duration_ns,reason\n";
+    for (const auto& p : m_pauses)
+        pauses << p.taskId << ',' << p.startNs << ',' << p.endNs << ',' << p.endNs-p.startNs << ',' << p.reason << '\n';
 }
 } // namespace ns3::protection

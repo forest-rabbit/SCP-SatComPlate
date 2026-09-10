@@ -16,6 +16,7 @@
 #include "ns3/flow-metrics.h"
 #include "ns3/fixed-protection-controller.h"
 #include "ns3/frequency-protection-controller.h"
+#include "ns3/least-recovery-load-placement-policy.h"
 #include "ns3/protection-metrics.h"
 #include "ns3/link-metrics-recorder.h"
 #include "ns3/online-orbit-constellation.h"
@@ -213,6 +214,8 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
                          config.backupStorageBytesPerNode);
+    commandLine.AddValue("placementMode", "ffp baseline / lrl diagnostic (compfrr only)", config.placementMode);
+    commandLine.AddValue("lrlRecoveryWeight", "Diagnostic active-recovery weight; G3 freezes 1", config.lrlRecoveryWeight);
     commandLine.AddValue("fixedProtectionDelta",
                          "Fixed progress interval (0.05 = 5%), per-mille precision",
                          config.fixedProtectionDelta);
@@ -369,6 +372,9 @@ ValidateConfig(const SatComputeConfig& config)
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
     RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr"});
+    RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl"});
+    if (config.placementMode == "lrl" && config.protectionMode != "compfrr")
+        FailConfig("placementMode", "lrl is only a compfrr diagnostic, not fixed/off");
     if (config.protectionMode != "off" &&
         (config.topologyOnly || !hasComputeProfile || config.compfrrShadow))
     {
@@ -670,6 +676,7 @@ main(int argc, char* argv[])
             std::unique_ptr<protection::FixedProtectionController> protection;
             std::unique_ptr<protection::FrequencyProtectionController> frequency;
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
+            std::filesystem::remove(outputDirectory / "frequency-pause-intervals.csv");
             if (config.protectionMode == "fixed")
             {
                 protection = std::make_unique<protection::FixedProtectionController>(
@@ -685,7 +692,10 @@ main(int argc, char* argv[])
             {
                 frequency = std::make_unique<protection::FrequencyProtectionController>(
                     taskCoordinator, topology, faultModelEngine,
-                    config.backupStorageBytesPerNode, simulationDurationNs);
+                    config.backupStorageBytesPerNode, simulationDurationNs,
+                    config.placementMode == "lrl"
+                        ? std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.lrlRecoveryWeight)
+                        : std::unique_ptr<protection::PlacementPolicy>{});
             }
             else
             {
@@ -722,11 +732,13 @@ main(int argc, char* argv[])
                 WriteProtectionMetrics(frequency->Manager(), *transferEngine, outputDirectory);
                 frequency->Recovery()->WriteMetrics(outputDirectory);
                 frequency->WriteDecisions(outputDirectory);
+                frequency->PlacementLoads().WriteMetrics(outputDirectory);
             }
             if (protection)
             {
                 protection->Finalize();
                 WriteProtectionMetrics(protection->Manager(), *transferEngine, outputDirectory);
+                protection->PlacementLoads().WriteMetrics(outputDirectory);
                 if (protection->Recovery())
                     protection->Recovery()->WriteMetrics(outputDirectory);
                 else

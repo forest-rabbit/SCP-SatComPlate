@@ -180,6 +180,13 @@ RecoveryController::Fault(const TaskRuntime& task, const TaskFaultNodeChange& ch
     auto snapshot = m_manager.FreezeRecoverySnapshot(task.definition.taskId, Now());
     auto owned = std::make_unique<State>(task, snapshot, change.fault);
     auto& state = *owned;
+    state.summary.checkpointStateExists = snapshot.phase == "ON" && snapshot.remoteObject;
+    if (snapshot.phase != "OFF")
+    {
+        const auto remote = Service(snapshot.remoteNode);
+        state.summary.remoteBusyAtFault = remote && !remote->IsIdle();
+        state.summary.remoteEligibleAtFault = Eligible(snapshot.remoteNode, state);
+    }
     Require(m_states.emplace(task.definition.taskId, std::move(owned)).second,
             "second recovery attempt forbidden");
     Log(state, "FAULT_SNAPSHOT", snapshot.tailBytes);
@@ -284,6 +291,19 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
     auto& r = state.summary;
     const auto& f = r.snapshot;
     const auto base = f.remoteObject ? m_manager.Pool(f.remoteNode).Find(f.remoteObject) : nullptr;
+    // Classification observes the same current predicates used below; it never admits a node.
+    if (f.phase != "OFF" && !m_tasks->IsSatelliteAvailable(f.remoteNode))
+        r.checkpointFallbackReason = "REMOTE_F3";
+    else if (f.phase != "ON" || !base || base->reserved)
+        r.checkpointFallbackReason = "STATE_MISSING";
+    else if (!m_tasks->IsComputeAvailable(f.remoteNode))
+        r.checkpointFallbackReason = "REMOTE_UNAVAILABLE";
+    else if (!Service(f.remoteNode)->IsIdle())
+        r.checkpointFallbackReason = "REMOTE_BUSY";
+    else if (!Reachable(f.remoteNode, state.task.definition.resultNodeId))
+        r.checkpointFallbackReason = "PATH_UNAVAILABLE";
+    else
+        r.checkpointFallbackReason = "OTHER";
     if (f.phase == "ON" && base && !base->reserved && Eligible(f.remoteNode, state))
     {
         const auto rate = Service(f.remoteNode)->GetComputeRateWorkUnitsPerSecond();
@@ -299,7 +319,9 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
             transfer ? std::optional{r.estimatedTailNs} : std::nullopt, r.estimatedRedoNs);
         r.path = choice == RecoveryPath::TAIL ? "TAIL" : "REMOTE_REDO";
         state.startWork = choice == RecoveryPath::TAIL ? f.localWork : f.remoteWork;
-        return AcceptAndExecute(state, f.remoteNode);
+        const bool accepted = AcceptAndExecute(state, f.remoteNode);
+        if (accepted) r.checkpointFallbackReason.clear();
+        return accepted;
     }
     return false;
 }
@@ -335,6 +357,7 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     Log(state, "RECOVERY_DECISION");
     r.recoveryNode = node;
     r.acceptedNs = Now();
+    if (m_loadObserver) m_loadObserver(state.task.definition.taskId, node, true);
     r.plannedCatchupRedoWu = f.actualWork - state.startWork;
     r.plannedPostCatchupWu = state.layout.Work() - f.actualWork;
     r.plannedTotalRecoveryWu = state.layout.Work() - state.startWork;
@@ -552,6 +575,7 @@ RecoveryController::Computed(uint64_t id, uint64_t generation, uint32_t node, in
     if (!state.attempt.CompleteCompute({id, generation}, at))
         return Fail(state, "RECOVERY_COMPUTE_DEADLINE");
     state.summary.computeCompleteNs = at;
+    if (m_loadObserver) m_loadObserver(id, node, false);
     Log(state, "RECOVERY_COMPUTE_COMPLETE");
     Require(m_tasks->RecoveryComputed(id, generation, at - state.summary.computeStartedNs),
             "recovery compute completion rejected");
@@ -568,6 +592,8 @@ RecoveryController::Cleanup(State& state)
     if (!state.live)
         return;
     state.live = false;
+    if (state.summary.recoveryNode && m_loadObserver)
+        m_loadObserver(state.task.definition.taskId, *state.summary.recoveryNode, false);
     for (auto event : state.timers)
         Simulator::Cancel(event);
     if (state.service)

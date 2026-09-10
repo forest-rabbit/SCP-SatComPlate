@@ -50,7 +50,7 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 | `protection-contract-test.cc` | N5A-G1 独立架构、存储守恒、状态大小、L1/RemoteCommit 时序、attempt 隔离与恢复选择；不发真实备份流 |
 | `n5b-policy-test.cc` | FFP 原规则穷举对照、LRL 合成诊断、频率纯求解与 shadow 锚点、当前概率/同轮提交/前向配置合同；不接入真实频率运行时 |
 | `protection-path-test.cc` | N5A-G2 真实 UDP 动态注册/乱序接收、ID、存储不足、非零初始化、取消与同纳秒计算结束 |
-| `frequency-runtime-test.cc` | N5B-G2 实际故障 epoch、提案/提交、四类合法状态、动态 delta/n、不可变 batch、PAUSE/恢复及存储峰值 |
+| `frequency-runtime-test.cc` | N5B 实际故障 epoch、提案/提交、四类状态、动态频率、PAUSE/恢复、LRL 实时负载与重复运行一致性 |
 | `recovery-runtime-test.cc` | G3 受控 FaultController→备份/网络/计算/任务闭环，LocalDelivery、服务锁、F1/F2 免疫、F3、deadline、同纳秒实体快照和旧回调 |
 | `link-window-test.cc` | 10 Gbps、空闲、双向独立、跨窗/尾窗、可用性、队列与预留时间积分 |
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
@@ -114,7 +114,7 @@ G2 smoke 为 16 星/4 类任务/15 s 的 off、fixed、重复、容量不足四�
 | `run-topology-smoke.sh` | topology-only 切片、终点采样、XYZ 演化和逐字节确定性 |
 | `run-compfrr-shadow-smoke.py` | 8任务off/on、重复、audit独立性、字节/队列账本及同纳秒F3/初始化顺序 |
 | `run-protection-smoke.py` | G2 四类真实固定备份流、receiver/commit/存储守恒、off 计算对照和确定性 |
-| `run-frequency-smoke.py` | N5B-G2 四任务 generate CLI、当前 q/完成前概率逐值一致、审计开关独立及 off 输出清理 |
+| `run-frequency-smoke.py` | N5B 四任务 generate CLI、概率逐值一致、FFP/LRL 统计、审计独立及 off 输出清理 |
 | `run-recovery-smoke.py` | G3 16 星/4 任务/15 s 受控 F3，off/fixed/重复运行，同星 RESULT 的实际字节与零网络流 |
 | `run-link-metrics-smoke.py` | 指标开关不改变业务、空闲/丢包/故障、窗口汇总和陈旧文件清理 |
 
@@ -171,9 +171,18 @@ SATCOMPUTE_POSITION_SLICES=output/n4c-g3-truncnormal-v3-20260909/orbit/topology 
 
 ## 手动正式运行与 G4 验证
 
-`integration/regression/run-final-scenario.py`仅支持当前场景的none、generate、
-generate+shadow。默认为generate；概率CSV审计和shadow均默认关闭。
+`integration/regression/run-final-scenario.py`支持当前场景的none、generate、
+generate+shadow，以及仅供 N5A 验收的显式 validation-replay。默认为generate；概率CSV审计和shadow均默认关闭。
 输出必须是新目录，默认1300 s、800任务、66星、10 Gbps、1 ms、seed1/run11。
+
+N5B-G3 在同一构建下手动各运行一次：A 使用 `--protection-mode=fixed`，B 使用
+`--protection-mode=compfrr`，C 再加 `--placement-mode=lrl`。三者均为在线 generate，
+不自动加入 smoke/regression/CI。LRL lambda 固定 1，无扫描。输出目录约定为
+`output/n5b-g3/{A-ffp-fixed,B-ffp-compfrr-frequency,C-lrl-compfrr-frequency}`。
+`analyze-frequency-evaluation.py --runs A目录 B目录 C目录` 只读这些原始输出，
+核对配对运行参数、动态所有权和 N5A 实际账本，写入各目录的 `frequency-evaluation.json`
+及父目录 `paired-evaluation.json`；不重跑、不修改原始 CSV。`test_frequency_evaluation.py`
+验证统计口径，smoke 在四任务真实结果上检查同一个分析入口。
 
 ```bash
 # 手动完整运行；不是日常短测试

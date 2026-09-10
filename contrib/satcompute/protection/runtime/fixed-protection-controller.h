@@ -4,6 +4,7 @@
 #include "../mechanism/checkpoint/checkpoint-manager.h"
 #include "../policy/fixed/fixed-protection-policy.h"
 #include "recovery-controller.h"
+#include "placement-load-ledger.h"
 
 namespace ns3::protection
 {
@@ -28,6 +29,7 @@ class FixedProtectionController
                               bool enableRecovery = false);
     ~FixedProtectionController();
     void Finalize(); ///< Release remaining protection after simulation stop.
+    const PlacementLoadLedger& PlacementLoads() const { return m_loads; } ///< Actual ownership.
 
     /** @return Mechanism evidence for the dedicated metrics writer. */
     const CheckpointManager& Manager() const
@@ -45,6 +47,7 @@ class FixedProtectionController
     void OnTask(const TaskEventRecord& event); ///< Observe, never mutate ordinary task state.
     Ptr<TaskCoordinator> m_tasks;              ///< Retained coordinator, outlives event binding.
     SatelliteRuntimeView& m_topology;          ///< Existing real network view.
+    PlacementLoadLedger m_loads;               ///< Diagnostic only for fixed FFP.
     CheckpointManager m_manager;               ///< Sole G2 checkpoint executor.
     FixedProtectionPolicy m_policy;            ///< Explicit fixed policy, no probability query.
     ProtectionRuntime m_runtime;               ///< Policy/mechanism dispatcher.

@@ -189,6 +189,16 @@ Run(const Options& o, const std::string& output)
     }
     Check(rows.size() == 1, o.name + ": recovery row missing");
     const auto r = rows.front();
+    if (o.name == "remote-f3-recompute")
+        Check(r.checkpointFallbackReason == "REMOTE_F3", "remote F3 fallback diagnostic");
+    if (o.name == "remote-compute-outage")
+        Check(r.checkpointFallbackReason == "REMOTE_UNAVAILABLE", "remote outage fallback diagnostic");
+    if (o.name == "off-recompute-local" || o.name == "initializing-recompute")
+        Check(!r.checkpointStateExists && r.checkpointFallbackReason == "STATE_MISSING",
+              "missing checkpoint fallback diagnostic");
+    if (r.path == "TAIL" || r.path == "REMOTE_REDO")
+        Check(r.checkpointStateExists && r.checkpointFallbackReason.empty(),
+              "checkpoint recovery incorrectly labeled fallback");
     if (o.name == "tail-faster" || o.name == "recovery-f3-fails")
         Check(r.normalProtectionCostNs == 4000000 && r.reservedIdleNs == 18280839 &&
                   r.plannedCatchupRedoWu == 2199 && r.plannedTotalRecoveryWu == 84500 &&

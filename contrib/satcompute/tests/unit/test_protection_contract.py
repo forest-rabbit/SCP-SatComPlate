@@ -31,6 +31,14 @@ class ProtectionConfigTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("protectionMode has an unsupported value", result.stdout)
 
+    def test_placement_guards(self):
+        for options in ("--placementMode=unsupported", "--placementMode=lrl --protectionMode=fixed",
+                        "--placementMode=lrl --protectionMode=off"):
+            with self.subTest(options=options):
+                result = self.run_cli(options)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("placementMode", result.stdout)
+
     def test_frequency_requires_generate_and_compute_sources(self):
         for options in ("--faultMode=none", "--faultMode=generate --faultEnableF1=0 --faultEnableF2=0"):
             with self.subTest(options=options):

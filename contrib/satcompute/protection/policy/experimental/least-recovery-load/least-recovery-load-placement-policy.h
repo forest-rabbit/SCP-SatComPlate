@@ -9,7 +9,8 @@ namespace ns3::protection
 class LeastRecoveryLoadPlacementPolicy : public PlacementPolicy
 {
   public:
-    /** Explicit nonnegative integer weight; no production parameter or default. */
+    const char* Name() const override { return "lrl"; }
+    /** Explicit nonnegative integer weight, frozen before a diagnostic experiment. */
     explicit LeastRecoveryLoadPlacementPolicy(uint32_t recoveryWeight);
     std::optional<PlacementDecision> Select(const PlacementContext& context) const override;
 
