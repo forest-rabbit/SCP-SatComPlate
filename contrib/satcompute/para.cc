@@ -111,6 +111,18 @@ GetDefaultSatComputeConfig()
 
     // protection
 
+    // --protectionMode：默认 off 保持 N4 行为；fixed 真实数据流尚待 G2 接入。
+    config.protectionMode = "off";
+
+    // --backupStorageBytesPerNode：独立额外备份池，10 GB 为实验参数而非实测容量。
+    config.backupStorageBytesPerNode = 10'000'000'000;
+
+    // --fixedProtectionDelta：进度比例，5% 只是执行验证配置，不代表算法最优值。
+    config.fixedProtectionDelta = 0.05;
+
+    // --fixedProtectionBatchN：每 4 个有效 L1 组成一个 remote batch。
+    config.fixedProtectionBatchN = 4;
+
     // --compfrr-shadow：显式开启 G4 旁路评估，不影响任务、路由与故障抽样。
     config.compfrrShadow = false;
 

@@ -199,6 +199,18 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("faultProbabilityAudit",
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
+    commandLine.AddValue("protectionMode",
+                         "off; fixed data path is not connected in N5A-G1",
+                         config.protectionMode);
+    commandLine.AddValue("backupStorageBytesPerNode",
+                         "Backup-only storage capacity in decimal bytes",
+                         config.backupStorageBytesPerNode);
+    commandLine.AddValue("fixedProtectionDelta",
+                         "Fixed progress interval (0.05 = 5%), per-mille precision",
+                         config.fixedProtectionDelta);
+    commandLine.AddValue("fixedProtectionBatchN",
+                         "Fixed number of L1 records per remote batch",
+                         config.fixedProtectionBatchN);
     commandLine.AddValue("compfrr-shadow", "Opt-in G4 analytical decision observer (no real backup)",
                          config.compfrrShadow);
     commandLine.AddValue("compfrr-shadow-output", "Shadow CSV directory; default outputDir/shadow",
@@ -339,6 +351,25 @@ ValidateConfig(const SatComputeConfig& config)
         }
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
+    RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed"});
+    if (config.protectionMode != "off")
+    {
+        FailConfig("protectionMode", "fixed data path is not connected in N5A-G1; use off");
+    }
+    if (!std::isfinite(config.fixedProtectionDelta) || config.fixedProtectionDelta <= 0 ||
+        config.fixedProtectionDelta > 1 ||
+        std::abs(config.fixedProtectionDelta * 1000 -
+                 std::round(config.fixedProtectionDelta * 1000)) > 1e-9)
+    {
+        FailConfig("fixedProtectionDelta", "must be in (0,1] with per-mille precision");
+    }
+    const auto fixedDeltaPermille =
+        static_cast<uint32_t>(std::round(config.fixedProtectionDelta * 1000));
+    if (!fixedDeltaPermille || !config.fixedProtectionBatchN ||
+        config.fixedProtectionBatchN > 1000 / fixedDeltaPermille)
+    {
+        FailConfig("fixedProtectionBatchN", "requires n>0 and n*delta<=1");
+    }
     if (config.compfrrShadow && (config.topologyOnly || !hasComputeProfile || config.faultMode != "generate"))
     {
         FailConfig("compfrr-shadow", "requires network tasks and faultMode=generate");

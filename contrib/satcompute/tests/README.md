@@ -28,6 +28,7 @@ tests/
 | 文件 | 主要覆盖 |
 |---|---|
 | `para-test.cc` | `para.cc` 默认值、分组和关键压力测试默认项 |
+| `protection-contract-test.cc` | N5A-G1 独立架构、存储守恒、状态大小、L1/RemoteCommit 时序、attempt 隔离与恢复选择；不发真实备份流 |
 | `link-window-test.cc` | 10 Gbps、空闲、双向独立、跨窗/尾窗、可用性、队列与预留时间积分 |
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
 | `routing-policy-factory-test.cc` | 五种路由名到 next-hop/path policy 的映射 |
@@ -52,6 +53,7 @@ tests/
 | `test_fault_probability_comparison.py` | 概率对概率一致性及缺失记录拒绝 |
 | `test_fault_workload_fixtures.py` | 保留F1/F2/N4B固定fixture的角色与分布，不再依赖旧生成profile |
 | `test_link_metrics_report.py` | 通用链路统计分位数 |
+| `test_protection_contract.py` | N5A-G1 入口参数拒绝非法值/未接入 fixed，以及生产模块无 shadow 依赖 |
 
 C++另保留 `task-deadline-test.cc`（当前正式输入和deadline边界）以及
 `compfrr-shadow-model-test.cc`（成本分档、严格START、初始化不双计、频率枚举、
@@ -61,6 +63,17 @@ OFF/ON追赶与状态边界）。通用task/routing/fault/network测试未删除
 拓扑恢复边界覆盖；不读取生产故障文件，也不提供用户 replay 模式。
 
 ## Smoke
+
+N5A-G1 定向验证（需要先构建）：
+
+```bash
+./ns3 run --no-build "satcompute-protection-contract-test"
+./ns3 run --no-build "satcompute-protection-contract-test --traceInput=contrib/satcompute/input/experiments/leo-66/workload/task-trace.json"
+```
+
+第二条只核对800份任务的字节/WU/合法边界，与 G4 oracle 单向比较，不运行800任务网络仿真。
+可加 `--sizingOutput=<新输出文件>` 保存四类代表性状态表；普通平台运行不输出这些验证数据。
+G1 不接真实 checkpoint/recovery；详见 [protection](../protection/README.md)。
 
 | 脚本 | 主要覆盖 |
 |---|---|

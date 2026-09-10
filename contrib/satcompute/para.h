@@ -59,6 +59,10 @@ struct SatComputeConfig
     bool faultProbabilityAudit;  ///< 是否采集并输出概率一致性审计数据。
 
     // protection
+    std::string protectionMode; ///< off / fixed; G1 尚未接入真实 fixed 数据流。
+    uint64_t backupStorageBytesPerNode; ///< 每计算星额外备份存储容量，十进制字节。
+    double fixedProtectionDelta; ///< 固定 checkpoint 进度间隔，0.05 表示 5%。
+    uint32_t fixedProtectionBatchN; ///< 每个 remote batch 包含的 L1 record 数。
     bool compfrrShadow; ///< G4 只读旁路决策评估，不创建真实备份。
     std::string compfrrShadowOutput; ///< 空时写入 outputDir/shadow。
 

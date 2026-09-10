@@ -33,7 +33,9 @@ annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移�
 N4C G3/G4 经 PR #90/#91、最终收尾经 PR #92 集成到 n4c，再由 PR #93 普通合入 main。
 正式入口为 [LEO-66](contrib/satcompute/input/experiments/leo-66/README.md)，
 冻结历史由 commit/PR 追溯，不依赖内部标签。
-N4 = COMPLETE，正式标签为 main 集成提交上的 `n4-complete`；N5 尚未开始。
+N4 = COMPLETE，正式标签为 main 集成提交上的 `n4-complete`。
+N5 集成线已由该标签建立；[Pre-N5 审计 PR #94](https://github.com/forest-rabbit/SCP-SatComPlate/pull/94)
+已合入 `n5`，Gate A/B 通过。N5A-G1 开发中，真实备份/恢复尚未接入，未改动 main 冻结结果。
 
 ## N0：初始网络平台
 

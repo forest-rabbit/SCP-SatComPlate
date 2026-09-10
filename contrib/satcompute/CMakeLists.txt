@@ -3,6 +3,12 @@ build_lib(
   SOURCE_FILES
     para.cc
     common/time-conversion.cc
+    protection/common/protection-types.cc
+    protection/common/task-state-adapter.cc
+    protection/storage/backup-storage-pool.cc
+    protection/runtime/protection-runtime.cc
+    protection/policy/fixed/fixed-protection-policy.cc
+    protection/mechanism/checkpoint/checkpoint-progress.cc
     tools/validation/compfrr-shadow/compfrr-shadow-model.cc
     tools/validation/compfrr-shadow/compfrr-shadow-evaluator.cc
     tools/validation/compfrr-shadow/compfrr-shadow-recorder.cc
@@ -68,6 +74,12 @@ build_lib(
   HEADER_FILES
     para.h
     common/time-conversion.h
+    protection/common/protection-types.h
+    protection/common/task-state-adapter.h
+    protection/storage/backup-storage-pool.h
+    protection/runtime/protection-runtime.h
+    protection/policy/fixed/fixed-protection-policy.h
+    protection/mechanism/checkpoint/checkpoint-progress.h
     tools/validation/compfrr-shadow/compfrr-shadow-model.h
     tools/validation/compfrr-shadow/compfrr-shadow-task-state.h
     tools/validation/compfrr-shadow/compfrr-shadow-evaluator.h
@@ -212,6 +224,14 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-protection-contract-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/protection-contract-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-compfrr-shadow-model-test
   EXECNAME_PREFIX satcompute_test_
