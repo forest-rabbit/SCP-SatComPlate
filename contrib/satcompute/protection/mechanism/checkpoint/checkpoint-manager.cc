@@ -55,6 +55,7 @@ CheckpointManager::State::State(const TaskRuntime& runtime,
     summary.startNs = now;
     summary.localCostNs = costs.localNs;
     summary.remoteCostNs = costs.remoteNs;
+    summary.primaryRate = computeRate;
 }
 
 CheckpointManager::CheckpointManager(Ptr<TaskCoordinator> tasks,
@@ -143,6 +144,14 @@ CheckpointManager::Log(State& state,
                        uint64_t object,
                        uint64_t transfer)
 {
+    if (event == "INIT_STATE_GENERATED")
+        ++state.summary.initGenerated;
+    if (event == "INIT_COST_COMMITTED")
+        ++state.summary.initCommitted;
+    if (event == "L1_GENERATED")
+        ++state.summary.localGeneratedCostCount;
+    if (event == "REMOTE_COST_COMMITTED")
+        ++state.summary.remoteCommittedCostCount;
     const auto snapshot = state.progress.Current();
     const auto& local = *m_pools.at(state.config.localNode);
     const auto& remote = *m_pools.at(state.config.remoteNode);
@@ -595,6 +604,7 @@ CheckpointManager::FinishPhysicalCommit(State& state, bool initialization)
                          state.layout.CommittedStateBytes(work)),
             "remote in-place merge failed");
     state.physicalCommit.reset();
+    Log(state, initialization ? "INIT_COST_COMMITTED" : "REMOTE_COST_COMMITTED", work);
     if (!m_recoveryRetention)
     {
         Log(state,
@@ -689,6 +699,7 @@ CheckpointManager::Finalize()
     {
         Stop(*state, "SIMULATION_ENDED");
         ReleaseRecoveryState(id);
+        state->physicalCommit.reset();
     }
     for (auto& [time, event] : m_flushEvents)
         Simulator::Cancel(event);
@@ -701,8 +712,42 @@ CheckpointManager::Summaries() const
 {
     std::vector<ProtectionTaskSummary> result;
     for (const auto& [id, state] : m_states)
-        result.push_back(state->summary);
+    {
+        auto row = state->summary;
+        row.normalCostNs = (row.initGenerated + row.localGeneratedCostCount) * row.localCostNs +
+                           (row.initCommitted + row.remoteCommittedCostCount) * row.remoteCostNs;
+        row.localPeakBytes = m_pools.at(row.localNode)->TaskPeak(id);
+        row.remotePeakBytes = m_pools.at(row.remoteNode)->TaskPeak(id);
+        result.push_back(row);
+    }
     return result;
+}
+
+bool
+CheckpointManager::IsQuiescent() const
+{
+    for (auto service : m_tasks->GetComputeServices())
+        if (service->HasRecoveryReservation())
+            return false;
+    for (const auto& row : m_network->CollectSummaries())
+        if (m_network->IsRuntimeTransfer(row.transferId) && row.transferState != "COMPLETED" &&
+            row.transferState != "FAILED" && row.transferState != "CANCELLED")
+            return false;
+    for (const auto& [time, requests] : m_requests)
+        if (!requests.empty())
+            return false;
+    for (const auto& [id, state] : m_states)
+    {
+        if (state->active || state->physicalCommit)
+            return false;
+        for (const auto& timer : state->timers)
+            if (timer.IsPending())
+                return false;
+    }
+    for (const auto& [node, pool] : m_pools)
+        if (pool->Used() || pool->Reserved())
+            return false;
+    return true;
 }
 
 RecoverySnapshot

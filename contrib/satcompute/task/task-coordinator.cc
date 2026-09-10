@@ -1061,4 +1061,41 @@ TaskCoordinator::IsSatelliteAvailable(uint32_t nodeId) const
     return !m_unavailableSatelliteNodes.contains(nodeId);
 }
 
+void
+TaskCoordinator::FinalizeSimulation()
+{
+    for (auto& task : m_tasks)
+    {
+        if (IsTerminalTaskState(task.state))
+            continue;
+        const auto id = task.definition.taskId;
+        if (task.attemptGeneration == 1)
+        {
+            FailRecovery(id, "SIMULATION_ENDED", TaskFailureReason::SIMULATION_ENDED);
+            continue;
+        }
+        const auto before = task.state;
+        auto service = GetComputeService(task.definition.computeNodeId);
+        if (before == TASK_RUNNING)
+            service->CancelRunningTaskForFailure(id);
+        if (before == TASK_QUEUED)
+            service->RemoveQueuedTaskForFailure(id);
+        CancelComputeDeadline(id);
+        task.FailIfActive(Simulator::Now().GetNanoSeconds(),
+                          TaskFailureReason::SIMULATION_ENDED,
+                          "SIMULATION_ENDED");
+        m_taskEvents.push_back({Simulator::Now().GetNanoSeconds(),
+                                id,
+                                before,
+                                TASK_FAILED,
+                                task.definition.computeNodeId,
+                                "SIMULATION_ENDED"});
+        m_taskTransition(m_taskEvents.back());
+        m_transferEngine->FinalizeTransfersIfActive(
+            {task.definition.inputTransferId, task.definition.resultTransferId},
+            TransferTerminalState::CANCELLED,
+            TransferTerminalReason::SIMULATION_ENDED);
+    }
+}
+
 } // namespace ns3

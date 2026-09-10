@@ -196,8 +196,13 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("taskCompletionPolicy",
                          "Task completion policy: strict or report",
                          config.taskCompletionPolicy);
-    commandLine.AddValue("faultMode", "Fault mode: none or generate", config.faultMode);
+    commandLine.AddValue("faultMode",
+                         "none/generate; validation-replay for frozen execution tests only",
+                         config.faultMode);
     commandLine.AddValue("faultTrace", "Generated fault trace output path", config.faultTrace);
+    commandLine.AddValue("validationFaultTrace",
+                         "Frozen validation input; never online model input",
+                         config.validationFaultTrace);
     commandLine.AddValue("faultProbabilityAudit",
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
@@ -332,7 +337,16 @@ ValidateConfig(const SatComputeConfig& config)
         FailConfig("islMtuBytes", "must be at least 64028 for size-aware chunking");
     }
     RequireChoice(config.taskCompletionPolicy, "taskCompletionPolicy", {"strict", "report"});
-    RequireChoice(config.faultMode, "faultMode", {"none", "generate"});
+    RequireChoice(config.faultMode, "faultMode", {"none", "generate", "validation-replay"});
+    if (config.faultMode == "validation-replay")
+    {
+        if (config.validationFaultTrace.empty() || !hasComputeProfile ||
+            config.faultProbabilityAudit || config.compfrrShadow)
+            FailConfig("validationFaultTrace",
+                       "validation replay requires frozen input, tasks, audit/shadow off");
+    }
+    else if (!config.validationFaultTrace.empty())
+        FailConfig("validationFaultTrace", "only accepted for validation-replay");
     if (config.faultMode == "none" && !config.faultTrace.empty())
     {
         FailConfig("faultMode", "none cannot use faultTrace");
@@ -343,7 +357,7 @@ ValidateConfig(const SatComputeConfig& config)
     }
     if (config.faultProbabilityAudit)
     {
-        if (config.faultMode == "none")
+        if (config.faultMode != "generate")
         {
             FailConfig("faultProbabilityAudit", "requires faultMode=generate");
         }
@@ -430,7 +444,7 @@ ApplyModeDefaults(SatComputeConfig& config, int argc, char* argv[])
     // ns-3 CommandLine rejects empty string values; use an explicit sentinel.
     if (config.computeProfile == "none") config.computeProfile.clear();
     if (config.taskTrace == "none") config.taskTrace.clear();
-    if (config.faultMode == "generate" && config.faultTrace.empty())
+    if (config.faultMode != "none" && config.faultTrace.empty())
     {
         config.faultTrace =
             (std::filesystem::path(config.outputDirectory) / "fault-trace.json").string();
@@ -461,10 +475,19 @@ main(int argc, char* argv[])
         config.computeProfile =
             ResolveOptionalInputFile(config.computeProfile, "computeProfile");
         config.taskTrace = ResolveOptionalInputFile(config.taskTrace, "taskTrace");
-        if (config.faultMode == "generate")
+        if (config.faultMode != "none")
         {
             config.faultTrace = ResolveOutputFile(config.faultTrace, "faultTrace");
         }
+        config.validationFaultTrace =
+            ResolveOptionalInputFile(config.validationFaultTrace, "validationFaultTrace");
+        if (!config.validationFaultTrace.empty() &&
+            (std::filesystem::weakly_canonical(config.validationFaultTrace) ==
+                 std::filesystem::weakly_canonical(config.faultTrace) ||
+             std::filesystem::weakly_canonical(config.outputDirectory) ==
+                 std::filesystem::weakly_canonical(config.validationFaultTrace).parent_path()))
+            FailConfig("validationFaultTrace",
+                       "must not overwrite frozen input or its evidence directory");
         const int64_t simulationDurationNs =
             SatComputeSecondsToNanoseconds(config.simulationDurationSeconds,
                                            "simulationDuration");
@@ -600,6 +623,15 @@ main(int argc, char* argv[])
                         topology.GetOnlineConstellation());
                 }
             }
+            if (config.faultMode == "validation-replay")
+            {
+                const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+                const auto trace = ReadValidationFaultTrace(
+                    config.validationFaultTrace, ids, simulationDurationNs);
+                faultController = CreateObject<FaultController>();
+                faultController->ConfigureValidationReplay(trace, ids, simulationDurationNs);
+                faultController->BindTopology(topology);
+            }
             if (computeProfile.has_value() && taskTrace.has_value())
             {
                 taskCoordinator = CreateObject<TaskCoordinator>();
@@ -689,6 +721,8 @@ main(int argc, char* argv[])
                 const FaultTrace& generatedTrace = faultModelEngine->Finalize();
                 WriteFaultTraceV2(config.faultTrace, generatedTrace);
             }
+            else if (config.faultMode == "validation-replay")
+                WriteFaultTraceV2(config.faultTrace, faultController->GetTrace());
             const int64_t wallClockNs =
                 std::chrono::duration_cast<std::chrono::nanoseconds>(wallStop - wallStart).count();
             std::optional<CapacityAwareRuntimeSummary> capacitySummary;

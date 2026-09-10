@@ -21,6 +21,25 @@ tests/
 日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动正式场景的原始指标
 保存在 gitignore 排除的本地 `output/`，完整800任务运行不接入 `run-all.sh` 或 GitHub CI。
 
+N5A-G4 的冻结故障验收仍复用 `integration/regression/run-final-scenario.py`，
+只在明确授权后手动运行；原始 N4 输出不可覆盖。例：
+
+```bash
+.venv/bin/python contrib/satcompute/tests/integration/regression/run-final-scenario.py \
+  --output-dir output/n5a-g4/off-replay --fault-mode validation-replay \
+  --validation-trace output/n4-release-validation/fault-trace.json
+# FIXED 使用另一个新目录，并追加 --protection-mode fixed。
+.venv/bin/python contrib/satcompute/tests/integration/regression/analyze-protection-accounting.py \
+  --run output/n5a-g4/off-replay --reference output/n4-release-validation
+# FIXED 分析只传 --run；不要求其业务输出等同 OFF。
+```
+
+缺少冻结 trace 必须停止，不重新 generate 替代。OFF 比较13份业务 CSV 与5份 JSON，
+仅忽略 run-summary 的 wall_clock_ns/s；在线模型概率审计和旧 shadow 不属于回放输出。
+会产生离线 `protection-accounting.json` 与逐任务 CSV，正常平台运行不自动执行该分析。
+`recovery-runtime-test.cc` 覆盖 planned/actual、失败前缀、预留等待和三个人工核算锚点；
+recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 截断清理。
+
 ## Unit
 
 `unit/run-cpp-tests.sh` 按固定顺序运行以下普通 executable：

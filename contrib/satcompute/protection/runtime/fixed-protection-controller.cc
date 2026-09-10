@@ -64,6 +64,7 @@ FixedProtectionController::Finalize()
 {
     if (m_recovery)
         m_recovery->Finalize();
+    m_tasks->FinalizeSimulation();
     m_manager.Finalize();
 }
 } // namespace ns3::protection

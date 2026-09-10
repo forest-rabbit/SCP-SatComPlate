@@ -102,6 +102,8 @@ TaskFailureReasonToString(TaskFailureReason reason)
         return "RESULT_TRANSFER_FAILED";
     case TaskFailureReason::COMPUTE_DEADLINE_EXCEEDED:
         return "COMPUTE_DEADLINE_EXCEEDED";
+    case TaskFailureReason::SIMULATION_ENDED:
+        return "SIMULATION_ENDED";
     }
     return "UNKNOWN";
 }

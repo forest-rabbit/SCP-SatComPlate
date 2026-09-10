@@ -182,14 +182,6 @@ RecoveryController::Fault(const TaskRuntime& task, const TaskFaultNodeChange& ch
     auto& state = *owned;
     Require(m_states.emplace(task.definition.taskId, std::move(owned)).second,
             "second recovery attempt forbidden");
-    for (const auto& e : m_manager.Events())
-        if (e.taskId == task.definition.taskId && e.timeNs < snapshot.faultNs)
-        {
-            if (e.event == "INIT_STATE_GENERATED" || e.event == "L1_GENERATED")
-                state.summary.normalProtectionCostNs += snapshot.localCostNs;
-            if (e.event == "INIT_COMPLETE" || e.event == "REMOTE_COMMIT")
-                state.summary.normalProtectionCostNs += snapshot.remoteCostNs;
-        }
     Log(state, "FAULT_SNAPSHOT", snapshot.tailBytes);
     // Snapshot is already immutable. Quiescence cancels old callbacks but retains its objects.
     m_manager.QuiesceForRecovery(snapshot);
@@ -343,9 +335,10 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     Log(state, "RECOVERY_DECISION");
     r.recoveryNode = node;
     r.acceptedNs = Now();
-    r.catchupRedoWork = f.actualWork - state.startWork;
-    r.postCatchupWork = state.layout.Work() - f.actualWork;
-    r.fullRecomputeWork = r.path == "RECOMPUTE" ? state.layout.Work() : 0;
+    r.plannedCatchupRedoWu = f.actualWork - state.startWork;
+    r.plannedPostCatchupWu = state.layout.Work() - f.actualWork;
+    r.plannedTotalRecoveryWu = state.layout.Work() - state.startWork;
+    r.recoveryRate = state.service->GetComputeRateWorkUnitsPerSecond();
     Log(state, "RECOVERY_ACCEPTED");
     if (r.path == "TAIL")
     {
@@ -521,7 +514,7 @@ RecoveryController::StartCompute(State& state)
     if (!work || !state.service->StartRecovery(state.task.definition.taskId,
                                                1,
                                                work,
-                                               state.summary.catchupRedoWork,
+                                               state.summary.plannedCatchupRedoWu,
                                                MakeCallback(&RecoveryController::Started, this),
                                                MakeCallback(&RecoveryController::Catchup, this),
                                                MakeCallback(&RecoveryController::Computed, this)))
@@ -597,7 +590,10 @@ RecoveryController::Fail(State& state, const std::string& reason)
     state.summary.reason = reason;
     state.attempt.Fail();
     Log(state, "RECOVERY_FAILED");
-    m_tasks->FailRecovery(state.task.definition.taskId, reason);
+    m_tasks->FailRecovery(state.task.definition.taskId,
+                          reason,
+                          reason == "SIMULATION_ENDED" ? TaskFailureReason::SIMULATION_ENDED
+                                                       : TaskFailureReason::COMPUTE_NODE_FAILURE);
 }
 
 void
@@ -633,8 +629,24 @@ std::vector<RecoverySummary>
 RecoveryController::Summaries() const
 {
     std::vector<RecoverySummary> rows;
+    std::map<uint64_t, uint64_t> normalCosts;
+    for (const auto& row : m_manager.Summaries())
+        normalCosts[row.taskId] = row.normalCostNs;
     for (const auto& [id, state] : m_states)
-        rows.push_back(state->summary);
+    {
+        auto row = state->summary;
+        row.normalProtectionCostNs = normalCosts[id];
+        row.primaryRate = Service(row.primaryNode)->GetComputeRateWorkUnitsPerSecond();
+        if (state->service)
+        {
+            const auto actual = state->service->GetRecoveryAccounting(id, 1);
+            row.actualServiceNs = actual.serviceNs;
+            row.actualTotalRecoveryWu = actual.executedWork;
+            row.actualCatchupRedoWu = std::min(actual.executedWork, row.plannedCatchupRedoWu);
+            row.actualPostCatchupWu = actual.executedWork - row.actualCatchupRedoWu;
+        }
+        rows.push_back(row);
+    }
     return rows;
 }
 } // namespace ns3::protection

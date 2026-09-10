@@ -8,6 +8,7 @@
 #include "ns3/local-delivery.h"
 #include "ns3/mac48-address.h"
 #include "ns3/online-topology-controller.h"
+#include "ns3/protection-metrics.h"
 #include "ns3/recovery-controller.h"
 #include "ns3/simulator.h"
 #include <algorithm>
@@ -169,6 +170,8 @@ Run(const Options& o, const std::string& output)
     recovery.Finalize();
     manager.Finalize();
     recovery.WriteMetrics(std::filesystem::path(output) / o.name);
+    WriteProtectionMetrics(
+        manager, *tasks->GetTransferEngine(), std::filesystem::path(output) / o.name);
     const auto rows = recovery.Summaries();
     if (o.faults.empty())
     {
@@ -186,6 +189,55 @@ Run(const Options& o, const std::string& output)
     }
     Check(rows.size() == 1, o.name + ": recovery row missing");
     const auto r = rows.front();
+    if (o.name == "tail-faster" || o.name == "recovery-f3-fails")
+        Check(r.normalProtectionCostNs == 4000000 && r.reservedIdleNs == 18280839 &&
+                  r.plannedCatchupRedoWu == 2199 && r.plannedTotalRecoveryWu == 84500 &&
+                  r.actualCatchupRedoWu == 2199 &&
+                  r.actualTotalRecoveryWu == (o.success ? 84500 : 5171) &&
+                  r.actualPostCatchupWu == (o.success ? 82301 : 2972),
+              "manual TAIL success/failure accounting anchor differs");
+    if (o.name == "off-recompute-local")
+        Check(r.normalProtectionCostNs == 0 && r.reservedIdleNs == 1 &&
+                  r.plannedCatchupRedoWu == 7699 && r.actualTotalRecoveryWu == 100000 &&
+                  r.actualCatchupRedoWu == 7699 && r.actualPostCatchupWu == 92301,
+              "manual RECOMPUTE accounting anchor differs");
+    Check(manager.IsQuiescent(), "final protection requests/merges/runtime transfers leaked");
+    Check(r.actualTotalRecoveryWu == r.actualCatchupRedoWu + r.actualPostCatchupWu,
+          "actual recovery partition differs");
+    Check(r.plannedTotalRecoveryWu == r.plannedCatchupRedoWu + r.plannedPostCatchupWu,
+          "planned recovery partition differs");
+    Check(r.actualTotalRecoveryWu <= r.plannedTotalRecoveryWu, "actual exceeds planned work");
+    Check(r.actualTotalRecoveryWu ==
+              std::min<uint64_t>(r.plannedTotalRecoveryWu,
+                                 static_cast<unsigned __int128>(r.actualServiceNs) *
+                                     r.recoveryRate / 1000000000),
+          "actual WU does not follow real integer service");
+    if (r.computeCompleteNs >= 0)
+        Check(r.actualTotalRecoveryWu == r.plannedTotalRecoveryWu,
+              "completed recovery work missing");
+    if (r.catchupNs >= 0)
+        Check(r.actualCatchupRedoWu == r.plannedCatchupRedoWu, "real catchup work missing");
+    else
+        Check(r.actualPostCatchupWu == 0, "post-catchup work before catchup");
+    if (r.acceptedNs >= 0)
+        Check(r.reservedIdleNs ==
+                  (r.computeStartedNs >= 0 ? r.computeStartedNs : r.terminalNs) - r.acceptedNs,
+              "reserved idle includes extra cR or omits never-started wait");
+    for (const auto& summary : manager.Summaries())
+    {
+        uint64_t local = 0, remote = 0;
+        for (const auto& event : manager.Events())
+            if (event.taskId == summary.taskId && event.generation == 0)
+            {
+                local += event.event == "INIT_STATE_GENERATED" || event.event == "L1_GENERATED";
+                remote +=
+                    event.event == "INIT_COST_COMMITTED" || event.event == "REMOTE_COST_COMMITTED";
+            }
+        Check(summary.normalCostNs == local * summary.localCostNs + remote * summary.remoteCostNs,
+              "normal cost differs from real event counts");
+        Check(summary.normalCostNs == r.normalProtectionCostNs,
+              "recovery duplicates/omits normal cost");
+    }
     std::cout << o.name << ": " << r.path << ' ' << r.terminalState << ' ' << r.reason
               << " x/l/r=" << r.snapshot.actualWork << '/' << r.snapshot.localWork << '/'
               << r.snapshot.remoteWork << " input=" << r.inputMode << " result=" << r.resultMode
@@ -202,9 +254,9 @@ Run(const Options& o, const std::string& output)
         Check(r.catchupNs >= r.computeStartedNs && r.computeCompleteNs >= r.catchupNs,
               "catchup must be a real intermediate compute milestone");
         Check(r.catchupNs - r.computeStartedNs ==
-                  (r.catchupRedoWork
+                  (r.plannedCatchupRedoWu
                        ? ComputeService::CalculateServiceTimeNs(
-                             r.catchupRedoWork, r.recoveryNode == 0 ? o.recoveryRate : 100000)
+                             r.plannedCatchupRedoWu, r.recoveryNode == 0 ? o.recoveryRate : 100000)
                        : 0),
               "catchup duration differs");
         Check(r.resultBytes == 4 && r.resultCompleteNs >= r.computeCompleteNs,
@@ -403,7 +455,22 @@ main(int argc, char** argv)
         auto init = Run({"initializing-recompute", {Fault(1, 3, 4000000)}, "RECOMPUTE"}, output);
         Check(init.snapshot.phase == "INITIALIZING", "fixture did not hit initialization");
         Run({"empty-tail-redo", {Fault(1, 3, 35000000)}, "REMOTE_REDO"}, output);
-        Run({"tail-faster", {Fault(1, 3, 180000000)}, "TAIL"}, output);
+        auto tail = Run({"tail-faster", {Fault(1, 3, 180000000)}, "TAIL"}, output);
+        auto pre = Run({"f3-before-catchup",
+                        {Fault(1, 3, 180000000), Fault(2, 0, tail.computeStartedNs + 1, true)},
+                        "TAIL",
+                        false},
+                       output);
+        Check(pre.actualCatchupRedoWu < pre.plannedCatchupRedoWu && pre.actualPostCatchupWu == 0,
+              "pre-catchup F3 charged unexecuted work");
+        auto wait = Run({"f3-reserved-idle",
+                         {Fault(1, 3, 180000000), Fault(2, 0, tail.acceptedNs + 100, true)},
+                         "TAIL",
+                         false},
+                        output);
+        Check(wait.computeStartedNs < 0 && wait.actualTotalRecoveryWu == 0 &&
+                  wait.reservedIdleNs == 100,
+              "never-started recovery accounting differs");
         Run({"redo-faster", {Fault(1, 3, 180000000)}, "REMOTE_REDO", true, true, 0, 0, 10000000},
             output);
         Run({"local-f3-redo",

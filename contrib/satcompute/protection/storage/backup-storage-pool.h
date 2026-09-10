@@ -104,6 +104,19 @@ class BackupStoragePool
         return m_failures;
     }
 
+    /** Task-owned simultaneous used+reserved peak on this node, not whole-pool peak. */
+    uint64_t TaskPeak(uint64_t taskId) const
+    {
+        const auto found = m_taskPeaks.find(taskId);
+        return found == m_taskPeaks.end() ? 0 : found->second;
+    }
+
+    /** Stable owners of capacity-rejected requests. */
+    const std::set<uint64_t>& FailedTasks() const
+    {
+        return m_failedTasks;
+    }
+
   private:
     /** Shared insertion with checked identity allocation. */
     std::optional<uint64_t> Insert(uint64_t taskId, StorageKind kind, uint64_t bytes, bool reserve);
@@ -118,6 +131,8 @@ class BackupStoragePool
     uint64_t m_peakTotal{};                     ///< Simultaneous high-water mark.
     uint64_t m_failures{};                      ///< Capacity failures.
     std::map<uint64_t, StorageEntry> m_entries; ///< Stable object ledger.
+    std::map<uint64_t, uint64_t> m_taskPeaks;   ///< Per-owner peak, retained after release.
+    std::set<uint64_t> m_failedTasks;           ///< Unique failed allocation owners.
 };
 } // namespace ns3::protection
 #endif

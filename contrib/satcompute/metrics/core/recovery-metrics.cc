@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "../../protection/runtime/recovery-controller.h"
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 
 namespace ns3::protection
@@ -50,12 +51,19 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
             "ns,"
             "result_complete_time_ns,result_bytes,result_delivery_mode,result_transfer_id,logical_"
             "completion,"
-            "original_deadline_ns,deadline_met,reserved_idle_ns,catchup_redo_work_units,"
-            "post_catchup_work_units,full_recompute_work_units,normal_protection_cost_ns,terminal_"
+            "original_deadline_ns,deadline_met,reserved_idle_ns,planned_catchup_redo_wu,"
+            "planned_post_catchup_wu,planned_total_recovery_wu,actual_catchup_redo_wu,"
+            "actual_post_catchup_wu,actual_total_recovery_wu,actual_recovery_service_ns,"
+            "primary_rate_wu_per_s,recovery_rate_wu_per_s,normal_protection_eq_wu,"
+            "recovery_reserved_idle_eq_wu,recovery_catchup_actual_wu,w_waste_actual,"
+            "normal_protection_cost_ns,terminal_"
             "time_ns,"
             "terminal_state,terminal_reason\n";
+    file << std::setprecision(17);
     for (const auto& r : Summaries())
     {
+        const double normal = static_cast<double>(r.normalProtectionCostNs) * r.primaryRate / 1e9;
+        const double idle = static_cast<double>(r.reservedIdleNs) * r.recoveryRate / 1e9;
         const auto& s = r.snapshot;
         std::ostringstream objects;
         for (const auto& [work, id] : s.localObjects)
@@ -88,10 +96,13 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
              << (r.terminalState == "COMPLETED") << ',' << s.deadlineNs << ','
              << (r.computeCompleteNs >= 0 && r.computeCompleteNs <= s.deadlineNs) << ','
              << (r.acceptedNs >= 0 ? std::to_string(r.reservedIdleNs) : "") << ','
-             << (r.acceptedNs >= 0 ? std::to_string(r.catchupRedoWork) : "") << ','
-             << (r.acceptedNs >= 0 ? std::to_string(r.postCatchupWork) : "") << ','
-             << r.fullRecomputeWork << ',' << r.normalProtectionCostNs << ',' << Time(r.terminalNs)
-             << ',' << r.terminalState << ',' << r.reason << '\n';
+             << r.plannedCatchupRedoWu << ',' << r.plannedPostCatchupWu << ','
+             << r.plannedTotalRecoveryWu << ',' << r.actualCatchupRedoWu << ','
+             << r.actualPostCatchupWu << ',' << r.actualTotalRecoveryWu << ',' << r.actualServiceNs
+             << ',' << r.primaryRate << ',' << r.recoveryRate << ',' << normal << ',' << idle << ','
+             << r.actualCatchupRedoWu << ',' << normal + idle + r.actualCatchupRedoWu << ','
+             << r.normalProtectionCostNs << ',' << Time(r.terminalNs) << ',' << r.terminalState
+             << ',' << r.reason << '\n';
     }
     std::ofstream events(directory / "recovery-events.csv");
     events.exceptions(std::ios::failbit | std::ios::badbit);

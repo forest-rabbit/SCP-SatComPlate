@@ -93,6 +93,8 @@ class TaskCoordinator : public Object
                     double computeDeadlineFactor = 1.3);
 
     bool IsComplete() const;
+    /** Explicit fixed-runtime finalizer; leaves legacy off-mode truncation semantics unchanged. */
+    void FinalizeSimulation();
     void ValidateCompleted() const;
     Ptr<NetworkTransferEngine> GetTransferEngine() const;
     const std::vector<TaskRuntime>& GetTaskRuntimes() const;

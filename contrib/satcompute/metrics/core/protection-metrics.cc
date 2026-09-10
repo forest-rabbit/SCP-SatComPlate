@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "protection-metrics.h"
 #include <fstream>
+#include <iomanip>
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 
 namespace ns3
@@ -80,30 +82,48 @@ WriteProtectionMetrics(const protection::CheckpointManager& manager,
                   << r.sentApplicationBytes << ',' << r.capacityWaitingTimeNs << '\n';
     }
     auto tasks = Open(directory, "protection-task-summary.csv");
-    tasks << "task_id,input_bytes,total_work_units,variable_state_bytes,primary_node,local_node,"
-             "remote_node,delta_permille,batch_n,start_time_ns,init_complete_time_ns,stop_time_ns,"
-             "cL_ns,cR_ns,local_work_units,remote_work_units,generated_count,local_commit_count,"
-             "remote_commit_count,stop_reason\n";
+    tasks
+        << "task_id,input_bytes,total_work_units,variable_state_bytes,primary_node,local_node,"
+           "remote_node,delta_permille,batch_n,start_time_ns,init_complete_time_ns,stop_time_ns,"
+           "cL_ns,cR_ns,local_work_units,remote_work_units,generated_count,local_commit_count,"
+           "remote_commit_count,stop_reason,primary_rate_wu_per_s,init_generated_cost_count,"
+           "init_committed_cost_count,local_generated_cost_count,remote_committed_cost_count,"
+           "normal_protection_cost_ns,normal_protection_eq_wu,local_peak_bytes,remote_peak_bytes\n";
+    tasks << std::setprecision(17);
     for (const auto& r : manager.Summaries())
         tasks << r.taskId << ',' << r.inputBytes << ',' << r.work << ',' << r.variableBytes << ','
               << r.primaryNode << ',' << r.localNode << ',' << r.remoteNode << ','
               << r.deltaPermille << ',' << r.batchN << ',' << r.startNs << ',' << r.initializationNs
               << ',' << r.stopNs << ',' << r.localCostNs << ',' << r.remoteCostNs << ','
               << r.localWork << ',' << r.remoteWork << ',' << r.generated << ',' << r.localCommits
-              << ',' << r.remoteCommits << ',' << r.stopReason << '\n';
+              << ',' << r.remoteCommits << ',' << r.stopReason << ',' << r.primaryRate << ','
+              << r.initGenerated << ',' << r.initCommitted << ',' << r.localGeneratedCostCount
+              << ',' << r.remoteCommittedCostCount << ',' << r.normalCostNs << ','
+              << static_cast<double>(r.normalCostNs) * r.primaryRate / 1e9 << ','
+              << r.localPeakBytes << ',' << r.remotePeakBytes << '\n';
     auto pools = Open(directory, "protection-node-storage-summary.csv");
     pools << "node_id,capacity_bytes,used_bytes,reserved_bytes,peak_used_bytes,peak_reserved_bytes,"
-             "peak_total_bytes,allocation_failures\n";
+             "peak_total_bytes,allocation_failures,final_used_bytes,final_reserved_bytes\n";
     for (const auto& [node, pool] : manager.Pools())
         pools << node << ',' << pool->Capacity() << ',' << pool->Used() << ',' << pool->Reserved()
               << ',' << pool->PeakUsed() << ',' << pool->PeakReserved() << ',' << pool->PeakTotal()
-              << ',' << pool->AllocationFailures() << '\n';
+              << ',' << pool->AllocationFailures() << ',' << pool->Used() << ',' << pool->Reserved()
+              << '\n';
+    std::set<uint64_t> failedTasks;
+    for (const auto& [node, pool] : manager.Pools())
+        failedTasks.insert(pool->FailedTasks().begin(), pool->FailedTasks().end());
+    auto final = Open(directory, "protection-finalization.json");
+    final << nlohmann::json({{"quiescent", manager.IsQuiescent()},
+                             {"tasks_with_storage_failure", failedTasks}})
+                 .dump(2)
+          << '\n';
 }
 
 void
 RemoveProtectionMetrics(const std::filesystem::path& directory)
 {
-    for (const auto name : {"recovery-summary.csv",
+    for (const auto name : {"protection-finalization.json",
+                            "recovery-summary.csv",
                             "recovery-events.csv",
                             "protection-events.csv",
                             "protection-transfers.csv",

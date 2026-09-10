@@ -16,6 +16,11 @@ BackupStoragePool::UpdatePeaks()
     m_peakUsed = std::max(m_peakUsed, m_used);
     m_peakReserved = std::max(m_peakReserved, m_reserved);
     m_peakTotal = std::max(m_peakTotal, m_used + m_reserved);
+    std::map<uint64_t, uint64_t> totals;
+    for (const auto& [id, entry] : m_entries)
+        totals[entry.taskId] += entry.bytes;
+    for (const auto& [task, bytes] : totals)
+        m_taskPeaks[task] = std::max(m_taskPeaks[task], bytes);
 }
 
 std::optional<uint64_t>
@@ -28,6 +33,7 @@ BackupStoragePool::Insert(uint64_t taskId, StorageKind kind, uint64_t bytes, boo
         if (m_failures == std::numeric_limits<uint64_t>::max())
             throw std::overflow_error("storage failure counter overflow");
         ++m_failures;
+        m_failedTasks.insert(taskId);
         return std::nullopt;
     }
     if (!m_nextId)

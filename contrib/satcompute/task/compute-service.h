@@ -11,6 +11,7 @@
 #include "ns3/traced-callback.h"
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <set>
 #include <utility>
@@ -27,6 +28,13 @@ struct RunningComputeTaskSnapshot
     int64_t elapsedTimeNs{}; ///< Known elapsed service time at this instant.
     int64_t remainingTimeNs{}; ///< Known time until the scheduled completion.
     double completionRatio{}; ///< elapsed/service in [0, 1].
+};
+
+/** Real recovery service ledger, retained after completion/cancellation. */
+struct RecoveryComputeAccounting
+{
+    uint64_t plannedWork{}, executedWork{}, rate{}; ///< Integer WU and WU/s.
+    int64_t serviceNs{}; ///< Actual occupied compute time, excluding reserved-idle.
 };
 
 /** Deterministic, non-preemptive, single-server FCFS compute queue. */
@@ -92,6 +100,8 @@ class ComputeService : public Application
                        Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed);
     /** Cancel only the matching recovery; F3/deadline cleanup, not F1/F2 availability. */
     bool CancelRecovery(uint64_t taskId, uint64_t generation);
+    /** Read observed work, never planned work substituted for an interrupted attempt. */
+    RecoveryComputeAccounting GetRecoveryAccounting(uint64_t taskId, uint64_t generation) const;
     uint64_t GetCancelledRunningTaskCount() const;
     uint64_t GetRemovedQueuedTaskCount() const;
 
@@ -117,6 +127,7 @@ class ComputeService : public Application
     /** Notify observers after a service-state transition, before dependent dispatch. */
     void NotifyComputeState();
     void RecoveryCatchup(uint64_t taskId, uint64_t generation); ///< Guarded service milestone.
+    void RecordRecoveryAccounting(); ///< Freeze observed prefix before releasing service state.
 
     uint32_t m_nodeId{};
     uint64_t m_computeRateWorkUnitsPerSecond{};
@@ -133,6 +144,7 @@ class ComputeService : public Application
     EventId m_completionEvent;
     std::optional<std::pair<uint64_t, uint64_t>> m_recoveryOwner; ///< Reserved task/generation.
     bool m_runningRecovery{}; ///< Only this attempt ignores compute availability.
+    std::map<std::pair<uint64_t, uint64_t>, RecoveryComputeAccounting> m_recoveryAccounting;
     EventId m_catchupEvent;   ///< Cancelled with the owning recovery.
     Callback<void, uint64_t, uint64_t, uint32_t, int64_t> m_recoveryCatchup;
     Callback<void, uint64_t, uint64_t, uint32_t, int64_t> m_recoveryCompleted;

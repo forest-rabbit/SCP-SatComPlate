@@ -78,6 +78,10 @@ class FaultController : public Object
 
     void ConfigureGeneration(const std::vector<uint32_t>& satelliteIds,
                              int64_t simulationDurationNs);
+    /** Validation-only frozen events; uses the same timestamp-batched executor. */
+    void ConfigureValidationReplay(const FaultTrace& trace,
+                                   const std::vector<uint32_t>& satelliteIds,
+                                   int64_t simulationDurationNs);
     /**
      * Move an active generated compute recovery to the current time.
      *
@@ -125,6 +129,7 @@ class FaultController : public Object
     std::set<int64_t> m_processedBatchTimes;
     std::set<std::pair<FaultEventType, uint64_t>> m_generatedEventKeys;
     std::vector<FaultRuntimeEventRecord> m_events;
+    std::vector<EventId> m_validationEvents; ///< Frozen START submissions, validation only.
     SatelliteTopologyController* m_topology{};
     Ptr<TaskCoordinator> m_taskCoordinator;
 };

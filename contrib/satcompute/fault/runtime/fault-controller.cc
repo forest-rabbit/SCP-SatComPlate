@@ -193,6 +193,21 @@ FaultController::ConfigureGeneration(const std::vector<uint32_t>& satelliteIds,
 }
 
 void
+FaultController::ConfigureValidationReplay(const FaultTrace& trace,
+                                           const std::vector<uint32_t>& satelliteIds,
+                                           int64_t simulationDurationNs)
+{
+    ConfigureGeneration(satelliteIds, simulationDurationNs);
+    std::map<int64_t, std::vector<GeneratedFaultEvent>> starts;
+    for (const auto& fault : trace.faults)
+        starts[fault.startTimeNs.value()].push_back({FaultEventType::START, fault});
+    for (const auto& [time, events] : starts)
+        m_validationEvents.push_back(Simulator::Schedule(
+            NanoSeconds(time), [this, events]() { SubmitGeneratedBatch(events); }));
+    FinalizeGeneratedTrace(trace);
+}
+
+void
 FaultController::ShortenGeneratedComputeFault(
     const FaultDefinition& shortenedFault,
     int64_t originalRecoveryTimeNs)
@@ -537,6 +552,9 @@ FaultController::GetEvents() const
 void
 FaultController::DoDispose()
 {
+    for (const auto& event : m_validationEvents)
+        if (event.IsPending())
+            Simulator::Cancel(event);
     for (auto& [simulationTimeNs, event] : m_batchEvents)
     {
         static_cast<void>(simulationTimeNs);

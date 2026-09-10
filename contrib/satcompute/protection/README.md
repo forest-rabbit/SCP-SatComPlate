@@ -1,9 +1,9 @@
 # 保护与恢复模块（N5A）
 
 N5A 回答“怎样执行保护”，N5B 才决定启动/频率，N5C 才优化节点选择。
-当前接入 **G3 单次故障恢复闭环**：G2 的真实备份路径不变，增加故障快照、恢复服务预留、
-TAIL / REMOTE_REDO / RECOMPUTE 和 winning RESULT。cL/cR 不占用主 ComputeService。
-本门禁仅做受控小规模正确性验证；G4 集成验收仍需单独确认。
+当前接入单次故障恢复闭环和 **G4 planned/actual 资源账本**：真实备份路径、故障快照、
+恢复服务预留、TAIL / REMOTE_REDO / RECOMPUTE 和 winning RESULT。cL/cR 不占用主 ComputeService。
+FIXED 正式场景仅为执行验收，不代表 CompFRR 算法效果；N5B/N5C 尚未接入。
 
 ## 文件与职责
 
@@ -65,7 +65,7 @@ cL/cR 同时是等效资源成本和异步逻辑时间，不进入普通 Compute
 
 初始化同时启动 base 传输和状态生成路径；两条路径都完成后再等 cR。初始变量状态为 0
 也必须显式完成初始化；没有变量 payload 时不创建零字节 UDP flow，不靠 `bytes>0` 判断 ON。
-正常成本账本保留 `Cinit + N_L*cL + N_R*cR`，生成、接收、提交计数分别记录，G2 接账本时
+正常成本账本使用下文的唯一事件计数口径，生成、接收、提交计数分别记录，
 不得把失败/取消操作冒充已提交保护。真实网络传播、序列化与排队不再额外加一份解析时延。
 
 不实现网络 ACK、重传或第二套网络。RemoteCommit 是内部零字节事件。
@@ -195,6 +195,37 @@ G3 将 RemoteCommit 的物理融合/旧记录清理延后 1 ns，名义有效时
 正常完成/保护放弃走 Stop 全清理；QuiesceForRecovery 不清空有效备份。
 受控测试反转同纳秒 fault/commit UID，检查相同实体对象、有效进度和最终结果时间；
 另检查同 ns deadline 完成与 stale primary 回调。
+
+## G4 资源账本
+
+`recovery-summary.csv` 区分 planned 与 actual 三列：catchup_redo、post_catchup、total，单位 WU。
+TAIL/REMOTE_REDO/RECOMPUTE 的起始进度分别为 lf/rf/0，计划 catch-up 为 `xf-start`，
+计划 post 为 `W-xf`，计划 total 为 `W-start`。xf/lf/rf 均为整数 WU，不是百分比。
+实际 WU 由 ComputeService 在真实服务完成/取消/停止时保留，使用
+`min(planned, floor(actual_service_ns * rate / 1e9))`；正常完成 actual=planned，
+失败只计执行前缀。post-catchup 须统计，但不属于重复计算 waste。
+
+正常成本只计实际完成事件：初始化 `INIT_STATE_GENERATED*cL + INIT_COST_COMMITTED*cR`；
+后续 `L1_GENERATED*cL + REMOTE_COST_COMMITTED*cR`，初始化不再计入后续次数。
+尚未完成生成/物理提交的取消操作不按完整 cL/cR 收费；这是事件完成计费，不是假设占用了真实 CPU。
+物理提交成本事件与名义 RemoteCommit 区分，同 ns fault 导致未物理提交的操作不计提交成本。
+任务保护表保存四项次数、成本 ns、主星速率和 normal 等效 WU。
+
+主 waste = `normal_protection_eq_wu + recovery_reserved_idle_eq_wu + recovery_catchup_actual_wu`。
+normal 用主星速率换算；reserved-idle 用恢复星速率，区间是 accepted 到 compute start，
+从未开始则到释放/失败。等待 tail 的 cR 已在该区间内，不重复加一次。
+恢复后的正常剩余计算、业务 RESULT 网络流量均不计入上述 waste/备份网络主项。
+
+存储表保留各节点 used/reserved/total 峰值及 final used/reserved；任务表的 local/remote peak
+是本任务在该节点的同时 used+reserved 峰值，不拿整个共享池峰值冒充。
+`protection-finalization.json` 检查存储、恢复锁、在途 runtime flows、待注册请求/提交/定时器清空，
+并列出容量分配失败的任务 ID。fixed 仿真结束还将未终结任务标为 `FAILED/SIMULATION_ENDED`；
+off 的原有截断合同不变。
+
+离线脚本 `tests/integration/regression/analyze-protection-accounting.py` 从真实 CSV 校验并生成
+全局、四类任务、恢复路径/终态分组的 planned/actual、waste、存储/网络与完成/deadline 统计。
+网络分别保留 declared/sent/received，主备份开销使用实际 sent payload；同星交付 network=0，
+跨星恢复 RESULT 单列。脚本默认不随平台或 CI 启动，不修改原始 CSV。
 
 测试与指令见 [tests](../tests/README.md)，本门禁证据见
 [N5A-G1](../../../docs/n5/reviews/N5A-G1-architecture-storage.md)、

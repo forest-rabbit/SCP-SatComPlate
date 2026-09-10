@@ -105,6 +105,8 @@ GetDefaultSatComputeConfig()
 
     // --faultTrace: generated output; empty uses outputDir/fault-trace.json.
     config.faultTrace = "";
+    // 验收专用冻结事件输入；正常 none/generate 运行必须留空。
+    config.validationFaultTrace = "";
 
     // --faultProbabilityAudit：按需采集概率记录；正常运行默认关闭。
     config.faultProbabilityAudit = false;

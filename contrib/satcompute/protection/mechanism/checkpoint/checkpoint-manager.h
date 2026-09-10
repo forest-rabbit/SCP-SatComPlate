@@ -61,6 +61,9 @@ struct ProtectionTaskSummary
     uint64_t localWork{}, remoteWork{}, generated{}, localCommits{},
         remoteCommits{};    ///< Evidence counts.
     std::string stopReason; ///< First protection-stop reason.
+    uint64_t primaryRate{}, initGenerated{}, initCommitted{}, localGeneratedCostCount{},
+        remoteCommittedCostCount{}, normalCostNs{}, localPeakBytes{}, remotePeakBytes{};
+    ///< Real completed cost events; initialization excluded from recurrent counters.
 };
 
 /** Real checkpoint data path and retained fault snapshots; never mutates primary compute. */
@@ -134,6 +137,8 @@ class CheckpointManager : public ProtectionMechanism
 
     /** @return Stable task-ID ordered summaries. */
     std::vector<ProtectionTaskSummary> Summaries() const;
+    /** Verify all asynchronous state has been finalized; no simulation mutation. */
+    bool IsQuiescent() const;
 
     /** @return Node-ID ordered extra-storage ledgers. */
     const std::map<uint32_t, std::unique_ptr<BackupStoragePool>>& Pools() const

@@ -54,8 +54,10 @@ struct SatComputeConfig
     std::string taskCompletionPolicy; ///< 任务完成策略：strict 或 report。
 
     // fault
-    std::string faultMode;       ///< none or generate.
+    std::string faultMode; ///< none/generate; validation-replay is an explicit test-only mode.
     std::string faultTrace;      ///< Generated fault trace output path.
+    std::string
+        validationFaultTrace;    ///< Frozen input, only for validation-replay; never online truth.
     bool faultProbabilityAudit;  ///< 是否采集并输出概率一致性审计数据。
 
     // protection

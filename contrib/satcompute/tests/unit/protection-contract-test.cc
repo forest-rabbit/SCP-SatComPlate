@@ -71,10 +71,13 @@ StorageChecks()
     Check(pool.CommitReservation(a) && !pool.CommitReservation(a), "reservation commits once");
     Check(pool.PeakUsed() == 100 && pool.PeakReserved() == 60 && pool.PeakTotal() == 100,
           "capacity peaks");
+    Check(pool.TaskPeak(1) == 60 && pool.TaskPeak(2) == 40 && pool.TaskPeak(3) == 0,
+          "per-task peak must not inherit shared-pool peak");
     Check(pool.ReleaseTask(1) == 1 && pool.ReleaseTask(1) == 0 && pool.Used() == 40,
           "task-scoped cleanup");
     Check(pool.Release(b) && !pool.Release(b) && pool.Free() == 100, "no underflow");
     Check(pool.AllocationFailures() == 1, "allocation failures recorded");
+    Check(pool.FailedTasks() == std::set<uint64_t>{3}, "failed allocation owner missing");
     const auto state = *pool.Allocate(1, StorageKind::REMOTE_STATE, 60);
     const auto batch = *pool.TryReserve(1, StorageKind::REMOTE_BATCH, 40);
     Check(!pool.Merge(state, batch, 80), "unreceived batch cannot merge");
@@ -86,6 +89,7 @@ StorageChecks()
     const auto foreign = *pool.Allocate(2, StorageKind::REMOTE_BATCH, 20);
     Check(!pool.Merge(state, foreign, 80), "cannot consume another task's storage");
     Check(pool.ReleaseTask(1) == 1 && pool.ReleaseTask(2) == 1, "terminal zero");
+    Check(pool.TaskPeak(1) == 100 && pool.TaskPeak(2) == 40, "peaks survive merge/release");
     const auto zero = *pool.Allocate(4, StorageKind::REMOTE_STATE, 0);
     Check(pool.Find(zero) && pool.Find(zero)->bytes == 0, "zero-byte committed state exists");
     Check(pool.ReleaseTask(4) == 1, "zero object cleaned");

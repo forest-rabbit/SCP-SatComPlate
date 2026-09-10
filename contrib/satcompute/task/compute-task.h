@@ -36,7 +36,8 @@ enum class TaskFailureReason
     RESULT_SATELLITE_FAILURE,
     INPUT_TRANSFER_FAILED,
     RESULT_TRANSFER_FAILED,
-    COMPUTE_DEADLINE_EXCEEDED
+    COMPUTE_DEADLINE_EXCEEDED,
+    SIMULATION_ENDED
 };
 
 const char* TaskFailureReasonToString(TaskFailureReason reason);

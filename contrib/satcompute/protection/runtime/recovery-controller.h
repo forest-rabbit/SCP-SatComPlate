@@ -19,8 +19,11 @@ struct RecoverySummary
         inputReceivedNs{-1}, tailStartedNs{-1}, tailReceivedNs{-1}, tailCommitNs{-1},
         computeStartedNs{-1}, catchupNs{-1}, computeCompleteNs{-1}, resultStartedNs{-1},
         resultCompleteNs{-1}, terminalNs{-1}, reservedIdleNs{}; ///< Actual causal event times.
-    uint64_t catchupRedoWork{}, postCatchupWork{}, fullRecomputeWork{}, resultBytes{},
-        resultTransferId{}, normalProtectionCostNs{}; ///< Work/byte/cost accounting.
+    uint64_t plannedCatchupRedoWu{}, plannedPostCatchupWu{}, plannedTotalRecoveryWu{},
+        resultBytes{}, resultTransferId{}, normalProtectionCostNs{}; ///< Work/byte/cost accounting.
+    uint64_t actualCatchupRedoWu{}, actualPostCatchupWu{}, actualTotalRecoveryWu{}, recoveryRate{},
+        primaryRate{};         ///< Observed WU, with explicit rates for equivalent cost.
+    int64_t actualServiceNs{}; ///< Actual service prefix, not wall-clock stage duration.
 };
 
 /** One recovery event, including local logical deliveries which have no transfer ID. */

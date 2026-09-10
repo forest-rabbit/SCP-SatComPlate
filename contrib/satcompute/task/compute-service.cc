@@ -137,6 +137,7 @@ ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
         Simulator::Cancel(m_completionEvent);
     }
     // StopApplication already accounts the active prefix before post-Run recovery cleanup.
+    RecordRecoveryAccounting();
     const auto elapsed = m_isRunning ?
         static_cast<uint64_t>(Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs) : 0;
     NS_ABORT_MSG_IF(elapsed > static_cast<uint64_t>(m_currentTaskServiceTimeNs) ||
@@ -204,6 +205,7 @@ ComputeService::StartApplication()
 void
 ComputeService::StopApplication()
 {
+    RecordRecoveryAccounting();
     Simulator::Cancel(m_catchupEvent);
     if (m_isRunning && m_hasCurrentTask)
     {
@@ -276,6 +278,7 @@ ComputeService::CompleteCurrentTask()
     ++m_completedTaskCount;
 
     const uint64_t completedTaskId = m_currentTask.taskId;
+    RecordRecoveryAccounting();
     std::optional<std::pair<uint64_t, uint64_t>> recovery;
     if (m_runningRecovery)
         recovery = m_recoveryOwner;
@@ -459,6 +462,7 @@ ComputeService::StartRecovery(uint64_t id,
     m_currentTaskServiceTimeNs = CalculateServiceTimeNs(work, m_computeRateWorkUnitsPerSecond);
     m_hasCurrentTask = true;
     m_runningRecovery = true;
+    m_recoveryAccounting[{id, generation}] = {work, 0, m_computeRateWorkUnitsPerSecond, 0};
     m_recoveryCatchup = catchup;
     m_recoveryCompleted = completed;
     NotifyComputeState();
@@ -495,6 +499,36 @@ ComputeService::CancelRecovery(uint64_t id, uint64_t generation)
     m_recoveryOwner.reset();
     RequestDispatch();
     return true;
+}
+
+RecoveryComputeAccounting
+ComputeService::GetRecoveryAccounting(uint64_t id, uint64_t generation) const
+{
+    const auto found = m_recoveryAccounting.find({id, generation});
+    if (found == m_recoveryAccounting.end())
+        return {};
+    auto result = found->second;
+    if (m_isRunning && m_hasCurrentTask && m_runningRecovery &&
+        m_recoveryOwner == std::optional{std::pair{id, generation}})
+    {
+        result.serviceNs = std::clamp(Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs,
+                                      int64_t{0},
+                                      m_currentTaskServiceTimeNs);
+        // Inverse of ceil(work * 1e9 / rate); no fractional WU counted as completed.
+        const auto work =
+            static_cast<unsigned __int128>(result.serviceNs) * result.rate / 1000000000;
+        result.executedWork = static_cast<uint64_t>(
+            std::min(work, static_cast<unsigned __int128>(result.plannedWork)));
+    }
+    return result;
+}
+
+void
+ComputeService::RecordRecoveryAccounting()
+{
+    if (m_runningRecovery && m_recoveryOwner)
+        m_recoveryAccounting[*m_recoveryOwner] =
+            GetRecoveryAccounting(m_recoveryOwner->first, m_recoveryOwner->second);
 }
 
 uint64_t

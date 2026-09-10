@@ -7,6 +7,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import tempfile
+import runpy
 
 ROOT = Path(__file__).resolve().parents[5]
 FIXTURE = ROOT / "contrib/satcompute/tests/fixtures/protection"
@@ -17,7 +18,7 @@ def rows(directory, name):
         return list(csv.DictReader(stream))
 
 
-def run(directory, mode):
+def run(directory, mode, validation_trace=None, cutoff=False):
     args = ["satcompute", "--simulationDuration=15", "--faultMode=generate",
             "--faultEnableF1=0", "--faultEnableF2=0", "--faultEnableF3=1",
             "--faultF3Mode=controlled", "--faultF3Node=3", "--faultF3Time=1.4",
@@ -29,6 +30,19 @@ def run(directory, mode):
             "--fixedProtectionDelta=0.05", "--fixedProtectionBatchN=4",
             "--routingMode=global-capacity-aware-hrw", "--islBandwidthBps=10000000000",
             "--delayMode=fixed", "--fixedDelay=0.001", f"--outputDir={directory}"]
+    if validation_trace is not None:
+        args.remove("--faultMode=generate")
+        args += ["--faultMode=validation-replay", f"--validationFaultTrace={validation_trace}"]
+    if cutoff:
+        trace = json.loads((FIXTURE / "fixed-four-profiles.json").read_text())
+        for task in trace["tasks"]:
+            task["arrival_time_ns"] = 1
+        path = directory.parent / "cutoff-tasks.json"
+        path.write_text(json.dumps(trace))
+        args.remove("--faultMode=generate")
+        args.remove("--simulationDuration=15")
+        args.remove(f"--taskTrace={FIXTURE / 'fixed-four-profiles.json'}")
+        args += ["--faultMode=none", "--simulationDuration=0.1", f"--taskTrace={path}"]
     result = subprocess.run([str(ROOT / "ns3"), "run", "--no-build", shlex.join(args)],
                             cwd=ROOT, text=True, capture_output=True, timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr
@@ -63,6 +77,22 @@ def verify(root):
     for name in ("recovery-summary.csv", "recovery-events.csv", "task-events.csv", "task-summary.csv",
                  "transfer-summary.csv", "protection-transfers.csv"):
         assert (fixed / name).read_bytes() == (root / "repeat" / name).read_bytes(), name
+    for mode in ("off", "fixed"):
+        replay = root / f"{mode}-replay"
+        run(replay, mode, root / "off/fault-trace.json")
+        for name in ("task-events.csv", "task-summary.csv", "transfer-summary.csv", "fault-events.csv",
+                     "compute-node-summary.csv", "fault-trace.json"):
+            assert (replay / name).read_bytes() == (root / mode / name).read_bytes(), f"replay {mode}: {name}"
+        if mode == "fixed":
+            for name in ("recovery-summary.csv", "recovery-events.csv", "protection-task-summary.csv"):
+                assert (replay / name).read_bytes() == (fixed / name).read_bytes(), name
+    analyze = runpy.run_path(str(ROOT / "contrib/satcompute/tests/integration/regression/analyze-protection-accounting.py"))["analyze"]
+    for mode in ("off", "fixed", "fixed-replay"):
+        analyze(root / mode)
+    run(root / "cutoff", "fixed", cutoff=True)
+    cutoff = analyze(root / "cutoff")
+    assert cutoff["summary"]["failed"] == 4 and cutoff["storage"]["quiescent"]
+    assert {t["failure_reason"] for t in rows(root / "cutoff", "task-summary.csv")} == {"SIMULATION_ENDED"}
     return {"recovery_smoke": "passed", "tasks": 4, "off_completed": 0, "fixed_completed": 1,
             "path": r["chosen_path"], "local_result_bytes": int(r["result_bytes"]),
             "local_result_network_flows": 0, "deterministic": True}

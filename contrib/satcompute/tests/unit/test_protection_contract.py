@@ -31,6 +31,15 @@ class ProtectionConfigTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("protectionMode has an unsupported value", result.stdout)
 
+    def test_validation_replay_requires_explicit_input_and_no_online_audit(self):
+        for options in ("--faultMode=validation-replay",
+                        "--faultMode=generate --validationFaultTrace=unused.json",
+                        "--faultMode=validation-replay --validationFaultTrace=unused.json --faultProbabilityAudit=1"):
+            with self.subTest(options=options):
+                result = self.run_cli(options)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("validationFaultTrace", result.stdout)
+
     def test_delta_domain_and_precision(self):
         for value in ("0", "-0.01", "1.1", "0.0001", "nan", "inf"):
             with self.subTest(value=value):
