@@ -45,6 +45,12 @@ def verify(root):
     probabilities = {(r["task_id"], r["simulation_time_ns"]): r
                      for r in rows(audit, "fault-model-probabilities.csv")}
     for r in decisions:
+        if r.get("decision_trigger") == "TASK_RUNNING":
+            assert r["actual_fault_sampled"] == r["actual_fault_hit"] == "0"
+            assert int(r["first_sample_time_ns"]) > int(r["fault_epoch_time_ns"])
+            if r["decision_committed"] == "1":
+                assert r["phase_after"] == "INITIALIZING"
+            continue
         p = probabilities[(r["task_id"], r["fault_epoch_time_ns"])]
         assert float(r["q_current_sample"]) == float(p["combined_step_failure_probability"])
         assert float(r["p_fail_before_finish"]) == float(p["failure_before_finish_probability"])

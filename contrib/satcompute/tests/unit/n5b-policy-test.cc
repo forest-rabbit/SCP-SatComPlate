@@ -235,6 +235,16 @@ void Oracle(const FrequencyInput& in, const char* label)
 
 void SolverChecks()
 {
+    auto unavailable = Toy();
+    unavailable.replayAvailable = false;
+    unavailable.inputBandwidth = 0;
+    const auto protectWithoutReplay = CompFrrFrequencyPolicy().Evaluate(unavailable);
+    Check(!protectWithoutReplay.jOff && protectWithoutReplay.action == FrequencyAction::START,
+          "unavailable OFF input incorrectly vetoed executable protection");
+    unavailable.risk.pFailBeforeFinish = 0;
+    const auto noRisk = CompFrrFrequencyPolicy().Evaluate(unavailable);
+    Check(noRisk.jOff == 0 && noRisk.action == FrequencyAction::NONE,
+          "unavailable OFF input forced zero-risk protection");
     CompFrrFrequencyPolicy policy;
     auto in = Toy();
     Oracle(in, "OFF/START anchor");

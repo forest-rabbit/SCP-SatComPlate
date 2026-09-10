@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "recovery-controller.h"
-#include "ns3/ipv4.h"
-#include "ns3/point-to-point-channel.h"
+
 #include "ns3/simulator.h"
+
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
@@ -33,9 +33,10 @@ Require(bool value, const char* message)
 const char*
 Prefix(ProtectionTransferKind kind)
 {
-    return kind == ProtectionTransferKind::RECOVERY_INPUT  ? "RECOVERY_INPUT"
-           : kind == ProtectionTransferKind::RECOVERY_TAIL ? "RECOVERY_TAIL"
-                                                           : "RECOVERY_RESULT";
+    return kind == ProtectionTransferKind::RECOVERY_INPUT   ? "RECOVERY_INPUT"
+           : kind == ProtectionTransferKind::RECOVERY_TAIL  ? "RECOVERY_TAIL"
+           : kind == ProtectionTransferKind::RECOVERY_STATE ? "RECOVERY_STATE"
+                                                            : "RECOVERY_RESULT";
 }
 } // namespace
 
@@ -131,10 +132,14 @@ RecoveryController::Fault(const TaskRuntime& task, const TaskFaultNodeChange& ch
         const bool inputLost = state.summary.path == "RECOMPUTE" &&
                                state.summary.inputReceivedNs < 0 &&
                                task.definition.sourceNodeId == change.nodeId;
-        const bool tailLost = state.summary.path == "TAIL" && state.summary.tailReceivedNs < 0 &&
-                              state.summary.snapshot.localNode == change.nodeId;
+        const bool tailLost =
+            (state.summary.path == "TAIL" || state.summary.path == "MIGRATE_TAIL") &&
+            state.summary.tailReceivedNs < 0 && state.summary.snapshot.localNode == change.nodeId;
+        const bool stateLost = state.summary.path.starts_with("MIGRATE_") &&
+                               state.summary.stateReceivedNs < 0 &&
+                               state.summary.snapshot.remoteNode == change.nodeId;
         if (state.summary.recoveryNode == change.nodeId ||
-            task.definition.resultNodeId == change.nodeId || inputLost || tailLost)
+            task.definition.resultNodeId == change.nodeId || inputLost || tailLost || stateLost)
         {
             state.summary.reason = "RECOVERY_F3_SATELLITE_FAILURE";
             for (auto id : state.transfers)
@@ -181,6 +186,8 @@ RecoveryController::Fault(const TaskRuntime& task, const TaskFaultNodeChange& ch
     auto owned = std::make_unique<State>(task, snapshot, change.fault);
     auto& state = *owned;
     state.summary.checkpointStateExists = snapshot.phase == "ON" && snapshot.remoteObject;
+    if (state.summary.checkpointStateExists)
+        state.summary.checkpointStateBytes = state.layout.CommittedStateBytes(snapshot.remoteWork);
     if (snapshot.phase != "OFF")
     {
         const auto remote = Service(snapshot.remoteNode);
@@ -220,41 +227,7 @@ RecoveryController::Estimate(uint32_t source, uint32_t destination, uint64_t byt
 {
     if (!Reachable(source, destination))
         return std::nullopt;
-    if (source == destination)
-        return 1;
-    std::set<uint32_t> visited;
-    uint64_t bottleneck = std::numeric_limits<uint64_t>::max();
-    int64_t propagation = 0;
-    while (source != destination)
-    {
-        if (!visited.insert(source).second)
-            return std::nullopt;
-        auto routes = m_topology.GetEcmpRouteCandidates(source, destination);
-        if (routes.empty())
-            return std::nullopt;
-        std::sort(routes.begin(), routes.end(), [](const auto& a, const auto& b) {
-            return a.outputInterface < b.outputInterface;
-        });
-        const auto interface = routes.front().outputInterface;
-        bottleneck = std::min(bottleneck, m_network->GetResidualRateBps(source, routes.front()));
-        auto ipv4 = m_topology.GetNodeBySatelliteId(source)->GetObject<Ipv4>();
-        auto channel =
-            DynamicCast<PointToPointChannel>(ipv4->GetNetDevice(interface)->GetChannel());
-        if (!channel || !bottleneck)
-            return std::nullopt;
-        TimeValue delay;
-        channel->GetAttribute("Delay", delay);
-        propagation += delay.Get().GetNanoSeconds();
-        source = m_topology.GetNextHopSatelliteId(source, interface);
-    }
-    // Snapshot estimate only: payload serialization plus current propagation. Actual UDP
-    // packetization, capacity waiting and queues remain solely in NetworkTransferEngine.
-    const auto serialization =
-        (static_cast<unsigned __int128>(bytes) * 8000000000ULL + bottleneck - 1) / bottleneck;
-    if (serialization >
-        static_cast<unsigned __int128>(std::numeric_limits<int64_t>::max() - propagation))
-        return std::nullopt;
-    return propagation + static_cast<int64_t>(serialization);
+    return m_network->EstimateAdmissiblePath(source, destination).TransferTimeNs(bytes);
 }
 
 void
@@ -323,6 +296,73 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
         if (accepted) r.checkpointFallbackReason.clear();
         return accepted;
     }
+    if (f.phase == "ON" && base && !base->reserved && m_tasks->IsSatelliteAvailable(f.remoteNode))
+        return TryRelocate(state);
+    return false;
+}
+
+bool
+RecoveryController::TryRelocate(State& state)
+{
+    auto& r = state.summary;
+    const auto& f = r.snapshot;
+    r.relocationAttempted = true;
+    r.relocationTrigger = r.checkpointFallbackReason;
+    r.relocationFailureReason = "NO_ELIGIBLE_RECOVERY_NODE";
+    const auto bytes = state.layout.CommittedStateBytes(f.remoteWork);
+    const auto old = m_manager.Pool(f.remoteNode).Find(f.remoteObject);
+    Require(old && !old->reserved && old->bytes == bytes,
+            "relocation requires exact committed state");
+    for (const auto& [candidate, pool] : m_manager.Pools())
+    {
+        if (candidate == f.remoteNode || !Eligible(candidate, state))
+            continue;
+        if (pool->Free() < bytes)
+        {
+            r.relocationFailureReason = "DESTINATION_STORAGE_UNAVAILABLE";
+            continue;
+        }
+        const auto route = m_network->EstimateAdmissiblePath(f.remoteNode, candidate);
+        const auto transfer = route.TransferTimeNs(bytes);
+        if (!transfer)
+        {
+            r.relocationFailureReason = route.failureReason;
+            continue;
+        }
+        const auto rate = Service(candidate)->GetComputeRateWorkUnitsPerSecond();
+        const auto remaining = Duration(state.layout.Work() - f.actualWork, rate);
+        const auto redo = *transfer + Duration(f.actualWork - f.remoteWork, rate);
+        std::optional<int64_t> tail;
+        if (f.localWork > f.remoteWork && f.tailBytes && pool->Free() - bytes >= f.tailBytes)
+        {
+            const auto tailTransfer = Estimate(f.localNode, candidate, f.tailBytes);
+            if (tailTransfer)
+                tail = std::max(*transfer, *tailTransfer) + f.remoteCostNs +
+                       Duration(f.actualWork - f.localWork, rate);
+        }
+        const auto budget = f.deadlineNs - Now() - remaining;
+        const bool redoFits = redo <= budget;
+        const bool tailFits = tail && *tail <= budget;
+        if (!redoFits && !tailFits)
+        {
+            r.relocationFailureReason = "CHECKPOINT_DEADLINE_INFEASIBLE";
+            continue;
+        }
+        const bool useTail = tailFits && (!redoFits || *tail < redo);
+        r.estimatedMigrateRedoNs = redo;
+        r.estimatedMigrateTailNs = tail.value_or(-1);
+        if (const auto input = Estimate(state.task.definition.sourceNodeId,
+                                        candidate,
+                                        state.task.definition.inputBytes))
+            r.estimatedRecomputeNs = *input + Duration(f.actualWork, rate);
+        r.path = useTail ? "MIGRATE_TAIL" : "MIGRATE_REDO";
+        state.startWork = useTail ? f.localWork : f.remoteWork;
+        if (AcceptAndExecute(state, candidate))
+        {
+            r.checkpointFallbackReason.clear();
+            return true;
+        }
+    }
     return false;
 }
 
@@ -358,12 +398,60 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     r.recoveryNode = node;
     r.acceptedNs = Now();
     if (m_loadObserver) m_loadObserver(state.task.definition.taskId, node, true);
+    if (r.path == "RECOMPUTE")
+        if (const auto estimate = Estimate(state.task.definition.sourceNodeId,
+                                           node,
+                                           state.task.definition.inputBytes))
+            r.estimatedRecomputeNs =
+                *estimate +
+                Duration(f.actualWork, state.service->GetComputeRateWorkUnitsPerSecond());
     r.plannedCatchupRedoWu = f.actualWork - state.startWork;
     r.plannedPostCatchupWu = state.layout.Work() - f.actualWork;
     r.plannedTotalRecoveryWu = state.layout.Work() - state.startWork;
     r.recoveryRate = state.service->GetComputeRateWorkUnitsPerSecond();
     Log(state, "RECOVERY_ACCEPTED");
-    if (r.path == "TAIL")
+    if (r.path.starts_with("MIGRATE_"))
+    {
+        auto& pool = m_manager.Pool(node);
+        const auto object = pool.TryReserve(state.task.definition.taskId,
+                                            StorageKind::REMOTE_STATE,
+                                            r.checkpointStateBytes);
+        if (!object)
+        {
+            Fail(state, "RECOVERY_STATE_CAPACITY_UNAVAILABLE");
+            return true;
+        }
+        state.relocatedObject = *object;
+        if (r.path == "MIGRATE_TAIL")
+        {
+            const auto tail = pool.TryReserve(state.task.definition.taskId,
+                                              StorageKind::REMOTE_BATCH,
+                                              f.tailBytes);
+            if (!tail)
+            {
+                Fail(state, "RECOVERY_TAIL_CAPACITY_UNAVAILABLE");
+                return true;
+            }
+            state.tailObject = *tail;
+        }
+        r.relocationFailureReason.clear();
+        r.relocationBytes = r.checkpointStateBytes;
+        Log(state, "CHECKPOINT_RELOCATION_STARTED", r.relocationBytes);
+        Deliver(state,
+                ProtectionTransferKind::RECOVERY_STATE,
+                f.remoteNode,
+                node,
+                r.relocationBytes,
+                state.relocatedObject);
+        if (state.live && r.path == "MIGRATE_TAIL")
+            Deliver(state,
+                    ProtectionTransferKind::RECOVERY_TAIL,
+                    f.localNode,
+                    node,
+                    f.tailBytes,
+                    state.tailObject);
+    }
+    else if (r.path == "TAIL")
     {
         const auto object = m_manager.Pool(node).TryReserve(
             state.task.definition.taskId, StorageKind::REMOTE_BATCH, f.tailBytes);
@@ -408,7 +496,7 @@ RecoveryController::Deliver(State& state,
 {
     if (!Reachable(source, destination))
         return Fail(state, "RECOVERY_DELIVERY_UNREACHABLE");
-    const std::string mode = source == destination ? "LOCAL" : "NETWORK";
+    const std::string mode = !bytes ? "ZERO_BYTES" : source == destination ? "LOCAL" : "NETWORK";
     auto& r = state.summary;
     if (kind == ProtectionTransferKind::RECOVERY_INPUT)
     {
@@ -417,12 +505,19 @@ RecoveryController::Deliver(State& state,
     }
     else if (kind == ProtectionTransferKind::RECOVERY_TAIL)
         r.tailStartedNs = Now();
+    else if (kind == ProtectionTransferKind::RECOVERY_STATE)
+        r.stateStartedNs = Now();
     else
     {
         r.resultStartedNs = Now();
         r.resultMode = mode;
     }
     Log(state, std::string(Prefix(kind)) + "_STARTED", bytes, 0, mode);
+    if (!bytes)
+    {
+        Later(state, 1, [this, &state, kind] { Received(state, kind, 0, 0); });
+        return;
+    }
     if (source == destination)
     {
         state.timers.push_back(LocalDelivery::Schedule(
@@ -486,8 +581,9 @@ RecoveryController::Received(State& state,
     auto& r = state.summary;
     const auto expected = kind == ProtectionTransferKind::RECOVERY_INPUT
                               ? state.task.definition.inputBytes
-                          : kind == ProtectionTransferKind::RECOVERY_TAIL ? r.snapshot.tailBytes
-                                                                          : r.resultBytes;
+                          : kind == ProtectionTransferKind::RECOVERY_STATE ? r.checkpointStateBytes
+                          : kind == ProtectionTransferKind::RECOVERY_TAIL  ? r.snapshot.tailBytes
+                                                                           : r.resultBytes;
     Require(bytes == expected, "recovery logical bytes disagree with receiver");
     if (kind == ProtectionTransferKind::RECOVERY_RESULT)
     {
@@ -505,12 +601,25 @@ RecoveryController::Received(State& state,
         Log(state, "RECOVERY_INPUT_RECEIVED", bytes, transferId, r.inputMode);
         StartCompute(state);
     }
+    else if (kind == ProtectionTransferKind::RECOVERY_STATE)
+    {
+        r.stateReceivedNs = Now();
+        Require(m_manager.Pool(*r.recoveryNode).CommitReservation(state.relocatedObject),
+                "relocated state lost destination reservation");
+        Log(state, "RECOVERY_STATE_COMMITTED", bytes, transferId, bytes ? "NETWORK" : "ZERO_BYTES");
+        MigrationReady(state);
+    }
     else
     {
         r.tailReceivedNs = Now();
         Require(m_manager.Pool(*r.recoveryNode).CommitReservation(state.tailObject),
                 "tail reception lost its reservation");
-        Log(state, "RECOVERY_TAIL_RECEIVED", bytes, transferId, "NETWORK");
+        Log(state, "RECOVERY_TAIL_RECEIVED", bytes, transferId, transferId ? "NETWORK" : "LOCAL");
+        if (r.path == "MIGRATE_TAIL")
+        {
+            MigrationReady(state);
+            return;
+        }
         Later(state, r.snapshot.remoteCostNs, [this, &state] {
             const auto& f = state.summary.snapshot;
             Require(m_manager.Pool(*state.summary.recoveryNode)
@@ -527,11 +636,42 @@ RecoveryController::Received(State& state,
 }
 
 void
+RecoveryController::MigrationReady(State& state)
+{
+    auto& r = state.summary;
+    if (r.stateReceivedNs < 0 || state.mergeScheduled)
+        return;
+    if (r.path == "MIGRATE_REDO")
+    {
+        state.mergeScheduled = true;
+        StartCompute(state);
+        return;
+    }
+    if (r.tailReceivedNs < 0)
+        return;
+    state.mergeScheduled = true;
+    Later(state, r.snapshot.remoteCostNs, [this, &state] {
+        auto& r = state.summary;
+        Require(m_manager.Pool(*r.recoveryNode)
+                    .Merge(state.relocatedObject,
+                           state.tailObject,
+                           state.layout.CommittedStateBytes(r.snapshot.localWork)),
+                "migration merge lost state");
+        state.tailObject = 0;
+        r.tailCommitNs = Now();
+        Log(state, "RECOVERY_TAIL_COMMIT", r.snapshot.tailBytes);
+        StartCompute(state);
+    });
+}
+
+void
 RecoveryController::StartCompute(State& state)
 {
     if (!state.attempt.StartRecovery({state.task.definition.taskId, 1}, Now()))
         return Fail(state, "RECOVERY_COMPUTE_DEADLINE");
     // Adopt valid state into active compute memory; it is no longer extra backup storage.
+    if (state.summary.path.starts_with("MIGRATE_"))
+        Log(state, "CHECKPOINT_RELOCATION_OWNERSHIP_SECURED", state.summary.relocationBytes);
     m_manager.ReleaseRecoveryState(state.task.definition.taskId);
     const auto work = state.layout.Work() - state.startWork;
     if (!work || !state.service->StartRecovery(state.task.definition.taskId,
@@ -614,6 +754,11 @@ RecoveryController::Fail(State& state, const std::string& reason)
     if (!state.live)
         return;
     state.summary.reason = reason;
+    if (state.summary.path.starts_with("MIGRATE_") && state.summary.computeStartedNs < 0)
+    {
+        state.summary.relocationFailureReason = reason;
+        Log(state, "CHECKPOINT_RELOCATION_FAILED", state.summary.relocationBytes);
+    }
     state.attempt.Fail();
     Log(state, "RECOVERY_FAILED");
     m_tasks->FailRecovery(state.task.definition.taskId,
@@ -637,6 +782,11 @@ RecoveryController::OnTask(const TaskEventRecord& event)
     state.summary.terminalNs = event.simulationTimeNs;
     if (event.toState == TASK_FAILED && state.attempt.Stage() != AttemptStage::FAILED)
     {
+        if (state.summary.path.starts_with("MIGRATE_") && state.summary.computeStartedNs < 0)
+        {
+            state.summary.relocationFailureReason = state.summary.reason;
+            Log(state, "CHECKPOINT_RELOCATION_FAILED", state.summary.relocationBytes);
+        }
         state.attempt.Fail();
         Log(state, "RECOVERY_FAILED");
     }

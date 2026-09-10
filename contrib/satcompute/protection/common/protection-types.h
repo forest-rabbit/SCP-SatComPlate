@@ -40,7 +40,8 @@ enum class ProtectionTransferKind
     REMOTE_BATCH,
     RECOVERY_TAIL,
     RECOVERY_INPUT,
-    RECOVERY_RESULT ///< Business output; shares canonical IDs, never protection byte totals.
+    RECOVERY_RESULT, ///< Business output; shares canonical IDs, never protection byte totals.
+    RECOVERY_STATE   ///< Complete committed checkpoint relocated to a new recovery node.
 };
 
 /** Logical-task attempt role; future replicas do not reuse primary identity. */

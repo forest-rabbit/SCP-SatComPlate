@@ -25,7 +25,11 @@ struct FrequencyDecisionRecord
     ProtectionPhase phaseAfter{};            ///< Effective phase after current fault application.
     std::string reason;                      ///< Resolution, distinct from solver reason.
     std::string resourceReason; ///< Diagnostic hard-resource cause; never changes solver scoring.
+    std::string replayReason;   ///< Soft OFF INPUT admission status.
     PlacementNodeLoad localLoad, remoteLoad; ///< Causal load snapshots before ranking/admission.
+    std::string trigger{"FAULT_EPOCH"};      ///< TASK_RUNNING is a policy event, never a draw.
+    double pF1{}, pF2{};     ///< Current model snapshot, not an observed failure label.
+    int64_t firstSampleNs{}; ///< First real check included by the predictor.
 };
 
 /** Online generate integration. Owns no fault model, RNG, state bytes or second network. */
@@ -94,6 +98,7 @@ class FrequencyProtectionController : public ProtectionPolicy
         std::optional<ProtectionPhase> stopped; ///< Deferred gate stop until proposal resolves.
         std::optional<int64_t> pauseStart; ///< Beginning of the current reason-specific interval.
         std::string pauseReason; ///< Current effective pause cause.
+        int64_t lastDecisionNs{-1}; ///< Avoid duplicate policy evaluation at a coincident check.
     };
     struct PauseInterval
     {
@@ -107,8 +112,9 @@ class FrequencyProtectionController : public ProtectionPolicy
         double Seconds(uint64_t bytes) const; ///< Serialization plus current propagation.
     };
 
-    void OnTask(const TaskEventRecord& event); ///< Task start registers only; no decision timer.
+    void OnTask(const TaskEventRecord& event);      ///< Immediate OFF decision at primary dispatch.
     void BeforeEpoch(const FaultEpochInput& epoch); ///< Pure proposal before random draws.
+    void Evaluate(const FaultEpochInput& epoch, const std::string& trigger);
     void AfterEpoch(int64_t timeNs, const std::vector<FaultEpochOutcome>& outcomes);
     ///< Sole post-fault decision application boundary.
     void Initialized(uint64_t taskId);                ///< Real physical initialization callback.
@@ -116,7 +122,9 @@ class FrequencyProtectionController : public ProtectionPolicy
     const TaskRuntime& Task(uint64_t taskId) const;   ///< Stable logical task lookup.
     Ptr<ComputeService> Service(uint32_t node) const; ///< Actual compute profile owner.
     std::vector<BackupCandidate> Candidates(uint32_t primary) const; ///< Causal FFP inputs.
-    std::optional<Path> EstimatePath(uint32_t source, uint32_t destination) const;
+    std::optional<Path> EstimatePath(uint32_t source,
+                                     uint32_t destination,
+                                     std::string* reason = nullptr) const;
     ///< Current deterministic route, never future queue completion.
     bool BuildResources(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
     ///< Adapt actual placement, legal inventory, pools, rates and paths.

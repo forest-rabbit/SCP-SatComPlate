@@ -313,7 +313,7 @@ std::string Controlled(TaskProfile profile,
                       mode};
         Simulator::Schedule(NanoSeconds(100000000), [&] {
             Check(controller.Decisions().empty() && controller.Manager().Summaries().empty(),
-                  "task start made an immediate decision");
+                  "unconfigured synthetic engine invented a production task-start prediction");
         });
         Simulator::Schedule(NanoSeconds(200000000), [&] {
             driver.Epoch(mode == "none" ? 0.0 : 0.4, mode == "start-hit");
@@ -417,6 +417,20 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         executor->BindTopology(topology);
         auto engine = CreateObject<FaultModelEngine>();
         auto parameters = GetDefaultFaultParameters();
+        std::optional<ComputeFailurePredictionInput> beforeCheck;
+        if (mode == "phase-boundary")
+            Simulator::Schedule(NanoSeconds(100000000), [&] {
+                const auto before = engine->GetNodeSnapshots();
+                beforeCheck = engine->QueryTaskPrediction(3, 200000000);
+                const auto after = engine->GetNodeSnapshots();
+                Check(beforeCheck && beforeCheck->firstSampleTimeNs == 100000000,
+                      "pending coincident sample excluded from task-start query");
+                for (size_t i = 0; i < before.size(); ++i)
+                    Check(before[i].f1SampleCount == after[i].f1SampleCount &&
+                              before[i].f2SampleCount == after[i].f2SampleCount &&
+                              before[i].f1State.temperatureC == after[i].f1State.temperatureC,
+                          "task-start query mutated physical state or sampled RNG");
+            });
         parameters.checkIntervalSeconds = 0.1;
         parameters.f1.temperature.heatingToCriticalSeconds = 0.8;
         parameters.f2.enabled = true;
@@ -427,9 +441,19 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         const bool paired = mode == "ffp-two" || mode == "lrl-two";
         const std::vector<uint32_t> computeNodes = paired ? ids : std::vector<uint32_t>{0, 2, 3, 4};
         engine->Configure(parameters, ids, computeNodes, END, executor, true);
+        if (mode == "phase-boundary")
+            Simulator::Schedule(NanoSeconds(100000000), [&] {
+                const auto afterCheck = engine->QueryTaskPrediction(3, 200000000);
+                Check(beforeCheck && afterCheck && afterCheck->firstSampleTimeNs == 200000000,
+                      "completed coincident sample included a second time");
+            });
         engine->BindOrbitConstellation(topology.GetConstellation());
         auto tasks = CreateObject<TaskCoordinator>();
-        auto definition = Definition(TaskProfile::LLM);
+        auto definition = Definition(mode == "immediate-sparse" ? TaskProfile::SPARSE_INFERENCE
+                                                                : TaskProfile::LLM);
+        if (mode == "immediate-sparse")
+            definition.sourceNodeId =
+                1; // Nonlocal INPUT replay makes protection beneficial at x=0.
         if (mode == "short")
             definition.computeWorkUnits = 100;
         ComputeProfile compute;
@@ -463,21 +487,41 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         controller.Finalize();
         auto trace = engine->Finalize();
         if (mode == "short")
-            Check(controller.Decisions().empty() && controller.Manager().Summaries().empty(),
-                  "short task protected before first fault grid");
+            Check(controller.Decisions().size() == 1 && controller.Manager().Summaries().empty() &&
+                      controller.Decisions().front().input.risk.pFailBeforeFinish == 0,
+                  "short task missed immediate decision or invented a future check");
         else
         {
             Check(!controller.Decisions().empty(), "online generate decision absent");
-            Check(controller.Decisions().front().input.risk.epochNs == 100000000,
-                  "first decision not global grid");
+            Check(controller.Decisions().front().trigger == "TASK_RUNNING" &&
+                      controller.Decisions().front().input.risk.epochNs ==
+                          tasks->GetTaskRuntimes().front().computeStartTimeNs,
+                  "first decision did not run immediately at primary dispatch");
         }
         bool hit = false, start = false, update = false;
+        if (mode == "immediate-sparse")
+            Check(controller.Decisions().front().committed &&
+                      controller.Decisions().front().proposal.action == FrequencyAction::START &&
+                      controller.Decisions().front().phaseAfter == ProtectionPhase::INITIALIZING,
+                  "beneficial short image task waited for first fault epoch to START");
         for (const auto& row : controller.Decisions())
         {
+            start = start || (row.proposal.action == FrequencyAction::START && row.committed);
+            if (row.trigger == "TASK_RUNNING")
+            {
+                Check(!row.sampled && !row.faultHit &&
+                          row.firstSampleNs == 100000000 * (row.input.risk.epochNs / 100000000 + 1),
+                      "task-start decision consumed a draw or used a task-relative grid");
+                if (row.committed)
+                    Check(row.phaseAfter == ProtectionPhase::INITIALIZING,
+                          "immediate START jumped directly to ON");
+                continue;
+            }
             if (!row.sampled)
             {
                 Check(mode == "f3" && row.faultHit && !row.committed &&
-                          row.proposal.action == FrequencyAction::START,
+                          (row.proposal.action == FrequencyAction::START ||
+                           row.proposal.action == FrequencyAction::NONE),
                       "same-time F3 leaked into proposal or committed a START");
                 Check(controller.Manager().Summaries().empty(),
                       "F3 created same-epoch initialization");
@@ -501,6 +545,14 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         if (mode == "normal")
             Check(hit && start && update && !trace.faults.empty(),
                   "online generate missed start/update/actual hit");
+        if (mode == "f3")
+        {
+            Check(engine->GetF3ComputeRiskRecords().size() == 1, "F3 causal risk snapshot missing");
+            const auto& snapshot = engine->GetF3ComputeRiskRecords().front();
+            Check(snapshot.taskId == 1 && snapshot.timeNs == 100000000 && snapshot.pFinish > 0 &&
+                      snapshot.pFinish >= snapshot.qCompute,
+                  "F3 victim causal probability was disabled");
+        }
         if (paired)
         {
             std::map<uint64_t, uint32_t> selected;
@@ -556,6 +608,8 @@ int main(int argc, char** argv)
             Controlled(TaskProfile::LLM, "dynamic", std::filesystem::path(output) / "repeat-b");
         Check(first == second, "repeated controlled decisions differ");
         Online(std::filesystem::path(output) / "online-generate");
+        Online(std::filesystem::path(output) / "online-immediate-sparse", "immediate-sparse");
+        Online(std::filesystem::path(output) / "online-phase-boundary", "phase-boundary");
         Online(std::filesystem::path(output) / "online-short", "short");
         Online(std::filesystem::path(output) / "online-f3", "f3");
         Online(std::filesystem::path(output) / "online-ffp-two", "ffp-two");

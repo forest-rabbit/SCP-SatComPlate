@@ -59,7 +59,11 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
             "normal_protection_cost_ns,terminal_"
             "time_ns,"
             "terminal_state,terminal_reason,checkpoint_state_exists,remote_eligible_at_fault,"
-            "remote_busy_at_fault,checkpoint_fallback_reason\n";
+            "remote_busy_at_fault,checkpoint_fallback_reason,old_remote_node,new_recovery_node,"
+            "checkpoint_state_bytes,checkpoint_relocation_attempted,checkpoint_relocation_bytes,"
+            "estimated_migrate_tail_ns,estimated_migrate_redo_ns,estimated_recompute_ns,"
+            "checkpoint_relocation_failure_reason,checkpoint_relocation_trigger,"
+            "state_start_time_ns,state_received_time_ns\n";
     file << std::setprecision(17);
     for (const auto& r : Summaries())
     {
@@ -104,7 +108,14 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
              << r.actualCatchupRedoWu << ',' << normal + idle + r.actualCatchupRedoWu << ','
              << r.normalProtectionCostNs << ',' << Time(r.terminalNs) << ',' << r.terminalState
              << ',' << r.reason << ',' << r.checkpointStateExists << ',' << r.remoteEligibleAtFault
-             << ',' << r.remoteBusyAtFault << ',' << r.checkpointFallbackReason << '\n';
+             << ',' << r.remoteBusyAtFault << ',' << r.checkpointFallbackReason << ','
+             << (s.phase == "OFF" ? "" : std::to_string(s.remoteNode)) << ','
+             << (r.recoveryNode ? std::to_string(*r.recoveryNode) : "") << ','
+             << r.checkpointStateBytes << ',' << r.relocationAttempted << ',' << r.relocationBytes
+             << ',' << Time(r.estimatedMigrateTailNs) << ',' << Time(r.estimatedMigrateRedoNs)
+             << ',' << Time(r.estimatedRecomputeNs) << ',' << r.relocationFailureReason << ','
+             << r.relocationTrigger << ',' << Time(r.stateStartedNs) << ','
+             << Time(r.stateReceivedNs) << '\n';
     }
     std::ofstream events(directory / "recovery-events.csv");
     events.exceptions(std::ios::failbit | std::ios::badbit);

@@ -396,6 +396,8 @@ void
 FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
                               bool updateComputeModels)
 {
+    if (updateComputeModels)
+        m_lastCheckStartedNs = simulationTimeNs;
     NS_ABORT_MSG_IF(!m_configured || !m_bound || m_finalized ||
                         (m_parameters.f2.enabled && m_constellation == nullptr) ||
                         simulationTimeNs != Simulator::Now().GetNanoSeconds(),
@@ -544,6 +546,22 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
         const auto node = m_nodes.find(nodeId);
         if (node != m_nodes.end())
         {
+            const auto running = node->second.computeService->GetRunningTaskSnapshot();
+            if (running)
+            {
+                const auto input = QueryTaskPrediction(nodeId, running->remainingTimeNs);
+                if (input)
+                {
+                    const auto prediction = PredictComputeFailureBeforeFinish(*input);
+                    m_f3RiskRecords.push_back({simulationTimeNs,
+                                               nodeId,
+                                               running->taskId,
+                                               prediction.f1StepFailureProbability,
+                                               prediction.f2StepFailureProbability,
+                                               prediction.combinedStepFailureProbability,
+                                               prediction.predictedFailureProbability});
+                }
+            }
             ShortenActiveComputeFault(node->second, simulationTimeNs);
         }
         NS_ABORT_MSG_IF(m_nextFaultId == std::numeric_limits<uint64_t>::max(),
@@ -617,6 +635,37 @@ FaultModelEngine::GetNodeSnapshots() const
              m_faultController->GetState().IsComputeAvailable(nodeId)});
     }
     return snapshots;
+}
+
+std::optional<ComputeFailurePredictionInput>
+FaultModelEngine::QueryTaskPrediction(uint32_t nodeId, int64_t remainingNs) const
+{
+    const int64_t now = Simulator::Now().GetNanoSeconds();
+    const auto it = m_nodes.find(nodeId);
+    if (!m_bound || m_finalized || remainingNs <= 0 || (!m_f1Model && !m_f2Model) ||
+        it == m_nodes.end() || !it->second.computeService ||
+        !m_faultController->GetState().IsComputeAvailable(nodeId) ||
+        !m_faultController->GetState().IsSatelliteAvailable(nodeId))
+        return std::nullopt;
+    if (remainingNs > std::numeric_limits<int64_t>::max() - now ||
+        m_checkIntervalNs > std::numeric_limits<int64_t>::max() - now)
+        throw std::invalid_argument("task prediction time overflows int64");
+    auto state = it->second;
+    if (m_f1Model)
+        m_f1Model->AdvanceTo(state.f1State,
+                             state.thermalTimeNs,
+                             now,
+                             state.computeService->HasRunningTask(),
+                             m_parameters.checkIntervalSeconds);
+    if (m_f2Model)
+        m_f2Model->Update(state.f2State,
+                          m_constellation->GetPositionAt(nodeId, NanoSeconds(now)),
+                          m_parameters.checkIntervalSeconds);
+    auto input = PredictionInput(nodeId, state, now, remainingNs);
+    const bool pendingNow = now > 0 && now % m_checkIntervalNs == 0 && m_lastCheckStartedNs < now;
+    input.firstSampleTimeNs = pendingNow ? now : now + m_checkIntervalNs - now % m_checkIntervalNs;
+    input.finishExclusive = true;
+    return input;
 }
 
 ComputeRiskSnapshot

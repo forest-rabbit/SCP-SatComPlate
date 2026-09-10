@@ -140,7 +140,10 @@ def frequency(root, task_profiles, protected, recoveries):
             "pause_reason_duration_ns": {reason: sum(int(r["duration_ns"]) for r in ps if r["reason"] == reason)
                                          for reason in sorted({r["reason"] for r in ps})},
             "start_p_finish": stats([float(r["p_fail_before_finish"]) for r in starts]),
-            "start_margin": stats([float(r["j_off"]) - float(r["j_start"]) for r in starts]),
+            "start_margin": stats([float(r["j_off"]) - float(r["j_start"]) for r in starts if r["j_off"]]),
+            "start_off_unavailable": sum(not r["j_off"] for r in starts),
+            "task_start_decisions": sum(r.get("decision_trigger") == "TASK_RUNNING" for r in ds),
+            "immediate_starts": sum(r.get("decision_trigger") == "TASK_RUNNING" for r in starts),
             "proposal_reasons": dict(reasons),
             "tasks_ever_storage_rejected": len({r["task_id"] for r in ds if r["proposal_reason"] == "STORAGE_INFEASIBLE"}),
         }
@@ -176,6 +179,10 @@ def analyze(root):
         "remote_busy_at_fault": sum(r["remote_busy_at_fault"] == "1" for r in recoveries),
         "fallback_reasons": dict(Counter(r["checkpoint_fallback_reason"] for r in recoveries if r["checkpoint_fallback_reason"])),
         "recompute_reasons": dict(Counter(r["checkpoint_fallback_reason"] for r in recoveries if r["chosen_path"] == "RECOMPUTE")),
+        "relocation_evaluated": sum(r.get("checkpoint_relocation_attempted") == "1" for r in recoveries),
+        "relocation_paths": dict(Counter(r["chosen_path"] for r in recoveries if r["chosen_path"].startswith("MIGRATE_"))),
+        "relocation_state_bytes": sum(int(r.get("checkpoint_relocation_bytes") or 0) for r in recoveries),
+        "relocation_failure_reasons": dict(Counter(r["checkpoint_relocation_failure_reason"] for r in recoveries if r.get("checkpoint_relocation_failure_reason"))),
         "T_catch_s": stats([int(r["actual_T_catch_ns"]) / NS for r in recoveries if r["actual_T_catch_ns"]]),
         "no_observed_catchup": sum(not r["actual_T_catch_ns"] for r in recoveries),
         "work_units": {k: stats([int(r[k]) for r in recoveries]) for k in (

@@ -61,7 +61,9 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
            "committed_n,"
            "phase_after,reason,proposal_reason,local_additional_peak_bytes,remote_additional_peak_"
            "bytes,placement_mode,resource_reason,local_active_backup_assignments,"
-           "remote_active_backup_assignments,local_active_recoveries,remote_active_recoveries\n";
+           "remote_active_backup_assignments,local_active_recoveries,remote_active_recoveries,"
+           "decision_trigger,first_sample_time_ns,p_f1_snapshot,p_f2_snapshot,q_comp_snapshot,"
+           "replay_available,replay_reason\n";
     auto number = [&](const auto& value) {
         if (value)
             out << *value;
@@ -80,14 +82,18 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
         const auto& in = r.input;
         const auto& d = r.proposal;
         out << r.taskId << ',' << TaskProfileToString(r.profile) << ',' << in.risk.epochNs << ','
-            << Phase(in.phase) << ',' << in.risk.qCurrentSample << ',' << in.risk.pFailBeforeFinish
-            << ',' << r.progressWork << ',' << in.progress << ',';
+            << Phase(in.phase) << ',';
+        if (r.trigger == "FAULT_EPOCH")
+            out << in.risk.qCurrentSample;
+        out << ',' << in.risk.pFailBeforeFinish << ',' << r.progressWork << ',' << in.progress
+            << ',';
         if (r.pair)
             out << r.pair->localNode << ',' << r.pair->remoteNode << ',' << in.localFreeBytes << ','
                 << in.remoteFreeBytes << ',' << in.recoveryRate << ',';
         else
             out << ",,,,,";
-        number(in.pathAvailable ? std::optional(in.inputBandwidth) : std::nullopt);
+        number(in.pathAvailable && in.replayAvailable ? std::optional(in.inputBandwidth)
+                                                      : std::nullopt);
         number(in.pathAvailable ? std::optional(in.backupBandwidth) : std::nullopt);
         number(in.phase == ProtectionPhase::OFF ? d.jOff : std::nullopt);
         number(d.jStart);
@@ -112,12 +118,21 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
             out << r.localLoad.activeBackup << ',' << r.remoteLoad.activeBackup << ','
                 << r.localLoad.activeRecovery << ',' << r.remoteLoad.activeRecovery;
         else out << ",,,";
-        out << '\n';
+        out << ',' << r.trigger << ',' << r.firstSampleNs << ',' << r.pF1 << ',' << r.pF2 << ','
+            << in.risk.qCurrentSample << ',' << in.replayAvailable << ',' << r.replayReason << '\n';
     }
     std::ofstream pauses(directory / "frequency-pause-intervals.csv");
     pauses.exceptions(std::ios::badbit | std::ios::failbit);
     pauses << "task_id,start_time_ns,end_time_ns,duration_ns,reason\n";
     for (const auto& p : m_pauses)
         pauses << p.taskId << ',' << p.startNs << ',' << p.endNs << ',' << p.endNs-p.startNs << ',' << p.reason << '\n';
+    std::ofstream risks(directory / "f3-compute-risk-snapshots.csv");
+    risks.exceptions(std::ios::badbit | std::ios::failbit);
+    risks << std::setprecision(17)
+          << "time_ns,node_id,task_id,p_f1_snapshot,p_f2_snapshot,q_comp_snapshot,"
+             "p_fail_before_finish,F1F2_sampled,actual_fault\n";
+    for (const auto& r : m_faults->GetF3ComputeRiskRecords())
+        risks << r.timeNs << ',' << r.nodeId << ',' << r.taskId << ',' << r.pF1 << ',' << r.pF2
+              << ',' << r.qCompute << ',' << r.pFinish << ",0,F3\n";
 }
 } // namespace ns3::protection

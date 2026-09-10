@@ -29,6 +29,16 @@
 namespace ns3
 {
 
+/** Read-only new-flow admission estimate. Never reserves capacity or changes an in-flight path. */
+struct AdmissiblePathEstimate
+{
+    bool reachable{}, admissible{}, local{};
+    CapacityAwarePath path;
+    int64_t propagationNs{};
+    std::string failureReason;
+    std::optional<int64_t> TransferTimeNs(uint64_t bytes) const;
+};
+
 /** Own sender/receiver applications and deterministic transfer lifecycle. */
 class NetworkTransferEngine : public Object
 {
@@ -53,6 +63,8 @@ class NetworkTransferEngine : public Object
     bool IsProtectionTransfer(uint64_t transferId) const;
     /** Current directed-link residual capacity for causal recovery estimates; reserves nothing. */
     uint64_t GetResidualRateBps(uint32_t source, const EcmpRouteCandidate& route) const;
+    /** Preview the next runtime flow's current policy; actual registration rechecks admission. */
+    AdmissiblePathEstimate EstimateAdmissiblePath(uint32_t source, uint32_t destination) const;
     void SetTerminalObserver(uint64_t transferId, Callback<void, uint64_t, int64_t> observer);
     uint64_t GetReceivedBytes(uint64_t transferId) const;
     void StartTransferNow(uint64_t transferId,

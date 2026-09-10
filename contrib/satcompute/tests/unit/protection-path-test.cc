@@ -427,6 +427,82 @@ Ids()
     Check(rejected, "uint64 ID wrapped into ordinary range");
 }
 
+/** New-flow queries use production ECMP capacity admission, without reservations. */
+void
+AdmissionPreview()
+{
+    auto config = Configuration();
+    {
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        auto tasks = Tasks(topology, config.parameters);
+        auto engine = tasks->GetTransferEngine();
+        uint32_t source = 0, destination = 0, blockedHop = 0;
+        for (uint32_t a = 0; a < 16 && source == destination; ++a)
+            for (uint32_t b = 0; b < 16; ++b)
+            {
+                if (a == b)
+                    continue;
+                const auto routes = topology.GetEcmpRouteCandidates(a, b);
+                if (a != b && routes.size() == 2)
+                {
+                    source = a;
+                    destination = b;
+                    blockedHop = topology.GetNextHopSatelliteId(a, routes.front().outputInterface);
+                    break;
+                }
+            }
+        Check(source != destination, "admission fixture needs two ECMP alternatives");
+        Simulator::Schedule(NanoSeconds(10000000), [&] {
+            NetworkTransfer block;
+            block.transferId = 3;
+            block.sourceSatelliteId = source;
+            block.destinationSatelliteId = blockedHop;
+            block.sizeBytes = 100000000;
+            engine->RegisterRuntimePlan(block);
+            engine->StartTransferNow(3);
+        });
+        Simulator::Schedule(NanoSeconds(11000000), [&] {
+            const auto before = engine->CollectCapacityAwareSummary();
+            const auto preview = engine->EstimateAdmissiblePath(source, destination);
+            Check(preview.admissible && preview.reachable && preview.failureReason.empty() &&
+                      preview.path.hops.front().destinationSatelliteId != blockedHop,
+                  "blocked first route hid admissible alternate");
+            const auto after = engine->CollectCapacityAwareSummary();
+            Check(before.activePathCountAtEnd == after.activePathCountAtEnd &&
+                      before.totalReservedRateBpsAtEnd == after.totalReservedRateBpsAtEnd,
+                  "read-only query changed reservations");
+            NetworkTransfer next;
+            next.transferId = 4;
+            next.sourceSatelliteId = source;
+            next.destinationSatelliteId = destination;
+            next.sizeBytes = 100000000;
+            engine->RegisterRuntimePlan(next);
+            engine->StartTransferNow(4);
+        });
+        Simulator::Schedule(NanoSeconds(12000000), [&] {
+            Check(engine->GetTransferState(4) == TransferRuntimeState::ACTIVE,
+                  "actual transfer disagrees with alternate admission preview");
+            const auto blocked = engine->EstimateAdmissiblePath(source, destination);
+            Check(blocked.reachable && !blocked.admissible &&
+                      blocked.failureReason == "NO_ADMISSIBLE_PATH",
+                  "capacity exhaustion confused with topological disconnection");
+            const auto missing = engine->EstimateAdmissiblePath(source, 99);
+            Check(!missing.reachable && !missing.admissible && missing.failureReason == "NO_ROUTE",
+                  "missing endpoint did not return NO_ROUTE");
+            engine->FinalizeTransfersIfActive(
+                {3, 4},
+                TransferTerminalState::CANCELLED,
+                TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+            Check(engine->EstimateAdmissiblePath(source, destination).admissible,
+                  "admission did not recover after release");
+        });
+        Simulator::Stop(NanoSeconds(END));
+        Simulator::Run();
+    }
+    Reset();
+}
+
 /** Stopping several transfers must not briefly admit/send a pending sibling. */
 void
 BatchCancellation()
@@ -551,6 +627,7 @@ main()
     try
     {
         Ids();
+        AdmissionPreview();
         BatchCancellation();
         InclusiveCompletionBeforeUid();
         OutOfOrder();

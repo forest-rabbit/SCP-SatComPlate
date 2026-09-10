@@ -1,5 +1,8 @@
 # N5B-G3：频率正式对照与节点集中度诊断
 
+> **PRE-REVISION G3 EVIDENCE**：本报告及旧输出保留为修订前证据；R1–R4 修订后的合同与
+> 正式结果见 [G3R 修订报告](N5B-G3R-semantic-corrections.md)，不以本报告代替最终验收。
+
 状态：**G3 实现、三组正式运行与统一对账完成，STOPPED AT N5B-G3，待用户审阅**。
 这是单个 paired seed/run 的权衡证据，不是“CompFRR 全面优于 fixed”的结论。
 

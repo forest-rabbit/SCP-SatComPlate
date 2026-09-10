@@ -1,8 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "frequency-protection-controller.h"
 
-#include "ns3/ipv4.h"
-#include "ns3/point-to-point-channel.h"
 #include "ns3/simulator.h"
 
 #include <algorithm>
@@ -67,7 +65,22 @@ Ptr<ComputeService> FrequencyProtectionController::Service(uint32_t node) const
 void FrequencyProtectionController::OnTask(const TaskEventRecord& event)
 {
     if (event.toState == TASK_RUNNING)
+    {
         m_states.try_emplace(event.taskId);
+        const auto live = Service(event.nodeId)->GetRunningTaskSnapshot();
+        if (live)
+        {
+            const auto input = m_faults->QueryTaskPrediction(event.nodeId, live->remainingTimeNs);
+            if (input)
+            {
+                const auto q = CombineComputeFaultProbabilities(
+                    input->f1Model ? input->f1State.stepFailureProbability : 0,
+                    input->f2Model ? input->f2State.stepFailureProbability : 0);
+                Evaluate({event.nodeId, event.taskId, q, *input}, "TASK_RUNNING");
+                AfterEpoch(event.simulationTimeNs, {{event.nodeId, event.taskId, false, false}});
+            }
+        }
+    }
     auto found = m_states.find(event.taskId);
     if (found == m_states.end())
         return;
@@ -140,41 +153,26 @@ double FrequencyProtectionController::Path::Seconds(uint64_t bytes) const
     return local || !bytes ? 0 : bytes / bytesPerSecond + propagationSeconds;
 }
 
-std::optional<FrequencyProtectionController::Path> FrequencyProtectionController::EstimatePath(
-    uint32_t source,
-    uint32_t destination) const
+std::optional<FrequencyProtectionController::Path>
+FrequencyProtectionController::EstimatePath(uint32_t source,
+                                            uint32_t destination,
+                                            std::string* reason) const
 {
     if (!m_tasks->IsSatelliteAvailable(source) || !m_tasks->IsSatelliteAvailable(destination))
-        return std::nullopt;
-    // Finite representation of zero serialization for the solver's positive-bandwidth domain.
-    if (source == destination)
-        return Path{std::numeric_limits<double>::max(), 0, true};
-    Path path{std::numeric_limits<double>::max(), 0, false};
-    std::set<uint32_t> visited;
-    while (source != destination)
     {
-        if (!visited.insert(source).second)
-            return std::nullopt;
-        auto routes = m_topology.GetEcmpRouteCandidates(source, destination);
-        if (routes.empty())
-            return std::nullopt;
-        std::sort(routes.begin(), routes.end(), [](const auto& a, const auto& b) {
-            return a.outputInterface < b.outputInterface;
-        });
-        const auto& route = routes.front();
-        const auto rate = m_tasks->GetTransferEngine()->GetResidualRateBps(source, route);
-        auto ipv4 = m_topology.GetNodeBySatelliteId(source)->GetObject<Ipv4>();
-        auto channel = DynamicCast<PointToPointChannel>(
-            ipv4->GetNetDevice(route.outputInterface)->GetChannel());
-        if (!rate || !channel)
-            return std::nullopt;
-        path.bytesPerSecond = std::min(path.bytesPerSecond, rate / 8.0);
-        TimeValue delay;
-        channel->GetAttribute("Delay", delay);
-        path.propagationSeconds += delay.Get().GetSeconds();
-        source = m_topology.GetNextHopSatelliteId(source, route.outputInterface);
+        if (reason)
+            *reason = "NO_ROUTE";
+        return std::nullopt;
     }
-    return path;
+    const auto estimate = m_tasks->GetTransferEngine()->EstimateAdmissiblePath(source, destination);
+    if (reason)
+        *reason = estimate.failureReason;
+    if (!estimate.admissible)
+        return std::nullopt;
+    return Path{estimate.local ? std::numeric_limits<double>::max()
+                               : estimate.path.admittedRateBps / 8.0,
+                estimate.propagationNs / 1e9,
+                estimate.local};
 }
 
 bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
@@ -206,17 +204,21 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
         row.resourceReason = "PLACEMENT_UNAVAILABLE";
     else if (!local->IsIdle()) row.resourceReason = "LOCAL_BUSY";
     else if (!remote->IsIdle()) row.resourceReason = "REMOTE_BUSY";
-    const auto replay = EstimatePath(task.definition.sourceNodeId, pair.remoteNode);
-    const auto base = EstimatePath(task.definition.computeNodeId, pair.remoteNode);
-    const auto l1 = EstimatePath(task.definition.computeNodeId, pair.localNode);
-    const auto tail = EstimatePath(pair.localNode, pair.remoteNode);
-    input.pathAvailable = replay && base && l1 && tail;
+    const auto replay =
+        EstimatePath(task.definition.sourceNodeId, pair.remoteNode, &row.replayReason);
+    std::string baseReason, localReason, tailReason;
+    const auto base = EstimatePath(task.definition.computeNodeId, pair.remoteNode, &baseReason);
+    const auto l1 = EstimatePath(task.definition.computeNodeId, pair.localNode, &localReason);
+    const auto tail = EstimatePath(pair.localNode, pair.remoteNode, &tailReason);
+    input.replayAvailable = replay.has_value();
+    input.pathAvailable = base && l1 && tail;
     if (!input.pathAvailable)
     {
-        if (row.resourceReason.empty()) row.resourceReason = "PATH_UNAVAILABLE";
+        if (row.resourceReason.empty())
+            row.resourceReason = !base ? baseReason : !l1 ? localReason : tailReason;
         return false;
     }
-    input.inputBandwidth = replay->bytesPerSecond;
+    input.inputBandwidth = replay ? replay->bytesPerSecond : 0;
     input.backupBandwidth = std::min(l1->bytesPerSecond, tail->bytesPerSecond);
     TaskStateAdapter layout(task.definition);
     const auto initial = layout.Floor(row.progressWork);
@@ -231,10 +233,18 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
 
 void FrequencyProtectionController::BeforeEpoch(const FaultEpochInput& epoch)
 {
+    Evaluate(epoch, "FAULT_EPOCH");
+}
+
+void
+FrequencyProtectionController::Evaluate(const FaultEpochInput& epoch, const std::string& trigger)
+{
     const auto found = m_states.find(epoch.taskId);
     if (found == m_states.end())
         return;
     auto& state = found->second;
+    if (state.lastDecisionNs == epoch.prediction.predictionTimeNs)
+        return;
     const auto& task = Task(epoch.taskId);
     if (task.state != TASK_RUNNING || task.attemptGeneration ||
         epoch.nodeId != task.definition.computeNodeId ||
@@ -250,6 +260,11 @@ void FrequencyProtectionController::BeforeEpoch(const FaultEpochInput& epoch)
     if (phase != ProtectionPhase::OFF && phase != ProtectionPhase::ON)
         return;
     FrequencyDecisionRecord row;
+    row.trigger = trigger;
+    row.pF1 = epoch.prediction.f1Model ? epoch.prediction.f1State.stepFailureProbability : 0;
+    row.pF2 = epoch.prediction.f2Model ? epoch.prediction.f2State.stepFailureProbability : 0;
+    row.firstSampleNs =
+        epoch.prediction.firstSampleTimeNs.value_or(epoch.prediction.predictionTimeNs);
     row.taskId = epoch.taskId;
     row.profile = task.definition.taskProfile;
     row.previous = state.gate.CurrentConfig();
@@ -281,6 +296,7 @@ void FrequencyProtectionController::BeforeEpoch(const FaultEpochInput& epoch)
     in.storageDemand = {};
     state.gate.Propose(row.proposal);
     state.pending = m_decisions.size();
+    state.lastDecisionNs = in.risk.epochNs;
     m_decisions.push_back(std::move(row));
 }
 

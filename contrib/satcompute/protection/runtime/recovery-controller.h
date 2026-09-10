@@ -27,6 +27,11 @@ struct RecoverySummary
     bool checkpointStateExists{}, remoteEligibleAtFault{}, remoteBusyAtFault{};
     ///< Read-only fault-time diagnostic, not recovery admission overrides.
     std::string checkpointFallbackReason; ///< Why actual decision cannot use checkpoint state.
+    uint64_t checkpointStateBytes{}, relocationBytes{};
+    bool relocationAttempted{}; ///< Candidate search attempted, even if no target admits it.
+    std::string relocationFailureReason, relocationTrigger;
+    int64_t estimatedMigrateTailNs{-1}, estimatedMigrateRedoNs{-1}, estimatedRecomputeNs{-1},
+        stateStartedNs{-1}, stateReceivedNs{-1};
 };
 
 /** One recovery event, including local logical deliveries which have no transfer ID. */
@@ -86,6 +91,8 @@ class RecoveryController : public ProtectionMechanism
         RecoverySummary summary;     ///< Actual recovery evidence.
         Ptr<ComputeService> service; ///< Reserved then executing recovery service.
         uint64_t startWork{}, tailObject{}; ///< Adopted progress and temporary pool identity.
+        uint64_t relocatedObject{};         ///< Destination state reservation/committed object.
+        bool mergeScheduled{};              ///< State/tail arrival race guard.
         bool live{true}; ///< Guards every timer/transfer callback after terminalization.
         std::vector<EventId> timers;     ///< Decision, local delivery and merge callbacks.
         std::vector<uint64_t> transfers; ///< Real recovery network history.
@@ -95,6 +102,8 @@ class RecoveryController : public ProtectionMechanism
     void OnTask(const TaskEventRecord& event);
     void Decide(State& state);
     bool AcceptAndExecute(State& state, uint32_t node);
+    bool TryRelocate(State& state); ///< Stable-ID search; feasible checkpoints precede recompute.
+    void MigrationReady(State& state); ///< Wait for both real receivers before one cR merge.
     bool Eligible(uint32_t node, const State& state) const;
     bool Reachable(uint32_t source, uint32_t destination) const;
     std::optional<int64_t> Estimate(uint32_t source, uint32_t destination, uint64_t bytes) const;

@@ -67,6 +67,7 @@ struct FrequencyInput
     double stateTransferSeconds{};           ///< Causal initialization state transfer estimate.
     bool nodeAvailable{};                    ///< FFP candidate currently eligible.
     bool pathAvailable{};                    ///< Required current paths exist.
+    bool replayAvailable{true}; ///< OFF INPUT path is soft: unavailable is not a START veto.
     uint64_t localFreeBytes{};               ///< Actual N5A pool free bytes at decision time.
     uint64_t remoteFreeBytes{};              ///< Actual N5A pool free bytes at decision time.
     FrequencyStorageEstimator storageDemand; ///< Required pure causal per-candidate estimator.

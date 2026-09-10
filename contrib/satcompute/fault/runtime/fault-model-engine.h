@@ -50,6 +50,15 @@ struct FaultEpochOutcome
     bool sampled{}, faultHit{}; ///< F1/F2 sampling eligibility and actual current node hit.
 };
 
+/** Risk observed immediately before an actual F3; never an extra sampling event. */
+struct F3ComputeRiskRecord
+{
+    int64_t timeNs{};
+    uint32_t nodeId{};
+    uint64_t taskId{};
+    double pF1{}, pF2{}, qCompute{}, pFinish{};
+};
+
 /** Availability of a read-only node-level forecast. */
 enum class ComputeRiskStatus
 {
@@ -163,6 +172,15 @@ class FaultModelEngine : public Object
      */
     ComputeRiskSnapshot QueryComputeRisk(uint32_t nodeId, int64_t horizonNs = 1000000000LL) const;
 
+    /** Current causal copies and actual next sampling point; no RNG or future F3 access. */
+    std::optional<ComputeFailurePredictionInput> QueryTaskPrediction(uint32_t nodeId,
+                                                                     int64_t remainingNs) const;
+
+    const std::vector<F3ComputeRiskRecord>& GetF3ComputeRiskRecords() const
+    {
+        return m_f3RiskRecords;
+    }
+
     /** @return Pre-sampling probabilities produced from live generate state. */
     const std::vector<ComputeFailureProbabilityRecord>& GetProbabilityRecords() const;
     /** @return Optional state samples collected only with probability audit enabled. */
@@ -221,6 +239,7 @@ class FaultModelEngine : public Object
     int64_t m_simulationDurationNs{}; ///< Exclusive simulation end.
     FaultParameters m_parameters; ///< Unified model parameters.
     int64_t m_checkIntervalNs{}; ///< Converted model-check interval.
+    int64_t m_lastCheckStartedNs{-1}; ///< Resolves coincident task start / actual check phases.
     int64_t m_recoveryDurationNs{}; ///< Converted compute outage duration.
     std::optional<F1SelfStateFaultModel> m_f1Model; ///< Active F1 pure model.
     std::optional<F2RadiationFaultModel> m_f2Model; ///< Active F2 pure model.
@@ -231,6 +250,7 @@ class FaultModelEngine : public Object
     FaultTrace m_trace; ///< Completed canonical trace records.
     std::vector<ComputeFailureProbabilityRecord> m_probabilityRecords; ///< Live probabilities.
     std::vector<FaultModelStateRecord> m_stateAuditRecords; ///< Optional observed state, no RNG.
+    std::vector<F3ComputeRiskRecord> m_f3RiskRecords;       ///< Actual F3 causal diagnostic only.
     std::vector<EventId> m_modelEvents; ///< Pre-scheduled model/F3 checks.
     Ptr<FaultController> m_faultController; ///< Sole runtime fault executor.
     Ptr<TaskCoordinator> m_taskCoordinator; ///< Bound task lifecycle owner.

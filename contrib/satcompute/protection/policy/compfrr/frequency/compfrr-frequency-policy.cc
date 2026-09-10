@@ -34,10 +34,10 @@ void Validate(const FrequencyInput& in)
                          in.stateTransferSeconds})
         if (!std::isfinite(value) || value < 0)
             throw std::invalid_argument("invalid finite nonnegative frequency input");
-    if (in.work <= 0 || in.primaryRate <= 0 || in.recoveryRate <= 0 || in.inputBandwidth <= 0 ||
-        in.backupBandwidth <= 0 || in.progress > 1 || in.risk.epochNs < 0 ||
-        in.risk.intervalNs <= 0 || in.deadlineNs < 0 || in.costs.localNs < 0 ||
-        in.costs.remoteNs < 0 || !in.storageDemand)
+    if (in.work <= 0 || in.primaryRate <= 0 || in.recoveryRate <= 0 ||
+        (in.replayAvailable && in.inputBandwidth <= 0) || in.backupBandwidth <= 0 ||
+        in.progress > 1 || in.risk.epochNs < 0 || in.risk.intervalNs <= 0 || in.deadlineNs < 0 ||
+        in.costs.localNs < 0 || in.costs.remoteNs < 0 || !in.storageDemand)
         throw std::invalid_argument("invalid frequency domain or missing storage estimator");
 }
 } // namespace
@@ -78,10 +78,13 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
     out.deadlineSlackSeconds =
         (in.deadlineNs - in.risk.epochNs) / 1e9 - in.work * (1 - in.progress) / in.recoveryRate;
     out.initializationSeconds = std::max(in.baseTransferSeconds, cL + in.stateTransferSeconds) + cR;
-    out.jOff = in.risk.pFailBeforeFinish *
-               (in.inputBytes / in.inputBandwidth + in.progress * in.work / in.recoveryRate);
+    if (in.replayAvailable)
+        out.jOff = in.risk.pFailBeforeFinish *
+                   (in.inputBytes / in.inputBandwidth + in.progress * in.work / in.recoveryRate);
+    else if (in.risk.pFailBeforeFinish == 0)
+        out.jOff = 0;
     if (!std::isfinite(out.deadlineSlackSeconds) || !std::isfinite(out.initializationSeconds) ||
-        !std::isfinite(*out.jOff))
+        (out.jOff && !std::isfinite(*out.jOff)))
         throw std::invalid_argument("frequency time or OFF estimate overflow");
     if (in.progress >= 1 || in.remainingSeconds <= 0)
     {
@@ -144,7 +147,8 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
     out.jStart = cL + cR + out.selected->objective;
     if (out.initializationSeconds >= in.remainingSeconds)
         out.reason = "INITIALIZATION_TOO_LATE";
-    else if (*out.jStart < *out.jOff)
+    else if ((!in.replayAvailable && in.risk.pFailBeforeFinish > 0) ||
+             (out.jOff && *out.jStart < *out.jOff))
     {
         out.action = FrequencyAction::START;
         out.reason = "START_BENEFICIAL";

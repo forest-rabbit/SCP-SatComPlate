@@ -2,7 +2,7 @@
 
 N5A 回答“怎样执行保护”，N5B 才决定启动/频率，N5C 才优化节点选择。
 当前接入单次故障恢复闭环和 **G4 planned/actual 资源账本**：真实备份路径、故障快照、
-恢复服务预留、TAIL / REMOTE_REDO / RECOMPUTE 和 winning RESULT。cL/cR 不占用主 ComputeService。
+恢复服务预留、直接/迁移 checkpoint recovery、RECOMPUTE 和 winning RESULT。cL/cR 不占用主 ComputeService。
 FIXED 正式场景仅为执行验收，不代表 CompFRR 算法效果。N5A 已合入 n5；
 N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比固定/动态频率与 LRL 诊断，N5C 未实现。
 
@@ -70,7 +70,7 @@ G1 验证纯接口，G2 将实际库存和池快照接入同一求解器。
 - ON：`Jon=Delta_t*(muP/W)*(cL/delta+cR/(n*delta))+q_current_sample*Rbar`。
 - `Rbar=Kvar*(n-1)*delta/(2B)+cR*(n-1)/n+W*delta/(2muB)`。
 - `Rmax=deadline-now-W*(1-x)/muB`；候选要求 `Rbar<=Rmax` 并通过存储约束。
-- 初始化估计 `max(Tbase,cL+Tstate)+cR<Tremaining`；严格 `Jstart<Joff` 才提出 START。
+- 初始化估计 `max(Tbase,cL+Tstate)+cR<Tremaining`；OFF 可行时严格 `Jstart<Joff` 才提出 START。
 - 枚举 delta=1%..10%、步长0.1个百分点，n=1..100，n×delta≤1；精确同分按
   `(objective,delta_permille,n)` 升序，不增加 epsilon 或新的同分目标。
 
@@ -78,9 +78,10 @@ G1 验证纯接口，G2 将实际库存和池快照接入同一求解器。
 horizon 和 endpoint 语义；与故障侧提供的本轮联合 q 逐值核对。不用 next-1s 查询替代当前 q，
 不重写预测器、成本表或故障抽样。F1/F2 仍分别抽样，F3 不进入策略风险输入。
 
-决策网格对齐 fault-check，而非 task-start 的独立1秒定时器。在线按
+周期决策网格对齐 fault-check，而非 task-start 的独立1秒定时器。在线按
 `更新因果状态 -> q/P_finish -> 提出决策 -> 执行本轮故障 -> 存活且仍计算才提交`
-执行。任务启动只注册 OFF；下次检查前已经完成的任务不做决策。当前 START 遇到同轮故障仍视为 OFF；新 delta/n 不能改变当前故障前状态。
+执行。任务启动另做一次即时 OFF 评估（见下节），短于下一检查点的任务预测窗口为空。
+检查点提议 START 遇到同轮故障仍视为 OFF；新 delta/n 不能改变当前故障前状态。
 `FrequencyDecisionGate` 只维护单任务策略状态，真实初始化、记录、批次和故障仍由 N5A 执行。
 新 delta 从实际完成/上次触发边界向前取合法 target；新 n 只消费尚未组批的记录，已建批次不可变。
 ON 无可行候选时保留状态、暂停新 target 和新 batch，已有操作继续；不允许 ON→OFF。
@@ -97,9 +98,21 @@ N5B-G2/G3 正式接入和算法比较采用在线 **generate**。固定输入和
 同轮 F3 仍遵守原有“不抽 F1/F2”的规则，在决策记录中标记 `actual_fault_sampled=0`。
 START 存活才调用实际初始化，只有物理初始化对象完成融合才进入 ON；预测 T_init 不调度 ON。
 
+G3R 在 primary `TASK_RUNNING` 时立即评估 OFF→START，不等待下一个故障检查点。
+该只读预测从下一真实全局抽样点开始，不新增抽样；同刻检查尚未开始则包含当前点，
+已开始则排除，预计完成时刻不再抽样。未启动的任务仍在后续检查点重新评估。
+即时 START 只进入 INITIALIZING；同纳秒重复决策被去重。ON 的 UPDATE/PAUSE 仍沿用上述
+提案→抽样→存活提交合同。`decision_trigger` 区分 TASK_RUNNING / FAULT_EPOCH；
+前者 `q_current_sample` 留空，风险写入 `p_f1_snapshot/p_f2_snapshot/q_comp_snapshot`。
+F3 实际时刻的 F1/F2 因果快照另写 `f3-compute-risk-snapshots.csv`，不额外抽样。
+
 FFP 的 OFF 候选不预留资源，START 存活后固定节点对；ON 不换节点。
 节点当下不健康、不空闲或所需路径不可用时暂停新操作。
-路径取当前稳定接口顺序的路由、残余瓶颈带宽及传播时延；恢复速率读 remote 的 ComputeService。
+路径复用 NetworkTransferEngine 的只读准入查询：capacity-aware 搜索完整 ECMP 路径并使用
+当前真实 reservation；不由 Frequency 独自选第一条路径。恢复速率读 remote 的 ComputeService。
+primary→remote、primary→local、local→remote 是 START 的硬路径条件。
+source→remote 的 INPUT 重放仅用于 OFF 成本比较：不可用时显式记录 `replay_available=0` 和
+原因，不虚构带宽/等待时间；P_finish>0 且 START 本身可行时允许启动，P_finish=0 不强制保护。
 source=remote 的 INPUT 重算沿用 LocalDelivery，分析带宽用最大有限值表示零序列化极限，实际不发 UDP。
 
 库存快照包含 r/l、已捕获记录及 H、是否分配/接收、当前 remote state 和不可变 batch。
@@ -259,11 +272,22 @@ deadline 不因恢复重置，同 ns 算完按既有合同视为按时；过期�
 RECOMPUTE fallback。没有远端 base（含 INITIALIZING 未完成）时，local 增量不能独自恢复。
 有远端 base 时，只比较当前可知的 tail/redo 估计；tail 严格更小才选它，相等选择 redo。
 只执行一条；估计和实际耗时分列，不能事后取两个实际结果的最小值冒充执行结果。
-估计沿当前可达路径的稳定接口顺序，使用当前传播时延、剩余瓶颈容量和 payload 序列化时间；
+估计复用真实路由/准入的只读查询，使用当前传播时延、准入速率和 payload 序列化时间；
 不预测未来队列释放，不保证与实际 UDP 耗时相等。tail 加 cR 和 `(xf-lf)/恢复速率`，
 redo 为 `(xf-rf)/恢复速率`；无可用远端对象时才回退到原 source 的 INPUT 重放。
 
-remote 优先使用原固定备份节点；不可接受时按稳定 ID 选非主星的健康、空闲、可达节点重算。
+remote 优先使用原固定备份节点。已有有效 committed state、原 remote 忙或计算不可用但
+整星/存储仍可读时，先按稳定 ID 寻找非主星、健康空闲、结果可达且存储/路径/deadline 可行的迁移目标。
+`MIGRATE_REDO` 实际传输 `CommittedStateBytes(rf)` 后从 rf 重做；`MIGRATE_TAIL` 同时注册
+state 和真实 L1 记录之和（含 H）的 tail 传输，两者收齐后等一次 cR，再从 lf 开始计算。
+目标先预留 state/tail 存储，旧 checkpoint 保留到目标状态有效并接管，或 logical task 终态清理。
+可行 checkpoint 优先于零起点重算，即使后者估计略快；全部 checkpoint 选项不可行才 RECOMPUTE。
+已接受的迁移若真实传输失败，按现有单次恢复合同终止，不偷偷重新选择第二个 attempt。
+迁移等待计 reserved-idle，RECOVERY_STATE 计真实网络开销；LLM 在 rf=0 的零字节 state
+仅使用 1 ns 因果边界，不创建虚假 UDP。诊断记录 old/new node、state bytes、迁移触发/失败原因、
+三种候选估计和实际收齐时刻。它是恢复机制，不改变 N5B 的 FFP/LRL 放置排序。
+
+无可用 checkpoint 时按稳定 ID 选非主星的健康、空闲、可达节点重算。
 不会为了产生 UDP 排除 source 或 result。接受后等待 INPUT/tail/cR 时处于 reserved-idle，
 普通任务可入队但不能抢占；该等待不计 compute busy。catchup 是真实服务达到故障时 xf 的事件，
 并非“开始恢复”或“算完整个任务”。重做 WU 与 catchup 后的正常剩余 WU 分列。
@@ -305,7 +329,7 @@ G3 将 RemoteCommit 的物理融合/旧记录清理延后 1 ns，名义有效时
 ## G4 资源账本
 
 `recovery-summary.csv` 区分 planned 与 actual 三列：catchup_redo、post_catchup、total，单位 WU。
-TAIL/REMOTE_REDO/RECOMPUTE 的起始进度分别为 lf/rf/0，计划 catch-up 为 `xf-start`，
+TAIL（含 MIGRATE_TAIL）/REMOTE_REDO（含 MIGRATE_REDO）/RECOMPUTE 的起始进度分别为 lf/rf/0，计划 catch-up 为 `xf-start`，
 计划 post 为 `W-xf`，计划 total 为 `W-start`。xf/lf/rf 均为整数 WU，不是百分比。
 实际 WU 由 ComputeService 在真实服务完成/取消/停止时保留，使用
 `min(planned, floor(actual_service_ns * rate / 1e9))`；正常完成 actual=planned，
