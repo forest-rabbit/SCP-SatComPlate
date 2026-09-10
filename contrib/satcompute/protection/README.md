@@ -230,4 +230,5 @@ off 的原有截断合同不变。
 测试与指令见 [tests](../tests/README.md)，本门禁证据见
 [N5A-G1](../../../docs/n5/reviews/N5A-G1-architecture-storage.md)、
 [N5A-G2](../../../docs/n5/reviews/N5A-G2-fixed-backup-path.md)、
-[N5A-G3](../../../docs/n5/reviews/N5A-G3-recovery-loop.md)。
+[N5A-G3](../../../docs/n5/reviews/N5A-G3-recovery-loop.md)、
+[N5A-G4](../../../docs/n5/reviews/N5A-G4-integration-accounting.md)。
