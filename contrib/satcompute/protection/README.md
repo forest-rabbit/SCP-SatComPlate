@@ -97,6 +97,8 @@ R1 assignment 从副本准入到完成/取消，recovery 从完整故障 batch �
 
 `placement-selections.csv` 记录 task/time、模式、`selected_by_minimal_policy`、pair 或单节点、
 `actual_admission` 和原因；ACCEPTED 仅表示同步资源准入，不代表异步 INPUT/初始化已完成。
+task/time 不是 CompFRR 决策的唯一键：普通决策后，同纳秒真实容量释放可触发一次非抽样重试。
+离线审计按 OFF frequency 记录的触发类型及事件顺序逐条关联，禁止同类重复或容量重试额外抽样。
 异步完成/失败仍核对保护/副本/恢复原始账本。Frequency 的全候选路径/硬约束计数字段只适用于 FA，
 minimal 留空，不能把未检查的候选声称为 path-feasible。分布统计包括全部计算节点的零计数，
 R0/R1 的 local/remote、checkpoint 存储指标为不适用；不能据零池占用宣称普通运行内存更优。

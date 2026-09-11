@@ -86,12 +86,78 @@ def occupation(root, tasks, recoveries):
 
 
 def overlapping(intervals, begin, end):
+    if end <= begin:
+        return []
     return [r for r in intervals if r["start_ns"] < end and r["end_ns"] > begin]
+
+
+def validate_selection_events(selections, decisions):
+    """Join true OFF events, not a task/time key that can have a later capacity event."""
+    selected = defaultdict(list)
+    for row in selections:
+        selected[row["task_id"], row["time_ns"]].append(row)
+    if not decisions:
+        require(all(len(v) == 1 for v in selected.values()), "duplicate native/fixed placement decision")
+        return dict(off_events_matched=0, same_ns_normal_then_capacity=0)
+    off = defaultdict(list)
+    for row in decisions:
+        if row["phase_before"] == "OFF":
+            off[row["task_id"], row["fault_epoch_time_ns"]].append(row)
+    require(set(selected) == set(off), "selection/OFF event keys differ")
+    paired = 0
+    for key, values in off.items():
+        require(len(values) == len(selected[key]), "selection/OFF event counts differ")
+        families = []
+        for index, (selection, decision) in enumerate(zip(selected[key], values), 1):
+            trigger = decision["decision_trigger"]
+            require(trigger in ("TASK_RUNNING", "FAULT_EPOCH", "CAPACITY_RELEASE"), "unknown placement event trigger")
+            family = "capacity" if trigger == "CAPACITY_RELEASE" else "normal"
+            require(family not in families, "duplicate placement trigger family")
+            families.append(family)
+            if family == "capacity":
+                require(decision["actual_fault_sampled"] == decision["actual_fault_hit"] == "0",
+                        "capacity placement event sampled a fault")
+            require(all(selection[k] == decision[k] for k in ("local_node", "remote_node", "placement_mode")),
+                    "selection differs from its OFF event")
+            require(selection["reason"] == (decision["resource_reason"] or decision["reason"]),
+                    "selection reason differs from OFF event")
+            if selection["actual_admission"] == "ACCEPTED":
+                require(decision["decision_committed"] == "1" and decision["proposed_action"] == "START",
+                        "accepted placement without committed START")
+            selection.update(decision_trigger=trigger, same_ns_event_index=index,
+                             actual_fault_sampled=decision["actual_fault_sampled"],
+                             actual_fault_hit=decision["actual_fault_hit"])
+        require(len(families) == 1 or families == ["normal", "capacity"], "invalid same-ns placement event order")
+        paired += len(families) == 2
+    return dict(off_events_matched=len(selections), same_ns_normal_then_capacity=paired)
+
+
+def local_commit_window(events, protection_start, fault):
+    """Last actual local commit before the fault snapshot, respecting same-ns order."""
+    anchor = dict(start_ns=protection_start, end_ns=fault,
+                  anchor_kind="PROTECTION_START_NO_COMMIT", committed_local_wu=None)
+    for event in events:
+        if event["attempt_generation"] != "0":
+            continue
+        at = int(event["time_ns"])
+        if at > fault:
+            break
+        if at == fault and event["event"] == "FAULT_SNAPSHOT":
+            break
+        if at >= protection_start and event["event"] in ("L1_COMMITTED_LOCAL", "INIT_COST_COMMITTED"):
+            anchor.update(start_ns=at, anchor_kind=event["event"],
+                          committed_local_wu=int(event["local_work_units"]))
+    return anchor
 
 
 def diagnostics(root, tasks, protected, recoveries, decisions, selections):
     pauses = rows(root, "frequency-pause-intervals.csv", True)
     occupiers = occupation(root, tasks, recoveries)
+    commits = defaultdict(list)
+    for event in rows(root, "protection-events.csv", True):
+        if event["attempt_generation"] == "0" and event["event"] in (
+                "L1_COMMITTED_LOCAL", "INIT_COST_COMMITTED", "FAULT_SNAPSHOT"):
+            commits[event["task_id"]].append(event)
     fault_rows = []
     for r in recoveries:
         task, key = tasks[r["task_id"]], r["task_id"]
@@ -112,6 +178,12 @@ def diagnostics(root, tasks, protected, recoveries, decisions, selections):
         during = overlapping(own, begin, fault)
         pause_ns = sum(max(0, min(fault, number(e, "end_time_ns"))-max(begin, number(e, "start_time_ns")))
                        for e in pauses if e["task_id"] == key)
+        committed_window = local_commit_window(commits[key], number(p, "start_time_ns"), fault)
+        committed_occupiers = overlapping(own, committed_window["start_ns"], fault)
+        committed_window.update(occupants=committed_occupiers, remote_busy=bool(committed_occupiers),
+            pause_ns=sum(max(0, min(fault, number(e, "end_time_ns")) -
+                                 max(committed_window["start_ns"], number(e, "start_time_ns")))
+                         for e in pauses if e["task_id"] == key))
         actual, local, committed = (number(r, k) for k in ("actual_work_units", "local_work_units", "remote_work_units"))
         work = number(task, "compute_work_units")
         fault_rows.append(dict(task_id=key, fault_time_ns=fault, local_node=p["local_node"], remote_node=remote,
@@ -119,6 +191,7 @@ def diagnostics(root, tasks, protected, recoveries, decisions, selections):
             fault_time_busy=r["remote_busy_at_fault"] == "1", occupants_at_fault=at_fault,
             pre_fault_window_start_ns=begin, pre_fault_window_end_ns=fault,
             pre_fault_occupants=during, pre_fault_busy=bool(during), pre_fault_pause_ns=pause_ns,
+            since_last_local_commit=committed_window,
             later_occupants=overlapping(own, number(p, "start_time_ns"), fault),
             checkpoint_lag_wu=actual-local, remote_lag_wu=local-committed,
             x_minus_l=(actual-local)/work, l_minus_r=(local-committed)/work,
@@ -144,11 +217,17 @@ def diagnostics(root, tasks, protected, recoveries, decisions, selections):
         fault_time_busy_by_ordinary=sum(r["fault_time_busy"] and any(o["kind"] == "ordinary" for o in r["occupants_at_fault"]) for r in fault_rows),
         fault_time_busy_by_recovery=sum(r["fault_time_busy"] and any(o["kind"] == "recovery" for o in r["occupants_at_fault"]) for r in fault_rows),
         pre_fault_busy_count=sum(r["pre_fault_busy"] for r in fault_rows), pause_by_reason=by_reason,
+        remote_busy_since_last_local_commit_count=sum(r["since_last_local_commit"]["remote_busy"] and
+            r["since_last_local_commit"]["anchor_kind"] != "PROTECTION_START_NO_COMMIT" for r in fault_rows),
+        before_first_commit_remote_busy_count=sum(r["since_last_local_commit"]["remote_busy"] and
+            r["since_last_local_commit"]["anchor_kind"] == "PROTECTION_START_NO_COMMIT" for r in fault_rows),
         checkpoint_lag_wu=FREQ["stats"](r["checkpoint_lag_wu"] for r in fault_rows),
         capacity_release_resume_count=sum(d["phase_before"] == "ON" and d["decision_trigger"] == "CAPACITY_RELEASE" and
             d["decision_committed"] == "1" and d["proposed_action"] == "UPDATE" for d in decisions),
         sentinels=sentinels,
         window_definition="[max(protection start, fault - latest configured delta*W/primary_rate), fault); "
+                          "also [last actual local commit before fault snapshot, fault), with explicitly labelled "
+                          "protection-start fallback if no commit exists; "
                           "fault busy uses runtime snapshot; occupation intervals do not invent queued/transition ownership")
 
 
@@ -159,13 +238,13 @@ def analyze_run(root):
     protected = {p["task_id"]: p for p in rows(root, "protection-task-summary.csv", True)}
     selections = rows(root, "placement-selections.csv")
     decisions = rows(root, "frequency-decisions.csv", True)
-    require(len({(s["task_id"], s["time_ns"]) for s in selections}) == len(selections), "duplicate placement decision")
+    selection_events = validate_selection_events(selections, decisions)
     mode = value["execution"]["placement_mode"]
     require(all(s["placement_mode"] == mode and s["selected_by_minimal_policy"] == str(int(not mode.startswith("fa-")))
                 for s in selections), "selection identity mismatch")
     value["placement"] = role_loads(root, protected, scheme)
     value["selection"] = dict(count=len(selections), outcomes=dict(Counter(s["actual_admission"] for s in selections)),
-                              reasons=dict(Counter(s["reason"] for s in selections)))
+                              reasons=dict(Counter(s["reason"] for s in selections)), **selection_events)
     if decisions:
         FREQ["verify_pair_retries"](decisions, rows(root, "frequency-capacity-waits.csv"))
         value["score_checked"] = sum(RISK["decision_check"](d, tasks[d["task_id"]],
@@ -241,6 +320,7 @@ def main():
             remote_top3_share=r["placement"]["remote"]["top3_share"] if r["placement"]["remote"] else None,
             fault_time_remote_busy=r["diagnostics"]["fault_time_busy_count"],
             pre_fault_remote_busy=r["diagnostics"]["pre_fault_busy_count"],
+            remote_busy_since_last_commit=r["diagnostics"]["remote_busy_since_last_local_commit_count"],
             capacity_resumes=r["diagnostics"]["capacity_release_resume_count"],
             T_catch_p50_s=r["T_catch_s"].get("p50"), T_catch_p90_s=r["T_catch_s"].get("p90")))
         if not r["storage"]["applicable"]:
