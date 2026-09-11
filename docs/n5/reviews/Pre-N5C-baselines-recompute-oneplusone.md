@@ -1,6 +1,6 @@
 # Pre-N5C：Recompute 与 1+1 baseline
 
-状态：**实现、维护回归和六组完整实验通过，STOPPED AT PRE-N5C BASELINE AUDIT**。
+状态：**统一浪费离线修订通过，STOPPED AT PRE-N5C ACCOUNTING REVISION AUDIT**。
 [Draft PR #97](https://github.com/forest-rabbit/SCP-SatComPlate/pull/97)，
 分支 `feature/n5-baselines`，base=`n5`；不自动合并，不进入 N5C。
 
@@ -13,7 +13,8 @@ N5B [PR #96](https://github.com/forest-rabbit/SCP-SatComPlate/pull/96) 已于 20
 `main@009788ca9c5042160e50a014c6d657e785f225f3` 不变。
 
 六组执行 HEAD 均为 **`cfb7a0498d0f1d2182809372c12267cdf942b8c4`**，
-每组开始时工作区干净；后续仅整理本报告，审阅 HEAD 以 PR 为准。
+每组开始时工作区干净；后续修订仅涉及离线分析器、其单元测试和本报告，审阅 HEAD 以 PR 为准。
+本轮没有重新运行仿真，原始 R0–R5 CSV/JSON 保持只读，执行身份不变。
 Recompute 增量为 `77c9d23a7`，1+1 与统一比较门禁为 `cfb7a0498`。
 
 冻结语义：
@@ -24,7 +25,7 @@ Recompute 增量为 `77c9d23a7`，1+1 与统一比较门禁为 `cfb7a0498`。
   此后沿用已接受恢复的 F1/F2 免疫，F3 始终有效。
 - 维持原绝对 compute deadline，不改为结果交付 deadline。按时计算后的 RESULT 可继续传输；
   首个有效交付获胜，取消另一 attempt，但保留其实际 WU 和已发字节。
-- planned 取决策时估计，actual 仅取真实执行/预留时长。失败任务另报 raw WU，不用 sum(WU)-W 生成负开销。
+- planned 取决策时估计，actual 仅取真实执行/预留时长。失败任务的全部实际执行计入 waste；仅成功任务扣除一份有效 W，不生成负开销。
 - 同星 INPUT/RESULT 使用 LocalDelivery；跨星统一走 NetworkTransferEngine。没有 scheme-specific Routing。
 - 两种新 baseline 仅支持 FFP；fixed/compfrr 继续支持 FFP/LRL；n5c 明确 NOT_IMPLEMENTED。
   remoteBusyRecoveryPolicy 只切换 checkpoint 的 REMOTE_BUSY，对 off/完整 Recompute/1+1 不适用。
@@ -97,32 +98,88 @@ R5 对冻结 `output/n5b-architecture/B-ffp-compfrr-frequency`：
 R0 的 58 次为 `NO_FEASIBLE_RECOMPUTE_NODE_INPUT_OR_DEADLINE`：
 逐条核对后，**全部即使忽略 INPUT 也没有足够时间在任一 100,000 WU/s 节点从零算完**。
 它们在准入时失败，不是运行至 deadline 才超时，因此表中“执行 deadline 超时”为 0。
-不能把 R0 较低的总开销解释为同等完成率下的成本优势。
+R0 的低网络流量伴随 58 个任务失败，不能解释为同等完成率下的成本优势。
 
 R1 的恢复统计指主 attempt 故障后的接管；86 个直接受影响任务包含 83 个主故障和
 3 个正常副本故障，后者由主任务完成。故障数按来源报告，不强求相同 seed 产生相同最终 trace。
 
-| 组 | 常态保护 eq-WU | planned 追赶 WU | actual 追赶 WU | actual post-catchup WU | actual 总恢复 WU | W_waste_actual eq-WU |
-|---|---|---|---|---|---|---|
-| R0 | 0 | 23,870,749 | 2,197,227 | 11,274,928 | 13,472,155 | 2,719,233.8628 |
-| R1 | 0 | — | — | — | — | 337,298,032.8606 |
-| R2 | 1,523,120 | 2,516,876 | 1,776,518 | 24,294,103 | 26,070,621 | 3,705,412.7797 |
-| R3 | 1,523,120 | 1,394,484 | 1,394,484 | 24,335,591 | 25,730,075 | 3,285,672.7436 |
-| R4 | 444,770 | 3,211,471 | 1,923,329 | 24,245,762 | 26,169,091 | 2,941,764.9036 |
-| R5 | 441,510 | 1,355,313 | 1,355,313 | 24,335,591 | 25,690,904 | 2,344,498.5932 |
+本轮修订统一计算容量浪费，而不是改变机制或总执行量：
 
-R0 的 planned 追赶包含未准入记录；actual 不包含任何未执行工作。
-R1 的 checkpoint catchup/post-catchup 字段不适用，不能用零值声称“没有恢复工作”：
-其真实 primary=328,177,528 WU，
-replica=345,912,166 WU，
-合计=674,089,694 WU；
-成功任务冗余=321,576,575 WU，
-失败 raw WU=0（受控失败 fixture 另验证，不做负数扣减）。
+```text
+task_execution_waste_wu
+  = 所有物理 attempt 的 actual WU 总和 - 成功逻辑任务的有效 WU
+w_waste_actual
+  = task_execution_waste_wu + normal_protection_eq_wu + reserved_idle_eq_wu
+```
 
-actual waste 口径：Recompute=实际历史追赶+实际预留等待；
-1+1（成功任务）=实际冗余+实际副本预留等待；
-Fixed/CompFRR=实际常态保护等价成本+实际预留等待+实际历史追赶。
-正常业务的有效剩余计算不重复算作 waste；actual post-catchup/总恢复工作单独列出。
+成功严格取 `final_state == COMPLETED && compute_deadline_met == 1`；
+按时计算后的 RESULT 可以晚于 compute deadline 交付。失败任务不扣任何有效 W。
+normal 沿用实际完成的 cL/cR 事件等价计费；idle 沿用真实 reservation 等待，
+fault-time cR 已在 idle 中，不重复加费。这是 eq-WU 容量浪费，不是纯 CPU 执行量或总资源消耗；
+网络 Byte、备份池峰值 Byte 仍独立报告。
+
+旧汇总漏掉了最终失败任务已执行却未形成有效结果的计算。本次从既有因果执行记录离线重建：
+`W_waste_actual has been recomputed offline from existing causal execution ledgers; no simulation was rerun.`
+
+| 组 | 成功任务额外执行 WU | 失败任务全部执行 WU | task execution waste WU | normal eq-WU | actual idle eq-WU | W_waste_actual eq-WU |
+|---|---:|---:|---:|---:|---:|---:|
+| R0 | 2,197,227 | 21,673,522 | 23,870,749 | 0 | 522,006.8628 | 24,392,755.8628 |
+| R1 | 321,576,575 | 0 | 321,576,575 | 0 | 15,721,457.8606 | 337,298,032.8606 |
+| R2 | 1,466,166 | 1,361,062 | 2,827,228 | 1,523,120 | 405,774.7797 | 4,756,122.7797 |
+| R3 | 1,394,484 | 0 | 1,394,484 | 1,523,120 | 368,068.7436 | 3,285,672.7436 |
+| R4 | 1,354,057 | 2,426,686 | 3,780,743 | 444,770 | 573,665.9036 | 4,799,178.9036 |
+| R5 | 1,355,313 | 0 | 1,355,313 | 441,510 | 547,675.5932 | 2,344,498.5932 |
+
+每组 task execution waste 等于前两列之和；normal/idle 只加一次。
+原始 `recovery-summary.csv`、`replica-summary.csv` 的旧 waste 字段不改写，
+只作为历史机制账本校验，跨方案结论统一取新 `evaluation.json`。
+
+实际执行重建与门禁：
+
+- 恢复任务：primary 取故障快照 `actual_work_units`，与 fault-task-impact 的实际进度和
+  连续计算时间交叉核对；recovery 取 `actual_total_recovery_wu` 和实际 service。
+  不能把被恢复 attempt 覆写的逻辑 compute_service_time 当作原 primary 服务。
+- 1+1：逐项累加 `replica-attempts.csv` 的真实 WU/service，与副本汇总一致；
+  普通未故障任务用实际 compute 起止时间。任何缺失或冲突的 actual 证据立即停止并报 task_id。
+- 六组所有 attempt 的 actual service ns 总和均与 `compute-node-summary.csv` 的 busy ns 精确一致。
+  没有从 planned/estimated 字段补 actual；逐 profile 聚合与全局守恒。
+- R0：83 个故障任务实际前缀 **23,870,749 WU**；其中 58 个未恢复任务损失
+  **21,673,522 WU**，25 个成功任务多执行 **2,197,227 WU**。
+  加 actual idle **522,006.8628 eq-WU**，强制锚点 **24,392,755.8628 eq-WU** 通过。
+- R1：primary **328,177,528** + replica **345,912,166** - 有效任务 **352,513,119**
+  = **321,576,575 WU**；加 idle 得 **337,298,032.8606 eq-WU**。
+  R3/R5 均 800/800 成功，新 task waste 分别与 actual catchup **1,394,484 / 1,355,313 WU** 相等。
+
+R2/R4 最终失败任务全部实际执行如下；它们均未完成追赶，
+故本场景 post-catchup=0，但分析器和离线测试也覆盖“追赶后继续执行再失败”的情况：
+
+| 任务 | 组 | primary actual WU | recovery actual WU | 失败任务全部执行 WU | terminal reason |
+|---|---|---:|---:|---:|---|
+| 114 | R2 | 701,967 | 212,198 | 914,165 | COMPUTE_DEADLINE_EXCEEDED |
+| 252 | R2 | 348,743 | 98,154 | 446,897 | COMPUTE_DEADLINE_EXCEEDED |
+| 114 | R4 | 701,967 | 212,198 | 914,165 | COMPUTE_DEADLINE_EXCEEDED |
+| 252 | R4 | 348,743 | 98,154 | 446,897 | COMPUTE_DEADLINE_EXCEEDED |
+| 475 | R4 | 806,704 | 258,920 | 1,065,624 | COMPUTE_DEADLINE_EXCEEDED |
+
+这些记录的 replica actual 均为 0。R0 的 58 个失败记录 recovery/replica actual 均为 0。
+六组 `failed_task_execution` 保留全部 63 条逐任务审计记录
+（task/group/scheme、primary/recovery/replica actual、failed execution、terminal reason），
+不是只保存汇总。
+
+恢复诊断项另列，**不能再次加入上述统一 waste**：
+
+| 组 | planned 追赶 WU | actual 追赶 WU | actual post-catchup WU | actual 总恢复 WU |
+|---|---:|---:|---:|---:|
+| R0 | 23,870,749 | 2,197,227 | 11,274,928 | 13,472,155 |
+| R1 | — | — | — | — |
+| R2 | 2,516,876 | 1,776,518 | 24,294,103 | 26,070,621 |
+| R3 | 1,394,484 | 1,394,484 | 24,335,591 | 25,730,075 |
+| R4 | 3,211,471 | 1,923,329 | 24,245,762 | 26,169,091 |
+| R5 | 1,355,313 | 1,355,313 | 24,335,591 | 25,690,904 |
+
+planned 追赶仅解释恢复难度；actual 追赶仅解释已重复的历史计算。
+post-catchup 在成功任务中是有效剩余工作，在最终失败任务中随全部实际执行计入 waste。
+R1 的 checkpoint catchup/post-catchup 不适用，不用零值声称“没有恢复工作”。
 
 | 组 | 有等待估计的记录数 | planned 等待 eq-WU | actual 等待 eq-WU | 观察到 T_catch 的记录数 | T_catch P50 / P90 / max（s） |
 |---|---|---|---|---|---|
@@ -134,9 +191,8 @@ Fixed/CompFRR=实际常态保护等价成本+实际预留等待+实际历史追�
 | R5 | 83 | 481,778.4213 | 547,675.5932 | 83 | 0.096401 / 0.457682 / 2.17366 |
 
 planned 等待来自当次路径估计；actual 从真实 reservation 到 compute start 或终止计时，
-含真实排队/接收/融合等待。完整 Recompute 的 25 次准入记录：
-planned waste=2,718,558.9975，actual waste=2,719,233.8628 eq-WU。
-其余 58 条没有完整等待估计，不伪造 planned 总开销。
+含真实排队/接收/融合等待。完整 Recompute 只有 25 次准入存在完整等待估计；
+其余 58 条不伪造 planned 等待，但其已执行 primary WU 仍完整计入 actual waste。
 R2 的任务 114/252 计划追赶 701,967/348,743 WU，deadline 截断后只实际执行
 212,198/98,154 WU；R4 同样只记已执行前缀。
 T_catch 只统计真正达到故障前进度的记录，未追赶完成不是 0 秒。
@@ -219,7 +275,7 @@ R1 的 RESULT 列含 primary 的 winner/loser，REPLICA_RESULT 列含 replica �
   R4 仅 1 个可观测样本、均为 1.502626751 s；
   R5 为 4 个样本、0.3336398245/0.4246014273/0.462985551 s。
 
-**整组** R4→R5 的 waste 少 **597,266.3104 eq-WU（20.3%）**，
+**整组** R4→R5 的 waste 少 **2,454,680.3104 eq-WU（51.15%）**，
 额外网络少 413,387,152 B，并多完成 3 个任务；不能与四个 busy 事件的差额直接混用。
 同一频率算法在不同恢复占用下有后续闭环差异：例如同为 583 s 故障的任务 605，
 R4 为 TAIL、追赶 1,731 WU，R5 为 REMOTE_REDO、追赶 106,326 WU；
@@ -231,14 +287,17 @@ R5 的频率记录出现 PLACEMENT_UNAVAILABLE/PAUSE，而 R4 的 checkpoint 更
 
 - **R2→R4，Frequency 消融**：常态等价成本降低 70.8%，
   额外网络降低 53.26%，
-  总 waste 降低 20.61%；
-  但完成数 798→797，不能只报告成本下降而隐去成功率差异。
+  但统一总 waste **增加 43,056.1239 eq-WU（0.91%）**，完成数 798→797；
+  正常维护成本下降不等于计入失败任务后总浪费也下降。
 - **R2→R3，Fixed 下的 relocation**：同三个 busy 任务 114/252/551，从 1/3 成功变为 3/3，
   少 382,034 actual catchup WU、37,605.9518 eq-WU busy 等待、462,187,683 B 恢复字节。
   R3 busy T_catch P50/P90/max=0.394200256/0.4385059648/0.449582392 s（n=3）；
   R2 只有任务 551 达到追赶点（1.502626751 s），另外两个右删失。
-  整组 waste 差为 419,740.0361 eq-WU，包含 busy 之外的少量等待差异。
+  整组 waste 降低 **1,470,450.0361 eq-WU（30.92%）**，包含失败任务损失和 busy 外的等待差异。
+- **R3→R5**：均 800/800 完成，统一 waste 降低 **941,174.1504 eq-WU（28.64%）**。
 - **R0/R1/R5，整体对照**：R0 常态成本为零，但 58 个晚故障已不具备从零恢复的 deadline 预算。
+  R0→R5 的统一 waste 降低 **22,048,257.2696 eq-WU（90.39%）**，完成数 742→800；
+  这是包含最终失败损失的实际工程对照，不是两组都成功时的重计算反事实成本。
   R1/R5 均 800/800；R5 的 waste 比 R1 少 99.3%，
   但额外应用层网络载荷高于 R1，不能宣称所有资源维度均更低。
   平均链路利用率与应用字节不是同一量，已分别报告。
@@ -261,11 +320,11 @@ Recompute/1+1 不占 checkpoint 池；**active working-set storage 未独立量�
 
 | 组 | dense-image：完成 / waste eq-WU | sparse-inference：完成 / waste eq-WU | compression：完成 / waste eq-WU | llm：完成 / waste eq-WU |
 |---|---|---|---|---|
-| R0 | 229 / 423,383.1039 | 226 / 862,654.8349 | 219 / 1,097,730.3334 | 68 / 335,465.5906 |
+| R0 | 229 / 3,801,396.1039 | 226 / 5,597,189.8349 | 219 / 9,105,202.3334 | 68 / 5,888,967.5906 |
 | R1 | 240 / 96,788,607.8611 | 240 / 88,528,824.7882 | 240 / 96,080,246.0935 | 80 / 55,900,354.1178 |
-| R2 | 240 / 673,576.2723 | 239 / 764,457.8746 | 239 / 1,189,749.3508 | 80 / 1,077,629.282 |
-| R3 | 240 / 673,576.2723 | 240 / 552,128.5056 | 240 / 982,338.6837 | 80 / 1,077,629.282 |
-| R4 | 240 / 274,453.3199 | 239 / 584,341.6106 | 238 / 1,270,704.805 | 80 / 812,265.1681 |
+| R2 | 240 / 673,576.2723 | 239 / 1,466,424.8746 | 239 / 1,538,492.3508 | 80 / 1,077,629.2820 |
+| R3 | 240 / 673,576.2723 | 240 / 552,128.5056 | 240 / 982,338.6837 | 80 / 1,077,629.2820 |
+| R4 | 240 / 274,453.3199 | 239 / 1,286,308.6106 | 238 / 2,426,151.8050 | 80 / 812,265.1681 |
 | R5 | 240 / 273,553.3199 | 240 / 378,980.7711 | 240 / 879,499.3341 | 80 / 812,465.1681 |
 
 ## 复现与边界
@@ -275,16 +334,16 @@ Recompute/1+1 不占 checkpoint 池；**active working-set storage 未独立量�
 `R3-fixed-ffp-relocate-busy`、`R4-compfrr-ffp-recompute-busy`、
 `R5-compfrr-ffp-relocate-busy`。
 `execution.json` 保留完整命令和执行身份；`evaluation.json` 含六组逐任务、
-恢复、副本与 busy 明细；`R5-frozen-equivalence.json` 含 31 项比较结果。
+恢复、副本与 busy 明细；新增 actual 执行分解、失败任务明细、审计门禁和六项 waste 百分比。
+`R5-frozen-equivalence.json` 含 31 项比较结果，原始物理等价结论不变。
+本次只运行离线 analyzer 及其 **15 项单元测试**；未运行 ns-3、C++/smoke/regression 仿真或 CI。
+执行前后检查六组原始目录的全部 **192 个文件**，内容未写入，文件集合、大小及修改/变更时间不变。
 这些大体积原始文件按 gitignore 留在本地；仓库中的本报告保存汇总，完整指标可按记录的命令复现。
 
 ```bash
-# 使用新目录，runner 拒绝覆盖原始证据；例为 R5。
-.venv/bin/python contrib/satcompute/tests/integration/regression/run-final-scenario.py \
-  --output-dir output/n5-baselines-rerun/R5-compfrr-ffp-relocate-busy \
-  --fault-mode generate --protection-mode compfrr --placement-mode ffp \
-  --remote-busy-recovery-policy relocate
-# 已有六组的离线统一核对；正常平台运行不自动做这些分析。
+# 本轮禁止重跑仿真；只读取已经存在的六组原始输出。
+.venv/bin/python -m unittest discover \
+  -s contrib/satcompute/tests/unit -p 'test_baseline_evaluation.py' -v
 .venv/bin/python contrib/satcompute/tests/integration/regression/analyze-baseline-evaluation.py \
   --root output/n5-baselines --output output/n5-baselines/evaluation.json
 ```
@@ -297,4 +356,4 @@ Recompute/1+1 不占 checkpoint 池；**active working-set storage 未独立量�
 N5C 的前置接口已就绪：可替换公共 placement 层而不重写两种 baseline 或 Routing。
 本轮仅揭示资源竞争、可行性和后续状态的影响，**没有设计或实现 N5C score、risk-aware placement、
 Multi-tree 或多 seed 实验**。保留 Draft PR 和 baseline 分支等待用户审阅；
-**STOPPED BEFORE N5C，不合并 baseline PR**。
+**STOPPED AT PRE-N5C ACCOUNTING REVISION AUDIT，不合并 PR #97，不进入 N5C**。

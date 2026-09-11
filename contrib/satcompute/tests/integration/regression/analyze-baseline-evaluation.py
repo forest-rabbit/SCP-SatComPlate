@@ -26,6 +26,116 @@ def number(row, key):
     return int(row.get(key) or 0)
 
 
+def actual_integer(row, key, label):
+    """Missing actual execution is an audit failure, never an implicit zero/planned value."""
+    require(key in row and row[key] not in (None, ""), f"{label}: missing actual {key}")
+    value = int(row[key])
+    require(value >= 0, f"{label}: negative actual {key}")
+    return value
+
+
+def execution_waste(work, success, primary, recovery, replica, normal, idle):
+    """Subtract exactly one useful workload only when the logical task succeeds."""
+    require(type(work) is int and work > 0 and type(success) is bool, "invalid logical workload/success")
+    require(all(type(v) is int and v >= 0 for v in (primary, recovery, replica)), "invalid actual execution")
+    require(all(math.isfinite(v) and v >= 0 for v in (normal, idle)), "invalid actual equivalent cost")
+    total = primary + recovery + replica
+    useful = work if success else 0
+    require(total >= useful, "successful task executed less than useful work")
+    waste = total - useful
+    return dict(primary_actual_wu=primary, recovery_actual_wu=recovery, replica_actual_wu=replica,
+        total_executed_wu=total, useful_work_wu=useful, task_execution_waste_wu=waste,
+        successful_extra_execution_wu=waste if success else 0,
+        failed_task_executed_wu=0 if success else total,
+        w_waste_actual=waste + normal + idle)
+
+
+def task_execution(task, recovery, replica, attempts, impacts, normal, idle):
+    """Reconstruct this baseline's uninterrupted primary and at most one recovery/replica.
+
+    Logical compute_service_time_ns is overwritten by recovered/winning service. Use
+    the fault-time primary snapshot or physical replica attempts for those tasks.
+    """
+    label = f"task {task['task_id']}"
+    work = actual_integer(task, "compute_work_units", label)
+    success = task["final_state"] == "COMPLETED" and task["compute_deadline_met"] == "1"
+    require(task["task_success"] == str(int(success)), f"{label}: logical success evidence disagrees")
+    primary = recovered = replicated = primary_ns = recovery_ns = replica_ns = 0
+    require(not (recovery and replica), f"{label}: mixed checkpoint and replica execution")
+    if replica:
+        require(attempts, f"{label}: missing physical replica attempts")
+        roles = Counter(a["role"] for a in attempts)
+        require(roles["primary"] == 1 and roles["replica"] == int(replica["replica_admitted"]) and
+                set(roles) <= {"primary", "replica"}, f"{label}: unsupported/duplicate physical attempts")
+        for a in attempts:
+            executed = actual_integer(a, "actual_work_units", label)
+            service = actual_integer(a, "actual_service_ns", label)
+            rate = actual_integer(a, "rate_wu_per_s", label)
+            require(rate > 0 and executed == min(work, service*rate//NS), f"{label}: replica service disagrees")
+            if a["role"] == "primary":
+                primary, primary_ns = executed, service
+            else:
+                replicated, replica_ns = executed, service
+        require(primary == actual_integer(replica, "primary_executed_wu", label) and
+                replicated == actual_integer(replica, "replica_executed_wu", label) and
+                primary+replicated == actual_integer(replica, "total_executed_wu", label),
+                f"{label}: physical attempts and replica summary disagree")
+        source = "replica-attempts.csv:actual_work_units/actual_service_ns"
+    else:
+        require(not attempts, f"{label}: physical attempts without replica summary")
+        start = int(task["compute_start_time_ns"])
+        rate = actual_integer(task, "compute_rate_work_units_per_second", label)
+        require(rate > 0, f"{label}: missing primary service rate")
+        if recovery:
+            require(len(impacts) == 1, f"{label}: missing/ambiguous primary fault execution")
+            impact = impacts[0]
+            require(impact["progress_valid"] == "1" and
+                    impact["task_state_before_fault"] == "RUNNING" and
+                    impact["fault_time_ns"] == recovery["fault_time_ns"] and
+                    impact["compute_start_time_ns"] == task["compute_start_time_ns"],
+                    f"{label}: fault snapshot identity/progress mismatch")
+            primary = actual_integer(recovery, "actual_work_units", label)
+            require(primary == actual_integer(impact, "completed_work_units_at_fault", label),
+                    f"{label}: primary actual WU snapshot disagrees")
+            primary_ns = int(recovery["fault_time_ns"]) - start
+            require(start >= 0 and primary_ns >= 0 and primary == min(work, primary_ns*rate//NS),
+                    f"{label}: fault-time primary service disagrees")
+            recovered = actual_integer(recovery, "actual_total_recovery_wu", label)
+            recovery_ns = actual_integer(recovery, "actual_recovery_service_ns", label)
+            if recovery["recovery_accept_time_ns"]:
+                recovery_rate = actual_integer(recovery, "recovery_rate_wu_per_s", label)
+                require(recovery_rate > 0 and recovered == recovery_ns*recovery_rate//NS,
+                        f"{label}: actual recovery service disagrees")
+            else:
+                require(recovered == recovery_ns == 0, f"{label}: unaccepted recovery executed work")
+            source = "recovery-summary.csv:actual_work_units/actual_total_recovery_wu; fault-task-impact.csv"
+        else:
+            require(not impacts, f"{label}: primary fault without execution ledger")
+            complete = int(task["compute_complete_time_ns"])
+            if start < 0:
+                require(not success and complete < 0, f"{label}: completed computation without start")
+            else:
+                end = complete if complete >= 0 else int(task["failure_time_ns"])
+                require(end >= start, f"{label}: missing actual uninterrupted primary service end")
+                primary_ns = end - start
+                if complete >= 0:
+                    require(primary_ns == actual_integer(task, "compute_service_time_ns", label),
+                            f"{label}: primary service duration disagrees")
+                primary = min(work, primary_ns*rate//NS)
+            source = "task-summary.csv:uninterrupted compute start/complete/failure timestamps"
+    result = execution_waste(work, success, primary, recovered, replicated, normal, idle)
+    if success and recovery:
+        require(result["task_execution_waste_wu"] == actual_integer(recovery, "actual_catchup_redo_wu", label),
+                f"{label}: successful recovery catchup conservation failed")
+    if replica:
+        diagnostic = "redundant_actual_wu" if success else "failed_raw_executed_wu"
+        require(result["task_execution_waste_wu"] == actual_integer(replica, diagnostic, label),
+                f"{label}: replica diagnostic conservation failed")
+    result.update(primary_actual_service_ns=primary_ns, recovery_actual_service_ns=recovery_ns,
+                  replica_actual_service_ns=replica_ns, execution_source=source)
+    return result
+
+
 def stats(values):
     values = sorted(values)
     def quantile(p):
@@ -162,6 +272,13 @@ def analyze(root):
     recovery_by_id = {r["task_id"]: r for r in recovery}
     replicas = {r["task_id"]: r for r in rows(root, "replica-summary.csv", True)}
     attempts = rows(root, "replica-attempts.csv", True)
+    impacts = rows(root, "fault-task-impact.csv")
+    primary_impacts = [r for r in impacts if r["impact_type"] in
+                       ("RUNNING_INTERRUPTED", "RUNNING_INTERRUPTED_PERMANENT")]
+    require(len(recovery) == len(recovery_by_id), "duplicate task recovery; unsupported reconstruction")
+    task_ids = {t["task_id"] for t in tasks}
+    require(len(task_ids) == len(tasks) and set(recovery_by_id) <= task_ids and set(replicas) <= task_ids and
+            all(a["task_id"] in replicas for a in attempts), "duplicate/orphan task execution ledger")
     is_replica = identity["protection_mode"] == "one-plus-one"
     if not is_replica:
         ACCOUNTING["analyze"](root)  # Existing event-based costs, relocation bytes and service conservation.
@@ -181,6 +298,8 @@ def analyze(root):
         planned_idle = (float(b["planned_reserved_idle_eq_wu"]) if b.get("planned_reserved_idle_eq_wu") else None) if is_replica else (
             None if wait is None else wait*number(r, "recovery_rate_wu_per_s")/NS)
         recovered = r.get("terminal_state") == "COMPLETED" if not is_replica else b.get("primary_faulted") == "1" and b.get("winner") == "replica"
+        execution_account = task_execution(t, r, b, [a for a in attempts if a["task_id"] == task_id],
+            [i for i in primary_impacts if i["task_id"] == task_id], normal, idle)
         task_rows.append(dict(task_id=task_id, profile=t["task_profile"], completed=t["final_state"] == "COMPLETED",
             failed=t["final_state"] == "FAILED", on_time=t["final_state"] == "COMPLETED" and t["compute_deadline_met"] == "1",
             deadline_miss=t["failure_reason"] == "COMPUTE_DEADLINE_EXCEEDED", normal_protection_eq_wu=normal,
@@ -188,7 +307,9 @@ def analyze(root):
             planned_catchup_wu=number(r, "planned_catchup_redo_wu"), actual_catchup_wu=catch,
             reserved_idle_eq_wu=idle, planned_reserved_idle_eq_wu=planned_idle,
             actual_post_catchup_wu=number(r, "actual_post_catchup_wu"), actual_total_recovery_wu=number(r, "actual_total_recovery_wu"),
-            w_waste_actual=normal+idle+catch+redundant,
+            **execution_account,
+            terminal_reason=t["failure_reason"] if t["final_state"] == "FAILED" else (
+                "COMPLETED" if t["compute_deadline_met"] == "1" else "COMPUTE_DEADLINE_NOT_MET"),
             recovery_attempted=bool(r) if not is_replica else b.get("primary_faulted") == "1",
             recovery_accepted=bool(r.get("recovery_accept_time_ns")) if not is_replica else bool(b.get("takeover_time_ns")),
             recovery_success=recovered))
@@ -196,10 +317,16 @@ def analyze(root):
         keys = ("completed", "failed", "on_time", "deadline_miss", "normal_protection_eq_wu", "replica_redundant_wu",
                 "replica_failed_raw_wu", "planned_catchup_wu", "actual_catchup_wu", "reserved_idle_eq_wu",
                 "actual_post_catchup_wu", "actual_total_recovery_wu", "w_waste_actual", "recovery_attempted",
-                "recovery_accepted", "recovery_success")
+                "recovery_accepted", "recovery_success", "primary_actual_wu", "recovery_actual_wu", "replica_actual_wu",
+                "total_executed_wu", "useful_work_wu", "task_execution_waste_wu", "successful_extra_execution_wu",
+                "failed_task_executed_wu", "primary_actual_service_ns", "recovery_actual_service_ns", "replica_actual_service_ns")
         totals = {k: sum(t[k] for t in values) for k in keys}
         totals.update(tasks=len(values), recovery_failure=totals["recovery_attempted"]-totals["recovery_success"])
         return totals
+    summary = aggregate(task_rows)
+    require(sum(summary[k] for k in ("primary_actual_service_ns", "recovery_actual_service_ns", "replica_actual_service_ns")) ==
+            sum(actual_integer(n, "busy_time_ns", "compute node") for n in rows(root, "compute-node-summary.csv")),
+            "reconstructed actual service differs from compute-node busy ledger")
     network = physical_network(root, tasks)
     run = json.loads((root / "run-summary.json").read_text())
     require(network["business_sent_bytes"] == run["sent_application_bytes"], "business totals differ")
@@ -208,7 +335,6 @@ def analyze(root):
     require(number(flow, "tx_bytes")-28*number(flow, "tx_packets") == network["total_physical_application_sent_bytes"],
             "physical payload union differs from FlowMonitor")
     faults = json.loads((root / "fault-trace.json").read_text())["faults"]
-    impacts = rows(root, "fault-task-impact.csv")
     direct = [r for r in impacts if "INTERRUPTED" in r["impact_type"]]
     pools = rows(root, "protection-node-storage-summary.csv")
     require(all(number(p, "final_used_bytes") == number(p, "final_reserved_bytes") == 0 for p in pools), "storage leak")
@@ -221,7 +347,7 @@ def analyze(root):
     links = rows(root, "link-summary.csv")
     available = sum(float(r["available_time_s"]) for r in links)
     link_time = sum(float(r["measurement_duration_s"]) for r in links)
-    return dict(execution=identity, execution_result=execution, summary=aggregate(task_rows),
+    return dict(execution=identity, execution_result=execution, summary=summary,
         profiles={p: aggregate([t for t in task_rows if t["profile"] == p]) for p in PROFILES},
         fault_counts=dict(F1=sum(bool(f["f1_occurred"]) for f in faults), F2=sum(bool(f["f2_occurred"]) for f in faults),
             F3=sum(f["fault_type"] == "satellite" for f in faults), direct_victims=len({r["task_id"] for r in direct}),
@@ -246,7 +372,10 @@ def analyze(root):
             actual_replica_wu=sum(number(r, "replica_executed_wu") for r in replicas.values())),
         planned_reserved_idle_eq_wu=stats([t["planned_reserved_idle_eq_wu"] for t in task_rows if t["planned_reserved_idle_eq_wu"] is not None]),
         note="Single controlled seed/run. 1+1 catchup/recovery WU fields are N/A (zero placeholders); "
-             "its waste includes successful-task redundant WU and all replica idle, with failed raw WU separately reported.",
+             "unified waste = all actual task execution - useful work of successful logical tasks + normal eq-WU + actual idle eq-WU. "
+             "Raw runtime waste fields remain unchanged mechanism diagnostics, not the revised cross-scheme metric.",
+        failed_task_execution=[dict(group=root.name, scheme=identity["protection_mode"], **t)
+                               for t in task_rows if not t["on_time"]],
         task_rows=task_rows, recovery_rows=recovery, replica_rows=list(replicas.values()))
 
 
@@ -291,6 +420,51 @@ def fairness(runs):
     return dict(same_code_and_controls=True, same_fault_trace_required=False, groups=len(runs))
 
 
+def accounting_gates(runs):
+    """Frozen R0-R5 audit anchors check reconstructed results, never supply them."""
+    for name, run in runs.items():
+        s = run["summary"]
+        require(s["task_execution_waste_wu"] == s["successful_extra_execution_wu"] + s["failed_task_executed_wu"] ==
+                s["total_executed_wu"] - s["useful_work_wu"], f"{name}: execution waste partition")
+        ACCOUNTING["close"](s["w_waste_actual"], s["task_execution_waste_wu"] + s["normal_protection_eq_wu"] +
+                            s["reserved_idle_eq_wu"], f"{name}: total waste partition")
+        for key in ("task_execution_waste_wu", "successful_extra_execution_wu", "failed_task_executed_wu"):
+            require(s[key] == sum(p[key] for p in run["profiles"].values()), f"{name}: profile {key} partition")
+    r0, r1, r3, r5 = (runs[name]["summary"] for name in
+        ("R0-recompute-ffp", "R1-one-plus-one-ffp", "R3-fixed-ffp-relocate-busy", "R5-compfrr-ffp-relocate-busy"))
+    require(r0["task_execution_waste_wu"] == 23870749 and r0["failed_task_executed_wu"] == 21673522,
+            "R0 exact fault execution audit anchor failed")
+    ACCOUNTING["close"](r0["w_waste_actual"], 24392755.8628, "R0 exact total waste audit anchor failed")
+    require(r1["primary_actual_wu"] == 328177528 and r1["replica_actual_wu"] == 345912166 and
+            r1["useful_work_wu"] == 352513119 and r1["task_execution_waste_wu"] == 321576575,
+            "R1 execution conservation anchor failed")
+    ACCOUNTING["close"](r1["w_waste_actual"], 337298032.8606, "R1 total waste conservation failed")
+    for name, s in (("R3", r3), ("R5", r5)):
+        require(s["completed"] == s["on_time"] == 800 and s["failed_task_executed_wu"] == 0 and
+                s["task_execution_waste_wu"] == s["actual_catchup_wu"], f"{name}: success conservation failed")
+    for name, ids in (("R2-fixed-ffp-recompute-busy", {"114", "252"}),
+                      ("R4-compfrr-ffp-recompute-busy", {"114", "252", "475"})):
+        failed = runs[name]["failed_task_execution"]
+        require({t["task_id"] for t in failed} == ids and
+                all(t["failed_task_executed_wu"] == t["primary_actual_wu"] + t["recovery_actual_wu"] + t["replica_actual_wu"]
+                    for t in failed), f"{name}: failed task actual execution missing")
+    return dict(passed=True, R0_exact_anchor=True, R1_conservation=True, R3_R5_conservation=True,
+                R2_R4_failed_execution_included=True, actual_service_ledger_conserved=True)
+
+
+def waste_comparisons(runs):
+    groups = list(GROUPS)
+    result = {}
+    for before, after in ((0, 5), (1, 5), (2, 4), (3, 5), (2, 3), (4, 5)):
+        a, b = (runs[groups[i]]["summary"] for i in (before, after))
+        delta = a["w_waste_actual"] - b["w_waste_actual"]
+        result[f"R{before}_to_R{after}"] = dict(before_waste_eq_wu=a["w_waste_actual"],
+            after_waste_eq_wu=b["w_waste_actual"], reduction_eq_wu=delta,
+            reduction_percent=100*delta/a["w_waste_actual"],
+            before_completed=a["completed"], after_completed=b["completed"])
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path)
@@ -301,11 +475,17 @@ def main():
     if args.reference or args.candidate:
         if not (args.reference and args.candidate):
             parser.error("--reference and --candidate must be supplied together")
+        require(not any(args.output.resolve().is_relative_to(p.resolve()) for p in (args.reference, args.candidate)),
+                "output must not overwrite raw simulation evidence")
         result = strict_equivalence(args.reference, args.candidate)
     else:
         if args.root is None: parser.error("provide --root or --reference/--candidate")
+        output = args.output.resolve()
+        require(not any(output.is_relative_to((args.root / name).resolve()) for name in GROUPS),
+                "output must not overwrite raw simulation evidence")
         runs = {name: analyze(args.root / name) for name in GROUPS}
-        result = dict(fairness=fairness(runs), runs=runs,
+        result = dict(fairness=fairness(runs), accounting_audit=accounting_gates(runs), runs=runs,
+            waste_comparisons=waste_comparisons(runs),
             R4_minus_R5=busy_comparison(runs["R4-compfrr-ffp-recompute-busy"], runs["R5-compfrr-ffp-relocate-busy"]))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2)+"\n")
