@@ -40,6 +40,21 @@ struct FrequencyRuntimeTestAccess
         return c.m_manager;
     }
     static void Released(FrequencyProtectionController& c) { c.CapacityReleased(); }
+    static bool BlockedInput(FrequencyProtectionController& c, TaskRuntime task)
+    {
+        task.definition.sourceNodeId = 5;
+        DecisionPathSnapshot paths([](auto source, auto) {
+            AdmissiblePathEstimate p;
+            p.reachable = true;
+            p.admissible = source != 5;
+            p.failureReason = p.admissible ? "" : "NO_ADMISSIBLE_PATH";
+            return p;
+        });
+        FrequencyDecisionRecord row;
+        c.EvaluateOffPairs(row, task, c.m_states.at(task.definition.taskId), paths);
+        return row.resourceReason == "NO_CAPACITY_NOW" && row.pairPathFeasible == 0 &&
+               row.pairStats.skipNoCapacity > 0 && row.proposal.action == FrequencyAction::NONE;
+    }
 };
 } // namespace ns3::protection
 
@@ -81,6 +96,13 @@ void Storage()
         TaskStateAdapter layout(task);
         const auto initial = layout.Floor(layout.Work() / 4);
         auto off = MakeFrequencyStorageEstimator(task, initial, std::nullopt)({50, 4});
+        auto deferred = MakeFrequencyStorageEstimator(task, initial, std::nullopt,
+                                                       InputStagingPolicy::DEFERRED)({50, 4});
+        Check(deferred && deferred->remoteAdditionalBytes >= layout.StateBytes(initial) + layout.HeaderBytes(),
+              "deferred initialization/merge state omitted");
+        Check(deferred->remoteAdditionalBytes <= off->remoteAdditionalBytes &&
+                  deferred->localAdditionalBytes == off->localAdditionalBytes,
+              "deferred storage changed L1 or increased remote requirement");
         Check(off.has_value(), "OFF storage missing");
         Check(off->remoteAdditionalBytes >=
                   task.inputBytes + layout.StateBytes(initial) + layout.HeaderBytes(),
@@ -281,7 +303,8 @@ struct Driver
 
 std::string Controlled(TaskProfile profile,
                        const std::string& mode,
-                       const std::filesystem::path& output)
+                       const std::filesystem::path& output,
+                       InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER)
 {
     std::string signature;
     {
@@ -306,7 +329,8 @@ std::string Controlled(TaskProfile profile,
         executor->BindTaskCoordinator(tasks);
         // No generation schedule here: deterministic injection tests only the boundary seam.
         auto engine = CreateObject<FaultModelEngine>();
-        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            nullptr, RemoteBusyRecoveryPolicy::RELOCATE, inputPolicy);
         Driver driver{controller,
                       tasks,
                       executor,
@@ -317,6 +341,9 @@ std::string Controlled(TaskProfile profile,
                   "unconfigured synthetic engine invented a production task-start prediction");
         });
         Simulator::Schedule(NanoSeconds(200000000), [&] {
+            if (inputPolicy == InputStagingPolicy::DEFERRED)
+                Check(FrequencyRuntimeTestAccess::BlockedInput(controller, tasks->GetTaskRuntimes().front()),
+                      "blocked deferred INPUT was not a hard pair filter/capacity retry reason");
             driver.Epoch(mode == "none" ? 0.0 : 0.4, mode == "start-hit");
             const auto& row = controller.Decisions().back();
             Check(row.pair && row.pair->localNode == 2 && row.pair->remoteNode == 0, "FFP changed");
@@ -324,7 +351,8 @@ std::string Controlled(TaskProfile profile,
             Check(row.input.localFreeBytes == 10000000000ULL &&
                       row.input.remoteFreeBytes == 10000000000ULL,
                   "pool free snapshot not live");
-            Check(row.input.backupBandwidth > 0 && row.input.baseTransferSeconds > 0,
+            Check(row.input.backupBandwidth > 0 && (inputPolicy == InputStagingPolicy::DEFERRED
+                      ? row.input.baseTransferSeconds == 0 : row.input.baseTransferSeconds > 0),
                   "path estimate missing");
             if (mode == "none")
                 Check(row.proposal.action == FrequencyAction::NONE &&
@@ -349,6 +377,16 @@ std::string Controlled(TaskProfile profile,
         controller.Finalize();
         Check(controller.Manager().IsQuiescent(), "frequency resources leaked");
         const TaskStateAdapter layout(Definition(profile));
+        if (inputPolicy == InputStagingPolicy::DEFERRED)
+        {
+            Check(std::none_of(controller.Manager().Flows().begin(), controller.Manager().Flows().end(),
+                              [](const auto& f) { return f.key.kind == ProtectionTransferKind::INIT_BASE; }),
+                  "deferred nonzero-progress initialization copied INPUT");
+            for (const auto& flow : controller.Manager().Flows())
+                if (flow.key.kind == ProtectionTransferKind::INIT_STATE)
+                    Check(flow.work > 0 && flow.bytes == layout.StateBytes(flow.work) + layout.HeaderBytes(),
+                          "deferred current state/H initialization mismatch");
+        }
         uint64_t previousWork = 0;
         for (const auto& event : controller.Manager().Events())
         {
@@ -787,6 +825,10 @@ int main(int argc, char** argv)
         const auto second =
             Controlled(TaskProfile::LLM, "dynamic", std::filesystem::path(output) / "repeat-b");
         Check(first == second, "repeated controlled decisions differ");
+        for (auto profile : {TaskProfile::DENSE_IMAGE, TaskProfile::SPARSE_INFERENCE,
+                             TaskProfile::COMPRESSION, TaskProfile::LLM})
+            Controlled(profile, "dynamic", std::filesystem::path(output) / (std::string("deferred-") + TaskProfileToString(profile)),
+                       InputStagingPolicy::DEFERRED);
         Online(std::filesystem::path(output) / "online-generate");
         Online(std::filesystem::path(output) / "online-immediate-sparse", "immediate-sparse");
         Online(std::filesystem::path(output) / "online-phase-boundary", "phase-boundary");

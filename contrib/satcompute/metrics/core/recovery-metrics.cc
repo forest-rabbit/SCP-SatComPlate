@@ -66,6 +66,8 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
             "state_start_time_ns,state_received_time_ns";
     if (m_recomputePlacement)
         file << ",planned_input_wait_ns,planned_reserved_idle_eq_wu,w_waste_planned";
+    if (Deferred())
+        file << ",input_staging_policy,state_ready_time_ns,planned_fault_input_wait_ns";
     file << '\n';
     file << std::setprecision(17);
     for (const auto& r : Summaries())
@@ -129,6 +131,8 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
                 file << r.plannedCatchupRedoWu +
                             static_cast<double>(r.plannedInputWaitNs) * r.recoveryRate / 1e9;
         }
+        if (Deferred())
+            file << ",deferred," << Time(r.stateReadyNs) << ',' << Time(r.plannedInputWaitNs);
         file << '\n';
     }
     std::ofstream events(directory / "recovery-events.csv");

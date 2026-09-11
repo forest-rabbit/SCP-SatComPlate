@@ -109,6 +109,7 @@ struct Options
     bool remoteBusy{}, blockTargets{}, fillTargets{}, failState{};
     TaskProfile taskProfile{TaskProfile::LLM};
     RemoteBusyRecoveryPolicy busyPolicy{RemoteBusyRecoveryPolicy::RELOCATE};
+    InputStagingPolicy inputPolicy{InputStagingPolicy::EAGER};
 };
 
 RecoverySummary
@@ -161,7 +162,7 @@ Run(const Options& o, const std::string& output)
     }
     fault->BindTopology(topology);
     fault->BindTaskCoordinator(tasks);
-    CheckpointManager manager(tasks, topology, o.capacity, end);
+    CheckpointManager manager(tasks, topology, o.capacity, end, o.inputPolicy);
     Driver driver{manager, o.protect};
     tasks->ConnectTaskObserver(MakeCallback(&Driver::OnTask, &driver));
     FixedProtectionPolicy policy(50, 4);
@@ -225,6 +226,20 @@ Run(const Options& o, const std::string& output)
     WriteProtectionMetrics(
         manager, *tasks->GetTransferEngine(), std::filesystem::path(output) / o.name);
     const auto rows = recovery.Summaries();
+    const bool deferred = o.inputPolicy == InputStagingPolicy::DEFERRED;
+    if (deferred)
+    {
+        Check(std::none_of(manager.Flows().begin(), manager.Flows().end(), [](const auto& f) {
+            return f.key.kind == ProtectionTransferKind::INIT_BASE;
+        }), "deferred sent normal-period original INPUT");
+        for (const auto& e : manager.Events())
+            if (e.event == "INIT_STATE_IDENTITY_READY")
+                Check(e.bytes == 0 && e.storageObject != 0, "deferred zero-state lost logical identity");
+        for (const auto& p : manager.Summaries())
+            if (p.initializationNs >= 0)
+                Check(p.initializationNs == p.startNs + p.localCostNs + p.remoteCostNs,
+                      "zero-progress deferred initialization omitted cL/cR or waited for INPUT");
+    }
     if (o.faults.empty())
     {
         RecoverySummary probe;
@@ -252,9 +267,9 @@ Run(const Options& o, const std::string& output)
         const TaskStateAdapter layout(trace.tasks.front());
         Check(r.checkpointStateExists && r.relocationAttempted &&
                   r.recoveryNode != r.snapshot.remoteNode &&
-                  r.relocationBytes == layout.CommittedStateBytes(r.snapshot.remoteWork),
+                  r.relocationBytes == layout.CommittedStateBytes(r.snapshot.remoteWork, o.inputPolicy),
               "migration did not preserve exact checkpoint sizing/ownership");
-        Check(r.inputStartedNs < 0, "migration replayed INPUT");
+        Check(deferred ? r.inputStartedNs >= 0 : r.inputStartedNs < 0, "migration INPUT policy mismatch");
         if (o.remoteBusy)
             Check(r.remoteBusyAtFault && r.relocationTrigger == "REMOTE_BUSY",
                   "busy fixture missed busy");
@@ -388,6 +403,40 @@ Run(const Options& o, const std::string& output)
     }
     if (r.resultMode == "LOCAL")
         Check(r.resultTransferId == 0, "local result allocated UDP ID");
+    if (deferred && r.acceptedNs >= 0)
+    {
+        uint64_t inputs = 0, merges = 0;
+        for (const auto& e : recovery.Events())
+            if (e.taskId == 1)
+            {
+                if (e.event == "RECOVERY_INPUT_STARTED")
+                {
+                    ++inputs;
+                    Check(e.bytes == trace.tasks.front().inputBytes && e.timeNs == r.acceptedNs,
+                          "fault INPUT is not one full original input requested immediately");
+                }
+                merges += e.event == "RECOVERY_TAIL_COMMIT";
+            }
+        Check(inputs == 1 && merges <= 1, "deferred duplicated INPUT or fault cR");
+        if (r.tailStartedNs >= 0)
+            Check(r.tailStartedNs == r.inputStartedNs, "independent INPUT/tail artificially serialized");
+        if (r.stateStartedNs >= 0)
+            Check(r.stateStartedNs == r.inputStartedNs, "independent INPUT/state artificially serialized");
+        if (r.computeStartedNs >= 0)
+            Check(r.inputReceivedNs >= 0 && r.stateReadyNs >= 0 &&
+                      r.computeStartedNs == std::max(r.inputReceivedNs, r.stateReadyNs),
+                  "deferred compute does not follow exact dependency join");
+        if (r.path == "REMOTE_REDO" || r.path == "MIGRATE_REDO" || r.path == "RECOMPUTE")
+            Check(merges == 0 && r.tailCommitNs < 0, "committed state copy or INPUT paid fault cR");
+        uint64_t maxNode = 0, sumNode = 0;
+        for (const auto& [node, pool] : manager.Pools())
+        {
+            maxNode = std::max(maxNode, pool->PeakTotal());
+            sumNode += pool->PeakTotal();
+        }
+        Check(manager.GlobalStoragePeakBytes() >= maxNode && manager.GlobalStoragePeakBytes() <= sumNode,
+              "global simultaneous storage peak violates per-node bounds");
+    }
     const auto capacity = tasks->GetTransferEngine()->CollectCapacityAwareSummary();
     Check(capacity.activePathCountAtEnd == 0 && capacity.totalReservedRateBpsAtEnd == 0,
           "recovery capacity reservation leaked");
@@ -717,6 +766,56 @@ main(int argc, char** argv)
             Check(terminal.actualTotalRecoveryWu == 0 && !terminal.relocationFailureReason.empty(),
                   "F3 during migration started compute or lost terminal diagnostic");
         }
+        Options deferred{"deferred-zero-redo", {Fault(1, 3, 35000000)}, "REMOTE_REDO"};
+        deferred.inputPolicy = InputStagingPolicy::DEFERRED;
+        const auto zero = Run(deferred, output);
+        Check(zero.snapshot.phase == "ON" && zero.snapshot.remoteObject && zero.snapshot.remoteBytes == 0 &&
+                  zero.inputMode == "LOCAL" && zero.snapshot.remoteWork == 0,
+              "committed zero state treated as missing or local INPUT used UDP");
+        deferred.name = "deferred-tail-input-first";
+        deferred.faults = {Fault(1, 3, 180000000)};
+        deferred.expectedPath = "TAIL";
+        deferred.source = 1;
+        const auto joined = Run(deferred, output);
+        Check(joined.inputReceivedNs < joined.stateReadyNs && joined.inputMode == "NETWORK",
+              "fixture missed INPUT-first tail dependency");
+        deferred.name = "deferred-source-f3-pending";
+        deferred.success = false;
+        deferred.faults.push_back(Fault(2, 1, joined.inputStartedNs + 100, true));
+        const auto lost = Run(deferred, output);
+        Check(lost.inputReceivedNs < 0 && lost.actualTotalRecoveryWu == 0 &&
+                  lost.reason == "RECOVERY_F3_SATELLITE_FAILURE", "pending original INPUT ignored source F3");
+        deferred.name = "deferred-source-f3-after-input";
+        deferred.success = true;
+        deferred.faults.back() = Fault(2, 1, joined.inputReceivedNs + 1, true);
+        Run(deferred, output);
+        for (auto profile : {TaskProfile::LLM, TaskProfile::DENSE_IMAGE,
+                             TaskProfile::SPARSE_INFERENCE, TaskProfile::COMPRESSION})
+        {
+            Options move{std::string("deferred-migrate-") + TaskProfileToString(profile),
+                         {Fault(1, 3, 500000000)}, "MIGRATE"};
+            move.inputPolicy = InputStagingPolicy::DEFERRED;
+            move.taskProfile = profile;
+            // Opposite incoming routes let the small sparse state finish before INPUT;
+            // a shared link can legitimately serialize them through normal admission.
+            move.source = profile == TaskProfile::SPARSE_INFERENCE ? 4 : 1;
+            move.remoteBusy = true;
+            auto moved = Run(move, output);
+            if (profile == TaskProfile::SPARSE_INFERENCE)
+                Check(moved.stateReadyNs < moved.inputReceivedNs,
+                      "fixture missed state-first original INPUT dependency");
+            move.name += "-recompute";
+            move.busyPolicy = RemoteBusyRecoveryPolicy::RECOMPUTE;
+            move.expectedPath = "RECOMPUTE";
+            move.deadlineFactor = 3;
+            Run(move, output);
+        }
+        redoMigration.name = "deferred-migrate-redo";
+        redoMigration.inputPolicy = InputStagingPolicy::DEFERRED;
+        Run(redoMigration, output);
+        failedMigration.name = "deferred-state-transfer-failed";
+        failedMigration.inputPolicy = InputStagingPolicy::DEFERRED;
+        Run(failedMigration, output);
         std::cout << "recovery-runtime-test: PASS (" << checks << " checks)\n";
         return 0;
     }

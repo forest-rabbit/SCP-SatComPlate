@@ -219,6 +219,8 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("placementMode", "ffp baseline / lrl diagnostic (fixed or compfrr)", config.placementMode);
     commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; REMOTE_BUSY only, ignored by off",
                          config.remoteBusyRecoveryPolicy);
+    commandLine.AddValue("inputStagingPolicy", "eager / deferred; deferred requires compfrr",
+                         config.inputStagingPolicy);
     commandLine.AddValue("lrlRecoveryWeight", "Diagnostic active-recovery weight; G3 freezes 1", config.lrlRecoveryWeight);
     commandLine.AddValue("fixedProtectionDelta",
                          "Fixed progress interval (0.05 = 5%), per-mille precision",
@@ -378,6 +380,9 @@ ValidateConfig(const SatComputeConfig& config)
     RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one"});
     RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "n5c"});
     RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
+    RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred"});
+    if (config.inputStagingPolicy == "deferred" && config.protectionMode != "compfrr")
+        FailConfig("inputStagingPolicy", "deferred requires compfrr protection");
     if (config.placementMode == "n5c")
         FailConfig("placementMode", "NOT_IMPLEMENTED: N5C placement is deferred");
     if (config.placementMode == "lrl" && config.protectionMode != "fixed" && config.protectionMode != "compfrr")
@@ -714,7 +719,9 @@ main(int argc, char* argv[])
                 frequency = std::make_unique<protection::FrequencyProtectionController>(
                     taskCoordinator, topology, faultModelEngine,
                     config.backupStorageBytesPerNode, simulationDurationNs,
-                    makePlacement(), busyPolicy);
+                    makePlacement(), busyPolicy,
+                    config.inputStagingPolicy == "deferred" ? protection::InputStagingPolicy::DEFERRED
+                                                             : protection::InputStagingPolicy::EAGER);
             }
             else if (config.protectionMode == "recompute")
             {

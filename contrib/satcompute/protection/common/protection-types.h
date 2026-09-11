@@ -9,6 +9,13 @@
 
 namespace ns3::protection
 {
+/** When the recovery node obtains original INPUT; state protection remains independent. */
+enum class InputStagingPolicy
+{
+    EAGER,    ///< Preserve normal-period full INPUT staging and legacy committed state.
+    DEFERRED  ///< Protect variable state only; fetch full INPUT after a fault.
+};
+
 /** Mechanism-independent checkpoint, recovery or replica policy action. */
 enum class ActionKind
 {

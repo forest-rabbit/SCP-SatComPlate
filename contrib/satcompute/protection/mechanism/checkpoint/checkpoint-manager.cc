@@ -61,9 +61,10 @@ CheckpointManager::State::State(const TaskRuntime& runtime,
 CheckpointManager::CheckpointManager(Ptr<TaskCoordinator> tasks,
                                      SatelliteRuntimeView& topology,
                                      uint64_t capacity,
-                                     int64_t stopNs)
+                                     int64_t stopNs,
+                                     InputStagingPolicy inputPolicy)
     : m_tasks(tasks), m_network(tasks ? tasks->GetTransferEngine() : nullptr), m_stopNs(stopNs),
-      m_ids(MaximumId(tasks))
+      m_inputPolicy(inputPolicy), m_ids(MaximumId(tasks))
 {
     if (stopNs <= 0)
         throw std::invalid_argument("invalid checkpoint duration");
@@ -73,6 +74,15 @@ CheckpointManager::CheckpointManager(Ptr<TaskCoordinator> tasks,
         m_pools.emplace(service->GetNodeId(), std::make_unique<BackupStoragePool>(capacity));
     }
     // Reject legacy/untyped or incompatible task budgets before the simulation starts.
+    if (m_inputPolicy == InputStagingPolicy::DEFERRED)
+        for (const auto& [node, pool] : m_pools)
+            pool->SetPeakObserver([this] {
+                unsigned __int128 total = 0;
+                for (const auto& [id, current] : m_pools)
+                    total += current->Used() + current->Reserved();
+                Require(total <= std::numeric_limits<uint64_t>::max(), "global storage peak overflow");
+                m_globalStoragePeakBytes = std::max(m_globalStoragePeakBytes, static_cast<uint64_t>(total));
+            });
     for (const auto& task : tasks->GetTaskRuntimes())
         TaskStateAdapter{task.definition};
 }
@@ -234,7 +244,7 @@ CheckpointManager::Execute(const ProtectionContext& context, const ProtectionAct
     const auto base = Reserve(state,
                               config.remoteNode,
                               StorageKind::REMOTE_STATE,
-                              task->definition.inputBytes,
+                              m_inputPolicy == InputStagingPolicy::DEFERRED ? 0 : task->definition.inputBytes,
                               state.initial);
     if (!base)
     {
@@ -244,7 +254,14 @@ CheckpointManager::Execute(const ProtectionContext& context, const ProtectionAct
     state.baseObject = *base;
     if (m_assignmentObserver)
         m_assignmentObserver(state.summary.taskId, config.remoteNode, true);
-    Queue(state,
+    if (m_inputPolicy == InputStagingPolicy::DEFERRED)
+    {
+        Require(m_pools.at(config.remoteNode)->CommitReservation(*base),
+                "logical state identity reservation missing");
+        state.baseReceivedNs = Now();
+        Log(state, "INIT_STATE_IDENTITY_READY", state.initial, 0, config.remoteNode, *base);
+    }
+    else Queue(state,
           ProtectionTransferKind::INIT_BASE,
           0,
           context.primaryNode,
@@ -592,7 +609,7 @@ CheckpointManager::Commit(State& state, bool initialization)
         Log(state,
             initialization ? "INIT_COMPLETE" : "REMOTE_COMMIT",
             work,
-            state.layout.CommittedStateBytes(work));
+            state.layout.CommittedStateBytes(work, m_inputPolicy));
         if (initialization)
             Log(state, "ON", work);
         state.physicalCommit = std::pair{Now(), initialization};
@@ -612,7 +629,7 @@ CheckpointManager::FinishPhysicalCommit(State& state, bool initialization)
     auto& remote = *m_pools.at(state.config.remoteNode);
     Require(remote.Merge(state.baseObject,
                          initialization ? state.initObject : state.batchObject,
-                         state.layout.CommittedStateBytes(work)),
+                         state.layout.CommittedStateBytes(work, m_inputPolicy)),
             "remote in-place merge failed");
     state.physicalCommit.reset();
     Log(state, initialization ? "INIT_COST_COMMITTED" : "REMOTE_COST_COMMITTED", work);
@@ -621,7 +638,7 @@ CheckpointManager::FinishPhysicalCommit(State& state, bool initialization)
         Log(state,
             initialization ? "INIT_COMPLETE" : "REMOTE_COMMIT",
             work,
-            state.layout.CommittedStateBytes(work));
+            state.layout.CommittedStateBytes(work, m_inputPolicy));
         if (initialization)
             Log(state, "ON", work);
     }
@@ -877,7 +894,7 @@ CheckpointManager::FreezeRecoverySnapshot(uint64_t id, int64_t at)
     {
         const auto base = Pool(result.remoteNode).Find(state.baseObject);
         Require(base && !base->reserved &&
-                    base->bytes == state.layout.CommittedStateBytes(before.remoteWork),
+                    base->bytes == state.layout.CommittedStateBytes(before.remoteWork, m_inputPolicy),
                 "strict fault snapshot lost its physical remote version");
         result.remoteObject = state.baseObject;
         result.remoteBytes = base->bytes;

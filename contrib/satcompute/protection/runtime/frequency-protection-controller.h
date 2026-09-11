@@ -51,7 +51,8 @@ class FrequencyProtectionController : public ProtectionPolicy
                                   uint64_t capacity,
                                   int64_t stopNs,
                                   std::unique_ptr<PlacementPolicy> placement = nullptr,
-                                  RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE);
+                                  RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
+                                  InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER);
     ~FrequencyProtectionController() override;
     /** Finish the same actual ledgers as fixed protection. */
     void Finalize();

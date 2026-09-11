@@ -266,6 +266,34 @@ FrequencyInput Toy()
     return in;
 }
 
+void DeferredChecks()
+{
+    auto in = Toy();
+    const auto eager = CompFrrFrequencyPolicy{}.Evaluate(in);
+    in.inputPolicy = InputStagingPolicy::DEFERRED;
+    const auto deferred = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Check(eager.selected && deferred.selected && eager.selected->config == deferred.selected->config,
+          "constant INPUT cost changed unconstrained frequency optimum");
+    Near(*deferred.jStart - *eager.jStart, in.risk.pFailBeforeFinish * in.inputBytes / in.inputBandwidth,
+         "deferred START omitted shared fault INPUT cost");
+    Near(*deferred.jOff, *eager.jOff, "deferred OFF recompute cost changed");
+    Near(deferred.initializationSeconds, in.costs.localNs / 1e9 + in.stateTransferSeconds + in.costs.remoteNs / 1e9,
+         "deferred initialization charged INPUT staging");
+    in.phase = ProtectionPhase::ON;
+    const auto on = CompFrrFrequencyPolicy{}.Evaluate(in);
+    in.inputPolicy = InputStagingPolicy::EAGER;
+    const auto oldOn = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Near(on.selected->objective, oldOn.selected->objective, "ON relative score includes constant INPUT");
+    in.inputPolicy = InputStagingPolicy::DEFERRED;
+    in.deadlineNs = 16800000000; // 0.8 s slack: INPUT alone consumes it.
+    Check(!CompFrrFrequencyPolicy{}.Evaluate(in).selected, "deferred deadline omitted INPUT wait");
+    in = Toy();
+    in.inputPolicy = InputStagingPolicy::DEFERRED;
+    in.replayAvailable = false;
+    in.inputBandwidth = 0;
+    Check(!CompFrrFrequencyPolicy{}.Evaluate(in).selected, "deferred admitted without original INPUT path");
+}
+
 void Oracle(const FrequencyInput& in, const char* label)
 {
     const auto actual = CompFrrFrequencyPolicy().Evaluate(in);
@@ -624,6 +652,7 @@ int main()
         PlacementChecks();
         FeasiblePairChecks();
         SolverChecks();
+        DeferredChecks();
         ProbabilityChecks();
         GateChecks();
         std::cout << "N5B policy: " << checks << " checks passed\n";

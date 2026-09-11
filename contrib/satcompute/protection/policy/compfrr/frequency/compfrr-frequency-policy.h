@@ -50,6 +50,7 @@ using FrequencyStorageEstimator =
 /** Scalar snapshot for independent analytical scoring; no simulator or RNG access. */
 struct FrequencyInput
 {
+    InputStagingPolicy inputPolicy{InputStagingPolicy::EAGER}; ///< Explicit INPUT timing contract.
     ProtectionPhase phase{ProtectionPhase::OFF}; ///< Only OFF and ON make risk decisions.
     FrequencyRisk risk;                          ///< Supplied at the same current fault epoch.
     double inputBytes{};                         ///< Original serialized INPUT S, not Kvar.
@@ -67,7 +68,7 @@ struct FrequencyInput
     double stateTransferSeconds{};           ///< Causal initialization state transfer estimate.
     bool nodeAvailable{};                    ///< FFP candidate currently eligible.
     bool pathAvailable{};                    ///< Required current paths exist.
-    bool replayAvailable{true}; ///< OFF INPUT path is soft: unavailable is not a START veto.
+    bool replayAvailable{true}; ///< Soft for eager OFF; mandatory for deferred protection.
     uint64_t localFreeBytes{};               ///< Actual N5A pool free bytes at decision time.
     uint64_t remoteFreeBytes{};              ///< Actual N5A pool free bytes at decision time.
     FrequencyStorageEstimator storageDemand; ///< Required pure causal per-candidate estimator.

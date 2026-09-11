@@ -20,10 +20,12 @@ uint64_t Add(uint64_t a, uint64_t b)
 FrequencyStorageEstimator MakeFrequencyStorageEstimator(
     const TaskDefinition& task,
     uint64_t actual,
-    std::optional<CheckpointInventory> inventory)
+    std::optional<CheckpointInventory> inventory,
+    InputStagingPolicy inputPolicy)
 {
     return [layout = TaskStateAdapter(task),
-            input = task.inputBytes,
+            input = inputPolicy == InputStagingPolicy::DEFERRED ? 0 : task.inputBytes,
+            inputPolicy,
             actual,
             inventory = std::move(inventory)](
                FrequencyConfiguration config) -> std::optional<FrequencyStorageDemand> {
@@ -78,10 +80,10 @@ FrequencyStorageEstimator MakeFrequencyStorageEstimator(
                 Add(layout.StateBytes(layout.Work()) - layout.StateBytes(initial), futureHeaders);
             maximumBatch = std::max(maximumBatch, local);
         }
-        const uint64_t base = on ? inventory->baseBytes : layout.CommittedStateBytes(initial);
+        const uint64_t base = on ? inventory->baseBytes : layout.CommittedStateBytes(initial, inputPolicy);
         // Both image and whole-token state budgets are monotone affine in work.
         const auto maximumState = std::max(
-            {base, layout.CommittedStateBytes(initial), layout.CommittedStateBytes(layout.Work())});
+            {base, layout.CommittedStateBytes(initial, inputPolicy), layout.CommittedStateBytes(layout.Work(), inputPolicy)});
         const auto futurePeak = Add(maximumState, maximumBatch);
         const auto occupied = Add(base, on ? inventory->batchBytes : 0);
         uint64_t remote = futurePeak > occupied ? futurePeak - occupied : 0;

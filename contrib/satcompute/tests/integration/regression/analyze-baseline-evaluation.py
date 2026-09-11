@@ -214,7 +214,7 @@ def planned_wait(r):
     key = {"RECOMPUTE": "estimated_recompute_ns", "TAIL": "estimated_tail_ns",
            "MIGRATE_TAIL": "estimated_migrate_tail_ns", "MIGRATE_REDO": "estimated_migrate_redo_ns"}.get(r.get("chosen_path"))
     if r.get("chosen_path") == "REMOTE_REDO" and r.get("recovery_accept_time_ns"):
-        return 0
+        return number(r, "planned_fault_input_wait_ns") if r.get("input_staging_policy") == "deferred" else 0
     rate = number(r, "recovery_rate_wu_per_s")
     if key and r.get(key) and rate:
         work = number(r, "planned_catchup_redo_wu")

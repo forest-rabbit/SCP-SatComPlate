@@ -21,6 +21,8 @@ BackupStoragePool::UpdatePeaks()
         totals[entry.taskId] += entry.bytes;
     for (const auto& [task, bytes] : totals)
         m_taskPeaks[task] = std::max(m_taskPeaks[task], bytes);
+    if (m_peakObserver)
+        m_peakObserver();
 }
 
 std::optional<uint64_t>

@@ -104,12 +104,14 @@ def relocation_check(task, protected, recovery, flows):
     r = recovery
     work, remote = number(task, "compute_work_units"), number(r, "remote_work_units")
     size = number(task, "input_bytes")
+    deferred = r.get("input_staging_policy") == "deferred"
     state = (remote // 100 * 114688 if task["task_profile"] == "llm" else
-             size - size * remote // work + number(protected, "variable_state_bytes") * remote // work)
+             (0 if deferred else size - size * remote // work) + number(protected, "variable_state_bytes") * remote // work)
     require(number(r, "checkpoint_state_bytes") == number(r, "checkpoint_relocation_bytes") == state,
             "relocation did not use exact committed state bytes")
-    require(r["old_remote_node"] != r["new_recovery_node"] and not r["input_start_time_ns"],
-            "migration used original node or replayed INPUT")
+    require(r["old_remote_node"] != r["new_recovery_node"] and
+            (bool(r["input_start_time_ns"]) if deferred else not r["input_start_time_ns"]),
+            "migration used original node or wrong INPUT staging policy")
     state_flows = [f for f in flows if f["kind"] == "RECOVERY_STATE"]
     require(len(state_flows) == int(state > 0), "missing/duplicate migration state flow")
     if state_flows:

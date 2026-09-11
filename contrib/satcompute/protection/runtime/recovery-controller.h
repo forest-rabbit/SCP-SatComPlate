@@ -35,6 +35,7 @@ struct RecoverySummary
     int64_t estimatedMigrateTailNs{-1}, estimatedMigrateRedoNs{-1}, estimatedRecomputeNs{-1},
         stateStartedNs{-1}, stateReceivedNs{-1};
     int64_t plannedInputWaitNs{-1}; ///< Decision-time INPUT estimate, never actual reservation wait.
+    int64_t stateReadyNs{-1}; ///< Actual state/tail/merge dependency join, independent of INPUT.
 };
 
 /** One recovery event, including local logical deliveries which have no transfer ID. */
@@ -123,6 +124,8 @@ class RecoveryController : public ProtectionMechanism
     void TransferTerminal(uint64_t transferId, int64_t timeNs);
     void Received(State& state, ProtectionTransferKind kind, uint64_t bytes, uint64_t transferId);
     void StartCompute(State& state);
+    /** Immutable input contract from the checkpoint owner, not a second configuration. */
+    bool Deferred() const { return m_manager.InputPolicy() == InputStagingPolicy::DEFERRED; }
     void Started(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
     void Catchup(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
     void Computed(uint64_t id, uint64_t generation, uint32_t node, int64_t at);

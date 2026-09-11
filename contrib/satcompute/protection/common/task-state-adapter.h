@@ -2,6 +2,7 @@
 #ifndef SATCOMPUTE_TASK_STATE_ADAPTER_H
 #define SATCOMPUTE_TASK_STATE_ADAPTER_H
 #include "../../task/compute-task.h"
+#include "protection-types.h"
 #include <optional>
 #include <vector>
 
@@ -36,6 +37,8 @@ class TaskStateAdapter
     uint64_t StateBytes(uint64_t work) const;
     /** Frozen remaining-input plus state formula, or whole-token KV for LLM. */
     uint64_t CommittedStateBytes(uint64_t work) const;
+    /** Explicit state-only deferred contract; the one-argument API stays eager-compatible. */
+    uint64_t CommittedStateBytes(uint64_t work, InputStagingPolicy policy) const;
     /** Increment variable bytes plus one H; endpoints must be distinct legal boundaries. */
     uint64_t RecordBytes(uint64_t from, uint64_t to) const;
     /** Greatest legal boundary no later than completed work. */

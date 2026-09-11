@@ -54,6 +54,7 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
 | `placementMode` | `ffp` | fixed / compfrr 均真正注入 `ffp` 或 `lrl`；后者为负载排名诊断 |
 | `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
+| `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
 off 不创建保护池、流或 CSV，不做故障恢复；fixed 对每个首次主计算启动执行一次固定策略，
@@ -113,14 +114,20 @@ REPLICA_INPUT 全属额外流量；仅获胜 RESULT 属业务，败方已发送 
 不得重复扣除当前已用/已预留状态。未提供估计器会拒绝输入，不默认当成容量无限。
 G1 验证纯接口，G2 将实际库存和池快照接入同一求解器。
 
-- OFF：`Joff=P_finish*(S/B_I+xW/muB)`；
+- Eager OFF：`Joff=P_finish*(S/B_I+xW/muB)`；
   `Jstart=cL+cR+min[(1-x)*(cL/delta+cR/(n*delta))+P_finish*Rbar]`。
 - ON：`Jon=Delta_t*(muP/W)*(cL/delta+cR/(n*delta))+q_current_sample*Rbar`。
 - `Rbar=Kvar*(n-1)*delta/(2B)+cR*(n-1)/n+W*delta/(2muB)`。
-- `Rmax=deadline-now-W*(1-x)/muB`；候选要求 `Rbar<=Rmax` 并通过存储约束。
-- 初始化估计 `max(Tbase,cL+Tstate)+cR<Tremaining`；OFF 可行时严格 `Jstart<Joff` 才提出 START。
+- `Rmax=deadline-now-W*(1-x)/muB`；eager 候选要求 `Rbar<=Rmax` 并通过存储约束。
+- Eager 初始化估计 `max(Tbase,cL+Tstate)+cR<Tremaining`；OFF 可行时严格 `Jstart<Joff` 才提出 START。
 - 枚举 delta=1%..10%、步长0.1个百分点，n=1..100，n×delta≤1；精确同分按
   `(objective,delta_permille,n)` 升序，不增加 epsilon 或新的同分目标。
+
+Deferred 的 Joff 不变，Jstart 在上述式子上加 `P_finish*S/B_I`，因此同一候选的
+故障 INPUT 成本在 START/OFF 两边一致；不能只从初始化删 INPUT、却保留偏向 START 的旧比较。
+ON 相对评分及 `(delta,n)` 搜索不变，但硬约束改为 `S/B_I+Rbar<=Rmax`，
+初始化估计只含 `cL+Tstate+cR`。原 source→remote INPUT 路径成为硬条件。
+频率解析评分不额外计传播时延；它是保守估计，不强迫实际 INPUT/state 串行执行。
 
 `MakeFrequencyRisk` 调用现有 `PredictComputeFailureBeforeFinish`，保留它的当前检查点、整数
 horizon 和 endpoint 语义；与故障侧提供的本轮联合 q 逐值核对。不用 next-1s 查询替代当前 q，
@@ -159,7 +166,7 @@ FFP 的 OFF 候选不预留资源，START 存活后固定节点对；ON 不换�
 路径复用 NetworkTransferEngine 的只读准入查询：capacity-aware 搜索完整 ECMP 路径并使用
 当前真实 reservation；不由 Frequency 独自选第一条路径。恢复速率读 remote 的 ComputeService。
 primary→remote、primary→local、local→remote 是 START 的硬路径条件。
-source→remote 的 INPUT 重放仅用于 OFF 成本比较：不可用时显式记录 `replay_available=0` 和
+Eager 的 source→remote INPUT 重放仅用于 OFF 成本比较：不可用时显式记录 `replay_available=0` 和
 原因，不虚构带宽/等待时间；P_finish>0 且 START 本身可行时允许启动，P_finish=0 不强制保护。
 source=remote 的 INPUT 重算沿用 LocalDelivery，分析带宽用最大有限值表示零序列化极限，实际不发 UDP。
 
@@ -184,7 +191,7 @@ INIT/ON/恢复/终态不做 OFF 重试。`frequency-capacity-waits.csv` 单独�
 库存快照包含 r/l、已捕获记录及 H、是否分配/接收、当前 remote state 和不可变 batch。
 估计器只输出与 **free bytes** 比较的新增峰值：
 
-- OFF 至少覆盖 INIT_BASE + INIT_STATE 的临时峰值及实际 CommittedStateBytes；
+- OFF 至少覆盖初始化临时峰值（eager 为 INIT_BASE + INIT_STATE，deferred 仅 INIT_STATE）及对应策略的 CommittedStateBytes；
 - local 保守计入现有尚未分配记录与剩余合法捕获，不提前抵扣将来网络何时释放空间；
 - remote 考虑未来 batch 的实际记录字节和 state 融合峰值，扣除已经计入 used/reserved 的 state/batch；
 - OFF 的初始化完成时刻可能受队列影响，因此额外使用剩余变量状态的上界。
@@ -248,10 +255,14 @@ cL/cR 同时是等效资源成本和异步逻辑时间，不进入普通 Compute
 | (100,500] MB | 0.5 ms | 2 ms |
 | >500 MB | 2 ms | 8 ms |
 
-初始化同时启动 base 传输和状态生成路径；两条路径都完成后再等 cR。初始变量状态为 0
+Eager 初始化同时启动 base 传输和状态生成路径；两条路径都完成后再等 cR。初始变量状态为 0
 也必须显式完成初始化；没有变量 payload 时不创建零字节 UDP flow，不靠 `bytes>0` 判断 ON。
 正常成本账本使用下文的唯一事件计数口径，生成、接收、提交计数分别记录，
 不得把失败/取消操作冒充已提交保护。真实网络传播、序列化与排队不再额外加一份解析时延。
+
+Deferred 不发送 INIT_BASE，也不为 INPUT 预留备份池：分配零字节 REMOTE_STATE 身份，
+在 cL 后发送当前 `K(w)+H` 的 INIT_STATE、接收后等一次 cR 才进入 ON。
+`w=0` 时保留显式逻辑零状态，照常支付 cL/cR，没有假 UDP；对象存在与否不能用字节数判定。
 
 不实现网络 ACK、重传或第二套网络。RemoteCommit 是内部零字节事件。
 `NetworkTransferEngine::RegisterRuntimePlan` 沿用普通 INPUT/RESULT 的 ID/端口；
@@ -269,12 +280,15 @@ G1 的 CheckpointProgress 由单元测试显式驱动时刻，不自己调度仿
 
 进度用整数完成 WU 表示，W 为总 WU。K 包含变量索引，不含重复 H：
 
-- 非 LLM：`K(w)=floor(Kvar*w/W)`，`Mstate(w)=S-floor(S*w/W)+K(w)`。
+- 非 LLM：`K(w)=floor(Kvar*w/W)`；eager 的 `Mstate(w)=S-floor(S*w/W)+K(w)`。
   剩余原始输入向上保留到整数 B，不采用 `S+K(w)` 或 `min(S,K)`。
 - LLM：`K(w)=floor(w/100)*114688 B`，`Mstate(w)=K(w)`；正式 checkpoint 只取完整 token。
 - L1：`D_L=K(w_new)-K(w_old)+H`，H 使用既有固定头加十进制 task ID 字节数，LLM H=0。
   batch 是所含实际 records 的字节和，不丢 H，也不额外发明一份 batch 头。
 - remote committed 的固定 metadata 暂为 0；历史 records 的 H 不累积进入长期状态。
+
+Deferred 的四种 profile 统一 `Mstate(w)=K(w)`，包括迁移的 RECOVERY_STATE；不混入原始 INPUT。
+`CommittedStateBytes(w)` 保留 eager 兼容接口，带显式 `InputStagingPolicy` 的重载供新路径使用。
 
 图像保持 G1 的 tile/合成文件边界，LLM 保持完整 token；相同 WU 边界去重，不生成零进度 checkpoint。
 这是已披露的线性任务/状态预算，不声称能够真实恢复任意压缩器或 LLM 程序。
@@ -340,11 +354,38 @@ RECOMPUTE fallback。没有远端 base（含 INITIALIZING 未完成）时，loca
 只执行一条；估计和实际耗时分列，不能事后取两个实际结果的最小值冒充执行结果。
 估计复用真实路由/准入的只读查询，使用当前传播时延、准入速率和 payload 序列化时间；
 不预测未来队列释放，不保证与实际 UDP 耗时相等。tail 加 cR 和 `(xf-lf)/恢复速率`，
-redo 为 `(xf-rf)/恢复速率`；无可用远端对象时才回退到原 source 的 INPUT 重放。
+redo 为 `(xf-rf)/恢复速率`；上述是 eager，deferred 的 INPUT 依赖如下。
+
+### Deferred 故障依赖
+
+每个 accepted recovery 向**实际恢复节点**请求一次完整原始 INPUT（原 source 发出），
+不是剩余输入，也不是先发旧 remote 再转发。INPUT 属于临时业务依赖，不进额外备份池。
+
+| 路径 | 可并行发起的故障期数据 | 启动恢复计算前的条件 |
+|---|---|---|
+| REMOTE_REDO | INPUT | INPUT 接收；已有状态无需再融合 |
+| TAIL | INPUT、TAIL | INPUT 接收且 TAIL 接收后一次 cR 完成 |
+| RECOMPUTE | INPUT | INPUT 接收；从 0 WU 重算，不搬运检查点 |
+| MIGRATE_REDO | INPUT、STATE | 两者接收，无额外 cR |
+| MIGRATE_TAIL | INPUT、STATE、TAIL | INPUT 接收且 STATE/TAIL 收齐后一次 cR 完成 |
+
+流在同一决策时刻请求，由公共网络准入/竞争决定实际排队。恢复路径估计用当前各依赖的
+`max(INPUT, state/tail/merge)+redo`，不预测未来队列；与频率层的保守加法估计分开。
+INPUT 来源星在接收完成前发生 F3 会终止本次恢复，完成后不再是该 INPUT 的依赖。
+保留现有 F1/F2 恢复 attempt 免疫、同纳秒 fault batch、原 deadline、唯一终态与清理合同。
+reserved-idle 只计接受到实际计算/终止的一段等待，不把并行流耗时重复相加。
+
+Deferred 新增 `input-staging-summary.json` 的全网同时 used+reserved 峰值，
+以及恢复表中的 `state_ready_time_ns`、`planned_fault_input_wait_ns`；旧 eager CSV 不改列。
+`tests/integration/regression/analyze-input-deferred.py` 另行输出 INPUT 逻辑/物理字节、
+常态/故障期额外流量、依赖关键路径等待、存储和四 profile 对比；浪费复用 PR #97 修正后的
+actual 执行口径，不把 raw recovery 表中的旧机制诊断列直接当跨方案总浪费。
+
+### 远端忙与迁移
 
 remote 优先使用原固定备份节点。已有有效 committed state、原 remote 忙或计算不可用但
 整星/存储仍可读时，先按稳定 ID 寻找非主星、健康空闲、结果可达且存储/路径/deadline 可行的迁移目标。
-`MIGRATE_REDO` 实际传输 `CommittedStateBytes(rf)` 后从 rf 重做；`MIGRATE_TAIL` 同时注册
+`MIGRATE_REDO` 实际传输对应 INPUT 策略的 `CommittedStateBytes(rf, policy)` 后从 rf 重做；`MIGRATE_TAIL` 同时注册
 state 和真实 L1 记录之和（含 H）的 tail 传输，两者收齐后等一次 cR，再从 lf 开始计算。
 目标先预留 state/tail 存储，旧 checkpoint 保留到目标状态有效并接管，或 logical task 终态清理。
 默认 relocate 下可行 checkpoint 优先于零起点重算，即使后者估计略快；全部 checkpoint 选项不可行才 RECOMPUTE。

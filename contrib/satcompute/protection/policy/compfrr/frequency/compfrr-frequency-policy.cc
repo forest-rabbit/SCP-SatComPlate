@@ -72,12 +72,15 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
     }
     Validate(in);
     const bool on = in.phase == ProtectionPhase::ON;
+    const bool deferred = in.inputPolicy == InputStagingPolicy::DEFERRED;
+    const double faultInput = deferred && in.replayAvailable ? in.inputBytes / in.inputBandwidth : 0;
     const double cL = in.costs.localNs / 1e9;
     const double cR = in.costs.remoteNs / 1e9;
     const double interval = in.risk.intervalNs / 1e9;
     out.deadlineSlackSeconds =
         (in.deadlineNs - in.risk.epochNs) / 1e9 - in.work * (1 - in.progress) / in.recoveryRate;
-    out.initializationSeconds = std::max(in.baseTransferSeconds, cL + in.stateTransferSeconds) + cR;
+    out.initializationSeconds = (deferred ? cL + in.stateTransferSeconds
+                                         : std::max(in.baseTransferSeconds, cL + in.stateTransferSeconds)) + cR;
     if (in.replayAvailable)
         out.jOff = in.risk.pFailBeforeFinish *
                    (in.inputBytes / in.inputBandwidth + in.progress * in.work / in.recoveryRate);
@@ -91,7 +94,8 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
         out.reason = "NO_REMAINING_COMPUTE";
         return out;
     }
-    if (in.nodeAvailable && in.pathAvailable && out.deadlineSlackSeconds >= 0)
+    if (in.nodeAvailable && in.pathAvailable && (!deferred || in.replayAvailable) &&
+        out.deadlineSlackSeconds >= 0)
     {
         for (uint32_t d = 10; d <= 100; ++d)
             for (uint32_t n = 1; n <= 100 && n * d <= 1000; ++n)
@@ -102,7 +106,7 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
                     cR * (n - 1) / n + in.work * delta / (2 * in.recoveryRate);
                 if (!std::isfinite(recovery))
                     throw std::invalid_argument("frequency recovery estimate overflow");
-                if (recovery > out.deadlineSlackSeconds)
+                if (faultInput + recovery > out.deadlineSlackSeconds)
                 {
                     ++out.deadlineRejected;
                     continue;
@@ -132,7 +136,8 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
     if (!out.selected)
     {
         out.action = on ? FrequencyAction::PAUSE : FrequencyAction::NONE;
-        out.reason = !in.nodeAvailable || !in.pathAvailable ? "PLACEMENT_UNAVAILABLE"
+        out.reason = !in.nodeAvailable || !in.pathAvailable || (deferred && !in.replayAvailable)
+                         ? "PLACEMENT_UNAVAILABLE"
                      : out.deadlineSlackSeconds < 0         ? "DEADLINE_INFEASIBLE"
                      : out.storageRejected                  ? "STORAGE_INFEASIBLE"
                                                             : "DEADLINE_INFEASIBLE";
@@ -144,7 +149,9 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
         out.reason = "ON_MINIMUM_SCORE";
         return out;
     }
-    out.jStart = cL + cR + out.selected->objective;
+    // Deferred START and OFF both pay one original INPUT after a fault.
+    // It is constant across frequency candidates, but must not bias START vs OFF.
+    out.jStart = cL + cR + out.selected->objective + in.risk.pFailBeforeFinish * faultInput;
     if (out.initializationSeconds >= in.remainingSeconds)
         out.reason = "INITIALIZATION_TOO_LATE";
     else if ((!in.replayAvailable && in.risk.pFailBeforeFinish > 0) ||

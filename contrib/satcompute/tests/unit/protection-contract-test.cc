@@ -159,6 +159,15 @@ StateChecks()
         const auto task = Task(profile);
         LayoutCheck(task);
         TaskStateAdapter a(task);
+        for (auto work : {uint64_t{0}, a.Floor(a.Work() / 2), a.Work()})
+        {
+            Check(a.CommittedStateBytes(work, InputStagingPolicy::EAGER) == a.CommittedStateBytes(work),
+                  "explicit eager changed legacy state size");
+            Check(a.CommittedStateBytes(work, InputStagingPolicy::DEFERRED) == a.StateBytes(work),
+                  "deferred state contains original INPUT or H");
+        }
+        Check(a.CommittedStateBytes(0, InputStagingPolicy::DEFERRED) == 0,
+              "logical zero state unexpectedly contains bytes");
         const auto before = a.CommittedStateBytes(0);
         Check(before == (profile == TaskProfile::LLM ? 0 : task.inputBytes),
               "initial base storage");

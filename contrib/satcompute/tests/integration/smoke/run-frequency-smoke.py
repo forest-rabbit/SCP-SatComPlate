@@ -20,7 +20,7 @@ def rows(directory, name):
     return result
 
 
-def run(output, mode="compfrr", audit=False, placement="ffp"):
+def run(output, mode="compfrr", audit=False, placement="ffp", staging="eager"):
     arguments = ["satcompute", "--simulationDuration=15", "--randomSeed=1", "--randomRun=11",
         "--constellationConfig=contrib/satcompute/tests/fixtures/constellation/connected-16.csv",
         f"--taskTrace={FIXTURE / 'fixed-four-profiles.json'}",
@@ -31,6 +31,7 @@ def run(output, mode="compfrr", audit=False, placement="ffp"):
         f"--placementMode={placement}", "--lrlRecoveryWeight=1",
         "--routingMode=global-capacity-aware-hrw", "--islBandwidthBps=10000000000",
         "--delayMode=fixed", "--fixedDelay=0.001", f"--outputDir={output}"]
+    arguments += [f"--inputStagingPolicy={staging}"]
     process = subprocess.run([str(ROOT / "ns3"), "run", "--no-build", shlex.join(arguments)],
                              cwd=ROOT, text=True, capture_output=True, timeout=120)
     assert process.returncode == 0, process.stdout + process.stderr
@@ -72,6 +73,10 @@ def verify(root):
         assert int(pool["used_bytes"]) == int(pool["reserved_bytes"]) == 0
         assert int(pool["peak_total_bytes"]) <= int(pool["capacity_bytes"])
     run(root / "lrl", placement="lrl")
+    run(root / "deferred", staging="deferred")
+    meta = json.loads((root / "deferred/input-staging-summary.json").read_text())
+    assert meta["input_staging_policy"] == "deferred"
+    assert all(r["kind"] != "INIT_BASE" for r in rows(root / "deferred", "protection-transfers.csv"))
     assert all(r["placement_mode"] == "lrl" for r in rows(root / "lrl", "frequency-decisions.csv"))
     for directory in (audit, root / "lrl"):
         for r in rows(directory, "placement-node-summary.csv"):

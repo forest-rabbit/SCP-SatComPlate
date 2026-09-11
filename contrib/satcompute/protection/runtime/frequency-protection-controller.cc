@@ -17,11 +17,12 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
                                                              uint64_t capacity,
     int64_t stopNs,
     std::unique_ptr<PlacementPolicy> placement,
-    RemoteBusyRecoveryPolicy busyPolicy)
+    RemoteBusyRecoveryPolicy busyPolicy,
+    InputStagingPolicy inputPolicy)
     : m_tasks(tasks),
       m_topology(topology),
       m_faults(faults),
-      m_manager(tasks, topology, capacity, stopNs),
+      m_manager(tasks, topology, capacity, stopNs, inputPolicy),
       m_placement(placement ? std::move(placement) : std::make_unique<FirstFeasiblePlacementPolicy>())
 {
     if (!faults)
@@ -232,6 +233,7 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
                                                    State& state, DecisionPathSnapshot& paths)
 {
     auto& input = row.input;
+    input.inputPolicy = m_manager.InputPolicy();
     row.pair = row.pair ? row.pair : state.pair ? state.pair
                           : m_placement->SelectCheckpointPair({task.definition.computeNodeId,
                                                 Candidates(task.definition.computeNodeId)});
@@ -263,23 +265,25 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
     const auto l1 = EstimatePath(paths, task.definition.computeNodeId, pair.localNode, &localReason);
     const auto tail = EstimatePath(paths, pair.localNode, pair.remoteNode, &tailReason);
     input.replayAvailable = replay.has_value();
-    input.pathAvailable = base && l1 && tail;
+    input.pathAvailable = base && l1 && tail &&
+        (input.inputPolicy == InputStagingPolicy::EAGER || replay);
     if (!input.pathAvailable)
     {
         if (row.resourceReason.empty())
-            row.resourceReason = !base ? baseReason : !l1 ? localReason : tailReason;
+            row.resourceReason = !base ? baseReason : !l1 ? localReason : !tail ? tailReason : row.replayReason;
         return false;
     }
     input.inputBandwidth = replay ? replay->bytesPerSecond : 0;
     input.backupBandwidth = std::min(l1->bytesPerSecond, tail->bytesPerSecond);
     TaskStateAdapter layout(task.definition);
     const auto initial = layout.Floor(row.progressWork);
-    input.baseTransferSeconds = base->Seconds(task.definition.inputBytes);
+    input.baseTransferSeconds = input.inputPolicy == InputStagingPolicy::DEFERRED
+        ? 0 : base->Seconds(task.definition.inputBytes);
     input.stateTransferSeconds =
         base->Seconds(initial ? layout.StateBytes(initial) + layout.HeaderBytes() : 0);
     input.storageDemand = MakeFrequencyStorageEstimator(task.definition,
                                                         row.progressWork,
-                                                        m_manager.Inventory(row.taskId));
+                                                        m_manager.Inventory(row.taskId), input.inputPolicy);
     return true;
 }
 
@@ -292,6 +296,28 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
     row.pairStats = BuildFeasiblePlacementPairs(context, [&](auto source, auto destination) {
         return paths.Availability(source, destination);
     });
+    if (m_manager.InputPolicy() == InputStagingPolicy::DEFERRED)
+    {
+        // INPUT is an operation-specific fourth path, not a new placement ranking.
+        // Filter before selecting a pair so a blocked source path can retry on capacity
+        // release or try another pair instead of violating the three-path preview assertion.
+        auto& stats = row.pairStats;
+        std::erase_if(stats.pairs, [&](const auto& pair) {
+            const auto p = paths.Availability(task.definition.sourceNodeId, pair.remoteNode);
+            if (!m_tasks->IsSatelliteAvailable(task.definition.sourceNodeId) || !p.reachable)
+                ++stats.skipNoRoute;
+            else if (p.admissible)
+                return false;
+            else if (p.reason == "NO_ADMISSIBLE_PATH")
+                ++stats.skipNoCapacity;
+            else
+                ++stats.skipOther;
+            return true;
+        });
+        if (stats.nodeFeasible && stats.pairs.empty())
+            stats.reason = stats.skipNoCapacity ? "NO_CAPACITY_NOW"
+                         : stats.skipOther ? "PATH_ADMISSION_UNAVAILABLE" : "NO_ROUTE";
+    }
     auto pairs = std::move(row.pairStats.pairs);
     row.pairPathFeasible = pairs.size();
     m_placement->RankPairs(pairs, context);
