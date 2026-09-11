@@ -55,5 +55,31 @@ N5C 的接口可分别实现单节点排名和双节点排名，本轮不实现�
 - 恢复 1539 个检查：默认迁移、忙远端从零重算、非忙计算不可用仍迁移、
   重算追赶中被 F3 打断只计实际 WU。原 N4B 回归仍为 88/12、11 START、483 条概率一致。
 
-完整 800 任务 B 的本轮复现结果将在运行后补入；此前不宣布冻结验收完成。
-历史基准见 [最终 800 任务场景](N5B-final-800-task-scene.md)，不覆盖历史输出。
+## 完整 B 复现：PASS
+
+干净执行提交 `cc57dc570d40870906428b6b954db9547676c077`，完整运行 1300 s，
+generate + compfrr + ffp + relocate，audit/shadow 关闭；退出码 0，耗时 1148.484 s。
+输出 `output/n5b-architecture/B-ffp-compfrr-frequency/`。
+
+与 [旧最终 800 任务 B](N5B-final-800-task-scene.md) 比较，**全部 25 个 CSV 逐字节一致**；
+6 个结果 JSON 完全等价，仅 `run-summary.json` 排除真实 wall-clock 两字段。
+包括任务/故障/路由/频率决策、保护/恢复事件与资源账本，不只核对最终完成数。
+比较不包含执行命令、提交号、耗时日志及嵌入这些元数据的派生 frequency-evaluation。
+对比清单：`output/n5b-architecture/strict-equivalence.json`，未加入 SHA-256。
+
+| 指标 | 复现结果（与旧 B 一致） |
+|---|---:|
+| 完成 / 失败；按期完成 | 800 / 0；800 |
+| F1 / F2 / F3 | 84 / 2 / 1 |
+| 接受恢复 / 恢复成功 | 83 / 83 |
+| TAIL / REMOTE_REDO / MIGRATE_TAIL / MIGRATE_REDO / RECOMPUTE | 68 / 6 / 3 / 1 / 5 |
+| normal / reserved-idle / catch-up（等效 WU） | 441510 / 547675.5932 / 1355313 |
+| W_waste_actual（等效 WU） | 2344498.5932 |
+| protection 实际发送字节 | 226079890635 |
+
+task120 的全部 F3 门槛通过：故障前无 F1/F2、有收益 START、实际 ON、使用 checkpoint 并按期完成。
+专用证据 `output/n5b-architecture/f3-check.json`；所有存储、placement 与网络预留归零。
+这是一组兼容性复现，不是多 seed 性能结论；未重跑 A/C 或完整 Recompute/1+1 baseline。
+建议交付 N5B 最终架构审阅；保留 Draft PR #96，main/n5 不变。
+
+`STOPPED AT N5B FINAL ARCHITECTURE AUDIT`
