@@ -2,7 +2,7 @@
 #ifndef SATCOMPUTE_FREQUENCY_PROTECTION_CONTROLLER_H
 #define SATCOMPUTE_FREQUENCY_PROTECTION_CONTROLLER_H
 #include "../../fault/runtime/fault-model-engine.h"
-#include "../policy/baseline/first-feasible-placement/first-feasible-placement-policy.h"
+#include "../policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
 #include "../policy/compfrr/frequency/frequency-decision-gate.h"
 #include "frequency-storage-estimator.h"
 #include "recovery-controller.h"
@@ -59,6 +59,7 @@ class FrequencyProtectionController : public ProtectionPolicy
     /** Write only decision/prediction audit, not actual metrics. */
     void WriteDecisions(const std::filesystem::path& directory) const;
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
+    const PlacementPolicy& Placement() const { return *m_placement; }
     ///< Live ownership used by LRL and the same diagnostic output for FFP.
 
     const CheckpointManager& Manager() const

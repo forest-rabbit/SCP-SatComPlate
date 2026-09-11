@@ -22,10 +22,13 @@ class RecomputeController
     const CheckpointManager& Manager() const { return m_manager; }
     /** Same actual recovery ledger as checkpoint schemes. */
     const RecoveryController& Recovery() const { return m_recovery; }
+    const PlacementPolicy& Placement() const { return *m_placement; }
+    const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
 
   private:
     Ptr<TaskCoordinator> m_tasks; ///< Shared logical task owner.
     std::unique_ptr<PlacementPolicy> m_placement; ///< Injected single-node ranking.
+    PlacementLoadLedger m_loads; ///< Real accepted native R0 recovery ownership.
     RecomputePolicy m_policy; ///< No checkpoint actions.
     CheckpointManager m_manager; ///< Shared canonical flow allocator; no checkpoint state created.
     RecoveryController m_recovery; ///< Shared real INPUT/compute/RESULT executor.

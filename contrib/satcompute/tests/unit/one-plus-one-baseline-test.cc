@@ -2,7 +2,8 @@
 #include "../support/config-factory.h"
 #include "../support/fault-injection.h"
 #include "ns3/command-line.h"
-#include "ns3/first-feasible-placement-policy.h"
+#include "ns3/fa-first-feasible-placement-policy.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
 #include "ns3/one-plus-one-controller.h"
@@ -50,6 +51,7 @@ struct Options
     bool blockAll{}, blockFirst{}, inspectConcurrent{true};
     double deadlineFactor{1.3};
     int64_t stopNs{2000000000};
+    bool minimal{}, lrl{}, slowFirst{};
 };
 
 struct Evidence
@@ -67,7 +69,7 @@ Evidence Run(const Options& o, const std::string& output)
     OnlineTopologyController topology(config.parameters, config.constellation);
     topology.Initialize();
     auto tasks = CreateObject<TaskCoordinator>();
-    ComputeProfile profile{{{0, o.replicaRate}, {2, 100000}, {3, 100000}, {4, 100000}}};
+    ComputeProfile profile{{{0, o.slowFirst ? 1 : o.replicaRate}, {2, 100000}, {3, 100000}, {4, 100000}}};
     TaskTrace trace{{{1, o.source, 3, o.result, 1000000, o.resultBytes, 100000, 1, 1, 2, TaskProfile::LLM}}};
     tasks->Initialize(profile, trace, topology, "size-aware", 1024, config.parameters.islMtuBytes,
         config.parameters.receiverRcvBufBytes, false, o.stopNs, o.deadlineFactor);
@@ -77,8 +79,12 @@ Evidence Run(const Options& o, const std::string& output)
     FaultControllerTestAccess::Schedule(fault, o.faults, ids, o.stopNs);
     fault->BindTopology(topology);
     fault->BindTaskCoordinator(tasks);
-    OnePlusOneController controller(tasks, topology, o.stopNs,
-        std::make_unique<FirstFeasiblePlacementPolicy>());
+    std::unique_ptr<PlacementPolicy> placement;
+    if (o.minimal && o.lrl) placement = std::make_unique<LeastRecoveryLoadPlacementPolicy>(1);
+    else if (o.minimal) placement = std::make_unique<FirstFeasiblePlacementPolicy>();
+    else if (o.lrl) placement = std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1);
+    else placement = std::make_unique<FaFirstFeasiblePlacementPolicy>();
+    OnePlusOneController controller(tasks, topology, o.stopNs, std::move(placement));
     if (o.blockAll || o.blockFirst)
     {
         Simulator::Schedule(NanoSeconds(1), [&] {
@@ -95,7 +101,7 @@ Evidence Run(const Options& o, const std::string& output)
             uint32_t active = 0;
             for (auto service : tasks->GetComputeServices())
                 active += service->HasRunningTask() && service->GetRunningTaskId() == 1;
-            Check(active == (o.blockAll ? 1u : 2u), o.name + ": not real concurrent full execution");
+            Check(active == (o.blockAll || (o.minimal && o.slowFirst) ? 1u : 2u), o.name + ": not real concurrent full execution");
         });
     Simulator::Stop(NanoSeconds(o.stopNs));
     Simulator::Run();
@@ -107,8 +113,14 @@ Evidence Run(const Options& o, const std::string& output)
     const auto& b = r.attempts[1];
     Check(r.requested && r.requestedNs == p.computeStartedNs, "request not at first TASK_RUNNING");
     Check(r.deadlineNs == tasks->GetTaskRuntimes().front().computeDeadlineTimeNs, "deadline reset");
-    Check(r.admitted == !o.blockAll, o.name + ": unexpected admission");
-    Check(!r.admitted || b.node == (o.blockFirst ? 2u : 0u), "not FFP single-node placement");
+    Check(r.admitted == !(o.blockAll || (o.minimal && o.slowFirst)), o.name + ": unexpected admission");
+    Check(!r.admitted || b.node == (o.blockFirst || o.slowFirst ? 2u : 0u), "not expected single-node placement");
+    Check(controller.Manager().PlacementLoads().Empty(), "R1 active load leaked");
+    Check(controller.Manager().Placement().Selections().size() == 1, "R1 selected more than once");
+    if (o.minimal && o.slowFirst)
+        Check(controller.Manager().Placement().Selections().front().node == 0 &&
+              r.admissionReason == "SELECTED_REPLICA_NODE_INPUT_OR_DEADLINE_INFEASIBLE",
+              "minimal R1 retried second node or skipped real admission");
     Check(!r.admitted || b.node != p.node, "replica on primary node");
     uint32_t requests = 0, completions = 0, dispatches = 0;
     for (const auto& event : controller.Manager().Events())
@@ -179,7 +191,7 @@ Evidence Run(const Options& o, const std::string& output)
 
 void PolicyChecks()
 {
-    FirstFeasiblePlacementPolicy placement;
+    FaFirstFeasiblePlacementPolicy placement;
     OnePlusOnePolicy policy(placement);
     ProtectionContext c;
     c.attempt = {1, 0};
@@ -210,6 +222,13 @@ int main(int argc, char** argv)
     try
     {
         PolicyChecks();
+        for (bool minimal : {false, true})
+            for (bool lrl : {false, true})
+            {
+                Options o{std::string("ablation-") + (minimal ? "minimal-" : "fa-") + (lrl ? "lrl" : "ffp")};
+                o.minimal = minimal; o.lrl = lrl; o.slowFirst = true;
+                Run(o, output);
+            }
         const auto full = Run({"primary-wins"}, output);
         Check(full.task.winner == "primary", "primary-wins fixture missed winner");
         Options fast{"replica-faster"};

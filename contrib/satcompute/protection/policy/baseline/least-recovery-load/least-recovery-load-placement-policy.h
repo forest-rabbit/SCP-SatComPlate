@@ -5,7 +5,7 @@
 
 namespace ns3::protection
 {
-/** Diagnostic only: assignment count + weight * active recovery count, then stable ID. */
+/** Minimal LRL: active assignment + weight * active recovery count, then stable ID. */
 class LeastRecoveryLoadPlacementPolicy : public PlacementPolicy
 {
   public:

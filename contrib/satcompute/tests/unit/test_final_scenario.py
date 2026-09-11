@@ -201,14 +201,15 @@ class FinalRunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "CompFRR"):
                 RUN["arguments"](output, protection_mode=mode, input_staging_policy="deferred")
 
-    def test_complete_baselines_use_frozen_scene_and_ffp_only(self):
+    def test_complete_baselines_use_frozen_scene_and_four_placements(self):
         for mode in ("recompute", "one-plus-one"):
             command = RUN["arguments"](Path("unused"), protection_mode=mode)
             self.assertIn(f"--protectionMode={mode}", command)
             self.assertIn("--faultMode=generate", command)
-            self.assertIn("--placementMode=ffp", command)
-            with self.assertRaises(ValueError):
-                RUN["arguments"](Path("unused"), protection_mode=mode, placement_mode="lrl")
+            self.assertIn("--placementMode=fa-ffp", command)
+            for placement in ("ffp", "lrl", "fa-ffp", "fa-lrl"):
+                self.assertIn(f"--placementMode={placement}", RUN["arguments"](
+                    Path("unused"), protection_mode=mode, placement_mode=placement))
 
     def test_fixed_defaults_and_modes_without_running_simulation(self):
         defaults = RUN["arguments"](Path("unused"))

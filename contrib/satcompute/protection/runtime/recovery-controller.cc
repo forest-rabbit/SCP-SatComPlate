@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "recovery-controller.h"
-#include "../policy/baseline/first-feasible-placement/first-feasible-placement-policy.h"
+#include "../policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
 
 #include "ns3/simulator.h"
 
@@ -334,7 +334,7 @@ RecoveryController::Candidates(const State& state) const
     auto nodes = BuildFeasibleBackupNodes(context);
     // Recovery targets retain the established stable-ID baseline for BOTH pair policies.
     // N5C can later replace this ranking without duplicating operation feasibility.
-    FirstFeasiblePlacementPolicy{}.RankBackupNodes(nodes, context);
+    FaFirstFeasiblePlacementPolicy{}.RankBackupNodes(nodes, context);
     return nodes;
 }
 
@@ -426,19 +426,30 @@ RecoveryController::Execute(const ProtectionContext& context, const ProtectionAc
         for (const auto& service : m_tasks->GetComputeServices())
         {
             const auto node = service->GetNodeId();
+            const auto load = m_placementLoads ? m_placementLoads->Get(node) : PlacementNodeLoad{};
             placement.candidates.push_back({node,
                 m_tasks->IsComputeAvailable(node) && m_tasks->IsSatelliteAvailable(node),
-                service->IsIdle(), Reachable(node, state.task.definition.resultNodeId)});
+                service->IsIdle(), Reachable(node, state.task.definition.resultNodeId),
+                false, 0, 0, load.activeBackup, load.activeRecovery});
         }
-        const auto node = m_recomputePlacement->SelectBackupNode(placement, [&](uint32_t candidate) {
+        const auto feasible = [&](uint32_t candidate) {
             const auto input = Estimate(state.task.definition.sourceNodeId, candidate,
                                          state.task.definition.inputBytes);
             const auto work = Duration(state.layout.Work(), Service(candidate)->GetComputeRateWorkUnitsPerSecond());
             const auto budget = state.summary.snapshot.deadlineNs - Now();
             return input && work <= budget && *input <= budget - work;
-        });
-        if (node && AcceptAndExecute(state, *node))
+        };
+        const auto node = m_recomputePlacement->SelectBackupNode(placement, feasible);
+        m_recomputePlacement->RecordSelection({state.task.definition.taskId, Now(),
+            state.summary.primaryNode, {}, node, "REJECTED", "NO_FEASIBLE_RECOMPUTE_NODE_INPUT_OR_DEADLINE"});
+        // Minimal policies choose first; validate only that node, never retry a second one.
+        const bool selectedFeasible = node && (m_recomputePlacement->Eligibility() != PlacementEligibility::MINIMAL ||
+            (Reachable(*node, state.task.definition.resultNodeId) && feasible(*node)));
+        if (selectedFeasible && AcceptAndExecute(state, *node))
+        {
+            m_recomputePlacement->RecordAdmission(state.task.definition.taskId, Now(), "ACCEPTED", "RECOVERY_ACCEPTED");
             return;
+        }
         Log(state, "RECOVERY_DECISION");
         return Fail(state, "NO_FEASIBLE_RECOMPUTE_NODE_INPUT_OR_DEADLINE");
     }

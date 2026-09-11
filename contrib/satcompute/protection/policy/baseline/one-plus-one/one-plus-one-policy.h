@@ -12,6 +12,7 @@ class OnePlusOnePolicy : public ProtectionPolicy
 {
   public:
     explicit OnePlusOnePolicy(PlacementPolicy& placement) : m_placement(placement) {}
+    PlacementPolicy& Placement() { return m_placement; }
     ProtectionAction OnTaskComputeStart(const ProtectionContext& context) override
     {
         if (context.attempt.generation || !context.firstComputeStart ||
@@ -19,6 +20,8 @@ class OnePlusOnePolicy : public ProtectionPolicy
             return {};
         const auto node = m_placement.SelectBackupNode(
             {context.primaryNode, context.candidates}, context.backupNodeFeasible);
+        m_placement.RecordSelection({context.attempt.taskId, context.nowNs, context.primaryNode,
+            {}, node, "NOT_REQUESTED", node ? "SELECTED" : "NO_CANDIDATE"});
         return node ? ProtectionAction{ActionKind::START_REPLICA, std::nullopt, node}
                     : ProtectionAction{};
     }

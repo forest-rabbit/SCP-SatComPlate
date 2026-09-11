@@ -76,6 +76,10 @@ FixedProtectionController::OnTask(const TaskEventRecord& event)
             return paths.Availability(source, destination);
         };
         m_runtime.OnTaskComputeStart(context);
+        if (const auto inventory = m_manager.Inventory(event.taskId))
+            m_policy.Placement().RecordAdmission(event.taskId, event.simulationTimeNs,
+                inventory->active ? "ACCEPTED" : "REJECTED",
+                inventory->active ? "INITIALIZATION_PENDING" : "INITIALIZATION_REJECTED");
     }
     if (event.toState == TASK_RESULT_TRANSFERRING && event.fromState != TASK_RUNNING_BACKUP)
         m_runtime.OnTaskComputeComplete({event.taskId, 0});

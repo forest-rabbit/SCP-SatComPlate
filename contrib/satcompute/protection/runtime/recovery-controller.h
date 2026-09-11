@@ -5,6 +5,7 @@
 #include "../mechanism/checkpoint/checkpoint-manager.h"
 #include "../policy/recovery-policy.h"
 #include "../policy/placement-policy.h"
+#include "placement-load-ledger.h"
 #include <filesystem>
 
 namespace ns3::protection
@@ -85,6 +86,7 @@ class RecoveryController : public ProtectionMechanism
     /** Observe accepted/finished execution ownership; no change to recovery scheduling. */
     void SetLoadObserver(std::function<void(uint64_t, uint32_t, bool)> observer)
     { m_loadObserver = std::move(observer); }
+    void SetPlacementLoads(const PlacementLoadLedger* loads) { m_placementLoads = loads; }
 
   private:
     /** Stable heap-owned attempt and asynchronous resources. */
@@ -146,6 +148,7 @@ class RecoveryController : public ProtectionMechanism
     ProtectionRuntime m_faultRuntime;     ///< Established mechanism first, then policy fallback.
     RemoteBusyRecoveryPolicy m_busyPolicy; ///< Changes REMOTE_BUSY only, not fault availability.
     PlacementPolicy* m_recomputePlacement; ///< Non-null only for full Recompute: strict operation feasibility.
+    const PlacementLoadLedger* m_placementLoads{}; ///< Native R0 active loads; no checkpoint ranking change.
     std::map<uint64_t, std::unique_ptr<State>> m_states; ///< Sole recovery per task.
     std::map<uint64_t, std::pair<uint64_t, ProtectionTransferKind>> m_flows; ///< Real callbacks.
     std::vector<RecoveryEvent> m_events; ///< Append-only causal history.

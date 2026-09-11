@@ -3,9 +3,12 @@
 #define SATCOMPUTE_PLACEMENT_POLICY_H
 #include "../common/protection-types.h"
 #include <functional>
+#include <filesystem>
 
 namespace ns3::protection
 {
+/** Candidate filtering is orthogonal to ranking and never inferred from a name. */
+enum class PlacementEligibility { MINIMAL, FEASIBILITY_AWARE };
 /** Read-only current candidates. No future queue, fault trace or reservations. */
 struct PlacementContext
 {
@@ -29,9 +32,25 @@ struct FeasiblePlacementPairs
     std::string reason;
 };
 
+/** Observational decision ledger. Admission here is synchronous resource admission,
+ * not successful asynchronous INPUT/checkpoint delivery. Never read by ranking. */
+struct PlacementSelection
+{
+    uint64_t taskId{};
+    int64_t timeNs{};
+    uint32_t primary{};
+    std::optional<PlacementDecision> pair;
+    std::optional<uint32_t> node;
+    std::string admission, reason;
+};
+
 FeasiblePlacementPairs BuildFeasiblePlacementPairs(
     const PlacementContext& context,
     const PlacementPathPreview& preview = {});
+
+/** Healthy/idle and structural constraints only. Never invokes a path preview. */
+FeasiblePlacementPairs BuildMinimalPlacementPairs(const PlacementContext& context);
+std::vector<uint32_t> BuildMinimalBackupNodes(const PlacementContext& context);
 
 /** Common node filters plus operation-specific route/storage/deadline requirements. */
 std::vector<uint32_t> BuildFeasibleBackupNodes(
@@ -44,6 +63,14 @@ class PlacementPolicy
   public:
     virtual ~PlacementPolicy() = default;
     virtual const char* Name() const = 0; ///< Stable diagnostic name, not an eligibility rule.
+    virtual PlacementEligibility Eligibility() const { return PlacementEligibility::MINIMAL; }
+    FeasiblePlacementPairs BuildPairs(const PlacementContext& context,
+                                     const PlacementPathPreview& preview = {}) const;
+    void RecordSelection(PlacementSelection row) { m_selections.push_back(std::move(row)); }
+    void RecordAdmission(uint64_t task, int64_t time, const std::string& status,
+                         const std::string& reason);
+    void WriteSelections(const std::filesystem::path& directory) const;
+    const std::vector<PlacementSelection>& Selections() const { return m_selections; }
     /** Return a complete pair, or no decision if either role cannot be placed. */
     std::optional<PlacementDecision> SelectCheckpointPair(
         const PlacementContext& context, const PlacementPathPreview& preview = {}) const;
@@ -57,6 +84,8 @@ class PlacementPolicy
     /** Rank only the common prefiltered set; no objective/risk optimization here. */
     virtual void RankPairs(std::vector<PlacementDecision>& pairs,
                            const PlacementContext& context) const = 0;
+  private:
+    std::vector<PlacementSelection> m_selections; ///< Diagnostics, not a policy input.
 };
 
 /** Shared baseline predicates, deliberately not storage/load optimization. */

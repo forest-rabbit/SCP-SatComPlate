@@ -18,8 +18,8 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 | `policy/placement-policy.h`、`policy/feasible-placement-pairs.cc` | 单节点/双节点共用的候选筛选与排名接口 |
 | `policy/recovery-policy.h` | 仅切换 REMOTE_BUSY 的 recompute / relocate 选择 |
 | `runtime/decision-path-snapshot.h` | 同次同步决策内缓存完整路径估计，跨事件不保留 |
-| `policy/baseline/first-feasible-placement/` | FFP：稳定 ID 的首个可行 local/remote，保持 N5A 原行为 |
-| `policy/experimental/least-recovery-load/` | LRL：当前 remote assignment + weight×active recovery，G3 节点集中度诊断 |
+| `policy/baseline/first-feasible-placement/`、`least-recovery-load/` | 最小筛选 FFP/LRL；分别按稳定 ID、当前活动负载排序 |
+| `policy/baseline/fa-first-feasible-placement/`、`fa-least-recovery-load/` | FA-FFP/FA-LRL：保留最新历史实现的可行性筛选，复用相同排序 |
 | `policy/compfrr/frequency/compfrr-frequency-policy.h/.cc` | 独立 J_OFF/J_START/J_ON 求解、可行域、当前 q/完成前预测接口 |
 | `policy/compfrr/frequency/frequency-decision-gate.h/.cc` | 每任务纯 proposal/commit 合同、前向 target/batch 规则；无仿真接线 |
 | `mechanism/checkpoint/checkpoint-progress.h/.cc` | 不发包的纯进度合同：生成延迟、连续接收、融合提交及同纳秒历史查询 |
@@ -52,40 +52,61 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 | `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
-| `placementMode` | `ffp` | fixed / compfrr 均真正注入 `ffp` 或 `lrl`；后者为负载排名诊断 |
+| `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，四种保护模式均可注入 |
 | `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
 | `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
 off 不创建保护池、流或 CSV，不做故障恢复；fixed 对每个首次主计算启动执行一次固定策略，
-不做动态概率决策。双节点共用健康、空闲（含队列为空）、local 一跳和三条路径准入筛选；
-FFP 按 local/remote 稳定 ID 排名，LRL 使用真实 assignment/recovery 计数排名。
+不做动态概率决策。FFP/LRL 只用健康、空闲（含队列为空）、非主/互异和 local 一跳结构条件；
+FA-FFP/FA-LRL 另用原可达性和三条路径准入筛选。FFP 按 local/remote 稳定 ID 排名，
+LRL 按 `(local load, local ID, remote load, remote ID)` 排名，load 为活动 assignment + 活动 recovery（正式 lambda=1）。
 候选可行不等于存储/带宽已经预留；fixed 的频率仍来自 delta/n，不调用 CompFRR 求解器。
 多个任务竞争同一候选时，由共享备份池与网络容量准入处理；恢复接管时额外原子锁定空闲服务。
 
 架构为 `Protection Scheme → Placement Policy → Recovery Policy → Shared Runtime`；
 Routing 是所有方案共用的基础设施，不属于其中任何算法开关。
 `SelectBackupNode` 为单节点角色，`SelectCheckpointPair` 为 local/remote 角色；
-两者共用基础候选筛选，操作再提供自己的路径、存储等条件，不要求最终候选集相同。
+两者按显式 `PlacementEligibility` 选择 minimal 或 FA builder；操作再提供自己的准入条件，不要求最终候选集相同。
 单节点不要求一跳或虚构 local，允许 source/recovery/result 同星并沿用 LocalDelivery。
-FFP/LRL 均实现两种角色；当前 checkpoint 恢复目标仍统一按 FFP 稳定 ID 排序，
+四种策略均实现两种角色；当前 checkpoint 恢复目标仍统一按既有稳定 ID 与操作可行性选择，
 不会因切换 prefault LRL 而顺带改变恢复排序。
 
 `protectionMode=recompute` 是完整 baseline：没有常态保护；首次主计算故障后调用
-`PlacementPolicy::SelectBackupNode`，按 FFP 选非主、健康、空闲且可达结果端的节点，
+`PlacementPolicy::SelectBackupNode`，默认 FA-FFP 选非主、健康、空闲且可达结果端的节点，
 还需原始 INPUT 当前可准入且 INPUT 估计加完整计算可能满足原 compute deadline。
 复用 RecoveryController 和零容量共享账本，不创建 checkpoint 对象，不产生 cL/cR、L1 或 REMOTE_BATCH。
 `recompute-controller.*` 接线、`policy/baseline/recompute/recompute-policy.h` 只决定故障后重算。
 `recovery-summary.csv` 对此模式增加 planned INPUT 等待及 planned 浪费列，实际值仍取真实执行。
 该严格筛选仅适用于完整 baseline，不改变 checkpoint 方案既有的 RECOMPUTE 后备行为。
-完整 recompute 与 one-plus-one 首版均只允许 FFP；`placementMode=n5c` 仍明确报 `NOT_IMPLEMENTED`。
+完整 recompute 与 one-plus-one 均支持四种 placement；`placementMode=n5c` 仍明确报 `NOT_IMPLEMENTED`。
+
+### Pre-N5C 可行性筛选消融
+
+默认 `fa-ffp` 保持最新 capacity-resume 版本行为；旧报告 `ffp/lrl` 必须按当时提交解释，
+不能将全部早期实现都宣称为当前 FA。新简化版选定一个候选后仍做真实路径/资源/操作检查，
+失败则结束本次决策，不寻找第二个候选。CompFRR 后续正常 epoch 或真实容量释放仍可重新决策，
+不是永久禁止该任务保护；fixed/1+1 仍是首次 TASK_RUNNING 一次申请。
+FA 的 Frequency 存储/deadline 搜索只保留在原 CompFRR 流程，Fixed 不新增 Frequency 筛选。
+ON 固定节点对及路径释放即时恢复不变。不会因选中空闲节点而长期预占其计算服务。
+
+四种 placement 只影响故障前 checkpoint pair，以及 R0 原生重算/R1 首次副本的单节点选择；
+checkpoint 故障后的 recovery/relocation 排序和候选搜索不切换。R0 记录真实接受恢复到计算完成/清理的活动负载；
+R1 assignment 从副本准入到完成/取消，recovery 从完整故障 batch 后 takeover 到计算完成/清理。
+无任务可选时不伪造负载；idle 限制下 LRL 与 FFP 相同也是有效结果。
+
+`placement-selections.csv` 记录 task/time、模式、`selected_by_minimal_policy`、pair 或单节点、
+`actual_admission` 和原因；ACCEPTED 仅表示同步资源准入，不代表异步 INPUT/初始化已完成。
+异步完成/失败仍核对保护/副本/恢复原始账本。Frequency 的全候选路径/硬约束计数字段只适用于 FA，
+minimal 留空，不能把未检查的候选声称为 path-feasible。分布统计包括全部计算节点的零计数，
+R0/R1 的 local/remote、checkpoint 存储指标为不适用；不能据零池占用宣称普通运行内存更优。
 
 ## 1+1：一次申请、真实双 attempt
 
 `runtime/one-plus-one-controller.*` 在首次 TASK_RUNNING 接线，
 `policy/baseline/one-plus-one/one-plus-one-policy.h` 向公共 PlacementPolicy 申请一次副本，
 `mechanism/replication/replica-manager.*` 执行真实 INPUT、完整 WU 和 RESULT。
-FFP 使用非主、健康、空闲且可达结果端的节点，并核对 INPUT 准入及原 deadline 的可能可行性。
+默认 FA-FFP 预筛可达性、INPUT 准入及原 deadline；minimal 先选健康空闲节点，再对该节点核对相同准入。
 未准入不重试，副本失败不创建第三副本，不追加隐藏的 Recompute。主任务不等待副本。
 
 正常副本不免疫 F1/F2；INPUT 期间的计算故障沿用普通任务语义：输入继续、计算等待可用性恢复。
@@ -106,7 +127,7 @@ REPLICA_INPUT 全属额外流量；仅获胜 RESULT 属业务，败方已发送 
 
 ## N5B：频率策略与在线接线
 
-`compfrr` 默认组合 `CompFrrFrequencyPolicy + FFP`；A/B 为频率主比较，C 才切换 LRL。
+`compfrr` 默认组合 `CompFrrFrequencyPolicy + FA-FFP`；历史 A/B/C 名称按当时报告解释。
 频率求解器独立实现数学公式，不调用验证目录；只有测试将同输入送入旧 shadow 比较。
 `FrequencyInput` 是当前状态的只读数值快照，FFP 先给出节点，G2 适配层再提供主/恢复算力、
 输入/备份路径估计和 storage headroom。cL/cR 从唯一 `GetProtectionCosts(Kvar)` 取得。
@@ -172,7 +193,7 @@ G3R 在 primary `TASK_RUNNING` 时立即评估 OFF→START，不等待下一个�
 两个非抽样触发的 `q_current_sample` 留空，风险写入 `p_f1_snapshot/p_f2_snapshot/q_comp_snapshot`。
 F3 实际时刻的 F1/F2 因果快照另写 `f3-compute-risk-snapshots.csv`，不额外抽样。
 
-FFP 的 OFF 候选不预留资源，START 存活后固定节点对；ON 不换节点。
+各 placement 的 OFF 候选不预留资源，START 存活后固定节点对；ON 不换节点。
 节点当下不健康、不空闲或所需路径不可用时暂停新操作。
 路径复用 NetworkTransferEngine 的只读准入查询：capacity-aware 搜索完整 ECMP 路径并使用
 当前真实 reservation；不由 Frequency 独自选第一条路径。恢复速率读 remote 的 ComputeService。
@@ -186,14 +207,14 @@ source=remote 的 INPUT 重算沿用 LocalDelivery，分析带宽用最大有限
 下一任务/epoch/容量释放重试重新查询；真实 INIT/L1/BATCH/恢复传输仍向 NetworkTransferEngine
 正式准入，快照不预留容量、不消耗 flow key，也不改变路由、故障抽样或事件顺序。
 
-G3R2 的 FFP/LRL 共享同一时刻的全部可行节点对：健康、空闲、local 一跳且三条硬路径
+G3R2 演进后的强筛选（当前 FA-FFP/FA-LRL）共享同一时刻的全部可行节点对：健康、空闲、local 一跳且三条硬路径
 均获上述只读准入。FFP 按 (local ID, remote ID)；LRL 按 (local load, ID, remote load, ID)。
 依次跳过存储/deadline/初始化硬约束失败的节点对；遇到第一组频率硬约束可行的节点对就
 比较 J_start/J_off，不按 J 搜索其他节点对。`NO_FEASIBLE_NODE_PAIR`、`NO_ROUTE`、
 `NO_CAPACITY_NOW` 分开记录。候选数/路径数为全量；`pair_hard_checked/feasible` 与
 storage/deadline skip 仅统计实际检查过的排序前缀，不声称检查了后续所有频率组合。
 
-OFF 且 P_finish>0、所有可用硬路径暂被容量阻塞时登记等待兴趣，不预留资源。
+OFF 且 P_finish>0、FA 的全部候选或 minimal 已选候选暂被容量阻塞时登记等待兴趣，不预留资源。
 实际传输释放容量后 ScheduleNow 按任务 ID 重评，同一任务每纳秒最多一次；重新读取进度、
 下一真实抽样网格的预测、路径和负载，不复用旧提案、不额外抽故障。成功仍须真实初始化，
 INIT/恢复/终态不重试；ON 不做 OFF 重试。`frequency-capacity-waits.csv` 单独记录 OFF 等待区间，

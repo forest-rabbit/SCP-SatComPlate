@@ -18,7 +18,7 @@
 #include "ns3/frequency-protection-controller.h"
 #include "ns3/recompute-controller.h"
 #include "ns3/one-plus-one-controller.h"
-#include "ns3/least-recovery-load-placement-policy.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
 #include "ns3/protection-metrics.h"
 #include "ns3/link-metrics-recorder.h"
 #include "ns3/online-orbit-constellation.h"
@@ -216,7 +216,7 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
                          config.backupStorageBytesPerNode);
-    commandLine.AddValue("placementMode", "ffp baseline / lrl diagnostic (fixed or compfrr)", config.placementMode);
+    commandLine.AddValue("placementMode", "ffp/lrl minimal, fa-ffp/fa-lrl feasibility-aware", config.placementMode);
     commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; REMOTE_BUSY only, ignored by off",
                          config.remoteBusyRecoveryPolicy);
     commandLine.AddValue("inputStagingPolicy", "eager / deferred; deferred requires compfrr",
@@ -378,15 +378,15 @@ ValidateConfig(const SatComputeConfig& config)
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
     RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one"});
-    RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "n5c"});
+    RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"});
     RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
     RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred"});
     if (config.inputStagingPolicy == "deferred" && config.protectionMode != "compfrr")
         FailConfig("inputStagingPolicy", "deferred requires compfrr protection");
     if (config.placementMode == "n5c")
         FailConfig("placementMode", "NOT_IMPLEMENTED: N5C placement is deferred");
-    if (config.placementMode == "lrl" && config.protectionMode != "fixed" && config.protectionMode != "compfrr")
-        FailConfig("placementMode", "lrl requires fixed or compfrr protection");
+    if ((config.placementMode == "lrl" || config.placementMode == "fa-lrl") && config.protectionMode == "off")
+        FailConfig("placementMode", "lrl requires an enabled protection scheme");
     if (config.protectionMode != "off" &&
         (config.topologyOnly || !hasComputeProfile || config.compfrrShadow))
     {
@@ -698,7 +698,11 @@ main(int argc, char* argv[])
             const auto makePlacement = [&]() -> std::unique_ptr<protection::PlacementPolicy> {
                 if (config.placementMode == "lrl")
                     return std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.lrlRecoveryWeight);
-                return std::make_unique<protection::FirstFeasiblePlacementPolicy>();
+                if (config.placementMode == "fa-lrl")
+                    return std::make_unique<protection::FaLeastRecoveryLoadPlacementPolicy>(config.lrlRecoveryWeight);
+                if (config.placementMode == "ffp")
+                    return std::make_unique<protection::FirstFeasiblePlacementPolicy>();
+                return std::make_unique<protection::FaFirstFeasiblePlacementPolicy>();
             };
             const auto busyPolicy = config.remoteBusyRecoveryPolicy == "recompute"
                 ? protection::RemoteBusyRecoveryPolicy::RECOMPUTE
@@ -769,12 +773,16 @@ main(int argc, char* argv[])
                 replication->Finalize();
                 WriteProtectionMetrics(replication->Manager().Ledger(), *transferEngine, outputDirectory);
                 replication->Manager().WriteMetrics(outputDirectory);
+                replication->Manager().Placement().WriteSelections(outputDirectory);
+                replication->Manager().PlacementLoads().WriteMetrics(outputDirectory);
             }
             if (recompute)
             {
                 recompute->Finalize();
                 WriteProtectionMetrics(recompute->Manager(), *transferEngine, outputDirectory);
                 recompute->Recovery().WriteMetrics(outputDirectory);
+                recompute->Placement().WriteSelections(outputDirectory);
+                recompute->PlacementLoads().WriteMetrics(outputDirectory);
             }
             if (frequency)
             {
@@ -783,12 +791,14 @@ main(int argc, char* argv[])
                 frequency->Recovery()->WriteMetrics(outputDirectory);
                 frequency->WriteDecisions(outputDirectory);
                 frequency->PlacementLoads().WriteMetrics(outputDirectory);
+                frequency->Placement().WriteSelections(outputDirectory);
             }
             if (protection)
             {
                 protection->Finalize();
                 WriteProtectionMetrics(protection->Manager(), *transferEngine, outputDirectory);
                 protection->PlacementLoads().WriteMetrics(outputDirectory);
+                protection->Placement().WriteSelections(outputDirectory);
                 if (protection->Recovery())
                     protection->Recovery()->WriteMetrics(outputDirectory);
                 else

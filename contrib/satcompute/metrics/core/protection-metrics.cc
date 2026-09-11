@@ -141,7 +141,7 @@ RemoveProtectionMetrics(const std::filesystem::path& directory)
 {
     for (const auto name : {"protection-finalization.json",
                             "input-staging-summary.json",
-                            "placement-node-summary.csv",
+                            "placement-node-summary.csv", "placement-selections.csv",
                             "placement-load-events.csv",
                             "frequency-pause-intervals.csv",
                             "f3-compute-risk-snapshots.csv",

@@ -2,7 +2,8 @@
 #include "../support/config-factory.h"
 #include "../support/fault-injection.h"
 #include "ns3/command-line.h"
-#include "ns3/first-feasible-placement-policy.h"
+#include "ns3/fa-first-feasible-placement-policy.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
 #include "ns3/online-topology-controller.h"
@@ -46,6 +47,7 @@ struct Options
     bool noFault{}, local{}, busyFirst{}, noCapacity{}, recoveryF3{}, recoveryComputeFault{};
     int64_t stopNs{2000000000};
     double deadlineFactor{1.3};
+    bool minimal{}, lrl{}, slowFirst{};
 };
 
 RecoverySummary Run(const Options& o, const std::string& output)
@@ -58,7 +60,7 @@ RecoverySummary Run(const Options& o, const std::string& output)
     OnlineTopologyController topology(config.parameters, config.constellation);
     topology.Initialize();
     auto tasks = CreateObject<TaskCoordinator>();
-    ComputeProfile profile{{{0, 100000}, {2, 100000}, {3, 100000}, {4, 100000}}};
+    ComputeProfile profile{{{0, o.slowFirst ? 1u : 100000u}, {2, 100000}, {3, 100000}, {4, 100000}}};
     TaskTrace trace{{{1, o.local ? 0u : 1u, 3, o.local ? 0u : 6u,
                      1000000, 4, 100000, 1, 1, 2, TaskProfile::LLM}}};
     tasks->Initialize(profile, trace, topology, "size-aware", 1024,
@@ -74,8 +76,12 @@ RecoverySummary Run(const Options& o, const std::string& output)
     FaultControllerTestAccess::Schedule(fault, faults, ids, o.stopNs);
     fault->BindTopology(topology);
     fault->BindTaskCoordinator(tasks);
-    RecomputeController controller(tasks, topology, o.stopNs,
-        std::make_unique<FirstFeasiblePlacementPolicy>());
+    std::unique_ptr<PlacementPolicy> placement;
+    if (o.minimal && o.lrl) placement = std::make_unique<LeastRecoveryLoadPlacementPolicy>(1);
+    else if (o.minimal) placement = std::make_unique<FirstFeasiblePlacementPolicy>();
+    else if (o.lrl) placement = std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1);
+    else placement = std::make_unique<FaFirstFeasiblePlacementPolicy>();
+    RecomputeController controller(tasks, topology, o.stopNs, std::move(placement));
     Simulator::Schedule(NanoSeconds(faultNs - 1), [&] {
         Check(controller.Manager().Events().empty() && controller.Manager().Flows().empty() &&
               controller.Manager().Summaries().empty(), o.name + ": prefault activity");
@@ -93,6 +99,15 @@ RecoverySummary Run(const Options& o, const std::string& output)
     Simulator::Stop(NanoSeconds(o.stopNs));
     Simulator::Run();
     controller.Finalize();
+    Check(controller.PlacementLoads().Empty(), "R0 active placement loads leaked");
+    if (o.slowFirst)
+    {
+        const auto& selected = controller.Placement().Selections();
+        Check(selected.size() == 1 && selected.front().node == (o.minimal ? 0u : 2u),
+              "R0 minimal/FA admission did not differ or retried another candidate");
+        Check((selected.front().admission == "ACCEPTED") == !o.minimal,
+              "R0 selected-node true admission missing");
+    }
     for (auto service : tasks->GetComputeServices())
     {
         if (o.busyFirst) service->CancelRecovery(99, 1);
@@ -131,7 +146,7 @@ RecoverySummary Run(const Options& o, const std::string& output)
               "actual work conservation");
         if (r.acceptedNs >= 0)
         {
-            Check(r.recoveryNode == (o.busyFirst ? 2u : 0u), "not first feasible backup node");
+            Check(r.recoveryNode == (o.busyFirst || o.slowFirst ? 2u : 0u), "not first feasible backup node");
             Check(r.plannedInputWaitNs >= 0, "planned INPUT estimate missing");
             Check(r.reservedIdleNs == (r.computeStartedNs < 0 ? r.terminalNs : r.computeStartedNs) -
                   r.acceptedNs, "actual reserved wait differs");
@@ -174,6 +189,13 @@ int main(int argc, char** argv)
     command.Parse(argc, argv);
     try
     {
+        for (bool minimal : {false, true})
+            for (bool lrl : {false, true})
+            {
+                Options o{std::string("ablation-") + (minimal ? "minimal-" : "fa-") + (lrl ? "lrl" : "ffp")};
+                o.minimal = minimal; o.lrl = lrl; o.slowFirst = true;
+                Run(o, output);
+            }
         RecomputePolicy policy;
         ProtectionContext context;
         Check(policy.OnTaskComputeStart(context).kind == ActionKind::NONE &&

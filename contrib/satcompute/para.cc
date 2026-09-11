@@ -118,8 +118,8 @@ GetDefaultSatComputeConfig()
     // one-plus-one 在首次 TASK_RUNNING 一次申请真实完整副本；无可行资源则不重试。
     config.protectionMode = "off";
 
-    // --placementMode：FFP 为默认基线；fixed / compfrr 均可注入 LRL 作负载排名诊断。
-    config.placementMode = "ffp";
+    // --placementMode：fa-ffp 保留历史行为；ffp/lrl 是最小筛选，fa-lrl 是可行性筛选加负载排序。
+    config.placementMode = "fa-ffp";
     // --remoteBusyRecoveryPolicy：仅 remote 计算忙但检查点可读时生效。
     // relocate 迁移状态后继续；recompute 放弃检查点，从原始 INPUT 重算；off 忽略本参数。
     config.remoteBusyRecoveryPolicy = "relocate";

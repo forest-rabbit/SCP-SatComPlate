@@ -7,7 +7,7 @@
 #include "ns3/placement-policy.h"
 #include "ns3/decision-path-snapshot.h"
 #include "ns3/fixed-protection-controller.h"
-#include "ns3/least-recovery-load-placement-policy.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
 #include "ns3/protection-transfer-key.h"
 #include "ns3/simulator.h"
 #include <algorithm>
@@ -567,7 +567,7 @@ FixedPlacement(bool lrl)
                           config.parameters.islMtuBytes, config.parameters.receiverRcvBufBytes,
                           false, END);
         FixedProtectionController controller(tasks, topology, 10000000000ULL, END, 50, 4, false,
-            lrl ? std::make_unique<LeastRecoveryLoadPlacementPolicy>(1)
+            lrl ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
                 : std::unique_ptr<PlacementPolicy>{});
         Simulator::Stop(NanoSeconds(END));
         Simulator::Run();

@@ -13,7 +13,7 @@ build_lib(
     protection/policy/compfrr/frequency/frequency-decision-gate.cc
     protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.cc
     protection/policy/feasible-placement-pairs.cc
-    protection/policy/experimental/least-recovery-load/least-recovery-load-placement-policy.cc
+    protection/policy/baseline/least-recovery-load/least-recovery-load-placement-policy.cc
     protection/mechanism/checkpoint/checkpoint-progress.cc
     protection/mechanism/checkpoint/checkpoint-manager.cc
     protection/runtime/fixed-protection-controller.cc
@@ -106,7 +106,9 @@ build_lib(
     protection/policy/recovery-policy.h
     protection/runtime/decision-path-snapshot.h
     protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.h
-    protection/policy/experimental/least-recovery-load/least-recovery-load-placement-policy.h
+    protection/policy/baseline/least-recovery-load/least-recovery-load-placement-policy.h
+    protection/policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h
+    protection/policy/baseline/fa-least-recovery-load/fa-least-recovery-load-placement-policy.h
     protection/mechanism/checkpoint/checkpoint-progress.h
     protection/mechanism/checkpoint/checkpoint-manager.h
     protection/runtime/fixed-protection-controller.h

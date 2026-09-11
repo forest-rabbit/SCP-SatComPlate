@@ -32,6 +32,7 @@ class FixedProtectionController
     ~FixedProtectionController();
     void Finalize(); ///< Release remaining protection after simulation stop.
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; } ///< Actual ownership.
+    const PlacementPolicy& Placement() const { return m_policy.Placement(); }
 
     /** @return Mechanism evidence for the dedicated metrics writer. */
     const CheckpointManager& Manager() const

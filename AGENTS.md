@@ -83,6 +83,18 @@ leave placement, faults, routing, deadlines and old evidence unchanged. Keep PR 
 The subsequent user-approved ON correction retries only NO_ADMISSIBLE_PATH pauses on
 real capacity release, retaining the fixed pair and ON score; no new fault draws,
 reservation bypass or historical checkpoints. Re-run R4-R7 in a new output directory.
+The accepted final Pre-N5C feasibility ablation supersedes that four-run limit:
+retain current behavior as fa-ffp/fa-lrl (default fa-ffp); ffp/lrl use only healthy,
+idle and structural eligibility, followed by real admission of one selected candidate.
+Never retry another candidate within the same minimal decision. Existing later
+decision/capacity-release events remain allowed; 1+1 is still one-shot.
+Four placements affect prefault checkpoint pairs and native R0/R1 single-node roles;
+checkpoint post-fault recovery ranking stays frozen. Use current active loads,
+not cumulative history. R5/R7 fa-ffp must reproduce the latest ON-resume evidence
+before the remaining 30 runs. All 32 use one clean execution HEAD, 800 tasks/1300 s,
+unchanged workload/faults/routing/costs/seed. New output only; keep historical raw
+evidence unchanged. Update Draft PR #97 after verification; no merge/tag/branch
+cleanup, extra GitHub CI, or N5C implementation. Super* is not the accepted naming.
 1+1 requests exactly one resource-constrained replica at first TASK_RUNNING;
 failed admission is not retried. Normal replicas are fault-exposed; takeover
 and recovery immunity occur only after the complete same-ns fault batch.

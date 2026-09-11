@@ -21,7 +21,7 @@ def run(directory, mode, trace):
             "--faultMode=none", "--compfrr-shadow=0", "--taskCompletionPolicy=strict",
             "--constellationConfig=contrib/satcompute/tests/fixtures/constellation/connected-16.csv",
             f"--computeProfile={FIXTURE / 'fixed-compute.json'}", f"--taskTrace={trace}",
-            f"--protectionMode={mode}", "--placementMode=ffp", "--backupStorageBytesPerNode=10000000000",
+            f"--protectionMode={mode}", "--placementMode=fa-ffp", "--backupStorageBytesPerNode=10000000000",
             "--routingMode=global-capacity-aware-hrw", "--islBandwidthBps=10000000000",
             "--delayMode=fixed", "--fixedDelay=0.001", f"--outputDir={directory}"]
     result = subprocess.run([str(ROOT / "ns3"), "run", "--no-build", shlex.join(args)],

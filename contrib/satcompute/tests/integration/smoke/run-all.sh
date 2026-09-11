@@ -15,5 +15,6 @@ python3 "$script_dir/run-protection-smoke.py"
 python3 "$script_dir/run-recovery-smoke.py"
 python3 "$script_dir/run-frequency-smoke.py"
 python3 "$script_dir/run-baseline-smoke.py"
+python3 "$script_dir/run-placement-baseline-smoke.py"
 
 echo "SatCompute smoke suites passed."

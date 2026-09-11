@@ -52,13 +52,15 @@ class ProtectionConfigTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("NOT_IMPLEMENTED", result.stdout)
 
-    def test_full_baselines_guard_and_ffp_only(self):
+    def test_full_baselines_guard_and_four_placements(self):
         for mode in ("recompute", "one-plus-one"):
             result = self.run_cli(f"--protectionMode={mode} --fixedProtectionDelta=0")
             self.assertIn("fixedProtectionDelta", result.stdout)
             self.assertNotIn("NOT_IMPLEMENTED", result.stdout)
-            result = self.run_cli(f"--protectionMode={mode} --placementMode=lrl")
-            self.assertIn("lrl requires fixed or compfrr", result.stdout)
+            for placement in ("ffp", "lrl", "fa-ffp", "fa-lrl"):
+                result = self.run_cli(f"--protectionMode={mode} --placementMode={placement} --fixedProtectionDelta=0")
+                self.assertIn("fixedProtectionDelta", result.stdout)
+                self.assertNotIn("ERROR: placementMode", result.stdout)
 
     def test_busy_policy_guard_and_off_ignores_valid_values(self):
         result = self.run_cli("--remoteBusyRecoveryPolicy=unsupported")

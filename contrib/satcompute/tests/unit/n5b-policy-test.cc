@@ -5,10 +5,10 @@
 #include "ns3/compfrr-frequency-policy.h"
 #include "ns3/compfrr-shadow-model.h" // Independent test oracle only.
 #include "ns3/compute-fault-combination.h"
-#include "ns3/first-feasible-placement-policy.h"
+#include "ns3/fa-first-feasible-placement-policy.h"
 #include "ns3/fixed-protection-policy.h"
 #include "ns3/frequency-decision-gate.h"
-#include "ns3/least-recovery-load-placement-policy.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
 
 #include <algorithm>
 #include <cmath>
@@ -69,7 +69,7 @@ std::optional<PlacementDecision> LegacyPair(const PlacementContext& c)
 
 void PlacementChecks()
 {
-    FirstFeasiblePlacementPolicy ffp;
+    FaFirstFeasiblePlacementPolicy ffp;
     PlacementContext c{2, {{3}, {0}, {2}, {1}}};
     for (uint32_t mask = 0; mask < 65536; ++mask)
     {
@@ -84,7 +84,7 @@ void PlacementChecks()
         }
         const auto expected = LegacyPair(c);
         Check(ffp.SelectCheckpointPair(c) == expected, "FFP differs from N5A pair rule");
-        const auto ranked = LeastRecoveryLoadPlacementPolicy(1).SelectCheckpointPair(c);
+        const auto ranked = FaLeastRecoveryLoadPlacementPolicy(1).SelectCheckpointPair(c);
         Check(bool(ranked) == bool(expected), "LRL/FFP hard-feasible sets differ");
         if (ranked)
         {
@@ -123,7 +123,7 @@ void PlacementChecks()
     std::reverse(c.candidates.begin(), c.candidates.end());
     Check(ffp.SelectCheckpointPair(c) == expected, "stable ID not input order");
 
-    LeastRecoveryLoadPlacementPolicy lrl(2);
+    FaLeastRecoveryLoadPlacementPolicy lrl(2);
     Check(ffp.SelectBackupNode(c) == 0 && lrl.SelectBackupNode(c) != 0,
           "single-node role must use injected ranking, without a fake pair");
     Check(ffp.SelectBackupNode(c, [](auto n) { return n == 3; }) == 3,
@@ -145,7 +145,7 @@ void PlacementChecks()
     fixedContext.primaryNode = c.primaryNode;
     fixedContext.firstComputeStart = fixedContext.taskSelected = true;
     fixedContext.candidates = c.candidates;
-    FixedProtectionPolicy injected(50, 4, std::make_unique<LeastRecoveryLoadPlacementPolicy>(2));
+    FixedProtectionPolicy injected(50, 4, std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(2));
     const auto injectedPair = injected.OnTaskComputeStart(fixedContext).checkpoint;
     const auto rankedPair = lrl.SelectCheckpointPair(c);
     Check(injectedPair && injectedPair->localNode == rankedPair->localNode &&
@@ -188,12 +188,75 @@ void PlacementChecks()
     Check(loads.Empty() && loads.Get(1).peakRecovery == 1, "load counters leak/underflow");
 }
 
+void MinimalPlacementChecks()
+{
+    FirstFeasiblePlacementPolicy ffp;
+    LeastRecoveryLoadPlacementPolicy lrl(1);
+    FaFirstFeasiblePlacementPolicy fa;
+    FaLeastRecoveryLoadPlacementPolicy faLrl(1);
+    for (uint32_t mask = 0; mask < 512; ++mask)
+    {
+        PlacementContext c{3, {{0, bool(mask & 1), bool(mask & 2), bool(mask & 4), bool(mask & 8)},
+                               {1, true, true, true, false}, {2, true, true, true, true},
+                               {3, true, true, true, true}}};
+        c.candidates[0].backupAssignmentCount = 2;
+        c.candidates[0].activeRecoveryCount = 1;
+        c.candidates[0].storageFreeBytes = (mask & 128) ? 999 : 0;
+        uint64_t previews = 0, operations = 0;
+        auto preview = [&](uint32_t a, uint32_t b) {
+            ++previews;
+            const bool touches = a == 0 || b == 0;
+            return PlacementPathAvailability{!touches || bool(mask & 16),
+                !touches || ((mask & 32) && (mask & 64)), "NO_ADMISSIBLE_PATH"};
+        };
+        auto operation = [&](auto node) { ++operations; return node != 0 || ((mask & 128) && (mask & 256)); };
+        const auto pairs = ffp.BuildPairs(c, preview).pairs;
+        Check(pairs == lrl.BuildPairs(c, preview).pairs, "minimal FFP/LRL candidate sets differ");
+        const auto selected = ffp.SelectCheckpointPair(c, preview);
+        const auto single = ffp.SelectBackupNode(c, operation);
+        lrl.SelectCheckpointPair(c, preview);
+        lrl.SelectBackupNode(c, operation);
+        Check(previews == 0 && operations == 0, "minimal selection leaked system feasibility preview");
+        const bool eligible = (mask & 1) && (mask & 2);
+        Check(single == (eligible ? 0u : 1u), "minimal single node used non-minimal attributes");
+        const PlacementDecision expected = eligible && (mask & 8) ? PlacementDecision{0,1}
+            : PlacementDecision{2, eligible ? 0u : 1u};
+        Check(selected == expected, "minimal pair ignored structure or used reachability");
+        for (const auto& p : pairs)
+            Check(p.localNode != 3 && p.remoteNode != 3 && p.localNode != p.remoteNode,
+                  "invalid structural pair");
+
+        // Independent pre-ablation oracle, not a call back into a production builder.
+        std::vector<PlacementDecision> legacy;
+        for (const auto& a : c.candidates)
+            for (const auto& b : c.candidates)
+            {
+                if (a.nodeId == 3 || b.nodeId == 3 || a.nodeId == b.nodeId || !a.healthy ||
+                    !a.idle || !a.reachable || !a.oneHop || !b.healthy || !b.idle || !b.reachable) continue;
+                bool valid = true;
+                for (const auto [s, d] : {std::pair{3u,a.nodeId}, std::pair{3u,b.nodeId}, std::pair{a.nodeId,b.nodeId}})
+                { const auto p = preview(s,d); valid &= p.reachable && p.admissible; }
+                if (valid) legacy.push_back({a.nodeId,b.nodeId});
+            }
+        auto actual = fa.BuildPairs(c, preview).pairs;
+        Check(actual == legacy && actual == faLrl.BuildPairs(c, preview).pairs,
+              "FA rename changed historical feasible candidate sets");
+        std::sort(legacy.begin(), legacy.end(), [](const auto& a, const auto& b) {
+            return std::pair{a.localNode,a.remoteNode} < std::pair{b.localNode,b.remoteNode};
+        });
+        Check(fa.SelectCheckpointPair(c, preview) == (legacy.empty() ? std::nullopt : std::optional{legacy.front()}),
+              "FA-FFP rename changed historical choice");
+    }
+    PlacementContext empty{0, {{0,true,true,true,true}}};
+    Check(!ffp.SelectBackupNode(empty) && !lrl.SelectCheckpointPair(empty), "self-only context admitted");
+}
+
 void FeasiblePairChecks()
 {
     PlacementContext c{3, {{0, true, true, true, true}, {1, true, true, true, true},
                            {2, true, true, true, false}, {3, true, true, true, true}}};
-    FirstFeasiblePlacementPolicy ffp;
-    LeastRecoveryLoadPlacementPolicy lrl(1);
+    FaFirstFeasiblePlacementPolicy ffp;
+    FaLeastRecoveryLoadPlacementPolicy lrl(1);
     uint64_t probes = 0;
     auto probe = [&](uint32_t s, uint32_t d) {
         ++probes;
@@ -745,6 +808,7 @@ int main()
     try
     {
         PlacementChecks();
+        MinimalPlacementChecks();
         FeasiblePairChecks();
         SolverChecks();
         RiskWeightedStartChecks();

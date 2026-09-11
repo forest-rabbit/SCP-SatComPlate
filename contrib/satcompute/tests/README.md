@@ -21,6 +21,16 @@ tests/
 日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动正式场景的原始指标
 保存在 gitignore 排除的本地 `output/`，完整正式场景运行不接入 `run-all.sh` 或 GitHub CI。
 
+Pre-N5C placement 消融入口为 `integration/regression/run-pre-n5c-placement-matrix.py`：
+`--stage gates` 先运行 R5/R7-FA-FFP 并与最新 capacity-resume 原始文件比较；
+`--stage remaining --jobs 8` 再运行其余 30 组，合计 32 组，每组 800 任务/1300 s，需显式授权。
+两阶段必须同一干净 HEAD，拒绝覆盖已有组目录。`analyze-pre-n5c-placement-matrix.py --root 输出目录`
+核对实际 WU/物理流/清理及频率公式，生成 master-summary CSV/JSON；不回写历史 CSV/JSON。
+`run-placement-baseline-smoke.py` 仅为 16 组四任务接线检查，纳入维护 smoke，不运行正式场景。
+原 FA fixture 保留；`n5b-policy-test.cc` 增加 minimal 布尔穷举和历史可行集 oracle，
+`frequency-runtime-test.cc` 验证真实链路拒绝与不搜索第二候选，R0/R1 测试验证真实 deadline 准入差异。
+`test_placement_matrix.py` 验证矩阵组数、零计数分布及 rename 比较不忽略业务差异。
+
 N5A-G4 的冻结故障验收仍复用 `integration/regression/run-final-scenario.py`，
 只在明确授权后手动运行；原始 N4 输出不可覆盖。例：
 

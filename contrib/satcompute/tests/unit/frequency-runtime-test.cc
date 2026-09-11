@@ -3,7 +3,8 @@
 
 #include "ns3/command-line.h"
 #include "ns3/frequency-protection-controller.h"
-#include "ns3/least-recovery-load-placement-policy.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
+#include "ns3/fixed-protection-controller.h"
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
 #include "ns3/online-topology-controller.h"
@@ -527,7 +528,7 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         executor->BindTaskCoordinator(tasks);
         engine->BindTaskCoordinator(tasks);
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
-            mode == "lrl-two" ? std::make_unique<LeastRecoveryLoadPlacementPolicy>(1)
+            mode == "lrl-two" ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
                                : std::unique_ptr<PlacementPolicy>{});
         Simulator::Stop(NanoSeconds(END));
         Simulator::Run();
@@ -705,7 +706,8 @@ struct RetryDriver
     }
 };
 
-void CapacityRetry(const std::filesystem::path& output, bool terminal = false, bool lrl = false)
+void CapacityRetry(const std::filesystem::path& output, bool terminal = false, bool lrl = false,
+                   bool minimal = false)
 {
     RngSeedManager::SetSeed(1);
     RngSeedManager::SetRun(11);
@@ -734,8 +736,10 @@ void CapacityRetry(const std::filesystem::path& output, bool terminal = false, b
             config.parameters.receiverRcvBufBytes, false, END, 1.3);
         executor->BindTaskCoordinator(tasks);
         engine->BindTaskCoordinator(tasks);
-        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
-            lrl ? std::make_unique<LeastRecoveryLoadPlacementPolicy>(1) : std::unique_ptr<PlacementPolicy>{});
+        std::unique_ptr<PlacementPolicy> policy;
+        if (minimal) policy = std::make_unique<FirstFeasiblePlacementPolicy>();
+        else if (lrl) policy = std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END, std::move(policy));
         // Ranking must skip a path-feasible pair rejected by real storage, not stop at it.
         auto& pool = FrequencyRuntimeTestAccess::Manager(controller).Pool(0);
         std::optional<uint64_t> storageBlock;
@@ -799,6 +803,53 @@ void CapacityRetry(const std::filesystem::path& output, bool terminal = false, b
         Check(controller.Manager().IsQuiescent(), "capacity retry leaked checkpoint resources");
         Check(controller.PlacementLoads().Empty(), "capacity retry leaked placement ownership");
         tasks->DisconnectTaskObserver(MakeCallback(&RetryDriver::OnTask, &driver));
+    }
+    Reset();
+}
+/** Actual reserved link rejects the minimal first pair; FA selects another pair. */
+void PlacementAdmission(const std::filesystem::path& output, bool minimal, bool lrl)
+{
+    {
+        auto config = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        config.parameters.routingMode = "global-capacity-aware-hrw";
+        config.parameters.fixedDelaySeconds = .001;
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        auto tasks = CreateObject<TaskCoordinator>();
+        auto task = Definition(TaskProfile::SPARSE_INFERENCE);
+        task.sourceNodeId = 1; task.arrivalTimeNs = 20000000;
+        ComputeProfile profile;
+        for (uint32_t node = 0; node < 16; ++node) profile.nodes.push_back({node,100000});
+        tasks->Initialize(profile,
+            TaskTrace{{task}}, topology, "size-aware", 1024, config.parameters.islMtuBytes,
+            config.parameters.receiverRcvBufBytes, false, END, 1.3);
+        std::unique_ptr<PlacementPolicy> policy;
+        if (minimal && lrl) policy = std::make_unique<LeastRecoveryLoadPlacementPolicy>(1);
+        else if (minimal) policy = std::make_unique<FirstFeasiblePlacementPolicy>();
+        else if (lrl) policy = std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1);
+        else policy = std::make_unique<FaFirstFeasiblePlacementPolicy>();
+        FixedProtectionController controller(tasks, topology, 10000000000ULL, END, 50, 4,
+                                             false, std::move(policy));
+        Simulator::Schedule(NanoSeconds(1000000), [&] {
+            NetworkTransfer transfer;
+            transfer.transferId = 9102; transfer.sourceSatelliteId = 3; transfer.destinationSatelliteId = 2;
+            transfer.sizeBytes = 1000000000;
+            tasks->GetTransferEngine()->RegisterRuntimePlan(transfer);
+            tasks->GetTransferEngine()->StartTransferNow(9102);
+        });
+        Simulator::Stop(NanoSeconds(END)); Simulator::Run(); controller.Finalize();
+        const auto& selections = controller.Placement().Selections();
+        Check(selections.size() == 1 && selections.front().pair.has_value(), "controlled selection missing or retried");
+        if (minimal)
+            Check(selections.front().pair == PlacementDecision{2,0} && selections.front().admission == "REJECTED" &&
+                  selections.front().reason == "NO_ADMISSIBLE_PATH" && controller.Manager().Summaries().empty(),
+                  "minimal path admission skipped first pair or secretly searched next");
+        else
+            Check(selections.front().pair->localNode != 2 && !controller.Manager().Summaries().empty(),
+                  "FA failed to bypass blocked first link");
+        Check(controller.PlacementLoads().Empty() && controller.Manager().IsQuiescent(), "ablation resources leaked");
+        std::filesystem::create_directories(output);
+        controller.Placement().WriteSelections(output);
     }
     Reset();
 }
@@ -1009,6 +1060,11 @@ int main(int argc, char** argv)
     try
     {
         Storage();
+        for (bool minimal : {false, true})
+            for (bool lrl : {false, true})
+                PlacementAdmission(std::filesystem::path(output) / (std::string("placement-") +
+                    (minimal ? "minimal-" : "fa-") + (lrl ? "lrl" : "ffp")), minimal, lrl);
+        CapacityRetry(std::filesystem::path(output) / "capacity-retry-minimal", false, false, true);
         for (const auto& mode : {"normal", "fault", "terminal", "storage"})
             OnCapacityRetry(std::filesystem::path(output) / (std::string("on-capacity-") + mode), mode);
         OnCapacityRetry(std::filesystem::path(output) / "on-capacity-deferred", "normal", InputStagingPolicy::DEFERRED);

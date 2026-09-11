@@ -92,9 +92,10 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 ## 参数边界
 
 `protectionMode=off` 默认保持现有行为；`fixed` 接入真实备份数据流与单次故障恢复，支持无故障与 generate。
-fixed/compfrr 共用 `placementMode=ffp|lrl`；`remoteBusyRecoveryPolicy=relocate|recompute`
+四种保护模式共用 `placementMode=ffp|lrl|fa-ffp|fa-lrl`，默认 `fa-ffp` 延续历史行为；简化版先选候选再做真实准入。
+`remoteBusyRecoveryPolicy=relocate|recompute`
 仅切换远端计算忙时的恢复方式，默认 relocate。完整 `recompute` 为无常态保护的故障后从零重算，
-`one-plus-one` 为首次主计算启动时一次性申请的真实并行副本，两者当前仅支持 FFP。
+`one-plus-one` 为首次主计算启动时一次性申请的真实并行副本。
 `inputStagingPolicy=eager` 保持旧行为；CompFRR 可显式设 `deferred`，常态只保护状态，
 故障后再向实际恢复星获取一次原始 INPUT，其他冻结参数不变。
 N5C 尚未实现；详见 [保护与恢复模块](protection/README.md)。

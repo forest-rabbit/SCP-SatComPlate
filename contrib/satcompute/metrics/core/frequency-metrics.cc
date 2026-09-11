@@ -127,7 +127,8 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
         out << ',' << r.trigger << ',' << r.firstSampleNs << ',' << r.pF1 << ',' << r.pF2 << ','
             << in.risk.qCurrentSample << ',' << in.replayAvailable << ',' << r.replayReason << ','
             << r.waitingBefore << ',' << r.waitingAfter << ',';
-        if (in.phase == ProtectionPhase::OFF)
+        if (in.phase == ProtectionPhase::OFF &&
+            m_placement->Eligibility() == PlacementEligibility::FEASIBILITY_AWARE)
             out << r.pairStats.total << ',' << r.pairStats.nodeFeasible << ',' << r.pairPathFeasible
                 << ',' << r.pairHardChecked << ',' << r.pairHardFeasible << ',' << r.pairStats.skipNode
                 << ',' << r.pairStats.skipNoRoute << ',' << r.pairStats.skipNoCapacity << ','

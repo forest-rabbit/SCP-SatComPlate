@@ -23,7 +23,7 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
       m_topology(topology),
       m_faults(faults),
       m_manager(tasks, topology, capacity, stopNs, inputPolicy),
-      m_placement(placement ? std::move(placement) : std::make_unique<FirstFeasiblePlacementPolicy>())
+      m_placement(placement ? std::move(placement) : std::make_unique<FaFirstFeasiblePlacementPolicy>())
 {
     if (!faults)
         throw std::invalid_argument("frequency protection requires online generate epochs");
@@ -299,10 +299,11 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
 {
     const PlacementContext context{task.definition.computeNodeId,
                                    Candidates(task.definition.computeNodeId)};
-    row.pairStats = BuildFeasiblePlacementPairs(context, [&](auto source, auto destination) {
+    const bool minimal = m_placement->Eligibility() == PlacementEligibility::MINIMAL;
+    row.pairStats = m_placement->BuildPairs(context, [&](auto source, auto destination) {
         return paths.Availability(source, destination);
     });
-    if (m_manager.InputPolicy() == InputStagingPolicy::DEFERRED)
+    if (!minimal && m_manager.InputPolicy() == InputStagingPolicy::DEFERRED)
     {
         // INPUT is an operation-specific fourth path, not a new placement ranking.
         // Filter before selecting a pair so a blocked source path can retry on capacity
@@ -341,7 +342,14 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
         row.pair = pair;
         row.resourceReason.clear();
         if (!BuildResources(row, task, state, paths))
-            throw std::logic_error("read-only pair preview changed within one decision");
+        {
+            if (!minimal) throw std::logic_error("read-only pair preview changed within one decision");
+            if (row.resourceReason == "NO_ADMISSIBLE_PATH") row.resourceReason = "NO_CAPACITY_NOW";
+            row.proposal.phase = ProtectionPhase::OFF;
+            row.proposal.epochNs = row.input.risk.epochNs;
+            row.proposal.reason = row.resourceReason;
+            return; // Selected candidate failed actual checks; never try another pair here.
+        }
         ++row.pairHardChecked;
         row.proposal = m_policy.Evaluate(row.input);
         const auto& reason = row.proposal.reason;
@@ -354,6 +362,7 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
             return;
         }
         row.resourceReason = reason == "INITIALIZATION_TOO_LATE" ? "DEADLINE_INFEASIBLE" : reason;
+        if (minimal) return;
     }
 }
 
@@ -540,6 +549,15 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
         }
         row.committedConfig = state.gate.CurrentConfig();
         row.phaseAfter = state.gate.Phase();
+        if (row.input.phase == ProtectionPhase::OFF)
+        {
+            const auto inventory = m_manager.Inventory(row.taskId);
+            const bool admitted = row.committed && row.proposal.action == FrequencyAction::START &&
+                                  inventory && inventory->active;
+            m_placement->RecordSelection({row.taskId, time, task.definition.computeNodeId,
+                row.pair, {}, admitted ? "ACCEPTED" : "NOT_ADMITTED",
+                row.resourceReason.empty() ? row.reason : row.resourceReason});
+        }
     }
 }
 

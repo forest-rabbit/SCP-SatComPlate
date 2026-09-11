@@ -36,6 +36,7 @@ ReplicaManager::ReplicaManager(Ptr<TaskCoordinator> tasks, SatelliteRuntimeView&
     : m_tasks(tasks), m_topology(topology), m_network(tasks->GetTransferEngine()),
       m_policy(policy), m_ledger(tasks, topology, 0, stopNs)
 {
+    for (auto service : tasks->GetComputeServices()) m_loads.RegisterNode(service->GetNodeId());
     m_tasks->SetParallelAttemptHooks({
         [this](auto id, auto node, auto at) { PrimaryComputed(id, node, at); },
         [this](auto id) { Deadline(id); },
@@ -115,7 +116,8 @@ void ReplicaManager::Request(uint64_t id)
             (node == task->definition.resultNodeId ||
              !m_topology.GetEcmpRouteCandidates(node, task->definition.resultNodeId).empty());
         context.candidates.push_back({node, m_tasks->IsSatelliteAvailable(node) && service->IsComputeAvailable(),
-                                      service->IsIdle(), resultReachable});
+                                      service->IsIdle(), resultReachable, false, 0, 0,
+                                      m_loads.Get(node).activeBackup, m_loads.Get(node).activeRecovery});
     }
     context.backupNodeFeasible = [&](uint32_t node) {
         if (!m_tasks->IsSatelliteAvailable(task->definition.sourceNodeId)) return false;
@@ -135,14 +137,30 @@ void ReplicaManager::Request(uint64_t id)
     auto& replica = r.attempts[1];
     replica.node = *action.replicaNode;
     auto service = Service(replica.node);
+    if (m_policy.Placement().Eligibility() == PlacementEligibility::MINIMAL)
+    {
+        const auto candidate = std::find_if(context.candidates.begin(), context.candidates.end(),
+            [&](const auto& c) { return c.nodeId == replica.node; });
+        if (candidate == context.candidates.end() || !candidate->reachable ||
+            !context.backupNodeFeasible(replica.node))
+        {
+            r.admissionReason = "SELECTED_REPLICA_NODE_INPUT_OR_DEADLINE_INFEASIBLE";
+            m_policy.Placement().RecordAdmission(id, Now(), "REJECTED", r.admissionReason);
+            Log(state, 1, "REPLICA_NOT_ADMITTED");
+            return;
+        }
+    }
     if (!service->ReserveRecovery(id, 1))
     {
         r.admissionReason = "REPLICA_RESOURCE_UNAVAILABLE";
+        m_policy.Placement().RecordAdmission(id, Now(), "REJECTED", r.admissionReason);
         Log(state, 1, "REPLICA_NOT_ADMITTED");
         return;
     }
     r.admitted = true;
     r.admissionReason = "ADMITTED";
+    m_policy.Placement().RecordAdmission(id, Now(), "ACCEPTED", r.admissionReason);
+    m_loads.Assignment(id, replica.node, true, Now());
     replica.stage = ReplicaStage::INPUT;
     replica.rate = service->GetComputeRateWorkUnitsPerSecond();
     replica.reservedNs = Now();
@@ -219,6 +237,7 @@ void ReplicaManager::Computed(State& state, uint64_t generation, int64_t at)
     }
     Require(m_tasks->ParallelComputed(state.summary.taskId, a.node, at), "logical compute evidence rejected");
     a.computeCompleteNs = at;
+    if (generation) m_loads.Recovery(state.summary.taskId, a.node, false, at);
     a.stage = ReplicaStage::RESULT;
     a.resultStartedNs = at;
     Log(state, generation, "ATTEMPT_COMPUTE_COMPLETE");
@@ -332,6 +351,11 @@ void ReplicaManager::Win(State& state, uint64_t generation)
             "winning RESULT missed compute deadline");
     a.stage = ReplicaStage::COMPLETED;
     a.terminalNs = Now();
+    if (generation)
+    {
+        m_loads.Assignment(state.summary.taskId, a.node, false, Now());
+        m_loads.Recovery(state.summary.taskId, a.node, false, Now());
+    }
     Cancel(state, 1 - generation, "OTHER_ATTEMPT_WON", false);
     state.live = false;
     state.summary.winner = generation ? "replica" : "primary";
@@ -356,7 +380,11 @@ void ReplicaManager::Cancel(State& state, uint64_t generation, const std::string
     a.reason = reason;
     a.terminalNs = Now();
     if (generation)
+    {
+        m_loads.Assignment(state.summary.taskId, a.node, false, Now());
+        m_loads.Recovery(state.summary.taskId, a.node, false, Now());
         Service(a.node)->CancelRecovery(state.summary.taskId, 1);
+    }
     else if (running)
         Service(a.node)->CancelRunningTaskForFailure(state.summary.taskId);
     std::vector<uint64_t> ids;
@@ -464,6 +492,8 @@ void ReplicaManager::BatchComplete()
             {
                 replica.immune = true;
                 replica.takeoverNs = Now();
+                if (replica.stage != ReplicaStage::RESULT)
+                    m_loads.Recovery(id, replica.node, true, Now());
                 Log(state, 1, "REPLICA_TAKEOVER_AFTER_FAULT_BATCH");
             }
         }
@@ -477,6 +507,7 @@ void ReplicaManager::Finalize()
         if (state->live) Fail(*state, "SIMULATION_ENDED", TaskFailureReason::SIMULATION_ENDED);
     m_tasks->FinalizeSimulation();
     m_ledger.Finalize();
+    if (!m_loads.Empty()) throw std::logic_error("replica placement load leaked");
 }
 
 std::vector<ReplicaSummary> ReplicaManager::Summaries() const
