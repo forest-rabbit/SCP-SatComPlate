@@ -1,5 +1,6 @@
 """Frozen scene integrity, deterministic generator and final-only runner contracts."""
 from collections import Counter
+from copy import deepcopy
 import csv
 import contextlib
 import io
@@ -19,6 +20,7 @@ GENERATION = MODULE / "tools/generation"
 sys.path.insert(0, str(GENERATION))
 GEN = runpy.run_path(str(GENERATION / "generate-task-workload.py"))
 RUN = runpy.run_path(str(MODULE / "tests/integration/regression/run-final-scenario.py"))
+F3_CHECK = runpy.run_path(str(MODULE / "tests/integration/regression/run-f3-protection-check.py"))
 SCENE = MODULE / "input/experiments/leo-66"
 
 
@@ -35,7 +37,7 @@ class FinalScenarioTests(unittest.TestCase):
                          {"dense-image": 240, "sparse-inference": 240, "compression": 240, "llm": 80})
         self.assertEqual(tuple(sum(t[k] for t in self.tasks) for k in
                               ("input_bytes", "output_bytes", "compute_work_units")),
-                         (193526895311, 99846517485, 351623833))
+                         (194119753287, 100168131855, 352513119))
         self.assertTrue(all(10**9 <= t["arrival_time_ns"] <= 1050*10**9 for t in self.tasks))
         self.assertEqual(len(self.profile), 66)
         self.assertEqual({p["node_id"] for p in self.profile}, set(range(66)))
@@ -64,13 +66,31 @@ class FinalScenarioTests(unittest.TestCase):
             self.assertEqual(actual["task_profile"], attr["task_profile"])
             self.assertEqual(actual["arrival_time_ns"], arrivals[actual["task_id"]])
         anchors = [a for a in self.attributes if a.get("fixed_tail_anchor")]
-        ordinary = [a for a in self.attributes if a["task_profile"] != "llm" and not a.get("fixed_tail_anchor")]
-        self.assertEqual(len(ordinary), 705)
+        ordinary = [a for a in self.attributes if a["task_profile"] != "llm"
+                    and not a.get("fixed_tail_anchor") and not a.get("controlled_f3_size")]
+        self.assertEqual(len(ordinary), 704)
         self.assertTrue(all(50_000_000 <= a["input_bytes"] < 1_000_000_000 for a in ordinary))
         self.assertEqual(Counter(a["input_bytes"] for a in anchors), {500_000_000: 10, 1_000_000_000: 5})
         expected = json.loads((SCENE / "workload/workload-summary.json").read_text())["truncated_normal"]["fixed_tail_task_ids"]
         self.assertEqual({str(s): [a["task_id"] for a in anchors if a["input_bytes"] == s]
                           for s in (500_000_000, 1_000_000_000)}, expected)
+
+    def test_controlled_task_size_only_and_no_predecessor(self):
+        target = self.tasks[119]
+        self.assertEqual(target, dict(task_id=120, task_profile="compression", input_bytes=800_000_000,
+            output_bytes=433_985_046, compute_work_units=1_200_000, source_node_id=54,
+            compute_node_id=62, result_node_id=33, arrival_time_ns=1024682825747))
+        self.assertEqual([t["task_id"] for t in self.tasks if t["compute_node_id"] == 62], [120])
+        overridden = [a for a in self.attributes if a.get("controlled_f3_size")]
+        self.assertEqual(len(overridden), 1)
+        self.assertEqual(overridden[0]["original_input_bytes"], 207142024)
+        summary = json.loads((SCENE / "workload/workload-summary.json").read_text())
+        self.assertNotIn("warmup", summary)
+        self.assertEqual(summary["ordinary_image_count"], 704)
+        placement = json.loads((SCENE / "placement/placement-manifest.json").read_text())
+        self.assertEqual(len(placement["placements"]), 800)
+        for key, total in (("task_count", 800), ("input_bytes", 194119753287), ("work_units", 352513119)):
+            self.assertEqual(sum(r[key] for r in placement["by_region"].values()), total)
 
     def test_synthetic_placement_deterministic_and_missing_slices_rejected(self):
         positions = {t*10**9: {n: (40., (-95., 15., 120., 70.)[n % 4]) for n in range(66)}
@@ -121,6 +141,40 @@ class FinalScenarioTests(unittest.TestCase):
                 with patch("sys.argv", [*args, flag]), contextlib.redirect_stderr(io.StringIO()):
                     with self.assertRaises(SystemExit):
                         GEN["main"]()
+
+
+class F3SelectionTests(unittest.TestCase):
+    def test_completion_alone_or_start_without_checkpoint_never_passes(self):
+        tables = {
+            "task-summary.csv": [dict(task_id="120", input_bytes="800000000", compute_work_units="1200000",
+                compute_start_time_ns="1025000000000", final_state="COMPLETED", compute_deadline_met="1")],
+            "recovery-summary.csv": [dict(task_id="120", fault_type="satellite", fault_time_ns=str(F3_CHECK["F3_NS"]),
+                phase_at_fault="ON", chosen_path="REMOTE_REDO", checkpoint_state_exists="1", remote_work_units="100")],
+            "frequency-decisions.csv": [dict(task_id="120", proposed_action="START", decision_committed="1",
+                j_off="0.03", j_start="0.02")],
+            "protection-events.csv": [dict(task_id="120", event="INIT_COST_COMMITTED", attempt_generation="0",
+                time_ns="1026600000000")]}
+        assess = F3_CHECK["assess"]
+        cases = [(None, None, None), ("recovery-summary.csv", "phase_at_fault", "INITIALIZING"),
+                 ("recovery-summary.csv", "chosen_path", "RECOMPUTE"),
+                 ("recovery-summary.csv", "remote_work_units", "0"),
+                 ("frequency-decisions.csv", "j_start", "0.03"),
+                 ("protection-events.csv", "time_ns", str(F3_CHECK["F3_NS"])),
+                 ("task-summary.csv", "compute_deadline_met", "0")]
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            fault_file = directory / "fault-trace.json"
+            fault_file.write_text('{"faults": []}')
+            for name, key, value in cases:
+                data = deepcopy(tables)
+                if name:
+                    data[name][0][key] = value
+                with self.subTest(name=name, key=key), patch.dict(assess.__globals__, rows=lambda d, n: data[n]):
+                    self.assertEqual(assess(directory)["eligible"], name is None)
+            fault_file.write_text(json.dumps({"faults": [dict(node_id=62, fault_type="compute",
+                fault_occurred=True, start_time_ns=1026000000000)]}))
+            with patch.dict(assess.__globals__, rows=lambda d, n: tables[n]):
+                self.assertFalse(assess(directory)["eligible"])
 
 
 class FinalRunnerTests(unittest.TestCase):

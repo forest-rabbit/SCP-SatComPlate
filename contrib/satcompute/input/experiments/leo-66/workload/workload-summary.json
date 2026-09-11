@@ -1,6 +1,45 @@
 {
-  "purpose": "offline-g3-candidate-v3-review-not-frozen",
-  "reference_rate_work_units_per_second": 100000,
+  "workload_seed": "n4c-g1-66",
+  "placement_seed": "n4c-g3-hotspot",
+  "task_count": 800,
+  "class_counts": {
+    "sparse-inference": 240,
+    "dense-image": 240,
+    "compression": 240,
+    "llm": 80
+  },
+  "ordinary_image_count": 704,
+  "fixed_tail_task_ids": {
+    "500000000": [
+      97,
+      111,
+      183,
+      283,
+      285,
+      301,
+      418,
+      421,
+      589,
+      623
+    ],
+    "1000000000": [
+      102,
+      191,
+      352,
+      531,
+      605
+    ]
+  },
+  "arrival_window_s": [
+    1,
+    1050
+  ],
+  "simulation_duration_s": 1300,
+  "compute_rate_work_units_per_second": 100000,
+  "total_input_bytes": 194119753287,
+  "total_output_bytes": 100168131855,
+  "total_compute_work_units": 352513119,
+  "total_variable_state_bytes": 170508041062,
   "llm_parameters": {
     "layers": 28,
     "kv_heads": 8,
@@ -10,993 +49,17 @@
     "header_bytes": 0,
     "max_cached_tokens": 40960
   },
-  "llm_config_source": "https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/config.json",
-  "image_reference_commit": "0dbc0c7b6281219e1356151fd640336cde885e7d",
-  "image_reference_bytes": [
-    {
-      "profile": "dense-image",
-      "input_bytes": 52428800,
-      "payload_bytes": 52428800,
-      "index_bytes": 400,
-      "output_bytes": 52428800,
-      "fixed_header_bytes": 44,
-      "input_representation": "raw-four-band-uint16-array",
-      "source_document": "dense-image-pilot-results.md"
-    },
-    {
-      "profile": "sparse-inference",
-      "input_bytes": 26246291,
-      "payload_bytes": 48256,
-      "index_bytes": 800,
-      "output_bytes": 49056,
-      "fixed_header_bytes": 48,
-      "input_representation": "encoded-image-file-bytes",
-      "source_document": "sparse-inference-pilot-results.md"
-    },
-    {
-      "profile": "compression",
-      "input_bytes": 52428800,
-      "payload_bytes": 28440844,
-      "index_bytes": 800,
-      "output_bytes": 28441644,
-      "fixed_header_bytes": 44,
-      "input_representation": "raw-four-band-uint16-array",
-      "source_document": "compression-encoding-pilot-results.md"
-    }
-  ],
-  "task_count": 800,
-  "total_input_bytes": 193526895311,
-  "total_output_bytes": 99846517485,
-  "total_compute_work_units": 351623833,
-  "total_variable_state_bytes": 170186426692,
-  "service_demand": {
-    "images": {
-      "count": 720,
-      "total_work_units": 290290633,
-      "total_service_demand_seconds": 2902.90633
-    },
-    "llm": {
-      "count": 80,
-      "total_work_units": 61333200,
-      "total_service_demand_seconds": 613.332
-    },
-    "all": {
-      "count": 800,
-      "total_work_units": 351623833,
-      "total_service_demand_seconds": 3516.23833
-    },
-    "llm_share": 0.17442844950728922
+  "controlled_f3_task": {
+    "task_id": 120,
+    "original_input_bytes": 207142024,
+    "input_bytes": 800000000,
+    "rule": "B-only size-selected controlled F3 protection case; not an unbiased performance sample"
   },
-  "image_service_bands": {
-    "lt_0_5s": {
-      "count": 0,
-      "ratio": 0.0
-    },
-    "lt_1s": {
-      "count": 15,
-      "ratio": 0.020833333333333332
-    },
-    "lt_2s": {
-      "count": 109,
-      "ratio": 0.15138888888888888
-    },
-    "2s_le_t_lt_5s": {
-      "count": 414,
-      "ratio": 0.575
-    },
-    "5s_le_t_le_10s": {
-      "count": 192,
-      "ratio": 0.26666666666666666
-    },
-    "gt_10s": {
-      "count": 5,
-      "ratio": 0.006944444444444444
-    }
-  },
-  "image_population": {
-    "count": 720,
-    "input_bytes": 193526849343,
-    "input_size_bytes": {
-      "min": 50821400,
-      "median": 257824660.0,
-      "p95": 500000000.0,
-      "max": 1000000000
-    },
-    "service_time_seconds": {
-      "min": 0.76233,
-      "median": 3.867375,
-      "p95": 7.5,
-      "max": 15.0
-    },
-    "service_bands": {
-      "lt_0_5s": {
-        "count": 0,
-        "ratio": 0.0
-      },
-      "lt_1s": {
-        "count": 15,
-        "ratio": 0.020833333333333332
-      },
-      "lt_2s": {
-        "count": 109,
-        "ratio": 0.15138888888888888
-      },
-      "2s_le_t_lt_5s": {
-        "count": 414,
-        "ratio": 0.575
-      },
-      "5s_le_t_le_10s": {
-        "count": 192,
-        "ratio": 0.26666666666666666
-      },
-      "gt_10s": {
-        "count": 5,
-        "ratio": 0.006944444444444444
-      }
-    }
-  },
-  "ordinary_images": {
-    "all": {
-      "count": 705,
-      "input_bytes": 183526849343,
-      "input_size_bytes": {
-        "min": 50821400,
-        "median": 254660536.0,
-        "p95": 472455241.6,
-        "max": 659115032
-      },
-      "service_time_seconds": {
-        "min": 0.76233,
-        "median": 3.81991,
-        "p95": 7.086834,
-        "max": 9.88673
-      },
-      "service_bands": {
-        "lt_0_5s": {
-          "count": 0,
-          "ratio": 0.0
-        },
-        "lt_1s": {
-          "count": 15,
-          "ratio": 0.02127659574468085
-        },
-        "lt_2s": {
-          "count": 109,
-          "ratio": 0.15460992907801419
-        },
-        "2s_le_t_lt_5s": {
-          "count": 414,
-          "ratio": 0.5872340425531914
-        },
-        "5s_le_t_le_10s": {
-          "count": 182,
-          "ratio": 0.2581560283687943
-        },
-        "gt_10s": {
-          "count": 0,
-          "ratio": 0.0
-        }
-      }
-    },
-    "by_profile": {
-      "dense-image": {
-        "count": 237,
-        "input_bytes": 61098509128,
-        "input_size_bytes": {
-          "min": 50821400,
-          "median": 259586536.0,
-          "p95": 471852438.4,
-          "max": 659115032
-        },
-        "service_time_seconds": {
-          "min": 0.76233,
-          "median": 3.8938,
-          "p95": 7.077794,
-          "max": 9.88673
-        },
-        "service_bands": {
-          "lt_0_5s": {
-            "count": 0,
-            "ratio": 0.0
-          },
-          "lt_1s": {
-            "count": 9,
-            "ratio": 0.0379746835443038
-          },
-          "lt_2s": {
-            "count": 35,
-            "ratio": 0.14767932489451477
-          },
-          "2s_le_t_lt_5s": {
-            "count": 148,
-            "ratio": 0.6244725738396625
-          },
-          "5s_le_t_le_10s": {
-            "count": 54,
-            "ratio": 0.22784810126582278
-          },
-          "gt_10s": {
-            "count": 0,
-            "ratio": 0.0
-          }
-        }
-      },
-      "sparse-inference": {
-        "count": 240,
-        "input_bytes": 62908897967,
-        "input_size_bytes": {
-          "min": 51159660,
-          "median": 260135802.5,
-          "p95": 473583905.2,
-          "max": 555208967
-        },
-        "service_time_seconds": {
-          "min": 0.7674,
-          "median": 3.90204,
-          "p95": 7.103768,
-          "max": 8.32814
-        },
-        "service_bands": {
-          "lt_0_5s": {
-            "count": 0,
-            "ratio": 0.0
-          },
-          "lt_1s": {
-            "count": 4,
-            "ratio": 0.016666666666666666
-          },
-          "lt_2s": {
-            "count": 39,
-            "ratio": 0.1625
-          },
-          "2s_le_t_lt_5s": {
-            "count": 132,
-            "ratio": 0.55
-          },
-          "5s_le_t_le_10s": {
-            "count": 69,
-            "ratio": 0.2875
-          },
-          "gt_10s": {
-            "count": 0,
-            "ratio": 0.0
-          }
-        }
-      },
-      "compression": {
-        "count": 228,
-        "input_bytes": 59519442248,
-        "input_size_bytes": {
-          "min": 62096744,
-          "median": 238464432.0,
-          "p95": 472202749.6,
-          "max": 595165768
-        },
-        "service_time_seconds": {
-          "min": 0.93146,
-          "median": 3.576975,
-          "p95": 7.0830459999999995,
-          "max": 8.92749
-        },
-        "service_bands": {
-          "lt_0_5s": {
-            "count": 0,
-            "ratio": 0.0
-          },
-          "lt_1s": {
-            "count": 2,
-            "ratio": 0.008771929824561403
-          },
-          "lt_2s": {
-            "count": 35,
-            "ratio": 0.15350877192982457
-          },
-          "2s_le_t_lt_5s": {
-            "count": 134,
-            "ratio": 0.5877192982456141
-          },
-          "5s_le_t_le_10s": {
-            "count": 59,
-            "ratio": 0.25877192982456143
-          },
-          "gt_10s": {
-            "count": 0,
-            "ratio": 0.0
-          }
-        }
-      }
-    }
-  },
-  "large_image_tasks": {
-    "count": 15,
-    "input_bytes": 10000000000,
-    "input_ratio": 0.05167240441660516
-  },
-  "llm_5_to_10_seconds_target_met": true,
-  "tail_counts": {
-    "1000000000": 5,
-    "500000000": 10
-  },
-  "tail_counts_by_profile": {
-    "dense-image": {
-      "1000000000": 1,
-      "500000000": 2
-    },
-    "sparse-inference": {
-      "1000000000": 0,
-      "500000000": 0
-    },
-    "compression": {
-      "1000000000": 4,
-      "500000000": 8
-    },
-    "llm": {
-      "1000000000": 0,
-      "500000000": 0
-    }
-  },
-  "classes": {
-    "dense-image": {
-      "count": 240,
-      "input_bytes": 63098509128,
-      "input_size_bytes": {
-        "min": 50821400,
-        "median": 262102024.0,
-        "p95": 484758112.4,
-        "max": 1000000000
-      },
-      "service_time_seconds": {
-        "min": 0.76233,
-        "median": 3.9315350000000002,
-        "p95": 7.2713790000000005,
-        "max": 15.0
-      },
-      "service_bands": {
-        "lt_0_5s": {
-          "count": 0,
-          "ratio": 0.0
-        },
-        "lt_1s": {
-          "count": 9,
-          "ratio": 0.0375
-        },
-        "lt_2s": {
-          "count": 35,
-          "ratio": 0.14583333333333334
-        },
-        "2s_le_t_lt_5s": {
-          "count": 148,
-          "ratio": 0.6166666666666667
-        },
-        "5s_le_t_le_10s": {
-          "count": 56,
-          "ratio": 0.23333333333333334
-        },
-        "gt_10s": {
-          "count": 1,
-          "ratio": 0.004166666666666667
-        }
-      },
-      "output_bytes": 63098509128,
-      "work_units": {
-        "min": 76233,
-        "median": 393153.5,
-        "p95": 727137.9,
-        "max": 1500000
-      },
-      "total_work_units": 94647884,
-      "total_service_demand_seconds": 946.47884,
-      "total_variable_state_bytes": 63098990415
-    },
-    "sparse-inference": {
-      "count": 240,
-      "input_bytes": 62908897967,
-      "input_size_bytes": {
-        "min": 51159660,
-        "median": 260135802.5,
-        "p95": 473583905.2,
-        "max": 555208967
-      },
-      "service_time_seconds": {
-        "min": 0.7674,
-        "median": 3.90204,
-        "p95": 7.103768,
-        "max": 8.32814
-      },
-      "service_bands": {
-        "lt_0_5s": {
-          "count": 0,
-          "ratio": 0.0
-        },
-        "lt_1s": {
-          "count": 4,
-          "ratio": 0.016666666666666666
-        },
-        "lt_2s": {
-          "count": 39,
-          "ratio": 0.1625
-        },
-        "2s_le_t_lt_5s": {
-          "count": 132,
-          "ratio": 0.55
-        },
-        "5s_le_t_le_10s": {
-          "count": 69,
-          "ratio": 0.2875
-        },
-        "gt_10s": {
-          "count": 0,
-          "ratio": 0.0
-        }
-      },
-      "output_bytes": 117580638,
-      "work_units": {
-        "min": 76740,
-        "median": 390204.0,
-        "p95": 710376.8,
-        "max": 832814
-      },
-      "total_work_units": 94363464,
-      "total_service_demand_seconds": 943.63464,
-      "total_variable_state_bytes": 117580638
-    },
-    "compression": {
-      "count": 240,
-      "input_bytes": 67519442248,
-      "input_size_bytes": {
-        "min": 62096744,
-        "median": 253468440.0,
-        "p95": 503940307.6,
-        "max": 1000000000
-      },
-      "service_time_seconds": {
-        "min": 0.93146,
-        "median": 3.8020300000000002,
-        "p95": 7.5591075,
-        "max": 15.0
-      },
-      "service_bands": {
-        "lt_0_5s": {
-          "count": 0,
-          "ratio": 0.0
-        },
-        "lt_1s": {
-          "count": 2,
-          "ratio": 0.008333333333333333
-        },
-        "lt_2s": {
-          "count": 35,
-          "ratio": 0.14583333333333334
-        },
-        "2s_le_t_lt_5s": {
-          "count": 134,
-          "ratio": 0.5583333333333333
-        },
-        "5s_le_t_le_10s": {
-          "count": 67,
-          "ratio": 0.2791666666666667
-        },
-        "gt_10s": {
-          "count": 4,
-          "ratio": 0.016666666666666666
-        }
-      },
-      "output_bytes": 36628035223,
-      "work_units": {
-        "min": 93146,
-        "median": 380203.0,
-        "p95": 755910.75,
-        "max": 1500000
-      },
-      "total_work_units": 101279285,
-      "total_service_demand_seconds": 1012.79285,
-      "total_variable_state_bytes": 36628035223
-    },
-    "llm": {
-      "count": 80,
-      "input_bytes": 45968,
-      "input_size_bytes": {
-        "min": 325,
-        "median": 598.0,
-        "p95": 768.3,
-        "max": 845
-      },
-      "service_time_seconds": {
-        "min": 5.137,
-        "median": 7.713,
-        "p95": 9.55785,
-        "max": 9.891
-      },
-      "service_bands": {
-        "lt_0_5s": {
-          "count": 0,
-          "ratio": 0.0
-        },
-        "lt_1s": {
-          "count": 0,
-          "ratio": 0.0
-        },
-        "lt_2s": {
-          "count": 0,
-          "ratio": 0.0
-        },
-        "2s_le_t_lt_5s": {
-          "count": 0,
-          "ratio": 0.0
-        },
-        "5s_le_t_le_10s": {
-          "count": 80,
-          "ratio": 1.0
-        },
-        "gt_10s": {
-          "count": 0,
-          "ratio": 0.0
-        }
-      },
-      "output_bytes": 2392496,
-      "work_units": {
-        "min": 513700,
-        "median": 771300.0,
-        "p95": 955785.0,
-        "max": 989100
-      },
-      "total_work_units": 61333200,
-      "total_service_demand_seconds": 613.332,
-      "total_variable_state_bytes": 70341820416
-    }
-  },
-  "node_demand_preview": [
-    {
-      "node_id": 0,
-      "task_count": 13,
-      "service_demand_seconds": 52.99161,
-      "demand_over_1300_second_capacity": 0.04076277692307692
-    },
-    {
-      "node_id": 1,
-      "task_count": 13,
-      "service_demand_seconds": 49.39392,
-      "demand_over_1300_second_capacity": 0.03799532307692308
-    },
-    {
-      "node_id": 2,
-      "task_count": 13,
-      "service_demand_seconds": 71.19512,
-      "demand_over_1300_second_capacity": 0.05476547692307693
-    },
-    {
-      "node_id": 3,
-      "task_count": 13,
-      "service_demand_seconds": 45.05232,
-      "demand_over_1300_second_capacity": 0.03465563076923077
-    },
-    {
-      "node_id": 4,
-      "task_count": 13,
-      "service_demand_seconds": 53.01182,
-      "demand_over_1300_second_capacity": 0.04077832307692308
-    },
-    {
-      "node_id": 5,
-      "task_count": 13,
-      "service_demand_seconds": 68.33051,
-      "demand_over_1300_second_capacity": 0.05256193076923077
-    },
-    {
-      "node_id": 6,
-      "task_count": 13,
-      "service_demand_seconds": 51.56358,
-      "demand_over_1300_second_capacity": 0.039664292307692306
-    },
-    {
-      "node_id": 7,
-      "task_count": 13,
-      "service_demand_seconds": 59.93818,
-      "demand_over_1300_second_capacity": 0.04610629230769231
-    },
-    {
-      "node_id": 8,
-      "task_count": 12,
-      "service_demand_seconds": 58.36738,
-      "demand_over_1300_second_capacity": 0.04489798461538461
-    },
-    {
-      "node_id": 9,
-      "task_count": 12,
-      "service_demand_seconds": 54.57509,
-      "demand_over_1300_second_capacity": 0.04198083846153847
-    },
-    {
-      "node_id": 10,
-      "task_count": 12,
-      "service_demand_seconds": 63.66033,
-      "demand_over_1300_second_capacity": 0.04896948461538462
-    },
-    {
-      "node_id": 11,
-      "task_count": 12,
-      "service_demand_seconds": 58.55117,
-      "demand_over_1300_second_capacity": 0.04503936153846154
-    },
-    {
-      "node_id": 12,
-      "task_count": 12,
-      "service_demand_seconds": 63.03329,
-      "demand_over_1300_second_capacity": 0.04848714615384615
-    },
-    {
-      "node_id": 13,
-      "task_count": 12,
-      "service_demand_seconds": 59.31453,
-      "demand_over_1300_second_capacity": 0.045626561538461535
-    },
-    {
-      "node_id": 14,
-      "task_count": 12,
-      "service_demand_seconds": 40.19879,
-      "demand_over_1300_second_capacity": 0.030922146153846156
-    },
-    {
-      "node_id": 15,
-      "task_count": 12,
-      "service_demand_seconds": 54.56523,
-      "demand_over_1300_second_capacity": 0.041973253846153843
-    },
-    {
-      "node_id": 16,
-      "task_count": 12,
-      "service_demand_seconds": 65.81253,
-      "demand_over_1300_second_capacity": 0.05062502307692307
-    },
-    {
-      "node_id": 17,
-      "task_count": 12,
-      "service_demand_seconds": 58.21515,
-      "demand_over_1300_second_capacity": 0.04478088461538462
-    },
-    {
-      "node_id": 18,
-      "task_count": 12,
-      "service_demand_seconds": 62.53315,
-      "demand_over_1300_second_capacity": 0.04810242307692308
-    },
-    {
-      "node_id": 19,
-      "task_count": 12,
-      "service_demand_seconds": 49.65934,
-      "demand_over_1300_second_capacity": 0.03819949230769231
-    },
-    {
-      "node_id": 20,
-      "task_count": 12,
-      "service_demand_seconds": 49.92106,
-      "demand_over_1300_second_capacity": 0.03840081538461538
-    },
-    {
-      "node_id": 21,
-      "task_count": 12,
-      "service_demand_seconds": 65.918,
-      "demand_over_1300_second_capacity": 0.05070615384615385
-    },
-    {
-      "node_id": 22,
-      "task_count": 12,
-      "service_demand_seconds": 54.75146,
-      "demand_over_1300_second_capacity": 0.042116507692307695
-    },
-    {
-      "node_id": 23,
-      "task_count": 12,
-      "service_demand_seconds": 38.88632,
-      "demand_over_1300_second_capacity": 0.029912553846153843
-    },
-    {
-      "node_id": 24,
-      "task_count": 12,
-      "service_demand_seconds": 51.59639,
-      "demand_over_1300_second_capacity": 0.03968953076923077
-    },
-    {
-      "node_id": 25,
-      "task_count": 12,
-      "service_demand_seconds": 52.35971,
-      "demand_over_1300_second_capacity": 0.0402767
-    },
-    {
-      "node_id": 26,
-      "task_count": 12,
-      "service_demand_seconds": 44.39019,
-      "demand_over_1300_second_capacity": 0.0341463
-    },
-    {
-      "node_id": 27,
-      "task_count": 12,
-      "service_demand_seconds": 56.17063,
-      "demand_over_1300_second_capacity": 0.04320817692307693
-    },
-    {
-      "node_id": 28,
-      "task_count": 12,
-      "service_demand_seconds": 60.29565,
-      "demand_over_1300_second_capacity": 0.04638126923076923
-    },
-    {
-      "node_id": 29,
-      "task_count": 12,
-      "service_demand_seconds": 61.71533,
-      "demand_over_1300_second_capacity": 0.04747333076923077
-    },
-    {
-      "node_id": 30,
-      "task_count": 12,
-      "service_demand_seconds": 55.43032,
-      "demand_over_1300_second_capacity": 0.042638707692307695
-    },
-    {
-      "node_id": 31,
-      "task_count": 12,
-      "service_demand_seconds": 57.4396,
-      "demand_over_1300_second_capacity": 0.04418430769230769
-    },
-    {
-      "node_id": 32,
-      "task_count": 12,
-      "service_demand_seconds": 60.76174,
-      "demand_over_1300_second_capacity": 0.046739800000000005
-    },
-    {
-      "node_id": 33,
-      "task_count": 12,
-      "service_demand_seconds": 49.81634,
-      "demand_over_1300_second_capacity": 0.038320261538461534
-    },
-    {
-      "node_id": 34,
-      "task_count": 12,
-      "service_demand_seconds": 41.76929,
-      "demand_over_1300_second_capacity": 0.03213022307692308
-    },
-    {
-      "node_id": 35,
-      "task_count": 12,
-      "service_demand_seconds": 49.59751,
-      "demand_over_1300_second_capacity": 0.03815193076923077
-    },
-    {
-      "node_id": 36,
-      "task_count": 12,
-      "service_demand_seconds": 53.95982,
-      "demand_over_1300_second_capacity": 0.041507553846153844
-    },
-    {
-      "node_id": 37,
-      "task_count": 12,
-      "service_demand_seconds": 49.56621,
-      "demand_over_1300_second_capacity": 0.038127853846153845
-    },
-    {
-      "node_id": 38,
-      "task_count": 12,
-      "service_demand_seconds": 43.6721,
-      "demand_over_1300_second_capacity": 0.03359392307692308
-    },
-    {
-      "node_id": 39,
-      "task_count": 12,
-      "service_demand_seconds": 44.58312,
-      "demand_over_1300_second_capacity": 0.03429470769230769
-    },
-    {
-      "node_id": 40,
-      "task_count": 12,
-      "service_demand_seconds": 48.22307,
-      "demand_over_1300_second_capacity": 0.037094669230769234
-    },
-    {
-      "node_id": 41,
-      "task_count": 12,
-      "service_demand_seconds": 58.07693,
-      "demand_over_1300_second_capacity": 0.044674561538461534
-    },
-    {
-      "node_id": 42,
-      "task_count": 12,
-      "service_demand_seconds": 43.8006,
-      "demand_over_1300_second_capacity": 0.033692769230769234
-    },
-    {
-      "node_id": 43,
-      "task_count": 12,
-      "service_demand_seconds": 37.49395,
-      "demand_over_1300_second_capacity": 0.0288415
-    },
-    {
-      "node_id": 44,
-      "task_count": 12,
-      "service_demand_seconds": 58.7491,
-      "demand_over_1300_second_capacity": 0.045191615384615386
-    },
-    {
-      "node_id": 45,
-      "task_count": 12,
-      "service_demand_seconds": 60.05034,
-      "demand_over_1300_second_capacity": 0.04619256923076923
-    },
-    {
-      "node_id": 46,
-      "task_count": 12,
-      "service_demand_seconds": 51.77321,
-      "demand_over_1300_second_capacity": 0.039825546153846154
-    },
-    {
-      "node_id": 47,
-      "task_count": 12,
-      "service_demand_seconds": 58.72072,
-      "demand_over_1300_second_capacity": 0.045169784615384616
-    },
-    {
-      "node_id": 48,
-      "task_count": 12,
-      "service_demand_seconds": 52.86826,
-      "demand_over_1300_second_capacity": 0.040667892307692306
-    },
-    {
-      "node_id": 49,
-      "task_count": 12,
-      "service_demand_seconds": 44.57952,
-      "demand_over_1300_second_capacity": 0.03429193846153846
-    },
-    {
-      "node_id": 50,
-      "task_count": 12,
-      "service_demand_seconds": 46.07133,
-      "demand_over_1300_second_capacity": 0.03543948461538462
-    },
-    {
-      "node_id": 51,
-      "task_count": 12,
-      "service_demand_seconds": 39.13008,
-      "demand_over_1300_second_capacity": 0.030100061538461537
-    },
-    {
-      "node_id": 52,
-      "task_count": 12,
-      "service_demand_seconds": 55.20673,
-      "demand_over_1300_second_capacity": 0.04246671538461538
-    },
-    {
-      "node_id": 53,
-      "task_count": 12,
-      "service_demand_seconds": 50.68013,
-      "demand_over_1300_second_capacity": 0.038984715384615384
-    },
-    {
-      "node_id": 54,
-      "task_count": 12,
-      "service_demand_seconds": 58.99373,
-      "demand_over_1300_second_capacity": 0.045379792307692304
-    },
-    {
-      "node_id": 55,
-      "task_count": 12,
-      "service_demand_seconds": 46.17473,
-      "demand_over_1300_second_capacity": 0.035519023076923076
-    },
-    {
-      "node_id": 56,
-      "task_count": 12,
-      "service_demand_seconds": 53.32278,
-      "demand_over_1300_second_capacity": 0.04101752307692308
-    },
-    {
-      "node_id": 57,
-      "task_count": 12,
-      "service_demand_seconds": 58.04911,
-      "demand_over_1300_second_capacity": 0.044653161538461536
-    },
-    {
-      "node_id": 58,
-      "task_count": 12,
-      "service_demand_seconds": 61.50961,
-      "demand_over_1300_second_capacity": 0.04731508461538462
-    },
-    {
-      "node_id": 59,
-      "task_count": 12,
-      "service_demand_seconds": 47.55041,
-      "demand_over_1300_second_capacity": 0.03657723846153846
-    },
-    {
-      "node_id": 60,
-      "task_count": 12,
-      "service_demand_seconds": 46.76376,
-      "demand_over_1300_second_capacity": 0.035972123076923074
-    },
-    {
-      "node_id": 61,
-      "task_count": 12,
-      "service_demand_seconds": 48.06684,
-      "demand_over_1300_second_capacity": 0.03697449230769231
-    },
-    {
-      "node_id": 62,
-      "task_count": 12,
-      "service_demand_seconds": 43.53721,
-      "demand_over_1300_second_capacity": 0.03349016153846154
-    },
-    {
-      "node_id": 63,
-      "task_count": 12,
-      "service_demand_seconds": 54.51231,
-      "demand_over_1300_second_capacity": 0.04193254615384615
-    },
-    {
-      "node_id": 64,
-      "task_count": 12,
-      "service_demand_seconds": 48.75247,
-      "demand_over_1300_second_capacity": 0.037501900000000005
-    },
-    {
-      "node_id": 65,
-      "task_count": 12,
-      "service_demand_seconds": 61.01757,
-      "demand_over_1300_second_capacity": 0.04693659230769231
-    }
-  ],
-  "node_service_demand_seconds": {
-    "min": 37.49395,
-    "median": 53.1673,
-    "p95": 65.27448,
-    "max": 71.19512
-  },
-  "assumptions": [
-    "Image W=ceil(3*S*a_z/2000), a_z=1; state/output are reference-ratio budgets, not measurements.",
-    "Ordinary images: TN(240,130;50,1000) decimal MB; fixed anchors identified by ID; no global budget correction.",
-    "LLM: synthetic P=128..256 and P+G=5000..10000, equal WU/token, no tokenizer or inference.",
-    "Larger LLM token counts increase total KV bytes; this is not merely WU normalization.",
-    "Short-task lt bands are cumulative, not a partition; no minimum duration is imposed.",
-    "LLM RESULT: generated uint32 token IDs; raw KV state only, H=0 is a scenario assumption.",
-    "Sparse safe points: equal-sized synthetic files at the measured mean file size, not actual DOTA files.",
-    "Node IDs 0..65 round-robin by task ID only estimate demand; no geography, arrival, queue or deadline.",
-    "Only 5/10/20-percent state conservation checks; no L1/batches, n/delta search or N5 execution.",
-    "No faults, network transfers, checkpoint execution, or N5 algorithms were run."
-  ],
-  "profile": "n4c-c800-truncnormal-v3",
-  "seed": "n4c-g1-66",
-  "simulation_duration_s": 1300,
-  "arrival_window_s": [
-    1,
-    1050
-  ],
-  "endpoint_assignment": "non-geographic-balanced",
-  "state_metadata": "G1 model/preview only; not runtime checkpoint objects",
   "truncated_normal": {
     "mu_mb": 240,
     "sigma_mb": 130,
-    "lower_bytes": 50000000,
-    "upper_exclusive_bytes": 1000000000,
-    "expected_mean_mb": 259.20557793343204,
-    "expected_image_input_bytes": 192739932443.06958,
-    "ordinary_input_bytes": 183526849343,
-    "count": 705,
-    "input_size_bytes": {
-      "min": 50821400,
-      "mean": 260321772.1177305,
-      "max": 659115032,
-      "p10": 108204070.0,
-      "p25": 169013536.0,
-      "median": 254660536.0,
-      "p75": 335972902.0,
-      "p90": 419943884.8000001,
-      "p95": 472455241.59999996,
-      "p99": 542397873.6000003
-    },
-    "size_counts": {
-      "lt_100MB": 58,
-      "lt_150MB": 140,
-      "gt_500MB": 22,
-      "gt_750MB": 0
-    },
+    "lower_mb": 50,
+    "upper_exclusive_mb": 1000,
     "fixed_tail_task_ids": {
       "500000000": [
         97,
@@ -1017,17 +80,76 @@
         531,
         605
       ]
-    },
-    "sampling": "Original FNV-1a n4c-input-truncnorm quantiles retained; inverse CDF; raw arrays floor to 8 B; no total correction",
-    "anchor_rule": "Keep original ten 500MB IDs; retain first four compression and first dense 1GB IDs in original n4c-tail order"
+    }
   },
-  "service_time_partition": {
-    "lt_1s": 15,
-    "1s_le_t_lt_2s": 94,
-    "2s_le_t_lt_5s": 414,
-    "5s_le_t_le_10s": 272,
-    "10s_lt_t_lt_15s": 0,
-    "eq_15s": 5
-  },
-  "workload_candidate": "C800-TruncNormal-v3"
+  "placement_manifest": "../placement/placement-manifest.json",
+  "purpose": "Final 800-task scene: B-selected 800 MB task 120; other 799 tasks unchanged; no predecessor",
+  "node_compute_work_units": {
+    "0": 1387247,
+    "1": 1837121,
+    "2": 1194383,
+    "3": 1835971,
+    "4": 148871,
+    "5": 3030741,
+    "6": 0,
+    "7": 2485284,
+    "8": 47432308,
+    "9": 37445429,
+    "10": 1744891,
+    "11": 45627098,
+    "12": 48595464,
+    "13": 463946,
+    "14": 872912,
+    "15": 0,
+    "16": 2169738,
+    "17": 1707690,
+    "18": 583814,
+    "19": 941625,
+    "20": 1434497,
+    "21": 2592580,
+    "22": 6808653,
+    "23": 1069307,
+    "24": 1455897,
+    "25": 1580767,
+    "26": 2800526,
+    "27": 1362900,
+    "28": 799235,
+    "29": 2171926,
+    "30": 160939,
+    "31": 1056059,
+    "32": 1360005,
+    "33": 1529596,
+    "34": 2087611,
+    "35": 2409104,
+    "36": 2884902,
+    "37": 2716338,
+    "38": 1115151,
+    "39": 2038605,
+    "40": 1135557,
+    "41": 23196787,
+    "42": 25488344,
+    "43": 1193316,
+    "44": 2280245,
+    "45": 453258,
+    "46": 200212,
+    "47": 968123,
+    "48": 1991565,
+    "49": 5623247,
+    "50": 481245,
+    "51": 9784671,
+    "52": 15635188,
+    "53": 1447806,
+    "54": 1010909,
+    "55": 8664920,
+    "56": 2311580,
+    "57": 1258873,
+    "58": 1658793,
+    "59": 383109,
+    "60": 911984,
+    "61": 1953037,
+    "62": 1200000,
+    "63": 1111787,
+    "64": 1147138,
+    "65": 2082294
+  }
 }

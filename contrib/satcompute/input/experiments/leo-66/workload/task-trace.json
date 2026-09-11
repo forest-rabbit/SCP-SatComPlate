@@ -1312,9 +1312,9 @@
     {
       "task_id": 120,
       "task_profile": "compression",
-      "input_bytes": 207142024,
-      "output_bytes": 112370676,
-      "compute_work_units": 310714,
+      "input_bytes": 800000000,
+      "output_bytes": 433985046,
+      "compute_work_units": 1200000,
       "source_node_id": 54,
       "compute_node_id": 62,
       "result_node_id": 33,

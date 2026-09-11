@@ -4,6 +4,10 @@
 #include "ns3/ipv4-address-generator.h"
 #include "ns3/mac48-address.h"
 #include "ns3/online-topology-controller.h"
+#include "ns3/placement-policy.h"
+#include "ns3/decision-path-snapshot.h"
+#include "ns3/fixed-protection-controller.h"
+#include "ns3/least-recovery-load-placement-policy.h"
 #include "ns3/protection-transfer-key.h"
 #include "ns3/simulator.h"
 #include <algorithm>
@@ -427,6 +431,156 @@ Ids()
     Check(rejected, "uint64 ID wrapped into ordinary range");
 }
 
+/** New-flow queries use production ECMP capacity admission, without reservations. */
+void
+AdmissionPreview()
+{
+    auto config = Configuration();
+    {
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        auto tasks = Tasks(topology, config.parameters);
+        auto engine = tasks->GetTransferEngine();
+        uint32_t source = 0, destination = 0, blockedHop = 0;
+        for (uint32_t a = 0; a < 16 && source == destination; ++a)
+            for (uint32_t b = 0; b < 16; ++b)
+            {
+                if (a == b)
+                    continue;
+                const auto routes = topology.GetEcmpRouteCandidates(a, b);
+                if (a != b && routes.size() == 2)
+                {
+                    source = a;
+                    destination = b;
+                    blockedHop = topology.GetNextHopSatelliteId(a, routes.front().outputInterface);
+                    break;
+                }
+            }
+        Check(source != destination, "admission fixture needs two ECMP alternatives");
+        Simulator::Schedule(NanoSeconds(10000000), [&] {
+            NetworkTransfer block;
+            block.transferId = 3;
+            block.sourceSatelliteId = source;
+            block.destinationSatelliteId = blockedHop;
+            block.sizeBytes = 100000000;
+            engine->RegisterRuntimePlan(block);
+            engine->StartTransferNow(3);
+        });
+        Simulator::Schedule(NanoSeconds(11000000), [&] {
+            const auto before = engine->CollectCapacityAwareSummary();
+            const auto preview = engine->EstimateAdmissiblePath(source, destination);
+            Check(preview.admissible && preview.reachable && preview.failureReason.empty() &&
+                      preview.path.hops.front().destinationSatelliteId != blockedHop,
+                  "blocked first route hid admissible alternate");
+            const auto local = preview.path.hops.front().destinationSatelliteId;
+            PlacementContext context{source, {{local, true, true, true, true},
+                                               {destination, true, true, true, false}}};
+            uint32_t queries = 0;
+            DecisionPathSnapshot paths([&](auto a, auto b) {
+                ++queries;
+                return engine->EstimateAdmissiblePath(a, b);
+            });
+            auto probe = [&](auto a, auto b) {
+                return paths.Availability(a, b);
+            };
+            const auto pairs = BuildFeasiblePlacementPairs(context, probe);
+            Check(pairs.pairs == std::vector<PlacementDecision>{{local, destination}},
+                  "pair builder discarded admissible alternate ECMP path");
+            std::reverse(context.candidates.begin(), context.candidates.end());
+            Check(BuildFeasiblePlacementPairs(context, probe).pairs == pairs.pairs,
+                  "reordered pair enumeration changed real admission");
+            const auto count = queries;
+            const auto& cached = paths.Get(source, destination);
+            Check(queries == count && cached.path.admittedRateBps == preview.path.admittedRateBps &&
+                      cached.propagationNs == preview.propagationNs &&
+                      cached.TransferTimeNs(123456) == preview.TransferTimeNs(123456),
+                  "cost adapter repeated path query or changed full estimate");
+            Check(count == 3, "pair and resource query did not share one full snapshot");
+            const auto& localPath = paths.Get(source, source);
+            Check(localPath.local && localPath.TransferTimeNs(123456) == 1 &&
+                      localPath.TransferTimeNs(0) == 0,
+                  "snapshot lost LocalDelivery semantics");
+            const auto after = engine->CollectCapacityAwareSummary();
+            Check(before.activePathCountAtEnd == after.activePathCountAtEnd &&
+                      before.totalReservedRateBpsAtEnd == after.totalReservedRateBpsAtEnd,
+                  "read-only query changed reservations");
+            NetworkTransfer next;
+            next.transferId = 4;
+            next.sourceSatelliteId = source;
+            next.destinationSatelliteId = destination;
+            next.sizeBytes = 100000000;
+            engine->RegisterRuntimePlan(next);
+            engine->StartTransferNow(4);
+            // All capacity is now consumed, despite the positive decision snapshot.
+            next.transferId = 5;
+            engine->RegisterRuntimePlan(next);
+            engine->StartTransferNow(5);
+        });
+        Simulator::Schedule(NanoSeconds(12000000), [&] {
+            Check(engine->GetTransferState(4) == TransferRuntimeState::ACTIVE,
+                  "actual transfer disagrees with alternate admission preview");
+            Check(engine->GetTransferState(5) != TransferRuntimeState::ACTIVE &&
+                      engine->GetReceivedBytes(5) == 0,
+                  "cached preview bypassed real transfer capacity admission");
+            DecisionPathSnapshot fresh([&](auto a, auto b) {
+                return engine->EstimateAdmissiblePath(a, b);
+            });
+            const auto blocked = fresh.Get(source, destination);
+            Check(blocked.reachable && !blocked.admissible &&
+                      blocked.failureReason == "NO_ADMISSIBLE_PATH",
+                  "capacity exhaustion confused with topological disconnection");
+            const auto missing = engine->EstimateAdmissiblePath(source, 99);
+            Check(!missing.reachable && !missing.admissible && missing.failureReason == "NO_ROUTE",
+                  "missing endpoint did not return NO_ROUTE");
+            engine->FinalizeTransfersIfActive(
+                {3, 4, 5},
+                TransferTerminalState::CANCELLED,
+                TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+            DecisionPathSnapshot released([&](auto a, auto b) {
+                return engine->EstimateAdmissiblePath(a, b);
+            });
+            Check(released.Get(source, destination).admissible,
+                  "admission did not recover after release");
+        });
+        Simulator::Stop(NanoSeconds(END));
+        Simulator::Run();
+    }
+    Reset();
+}
+
+/** Real fixed controllers must pass live assignment counts to the injected placement. */
+std::vector<ProtectionTaskSummary>
+FixedPlacement(bool lrl)
+{
+    auto config = Configuration();
+    std::vector<ProtectionTaskSummary> rows;
+    {
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        auto tasks = CreateObject<TaskCoordinator>();
+        ComputeProfile profile;
+        for (uint32_t node = 0; node < 16; ++node)
+            profile.nodes.push_back({node, 100000});
+        TaskTrace trace{{Llm(1), Llm(2, 4)}};
+        trace.tasks[1].arrivalTimeNs = 20000000;
+        tasks->Initialize(profile, trace, topology, "size-aware", 1024,
+                          config.parameters.islMtuBytes, config.parameters.receiverRcvBufBytes,
+                          false, END);
+        FixedProtectionController controller(tasks, topology, 10000000000ULL, END, 50, 4, false,
+            lrl ? std::make_unique<LeastRecoveryLoadPlacementPolicy>(1)
+                : std::unique_ptr<PlacementPolicy>{});
+        Simulator::Stop(NanoSeconds(END));
+        Simulator::Run();
+        controller.Finalize();
+        Check(tasks->IsComplete(), "injected fixed placement changed primary completion");
+        Check(controller.PlacementLoads().Empty(), "fixed injected placement leaked ownership");
+        CheckZero(controller.Manager());
+        rows = controller.Manager().Summaries();
+    }
+    Reset();
+    return rows;
+}
+
 /** Stopping several transfers must not briefly admit/send a pending sibling. */
 void
 BatchCancellation()
@@ -551,6 +705,12 @@ main()
     try
     {
         Ids();
+        AdmissionPreview();
+        const auto fixedFfp = FixedPlacement(false), fixedLrl = FixedPlacement(true);
+        Check(fixedFfp.size() == 2 && fixedLrl.size() == 2 &&
+                  fixedFfp[0].remoteNode == fixedLrl[0].remoteNode &&
+                  fixedFfp[1].remoteNode != fixedLrl[1].remoteNode,
+              "fixed LRL did not react to the first task's live remote assignment");
         BatchCancellation();
         InclusiveCompletionBeforeUid();
         OutOfOrder();

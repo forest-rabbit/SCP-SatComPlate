@@ -71,6 +71,15 @@ branch and stops after each G1/G2/G3/G4 gate for user approval. The active
 contract is summarized in `contrib/satcompute/protection/README.md`; cL is an
 asynchronous generation delay and equivalent cost, never a primary compute pause.
 
+N5A is complete and merged into `n5` through PR #95. N5B uses one
+`feature/n5b-compfrr-frequency` branch and stops after G1/G2/G3 for user review.
+G1 implements pure frequency/placement policies and contract tests only; G2
+owns live fault-epoch/checkpoint integration. N5B/N5C formal algorithm experiments
+use online `generate`; `validation-replay` remains an N5A execution-test exception,
+not a production prediction input. Production policy must not depend on the
+shadow validator; test-only comparisons are allowed. Reuse the canonical fault
+predictor, current sampling probabilities, state adapter and production cost tiers.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.

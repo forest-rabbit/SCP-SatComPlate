@@ -68,7 +68,7 @@ CheckInputs(const std::filesystem::path& output)
         "contrib/satcompute/input/experiments/leo-66";
     auto profile = ReadComputeProfile(root / "compute/compute-profile.json", endpoints);
     auto trace = ReadTaskTrace(root / "workload/task-trace.json", 1300000000000, endpoints, profile);
-    Check(profile.nodes.size() == 66 && trace.tasks.size() == 800, "C800 input counts differ");
+    Check(profile.nodes.size() == 66 && trace.tasks.size() == 800, "final scene input counts differ");
     uint64_t input = 0, work = 0, result = 0;
     std::map<TaskProfile, uint64_t> counts;
     for (const auto& node : profile.nodes)
@@ -83,7 +83,7 @@ CheckInputs(const std::filesystem::path& output)
     Check(counts[TaskProfile::DENSE_IMAGE] == 240 && counts[TaskProfile::SPARSE_INFERENCE] == 240 &&
               counts[TaskProfile::COMPRESSION] == 240 && counts[TaskProfile::LLM] == 80,
           "C800 parsed task classes differ");
-    Check(input == 193526895311ULL && work == 351623833 && result == 99846517485ULL,
+    Check(input == 194119753287ULL && work == 352513119 && result == 100168131855ULL,
           "C800 parsed ledgers differ");
     nlohmann::json data;
     {

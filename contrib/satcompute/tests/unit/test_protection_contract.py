@@ -19,7 +19,7 @@ class ProtectionConfigTests(unittest.TestCase):
     def test_fixed_rejects_shadow_execution(self):
         result = self.run_cli("--protectionMode=fixed --compfrr-shadow=1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("fixed requires network tasks and shadow off", result.stdout)
+        self.assertIn("protection requires network tasks and shadow off", result.stdout)
 
     def test_fixed_generate_passes_mode_guard_without_running_default_scene(self):
         result = self.run_cli("--protectionMode=fixed --faultMode=generate --fixedProtectionDelta=0")
@@ -27,9 +27,45 @@ class ProtectionConfigTests(unittest.TestCase):
         self.assertIn("fixedProtectionDelta", result.stdout)
 
     def test_invalid_mode_is_rejected(self):
-        result = self.run_cli("--protectionMode=compfrr")
+        result = self.run_cli("--protectionMode=unsupported")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("protectionMode has an unsupported value", result.stdout)
+
+    def test_placement_guards(self):
+        for options in ("--placementMode=unsupported",
+                        "--placementMode=lrl --protectionMode=off"):
+            with self.subTest(options=options):
+                result = self.run_cli(options)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("placementMode", result.stdout)
+
+    def test_fixed_lrl_passes_placement_guard(self):
+        result = self.run_cli("--protectionMode=fixed --placementMode=lrl --fixedProtectionDelta=0")
+        self.assertIn("fixedProtectionDelta", result.stdout)
+        self.assertNotIn("lrl requires", result.stdout)
+
+    def test_future_baselines_and_placement_are_explicitly_unimplemented(self):
+        for options in ("--protectionMode=recompute", "--protectionMode=one-plus-one",
+                        "--protectionMode=fixed --placementMode=n5c"):
+            with self.subTest(options=options):
+                result = self.run_cli(options)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("NOT_IMPLEMENTED", result.stdout)
+
+    def test_busy_policy_guard_and_off_ignores_valid_values(self):
+        result = self.run_cli("--remoteBusyRecoveryPolicy=unsupported")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("remoteBusyRecoveryPolicy has an unsupported value", result.stdout)
+        for mode in ("recompute", "relocate"):
+            result = self.run_cli(f"--protectionMode=off --remoteBusyRecoveryPolicy={mode} --fixedProtectionDelta=0")
+            self.assertIn("fixedProtectionDelta", result.stdout)
+
+    def test_frequency_requires_generate_and_compute_sources(self):
+        for options in ("--faultMode=none", "--faultMode=generate --faultEnableF1=0 --faultEnableF2=0"):
+            with self.subTest(options=options):
+                result = self.run_cli(f"--protectionMode=compfrr {options}")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("protectionMode", result.stdout)
 
     def test_validation_replay_requires_explicit_input_and_no_online_audit(self):
         for options in ("--faultMode=validation-replay",
@@ -60,6 +96,19 @@ class ProtectionConfigTests(unittest.TestCase):
                 continue
             with self.subTest(path=path.name):
                 self.assertNotIn("compfrr-shadow-", path.read_text())
+
+    def test_n5b_probability_interface_keeps_canonical_causal_inputs(self):
+        frequency = ROOT / "contrib/satcompute/protection/policy/compfrr/frequency"
+        implementation = (frequency / "compfrr-frequency-policy.cc").read_text()
+        self.assertIn("PredictComputeFailureBeforeFinish(in)", implementation)
+        self.assertIn("currentSamplerQ != prediction.combinedStepFailureProbability", implementation)
+        for path in frequency.glob("*.*"):
+            if path.suffix not in (".h", ".cc"):
+                continue
+            for forbidden in ("QueryComputeRisk", "FaultTrace", "F3FaultParameters",
+                              "GetValue(", "ReadValidationFaultTrace"):
+                with self.subTest(path=path.name, forbidden=forbidden):
+                    self.assertNotIn(forbidden, path.read_text())
 
 
 if __name__ == "__main__":

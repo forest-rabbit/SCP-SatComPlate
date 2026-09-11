@@ -1,6 +1,5 @@
 {
-  "profile": "n4c-hotspot",
-  "seed": "n4c-g3-hotspot",
+  "placement_seed": "n4c-g3-hotspot",
   "regions": [
     [
       "north-america",
@@ -25,41 +24,33 @@
     ]
   ],
   "hotspot_weight": 64,
-  "background_weight": 1,
   "regional_candidate_limit": 1,
+  "background_weight": 1,
   "position_rule": "preceding native ECEF slice, age < 1 s; spherical lat/lon",
-  "maximum_position_age_ns": 998859722,
   "empty_region_fallback_counts": {
     "east-asia": 22,
     "europe": 55
   },
-  "fallback_rule": "remaining weighted candidates; background always available",
-  "business_attributes_and_arrivals_unchanged": true,
-  "f3": null,
   "by_region": {
     "north-america": {
       "task_count": 203,
       "input_bytes": 49997766643,
-      "work_units": 91480219,
-      "compute_service_demand_s": 914.80219
+      "work_units": 91480219
     },
     "background": {
       "task_count": 209,
-      "input_bytes": 49661443007,
-      "work_units": 89774437,
-      "compute_service_demand_s": 897.74437
+      "input_bytes": 50254300983,
+      "work_units": 90663723
     },
     "europe": {
       "task_count": 164,
       "input_bytes": 38292218015,
-      "work_units": 70255486,
-      "compute_service_demand_s": 702.55486
+      "work_units": 70255486
     },
     "east-asia": {
       "task_count": 224,
       "input_bytes": 55575467646,
-      "work_units": 100113691,
-      "compute_service_demand_s": 1001.13691
+      "work_units": 100113691
     }
   },
   "placements": [
@@ -8064,41 +8055,10 @@
       "weighted_hot_candidate": false
     }
   ],
-  "workload_candidate": "C800-TruncNormal-v3",
   "simulation_duration_s": 1300,
   "arrival_window_s": [
     1,
     1050
   ],
-  "total_input_bytes": 193526895311,
-  "fixed_tail_task_ids": {
-    "500000000": [
-      97,
-      111,
-      183,
-      283,
-      285,
-      301,
-      418,
-      421,
-      589,
-      623
-    ],
-    "1000000000": [
-      102,
-      191,
-      352,
-      531,
-      605
-    ]
-  },
-  "hotspot_shares": {
-    "task_count": 0.72875,
-    "input_bytes": 0.73140840856529,
-    "work_units_and_service_demand": 0.73303396359939,
-    "ordinary_image_median_bytes": {
-      "hotspot": 259098396.0,
-      "background": 240764824
-    }
-  }
+  "total_input_bytes": 194119753287
 }

@@ -79,7 +79,7 @@ struct Driver
 
     void OnTask(const TaskEventRecord& e)
     {
-        if (e.toState == TASK_RUNNING && protect)
+        if (e.toState == TASK_RUNNING && protect && e.taskId == 1)
         {
             ProtectionContext context;
             context.attempt = {e.taskId, 0};
@@ -106,6 +106,9 @@ struct Options
     double deadlineFactor{1.3};
     bool lateFaultUid{};
     int64_t stopNs{END};
+    bool remoteBusy{}, blockTargets{}, fillTargets{}, failState{};
+    TaskProfile taskProfile{TaskProfile::LLM};
+    RemoteBusyRecoveryPolicy busyPolicy{RemoteBusyRecoveryPolicy::RELOCATE};
 };
 
 RecoverySummary
@@ -121,6 +124,15 @@ Run(const Options& o, const std::string& output)
     auto tasks = CreateObject<TaskCoordinator>();
     ComputeProfile profile{{{0, o.recoveryRate}, {2, 100000}, {3, 100000}, {4, 100000}}};
     TaskTrace trace{{{1, o.source, 3, o.result, 400, 4, 100000, 1, 1, 2, TaskProfile::LLM}}};
+    if (o.taskProfile != TaskProfile::LLM)
+    {
+        auto& task = trace.tasks.front();
+        task.taskProfile = o.taskProfile;
+        task.inputBytes = 52428800;
+        task.computeWorkUnits = 78644;
+    }
+    if (o.remoteBusy)
+        trace.tasks.push_back({2, 1, 0, 1, 400, 4, 100000, 450000000, 3, 4, TaskProfile::LLM});
     tasks->Initialize(profile,
                       trace,
                       topology,
@@ -153,7 +165,47 @@ Run(const Options& o, const std::string& output)
     Driver driver{manager, o.protect};
     tasks->ConnectTaskObserver(MakeCallback(&Driver::OnTask, &driver));
     FixedProtectionPolicy policy(50, 4);
-    RecoveryController recovery(tasks, topology, manager, end, policy);
+    RecoveryController recovery(tasks, topology, manager, end, policy, o.busyPolicy);
+    if (o.blockTargets || o.fillTargets)
+    {
+        Simulator::Schedule(NanoSeconds(480000000), [&] {
+            for (auto node : {2u, 4u})
+            {
+                if (o.fillTargets)
+                    Check(manager.Pool(node)
+                              .Allocate(99, StorageKind::REMOTE_STATE, manager.Pool(node).Free())
+                              .has_value(),
+                          "target fill failed");
+                if (o.blockTargets)
+                    for (auto service : tasks->GetComputeServices())
+                        if (service->GetNodeId() == node)
+                            Check(service->ReserveRecovery(99, 1), "target lock failed");
+            }
+        });
+        Simulator::Schedule(NanoSeconds(1100000000), [&] {
+            for (auto node : {2u, 4u})
+            {
+                manager.Pool(node).ReleaseTask(99);
+                for (auto service : tasks->GetComputeServices())
+                    if (service->GetNodeId() == node)
+                        service->CancelRecovery(99, 1);
+            }
+        });
+    }
+    if (o.failState)
+        Simulator::Schedule(NanoSeconds(500100000), [&] {
+            const auto r = recovery.Summaries().front();
+            Check(manager.Pool(r.snapshot.remoteNode).Find(r.snapshot.remoteObject) != nullptr,
+                  "migration released only checkpoint before destination received it");
+            bool failed = false;
+            for (const auto& flow : manager.Flows())
+                if (flow.key.kind == ProtectionTransferKind::RECOVERY_STATE)
+                    failed = tasks->GetTransferEngine()->FinalizeTransferIfActive(
+                        flow.transferId,
+                        TransferTerminalState::FAILED,
+                        TransferTerminalReason::TASK_FAILED);
+            Check(failed, "migration failure fixture missed real state flow");
+        });
     if (!o.faults.empty())
         Simulator::Schedule(NanoSeconds(600000000), [tasks] {
             const auto& task = tasks->GetTaskRuntimes().front();
@@ -187,8 +239,41 @@ Run(const Options& o, const std::string& output)
         Reset();
         return probe;
     }
-    Check(rows.size() == 1, o.name + ": recovery row missing");
+    // F3 of busy remote also interrupts its ordinary background task.
+    Check(rows.size() == (o.name == "migrate-f3-0" ? 2u : 1u), o.name + ": recovery row missing");
     const auto r = rows.front();
+    if (o.name == "remote-f3-recompute")
+        Check(r.checkpointFallbackReason == "REMOTE_F3", "remote F3 fallback diagnostic");
+    if (o.name == "remote-compute-outage")
+        Check(r.relocationTrigger == "REMOTE_UNAVAILABLE" && r.relocationAttempted,
+              "compute outage incorrectly destroyed readable checkpoint");
+    if (r.path.starts_with("MIGRATE_"))
+    {
+        const TaskStateAdapter layout(trace.tasks.front());
+        Check(r.checkpointStateExists && r.relocationAttempted &&
+                  r.recoveryNode != r.snapshot.remoteNode &&
+                  r.relocationBytes == layout.CommittedStateBytes(r.snapshot.remoteWork),
+              "migration did not preserve exact checkpoint sizing/ownership");
+        Check(r.inputStartedNs < 0, "migration replayed INPUT");
+        if (o.remoteBusy)
+            Check(r.remoteBusyAtFault && r.relocationTrigger == "REMOTE_BUSY",
+                  "busy fixture missed busy");
+        if (o.success)
+        {
+            Check(r.stateReceivedNs > r.acceptedNs && r.computeStartedNs >= r.stateReceivedNs,
+                  "migration computed before actual state reception");
+            if (r.path == "MIGRATE_TAIL")
+                Check(r.tailCommitNs ==
+                          std::max(r.tailReceivedNs, r.stateReceivedNs) + r.snapshot.remoteCostNs,
+                      "parallel state/tail did not wait for both receivers plus cR");
+        }
+    }
+    if (o.name == "off-recompute-local" || o.name == "initializing-recompute")
+        Check(!r.checkpointStateExists && r.checkpointFallbackReason == "STATE_MISSING",
+              "missing checkpoint fallback diagnostic");
+    if (r.path == "TAIL" || r.path == "REMOTE_REDO")
+        Check(r.checkpointStateExists && r.checkpointFallbackReason.empty(),
+              "checkpoint recovery incorrectly labeled fallback");
     if (o.name == "tail-faster" || o.name == "recovery-f3-fails")
         Check(r.normalProtectionCostNs == 4000000 && r.reservedIdleNs == 18280839 &&
                   r.plannedCatchupRedoWu == 2199 && r.plannedTotalRecoveryWu == 84500 &&
@@ -242,7 +327,8 @@ Run(const Options& o, const std::string& output)
               << " x/l/r=" << r.snapshot.actualWork << '/' << r.snapshot.localWork << '/'
               << r.snapshot.remoteWork << " input=" << r.inputMode << " result=" << r.resultMode
               << '\n';
-    Check(r.path == o.expectedPath, o.name + ": selected path differs");
+    Check(o.expectedPath == "MIGRATE" ? r.path.starts_with("MIGRATE_") : r.path == o.expectedPath,
+          o.name + ": selected path differs");
     Check(tasks->GetTaskRuntimes().front().TaskSucceeded() == o.success,
           o.name + ": logical outcome differs");
     Check(r.snapshot.remoteWork <= r.snapshot.localWork &&
@@ -261,10 +347,10 @@ Run(const Options& o, const std::string& output)
               "catchup duration differs");
         Check(r.resultBytes == 4 && r.resultCompleteNs >= r.computeCompleteNs,
               "result byte/time contract differs");
-        const auto terminals =
-            std::count_if(tasks->GetTaskEvents().begin(),
-                          tasks->GetTaskEvents().end(),
-                          [](const auto& e) { return IsTerminalTaskState(e.toState); });
+        const auto terminals = std::count_if(
+            tasks->GetTaskEvents().begin(),
+            tasks->GetTaskEvents().end(),
+            [](const auto& e) { return e.taskId == 1 && IsTerminalTaskState(e.toState); });
         Check(terminals == 1, "logical task terminalized more than once");
     }
     for (const auto& [node, pool] : manager.Pools())
@@ -279,13 +365,21 @@ Run(const Options& o, const std::string& output)
     {
         Check(plan.sourceSatelliteId != plan.destinationSatelliteId,
               "same-node synthetic UDP created");
-        if (plan.transferId > 2 &&
+        if (tasks->GetTransferEngine()->IsRuntimeTransfer(plan.transferId) &&
             !tasks->GetTransferEngine()->IsProtectionTransfer(plan.transferId))
         {
-            Check(plan.sourceSatelliteId == *r.recoveryNode &&
-                      plan.destinationSatelliteId == o.result && plan.sizeBytes == 4,
+            const auto owner = std::find_if(rows.begin(), rows.end(), [&](const auto& row) {
+                return row.resultTransferId == plan.transferId;
+            });
+            Check(owner != rows.end(), "winning RESULT has no recovery owner");
+            const auto& definitions = tasks->GetTaskRuntimes();
+            const auto original = std::find_if(definitions.begin(), definitions.end(), [&](const auto& t) {
+                return t.definition.taskId == owner->snapshot.taskId;
+            });
+            Check(original != definitions.end() && plan.sourceSatelliteId == *owner->recoveryNode &&
+                      plan.destinationSatelliteId == original->definition.resultNodeId &&
+                      plan.sizeBytes == original->definition.outputBytes,
                   "winning RESULT used immutable primary source");
-            Check(r.resultTransferId == plan.transferId, "result history lost runtime transfer ID");
             if (o.name == "network-result-f3")
                 Check(tasks->GetTransferEngine()->GetTerminalReason(plan.transferId) ==
                           TransferTerminalReason::SOURCE_SATELLITE_FAILED,
@@ -487,7 +581,7 @@ main(int argc, char** argv)
             output);
         Run({"remote-compute-outage",
              {Fault(1, 0, 170000000), Fault(2, 3, 180000000)},
-             "RECOMPUTE",
+             "MIGRATE_TAIL",
              true,
              true,
              1,
@@ -548,6 +642,81 @@ main(int argc, char** argv)
                   first.resultCompleteNs == second.resultCompleteNs &&
                   first.normalProtectionCostNs == second.normalProtectionCostNs,
               "same-ns UID reversal changed physical snapshot or recovery result");
+        for (auto profile : {TaskProfile::LLM,
+                             TaskProfile::DENSE_IMAGE,
+                             TaskProfile::SPARSE_INFERENCE,
+                             TaskProfile::COMPRESSION})
+        {
+            Options migration{std::string("migrate-tail-") + TaskProfileToString(profile),
+                              {Fault(1, 3, 500000000)},
+                              "MIGRATE"};
+            migration.remoteBusy = true;
+            migration.taskProfile = profile;
+            Run(migration, output);
+        }
+        Options busyRecompute{"busy-policy-recompute", {Fault(1, 3, 500000000)}, "RECOMPUTE"};
+        busyRecompute.remoteBusy = true;
+        busyRecompute.deadlineFactor = 3;
+        busyRecompute.busyPolicy = RemoteBusyRecoveryPolicy::RECOMPUTE;
+        const auto recomputed = Run(busyRecompute, output);
+        Check(recomputed.checkpointFallbackReason == "REMOTE_BUSY" &&
+                  !recomputed.relocationAttempted && recomputed.inputStartedNs >= 0 &&
+                  recomputed.plannedCatchupRedoWu == recomputed.snapshot.actualWork &&
+                  recomputed.actualCatchupRedoWu == recomputed.plannedCatchupRedoWu,
+              "busy recompute did not replay INPUT and execute full catch-up");
+        busyRecompute.name = "busy-policy-recompute-interrupted";
+        busyRecompute.success = false;
+        busyRecompute.faults.push_back(Fault(2, *recomputed.recoveryNode,
+                                           recomputed.computeStartedNs + 1000000, true));
+        const auto interrupted = Run(busyRecompute, output);
+        Check(interrupted.actualCatchupRedoWu > 0 &&
+                  interrupted.actualCatchupRedoWu < interrupted.plannedCatchupRedoWu &&
+                  interrupted.actualPostCatchupWu == 0,
+              "interrupted recompute charged planned rather than executed catch-up");
+        Options unavailable{"remote-compute-outage",
+                            {Fault(1, 0, 170000000), Fault(2, 3, 180000000)},
+                            "MIGRATE_TAIL", true, true, 1, 1};
+        unavailable.busyPolicy = RemoteBusyRecoveryPolicy::RECOMPUTE;
+        Run(unavailable, output);
+        for (const auto* reason : {"REMOTE_UNAVAILABLE", "PATH_UNAVAILABLE", "REMOTE_F3", "STATE_MISSING"})
+            Check(AllowsCheckpointRelocation(RemoteBusyRecoveryPolicy::RECOMPUTE, reason),
+                  "busy policy changed a non-busy branch");
+        Options redoMigration{"migrate-redo",
+                              {Fault(1, 2, 490000000, true), Fault(2, 3, 500000000)},
+                              "MIGRATE_REDO"};
+        redoMigration.remoteBusy = true;
+        Run(redoMigration, output);
+        Options blockedMigration{"migrate-no-target", {Fault(1, 3, 500000000)}, "RECOMPUTE", false};
+        blockedMigration.remoteBusy = blockedMigration.blockTargets = true;
+        auto blocked = Run(blockedMigration, output);
+        Check(blocked.relocationAttempted &&
+                  blocked.relocationFailureReason == "NO_ELIGIBLE_RECOVERY_NODE",
+              "missing relocation target not diagnosed");
+        blockedMigration.name = "migrate-no-storage";
+        blockedMigration.blockTargets = false;
+        blockedMigration.fillTargets = true;
+        auto full = Run(blockedMigration, output);
+        Check(full.relocationFailureReason == "DESTINATION_STORAGE_UNAVAILABLE",
+              "destination storage rejection not diagnosed");
+        Options failedMigration{"migrate-transfer-failed",
+                                {Fault(1, 3, 500000000)},
+                                "MIGRATE_TAIL",
+                                false};
+        failedMigration.remoteBusy = failedMigration.failState = true;
+        auto failed = Run(failedMigration, output);
+        Check(!failed.relocationFailureReason.empty() && failed.actualTotalRecoveryWu == 0,
+              "failed migration lost failure accounting");
+        for (auto node : {0u, 2u})
+        {
+            Options lost{std::string("migrate-f3-") + std::to_string(node),
+                         {Fault(1, 3, 500000000), Fault(2, node, 500100000, true)},
+                         "MIGRATE_TAIL",
+                         false};
+            lost.remoteBusy = true;
+            auto terminal = Run(lost, output);
+            Check(terminal.actualTotalRecoveryWu == 0 && !terminal.relocationFailureReason.empty(),
+                  "F3 during migration started compute or lost terminal diagnostic");
+        }
         std::cout << "recovery-runtime-test: PASS (" << checks << " checks)\n";
         return 0;
     }

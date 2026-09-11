@@ -148,6 +148,23 @@ SatComputeIpv4GlobalRouting::GetEffectiveRouteCandidates(Ipv4Address destination
     return candidates;
 }
 
+uint32_t
+SatComputeIpv4GlobalRouting::PreviewNextHop(const EcmpFlowKey& key,
+                                            const std::vector<EcmpRouteCandidate>& candidates) const
+{
+    NS_ABORT_MSG_IF(candidates.empty(), "route preview needs candidates");
+    auto scratch = CreateObject<FlowRouteRegistry>();
+    scratch->RegisterTransfer(key, 1, 1);
+    scratch->BeginSending(key);
+    auto policy = RoutingPolicyFactory::CreateNextHopPolicy(
+        m_selectionMode,
+        PeekPointer(scratch),
+        m_flowRouteRegistry ? &m_flowRouteRegistry->GetSizeAwareLoadState() : nullptr);
+    const auto selected =
+        policy->Select({m_satelliteId, m_routeEpoch, m_hashSeed, key}, candidates);
+    return selected.candidateIndex;
+}
+
 void
 SatComputeIpv4GlobalRouting::SetIpv4(Ptr<Ipv4> ipv4)
 {

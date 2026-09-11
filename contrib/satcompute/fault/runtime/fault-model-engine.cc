@@ -348,6 +348,31 @@ FaultModelEngine::RecordProbability(uint32_t nodeId,
         return;
     }
 
+    const auto input = PredictionInput(nodeId, state, simulationTimeNs, task->remainingTimeNs);
+    const ComputeFailurePrediction prediction = PredictComputeFailureBeforeFinish(input);
+    m_probabilityRecords.push_back(
+        {simulationTimeNs, nodeId, task->taskId, task->startTimeNs, task->serviceTimeNs,
+         task->elapsedTimeNs, task->remainingTimeNs, simulationTimeNs + task->remainingTimeNs,
+         task->completionRatio, prediction.f1StepFailureProbability,
+         prediction.f2StepFailureProbability, prediction.combinedStepFailureProbability,
+         prediction.horizonStepCount, prediction.predictedFailureProbability});
+}
+
+void
+FaultModelEngine::SetEpochObservers(
+    std::function<void(const FaultEpochInput&)> before,
+    std::function<void(int64_t, const std::vector<FaultEpochOutcome>&)> after)
+{
+    if (static_cast<bool>(before) != static_cast<bool>(after))
+        throw FaultModelEngineError("fault epoch observers require both boundaries");
+    m_beforeEpoch = std::move(before);
+    m_afterEpoch = std::move(after);
+}
+
+ComputeFailurePredictionInput
+FaultModelEngine::PredictionInput(uint32_t nodeId, const NodeState& state,
+                                  int64_t simulationTimeNs, int64_t remainingNs) const
+{
     ComputeFailurePredictionInput input;
     input.f1Model = m_f1Model.has_value() ? &m_f1Model.value() : nullptr;
     input.f1State = state.f1State;
@@ -362,31 +387,17 @@ FaultModelEngine::RecordProbability(uint32_t nodeId,
             };
     }
     input.predictionTimeNs = simulationTimeNs;
-    input.remainingComputeTimeNs = task->remainingTimeNs;
+    input.remainingComputeTimeNs = remainingNs;
     input.checkIntervalNs = m_checkIntervalNs;
-    const ComputeFailurePrediction prediction =
-        PredictComputeFailureBeforeFinish(input);
-    m_probabilityRecords.push_back(
-        {simulationTimeNs,
-         nodeId,
-         task->taskId,
-         task->startTimeNs,
-         task->serviceTimeNs,
-         task->elapsedTimeNs,
-         task->remainingTimeNs,
-         simulationTimeNs + task->remainingTimeNs,
-         task->completionRatio,
-         prediction.f1StepFailureProbability,
-         prediction.f2StepFailureProbability,
-         prediction.combinedStepFailureProbability,
-         prediction.horizonStepCount,
-         prediction.predictedFailureProbability});
+    return input;
 }
 
 void
 FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
                               bool updateComputeModels)
 {
+    if (updateComputeModels)
+        m_lastCheckStartedNs = simulationTimeNs;
     NS_ABORT_MSG_IF(!m_configured || !m_bound || m_finalized ||
                         (m_parameters.f2.enabled && m_constellation == nullptr) ||
                         simulationTimeNs != Simulator::Now().GetNanoSeconds(),
@@ -402,6 +413,7 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
 
     std::vector<GeneratedFaultEvent> events;
     std::vector<FaultDefinition> completedRecords;
+    std::vector<FaultEpochOutcome> epochOutcomes;
     for (auto& [nodeId, state] : m_nodes)
     {
         if (state.activeComputeFault.has_value() &&
@@ -441,7 +453,7 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
             m_stateAuditRecords.push_back({simulationTimeNs, nodeId, state.f1State, state.f2State,
                                            computeAvailable && !f3NodeIds.contains(nodeId)});
         }
-        if (f3NodeIds.contains(nodeId) || !computeAvailable)
+        if (!computeAvailable)
         {
             continue;
         }
@@ -452,6 +464,20 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
             m_f2Model ? state.f2State.stepFailureProbability : 0.0;
         const double stepFailureProbability =
             CombineComputeFaultProbabilities(f1StepFailureProbability, f2StepFailureProbability);
+
+        // F3 eligibility is deliberately not exposed to the proposal. Preserve the
+        // existing no-F1/F2-draw rule on a same-time F3, reporting it only afterwards.
+        const auto running = state.computeService->GetRunningTaskSnapshot();
+        if (m_beforeEpoch && state.computeService->IsComputeAvailable() && running &&
+            running->remainingTimeNs > 0)
+        {
+            m_beforeEpoch({nodeId, running->taskId, stepFailureProbability,
+                           PredictionInput(nodeId, state, simulationTimeNs,
+                                            running->remainingTimeNs)});
+            epochOutcomes.push_back({nodeId, running->taskId, !f3NodeIds.contains(nodeId), false});
+        }
+        if (f3NodeIds.contains(nodeId))
+            continue;
 
         RecordProbability(nodeId, state, simulationTimeNs);
 
@@ -520,6 +546,22 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
         const auto node = m_nodes.find(nodeId);
         if (node != m_nodes.end())
         {
+            const auto running = node->second.computeService->GetRunningTaskSnapshot();
+            if (running)
+            {
+                const auto input = QueryTaskPrediction(nodeId, running->remainingTimeNs);
+                if (input)
+                {
+                    const auto prediction = PredictComputeFailureBeforeFinish(*input);
+                    m_f3RiskRecords.push_back({simulationTimeNs,
+                                               nodeId,
+                                               running->taskId,
+                                               prediction.f1StepFailureProbability,
+                                               prediction.f2StepFailureProbability,
+                                               prediction.combinedStepFailureProbability,
+                                               prediction.predictedFailureProbability});
+                }
+            }
             ShortenActiveComputeFault(node->second, simulationTimeNs);
         }
         NS_ABORT_MSG_IF(m_nextFaultId == std::numeric_limits<uint64_t>::max(),
@@ -536,6 +578,15 @@ FaultModelEngine::ProcessTime(int64_t simulationTimeNs,
         m_trace.faults.insert(m_trace.faults.end(),
                               completedRecords.begin(),
                               completedRecords.end());
+    }
+    if (m_afterEpoch && updateComputeModels)
+    {
+        for (auto& result : epochOutcomes)
+            result.faultHit = std::any_of(events.begin(), events.end(), [&](const auto& event) {
+                return event.eventType == FaultEventType::START &&
+                       event.fault.nodeId == result.nodeId;
+            });
+        m_afterEpoch(simulationTimeNs, epochOutcomes);
     }
 }
 
@@ -584,6 +635,37 @@ FaultModelEngine::GetNodeSnapshots() const
              m_faultController->GetState().IsComputeAvailable(nodeId)});
     }
     return snapshots;
+}
+
+std::optional<ComputeFailurePredictionInput>
+FaultModelEngine::QueryTaskPrediction(uint32_t nodeId, int64_t remainingNs) const
+{
+    const int64_t now = Simulator::Now().GetNanoSeconds();
+    const auto it = m_nodes.find(nodeId);
+    if (!m_bound || m_finalized || remainingNs <= 0 || (!m_f1Model && !m_f2Model) ||
+        it == m_nodes.end() || !it->second.computeService ||
+        !m_faultController->GetState().IsComputeAvailable(nodeId) ||
+        !m_faultController->GetState().IsSatelliteAvailable(nodeId))
+        return std::nullopt;
+    if (remainingNs > std::numeric_limits<int64_t>::max() - now ||
+        m_checkIntervalNs > std::numeric_limits<int64_t>::max() - now)
+        throw std::invalid_argument("task prediction time overflows int64");
+    auto state = it->second;
+    if (m_f1Model)
+        m_f1Model->AdvanceTo(state.f1State,
+                             state.thermalTimeNs,
+                             now,
+                             state.computeService->HasRunningTask(),
+                             m_parameters.checkIntervalSeconds);
+    if (m_f2Model)
+        m_f2Model->Update(state.f2State,
+                          m_constellation->GetPositionAt(nodeId, NanoSeconds(now)),
+                          m_parameters.checkIntervalSeconds);
+    auto input = PredictionInput(nodeId, state, now, remainingNs);
+    const bool pendingNow = now > 0 && now % m_checkIntervalNs == 0 && m_lastCheckStartedNs < now;
+    input.firstSampleTimeNs = pendingNow ? now : now + m_checkIntervalNs - now % m_checkIntervalNs;
+    input.finishExclusive = true;
+    return input;
 }
 
 ComputeRiskSnapshot
@@ -693,6 +775,8 @@ FaultModelEngine::DoDispose()
     m_taskCoordinator = nullptr;
     m_constellation = nullptr;
     m_probabilityRecords.clear();
+    m_beforeEpoch = {};
+    m_afterEpoch = {};
     Object::DoDispose();
 }
 

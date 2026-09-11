@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "fixed-protection-policy.h"
-#include <algorithm>
 #include <stdexcept>
 
 namespace ns3::protection
 {
-FixedProtectionPolicy::FixedProtectionPolicy(uint32_t deltaPermille, uint32_t batchN)
-    : m_delta(deltaPermille), m_batchN(batchN)
+FixedProtectionPolicy::FixedProtectionPolicy(uint32_t deltaPermille, uint32_t batchN,
+                                             std::unique_ptr<PlacementPolicy> placement)
+    : m_placement(placement ? std::move(placement) : std::make_unique<FirstFeasiblePlacementPolicy>()),
+      m_delta(deltaPermille), m_batchN(batchN)
 {
     if (!m_delta || m_delta > 1000 || !m_batchN || m_batchN > 1000 / m_delta)
         throw std::invalid_argument("fixed checkpoint requires delta>0, n>0, n*delta<=1");
@@ -19,24 +20,12 @@ FixedProtectionPolicy::OnTaskComputeStart(const ProtectionContext& context)
         !context.taskSelected || context.phase != ProtectionPhase::OFF ||
         !m_started.insert(context.attempt.taskId).second)
         return {};
-    auto nodes = context.candidates;
-    std::sort(nodes.begin(), nodes.end(), [](const auto& a, const auto& b) {
-        return a.nodeId < b.nodeId;
-    });
-    const auto feasible = [&](const auto& node) {
-        return node.nodeId != context.primaryNode && node.healthy && node.idle && node.reachable;
-    };
-    auto local = std::find_if(
-        nodes.begin(), nodes.end(), [&](const auto& n) { return feasible(n) && n.oneHop; });
-    if (local == nodes.end())
-        return {};
-    auto remote = std::find_if(nodes.begin(), nodes.end(), [&](const auto& n) {
-        return feasible(n) && n.nodeId != local->nodeId;
-    });
-    if (remote == nodes.end())
+    const auto pair = m_placement->SelectCheckpointPair(
+        {context.primaryNode, context.candidates}, context.previewPath);
+    if (!pair)
         return {};
     return {ActionKind::START_CHECKPOINT,
-            CheckpointConfiguration{m_delta, m_batchN, local->nodeId, remote->nodeId}};
+            CheckpointConfiguration{m_delta, m_batchN, pair->localNode, pair->remoteNode}};
 }
 
 ProtectionAction

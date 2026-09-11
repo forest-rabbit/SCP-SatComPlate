@@ -66,6 +66,13 @@ transfer 完成必须由 receiver 收齐声明字节。链路/队列丢包可能
 
 ## reservation 生命周期
 
+`EstimateAdmissiblePath` 是新流的只读快照，不分配端口、不预留容量、不更改已有路径。
+capacity-aware 直接复用真实 FindPath（含备选 ECMP 最短路径）；其他模式复用对应 next-hop
+policy，在隔离 assignment 上预览。`NO_ROUTE` 表示无拓扑路由，`NO_ADMISSIBLE_PATH`
+表示存在路由但当前无可准入路径。估计采用 payload 序列化加传播时间，不包含未来排队。
+查询不是预约：后续其他流、端口分配或容量变化可能改变实际选择，真实传输仍重新准入，
+并沿用下面的等待、暂停和重准入合同。
+
 - size-aware 在活动 flow 的每个节点保存声明字节 assignment，sender 完成发送时
   释放；
 - capacity-aware 在完整 ECMP 最短路径的每条有向边预留 admitted rate，receiver

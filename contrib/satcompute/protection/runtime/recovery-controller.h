@@ -3,6 +3,7 @@
 #define SATCOMPUTE_RECOVERY_CONTROLLER_H
 #include "../../traffic/local-delivery.h"
 #include "../mechanism/checkpoint/checkpoint-manager.h"
+#include "../policy/recovery-policy.h"
 #include <filesystem>
 
 namespace ns3::protection
@@ -24,6 +25,14 @@ struct RecoverySummary
     uint64_t actualCatchupRedoWu{}, actualPostCatchupWu{}, actualTotalRecoveryWu{}, recoveryRate{},
         primaryRate{};         ///< Observed WU, with explicit rates for equivalent cost.
     int64_t actualServiceNs{}; ///< Actual service prefix, not wall-clock stage duration.
+    bool checkpointStateExists{}, remoteEligibleAtFault{}, remoteBusyAtFault{};
+    ///< Read-only fault-time diagnostic, not recovery admission overrides.
+    std::string checkpointFallbackReason; ///< Why actual decision cannot use checkpoint state.
+    uint64_t checkpointStateBytes{}, relocationBytes{};
+    bool relocationAttempted{}; ///< Candidate search attempted, even if no target admits it.
+    std::string relocationFailureReason, relocationTrigger;
+    int64_t estimatedMigrateTailNs{-1}, estimatedMigrateRedoNs{-1}, estimatedRecomputeNs{-1},
+        stateStartedNs{-1}, stateReceivedNs{-1};
 };
 
 /** One recovery event, including local logical deliveries which have no transfer ID. */
@@ -44,7 +53,8 @@ class RecoveryController : public ProtectionMechanism
                        SatelliteRuntimeView& topology,
                        CheckpointManager& manager,
                        int64_t stopNs,
-                       ProtectionPolicy& policy);
+                       ProtectionPolicy& policy,
+                       RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE);
     ~RecoveryController();
     bool Supports(ActionKind kind) const override;
     void Execute(const ProtectionContext& context, const ProtectionAction& action) override;
@@ -68,6 +78,9 @@ class RecoveryController : public ProtectionMechanism
 
     /** Dedicated output; never created for protection off. */
     void WriteMetrics(const std::filesystem::path& directory) const;
+    /** Observe accepted/finished execution ownership; no change to recovery scheduling. */
+    void SetLoadObserver(std::function<void(uint64_t, uint32_t, bool)> observer)
+    { m_loadObserver = std::move(observer); }
 
   private:
     /** Stable heap-owned attempt and asynchronous resources. */
@@ -80,6 +93,8 @@ class RecoveryController : public ProtectionMechanism
         RecoverySummary summary;     ///< Actual recovery evidence.
         Ptr<ComputeService> service; ///< Reserved then executing recovery service.
         uint64_t startWork{}, tailObject{}; ///< Adopted progress and temporary pool identity.
+        uint64_t relocatedObject{};         ///< Destination state reservation/committed object.
+        bool mergeScheduled{};              ///< State/tail arrival race guard.
         bool live{true}; ///< Guards every timer/transfer callback after terminalization.
         std::vector<EventId> timers;     ///< Decision, local delivery and merge callbacks.
         std::vector<uint64_t> transfers; ///< Real recovery network history.
@@ -89,7 +104,11 @@ class RecoveryController : public ProtectionMechanism
     void OnTask(const TaskEventRecord& event);
     void Decide(State& state);
     bool AcceptAndExecute(State& state, uint32_t node);
+    bool TryRelocate(State& state); ///< Stable-ID search; feasible checkpoints precede recompute.
+    void MigrationReady(State& state); ///< Wait for both real receivers before one cR merge.
     bool Eligible(uint32_t node, const State& state) const;
+    /** Common node filters, followed by the operation's real transfer/storage checks. */
+    std::vector<uint32_t> Candidates(const State& state) const;
     bool Reachable(uint32_t source, uint32_t destination) const;
     std::optional<int64_t> Estimate(uint32_t source, uint32_t destination, uint64_t bytes) const;
     void Deliver(State& state,
@@ -119,9 +138,11 @@ class RecoveryController : public ProtectionMechanism
     Ptr<NetworkTransferEngine> m_network; ///< Existing real UDP engine.
     int64_t m_stopNs;                     ///< Absolute simulation endpoint.
     ProtectionRuntime m_faultRuntime;     ///< Established mechanism first, then policy fallback.
+    RemoteBusyRecoveryPolicy m_busyPolicy; ///< Changes REMOTE_BUSY only, not fault availability.
     std::map<uint64_t, std::unique_ptr<State>> m_states; ///< Sole recovery per task.
     std::map<uint64_t, std::pair<uint64_t, ProtectionTransferKind>> m_flows; ///< Real callbacks.
     std::vector<RecoveryEvent> m_events; ///< Append-only causal history.
+    std::function<void(uint64_t, uint32_t, bool)> m_loadObserver; ///< Current recovery load sink.
 };
 } // namespace ns3::protection
 #endif

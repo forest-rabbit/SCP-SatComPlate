@@ -8,6 +8,7 @@
 #include "fault-controller.h"
 
 #include "ns3/compute-failure-probability-record.h"
+#include "ns3/compute-failure-predictor.h"
 #include "ns3/fault-para.h"
 #include "ns3/compute-fault-combination.h"
 #include "ns3/f1-self-state-fault-model.h"
@@ -31,6 +32,32 @@ namespace ns3
 class ComputeService;
 class OnlineOrbitConstellation;
 class TaskCoordinator;
+
+/** Causal pre-sample task state. No outcome, schedule, or future workload is exposed. */
+struct FaultEpochInput
+{
+    uint32_t nodeId{}; ///< Stable compute node.
+    uint64_t taskId{}; ///< Currently executing task.
+    double currentSampleProbability{}; ///< Exact probability used by the current sampler.
+    ComputeFailurePredictionInput prediction; ///< Canonical predictor input from live state.
+};
+
+/** Observed result delivered only after the complete same-time fault batch is applied. */
+struct FaultEpochOutcome
+{
+    uint32_t nodeId{}; ///< Stable compute node.
+    uint64_t taskId{}; ///< Pre-sample executing task.
+    bool sampled{}, faultHit{}; ///< F1/F2 sampling eligibility and actual current node hit.
+};
+
+/** Risk observed immediately before an actual F3; never an extra sampling event. */
+struct F3ComputeRiskRecord
+{
+    int64_t timeNs{};
+    uint32_t nodeId{};
+    uint64_t taskId{};
+    double pF1{}, pF2{}, qCompute{}, pFinish{};
+};
 
 /** Availability of a read-only node-level forecast. */
 enum class ComputeRiskStatus
@@ -123,6 +150,10 @@ class FaultModelEngine : public Object
     /** Bind and initialize the shared native orbit source required by F2. */
     void BindOrbitConstellation(const OnlineOrbitConstellation& constellation);
 
+    /** Optional synchronous observer pair; absent in off/fixed modes. Never owns RNG. */
+    void SetEpochObservers(std::function<void(const FaultEpochInput&)> before,
+                           std::function<void(int64_t, const std::vector<FaultEpochOutcome>&)> after);
+
     /** Return the canonical occurred-event trace. */
     const FaultTrace& Finalize();
 
@@ -140,6 +171,15 @@ class FaultModelEngine : public Object
      * @return Risk conditional on the current load and no intervening F3 event.
      */
     ComputeRiskSnapshot QueryComputeRisk(uint32_t nodeId, int64_t horizonNs = 1000000000LL) const;
+
+    /** Current causal copies and actual next sampling point; no RNG or future F3 access. */
+    std::optional<ComputeFailurePredictionInput> QueryTaskPrediction(uint32_t nodeId,
+                                                                     int64_t remainingNs) const;
+
+    const std::vector<F3ComputeRiskRecord>& GetF3ComputeRiskRecords() const
+    {
+        return m_f3RiskRecords;
+    }
 
     /** @return Pre-sampling probabilities produced from live generate state. */
     const std::vector<ComputeFailureProbabilityRecord>& GetProbabilityRecords() const;
@@ -181,6 +221,11 @@ class FaultModelEngine : public Object
     void RecordProbability(uint32_t nodeId,
                            const NodeState& state,
                            int64_t simulationTimeNs);
+    /** Shared immutable input for audit and the causal pre-sample observer. */
+    ComputeFailurePredictionInput PredictionInput(uint32_t nodeId,
+                                                   const NodeState& state,
+                                                   int64_t timeNs,
+                                                   int64_t remainingNs) const;
     /** Update periodic models and/or execute F3 events in one timestamp batch. */
     void ProcessTime(int64_t simulationTimeNs, bool updateComputeModels);
     /** Observe exact service transitions without RNG or business mutations. */
@@ -194,6 +239,7 @@ class FaultModelEngine : public Object
     int64_t m_simulationDurationNs{}; ///< Exclusive simulation end.
     FaultParameters m_parameters; ///< Unified model parameters.
     int64_t m_checkIntervalNs{}; ///< Converted model-check interval.
+    int64_t m_lastCheckStartedNs{-1}; ///< Resolves coincident task start / actual check phases.
     int64_t m_recoveryDurationNs{}; ///< Converted compute outage duration.
     std::optional<F1SelfStateFaultModel> m_f1Model; ///< Active F1 pure model.
     std::optional<F2RadiationFaultModel> m_f2Model; ///< Active F2 pure model.
@@ -204,10 +250,14 @@ class FaultModelEngine : public Object
     FaultTrace m_trace; ///< Completed canonical trace records.
     std::vector<ComputeFailureProbabilityRecord> m_probabilityRecords; ///< Live probabilities.
     std::vector<FaultModelStateRecord> m_stateAuditRecords; ///< Optional observed state, no RNG.
+    std::vector<F3ComputeRiskRecord> m_f3RiskRecords;       ///< Actual F3 causal diagnostic only.
     std::vector<EventId> m_modelEvents; ///< Pre-scheduled model/F3 checks.
     Ptr<FaultController> m_faultController; ///< Sole runtime fault executor.
     Ptr<TaskCoordinator> m_taskCoordinator; ///< Bound task lifecycle owner.
     const OnlineOrbitConstellation* m_constellation{}; ///< Shared native F2 positions.
+    std::function<void(const FaultEpochInput&)> m_beforeEpoch; ///< Pre-draw, read-only proposal.
+    std::function<void(int64_t, const std::vector<FaultEpochOutcome>&)> m_afterEpoch;
+    ///< Post-application commit boundary; no reliance on event UID.
 };
 
 } // namespace ns3

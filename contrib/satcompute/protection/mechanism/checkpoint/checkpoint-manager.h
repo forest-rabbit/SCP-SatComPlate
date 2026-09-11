@@ -66,6 +66,23 @@ struct ProtectionTaskSummary
     ///< Real completed cost events; initialization excluded from recurrent counters.
 };
 
+/** Read-only physical inventory for frequency admission, never a recovery prediction. */
+struct CheckpointInventory
+{
+    CheckpointConfiguration config; ///< Last effective future cadence and fixed pair.
+    CheckpointSnapshot progress; ///< Current received/committed prefixes.
+    uint64_t actual{}, triggered{}, baseBytes{}, batchBytes{}, batchWork{}; ///< Exact ledger values.
+    bool active{}, initialized{}, paused{}, batchInFlight{}; ///< Actual mechanism state.
+    int64_t stopNs{-1}; ///< Actual quiescence/stop, for ending diagnostic intervals exactly.
+    std::optional<uint64_t> nextTarget; ///< Already scheduled, not yet captured boundary.
+    struct Record
+    {
+        uint64_t from{}, work{}, bytes{}; ///< Immutable captured endpoints and metadata-inclusive bytes.
+        bool allocated{}, received{}; ///< Whether bytes already count against the pool.
+    };
+    std::vector<Record> records; ///< Includes generated, in-flight and pending records.
+};
+
 /** Real checkpoint data path and retained fault snapshots; never mutates primary compute. */
 class CheckpointManager : public ProtectionMechanism
 {
@@ -88,6 +105,21 @@ class CheckpointManager : public ProtectionMechanism
     void OnTaskTerminal(uint64_t taskId) override;
     /** Idempotently stop all remaining protection after Simulator::Run. */
     void Finalize();
+
+    /** Change only future targets and not-yet-formed batches; placement stays fixed. */
+    bool UpdateFutureConfiguration(uint64_t taskId, uint32_t deltaPermille, uint32_t batchN);
+    /** Retain all state/operations but suppress new targets and batch formation. */
+    bool PauseFutureProtection(uint64_t taskId);
+    /** Physical snapshot; missing means no initialization has ever been attempted. */
+    std::optional<CheckpointInventory> Inventory(uint64_t taskId) const;
+    /** Notify only after the real initialization objects have been merged. */
+    void SetInitializationObserver(std::function<void(uint64_t)> observer)
+    {
+        m_initialized = std::move(observer);
+    }
+    /** Observe established/released remote ownership without changing admission or storage. */
+    void SetAssignmentObserver(std::function<void(uint64_t, uint32_t, bool)> observer)
+    { m_assignmentObserver = std::move(observer); }
 
     /** Enable strict fault-time object retention; no-fault G2 timing stays unchanged. */
     void EnableRecoveryRetention()
@@ -165,7 +197,7 @@ class CheckpointManager : public ProtectionMechanism
               int64_t now,
               uint64_t rate);
         const TaskRuntime& task; ///< Read-only ordinary runtime; coordinator outlives manager.
-        CheckpointConfiguration config; ///< Immutable fixed action.
+        CheckpointConfiguration config; ///< Future cadence, immutable placement.
         TaskStateAdapter layout;        ///< Exact production layout, no shadow dependency.
         CheckpointProgress progress;    ///< Valid contiguous progress and internal merge timing.
         ProtectionTaskSummary summary;  ///< Historical evidence retained after stop.
@@ -175,6 +207,9 @@ class CheckpointManager : public ProtectionMechanism
         int64_t baseReceivedNs{-1},
             stateReceivedNs{-1}; ///< Initialization path completion evidence.
         bool active{true}, batchInFlight{}, batchBlocked{}; ///< Terminal and no-retry guards.
+        bool futurePaused{}, initialized{}; ///< New-operation gate and physical init commit.
+        EventId captureEvent; ///< Only the unsatisfied future target is replaceable.
+        std::optional<uint64_t> nextTarget; ///< Not yet captured work.
         std::map<uint64_t, Record> records; ///< Captured records ordered by completed WU.
         std::vector<EventId> timers;        ///< Task-scoped cancellable generation/merge events.
         std::optional<std::pair<int64_t, bool>> physicalCommit; ///< Nominal time and init flag.
@@ -196,7 +231,7 @@ class CheckpointManager : public ProtectionMechanism
     /** @return Causal completed WU, bounded by total WU. */
     uint64_t Actual(const State& state) const;
     /** Schedule a guarded task-scoped callback strictly before simulation stop. */
-    void Later(State& state, int64_t at, std::function<void()> callback);
+    EventId Later(State& state, int64_t at, std::function<void()> callback);
     /** Append an invariant-checked event with current whole-pool snapshots. */
     void Log(State& state,
              const std::string& event,
@@ -240,6 +275,8 @@ class CheckpointManager : public ProtectionMechanism
     std::vector<ProtectionEvent> m_events;    ///< Append-only causal evidence.
     std::vector<ProtectionFlow> m_flows;      ///< Append-only real flow metadata.
     bool m_recoveryRetention{};               ///< Explicit G3 fault-enabled phase ordering.
+    std::function<void(uint64_t)> m_initialized; ///< Optional physical init notification.
+    std::function<void(uint64_t, uint32_t, bool)> m_assignmentObserver; ///< Read-only load ledger.
 };
 } // namespace ns3::protection
 #endif

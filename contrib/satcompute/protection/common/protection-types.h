@@ -2,7 +2,9 @@
 #ifndef SATCOMPUTE_PROTECTION_TYPES_H
 #define SATCOMPUTE_PROTECTION_TYPES_H
 #include <cstdint>
+#include <functional>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace ns3::protection
@@ -40,7 +42,8 @@ enum class ProtectionTransferKind
     REMOTE_BATCH,
     RECOVERY_TAIL,
     RECOVERY_INPUT,
-    RECOVERY_RESULT ///< Business output; shares canonical IDs, never protection byte totals.
+    RECOVERY_RESULT, ///< Business output; shares canonical IDs, never protection byte totals.
+    RECOVERY_STATE   ///< Complete committed checkpoint relocated to a new recovery node.
 };
 
 /** Logical-task attempt role; future replicas do not reuse primary identity. */
@@ -92,7 +95,20 @@ struct BackupCandidate
     bool idle{};       ///< No running task AND empty queue.
     bool reachable{};  ///< Current route exists; not a bandwidth guarantee.
     bool oneHop{};     ///< Eligible as local by the fixed placement rule.
+    uint64_t queueDepth{}; ///< Causal queue length; idle remains the admission predicate.
+    uint64_t storageFreeBytes{}; ///< Current free backup bytes, not a reservation.
+    uint64_t backupAssignmentCount{}; ///< Active backup assignments, diagnostic input.
+    uint64_t activeRecoveryCount{}; ///< Accepted nonterminal recovery ownership count.
 };
+
+/** Causal path feasibility supplied by runtime; never a capacity reservation. */
+struct PlacementPathAvailability
+{
+    bool reachable{}, admissible{};
+    std::string reason;
+};
+using PlacementPathPreview =
+    std::function<PlacementPathAvailability(uint32_t, uint32_t)>;
 
 /** Read-only event context for policy; no access to future faults or oracle results. */
 struct ProtectionContext
@@ -104,6 +120,7 @@ struct ProtectionContext
     bool firstComputeStart{};                    ///< True only for the first primary dispatch.
     bool taskSelected{}; ///< Explicit fixture/experiment filter, not a probability decision.
     std::vector<BackupCandidate> candidates; ///< Current candidate snapshots.
+    PlacementPathPreview previewPath; ///< Borrowed synchronous decision snapshot, never retained.
 };
 
 /** Already accepted attempt guard; does not modify any node health or fault RNG. */

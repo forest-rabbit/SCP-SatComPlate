@@ -7,8 +7,10 @@
 #include "network-transfer-engine.h"
 
 #include "../routing/routing-policy-factory.h"
-
 #include "ns3/abort.h"
+#include "ns3/ipv4.h"
+#include "ns3/point-to-point-channel.h"
+#include "ns3/satcompute-ipv4-global-routing-helper.h"
 #include "ns3/simulator.h"
 
 #include <algorithm>
@@ -338,6 +340,105 @@ NetworkTransferEngine::GetResidualRateBps(uint32_t source, const EcmpRouteCandid
                : rate;
 }
 
+std::optional<int64_t>
+AdmissiblePathEstimate::TransferTimeNs(uint64_t bytes) const
+{
+    if (!admissible)
+        return std::nullopt;
+    if (!bytes)
+        return 0;
+    if (local)
+        return 1;
+    const auto rate = path.admittedRateBps;
+    if (!rate || propagationNs < 0)
+        return std::nullopt;
+    const auto serialization =
+        (static_cast<unsigned __int128>(bytes) * 8000000000ULL + rate - 1) / rate;
+    if (serialization > static_cast<uint64_t>(std::numeric_limits<int64_t>::max() - propagationNs))
+        return std::nullopt;
+    return static_cast<int64_t>(serialization) + propagationNs;
+}
+
+AdmissiblePathEstimate
+NetworkTransferEngine::EstimateAdmissiblePath(uint32_t source, uint32_t destination) const
+{
+    AdmissiblePathEstimate out;
+    out.failureReason = "NO_ROUTE";
+    NS_ABORT_MSG_IF(!m_configured || !m_topology, "path preview requires configured network");
+    if (!m_topology->HasSatelliteId(source) || !m_topology->HasSatelliteId(destination))
+        return out;
+    if (source == destination)
+    {
+        out.reachable = out.admissible = out.local = true;
+        out.failureReason.clear();
+        return out;
+    }
+    if (m_topology->GetEcmpRouteCandidates(source, destination).empty())
+        return out;
+    out.reachable = true;
+    NetworkTransfer preview;
+    preview.sourceAddress = m_topology->GetServiceAddressBySatelliteId(source);
+    preview.destinationAddress = m_topology->GetServiceAddressBySatelliteId(destination);
+    const auto it = m_nextSourceOrdinal.find(source);
+    const auto ordinal = it == m_nextSourceOrdinal.end() ? 0 : it->second;
+    if (ordinal > std::numeric_limits<uint16_t>::max() - NETWORK_TRANSFER_FIRST_SOURCE_PORT)
+    {
+        out.failureReason = "SOURCE_PORT_EXHAUSTED";
+        return out;
+    }
+    preview.sourcePort = NETWORK_TRANSFER_FIRST_SOURCE_PORT + ordinal;
+    const auto key = BuildNetworkTransferFlowKey(preview);
+    if (m_capacityAwareRouting)
+    {
+        if (!m_capacityPathPolicy->FindPath({key, source, destination, m_topology->GetHashSeed()},
+                                            out.path))
+        {
+            out.failureReason = "NO_ADMISSIBLE_PATH";
+            return out;
+        }
+    }
+    else
+    {
+        std::set<uint32_t> visited;
+        out.path.admittedRateBps = std::numeric_limits<uint64_t>::max();
+        for (auto node = source; node != destination;)
+        {
+            if (!visited.insert(node).second)
+                return out;
+            const auto routes = m_topology->GetEcmpRouteCandidates(node, destination);
+            if (routes.empty())
+                return out;
+            const auto routing = SatComputeIpv4GlobalRoutingHelper::GetRouting(
+                m_topology->GetNodeBySatelliteId(node));
+            const auto route = routes.at(routing->PreviewNextHop(key, routes));
+            const auto next = m_topology->GetNextHopSatelliteId(node, route.outputInterface);
+            const auto rate = m_topology->GetIslDataRateBps(node, route.outputInterface);
+            out.path.hops.push_back({node, next, route, rate});
+            out.path.admittedRateBps = std::min(out.path.admittedRateBps, rate);
+            node = next;
+        }
+    }
+    for (const auto& hop : out.path.hops)
+    {
+        const auto ipv4 =
+            m_topology->GetNodeBySatelliteId(hop.sourceSatelliteId)->GetObject<Ipv4>();
+        const auto channel = DynamicCast<PointToPointChannel>(
+            ipv4->GetNetDevice(hop.candidate.outputInterface)->GetChannel());
+        if (!channel)
+            return out;
+        TimeValue delay;
+        channel->GetAttribute("Delay", delay);
+        NS_ABORT_MSG_IF(delay.Get().GetNanoSeconds() < 0 ||
+                            delay.Get().GetNanoSeconds() >
+                                std::numeric_limits<int64_t>::max() - out.propagationNs,
+                        "path propagation time overflow");
+        out.propagationNs += delay.Get().GetNanoSeconds();
+    }
+    out.admissible = true;
+    out.failureReason.clear();
+    return out;
+}
+
 void
 NetworkTransferEngine::SetTerminalObserver(uint64_t transferId,
                                           Callback<void, uint64_t, int64_t> observer)
@@ -564,7 +665,7 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
         m_flowRouteRegistry->ReleaseAssignmentsForRouteUpdate(
             flowKey,
             m_topology->GetRouteEpoch(m_plans[index].sourceSatelliteId));
-        m_capacityReservationState->Release(transferId);
+        ReleaseCapacity(transferId);
     }
 
     if (invalidTransfers.empty())
@@ -603,6 +704,12 @@ NetworkTransferEngine::HandleSenderComplete(uint64_t transferId, int64_t sendTim
         m_flowRouteRegistry->FinishSending(GetFlowKey(index));
     }
     m_states[index] = TransferRuntimeState::SENDER_FINISHED;
+}
+
+void NetworkTransferEngine::ReleaseCapacity(uint64_t transferId)
+{
+    m_capacityReservationState->Release(transferId);
+    if (m_capacityReleaseObserver) m_capacityReleaseObserver();
 }
 
 void
@@ -688,7 +795,7 @@ NetworkTransferEngine::FinalizeTransferIfActive(uint64_t transferId,
     if (m_capacityAwareRouting &&
         m_capacityReservationState->HasActivePath(transferId))
     {
-        m_capacityReservationState->Release(transferId);
+        ReleaseCapacity(transferId);
     }
 
     const EcmpFlowKey flowKey = GetFlowKey(index);

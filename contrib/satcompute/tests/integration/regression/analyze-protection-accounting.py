@@ -97,6 +97,34 @@ def recovery_check(row):
     return {"planned": planned, "actual": actual, "execution_ratio": actual / planned if planned else None}
 
 
+def relocation_check(task, protected, recovery, flows):
+    """Check actual migrated bytes/receive barriers, not just a new path label."""
+    if not recovery["chosen_path"].startswith("MIGRATE_"):
+        return
+    r = recovery
+    work, remote = number(task, "compute_work_units"), number(r, "remote_work_units")
+    size = number(task, "input_bytes")
+    state = (remote // 100 * 114688 if task["task_profile"] == "llm" else
+             size - size * remote // work + number(protected, "variable_state_bytes") * remote // work)
+    require(number(r, "checkpoint_state_bytes") == number(r, "checkpoint_relocation_bytes") == state,
+            "relocation did not use exact committed state bytes")
+    require(r["old_remote_node"] != r["new_recovery_node"] and not r["input_start_time_ns"],
+            "migration used original node or replayed INPUT")
+    state_flows = [f for f in flows if f["kind"] == "RECOVERY_STATE"]
+    require(len(state_flows) == int(state > 0), "missing/duplicate migration state flow")
+    if state_flows:
+        f = state_flows[0]
+        require(number(f, "bytes") == state and f["source_node"] == r["old_remote_node"] and
+                f["destination_node"] == r["new_recovery_node"], "migration flow ownership/bytes")
+    if r["recovery_compute_start_time_ns"]:
+        require(r["state_received_time_ns"] and number(r, "recovery_compute_start_time_ns") >=
+                number(r, "state_received_time_ns"), "compute started before state received")
+        if r["chosen_path"] == "MIGRATE_TAIL":
+            require(r["tail_received_time_ns"] and number(r, "tail_commit_time_ns") ==
+                    max(number(r, "state_received_time_ns"), number(r, "tail_received_time_ns")) +
+                    number(protected, "cR_ns"), "migration omitted/doubled cR or receiver barrier")
+
+
 def analyze(root):
     tasks = {r["task_id"]: r for r in rows(root, "task-summary.csv")}
     protected = {r["task_id"]: r for r in rows(root, "protection-task-summary.csv", True)}
@@ -113,10 +141,12 @@ def analyze(root):
     for r in recoveries.values():
         recovery_check(r)
     network = defaultdict(lambda: {"declared_bytes": 0, "sent_bytes": 0, "received_bytes": 0, "flows": 0})
-    for kind in ("INIT_BASE", "INIT_STATE", "L1", "REMOTE_BATCH", "RECOVERY_INPUT", "RECOVERY_TAIL", "RECOVERY_RESULT_NETWORK"):
+    for kind in ("INIT_BASE", "INIT_STATE", "L1", "REMOTE_BATCH", "RECOVERY_INPUT", "RECOVERY_TAIL", "RECOVERY_STATE", "RECOVERY_RESULT_NETWORK"):
         network[kind]
     task_network = Counter()
+    task_flows = defaultdict(list)
     for flow in rows(root, "protection-transfers.csv", True):
+        task_flows[flow["task_id"]].append(flow)
         require(flow["state"] in ("COMPLETED", "FAILED", "CANCELLED"), "active protection transfer")
         total = network[flow["kind"]]
         for key, column in (("declared_bytes", "bytes"), ("sent_bytes", "sent_bytes"), ("received_bytes", "received_bytes")):
@@ -125,6 +155,7 @@ def analyze(root):
         task_network[flow["task_id"]] += number(flow, "sent_bytes")
     transfers = {r["transfer_id"]: r for r in rows(root, "transfer-summary.csv")}
     for r in recoveries.values():
+        relocation_check(tasks[r["task_id"]], protected.get(r["task_id"], {}), r, task_flows[r["task_id"]])
         if r["result_transfer_id"]:
             flow = transfers[r["result_transfer_id"]]
             require(flow["terminal_state"] in ("COMPLETED", "FAILED", "CANCELLED"), "active recovery result")

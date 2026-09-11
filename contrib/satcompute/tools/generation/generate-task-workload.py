@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the final 66-satellite / 800-task scene from native position slices."""
+"""Generate the final 800-task scene with one explicit controlled F3 size override."""
 import argparse
 from bisect import bisect_right
 from collections import Counter, defaultdict
@@ -19,6 +19,8 @@ REGIONAL_CANDIDATE_LIMIT = 1
 ARRIVAL_WINDOW_NS = (1_000_000_000, 1_050_000_000_000)
 SIMULATION_SECONDS = 1300
 COMPUTE_RATE = 100_000
+CONTROLLED_F3_TASK_ID = 120
+CONTROLLED_F3_INPUT_BYTES = 800_000_000
 REGIONS = (
     ("north-america", -130, -60, 20, 55),
     ("europe", -10, 40, 35, 60),
@@ -187,6 +189,13 @@ def attributes(workload_seed=WORKLOAD_SEED):
         size = int((240+130*normal.inv_cdf(lower+u*(upper-lower)))*1_000_000)
         size = max(50_000_000, min(1_000_000_000-1, size))
         task["input_bytes"] = size-size % 8 if task["task_profile"] in ("dense-image", "compression") else size
+    # Explicit B-selected controlled case, not another truncated-normal sample.
+    # No arrival, endpoint, fault parameter or random key is changed.
+    target = tasks[CONTROLLED_F3_TASK_ID]
+    if target["task_profile"] != "compression" or target.get("fixed_tail_anchor"):
+        raise ValueError("controlled task 120 must be a non-anchor compression task")
+    target.update(original_input_bytes=target["input_bytes"],
+                  input_bytes=CONTROLLED_F3_INPUT_BYTES, controlled_f3_size=True)
     return [tasks[tid] for tid in sorted(tasks)]
 
 
@@ -282,10 +291,14 @@ def build_final_workload(satellite_ids, compute_nodes, positions,
                   source_node_id=0, compute_node_id=0, result_node_id=0, arrival_time_ns=times[a["task_id"]])
              for a, b in zip(attrs, budgets)]
     placement = place_tasks(tasks, positions, placement_seed)
+    target = next(a for a in attrs if a.get("controlled_f3_size"))
+    controlled = dict(task_id=target["task_id"], original_input_bytes=target["original_input_bytes"],
+                      input_bytes=target["input_bytes"],
+                      rule="B-only size-selected controlled F3 protection case; not an unbiased performance sample")
     anchors = {str(size): [t["task_id"] for t in attrs if t.get("fixed_tail_anchor") and t["input_bytes"] == size]
                for size in (500_000_000, 1_000_000_000)}
     summary = dict(workload_seed=workload_seed, placement_seed=placement_seed, task_count=len(tasks),
-                   class_counts=dict(Counter(t["task_profile"] for t in tasks)), ordinary_image_count=705,
+                   class_counts=dict(Counter(t["task_profile"] for t in tasks)), ordinary_image_count=704,
                    fixed_tail_task_ids=anchors, arrival_window_s=[1, 1050], simulation_duration_s=1300,
                    compute_rate_work_units_per_second=COMPUTE_RATE,
                    total_input_bytes=sum(b.input_bytes for b in budgets),
@@ -293,7 +306,9 @@ def build_final_workload(satellite_ids, compute_nodes, positions,
                    total_compute_work_units=sum(b.compute_work_units for b in budgets),
                    total_variable_state_bytes=sum(b.k_variable_bytes for b in budgets),
                    llm_parameters=asdict(LlmParameters()),
-                   truncated_normal={"mu_mb": 240, "sigma_mb": 130, "lower_mb": 50, "upper_exclusive_mb": 1000},
+                   controlled_f3_task=controlled,
+                   truncated_normal={"mu_mb": 240, "sigma_mb": 130, "lower_mb": 50,
+                                     "upper_exclusive_mb": 1000, "fixed_tail_task_ids": anchors},
                    placement=placement)
     return {"tasks": tasks}, summary
 

@@ -686,6 +686,37 @@ CheckComputeFailurePrediction()
     Check(f2State.continuousExposureSeconds == currentExposureSeconds,
           "F2 forecast mutated the live input snapshot");
 
+    ComputeFailurePredictionInput grid{&f1Model,
+                                       f1Model.CreateInitialSnapshot(),
+                                       &f2Model,
+                                       f2State,
+                                       [insidePosition](int64_t) { return insidePosition; },
+                                       10730000000LL,
+                                       2270000000LL,
+                                       secondNs};
+    grid.firstSampleTimeNs = 11 * secondNs;
+    grid.finishExclusive = true;
+    const auto aligned = PredictComputeFailureBeforeFinish(grid);
+    Check(aligned.steps.size() == 2 && aligned.steps.front().targetTimeNs == 11 * secondNs &&
+              aligned.steps.back().targetTimeNs == 12 * secondNs,
+          "off-epoch prediction invented a sample or included completion");
+    auto expectedThermal = grid.f1State;
+    f1Model.Update(expectedThermal, true, .27, 1);
+    Check(aligned.steps.front().f1StepFailureProbability == expectedThermal.stepFailureProbability,
+          "first grid step heated for a full second instead of remaining fraction");
+    grid.remainingComputeTimeNs = 100000000;
+    const auto noCheck = PredictComputeFailureBeforeFinish(grid);
+    Check(noCheck.steps.empty() && noCheck.predictedFailureProbability == 0 &&
+              noCheck.f2StepFailureProbability == f2State.stepFailureProbability,
+          "short task invented a fault draw or lost current risk snapshot");
+    grid.predictionTimeNs = 11 * secondNs;
+    grid.remainingComputeTimeNs = 100000000;
+    Check(PredictComputeFailureBeforeFinish(grid).steps.size() == 1,
+          "explicit pending same-time check omitted");
+    grid.firstSampleTimeNs = 12 * secondNs;
+    Check(PredictComputeFailureBeforeFinish(grid).steps.empty(),
+          "already processed same-time check counted twice");
+
     F1SelfStateFaultSnapshot combinedF1;
     combinedF1.stepFailureProbability = 0.2;
     F2RadiationFaultSnapshot combinedF2;

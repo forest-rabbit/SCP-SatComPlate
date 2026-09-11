@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "fixed-protection-controller.h"
+#include "decision-path-snapshot.h"
+#include "ns3/simulator.h"
+#include <stdexcept>
 
 namespace ns3::protection
 {
@@ -9,13 +12,24 @@ FixedProtectionController::FixedProtectionController(Ptr<TaskCoordinator> tasks,
                                                      int64_t stopNs,
                                                      uint32_t deltaPermille,
                                                      uint32_t batchN,
-                                                     bool enableRecovery)
+                                                     bool enableRecovery,
+                                                     std::unique_ptr<PlacementPolicy> placement,
+                                                     RemoteBusyRecoveryPolicy busyPolicy)
     : m_tasks(tasks), m_topology(topology), m_manager(tasks, topology, capacity, stopNs),
-      m_policy(deltaPermille, batchN), m_runtime(m_policy, {&m_manager})
+      m_policy(deltaPermille, batchN, std::move(placement)), m_runtime(m_policy, {&m_manager})
 {
+    for (auto service : tasks->GetComputeServices()) m_loads.RegisterNode(service->GetNodeId());
+    m_manager.SetAssignmentObserver([this](auto task, auto node, bool active) {
+        m_loads.Assignment(task, node, active, Simulator::Now().GetNanoSeconds());
+    });
     m_tasks->ConnectTaskObserver(MakeCallback(&FixedProtectionController::OnTask, this));
     if (enableRecovery)
-        m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, m_policy);
+    {
+        m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, m_policy, busyPolicy);
+        m_recovery->SetLoadObserver([this](auto task, auto node, bool active) {
+            m_loads.Recovery(task, node, active, Simulator::Now().GetNanoSeconds());
+        });
+    }
 }
 
 FixedProtectionController::~FixedProtectionController()
@@ -49,8 +63,18 @@ FixedProtectionController::OnTask(const TaskEventRecord& event)
                  m_tasks->IsComputeAvailable(node) && m_tasks->IsSatelliteAvailable(node),
                  service->IsIdle(),
                  !routes.empty(),
-                 oneHop});
+                 oneHop,
+                 0,
+                 m_manager.Pools().at(node)->Free(),
+                 m_loads.Get(node).activeBackup,
+                 m_loads.Get(node).activeRecovery});
         }
+        DecisionPathSnapshot paths([this](auto source, auto destination) {
+            return m_tasks->GetTransferEngine()->EstimateAdmissiblePath(source, destination);
+        });
+        context.previewPath = [&](auto source, auto destination) {
+            return paths.Availability(source, destination);
+        };
         m_runtime.OnTaskComputeStart(context);
     }
     if (event.toState == TASK_RESULT_TRANSFERRING && event.fromState != TASK_RUNNING_BACKUP)
@@ -66,5 +90,6 @@ FixedProtectionController::Finalize()
         m_recovery->Finalize();
     m_tasks->FinalizeSimulation();
     m_manager.Finalize();
+    if (!m_loads.Empty()) throw std::logic_error("fixed placement ownership leaked");
 }
 } // namespace ns3::protection

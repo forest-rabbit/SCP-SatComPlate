@@ -36,6 +36,8 @@ Kind(protection::ProtectionTransferKind kind)
         return "RECOVERY_TAIL";
     case K::RECOVERY_INPUT:
         return "RECOVERY_INPUT";
+    case K::RECOVERY_STATE:
+        return "RECOVERY_STATE";
     case K::RECOVERY_RESULT:
         throw std::logic_error("business RESULT must not enter protection metrics");
     }
@@ -123,6 +125,10 @@ void
 RemoveProtectionMetrics(const std::filesystem::path& directory)
 {
     for (const auto name : {"protection-finalization.json",
+                            "placement-node-summary.csv",
+                            "placement-load-events.csv",
+                            "frequency-pause-intervals.csv",
+                            "f3-compute-risk-snapshots.csv",
                             "recovery-summary.csv",
                             "recovery-events.csv",
                             "protection-events.csv",

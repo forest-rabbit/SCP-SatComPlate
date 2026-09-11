@@ -19,7 +19,7 @@ tests/
 ```
 
 日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动正式场景的原始指标
-保存在 gitignore 排除的本地 `output/`，完整800任务运行不接入 `run-all.sh` 或 GitHub CI。
+保存在 gitignore 排除的本地 `output/`，完整正式场景运行不接入 `run-all.sh` 或 GitHub CI。
 
 N5A-G4 的冻结故障验收仍复用 `integration/regression/run-final-scenario.py`，
 只在明确授权后手动运行；原始 N4 输出不可覆盖。例：
@@ -48,7 +48,9 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 |---|---|
 | `para-test.cc` | `para.cc` 默认值、分组和关键压力测试默认项 |
 | `protection-contract-test.cc` | N5A-G1 独立架构、存储守恒、状态大小、L1/RemoteCommit 时序、attempt 隔离与恢复选择；不发真实备份流 |
+| `n5b-policy-test.cc` | FFP 原规则穷举对照、LRL 合成诊断、频率纯求解与 shadow 锚点、当前概率/同轮提交/前向配置合同；不接入真实频率运行时 |
 | `protection-path-test.cc` | N5A-G2 真实 UDP 动态注册/乱序接收、ID、存储不足、非零初始化、取消与同纳秒计算结束 |
+| `frequency-runtime-test.cc` | N5B 实际故障 epoch、提案/提交、四类状态、动态频率、PAUSE/恢复、LRL 实时负载与重复运行一致性 |
 | `recovery-runtime-test.cc` | G3 受控 FaultController→备份/网络/计算/任务闭环，LocalDelivery、服务锁、F1/F2 免疫、F3、deadline、同纳秒实体快照和旧回调 |
 | `link-window-test.cc` | 10 Gbps、空闲、双向独立、跨窗/尾窗、可用性、队列与预留时间积分 |
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
@@ -70,7 +72,7 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 |---|---|
 | `test_task_workload_model.py` | 精确S/W/K/RESULT、rho/sigma/H、LLM、合法边界及5/10/20%守恒 |
 | `test_final_scenario.py` | 冻结输入、两类种子、固定锚点、缺失切片/非法CLI、正式runner；可选原生切片逐字节复现 |
-| `test_compfrr_shadow.py` | 全800任务跨语言布局、虚拟账本、资源分账、证据差异与离线统计 |
+| `test_compfrr_shadow.py` | 全部正式任务跨语言布局、虚拟账本、资源分账、证据差异与离线统计 |
 | `test_fault_probability_comparison.py` | 概率对概率一致性及缺失记录拒绝 |
 | `test_fault_workload_fixtures.py` | 保留F1/F2/N4B固定fixture的角色与分布，不再依赖旧生成profile |
 | `test_link_metrics_report.py` | 通用链路统计分位数 |
@@ -96,7 +98,7 @@ N5A 定向验证（需要先构建；使用项目 uv 环境）：
 .venv/bin/python contrib/satcompute/tests/integration/smoke/run-recovery-smoke.py --output-root output/n5a-g3/smoke
 ```
 
-第二条只核对800份任务的字节/WU/合法边界，与 G4 oracle 单向比较，不运行800任务网络仿真。
+第二条只核对全部正式任务的字节/WU/合法边界，与 G4 oracle 单向比较，不运行正式网络仿真。
 可加 `--sizingOutput=<新输出文件>` 保存四类代表性状态表；普通平台运行不输出这些验证数据。
 G2 smoke 为 16 星/4 类任务/15 s 的 off、fixed、重复、容量不足四次运行，输出可留在上述目录；
 不提供 `--output-root` 时自动使用临时目录。核对精确字节、cL/cR、l/r/x、存储、普通计算时间
@@ -112,6 +114,7 @@ G2 smoke 为 16 星/4 类任务/15 s 的 off、fixed、重复、容量不足四�
 | `run-topology-smoke.sh` | topology-only 切片、终点采样、XYZ 演化和逐字节确定性 |
 | `run-compfrr-shadow-smoke.py` | 8任务off/on、重复、audit独立性、字节/队列账本及同纳秒F3/初始化顺序 |
 | `run-protection-smoke.py` | G2 四类真实固定备份流、receiver/commit/存储守恒、off 计算对照和确定性 |
+| `run-frequency-smoke.py` | N5B 四任务 generate CLI、概率逐值一致、FFP/LRL 统计、审计独立及 off 输出清理 |
 | `run-recovery-smoke.py` | G3 16 星/4 任务/15 s 受控 F3，off/fixed/重复运行，同星 RESULT 的实际字节与零网络流 |
 | `run-link-metrics-smoke.py` | 指标开关不改变业务、空闲/丢包/故障、窗口汇总和陈旧文件清理 |
 
@@ -168,9 +171,28 @@ SATCOMPUTE_POSITION_SLICES=output/n4c-g3-truncnormal-v3-20260909/orbit/topology 
 
 ## 手动正式运行与 G4 验证
 
-`integration/regression/run-final-scenario.py`仅支持当前场景的none、generate、
-generate+shadow。默认为generate；概率CSV审计和shadow均默认关闭。
-输出必须是新目录，默认1300 s、800任务、66星、10 Gbps、1 ms、seed1/run11。
+`integration/regression/run-final-scenario.py`支持当前场景的none、generate、
+generate+shadow，以及仅供 N5A 验收的显式 validation-replay。默认为generate；概率CSV审计和shadow均默认关闭。
+输出必须是新目录，当前1300 s、800任务、66星、10 Gbps、1 ms、seed1/run11。
+
+当前最终场景移除前置任务 801，仅增大任务 120 到 800 MB；本次仅授权正式 B 组，
+使用 `--protection-mode=compfrr --placement-mode=ffp`，不追加 A/C 或 CI。
+`run-f3-protection-check.py --output-dir=新目录 --input-bytes 700000000 800000000`
+是保留真实故障模型/轨道的 B 组单任务大小初筛；首次通过后停止，完整负载仍须单独验收。
+`run-f3-protection-check.py --inspect-run=B目录` 只读检查：node62 在 F3 前无 F1/F2、
+START 有收益、F3 前真实 ON、使用有效非零进度检查点且按期完成；仅完成或仅 START 不算通过。
+`analyze-frequency-evaluation.py --runs B目录` 生成本次单组账本。
+历史 G3R2 的 801 任务 B/C 结果保留，不能与本次或旧 A 严格配对；双组分析也要求同场景、同代码。
+可行节点对、5 ms 释放、重复/部分释放、终态清理和无额外抽样测试位于既有 policy/runtime 单测。
+
+历史 N5B-G3 的 800 任务在同一构建下手动各运行一次：A 使用 `--protection-mode=fixed`，B 使用
+`--protection-mode=compfrr`，C 再加 `--placement-mode=lrl`。三者均为在线 generate，
+不自动加入 smoke/regression/CI。LRL lambda 固定 1，无扫描。输出目录约定为
+`output/n5b-g3/{A-ffp-fixed,B-ffp-compfrr-frequency,C-lrl-compfrr-frequency}`。
+`analyze-frequency-evaluation.py --runs A目录 B目录 C目录` 只读这些原始输出，
+核对配对运行参数、动态所有权和 N5A 实际账本，写入各目录的 `frequency-evaluation.json`
+及父目录 `paired-evaluation.json`；不重跑、不修改原始 CSV。`test_frequency_evaluation.py`
+验证统计口径，smoke 在四任务真实结果上检查同一个分析入口。
 
 ```bash
 # 手动完整运行；不是日常短测试

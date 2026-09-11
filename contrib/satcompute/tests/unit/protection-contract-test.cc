@@ -350,7 +350,8 @@ PolicyChecks()
 {
     const auto config = GetDefaultSatComputeConfig();
     Check(config.protectionMode == "off" && config.backupStorageBytesPerNode == 10000000000 &&
-              config.fixedProtectionDelta == .05 && config.fixedProtectionBatchN == 4,
+              config.fixedProtectionDelta == .05 && config.fixedProtectionBatchN == 4 &&
+              config.remoteBusyRecoveryPolicy == "relocate",
           "typed defaults");
     FixedProtectionPolicy policy(50, 4);
     TestMechanism checkpoint(ActionKind::START_CHECKPOINT), recompute(ActionKind::RECOMPUTE);
