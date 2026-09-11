@@ -4,6 +4,7 @@
 #include "../../traffic/local-delivery.h"
 #include "../mechanism/checkpoint/checkpoint-manager.h"
 #include "../policy/recovery-policy.h"
+#include "../policy/placement-policy.h"
 #include <filesystem>
 
 namespace ns3::protection
@@ -33,6 +34,7 @@ struct RecoverySummary
     std::string relocationFailureReason, relocationTrigger;
     int64_t estimatedMigrateTailNs{-1}, estimatedMigrateRedoNs{-1}, estimatedRecomputeNs{-1},
         stateStartedNs{-1}, stateReceivedNs{-1};
+    int64_t plannedInputWaitNs{-1}; ///< Decision-time INPUT estimate, never actual reservation wait.
 };
 
 /** One recovery event, including local logical deliveries which have no transfer ID. */
@@ -54,7 +56,8 @@ class RecoveryController : public ProtectionMechanism
                        CheckpointManager& manager,
                        int64_t stopNs,
                        ProtectionPolicy& policy,
-                       RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE);
+                       RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
+                       PlacementPolicy* recomputePlacement = nullptr);
     ~RecoveryController();
     bool Supports(ActionKind kind) const override;
     void Execute(const ProtectionContext& context, const ProtectionAction& action) override;
@@ -139,6 +142,7 @@ class RecoveryController : public ProtectionMechanism
     int64_t m_stopNs;                     ///< Absolute simulation endpoint.
     ProtectionRuntime m_faultRuntime;     ///< Established mechanism first, then policy fallback.
     RemoteBusyRecoveryPolicy m_busyPolicy; ///< Changes REMOTE_BUSY only, not fault availability.
+    PlacementPolicy* m_recomputePlacement; ///< Non-null only for full Recompute: strict operation feasibility.
     std::map<uint64_t, std::unique_ptr<State>> m_states; ///< Sole recovery per task.
     std::map<uint64_t, std::pair<uint64_t, ProtectionTransferKind>> m_flows; ///< Real callbacks.
     std::vector<RecoveryEvent> m_events; ///< Append-only causal history.

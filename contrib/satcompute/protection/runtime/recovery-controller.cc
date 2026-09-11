@@ -60,10 +60,11 @@ RecoveryController::RecoveryController(Ptr<TaskCoordinator> tasks,
                                        CheckpointManager& manager,
                                        int64_t stopNs,
                                        ProtectionPolicy& policy,
-                                       RemoteBusyRecoveryPolicy busyPolicy)
+                                       RemoteBusyRecoveryPolicy busyPolicy,
+                                       PlacementPolicy* recomputePlacement)
     : m_tasks(tasks), m_topology(topology), m_manager(manager),
       m_network(tasks->GetTransferEngine()), m_stopNs(stopNs), m_faultRuntime(policy, {this}),
-      m_busyPolicy(busyPolicy)
+      m_busyPolicy(busyPolicy), m_recomputePlacement(recomputePlacement)
 {
     m_manager.EnableRecoveryRetention();
     m_tasks->SetRecoveryHandler(
@@ -188,6 +189,13 @@ RecoveryController::Fault(const TaskRuntime& task, const TaskFaultNodeChange& ch
     auto snapshot = m_manager.FreezeRecoverySnapshot(task.definition.taskId, Now());
     auto owned = std::make_unique<State>(task, snapshot, change.fault);
     auto& state = *owned;
+    if (m_recomputePlacement)
+    {
+        Require(snapshot.phase == "OFF", "full Recompute cannot own checkpoint state");
+        state.summary.plannedCatchupRedoWu = snapshot.actualWork;
+        state.summary.plannedPostCatchupWu = task.definition.computeWorkUnits - snapshot.actualWork;
+        state.summary.plannedTotalRecoveryWu = task.definition.computeWorkUnits;
+    }
     state.summary.checkpointStateExists = snapshot.phase == "ON" && snapshot.remoteObject;
     if (state.summary.checkpointStateExists)
         state.summary.checkpointStateBytes = state.layout.CommittedStateBytes(snapshot.remoteWork);
@@ -395,6 +403,28 @@ RecoveryController::Execute(const ProtectionContext& context, const ProtectionAc
     auto& state = *m_states.at(context.attempt.taskId);
     state.summary.path = "RECOMPUTE";
     state.startWork = 0;
+    if (m_recomputePlacement)
+    {
+        PlacementContext placement{state.summary.primaryNode, {}};
+        for (const auto& service : m_tasks->GetComputeServices())
+        {
+            const auto node = service->GetNodeId();
+            placement.candidates.push_back({node,
+                m_tasks->IsComputeAvailable(node) && m_tasks->IsSatelliteAvailable(node),
+                service->IsIdle(), Reachable(node, state.task.definition.resultNodeId)});
+        }
+        const auto node = m_recomputePlacement->SelectBackupNode(placement, [&](uint32_t candidate) {
+            const auto input = Estimate(state.task.definition.sourceNodeId, candidate,
+                                         state.task.definition.inputBytes);
+            const auto work = Duration(state.layout.Work(), Service(candidate)->GetComputeRateWorkUnitsPerSecond());
+            const auto budget = state.summary.snapshot.deadlineNs - Now();
+            return input && work <= budget && *input <= budget - work;
+        });
+        if (node && AcceptAndExecute(state, *node))
+            return;
+        Log(state, "RECOVERY_DECISION");
+        return Fail(state, "NO_FEASIBLE_RECOMPUTE_NODE_INPUT_OR_DEADLINE");
+    }
     for (const auto candidate : Candidates(state))
     {
         if (Eligible(candidate, state) &&
@@ -423,9 +453,12 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
         if (const auto estimate = Estimate(state.task.definition.sourceNodeId,
                                            node,
                                            state.task.definition.inputBytes))
+        {
+            r.plannedInputWaitNs = *estimate;
             r.estimatedRecomputeNs =
                 *estimate +
                 Duration(f.actualWork, state.service->GetComputeRateWorkUnitsPerSecond());
+        }
     // For from-zero recompute this is xf*W planned full catch-up, not charged work.
     // Completion/interruption callbacks separately record only actually executed WU.
     r.plannedCatchupRedoWu = f.actualWork - state.startWork;

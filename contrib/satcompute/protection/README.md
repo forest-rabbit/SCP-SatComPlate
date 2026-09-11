@@ -67,10 +67,15 @@ Routing 是所有方案共用的基础设施，不属于其中任何算法开关
 FFP/LRL 均实现两种角色；当前 checkpoint 恢复目标仍统一按 FFP 稳定 ID 排序，
 不会因切换 prefault LRL 而顺带改变恢复排序。
 
-完整 `protectionMode=recompute`（无常态保护、故障后 INPUT 从零重算）、
-`one-plus-one`（真实双副本计算与 winner RESULT）以及 `placementMode=n5c` **尚未实现**，
-入口明确报 `NOT_IMPLEMENTED`，不能当 off/FFP 运行。现有 RECOMPUTE 是 checkpoint 方案的恢复后备，
-不是完整 baseline；未来 baseline 复用单节点接口及共享执行/资源账本，不伪装成 checkpoint。
+`protectionMode=recompute` 是完整 baseline：没有常态保护；首次主计算故障后调用
+`PlacementPolicy::SelectBackupNode`，按 FFP 选非主、健康、空闲且可达结果端的节点，
+还需原始 INPUT 当前可准入且 INPUT 估计加完整计算可能满足原 compute deadline。
+复用 RecoveryController 和零容量共享账本，不创建 checkpoint 对象，不产生 cL/cR、L1 或 REMOTE_BATCH。
+`recompute-controller.*` 接线、`policy/baseline/recompute/recompute-policy.h` 只决定故障后重算。
+`recovery-summary.csv` 对此模式增加 planned INPUT 等待及 planned 浪费列，实际值仍取真实执行。
+该严格筛选仅适用于完整 baseline，不改变 checkpoint 方案既有的 RECOMPUTE 后备行为。
+`one-plus-one`（真实双副本计算与 winner RESULT）及 `placementMode=n5c` **尚未实现**，
+入口明确报 `NOT_IMPLEMENTED`，不能当 off/FFP 运行。
 
 ## N5B：频率策略与在线接线
 

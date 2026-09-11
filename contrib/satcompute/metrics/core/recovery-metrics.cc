@@ -63,7 +63,10 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
             "checkpoint_state_bytes,checkpoint_relocation_attempted,checkpoint_relocation_bytes,"
             "estimated_migrate_tail_ns,estimated_migrate_redo_ns,estimated_recompute_ns,"
             "checkpoint_relocation_failure_reason,checkpoint_relocation_trigger,"
-            "state_start_time_ns,state_received_time_ns\n";
+            "state_start_time_ns,state_received_time_ns";
+    if (m_recomputePlacement)
+        file << ",planned_input_wait_ns,planned_reserved_idle_eq_wu,w_waste_planned";
+    file << '\n';
     file << std::setprecision(17);
     for (const auto& r : Summaries())
     {
@@ -115,7 +118,18 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
              << ',' << Time(r.estimatedMigrateTailNs) << ',' << Time(r.estimatedMigrateRedoNs)
              << ',' << Time(r.estimatedRecomputeNs) << ',' << r.relocationFailureReason << ','
              << r.relocationTrigger << ',' << Time(r.stateStartedNs) << ','
-             << Time(r.stateReceivedNs) << '\n';
+             << Time(r.stateReceivedNs);
+        if (m_recomputePlacement)
+        {
+            file << ',' << Time(r.plannedInputWaitNs) << ',';
+            if (r.plannedInputWaitNs >= 0)
+                file << static_cast<double>(r.plannedInputWaitNs) * r.recoveryRate / 1e9;
+            file << ',';
+            if (r.plannedInputWaitNs >= 0)
+                file << r.plannedCatchupRedoWu +
+                            static_cast<double>(r.plannedInputWaitNs) * r.recoveryRate / 1e9;
+        }
+        file << '\n';
     }
     std::ofstream events(directory / "recovery-events.csv");
     events.exceptions(std::ios::failbit | std::ios::badbit);

@@ -20,3 +20,14 @@ N5B [PR #96](https://github.com/forest-rabbit/SCP-SatComPlate/pull/96) 已于 20
 R5 必须复现 `output/n5b-architecture/B-ffp-compfrr-frequency`，不一致则停止报告。
 六组均固定最终 800-task/1300s 场景和 online generate/seed=1/run=11；不同负载允许产生不同 F1 故障轨迹。
 该场景是受控工程比较，不是无偏多 seed 论文统计。完成后停在 **PRE-N5C BASELINE AUDIT**，不自动合并或进入 N5C。
+
+## Recompute 增量验证
+
+独立 Recompute 已接入，checkpoint 方案的原后备分支保持不变。专项 278 项检查覆盖
+零常态开销、FFP、INPUT/LocalDelivery、从零计算、deadline/F3/仿真结束截断和清理。
+F3 fixture 的 planned catch-up 为 9,717 WU、actual 为 817 WU；deadline fixture 的
+100,000 WU 计划只实际执行 99,997 WU，未执行部分不计费。
+全部维护验证通过：Python 79 项、C++ 22 个程序、smoke 10 组、regression 4 组。
+其中原恢复检查 1,539 项；N4B 联合 fixture 为 88 完成/12 失败、483 条概率匹配。
+本地证据位于 `output/n5-baselines-validation/*-recompute.log`。
+尚未开始 R0-R5 正式运行，以上不替代 R5 完整兼容性门禁。

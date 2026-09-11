@@ -14,6 +14,7 @@ trap 'rm -rf "$test_output"' EXIT
 ./ns3 run --no-build "satcompute-frequency-runtime-test --outputDir=$test_output/frequency"
 ./ns3 run --no-build "satcompute-protection-path-test"
 ./ns3 run --no-build "satcompute-recovery-runtime-test --outputDir=$test_output/recovery"
+./ns3 run --no-build "satcompute-recompute-baseline-test --outputDir=$test_output/recompute"
 ./ns3 run --no-build "satcompute-compfrr-shadow-model-test"
 ./ns3 run --no-build "satcompute-link-window-test"
 

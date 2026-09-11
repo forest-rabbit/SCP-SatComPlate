@@ -16,6 +16,7 @@
 #include "ns3/flow-metrics.h"
 #include "ns3/fixed-protection-controller.h"
 #include "ns3/frequency-protection-controller.h"
+#include "ns3/recompute-controller.h"
 #include "ns3/least-recovery-load-placement-policy.h"
 #include "ns3/protection-metrics.h"
 #include "ns3/link-metrics-recorder.h"
@@ -209,7 +210,7 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
     commandLine.AddValue("protectionMode",
-                         "off / fixed / compfrr: checkpoint protection and single-attempt recovery",
+                         "off / recompute / fixed / compfrr: protection and recovery scheme",
                          config.protectionMode);
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
@@ -376,11 +377,11 @@ ValidateConfig(const SatComputeConfig& config)
     RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one"});
     RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "n5c"});
     RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
-    if (config.protectionMode == "recompute" || config.protectionMode == "one-plus-one")
-        FailConfig("protectionMode", "NOT_IMPLEMENTED: full recompute / one-plus-one baseline is deferred");
+    if (config.protectionMode == "one-plus-one")
+        FailConfig("protectionMode", "NOT_IMPLEMENTED: one-plus-one baseline is deferred");
     if (config.placementMode == "n5c")
         FailConfig("placementMode", "NOT_IMPLEMENTED: N5C placement is deferred");
-    if (config.placementMode == "lrl" && config.protectionMode == "off")
+    if (config.placementMode == "lrl" && config.protectionMode != "fixed" && config.protectionMode != "compfrr")
         FailConfig("placementMode", "lrl requires fixed or compfrr protection");
     if (config.protectionMode != "off" &&
         (config.topologyOnly || !hasComputeProfile || config.compfrrShadow))
@@ -682,6 +683,7 @@ main(int argc, char* argv[])
             std::unique_ptr<compfrr::ShadowEvaluator> shadow;
             std::unique_ptr<protection::FixedProtectionController> protection;
             std::unique_ptr<protection::FrequencyProtectionController> frequency;
+            std::unique_ptr<protection::RecomputeController> recompute;
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
             std::filesystem::remove(outputDirectory / "frequency-pause-intervals.csv");
             std::filesystem::remove(outputDirectory / "frequency-capacity-waits.csv");
@@ -712,6 +714,11 @@ main(int argc, char* argv[])
                     config.backupStorageBytesPerNode, simulationDurationNs,
                     makePlacement(), busyPolicy);
             }
+            else if (config.protectionMode == "recompute")
+            {
+                recompute = std::make_unique<protection::RecomputeController>(
+                    taskCoordinator, topology, simulationDurationNs, makePlacement());
+            }
             else
             {
                 RemoveProtectionMetrics(outputDirectory);
@@ -741,6 +748,12 @@ main(int argc, char* argv[])
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
             if (shadow) shadow->Finalize();
+            if (recompute)
+            {
+                recompute->Finalize();
+                WriteProtectionMetrics(recompute->Manager(), *transferEngine, outputDirectory);
+                recompute->Recovery().WriteMetrics(outputDirectory);
+            }
             if (frequency)
             {
                 frequency->Finalize();

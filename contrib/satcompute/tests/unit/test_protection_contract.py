@@ -45,12 +45,19 @@ class ProtectionConfigTests(unittest.TestCase):
         self.assertNotIn("lrl requires", result.stdout)
 
     def test_future_baselines_and_placement_are_explicitly_unimplemented(self):
-        for options in ("--protectionMode=recompute", "--protectionMode=one-plus-one",
+        for options in ("--protectionMode=one-plus-one",
                         "--protectionMode=fixed --placementMode=n5c"):
             with self.subTest(options=options):
                 result = self.run_cli(options)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("NOT_IMPLEMENTED", result.stdout)
+
+    def test_full_recompute_guard_and_ffp_only(self):
+        result = self.run_cli("--protectionMode=recompute --fixedProtectionDelta=0")
+        self.assertIn("fixedProtectionDelta", result.stdout)
+        self.assertNotIn("NOT_IMPLEMENTED", result.stdout)
+        result = self.run_cli("--protectionMode=recompute --placementMode=lrl")
+        self.assertIn("lrl requires fixed or compfrr", result.stdout)
 
     def test_busy_policy_guard_and_off_ignores_valid_values(self):
         result = self.run_cli("--remoteBusyRecoveryPolicy=unsupported")
