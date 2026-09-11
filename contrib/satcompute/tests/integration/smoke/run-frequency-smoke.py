@@ -50,7 +50,10 @@ def verify(root):
             assert r["actual_fault_sampled"] == r["actual_fault_hit"] == "0"
             assert int(r["first_sample_time_ns"]) > int(r["fault_epoch_time_ns"])
             if r["decision_committed"] == "1":
-                assert r["phase_after"] == "INITIALIZING"
+                assert r["phase_after"] == ("INITIALIZING" if r["phase_before"] == "OFF" else "ON")
+                if r["phase_before"] == "ON":
+                    assert r["decision_trigger"] == "CAPACITY_RELEASE"
+                    assert r["proposed_action"] in ("UPDATE", "PAUSE")
             continue
         p = probabilities[(r["task_id"], r["fault_epoch_time_ns"])]
         assert float(r["q_current_sample"]) == float(p["combined_step_failure_probability"])

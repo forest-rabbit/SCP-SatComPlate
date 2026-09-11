@@ -8,10 +8,11 @@ namespace ns3::protection
 void FrequencyDecisionGate::Propose(const FrequencyDecision& decision, bool capacityRetry)
 {
     const bool off = m_phase == ProtectionPhase::OFF;
-    const bool sameTimeRetry = capacityRetry && off && decision.epochNs == m_lastEpoch &&
+    const bool retryable = off || (m_phase == ProtectionPhase::ON && m_paused);
+    const bool sameTimeRetry = capacityRetry && retryable && decision.epochNs == m_lastEpoch &&
                                decision.epochNs > m_lastCapacityEpoch;
     if (m_proposal || (decision.epochNs <= m_lastEpoch && !sameTimeRetry) ||
-        (capacityRetry && (!off || decision.epochNs <= m_lastCapacityEpoch)) || decision.phase != m_phase ||
+        (capacityRetry && (!retryable || decision.epochNs <= m_lastCapacityEpoch)) || decision.phase != m_phase ||
         (!off && m_phase != ProtectionPhase::ON))
         throw std::invalid_argument("stale, duplicate or wrong-phase frequency proposal");
     if ((off && decision.action != FrequencyAction::NONE &&

@@ -122,7 +122,8 @@ void FrequencyProtectionController::CloseCapacityWait(uint64_t id, State& state,
 
 void FrequencyProtectionController::CapacityReleased()
 {
-    if (!m_finalized && !m_waitingCapacity.empty() && !m_capacityDrain.IsPending())
+    if (!m_finalized && (!m_waitingCapacity.empty() || !m_pausedCapacity.empty()) &&
+        !m_capacityDrain.IsPending())
         m_capacityDrain = Simulator::ScheduleNow(&FrequencyProtectionController::DrainCapacityRetries, this);
 }
 
@@ -130,19 +131,23 @@ void FrequencyProtectionController::DrainCapacityRetries()
 {
     if (m_finalized) return;
     // Stable IDs, fresh snapshots, no old proposal and no synthetic fault sample.
-    const auto waiting = m_waitingCapacity;
+    auto waiting = m_waitingCapacity;
+    waiting.insert(m_pausedCapacity.begin(), m_pausedCapacity.end());
     const auto now = Simulator::Now().GetNanoSeconds();
     for (const auto id : waiting)
     {
         auto& state = m_states.at(id);
         const auto& task = Task(id);
-        if (task.state != TASK_RUNNING || task.attemptGeneration ||
-            state.gate.Phase() != ProtectionPhase::OFF)
+        const bool off = state.gate.Phase() == ProtectionPhase::OFF;
+        const bool paused = state.gate.Phase() == ProtectionPhase::ON &&
+                            state.gate.Paused() && state.pauseReason == "NO_ADMISSIBLE_PATH";
+        if (task.state != TASK_RUNNING || task.attemptGeneration || (!off && !paused))
         {
-            CloseCapacityWait(id, state, now, "NOT_WAITING_OFF");
+            CloseCapacityWait(id, state, now, "NOT_WAITING_CAPACITY");
+            m_pausedCapacity.erase(id);
             continue;
         }
-        if (state.lastCapacityDecisionNs == now) continue;
+        if (state.pending || state.lastCapacityDecisionNs == now) continue;
         const auto live = Service(task.definition.computeNodeId)->GetRunningTaskSnapshot();
         if (!live || live->taskId != id) continue;
         const auto prediction = m_faults->QueryTaskPrediction(task.definition.computeNodeId,
@@ -158,6 +163,7 @@ void FrequencyProtectionController::DrainCapacityRetries()
 
 void FrequencyProtectionController::ClosePause(uint64_t task, State& state, int64_t time)
 {
+    m_pausedCapacity.erase(task);
     if (state.pauseStart)
     {
         const auto inventory = m_manager.Inventory(task);
@@ -479,6 +485,12 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
                        : row.trigger == "TASK_RUNNING" ? "START_TASK_RUNNING" : "START_FAULT_EPOCH";
             row.capacityRetrySuccess = row.trigger == "CAPACITY_RELEASE";
         }
+        else if (row.committed && row.proposal.action == FrequencyAction::UPDATE &&
+                 row.trigger == "CAPACITY_RELEASE")
+        {
+            row.reason = "RESUME_AFTER_CAPACITY_RELEASE";
+            row.capacityRetrySuccess = true;
+        }
         row.waitingAfter = state.capacityWaitStart.has_value();
         if (!row.waitingAfter && row.capacityWaitStartNs >= 0 && row.capacityWaitEndNs < 0)
             row.capacityWaitEndNs = time;
@@ -493,6 +505,7 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
                     state.pauseStart = time;
                     state.pauseReason = reason;
                 }
+                if (reason == "NO_ADMISSIBLE_PATH") m_pausedCapacity.insert(row.taskId);
             }
             else ClosePause(row.taskId, state, time);
             const auto config = state.gate.CurrentConfig();

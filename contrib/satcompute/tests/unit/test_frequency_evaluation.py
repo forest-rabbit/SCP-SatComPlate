@@ -28,6 +28,19 @@ class FrequencyEvaluationTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 check([{**row, key: value}], [])
 
+    def test_on_capacity_resume_without_off_pair_counts(self):
+        row = dict(task_id="1", fault_epoch_time_ns="5000000", phase_before="ON",
+                   actual_fault_sampled="0", actual_fault_hit="0", capacity_retry_success="1",
+                   decision_committed="1", proposed_action="UPDATE", decision_trigger="CAPACITY_RELEASE")
+        check = EVAL["verify_pair_retries"]
+        check([row], [])
+        check([{**row, "proposed_action": "PAUSE", "capacity_retry_success": "0"}], [])
+        for changed in ([row, row], [{**row, "actual_fault_sampled": "1"}],
+                        [{**row, "proposed_action": "START"}],
+                        [{**row, "capacity_wait_start_ns": "4000000"}]):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                check(changed, [])
+
     def test_bc_pair_identity_requires_same_scene_and_clean_same_code(self):
         runs = []
         for placement in ("ffp", "lrl"):

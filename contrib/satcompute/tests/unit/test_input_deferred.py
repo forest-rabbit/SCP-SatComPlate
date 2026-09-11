@@ -116,6 +116,9 @@ class RiskWeightedAuditTests(unittest.TestCase):
                    predicted_normal_s=str(normal), selected_score=str(normal+.2*float(row["predicted_recovery_s"])),
                    proposed_action="UPDATE")
         START["decision_check"](row, task, True)
+        row.update(decision_trigger="CAPACITY_RELEASE", q_comp_snapshot=row["q_current_sample"],
+                   q_current_sample="")
+        START["decision_check"](row, task, True)
         row["selected_score"] = str(normal+.8*float(row["predicted_recovery_s"]))
         with self.assertRaises(ValueError): START["decision_check"](row, task, True)
 

@@ -51,7 +51,7 @@ class FrequencyDecisionGate
     std::optional<FrequencyConfiguration> m_current; ///< Committed configuration.
     std::optional<FrequencyDecision> m_proposal;     ///< No effective side effects before Resolve.
     int64_t m_lastEpoch{-1};                         ///< Reject duplicate or stale decisions.
-    int64_t m_lastCapacityEpoch{-1}; ///< Allow one fresh OFF resource decision after same-ns NONE.
+    int64_t m_lastCapacityEpoch{-1}; ///< One fresh OFF/paused-ON resource decision per timestamp.
     bool m_paused{}; ///< Suppresses both new targets and new batches, never deletes state.
 };
 } // namespace ns3::protection

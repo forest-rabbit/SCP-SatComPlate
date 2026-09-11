@@ -197,10 +197,13 @@ Pre-N5C 当前审计只重跑新 R4–R7：均 `--protection-mode=compfrr --plac
 R4/R5 使用 eager，R6/R7 加 `--input-staging-policy=deferred`；R4/R6 加
 `--remote-busy-recovery-policy=recompute`，R5/R7 为 relocate。
 新 workload 为400 WU/token且总WU保持352513119；START使用初始化就绪后的风险加权进度，
-ON不变。输出放入 `output/n5-startscore-riskweighted-llm4x/` 下的新目录，不能复用旧eager结果。
+ON评分不变；后续容量修订为路径阻塞的ON增加释放重试（原节点对、无额外抽样）。
+本轮输出放入 `output/n5-on-capacity-resume/`，保留上一轮 `output/n5-startscore-riskweighted-llm4x/`。
 `integration/regression/analyze-riskweighted-start.py --r4 R4目录 --r5 R5目录 --r6 R6目录 --r7 R7目录
 --output 新JSON路径` 只读核对同代码/同workload、评分、实际浪费、流量、恢复和399/596/574。
 Python单测包含错误评分/INPUT/历史LLM状态口径及整数纳秒取整检查；生产不新增预测CSV总开关。
+既有 `frequency-runtime-test.cc` 覆盖自身L1在途占用、eager/deferred释放后恢复、重复通知、
+同纳秒故障/终止、存储阻塞及重复运行一致性；ON暂停与OFF等待分别记账。
 
 历史 N5B-G3 的 800 任务在同一构建下手动各运行一次：A 使用 `--protection-mode=fixed`，B 使用
 `--protection-mode=compfrr`，C 再加 `--placement-mode=lrl`。三者均为在线 generate，

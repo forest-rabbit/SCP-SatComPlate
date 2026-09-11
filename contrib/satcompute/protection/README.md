@@ -167,8 +167,8 @@ START 存活才调用实际初始化，只有物理初始化对象完成融合�
 G3R 在 primary `TASK_RUNNING` 时立即评估 OFF→START，不等待下一个故障检查点。
 该只读预测从下一真实全局抽样点开始，不新增抽样；同刻检查尚未开始则包含当前点，
 已开始则排除，预计完成时刻不再抽样。未启动的任务仍在后续检查点重新评估。
-即时 START 只进入 INITIALIZING；同纳秒重复决策被去重。ON 的 UPDATE/PAUSE 仍沿用上述
-提案→抽样→存活提交合同。`decision_trigger` 区分 TASK_RUNNING / FAULT_EPOCH / CAPACITY_RELEASE；
+即时 START 只进入 INITIALIZING；同纳秒重复决策被去重。故障检查时 ON 的 UPDATE/PAUSE 沿用上述
+提案→抽样→存活提交合同；容量释放仅做非抽样的资源重评。`decision_trigger` 区分 TASK_RUNNING / FAULT_EPOCH / CAPACITY_RELEASE；
 两个非抽样触发的 `q_current_sample` 留空，风险写入 `p_f1_snapshot/p_f2_snapshot/q_comp_snapshot`。
 F3 实际时刻的 F1/F2 因果快照另写 `f3-compute-risk-snapshots.csv`，不额外抽样。
 
@@ -196,8 +196,16 @@ storage/deadline skip 仅统计实际检查过的排序前缀，不声称检查�
 OFF 且 P_finish>0、所有可用硬路径暂被容量阻塞时登记等待兴趣，不预留资源。
 实际传输释放容量后 ScheduleNow 按任务 ID 重评，同一任务每纳秒最多一次；重新读取进度、
 下一真实抽样网格的预测、路径和负载，不复用旧提案、不额外抽故障。成功仍须真实初始化，
-INIT/ON/恢复/终态不做 OFF 重试。`frequency-capacity-waits.csv` 单独记录等待区间，
+INIT/恢复/终态不重试；ON 不做 OFF 重试。`frequency-capacity-waits.csv` 单独记录 OFF 等待区间，
 不混入 ON pause、reserved-idle 或 W_waste；START 原因区分任务开始、故障检查及容量释放。
+
+ON 因 `NO_ADMISSIBLE_PATH` 暂停时也登记容量释放通知：保持原节点对，在释放事件完成后
+读取当前进度、风险、库存和真实剩余容量，重新求解原 ON 公式；不忽略自身流的预约，不新增故障抽样。
+仍被容量阻塞则继续等待，其他原因（节点忙、存储、deadline 等）不因容量释放而持续重试。
+可行时提交 UPDATE，记录 `RESUME_AFTER_CAPACITY_RELEASE`，只恢复未来 target/batch，不补造历史检查点。
+同纳秒故障批次处理完毕后已进入恢复或终态的任务不重试；重复通知合并，每任务每纳秒最多重试一次。
+`capacity_retry_success` 表示 OFF 的 START 或 ON 的 UPDATE 成功，按 `phase_before` 区分；ON 暂停时长
+仍只记在 `frequency-pause-intervals.csv`，不作为额外计算占用。非抽样重试的评分使用 `q_comp_snapshot`。
 
 库存快照包含 r/l、已捕获记录及 H、是否分配/接收、当前 remote state 和不可变 batch。
 估计器只输出与 **free bytes** 比较的新增峰值：

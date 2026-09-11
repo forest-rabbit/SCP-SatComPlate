@@ -48,7 +48,8 @@ def decision_check(row, task, deferred):
                 "START-window risk leaked into ON")
         normal = number(task, "compute_rate_work_units_per_second")/work*(cL/delta+cR/(n*delta))
         near(float(row["predicted_normal_s"]), normal, "ON one-second maintenance changed")
-        near(float(row["selected_score"]), normal + float(row["q_current_sample"])*recovery,
+        q = row["q_comp_snapshot"] if row.get("decision_trigger") == "CAPACITY_RELEASE" else row["q_current_sample"]
+        near(float(row["selected_score"]), normal + float(q)*recovery,
              "ON current-q objective changed")
         return True
     require(row["phase_before"] == "OFF", "scored nondecision phase")

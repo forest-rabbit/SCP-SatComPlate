@@ -717,10 +717,20 @@ void GateChecks()
     Check(progress.Current().initialized == prior.initialized &&
               progress.Current().remoteWork == prior.remoteWork,
           "policy gate never rewrites real committed state");
-    update.epochNs = pause.epochNs + 1;
-    gate.Propose(update);
+    update.epochNs = pause.epochNs;
+    Reject([&] { gate.Propose(update); });
+    gate.Propose(update, true);
     gate.Resolve(update.epochNs, false, true);
     Check(!gate.Paused() && gate.NewBatchRecordCount(8) == 8, "resume consumes retained pending");
+    Reject([&] { gate.Propose(update, true); });
+    ++update.epochNs;
+    Reject([&] { gate.Propose(update, true); }); // Unpaused ON has no release interest.
+    pause.epochNs = update.epochNs;
+    gate.Propose(pause);
+    gate.Resolve(pause.epochNs, false, true);
+    gate.Propose(update, true);
+    Check(!gate.Resolve(update.epochNs, true, false) && gate.Paused(),
+          "same-ns fault must veto ON capacity resume");
     Reject([&] { gate.Stop(ProtectionPhase::OFF); });
     gate.Stop(ProtectionPhase::RECOVERING);
     Check(!gate.NextTarget(layout, 100000, 0), "recovery stops primary policy");

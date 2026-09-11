@@ -158,7 +158,8 @@ class FrequencyProtectionController : public ProtectionPolicy
     std::map<uint64_t, State> m_states;               ///< Per-primary frequency lifecycle.
     std::vector<FrequencyDecisionRecord> m_decisions; ///< Proposal/resolution audit.
     std::vector<PauseInterval> m_pauses;               ///< Actual committed PAUSE intervals.
-    std::set<uint64_t> m_waitingCapacity;
+    std::set<uint64_t> m_waitingCapacity; ///< OFF waiting for first protection admission.
+    std::set<uint64_t> m_pausedCapacity; ///< ON paused only for transient path capacity.
     std::vector<PauseInterval> m_capacityWaits; ///< Not a compute reservation or actual waste.
     EventId m_capacityDrain;
     bool m_finalized{};

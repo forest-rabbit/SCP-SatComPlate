@@ -79,7 +79,10 @@ N5C. Do not tune workload, faults, deadlines, routing or seed/run for results.
 The accepted Pre-N5C START revision overrides only LLM token mapping: 400 WU/token,
 total scene WU exactly 352513119 and LLM WU exactly 61333200; whole-token balancing
 allows at most ±200 WU per LLM task. Re-run only new R4–R7 with risk-weighted OFF→START;
-leave ON, placement, faults, routing, deadlines and old evidence unchanged. Keep PR #97 Draft.
+leave placement, faults, routing, deadlines and old evidence unchanged. Keep PR #97 Draft.
+The subsequent user-approved ON correction retries only NO_ADMISSIBLE_PATH pauses on
+real capacity release, retaining the fixed pair and ON score; no new fault draws,
+reservation bypass or historical checkpoints. Re-run R4-R7 in a new output directory.
 1+1 requests exactly one resource-constrained replica at first TASK_RUNNING;
 failed admission is not retried. Normal replicas are fault-exposed; takeover
 and recovery immunity occur only after the complete same-ns fault batch.
