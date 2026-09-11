@@ -119,6 +119,13 @@ class RiskWeightedAuditTests(unittest.TestCase):
         row["selected_score"] = str(normal+.8*float(row["predicted_recovery_s"]))
         with self.assertRaises(ValueError): START["decision_check"](row, task, True)
 
+    def test_ready_estimate_rounds_up_to_a_whole_nanosecond(self):
+        row, task = self.fixture()
+        row.update(t_init_s=".0100000001", init_ready_time_ns="10010000001")
+        START["decision_check"](row, task, True)
+        row["init_ready_time_ns"] = "10010000000"
+        with self.assertRaises(ValueError): START["decision_check"](row, task, True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -55,8 +55,10 @@ def decision_check(row, task, deferred):
     p, ready = float(row["p_fail_before_finish"]), float(row["p_fail_after_init_ready"])
     require(0 <= ready <= p + 1e-12 <= 1 + 1e-12, "ready mass outside finish mass")
     ready_ns = int(row["init_ready_time_ns"])
-    near(ready_ns/1e9, int(row["fault_epoch_time_ns"])/1e9 + float(row["t_init_s"]),
-         "ready timestamp disagrees with initialization")
+    # Estimate is a floating duration; runtime deliberately rounds it UP to ns.
+    # Subtract integer timestamps first, avoiding cancellation at large epochs.
+    rounding_ns = ready_ns-int(row["fault_epoch_time_ns"])-float(row["t_init_s"])*1e9
+    require(-.001 <= rounding_ns <= 1.001, "ready timestamp disagrees with ceil-to-ns initialization")
     if ready:
         representative = float(row["representative_progress_after_ready"])
         require(x <= representative <= 1, "representative progress is not causal")
