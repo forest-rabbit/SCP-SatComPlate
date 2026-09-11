@@ -178,6 +178,15 @@ class F3SelectionTests(unittest.TestCase):
 
 
 class FinalRunnerTests(unittest.TestCase):
+    def test_complete_baselines_use_frozen_scene_and_ffp_only(self):
+        for mode in ("recompute", "one-plus-one"):
+            command = RUN["arguments"](Path("unused"), protection_mode=mode)
+            self.assertIn(f"--protectionMode={mode}", command)
+            self.assertIn("--faultMode=generate", command)
+            self.assertIn("--placementMode=ffp", command)
+            with self.assertRaises(ValueError):
+                RUN["arguments"](Path("unused"), protection_mode=mode, placement_mode="lrl")
+
     def test_fixed_defaults_and_modes_without_running_simulation(self):
         defaults = RUN["arguments"](Path("unused"))
         for flag in ("--simulationDuration=1300", "--fixedDelay=0.001", "--randomSeed=1", "--randomRun=11",

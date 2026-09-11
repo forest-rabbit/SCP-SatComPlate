@@ -9,13 +9,14 @@
 
 namespace ns3::protection
 {
-/** Mechanism-independent policy action. Replica actions are intentionally deferred. */
+/** Mechanism-independent checkpoint, recovery or replica policy action. */
 enum class ActionKind
 {
     NONE,
     START_CHECKPOINT,
     UPDATE_CHECKPOINT,
-    RECOMPUTE
+    RECOMPUTE,
+    START_REPLICA
 };
 /** Explicit logical protection phase, independent of storage byte count. */
 enum class ProtectionPhase
@@ -43,14 +44,17 @@ enum class ProtectionTransferKind
     RECOVERY_TAIL,
     RECOVERY_INPUT,
     RECOVERY_RESULT, ///< Business output; shares canonical IDs, never protection byte totals.
-    RECOVERY_STATE   ///< Complete committed checkpoint relocated to a new recovery node.
+    RECOVERY_STATE,  ///< Complete committed checkpoint relocated to a new recovery node.
+    REPLICA_INPUT,
+    REPLICA_RESULT
 };
 
-/** Logical-task attempt role; future replicas do not reuse primary identity. */
+/** Logical-task attempt role; replicas do not reuse primary identity. */
 enum class AttemptRole
 {
     PRIMARY,
-    RECOVERY
+    RECOVERY,
+    REPLICA
 };
 /** Task execution stage distinct from protection setup state. */
 enum class AttemptStage
@@ -63,7 +67,7 @@ enum class AttemptStage
     FAILED
 };
 
-/** Stable pair carried by every future compute/transfer callback. */
+/** Stable pair identifying an attempt across compute/transfer callbacks. */
 struct AttemptKey
 {
     uint64_t taskId{};     ///< Logical task identity.
@@ -85,6 +89,7 @@ struct ProtectionAction
 {
     ActionKind kind{ActionKind::NONE};                 ///< Selected action.
     std::optional<CheckpointConfiguration> checkpoint; ///< Present for checkpoint configuration.
+    std::optional<uint32_t> replicaNode; ///< Present only for a true parallel-replica action.
 };
 
 /** Causal node candidate supplied by the runtime adapter, not a future trace. */
@@ -121,6 +126,7 @@ struct ProtectionContext
     bool taskSelected{}; ///< Explicit fixture/experiment filter, not a probability decision.
     std::vector<BackupCandidate> candidates; ///< Current candidate snapshots.
     PlacementPathPreview previewPath; ///< Borrowed synchronous decision snapshot, never retained.
+    std::function<bool(uint32_t)> backupNodeFeasible; ///< Borrowed operation-specific single-node checks.
 };
 
 /** Already accepted attempt guard; does not modify any node health or fault RNG. */

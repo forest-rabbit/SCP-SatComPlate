@@ -31,11 +31,14 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 | `../metrics/core/placement-load-metrics.cc` | 节点集中度和每次负载变更 CSV |
 | `../metrics/core/frequency-metrics.cc` | 独立逐 epoch 决策 CSV；不混入 N5A actual 成本账本 |
 | `runtime/recovery-controller.h/.cc` | 故障裁决、一次恢复、真实输入/尾部/计算/结果及终态清理 |
+| `policy/baseline/recompute/`、`runtime/recompute-controller.*` | 独立无常态保护策略、公共 FFP 与完整从零恢复接线 |
+| `policy/baseline/one-plus-one/`、`runtime/one-plus-one-controller.*` | 一次性热副本申请策略与主计算启动接线 |
+| `mechanism/replication/replica-manager.*`、`../metrics/core/replica-metrics.cc` | 真实并行 attempt、完整故障 batch 后接管、首个 RESULT 裁决和独立实际账本 |
 | `runtime/protection-transfer-key.h` | 同纳秒请求的稳定排序键与不回绕的保护流编号 |
 | `../traffic/local-delivery.h/.cc` | 同星逻辑交付；不创建 UDP，不计网络字节 |
 
 不建空目录或完整插件框架。
-未来 1+1/Multi-tree 增加 mechanism/action，复用 runtime、attempt、真实服务与资源账本。
+1+1 的独立 attempt 复用真实 ComputeService、网络和资源账本；Multi-tree 未实现。
 生产文件不引用 `tools/validation/compfrr-shadow`；测试可单向使用它核对旧布局，
 不能拿旧 shadow 的理想网络耗时要求真实备份时序完全一致。
 
@@ -45,12 +48,12 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 
 | 参数 | 默认 | 说明 |
 |---|---:|---|
-| `protectionMode` | `off` | `fixed` 固定保护；`compfrr` 动态频率，仅允许 generate 且启用 F1/F2 至少一个来源；保护模式均要求网络任务、shadow 关闭 |
+| `protectionMode` | `off` | `recompute` 完整从零重算；`one-plus-one` 真实热副本；`fixed` 固定检查点；`compfrr` 动态频率，仅后者要求 generate 且启用 F1/F2 至少一个来源；保护模式均要求网络任务、shadow 关闭 |
 | `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
 | `placementMode` | `ffp` | fixed / compfrr 均真正注入 `ffp` 或 `lrl`；后者为负载排名诊断 |
-| `remoteBusyRecoveryPolicy` | `relocate` | 仅切换 REMOTE_BUSY：迁移 checkpoint，或放弃 checkpoint 从零重算；off 忽略此参数 |
+| `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
 off 不创建保护池、流或 CSV，不做故障恢复；fixed 对每个首次主计算启动执行一次固定策略，
@@ -74,8 +77,31 @@ FFP/LRL 均实现两种角色；当前 checkpoint 恢复目标仍统一按 FFP �
 `recompute-controller.*` 接线、`policy/baseline/recompute/recompute-policy.h` 只决定故障后重算。
 `recovery-summary.csv` 对此模式增加 planned INPUT 等待及 planned 浪费列，实际值仍取真实执行。
 该严格筛选仅适用于完整 baseline，不改变 checkpoint 方案既有的 RECOMPUTE 后备行为。
-`one-plus-one`（真实双副本计算与 winner RESULT）及 `placementMode=n5c` **尚未实现**，
-入口明确报 `NOT_IMPLEMENTED`，不能当 off/FFP 运行。
+完整 recompute 与 one-plus-one 首版均只允许 FFP；`placementMode=n5c` 仍明确报 `NOT_IMPLEMENTED`。
+
+## 1+1：一次申请、真实双 attempt
+
+`runtime/one-plus-one-controller.*` 在首次 TASK_RUNNING 接线，
+`policy/baseline/one-plus-one/one-plus-one-policy.h` 向公共 PlacementPolicy 申请一次副本，
+`mechanism/replication/replica-manager.*` 执行真实 INPUT、完整 WU 和 RESULT。
+FFP 使用非主、健康、空闲且可达结果端的节点，并核对 INPUT 准入及原 deadline 的可能可行性。
+未准入不重试，副本失败不创建第三副本，不追加隐藏的 Recompute。主任务不等待副本。
+
+正常副本不免疫 F1/F2；INPUT 期间的计算故障沿用普通任务语义：输入继续、计算等待可用性恢复。
+主 attempt 失效时，同纳秒所有故障及通信拓扑覆盖完成后，幸存且可接管的副本才进入恢复 attempt
+的 F1/F2 免疫；F3 始终有效。同批主副本均被击中不能因处理顺序而提前免疫。
+两个 attempt 共享最初的绝对 **compute deadline**，不以 RESULT 到达时间判超期；
+deadline 取消尚未算完的 attempt，但保留已按时算完、正在交付的 RESULT。
+首个有效逻辑 RESULT 获胜，取消另一 attempt 的计算和未完成传输，已发送字节保留。
+
+`metrics/core/replica-metrics.cc` 输出 `replica-summary.csv`、`replica-attempts.csv`、
+`replica-events.csv`、`replica-transfers.csv`。两个 attempt 的 WU、等待和传输独立记录；
+成功任务的冗余 WU 为两者实际执行之和减 W，失败任务只报告 raw actual，不做负数减法。
+planned INPUT 等待取准入时估计，actual reserved-idle 取锁定服务到实际启动/终止的时间。
+REPLICA_INPUT 全属额外流量；仅获胜 RESULT 属业务，败方已发送 RESULT 属额外流量。
+`replica-transfers.csv` 保留所有结果流，包括原主 RESULT；不能只加总 checkpoint transfer 表来算 1+1 开销。
+这两种 baseline 不分配 checkpoint 对象；零容量共享账本仅复用规范化流编号。
+普通任务与副本的 active working-set 存储未独立量化，不能据此宣称 1+1 存储更优。
 
 ## N5B：频率策略与在线接线
 

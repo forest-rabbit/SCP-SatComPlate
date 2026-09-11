@@ -93,10 +93,11 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 
 `protectionMode=off` 默认保持现有行为；`fixed` 接入真实备份数据流与单次故障恢复，支持无故障与 generate。
 fixed/compfrr 共用 `placementMode=ffp|lrl`；`remoteBusyRecoveryPolicy=relocate|recompute`
-仅切换远端计算忙时的恢复方式，默认 relocate。完整 recompute/one-plus-one baseline 与 N5C 尚未实现，
-不可作为正式运行模式；详见 [保护与恢复模块](protection/README.md)。
+仅切换远端计算忙时的恢复方式，默认 relocate。完整 `recompute` 为无常态保护的故障后从零重算，
+`one-plus-one` 为首次主计算启动时一次性申请的真实并行副本，两者当前仅支持 FFP。
+N5C 尚未实现；详见 [保护与恢复模块](protection/README.md)。
 `compfrr` 在在线 generate 的故障检查点进行动态频率决策（需启用 F1/F2 至少一个来源）。
-两种保护模式均要求网络任务且 shadow 关闭。10 GB 备份池与频率参数说明见
+非 off 模式均要求网络任务且 shadow 关闭。10 GB 备份池与频率参数说明见
 [protection README](protection/README.md)，不修改正式场景输入或故障参数。
 
 G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评估，默认关闭。

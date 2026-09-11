@@ -102,6 +102,12 @@ class ComputeService : public Application
     bool CancelRecovery(uint64_t taskId, uint64_t generation);
     /** Read observed work, never planned work substituted for an interrupted attempt. */
     RecoveryComputeAccounting GetRecoveryAccounting(uint64_t taskId, uint64_t generation) const;
+    /** Start a normally fault-exposed replica in an already reserved slot. */
+    bool StartReplica(uint64_t taskId, uint64_t generation, uint64_t workUnits,
+                      Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+                      Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed);
+    /** Promote only a healthy reserved/running replica after complete fault-batch arbitration. */
+    bool PromoteReplica(uint64_t taskId, uint64_t generation);
     uint64_t GetCancelledRunningTaskCount() const;
     uint64_t GetRemovedQueuedTaskCount() const;
 
@@ -128,6 +134,12 @@ class ComputeService : public Application
     void NotifyComputeState();
     void RecoveryCatchup(uint64_t taskId, uint64_t generation); ///< Guarded service milestone.
     void RecordRecoveryAccounting(); ///< Freeze observed prefix before releasing service state.
+    /** Shared reserved-attempt execution; immunity is explicit before any callbacks. */
+    bool StartReservedAttempt(uint64_t taskId, uint64_t generation, uint64_t workUnits,
+        uint64_t catchupWorkUnits,
+        Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+        Callback<void, uint64_t, uint64_t, uint32_t, int64_t> catchup,
+        Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed, bool immune);
 
     uint32_t m_nodeId{};
     uint64_t m_computeRateWorkUnitsPerSecond{};
@@ -143,7 +155,8 @@ class ComputeService : public Application
     EventId m_dispatchEvent;
     EventId m_completionEvent;
     std::optional<std::pair<uint64_t, uint64_t>> m_recoveryOwner; ///< Reserved task/generation.
-    bool m_runningRecovery{}; ///< Only this attempt ignores compute availability.
+    bool m_runningRecovery{}; ///< A reserved external attempt (recovery or replica) is running.
+    bool m_recoveryImmune{}; ///< Only accepted recovery/takeover ignores compute availability.
     std::map<std::pair<uint64_t, uint64_t>, RecoveryComputeAccounting> m_recoveryAccounting;
     EventId m_catchupEvent;   ///< Cancelled with the owning recovery.
     Callback<void, uint64_t, uint64_t, uint32_t, int64_t> m_recoveryCatchup;

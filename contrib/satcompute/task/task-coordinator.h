@@ -72,6 +72,15 @@ struct FaultTaskImpactRecord
     uint64_t remainingWorkUnits{}; ///< Total work minus completed work when valid.
 };
 
+/** Optional parallel-attempt boundary; absent in all pre-existing schemes. */
+struct ParallelAttemptHooks
+{
+    std::function<void(uint64_t, uint32_t, int64_t)> primaryComputed; ///< Real primary service callback.
+    std::function<void(uint64_t)> deadline; ///< Original absolute compute deadline.
+    std::function<std::map<uint32_t, TaskFaultImpact>(const std::vector<TaskFaultNodeChange>&)> faultBatch;
+    std::function<void()> batchComplete; ///< Called after fault availability AND topology overlay.
+};
+
 /** Coordinate input transfer, FCFS compute, and result transfer lifecycles. */
 class TaskCoordinator : public Object
 {
@@ -126,6 +135,24 @@ class TaskCoordinator : public Object
     bool FailRecovery(uint64_t taskId,
                       const std::string& cause,
                       TaskFailureReason reason = TaskFailureReason::COMPUTE_NODE_FAILURE);
+    /** Install explicit parallel execution hooks; cannot coexist with checkpoint recovery. */
+    void SetParallelAttemptHooks(ParallelAttemptHooks hooks);
+    /** Called once at first TASK_RUNNING, before the replica policy decides admission. */
+    bool BeginParallelExecution(uint64_t taskId);
+    /** Mark an on-time attempt's computation, without cancelling the other attempt's deadline. */
+    bool ParallelComputed(uint64_t taskId, uint32_t node, int64_t at);
+    /** Commit one physically delivered result and its actual winning attempt timestamps. */
+    bool ParallelResult(uint64_t taskId, uint64_t generation, uint32_t node,
+                         int64_t computeAt, int64_t resultStartedAt, uint64_t actualServiceNs,
+                         uint64_t transferId, bool local);
+    /** Fail the logical task only after all parallel attempts are invalid. */
+    bool FailParallel(uint64_t taskId, const std::string& cause, TaskFailureReason reason,
+                       uint64_t actualServiceNs);
+    /** Append causal per-attempt fault impact before its service is cancelled. */
+    void RecordParallelFaultImpact(uint64_t taskId, const TaskFaultNodeChange& change,
+        const std::string& type, int64_t computeStart, std::optional<uint64_t> executedWork);
+    /** FaultController invokes this after completing the whole timestamp batch and overlay. */
+    void CompleteFaultBatch();
 
   private:
     friend struct TaskCoordinatorRecoveryTestAccess; ///< Stale-callback fixture access, not runtime
@@ -177,6 +204,7 @@ class TaskCoordinator : public Object
     std::map<uint64_t, EventId> m_deadlineEvents;
     Ptr<NetworkTransferEngine> m_transferEngine;
     std::function<bool(const TaskRuntime&, const TaskFaultNodeChange&)> m_recoveryHandler;
+    ParallelAttemptHooks m_parallelHooks; ///< Explicitly enabled only by real replication.
 };
 
 } // namespace ns3

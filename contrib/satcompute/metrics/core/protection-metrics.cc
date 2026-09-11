@@ -38,6 +38,10 @@ Kind(protection::ProtectionTransferKind kind)
         return "RECOVERY_INPUT";
     case K::RECOVERY_STATE:
         return "RECOVERY_STATE";
+    case K::REPLICA_INPUT:
+        return "REPLICA_INPUT";
+    case K::REPLICA_RESULT:
+        return "REPLICA_RESULT";
     case K::RECOVERY_RESULT:
         throw std::logic_error("business RESULT must not enter protection metrics");
     }
@@ -72,6 +76,9 @@ WriteProtectionMetrics(const protection::CheckpointManager& manager,
         summaries.emplace(row.transferId, std::move(row));
     for (const auto& f : manager.Flows())
     {
+        if (f.key.kind == protection::ProtectionTransferKind::REPLICA_RESULT &&
+            !network.IsProtectionTransfer(f.transferId))
+            continue; // Winning logical RESULT is business; all replica flows have a separate ledger.
         const auto& r = summaries.at(f.transferId);
         transfers << f.key.taskId << ',' << f.key.attemptGeneration << ',' << Kind(f.key.kind)
                   << ',' << f.key.sequence << ',' << f.transferId << ',' << r.sourceSatelliteId

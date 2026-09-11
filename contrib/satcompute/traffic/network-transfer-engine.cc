@@ -324,7 +324,24 @@ NetworkTransferEngine::IsRuntimeTransfer(uint64_t transferId) const
 bool
 NetworkTransferEngine::IsProtectionTransfer(uint64_t transferId) const
 {
-    return IsRuntimeTransfer(transferId) && !m_businessResults.contains(transferId);
+    return m_redundantResults.contains(transferId) ||
+           (IsRuntimeTransfer(transferId) && !m_businessResults.contains(transferId));
+}
+
+void
+NetworkTransferEngine::SetBusinessResult(uint64_t id, bool business)
+{
+    GetPlanIndex(id); // Require an existing real flow; classification cannot fabricate traffic.
+    if (business)
+    {
+        m_redundantResults.erase(id);
+        m_businessResults.insert(id);
+    }
+    else
+    {
+        m_businessResults.erase(id);
+        m_redundantResults.insert(id);
+    }
 }
 
 uint64_t

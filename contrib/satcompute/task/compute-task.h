@@ -104,6 +104,7 @@ struct TaskRuntime
     int64_t failureTimeNs{-1};
     TaskFailureReason failureReason{TaskFailureReason::NONE};
     uint64_t attemptGeneration{};       ///< Primary 0, sole recovery 1; never reset.
+    bool parallelExecution{};          ///< Independent attempts share one logical outcome.
     uint32_t activeComputeNodeId{};     ///< Actual executing node, not immutable placement.
     uint64_t winningResultTransferId{}; ///< Zero only for a local recovery result.
     bool localResultDelivered{};        ///< Logical bytes delivered without a network flow.

@@ -115,6 +115,7 @@ GetDefaultSatComputeConfig()
 
     // --protectionMode：默认 off 保持 N4 行为；fixed 启用真实检查点与一次故障恢复。
     // recompute 不做常态保护，故障后通过 FFP 选择可行节点、原始 INPUT 重传、从零重算。
+    // one-plus-one 在首次 TASK_RUNNING 一次申请真实完整副本；无可行资源则不重试。
     config.protectionMode = "off";
 
     // --placementMode：FFP 为默认基线；fixed / compfrr 均可注入 LRL 作负载排名诊断。

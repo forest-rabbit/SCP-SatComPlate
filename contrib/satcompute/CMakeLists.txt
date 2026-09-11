@@ -23,6 +23,9 @@ build_lib(
     metrics/core/placement-load-metrics.cc
     protection/runtime/recovery-controller.cc
     protection/runtime/recompute-controller.cc
+    protection/runtime/one-plus-one-controller.cc
+    protection/mechanism/replication/replica-manager.cc
+    metrics/core/replica-metrics.cc
     metrics/core/recovery-metrics.cc
     metrics/core/frequency-metrics.cc
     metrics/core/protection-metrics.cc
@@ -112,6 +115,9 @@ build_lib(
     protection/runtime/placement-load-ledger.h
     protection/runtime/recovery-controller.h
     protection/runtime/recompute-controller.h
+    protection/runtime/one-plus-one-controller.h
+    protection/mechanism/replication/replica-manager.h
+    protection/policy/baseline/one-plus-one/one-plus-one-policy.h
     protection/policy/baseline/recompute/recompute-policy.h
     protection/runtime/protection-transfer-key.h
     metrics/core/protection-metrics.h
@@ -259,6 +265,14 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-one-plus-one-baseline-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/one-plus-one-baseline-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-recompute-baseline-test
   EXECNAME_PREFIX satcompute_test_

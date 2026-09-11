@@ -17,6 +17,7 @@
 #include "ns3/fixed-protection-controller.h"
 #include "ns3/frequency-protection-controller.h"
 #include "ns3/recompute-controller.h"
+#include "ns3/one-plus-one-controller.h"
 #include "ns3/least-recovery-load-placement-policy.h"
 #include "ns3/protection-metrics.h"
 #include "ns3/link-metrics-recorder.h"
@@ -210,7 +211,7 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
     commandLine.AddValue("protectionMode",
-                         "off / recompute / fixed / compfrr: protection and recovery scheme",
+                         "off / recompute / one-plus-one / fixed / compfrr: protection scheme",
                          config.protectionMode);
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
@@ -377,8 +378,6 @@ ValidateConfig(const SatComputeConfig& config)
     RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one"});
     RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "n5c"});
     RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
-    if (config.protectionMode == "one-plus-one")
-        FailConfig("protectionMode", "NOT_IMPLEMENTED: one-plus-one baseline is deferred");
     if (config.placementMode == "n5c")
         FailConfig("placementMode", "NOT_IMPLEMENTED: N5C placement is deferred");
     if (config.placementMode == "lrl" && config.protectionMode != "fixed" && config.protectionMode != "compfrr")
@@ -684,6 +683,9 @@ main(int argc, char* argv[])
             std::unique_ptr<protection::FixedProtectionController> protection;
             std::unique_ptr<protection::FrequencyProtectionController> frequency;
             std::unique_ptr<protection::RecomputeController> recompute;
+            std::unique_ptr<protection::OnePlusOneController> replication;
+            for (const auto name : {"replica-summary.csv", "replica-attempts.csv", "replica-events.csv", "replica-transfers.csv"})
+                std::filesystem::remove(outputDirectory / name);
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
             std::filesystem::remove(outputDirectory / "frequency-pause-intervals.csv");
             std::filesystem::remove(outputDirectory / "frequency-capacity-waits.csv");
@@ -716,7 +718,14 @@ main(int argc, char* argv[])
             }
             else if (config.protectionMode == "recompute")
             {
+                RemoveProtectionMetrics(outputDirectory);
                 recompute = std::make_unique<protection::RecomputeController>(
+                    taskCoordinator, topology, simulationDurationNs, makePlacement());
+            }
+            else if (config.protectionMode == "one-plus-one")
+            {
+                RemoveProtectionMetrics(outputDirectory);
+                replication = std::make_unique<protection::OnePlusOneController>(
                     taskCoordinator, topology, simulationDurationNs, makePlacement());
             }
             else
@@ -748,6 +757,12 @@ main(int argc, char* argv[])
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
             if (shadow) shadow->Finalize();
+            if (replication)
+            {
+                replication->Finalize();
+                WriteProtectionMetrics(replication->Manager().Ledger(), *transferEngine, outputDirectory);
+                replication->Manager().WriteMetrics(outputDirectory);
+            }
             if (recompute)
             {
                 recompute->Finalize();

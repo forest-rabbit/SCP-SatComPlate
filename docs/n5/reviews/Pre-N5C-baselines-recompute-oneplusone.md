@@ -30,4 +30,9 @@ F3 fixture 的 planned catch-up 为 9,717 WU、actual 为 817 WU；deadline fixt
 全部维护验证通过：Python 79 项、C++ 22 个程序、smoke 10 组、regression 4 组。
 其中原恢复检查 1,539 项；N4B 联合 fixture 为 88 完成/12 失败、483 条概率匹配。
 本地证据位于 `output/n5-baselines-validation/*-recompute.log`。
-尚未开始 R0-R5 正式运行，以上不替代 R5 完整兼容性门禁。
+1+1 专项 681 项检查覆盖两种 winner、真实并行、一次性准入、正常副本故障、
+同纳秒双方故障、完整 batch 后接管及后续 F1/F2/F3、INPUT 期间故障等待、
+LocalDelivery、loser 已发字节、compute-deadline 与仿真结束清理。
+接入后维护验证为 Python 80 项、C++ 23 个程序、smoke 11 组、regression 4 组全通过；
+新统计脚本另补防重复计费、actual 截断、严格 R5 比较和事件配对测试。
+证据位于 `output/n5-baselines-validation/*-baselines.log`。以上不替代 R5 完整兼容性门禁。
