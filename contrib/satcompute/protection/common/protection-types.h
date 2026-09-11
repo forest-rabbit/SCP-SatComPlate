@@ -2,7 +2,9 @@
 #ifndef SATCOMPUTE_PROTECTION_TYPES_H
 #define SATCOMPUTE_PROTECTION_TYPES_H
 #include <cstdint>
+#include <functional>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace ns3::protection
@@ -99,6 +101,15 @@ struct BackupCandidate
     uint64_t activeRecoveryCount{}; ///< Accepted nonterminal recovery ownership count.
 };
 
+/** Causal path feasibility supplied by runtime; never a capacity reservation. */
+struct PlacementPathAvailability
+{
+    bool reachable{}, admissible{};
+    std::string reason;
+};
+using PlacementPathPreview =
+    std::function<PlacementPathAvailability(uint32_t, uint32_t)>;
+
 /** Read-only event context for policy; no access to future faults or oracle results. */
 struct ProtectionContext
 {
@@ -109,6 +120,7 @@ struct ProtectionContext
     bool firstComputeStart{};                    ///< True only for the first primary dispatch.
     bool taskSelected{}; ///< Explicit fixture/experiment filter, not a probability decision.
     std::vector<BackupCandidate> candidates; ///< Current candidate snapshots.
+    PlacementPathPreview previewPath; ///< Borrowed synchronous decision snapshot, never retained.
 };
 
 /** Already accepted attempt guard; does not modify any node health or fault RNG. */

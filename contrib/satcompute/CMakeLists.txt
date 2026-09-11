@@ -99,6 +99,8 @@ build_lib(
     protection/policy/compfrr/frequency/compfrr-frequency-policy.h
     protection/policy/compfrr/frequency/frequency-decision-gate.h
     protection/policy/placement-policy.h
+    protection/policy/recovery-policy.h
+    protection/runtime/decision-path-snapshot.h
     protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.h
     protection/policy/experimental/least-recovery-load/least-recovery-load-placement-policy.h
     protection/mechanism/checkpoint/checkpoint-progress.h

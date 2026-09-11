@@ -7,6 +7,7 @@
 #include "frequency-storage-estimator.h"
 #include "recovery-controller.h"
 #include "placement-load-ledger.h"
+#include "decision-path-snapshot.h"
 
 #include <filesystem>
 #include <set>
@@ -49,7 +50,8 @@ class FrequencyProtectionController : public ProtectionPolicy
                                   Ptr<FaultModelEngine> faults,
                                   uint64_t capacity,
                                   int64_t stopNs,
-                                  std::unique_ptr<PlacementPolicy> placement = nullptr);
+                                  std::unique_ptr<PlacementPolicy> placement = nullptr,
+                                  RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE);
     ~FrequencyProtectionController() override;
     /** Finish the same actual ledgers as fixed protection. */
     void Finalize();
@@ -135,12 +137,14 @@ class FrequencyProtectionController : public ProtectionPolicy
     const TaskRuntime& Task(uint64_t taskId) const;   ///< Stable logical task lookup.
     Ptr<ComputeService> Service(uint32_t node) const; ///< Actual compute profile owner.
     std::vector<BackupCandidate> Candidates(uint32_t primary) const; ///< Causal FFP inputs.
-    std::optional<Path> EstimatePath(uint32_t source,
+    std::optional<Path> EstimatePath(DecisionPathSnapshot& paths, uint32_t source,
                                      uint32_t destination,
                                      std::string* reason = nullptr) const;
     ///< Current deterministic route, never future queue completion.
-    bool BuildResources(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
-    void EvaluateOffPairs(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
+    bool BuildResources(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
+                        DecisionPathSnapshot& paths);
+    void EvaluateOffPairs(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
+                          DecisionPathSnapshot& paths);
     ///< Adapt actual placement, legal inventory, pools, rates and paths.
     Ptr<TaskCoordinator> m_tasks;                     ///< Business lifecycle owner.
     SatelliteRuntimeView& m_topology;                 ///< Shared network view.

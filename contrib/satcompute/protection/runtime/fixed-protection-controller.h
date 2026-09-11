@@ -26,7 +26,9 @@ class FixedProtectionController
                               int64_t stopNs,
                               uint32_t deltaPermille,
                               uint32_t batchN,
-                              bool enableRecovery = false);
+                              bool enableRecovery = false,
+                              std::unique_ptr<PlacementPolicy> placement = nullptr,
+                              RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE);
     ~FixedProtectionController();
     void Finalize(); ///< Release remaining protection after simulation stop.
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; } ///< Actual ownership.
@@ -47,7 +49,7 @@ class FixedProtectionController
     void OnTask(const TaskEventRecord& event); ///< Observe, never mutate ordinary task state.
     Ptr<TaskCoordinator> m_tasks;              ///< Retained coordinator, outlives event binding.
     SatelliteRuntimeView& m_topology;          ///< Existing real network view.
-    PlacementLoadLedger m_loads;               ///< Diagnostic only for fixed FFP.
+    PlacementLoadLedger m_loads;               ///< Shared ownership snapshot for FFP/LRL.
     CheckpointManager m_manager;               ///< Sole G2 checkpoint executor.
     FixedProtectionPolicy m_policy;            ///< Explicit fixed policy, no probability query.
     ProtectionRuntime m_runtime;               ///< Policy/mechanism dispatcher.

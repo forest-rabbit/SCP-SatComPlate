@@ -16,7 +16,8 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
                                                              Ptr<FaultModelEngine> faults,
                                                              uint64_t capacity,
     int64_t stopNs,
-    std::unique_ptr<PlacementPolicy> placement)
+    std::unique_ptr<PlacementPolicy> placement,
+    RemoteBusyRecoveryPolicy busyPolicy)
     : m_tasks(tasks),
       m_topology(topology),
       m_faults(faults),
@@ -35,7 +36,7 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
         [this](const auto& epoch) { BeforeEpoch(epoch); },
         [this](auto time, const auto& outcomes) { AfterEpoch(time, outcomes); });
     tasks->GetTransferEngine()->SetCapacityReleaseObserver([this] { CapacityReleased(); });
-    m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, *this);
+    m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, *this, busyPolicy);
     m_recovery->SetLoadObserver([this](auto task, auto node, bool active) {
         m_loads.Recovery(task, node, active, Simulator::Now().GetNanoSeconds());
     });
@@ -205,7 +206,7 @@ double FrequencyProtectionController::Path::Seconds(uint64_t bytes) const
 }
 
 std::optional<FrequencyProtectionController::Path>
-FrequencyProtectionController::EstimatePath(uint32_t source,
+FrequencyProtectionController::EstimatePath(DecisionPathSnapshot& paths, uint32_t source,
                                             uint32_t destination,
                                             std::string* reason) const
 {
@@ -215,7 +216,7 @@ FrequencyProtectionController::EstimatePath(uint32_t source,
             *reason = "NO_ROUTE";
         return std::nullopt;
     }
-    const auto estimate = m_tasks->GetTransferEngine()->EstimateAdmissiblePath(source, destination);
+    const auto& estimate = paths.Get(source, destination);
     if (reason)
         *reason = estimate.failureReason;
     if (!estimate.admissible)
@@ -228,11 +229,11 @@ FrequencyProtectionController::EstimatePath(uint32_t source,
 
 bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
                                                    const TaskRuntime& task,
-                                                   State& state)
+                                                   State& state, DecisionPathSnapshot& paths)
 {
     auto& input = row.input;
     row.pair = row.pair ? row.pair : state.pair ? state.pair
-                          : m_placement->Select({task.definition.computeNodeId,
+                          : m_placement->SelectCheckpointPair({task.definition.computeNodeId,
                                                 Candidates(task.definition.computeNodeId)});
     if (!row.pair)
     {
@@ -256,11 +257,11 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
     else if (!local->IsIdle()) row.resourceReason = "LOCAL_BUSY";
     else if (!remote->IsIdle()) row.resourceReason = "REMOTE_BUSY";
     const auto replay =
-        EstimatePath(task.definition.sourceNodeId, pair.remoteNode, &row.replayReason);
+        EstimatePath(paths, task.definition.sourceNodeId, pair.remoteNode, &row.replayReason);
     std::string baseReason, localReason, tailReason;
-    const auto base = EstimatePath(task.definition.computeNodeId, pair.remoteNode, &baseReason);
-    const auto l1 = EstimatePath(task.definition.computeNodeId, pair.localNode, &localReason);
-    const auto tail = EstimatePath(pair.localNode, pair.remoteNode, &tailReason);
+    const auto base = EstimatePath(paths, task.definition.computeNodeId, pair.remoteNode, &baseReason);
+    const auto l1 = EstimatePath(paths, task.definition.computeNodeId, pair.localNode, &localReason);
+    const auto tail = EstimatePath(paths, pair.localNode, pair.remoteNode, &tailReason);
     input.replayAvailable = replay.has_value();
     input.pathAvailable = base && l1 && tail;
     if (!input.pathAvailable)
@@ -283,13 +284,13 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
 }
 
 void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& row,
-                                                      const TaskRuntime& task, State& state)
+                                                      const TaskRuntime& task, State& state,
+                                                      DecisionPathSnapshot& paths)
 {
     const PlacementContext context{task.definition.computeNodeId,
                                    Candidates(task.definition.computeNodeId)};
     row.pairStats = BuildFeasiblePlacementPairs(context, [&](auto source, auto destination) {
-        const auto p = m_tasks->GetTransferEngine()->EstimateAdmissiblePath(source, destination);
-        return PlacementPathAvailability{p.reachable, p.admissible, p.failureReason};
+        return paths.Availability(source, destination);
     });
     auto pairs = std::move(row.pairStats.pairs);
     row.pairPathFeasible = pairs.size();
@@ -307,7 +308,7 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
     {
         row.pair = pair;
         row.resourceReason.clear();
-        if (!BuildResources(row, task, state))
+        if (!BuildResources(row, task, state, paths))
             throw std::logic_error("read-only pair preview changed within one decision");
         ++row.pairHardChecked;
         row.proposal = m_policy.Evaluate(row.input);
@@ -385,9 +386,12 @@ FrequencyProtectionController::Evaluate(const FaultEpochInput& epoch, const std:
     in.inputBytes = task.definition.inputBytes;
     in.variableBytes = TaskStateAdapter(task.definition).VariableBytes();
     in.costs = GetProtectionCosts(static_cast<uint64_t>(in.variableBytes));
+    DecisionPathSnapshot paths([this](auto source, auto destination) {
+        return m_tasks->GetTransferEngine()->EstimateAdmissiblePath(source, destination);
+    });
     if (phase == ProtectionPhase::OFF)
-        EvaluateOffPairs(row, task, state);
-    else if (BuildResources(row, task, state))
+        EvaluateOffPairs(row, task, state, paths);
+    else if (BuildResources(row, task, state, paths))
         row.proposal = m_policy.Evaluate(in);
     else
     {

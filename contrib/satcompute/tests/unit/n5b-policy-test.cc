@@ -83,8 +83,8 @@ void PlacementChecks()
             a.oneHop = flags & 8;
         }
         const auto expected = LegacyPair(c);
-        Check(ffp.Select(c) == expected, "FFP differs from N5A pair rule");
-        const auto ranked = LeastRecoveryLoadPlacementPolicy(1).Select(c);
+        Check(ffp.SelectCheckpointPair(c) == expected, "FFP differs from N5A pair rule");
+        const auto ranked = LeastRecoveryLoadPlacementPolicy(1).SelectCheckpointPair(c);
         Check(bool(ranked) == bool(expected), "LRL/FFP hard-feasible sets differ");
         if (ranked)
         {
@@ -116,20 +116,48 @@ void PlacementChecks()
           {0, true, true, true, true},
           {2, true, true, true, true},
           {1, true, true, true, true}}};
-    const auto expected = ffp.Select(c);
+    const auto expected = ffp.SelectCheckpointPair(c);
     c.candidates[1].backupAssignmentCount = 100000;
     c.candidates[1].storageFreeBytes = 0;
-    Check(ffp.Select(c) == expected, "FFP must not silently become load/storage balancing");
+    Check(ffp.SelectCheckpointPair(c) == expected, "FFP must not silently become load/storage balancing");
     std::reverse(c.candidates.begin(), c.candidates.end());
-    Check(ffp.Select(c) == expected, "stable ID not input order");
+    Check(ffp.SelectCheckpointPair(c) == expected, "stable ID not input order");
 
     LeastRecoveryLoadPlacementPolicy lrl(2);
-    Check(lrl.Select(c)->localNode != 0, "LRL avoids synthetic concentration");
+    Check(ffp.SelectBackupNode(c) == 0 && lrl.SelectBackupNode(c) != 0,
+          "single-node role must use injected ranking, without a fake pair");
+    Check(ffp.SelectBackupNode(c, [](auto n) { return n == 3; }) == 3,
+          "operation feasibility ignored");
+    Check(!ffp.SelectBackupNode(c, [](auto) { return false; }), "infeasible single node admitted");
+    PlacementContext single{10, {{1, true, true, true, false}}};
+    Check(ffp.SelectBackupNode(single) == 1 && !ffp.SelectCheckpointPair(single),
+          "single backup incorrectly requires one-hop or a second node");
+    for (auto member : {&BackupCandidate::healthy, &BackupCandidate::idle, &BackupCandidate::reachable})
+    {
+        single.candidates[0].*member = false;
+        Check(!ffp.SelectBackupNode(single), "single role missed shared hard filter");
+        single.candidates[0].*member = true;
+    }
+    single.primaryNode = 1;
+    Check(!ffp.SelectBackupNode(single), "single backup may not be its primary");
+    ProtectionContext fixedContext;
+    fixedContext.attempt = {100, 0};
+    fixedContext.primaryNode = c.primaryNode;
+    fixedContext.firstComputeStart = fixedContext.taskSelected = true;
+    fixedContext.candidates = c.candidates;
+    FixedProtectionPolicy injected(50, 4, std::make_unique<LeastRecoveryLoadPlacementPolicy>(2));
+    const auto injectedPair = injected.OnTaskComputeStart(fixedContext).checkpoint;
+    const auto rankedPair = lrl.SelectCheckpointPair(c);
+    Check(injectedPair && injectedPair->localNode == rankedPair->localNode &&
+              injectedPair->remoteNode == rankedPair->remoteNode &&
+              injectedPair->localNode != ffp.SelectCheckpointPair(c)->localNode,
+          "fixed still hardcodes FFP instead of executing injected LRL");
+    Check(lrl.SelectCheckpointPair(c)->localNode != 0, "LRL avoids synthetic concentration");
     for (auto& a : c.candidates)
         a.backupAssignmentCount = 0;
     for (int task = 0; task < 40; ++task)
     {
-        const auto pair = *lrl.Select(c);
+        const auto pair = *lrl.SelectCheckpointPair(c);
         for (auto& a : c.candidates)
             a.backupAssignmentCount += a.nodeId == pair.remoteNode;
     }
@@ -140,7 +168,7 @@ void PlacementChecks()
     for (auto& a : c.candidates)
         a.backupAssignmentCount = a.nodeId == 0 ? std::numeric_limits<uint64_t>::max() : 0;
     c.candidates[0].activeRecoveryCount = std::numeric_limits<uint64_t>::max();
-    Check(lrl.Select(c)->localNode != c.candidates[0].nodeId, "LRL weighted count overflow");
+    Check(lrl.SelectCheckpointPair(c)->localNode != c.candidates[0].nodeId, "LRL weighted count overflow");
 
     PlacementLoadLedger loads;
     loads.RegisterNode(0);

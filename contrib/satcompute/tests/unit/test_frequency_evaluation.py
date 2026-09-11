@@ -68,6 +68,13 @@ class FrequencyEvaluationTests(unittest.TestCase):
         self.assertIn("--lrlRecoveryWeight=1", a)
         self.assertIn("--simulationDuration=1300", a)
         self.assertIn("--faultMode=generate", a)
+        self.assertIn("--remoteBusyRecoveryPolicy=relocate", a)
+        fixed = RUN["arguments"](Path("output/not-run"), protection_mode="fixed",
+                                 placement_mode="lrl", remote_busy_recovery_policy="recompute")
+        self.assertIn("--placementMode=lrl", fixed)
+        self.assertIn("--remoteBusyRecoveryPolicy=recompute", fixed)
+        with self.assertRaises(ValueError):
+            RUN["arguments"](Path("output/not-run"), remote_busy_recovery_policy="other")
 
 
 if __name__ == "__main__":

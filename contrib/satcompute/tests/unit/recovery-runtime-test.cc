@@ -108,6 +108,7 @@ struct Options
     int64_t stopNs{END};
     bool remoteBusy{}, blockTargets{}, fillTargets{}, failState{};
     TaskProfile taskProfile{TaskProfile::LLM};
+    RemoteBusyRecoveryPolicy busyPolicy{RemoteBusyRecoveryPolicy::RELOCATE};
 };
 
 RecoverySummary
@@ -164,7 +165,7 @@ Run(const Options& o, const std::string& output)
     Driver driver{manager, o.protect};
     tasks->ConnectTaskObserver(MakeCallback(&Driver::OnTask, &driver));
     FixedProtectionPolicy policy(50, 4);
-    RecoveryController recovery(tasks, topology, manager, end, policy);
+    RecoveryController recovery(tasks, topology, manager, end, policy, o.busyPolicy);
     if (o.blockTargets || o.fillTargets)
     {
         Simulator::Schedule(NanoSeconds(480000000), [&] {
@@ -653,6 +654,33 @@ main(int argc, char** argv)
             migration.taskProfile = profile;
             Run(migration, output);
         }
+        Options busyRecompute{"busy-policy-recompute", {Fault(1, 3, 500000000)}, "RECOMPUTE"};
+        busyRecompute.remoteBusy = true;
+        busyRecompute.deadlineFactor = 3;
+        busyRecompute.busyPolicy = RemoteBusyRecoveryPolicy::RECOMPUTE;
+        const auto recomputed = Run(busyRecompute, output);
+        Check(recomputed.checkpointFallbackReason == "REMOTE_BUSY" &&
+                  !recomputed.relocationAttempted && recomputed.inputStartedNs >= 0 &&
+                  recomputed.plannedCatchupRedoWu == recomputed.snapshot.actualWork &&
+                  recomputed.actualCatchupRedoWu == recomputed.plannedCatchupRedoWu,
+              "busy recompute did not replay INPUT and execute full catch-up");
+        busyRecompute.name = "busy-policy-recompute-interrupted";
+        busyRecompute.success = false;
+        busyRecompute.faults.push_back(Fault(2, *recomputed.recoveryNode,
+                                           recomputed.computeStartedNs + 1000000, true));
+        const auto interrupted = Run(busyRecompute, output);
+        Check(interrupted.actualCatchupRedoWu > 0 &&
+                  interrupted.actualCatchupRedoWu < interrupted.plannedCatchupRedoWu &&
+                  interrupted.actualPostCatchupWu == 0,
+              "interrupted recompute charged planned rather than executed catch-up");
+        Options unavailable{"remote-compute-outage",
+                            {Fault(1, 0, 170000000), Fault(2, 3, 180000000)},
+                            "MIGRATE_TAIL", true, true, 1, 1};
+        unavailable.busyPolicy = RemoteBusyRecoveryPolicy::RECOMPUTE;
+        Run(unavailable, output);
+        for (const auto* reason : {"REMOTE_UNAVAILABLE", "PATH_UNAVAILABLE", "REMOTE_F3", "STATE_MISSING"})
+            Check(AllowsCheckpointRelocation(RemoteBusyRecoveryPolicy::RECOMPUTE, reason),
+                  "busy policy changed a non-busy branch");
         Options redoMigration{"migrate-redo",
                               {Fault(1, 2, 490000000, true), Fault(2, 3, 500000000)},
                               "MIGRATE_REDO"};

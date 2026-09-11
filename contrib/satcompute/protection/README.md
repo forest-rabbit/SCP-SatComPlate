@@ -14,8 +14,10 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 | `common/task-state-adapter.h/.cc` | 独立的生产 G1 布局、整数 WU/状态/H/合法边界映射及唯一生产成本档位 |
 | `storage/backup-storage-pool.h/.cc` | 每节点额外备份容量、used/reserved、原地融合、按任务清理及峰值 |
 | `runtime/protection-runtime.h/.cc` | Policy/Mechanism 窄接口、动作分发、故障接管机会和清理通知 |
-| `policy/fixed/fixed-protection-policy.h/.cc` | 首次主计算启动时的一次固定保护、组合 FFP、失败时重算后备动作 |
-| `policy/placement-policy.h` | PlacementContext/Decision/Policy，基础可行性与因果候选输入 |
+| `policy/fixed/fixed-protection-policy.h/.cc` | 首次主计算启动时的一次固定保护、注入 PlacementPolicy、失败时重算后备动作 |
+| `policy/placement-policy.h`、`policy/feasible-placement-pairs.cc` | 单节点/双节点共用的候选筛选与排名接口 |
+| `policy/recovery-policy.h` | 仅切换 REMOTE_BUSY 的 recompute / relocate 选择 |
+| `runtime/decision-path-snapshot.h` | 同次同步决策内缓存完整路径估计，跨事件不保留 |
 | `policy/baseline/first-feasible-placement/` | FFP：稳定 ID 的首个可行 local/remote，保持 N5A 原行为 |
 | `policy/experimental/least-recovery-load/` | LRL：当前 remote assignment + weight×active recovery，G3 节点集中度诊断 |
 | `policy/compfrr/frequency/compfrr-frequency-policy.h/.cc` | 独立 J_OFF/J_START/J_ON 求解、可行域、当前 q/完成前预测接口 |
@@ -47,13 +49,28 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 | `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
-| `placementMode` | `ffp` | `lrl` 仅允许配合 compfrr，作为 G3 placement 诊断 |
+| `placementMode` | `ffp` | fixed / compfrr 均真正注入 `ffp` 或 `lrl`；后者为负载排名诊断 |
+| `remoteBusyRecoveryPolicy` | `relocate` | 仅切换 REMOTE_BUSY：迁移 checkpoint，或放弃 checkpoint 从零重算；off 忽略此参数 |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
-off 不创建保护池、流或 CSV；fixed 对每个首次主计算启动执行一次固定策略，
-不做动态概率决策。local 为最小稳定 ID 的健康、空闲（含队列为空）、可达一跳节点；
-remote 为排除主星/local 后的最小可行 ID。候选可行不等于存储/带宽已经预留。
+off 不创建保护池、流或 CSV，不做故障恢复；fixed 对每个首次主计算启动执行一次固定策略，
+不做动态概率决策。双节点共用健康、空闲（含队列为空）、local 一跳和三条路径准入筛选；
+FFP 按 local/remote 稳定 ID 排名，LRL 使用真实 assignment/recovery 计数排名。
+候选可行不等于存储/带宽已经预留；fixed 的频率仍来自 delta/n，不调用 CompFRR 求解器。
 多个任务竞争同一候选时，由共享备份池与网络容量准入处理；恢复接管时额外原子锁定空闲服务。
+
+架构为 `Protection Scheme → Placement Policy → Recovery Policy → Shared Runtime`；
+Routing 是所有方案共用的基础设施，不属于其中任何算法开关。
+`SelectBackupNode` 为单节点角色，`SelectCheckpointPair` 为 local/remote 角色；
+两者共用基础候选筛选，操作再提供自己的路径、存储等条件，不要求最终候选集相同。
+单节点不要求一跳或虚构 local，允许 source/recovery/result 同星并沿用 LocalDelivery。
+FFP/LRL 均实现两种角色；当前 checkpoint 恢复目标仍统一按 FFP 稳定 ID 排序，
+不会因切换 prefault LRL 而顺带改变恢复排序。
+
+完整 `protectionMode=recompute`（无常态保护、故障后 INPUT 从零重算）、
+`one-plus-one`（真实双副本计算与 winner RESULT）以及 `placementMode=n5c` **尚未实现**，
+入口明确报 `NOT_IMPLEMENTED`，不能当 off/FFP 运行。现有 RECOMPUTE 是 checkpoint 方案的恢复后备，
+不是完整 baseline；未来 baseline 复用单节点接口及共享执行/资源账本，不伪装成 checkpoint。
 
 ## N5B：频率策略与在线接线
 
@@ -114,6 +131,11 @@ primary→remote、primary→local、local→remote 是 START 的硬路径条件
 source→remote 的 INPUT 重放仅用于 OFF 成本比较：不可用时显式记录 `replay_available=0` 和
 原因，不虚构带宽/等待时间；P_finish>0 且 START 本身可行时允许启动，P_finish=0 不强制保护。
 source=remote 的 INPUT 重算沿用 LocalDelivery，分析带宽用最大有限值表示零序列化极限，实际不发 UDP。
+
+路径快照只存在于一次同步决策的栈内，以 `(source,destination)` 保存完整 reachable/admissible、
+原因、选中路径、准入速率、传播时延和 local 标志，候选筛选与 BuildResources 共用一次查询。
+下一任务/epoch/容量释放重试重新查询；真实 INIT/L1/BATCH/恢复传输仍向 NetworkTransferEngine
+正式准入，快照不预留容量、不消耗 flow key，也不改变路由、故障抽样或事件顺序。
 
 G3R2 的 FFP/LRL 共享同一时刻的全部可行节点对：健康、空闲、local 一跳且三条硬路径
 均获上述只读准入。FFP 按 (local ID, remote ID)；LRL 按 (local load, ID, remote load, ID)。
@@ -294,7 +316,11 @@ remote 优先使用原固定备份节点。已有有效 committed state、原 re
 `MIGRATE_REDO` 实际传输 `CommittedStateBytes(rf)` 后从 rf 重做；`MIGRATE_TAIL` 同时注册
 state 和真实 L1 记录之和（含 H）的 tail 传输，两者收齐后等一次 cR，再从 lf 开始计算。
 目标先预留 state/tail 存储，旧 checkpoint 保留到目标状态有效并接管，或 logical task 终态清理。
-可行 checkpoint 优先于零起点重算，即使后者估计略快；全部 checkpoint 选项不可行才 RECOMPUTE。
+默认 relocate 下可行 checkpoint 优先于零起点重算，即使后者估计略快；全部 checkpoint 选项不可行才 RECOMPUTE。
+若配置 recompute，**只有** `checkpointFallbackReason=REMOTE_BUSY` 跳过迁移，
+直接走原始 INPUT 的零起点重算；REMOTE_UNAVAILABLE/PATH_UNAVAILABLE 等分支维持原行为，
+REMOTE_F3 不可读的状态仍不能迁移。两种操作共享基础候选生成，但迁移额外检查 committed state
+的传输、存储和 deadline，重算使用原 source INPUT；当前重算准入后的 INPUT 可真实等待网络容量。
 已接受的迁移若真实传输失败，按现有单次恢复合同终止，不偷偷重新选择第二个 attempt。
 迁移等待计 reserved-idle，RECOVERY_STATE 计真实网络开销；LLM 在 rf=0 的零字节 state
 仅使用 1 ns 因果边界，不创建虚假 UDP。诊断记录 old/new node、state bytes、迁移触发/失败原因、
@@ -347,6 +373,8 @@ TAIL（含 MIGRATE_TAIL）/REMOTE_REDO（含 MIGRATE_REDO）/RECOMPUTE 的起始
 实际 WU 由 ComputeService 在真实服务完成/取消/停止时保留，使用
 `min(planned, floor(actual_service_ns * rate / 1e9))`；正常完成 actual=planned，
 失败只计执行前缀。post-catchup 须统计，但不属于重复计算 waste。
+若用归一化进度 x_f 表示，Recompute 的 `x_f * W` 仅是 planned full catch-up；
+发生再次中断时不能把这个计划值记作 actual。
 
 正常成本只计实际完成事件：初始化 `INIT_STATE_GENERATED*cL + INIT_COST_COMMITTED*cR`；
 后续 `L1_GENERATED*cL + REMOTE_COST_COMMITTED*cR`，初始化不再计入后续次数。

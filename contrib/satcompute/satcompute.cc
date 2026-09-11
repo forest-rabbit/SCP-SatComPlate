@@ -214,7 +214,9 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
                          config.backupStorageBytesPerNode);
-    commandLine.AddValue("placementMode", "ffp baseline / lrl diagnostic (compfrr only)", config.placementMode);
+    commandLine.AddValue("placementMode", "ffp baseline / lrl diagnostic (fixed or compfrr)", config.placementMode);
+    commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; REMOTE_BUSY only, ignored by off",
+                         config.remoteBusyRecoveryPolicy);
     commandLine.AddValue("lrlRecoveryWeight", "Diagnostic active-recovery weight; G3 freezes 1", config.lrlRecoveryWeight);
     commandLine.AddValue("fixedProtectionDelta",
                          "Fixed progress interval (0.05 = 5%), per-mille precision",
@@ -371,10 +373,15 @@ ValidateConfig(const SatComputeConfig& config)
         }
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
-    RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr"});
-    RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl"});
-    if (config.placementMode == "lrl" && config.protectionMode != "compfrr")
-        FailConfig("placementMode", "lrl is only a compfrr diagnostic, not fixed/off");
+    RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one"});
+    RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "n5c"});
+    RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
+    if (config.protectionMode == "recompute" || config.protectionMode == "one-plus-one")
+        FailConfig("protectionMode", "NOT_IMPLEMENTED: full recompute / one-plus-one baseline is deferred");
+    if (config.placementMode == "n5c")
+        FailConfig("placementMode", "NOT_IMPLEMENTED: N5C placement is deferred");
+    if (config.placementMode == "lrl" && config.protectionMode == "off")
+        FailConfig("placementMode", "lrl requires fixed or compfrr protection");
     if (config.protectionMode != "off" &&
         (config.topologyOnly || !hasComputeProfile || config.compfrrShadow))
     {
@@ -679,6 +686,14 @@ main(int argc, char* argv[])
             std::filesystem::remove(outputDirectory / "frequency-pause-intervals.csv");
             std::filesystem::remove(outputDirectory / "frequency-capacity-waits.csv");
             std::filesystem::remove(outputDirectory / "f3-compute-risk-snapshots.csv");
+            const auto makePlacement = [&]() -> std::unique_ptr<protection::PlacementPolicy> {
+                if (config.placementMode == "lrl")
+                    return std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.lrlRecoveryWeight);
+                return std::make_unique<protection::FirstFeasiblePlacementPolicy>();
+            };
+            const auto busyPolicy = config.remoteBusyRecoveryPolicy == "recompute"
+                ? protection::RemoteBusyRecoveryPolicy::RECOMPUTE
+                : protection::RemoteBusyRecoveryPolicy::RELOCATE;
             if (config.protectionMode == "fixed")
             {
                 protection = std::make_unique<protection::FixedProtectionController>(
@@ -688,16 +703,14 @@ main(int argc, char* argv[])
                     simulationDurationNs,
                     static_cast<uint32_t>(std::round(config.fixedProtectionDelta * 1000)),
                     config.fixedProtectionBatchN,
-                    config.faultMode != "none");
+                    config.faultMode != "none", makePlacement(), busyPolicy);
             }
             else if (config.protectionMode == "compfrr")
             {
                 frequency = std::make_unique<protection::FrequencyProtectionController>(
                     taskCoordinator, topology, faultModelEngine,
                     config.backupStorageBytesPerNode, simulationDurationNs,
-                    config.placementMode == "lrl"
-                        ? std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.lrlRecoveryWeight)
-                        : std::unique_ptr<protection::PlacementPolicy>{});
+                    makePlacement(), busyPolicy);
             }
             else
             {

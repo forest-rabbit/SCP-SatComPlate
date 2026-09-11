@@ -21,13 +21,6 @@ struct PlacementDecision
     bool operator==(const PlacementDecision&) const = default;
 };
 
-/** One causal path preview. No capacity is acquired while enumerating pairs. */
-struct PlacementPathAvailability
-{
-    bool reachable{}, admissible{};
-    std::string reason;
-};
-
 /** Exhaustive node/path counts; frequency hard constraints are checked in ranking order. */
 struct FeasiblePlacementPairs
 {
@@ -38,7 +31,12 @@ struct FeasiblePlacementPairs
 
 FeasiblePlacementPairs BuildFeasiblePlacementPairs(
     const PlacementContext& context,
-    const std::function<PlacementPathAvailability(uint32_t, uint32_t)>& preview);
+    const PlacementPathPreview& preview = {});
+
+/** Common node filters plus operation-specific route/storage/deadline requirements. */
+std::vector<uint32_t> BuildFeasibleBackupNodes(
+    const PlacementContext& context,
+    const std::function<bool(uint32_t)>& operationFeasible = {});
 
 /** Placement ranks candidates only; runtime owns real admission and execution. */
 class PlacementPolicy
@@ -47,7 +45,15 @@ class PlacementPolicy
     virtual ~PlacementPolicy() = default;
     virtual const char* Name() const = 0; ///< Stable diagnostic name, not an eligibility rule.
     /** Return a complete pair, or no decision if either role cannot be placed. */
-    virtual std::optional<PlacementDecision> Select(const PlacementContext& context) const = 0;
+    std::optional<PlacementDecision> SelectCheckpointPair(
+        const PlacementContext& context, const PlacementPathPreview& preview = {}) const;
+    /** Single backup/recompute/replica role; does not fabricate a checkpoint pair. */
+    std::optional<uint32_t> SelectBackupNode(
+        const PlacementContext& context,
+        const std::function<bool(uint32_t)>& operationFeasible = {}) const;
+    /** Rank a common prefiltered single-node set. */
+    virtual void RankBackupNodes(std::vector<uint32_t>& nodes,
+                                 const PlacementContext& context) const = 0;
     /** Rank only the common prefiltered set; no objective/risk optimization here. */
     virtual void RankPairs(std::vector<PlacementDecision>& pairs,
                            const PlacementContext& context) const = 0;

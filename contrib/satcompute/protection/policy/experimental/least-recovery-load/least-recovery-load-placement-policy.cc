@@ -26,27 +26,15 @@ LeastRecoveryLoadPlacementPolicy::LeastRecoveryLoadPlacementPolicy(uint32_t reco
 {
 }
 
-std::optional<PlacementDecision> LeastRecoveryLoadPlacementPolicy::Select(
-    const PlacementContext& context) const
+void LeastRecoveryLoadPlacementPolicy::RankBackupNodes(
+    std::vector<uint32_t>& nodes, const PlacementContext& context) const
 {
-    auto nodes = context.candidates;
-    const auto score = [&](const auto& node) {
-        return static_cast<unsigned __int128>(node.backupAssignmentCount) +
-               static_cast<unsigned __int128>(m_recoveryWeight) * node.activeRecoveryCount;
-    };
+    std::map<uint32_t, unsigned __int128> loads;
+    for (const auto& node : context.candidates)
+        loads[node.nodeId] = static_cast<unsigned __int128>(node.backupAssignmentCount) +
+                            static_cast<unsigned __int128>(m_recoveryWeight) * node.activeRecoveryCount;
     std::sort(nodes.begin(), nodes.end(), [&](const auto& a, const auto& b) {
-        return std::tuple{score(a), a.nodeId} < std::tuple{score(b), b.nodeId};
+        return std::tuple{loads.at(a), a} < std::tuple{loads.at(b), b};
     });
-    const auto local = std::find_if(nodes.begin(), nodes.end(), [&](const auto& node) {
-        return IsPlacementCandidate(node, context.primaryNode) && node.oneHop;
-    });
-    if (local == nodes.end())
-        return std::nullopt;
-    const auto remote = std::find_if(nodes.begin(), nodes.end(), [&](const auto& node) {
-        return IsPlacementCandidate(node, context.primaryNode) && node.nodeId != local->nodeId;
-    });
-    if (remote == nodes.end())
-        return std::nullopt;
-    return PlacementDecision{local->nodeId, remote->nodeId};
 }
 } // namespace ns3::protection

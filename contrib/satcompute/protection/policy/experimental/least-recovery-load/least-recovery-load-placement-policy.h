@@ -12,7 +12,8 @@ class LeastRecoveryLoadPlacementPolicy : public PlacementPolicy
     const char* Name() const override { return "lrl"; }
     /** Explicit nonnegative integer weight, frozen before a diagnostic experiment. */
     explicit LeastRecoveryLoadPlacementPolicy(uint32_t recoveryWeight);
-    std::optional<PlacementDecision> Select(const PlacementContext& context) const override;
+    void RankBackupNodes(std::vector<uint32_t>& nodes,
+                         const PlacementContext& context) const override;
     void RankPairs(std::vector<PlacementDecision>& pairs,
                    const PlacementContext& context) const override;
 

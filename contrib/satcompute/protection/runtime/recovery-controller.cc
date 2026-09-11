@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "recovery-controller.h"
+#include "../policy/baseline/first-feasible-placement/first-feasible-placement-policy.h"
 
 #include "ns3/simulator.h"
 
@@ -58,9 +59,11 @@ RecoveryController::RecoveryController(Ptr<TaskCoordinator> tasks,
                                        SatelliteRuntimeView& topology,
                                        CheckpointManager& manager,
                                        int64_t stopNs,
-                                       ProtectionPolicy& policy)
+                                       ProtectionPolicy& policy,
+                                       RemoteBusyRecoveryPolicy busyPolicy)
     : m_tasks(tasks), m_topology(topology), m_manager(manager),
-      m_network(tasks->GetTransferEngine()), m_stopNs(stopNs), m_faultRuntime(policy, {this})
+      m_network(tasks->GetTransferEngine()), m_stopNs(stopNs), m_faultRuntime(policy, {this}),
+      m_busyPolicy(busyPolicy)
 {
     m_manager.EnableRecoveryRetention();
     m_tasks->SetRecoveryHandler(
@@ -296,9 +299,26 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
         if (accepted) r.checkpointFallbackReason.clear();
         return accepted;
     }
-    if (f.phase == "ON" && base && !base->reserved && m_tasks->IsSatelliteAvailable(f.remoteNode))
+    if (f.phase == "ON" && base && !base->reserved && m_tasks->IsSatelliteAvailable(f.remoteNode) &&
+        AllowsCheckpointRelocation(m_busyPolicy, r.checkpointFallbackReason))
         return TryRelocate(state);
     return false;
+}
+
+std::vector<uint32_t>
+RecoveryController::Candidates(const State& state) const
+{
+    PlacementContext context{state.summary.primaryNode, {}};
+    for (const auto& [node, pool] : m_manager.Pools())
+        context.candidates.push_back({node,
+                                     m_tasks->IsComputeAvailable(node) && m_tasks->IsSatelliteAvailable(node),
+                                     Service(node) && Service(node)->IsIdle(),
+                                     Reachable(node, state.task.definition.resultNodeId)});
+    auto nodes = BuildFeasibleBackupNodes(context);
+    // Recovery targets retain the established stable-ID baseline for BOTH pair policies.
+    // N5C can later replace this ranking without duplicating operation feasibility.
+    FirstFeasiblePlacementPolicy{}.RankBackupNodes(nodes, context);
+    return nodes;
 }
 
 bool
@@ -313,10 +333,11 @@ RecoveryController::TryRelocate(State& state)
     const auto old = m_manager.Pool(f.remoteNode).Find(f.remoteObject);
     Require(old && !old->reserved && old->bytes == bytes,
             "relocation requires exact committed state");
-    for (const auto& [candidate, pool] : m_manager.Pools())
+    for (const auto candidate : Candidates(state))
     {
         if (candidate == f.remoteNode || !Eligible(candidate, state))
             continue;
+        const auto& pool = m_manager.Pools().at(candidate);
         if (pool->Free() < bytes)
         {
             r.relocationFailureReason = "DESTINATION_STORAGE_UNAVAILABLE";
@@ -374,7 +395,7 @@ RecoveryController::Execute(const ProtectionContext& context, const ProtectionAc
     auto& state = *m_states.at(context.attempt.taskId);
     state.summary.path = "RECOMPUTE";
     state.startWork = 0;
-    for (const auto& [candidate, pool] : m_manager.Pools())
+    for (const auto candidate : Candidates(state))
     {
         if (Eligible(candidate, state) &&
             Reachable(state.task.definition.sourceNodeId, candidate) &&
@@ -405,6 +426,8 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
             r.estimatedRecomputeNs =
                 *estimate +
                 Duration(f.actualWork, state.service->GetComputeRateWorkUnitsPerSecond());
+    // For from-zero recompute this is xf*W planned full catch-up, not charged work.
+    // Completion/interruption callbacks separately record only actually executed WU.
     r.plannedCatchupRedoWu = f.actualWork - state.startWork;
     r.plannedPostCatchupWu = state.layout.Work() - f.actualWork;
     r.plannedTotalRecoveryWu = state.layout.Work() - state.startWork;

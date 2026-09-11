@@ -3,6 +3,7 @@
 #define SATCOMPUTE_RECOVERY_CONTROLLER_H
 #include "../../traffic/local-delivery.h"
 #include "../mechanism/checkpoint/checkpoint-manager.h"
+#include "../policy/recovery-policy.h"
 #include <filesystem>
 
 namespace ns3::protection
@@ -52,7 +53,8 @@ class RecoveryController : public ProtectionMechanism
                        SatelliteRuntimeView& topology,
                        CheckpointManager& manager,
                        int64_t stopNs,
-                       ProtectionPolicy& policy);
+                       ProtectionPolicy& policy,
+                       RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE);
     ~RecoveryController();
     bool Supports(ActionKind kind) const override;
     void Execute(const ProtectionContext& context, const ProtectionAction& action) override;
@@ -105,6 +107,8 @@ class RecoveryController : public ProtectionMechanism
     bool TryRelocate(State& state); ///< Stable-ID search; feasible checkpoints precede recompute.
     void MigrationReady(State& state); ///< Wait for both real receivers before one cR merge.
     bool Eligible(uint32_t node, const State& state) const;
+    /** Common node filters, followed by the operation's real transfer/storage checks. */
+    std::vector<uint32_t> Candidates(const State& state) const;
     bool Reachable(uint32_t source, uint32_t destination) const;
     std::optional<int64_t> Estimate(uint32_t source, uint32_t destination, uint64_t bytes) const;
     void Deliver(State& state,
@@ -134,6 +138,7 @@ class RecoveryController : public ProtectionMechanism
     Ptr<NetworkTransferEngine> m_network; ///< Existing real UDP engine.
     int64_t m_stopNs;                     ///< Absolute simulation endpoint.
     ProtectionRuntime m_faultRuntime;     ///< Established mechanism first, then policy fallback.
+    RemoteBusyRecoveryPolicy m_busyPolicy; ///< Changes REMOTE_BUSY only, not fault availability.
     std::map<uint64_t, std::unique_ptr<State>> m_states; ///< Sole recovery per task.
     std::map<uint64_t, std::pair<uint64_t, ProtectionTransferKind>> m_flows; ///< Real callbacks.
     std::vector<RecoveryEvent> m_events; ///< Append-only causal history.
