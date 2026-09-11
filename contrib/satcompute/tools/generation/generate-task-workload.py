@@ -159,11 +159,22 @@ def attributes(workload_seed=WORKLOAD_SEED):
         for tid in ids[offset:offset + count]:
             tasks[tid] = {"task_id": tid, "task_profile": profile}
         offset += count
+    # Keep the accepted LLM WU budgets, not the old token counts. Largest-remainder
+    # allocation preserves their exact sum while aligning each task to whole tokens.
+    llm_work = {tid: 100 * (5000 + deterministic_value(workload_seed, tid, "n4c-total-tokens") % 5001)
+                for tid, task in tasks.items() if task["task_profile"] == "llm"}
+    per_token = LlmParameters().work_units_per_token
+    if sum(llm_work.values()) % per_token:
+        raise ValueError("LLM total WU must admit exact whole-token conservation")
+    token_counts = {tid: work // per_token for tid, work in llm_work.items()}
+    extra = sum(llm_work.values()) // per_token - sum(token_counts.values())
+    for tid in sorted(llm_work, key=lambda tid: (-(llm_work[tid] % per_token), tid))[:extra]:
+        token_counts[tid] += 1
     for tid, task in tasks.items():
         if task["task_profile"] != "llm":
             continue
         prompt = 128 + deterministic_value(workload_seed, tid, "n4c-prompt-tokens") % 129
-        total = 5000 + deterministic_value(workload_seed, tid, "n4c-total-tokens") % 5001
+        total = token_counts[tid]
         repeats = 10 + deterministic_value(workload_seed, tid, "n4c-request-length") % 21
         request = {"prompt": "Summarize these observations: " + "cloud, coast, vegetation; " * repeats,
                    "max_new_tokens": total - prompt}
@@ -306,6 +317,13 @@ def build_final_workload(satellite_ids, compute_nodes, positions,
                    total_compute_work_units=sum(b.compute_work_units for b in budgets),
                    total_variable_state_bytes=sum(b.k_variable_bytes for b in budgets),
                    llm_parameters=asdict(LlmParameters()),
+                   llm_work_conservation=dict(total_work_units=sum(b.compute_work_units for b in budgets
+                                                                   if b.task_profile == "llm"),
+                       total_tokens=sum(b.extent for b in budgets if b.task_profile == "llm"),
+                       rounding="largest remainder; descending remainder, ascending task ID",
+                       max_abs_task_work_delta=max(abs(budget_for(a).compute_work_units -
+                           100 * (5000 + deterministic_value(workload_seed, a["task_id"], "n4c-total-tokens") % 5001))
+                           for a in attrs if a["task_profile"] == "llm")),
                    controlled_f3_task=controlled,
                    truncated_normal={"mu_mb": 240, "sigma_mb": 130, "lower_mb": 50,
                                      "upper_exclusive_mb": 1000, "fixed_tail_task_ids": anchors},

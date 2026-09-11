@@ -108,7 +108,7 @@ class Driver
         {
             if (sameNs)
                 Simulator::Schedule(
-                    NanoSeconds(999500000), &Driver::Start, this, event.taskId, event.nodeId);
+                    NanoSeconds(999900000), &Driver::Start, this, event.taskId, event.nodeId);
             else if (delayed)
                 Simulator::Schedule(
                     NanoSeconds(20000000), &Driver::Start, this, event.taskId, event.nodeId);
@@ -246,7 +246,7 @@ Lifecycle(const std::string& stopAt,
                       [](const auto& f) { return f.key.kind == ProtectionTransferKind::L1; }),
                   "unreserved L1 sent packets");
         }
-        if (capacity == 30000000)
+        if (capacity == 7500000)
         {
             Check(summary.localCommits >= 8 && summary.remoteWork > 0 &&
                       summary.remoteWork < summary.localWork,
@@ -667,8 +667,9 @@ InclusiveCompletionBeforeUid()
         topology.Initialize();
         auto tasks = CreateObject<TaskCoordinator>();
         auto definition = Llm(1);
-        definition.computeWorkUnits = 100;
-        ComputeProfile profile{{{0, 1000000}, {2, 1000000}, {3, 1000000}}};
+        definition.computeWorkUnits = TaskStateAdapter::LLM_WORK_UNITS_PER_TOKEN;
+        // One complete token must still finish at the same 0.1 ms cL callback.
+        ComputeProfile profile{{{0, 4000000}, {2, 4000000}, {3, 4000000}}};
         tasks->Initialize(profile,
                           TaskTrace{{definition}},
                           topology,
@@ -722,7 +723,7 @@ main()
         Lifecycle("FAIL_L1");
         Lifecycle("", 1);
         Lifecycle("", 1000000);
-        Lifecycle("", 30000000);
+        Lifecycle("", 7500000);
         Lifecycle("", 10000000000ULL, true);
         Lifecycle("", 10000000000ULL, false, true);
         Lifecycle("", 10000000000ULL, false, false, true);

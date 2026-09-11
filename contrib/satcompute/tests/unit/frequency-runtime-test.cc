@@ -168,6 +168,10 @@ struct Driver
         ComputeFailurePredictionInput input;
         input.f1Model = &model;
         input.f1State = model.CreateInitialSnapshot();
+        // A hot synthetic trajectory has post-initialization risk. A lone overridden
+        // current q on a cold state correctly has no protectable START-window mass.
+        if (q > 0)
+            input.f1State.temperatureC = GetDefaultFaultParameters().f1.temperature.criticalC;
         input.f1State.stepFailureProbability = q;
         input.predictionTimeNs = now;
         input.checkIntervalNs = 100000000;
@@ -494,7 +498,7 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
             definition.sourceNodeId =
                 1; // Nonlocal INPUT replay makes protection beneficial at x=0.
         if (mode == "short")
-            definition.computeWorkUnits = 100;
+            definition.computeWorkUnits = TaskStateAdapter::LLM_WORK_UNITS_PER_TOKEN;
         ComputeProfile compute;
         for (auto node : computeNodes) compute.nodes.push_back({node, 100000});
         TaskTrace workload{{definition}};
@@ -559,11 +563,16 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
             if (!row.sampled)
             {
                 Check(mode == "f3" && row.faultHit && !row.committed &&
-                          (row.proposal.action == FrequencyAction::START ||
-                           row.proposal.action == FrequencyAction::NONE),
-                      "same-time F3 leaked into proposal or committed a START");
-                Check(controller.Manager().Summaries().empty(),
-                      "F3 created same-epoch initialization");
+                          (row.input.phase == ProtectionPhase::ON
+                              ? row.proposal.action == FrequencyAction::UPDATE ||
+                                    row.proposal.action == FrequencyAction::PAUSE
+                              : row.proposal.action == FrequencyAction::START ||
+                                    row.proposal.action == FrequencyAction::NONE),
+                      "same-time F3 leaked into proposal or committed an action");
+                Check(std::none_of(controller.Manager().Events().begin(), controller.Manager().Events().end(),
+                      [&](const auto& event) { return event.event == "START" &&
+                          event.timeNs >= row.input.risk.epochNs; }),
+                      "F3 created same-epoch initialization (an earlier causal START is legal)");
                 continue;
             }
             const auto record = std::find_if(

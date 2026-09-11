@@ -37,7 +37,7 @@ class FinalScenarioTests(unittest.TestCase):
                          {"dense-image": 240, "sparse-inference": 240, "compression": 240, "llm": 80})
         self.assertEqual(tuple(sum(t[k] for t in self.tasks) for k in
                               ("input_bytes", "output_bytes", "compute_work_units")),
-                         (194119753287, 100168131855, 352513119))
+                         (194119753287, 100166291859, 352513119))
         self.assertTrue(all(10**9 <= t["arrival_time_ns"] <= 1050*10**9 for t in self.tasks))
         self.assertEqual(len(self.profile), 66)
         self.assertEqual({p["node_id"] for p in self.profile}, set(range(66)))
@@ -55,6 +55,20 @@ class FinalScenarioTests(unittest.TestCase):
         placement = json.loads((SCENE / "placement/placement-manifest.json").read_text())
         self.assertEqual((placement["hotspot_weight"], placement["regional_candidate_limit"]), (64, 1))
         self.assertEqual(placement["arrival_window_s"], [1, 1050])
+
+    def test_llm_conserves_total_work_with_only_two_ms_task_rounding(self):
+        llm = [a for a in self.attributes if a["task_profile"] == "llm"]
+        old = {a["task_id"]:100*(5000 + GEN["deterministic_value"](
+            GEN["WORKLOAD_SEED"],a["task_id"],"n4c-total-tokens") % 5001) for a in llm}
+        budgets = {a["task_id"]:GEN["budget_for"](a) for a in llm}
+        self.assertEqual(sum(b.compute_work_units for b in budgets.values()), sum(old.values()))
+        self.assertEqual(sum(old.values()), 61333200)
+        self.assertEqual(sum(b.extent for b in budgets.values()), 153333)
+        self.assertEqual(sum(b.k_variable_bytes for b in budgets.values()), 17585455104)
+        self.assertEqual(max(abs(b.compute_work_units-old[k]) for k,b in budgets.items()),200)
+        self.assertEqual(sum(b.compute_work_units!=old[k] for k,b in budgets.items()),64)
+        for b in budgets.values():
+            self.assertEqual(b.compute_work_units,400*b.extent)
 
     def test_attributes_arrivals_and_anchor_identity_match_frozen(self):
         self.assertEqual(self.attributes, GEN["attributes"]())

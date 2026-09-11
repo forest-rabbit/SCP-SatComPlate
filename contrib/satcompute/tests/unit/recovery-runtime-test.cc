@@ -290,11 +290,13 @@ Run(const Options& o, const std::string& output)
         Check(r.checkpointStateExists && r.checkpointFallbackReason.empty(),
               "checkpoint recovery incorrectly labeled fallback");
     if (o.name == "tail-faster" || o.name == "recovery-f3-fails")
-        Check(r.normalProtectionCostNs == 4000000 && r.reservedIdleNs == 18280839 &&
-                  r.plannedCatchupRedoWu == 2199 && r.plannedTotalRecoveryWu == 84500 &&
-                  r.actualCatchupRedoWu == 2199 &&
-                  r.actualTotalRecoveryWu == (o.success ? 84500 : 5171) &&
-                  r.actualPostCatchupWu == (o.success ? 82301 : 2972),
+        // 250 complete tokens put costs in tier 1; legal captures end at
+        // 5600/10800/16000 WU. Fault progress 17699 leaves exactly 1699 WU to redo.
+        Check(r.normalProtectionCostNs == 900000 && r.reservedIdleNs == 6190259 &&
+                  r.plannedCatchupRedoWu == 1699 && r.plannedTotalRecoveryWu == 84000 &&
+                  r.actualCatchupRedoWu == 1699 &&
+                  r.actualTotalRecoveryWu == (o.success ? 84000 : 6380) &&
+                  r.actualPostCatchupWu == (o.success ? 82301 : 4681),
               "manual TAIL success/failure accounting anchor differs");
     if (o.name == "off-recompute-local")
         Check(r.normalProtectionCostNs == 0 && r.reservedIdleNs == 1 &&
@@ -775,19 +777,19 @@ main(int argc, char** argv)
         deferred.name = "deferred-tail-input-first";
         deferred.faults = {Fault(1, 3, 180000000)};
         deferred.expectedPath = "TAIL";
-        deferred.source = 1;
+        deferred.source = 7; // Separate incoming link: small INPUT arrives before the KV tail.
         const auto joined = Run(deferred, output);
         Check(joined.inputReceivedNs < joined.stateReadyNs && joined.inputMode == "NETWORK",
               "fixture missed INPUT-first tail dependency");
         deferred.name = "deferred-source-f3-pending";
         deferred.success = false;
-        deferred.faults.push_back(Fault(2, 1, joined.inputStartedNs + 100, true));
+        deferred.faults.push_back(Fault(2, deferred.source, joined.inputStartedNs + 100, true));
         const auto lost = Run(deferred, output);
         Check(lost.inputReceivedNs < 0 && lost.actualTotalRecoveryWu == 0 &&
                   lost.reason == "RECOVERY_F3_SATELLITE_FAILURE", "pending original INPUT ignored source F3");
         deferred.name = "deferred-source-f3-after-input";
         deferred.success = true;
-        deferred.faults.back() = Fault(2, 1, joined.inputReceivedNs + 1, true);
+        deferred.faults.back() = Fault(2, deferred.source, joined.inputReceivedNs + 1, true);
         Run(deferred, output);
         for (auto profile : {TaskProfile::LLM, TaskProfile::DENSE_IMAGE,
                              TaskProfile::SPARSE_INFERENCE, TaskProfile::COMPRESSION})

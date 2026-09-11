@@ -30,7 +30,7 @@ class ShadowLayoutTest(unittest.TestCase):
             for task in tasks:
                 with self.subTest(task=task["task_id"]):
                     if task["task_profile"] == "llm":
-                        tokens = task["compute_work_units"] // 100
+                        tokens = task["compute_work_units"] // 400
                         budget = llm_budget(task["input_bytes"], tokens - 1, 1)
                     else:
                         budget = image_budget(task["task_profile"], task["input_bytes"], str(task["task_id"]))

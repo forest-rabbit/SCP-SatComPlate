@@ -157,9 +157,9 @@ PureChecks()
     llm.inputBytes = 400;
     llm.computeWorkUnits = 500000;
     const auto tokens = MakeWorkloadLayout(llm);
-    Check(tokens.variableBytes == 573440000 && tokens.Floor(199) == 100,
+    Check(tokens.variableBytes == 143360000 && tokens.Floor(799) == 400,
           "LLM whole-token boundary");
-    Check(tokens.StateAt(199) == 114688 && tokens.StateAt(200) == 229376,
+    Check(tokens.StateAt(799) == 114688 && tokens.StateAt(800) == 229376,
           "LLM partial tokens never yield partial KV state");
     ShadowTaskState state;
     state.costs = CostTier(500000000);
@@ -176,7 +176,7 @@ PureChecks()
     ShadowTaskState abort;
     abort.layout = tokens;
     abort.costs = CostTier(tokens.variableBytes);
-    abort.BeginInitialization(100, 100, 10, 2);
+    abort.BeginInitialization(100, 400, 10, 2);
     abort.StopComputation(200, false, false);
     Check(!abort.CompleteInitialization(300) && abort.mode == "DONE" &&
               abort.summary["initialization_completion_abort"] == true,
@@ -185,7 +185,7 @@ PureChecks()
     ShadowTaskState miss;
     miss.layout = tokens;
     miss.costs = CostTier(tokens.variableBytes);
-    miss.BeginInitialization(100, 100, 10, 2);
+    miss.BeginInitialization(100, 400, 10, 2);
     miss.StopComputation(200, true, true);
     Check(!miss.CompleteInitialization(300) && miss.summary["initialization_fault_miss"] == true,
           "fault abort cannot establish protection later");
@@ -193,19 +193,19 @@ PureChecks()
     ShadowTaskState success;
     success.layout = tokens;
     success.costs = CostTier(tokens.variableBytes);
-    success.BeginInitialization(100, 100, 10, 2);
-    Check(success.CompleteInitialization(200) && success.localWork == 100 &&
-              success.remoteWork == 100,
+    success.BeginInitialization(100, 400, 10, 2);
+    Check(success.CompleteInitialization(200) && success.localWork == 400 &&
+              success.remoteWork == 400,
           "initialization captures START boundary, not current real progress");
     Check(!success.CompleteInitialization(201), "initialization counted once");
-    success.pending.emplace_back(200, 114688);
-    success.localWork = 200;
+    success.pending.emplace_back(800, 114688);
+    success.localWork = 800;
     success.delta = 20;
     success.n = 1;
-    Check(success.pending.size() == 1 && success.remoteWork == 100,
+    Check(success.pending.size() == 1 && success.remoteWork == 400,
           "reconfiguration retains pending history");
     success.StopComputation(500, true, true);
-    Check(success.mode == "RECOVERING" && success.localWork == 200 && success.remoteWork == 100,
+    Check(success.mode == "RECOVERING" && success.localWork == 800 && success.remoteWork == 400,
           "fault preserves analytical recovery state");
 }
 } // namespace

@@ -12,6 +12,8 @@ namespace ns3::protection
 class TaskStateAdapter
 {
   public:
+    static constexpr uint64_t LLM_WORK_UNITS_PER_TOKEN = 400; ///< Whole-token compute mapping.
+    static constexpr uint64_t LLM_STATE_BYTES_PER_TOKEN = 114688; ///< Uncompressed KV tensor bytes.
     /** Validate frozen task mapping and construct legal application boundaries. */
     explicit TaskStateAdapter(const TaskDefinition& task);
 

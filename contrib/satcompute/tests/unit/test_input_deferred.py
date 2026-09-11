@@ -5,6 +5,7 @@ import runpy
 import unittest
 
 API = runpy.run_path(str(Path(__file__).resolve().parents[1] / "integration/regression/analyze-input-deferred.py"))
+START = runpy.run_path(str(Path(__file__).resolve().parents[1] / "integration/regression/analyze-riskweighted-start.py"))
 
 
 class DeferredAuditTests(unittest.TestCase):
@@ -65,6 +66,58 @@ class DeferredAuditTests(unittest.TestCase):
     def test_input_wait_unknown_is_not_a_zero_sample(self):
         self.assertIsNone(API["distribution"]([])["p50"])
         self.assertEqual(API["distribution"]([1, 3])["max"], 3)
+
+    def test_historical_and_current_llm_state_use_the_recorded_token_unit(self):
+        for unit in (100, 400):
+            task = dict(compute_work_units=str(1000*unit))
+            protected = dict(variable_state_bytes=str(1000*114688))
+            self.assertEqual(API["BASE"]["ACCOUNTING"]["llm_state_bytes"](task, protected, 2*unit-1), 114688)
+
+
+class RiskWeightedAuditTests(unittest.TestCase):
+    def fixture(self, deferred=True):
+        task = dict(task_id="1", task_profile="dense-image", input_bytes="1000000000",
+                    compute_work_units="1500000", compute_rate_work_units_per_second="100000")
+        recovery = START["variable_bytes"](task)*3*.05/(2e9)+.008*3/4+1500000*.05/200000
+        joff = .6*(7.5+(0 if deferred else 1))
+        row = dict(selected_score=str(.08+.6*recovery), proposed_action="START", recovery_rate="100000",
+            proposed_delta_permille="50", proposed_n="4", progress_ratio="0", replay_available="1",
+            input_bandwidth_bytes_per_s="1000000000", backup_bandwidth_bytes_per_s="1000000000",
+            predicted_recovery_s=str(recovery), rmax_s="5", phase_before="OFF", p_fail_before_finish=".8",
+            p_fail_after_init_ready=".6", representative_progress_after_ready=".5", init_ready_time_ns="10010000000",
+            fault_epoch_time_ns="10000000000", t_init_s=".01", j_off_start_window=str(joff), j_off=str(joff),
+            predicted_normal_s=".08", j_start=str(.09+.6*recovery), q_current_sample=".2")
+        return row, task
+
+    def test_new_scores_use_future_progress_and_cancel_deferred_input(self):
+        for deferred in (True, False):
+            row, task = self.fixture(deferred)
+            self.assertTrue(START["decision_check"](row, task, deferred))
+        for key, value in (("p_fail_after_init_ready", ".9"), ("j_off_start_window", "0"),
+                           ("j_start", "1"), ("predicted_normal_s", ".04"), ("rmax_s", ".5")):
+            row, task = self.fixture()
+            row[key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                START["decision_check"](row, task, True)
+
+    def test_no_ready_mass_and_no_placeholder_progress(self):
+        row, task = self.fixture()
+        row.update(p_fail_after_init_ready="0", representative_progress_after_ready="", j_off="0",
+                   j_off_start_window="0", selected_score=".08", j_start=".09", proposed_action="NONE")
+        START["decision_check"](row, task, True)
+        for key, value in (("representative_progress_after_ready", "0"), ("proposed_action", "START")):
+            bad = dict(row, **{key:value})
+            with self.assertRaises(ValueError): START["decision_check"](bad, task, True)
+
+    def test_on_keeps_current_sample_and_interval_cost(self):
+        row, task = self.fixture()
+        normal = .08/15
+        row.update(phase_before="ON", p_fail_after_init_ready="", representative_progress_after_ready="",
+                   predicted_normal_s=str(normal), selected_score=str(normal+.2*float(row["predicted_recovery_s"])),
+                   proposed_action="UPDATE")
+        START["decision_check"](row, task, True)
+        row["selected_score"] = str(normal+.8*float(row["predicted_recovery_s"]))
+        with self.assertRaises(ValueError): START["decision_check"](row, task, True)
 
 
 if __name__ == "__main__":

@@ -35,22 +35,22 @@
     "north-america": {
       "task_count": 203,
       "input_bytes": 49997766643,
-      "work_units": 91480219
+      "work_units": 91481119
     },
     "background": {
       "task_count": 209,
       "input_bytes": 50254300983,
-      "work_units": 90663723
+      "work_units": 90663123
     },
     "europe": {
       "task_count": 164,
       "input_bytes": 38292218015,
-      "work_units": 70255486
+      "work_units": 70254786
     },
     "east-asia": {
       "task_count": 224,
       "input_bytes": 55575467646,
-      "work_units": 100113691
+      "work_units": 100114091
     }
   },
   "placements": [

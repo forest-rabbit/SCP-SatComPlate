@@ -97,6 +97,17 @@ def recovery_check(row):
     return {"planned": planned, "actual": actual, "execution_ratio": actual / planned if planned else None}
 
 
+def llm_state_bytes(task, protected, completed_work):
+    """Infer the run's whole-token scale from its own full KV/WU ledger, not current defaults."""
+    state, work = number(protected, "variable_state_bytes"), number(task, "compute_work_units")
+    require(state > 0 and state % 114688 == 0, "invalid full KV state ledger")
+    tokens = state // 114688
+    require(work > 0 and work % tokens == 0, "invalid whole-token WU ledger")
+    unit = work // tokens
+    require(unit in (100, 400), "unsupported recorded LLM work scale")
+    return completed_work // unit * 114688
+
+
 def relocation_check(task, protected, recovery, flows):
     """Check actual migrated bytes/receive barriers, not just a new path label."""
     if not recovery["chosen_path"].startswith("MIGRATE_"):
@@ -105,7 +116,7 @@ def relocation_check(task, protected, recovery, flows):
     work, remote = number(task, "compute_work_units"), number(r, "remote_work_units")
     size = number(task, "input_bytes")
     deferred = r.get("input_staging_policy") == "deferred"
-    state = (remote // 100 * 114688 if task["task_profile"] == "llm" else
+    state = (llm_state_bytes(task, protected, remote) if task["task_profile"] == "llm" else
              (0 if deferred else size - size * remote // work) + number(protected, "variable_state_bytes") * remote // work)
     require(number(r, "checkpoint_state_bytes") == number(r, "checkpoint_relocation_bytes") == state,
             "relocation did not use exact committed state bytes")

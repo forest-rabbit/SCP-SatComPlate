@@ -67,7 +67,9 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
            "pair_candidates_total,pair_node_feasible,pair_path_feasible,pair_hard_checked,"
            "pair_hard_feasible,pair_skip_node,pair_skip_no_route,pair_skip_no_capacity,pair_skip_other,"
            "pair_skip_storage,pair_skip_deadline,pair_hard_rejection_reason,capacity_retry_count,"
-           "capacity_retry_success,capacity_wait_start_ns,capacity_wait_end_ns,capacity_wait_duration_ns\n";
+           "capacity_retry_success,capacity_wait_start_ns,capacity_wait_end_ns,capacity_wait_duration_ns,"
+           "p_fail_after_init_ready,representative_progress_after_ready,init_ready_time_ns,"
+           "j_off_start_window,old_current_progress_loss\n";
     auto number = [&](const auto& value) {
         if (value)
             out << *value;
@@ -139,6 +141,13 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
         number(r.capacityWaitEndNs >= 0 ? std::optional(r.capacityWaitEndNs) : std::nullopt);
         if (r.capacityWaitStartNs >= 0 && r.capacityWaitEndNs >= 0)
             out << r.capacityWaitEndNs - r.capacityWaitStartNs;
+        out << ',';
+        number(d.pFailAfterInitReady);
+        number(d.representativeProgressAfterReady);
+        number(d.initReadyTimeNs);
+        number(in.phase == ProtectionPhase::OFF ? d.jOff : std::nullopt);
+        if (in.phase == ProtectionPhase::OFF && d.legacyCurrentProgressLoss)
+            out << *d.legacyCurrentProgressLoss;
         out << '\n';
     }
     std::ofstream pauses(directory / "frequency-pause-intervals.csv");

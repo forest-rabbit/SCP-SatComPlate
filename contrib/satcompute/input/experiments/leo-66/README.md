@@ -16,7 +16,9 @@
 任务共 800 个：240 dense-image、240 sparse-inference、240 compression、80 LLM。
 704 个普通图像任务使用 TN(240,130;50,1000) 十进制 MB；另有 10×500 MB、5×1 GB
 固定任务 ID 锚点，以及显式定为 800 MB 的 compression 任务 120。
-INPUT=194119753287 B，RESULT=100168131855 B，WU=352513119。
+INPUT=194119753287 B，RESULT=100166291859 B，WU=352513119。
+LLM 使用400 WU/token，总 WU仍为61333200，token总数153333；只缩减token/KV/RESULT，
+不将任务工作量乘四。单任务完整token平衡取整最多±200 WU（±2 ms）；详见[生成器说明](../../../tools/generation/README.md)。
 到达窗口 1..1050 s，仿真至 1300 s；compute deadline 为首次开始时参考服务时间的 1.3 倍。
 
 - 网络：每 ISL 10 Gbps、fixed 单向 1 ms、每 20 s 更新；capacity-aware HRW、size-aware 分包。

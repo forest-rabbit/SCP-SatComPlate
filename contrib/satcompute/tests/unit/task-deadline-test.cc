@@ -83,7 +83,7 @@ CheckInputs(const std::filesystem::path& output)
     Check(counts[TaskProfile::DENSE_IMAGE] == 240 && counts[TaskProfile::SPARSE_INFERENCE] == 240 &&
               counts[TaskProfile::COMPRESSION] == 240 && counts[TaskProfile::LLM] == 80,
           "C800 parsed task classes differ");
-    Check(input == 194119753287ULL && work == 352513119 && result == 100168131855ULL,
+    Check(input == 194119753287ULL && work == 352513119 && result == 100166291859ULL,
           "C800 parsed ledgers differ");
     nlohmann::json data;
     {

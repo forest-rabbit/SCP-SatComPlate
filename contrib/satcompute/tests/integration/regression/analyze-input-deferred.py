@@ -57,7 +57,7 @@ def dependency_check(task, protected, r, flows, events):
                 "fault tail did not pay exactly one cR after required receivers")
     if r["phase_at_fault"] == "ON":
         work, remote = number(task, "compute_work_units"), number(r, "remote_work_units")
-        state = (remote // 100 * 114688 if task["task_profile"] == "llm" else
+        state = (BASE["ACCOUNTING"]["llm_state_bytes"](task, protected, remote) if task["task_profile"] == "llm" else
                  number(protected, "variable_state_bytes") * remote // work)
         require(number(r, "committed_remote_bytes") == number(r, "checkpoint_state_bytes") == state and
                 bool(r["committed_remote_object_id"]), "deferred committed state contains INPUT or lost zero identity")

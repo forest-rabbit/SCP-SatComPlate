@@ -77,7 +77,7 @@ def verify(directory):
         last = 0
         variable, total = int(row["variable_state_bytes"]), int(row["total_work_units"])
         header = 0 if tid == "4" else (48 if tid == "2" else 44) + len(tid)
-        state_bytes = lambda w: (w // 100 * 114688 if tid == "4" else variable * w // total)
+        state_bytes = lambda w: (w // 400 * 114688 if tid == "4" else variable * w // total)
         generated = {}
         records = {}
         remote = 0

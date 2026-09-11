@@ -10,6 +10,13 @@
 
 namespace ns3::protection
 {
+/** One causal future sampler probability, not a sampled event or new decision variable. */
+struct FrequencyRiskStep
+{
+    int64_t targetTimeNs{}; ///< Absolute canonical fault-check time.
+    double combinedStepFailureProbability{}; ///< Conditional F1/F2 union.
+};
+
 /** Same-epoch causal probabilities. Contains no trace, sample outcome or future fault ID. */
 struct FrequencyRisk
 {
@@ -17,6 +24,7 @@ struct FrequencyRisk
     int64_t intervalNs{};       ///< Current sample's reference interval and ON cost window.
     double qCurrentSample{};    ///< Union of the unchanged independent F1/F2 samples.
     double pFailBeforeFinish{}; ///< Canonical predictor, including the current check.
+    std::vector<FrequencyRiskStep> futureSteps; ///< Read-only canonical trajectory for START.
 };
 
 /** Call the existing production predictor and reject a mismatched sampler probability.
@@ -106,6 +114,10 @@ struct FrequencyDecision
     double initializationSeconds{};
     std::optional<double> jOff;
     std::optional<double> jStart;
+    std::optional<int64_t> initReadyTimeNs; ///< Estimated ready time, not actual commit evidence.
+    std::optional<double> pFailAfterInitReady; ///< Unconditional first-fault mass after ready.
+    std::optional<double> representativeProgressAfterReady; ///< Conditional weighted progress.
+    std::optional<double> legacyCurrentProgressLoss; ///< Old OFF score, diagnostic only.
     std::optional<FrequencyCandidate> selected;
     uint64_t feasibleCount{};
     uint64_t deadlineRejected{};

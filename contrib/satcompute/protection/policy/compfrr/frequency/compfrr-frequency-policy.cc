@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <tuple>
 
@@ -40,6 +41,48 @@ void Validate(const FrequencyInput& in)
         in.costs.localNs < 0 || in.costs.remoteNs < 0 || !in.storageDemand)
         throw std::invalid_argument("invalid frequency domain or missing storage estimator");
 }
+
+/** Aggregate existing predictions once per pair, preserving pre-ready survival mass. */
+void StartWindow(const FrequencyInput& in, FrequencyDecision& out)
+{
+    const long double delayNs = std::ceil(static_cast<long double>(out.initializationSeconds) * 1e9L);
+    if (delayNs < 0 || delayNs > std::numeric_limits<int64_t>::max() - in.risk.epochNs)
+        throw std::invalid_argument("initialization ready time overflow");
+    out.initReadyTimeNs = in.risk.epochNs + static_cast<int64_t>(delayNs);
+    long double survival = 1, total = 0, ready = 0, weighted = 0;
+    int64_t previous = -1;
+    for (const auto& step : in.risk.futureSteps)
+    {
+        Probability(step.combinedStepFailureProbability);
+        if (step.targetTimeNs < in.risk.epochNs || step.targetTimeNs <= previous)
+            throw std::invalid_argument("START trajectory times must be causal and strictly ordered");
+        previous = step.targetTimeNs;
+        const auto mass = survival * step.combinedStepFailureProbability;
+        survival *= 1 - static_cast<long double>(step.combinedStepFailureProbability);
+        total += mass;
+        if (step.targetTimeNs >= *out.initReadyTimeNs)
+        {
+            const long double progress = std::min(1.L, static_cast<long double>(in.progress) +
+                static_cast<long double>(in.primaryRate) * (step.targetTimeNs - in.risk.epochNs) /
+                    (1e9L * in.work));
+            ready += mass;
+            weighted += mass * progress;
+        }
+    }
+    if (std::abs(total - in.risk.pFailBeforeFinish) > 1e-12L)
+        throw std::invalid_argument("START trajectory disagrees with canonical P_finish");
+    out.pFailAfterInitReady = static_cast<double>(ready);
+    if (ready > 0)
+        out.representativeProgressAfterReady = static_cast<double>(weighted / ready);
+    if (in.replayAvailable)
+        out.jOff = static_cast<double>(weighted) * in.work / in.recoveryRate +
+            (in.inputPolicy == InputStagingPolicy::EAGER
+                 ? static_cast<double>(ready) * in.inputBytes / in.inputBandwidth : 0);
+    else if (ready == 0)
+        out.jOff = 0;
+    else
+        out.jOff.reset(); // Preserve eager executable protection when OFF INPUT is unavailable.
+}
 } // namespace
 
 FrequencyRisk MakeFrequencyRisk(double currentSamplerQ, const ComputeFailurePredictionInput& in)
@@ -48,10 +91,12 @@ FrequencyRisk MakeFrequencyRisk(double currentSamplerQ, const ComputeFailurePred
     const auto prediction = PredictComputeFailureBeforeFinish(in);
     if (currentSamplerQ != prediction.combinedStepFailureProbability)
         throw std::invalid_argument("policy q differs from current sampler q");
-    return {in.predictionTimeNs,
-            in.checkIntervalNs,
-            currentSamplerQ,
-            prediction.predictedFailureProbability};
+    FrequencyRisk risk{in.predictionTimeNs, in.checkIntervalNs,
+                       currentSamplerQ, prediction.predictedFailureProbability, {}};
+    risk.futureSteps.reserve(prediction.steps.size());
+    for (const auto& step : prediction.steps)
+        risk.futureSteps.push_back({step.targetTimeNs, step.combinedStepFailureProbability});
+    return risk;
 }
 
 bool FrequencyCandidateLess(const FrequencyCandidate& a, const FrequencyCandidate& b)
@@ -89,11 +134,14 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
     if (!std::isfinite(out.deadlineSlackSeconds) || !std::isfinite(out.initializationSeconds) ||
         (out.jOff && !std::isfinite(*out.jOff)))
         throw std::invalid_argument("frequency time or OFF estimate overflow");
+    out.legacyCurrentProgressLoss = out.jOff;
     if (in.progress >= 1 || in.remainingSeconds <= 0)
     {
         out.reason = "NO_REMAINING_COMPUTE";
         return out;
     }
+    if (!on)
+        StartWindow(in, out);
     if (in.nodeAvailable && in.pathAvailable && (!deferred || in.replayAvailable) &&
         out.deadlineSlackSeconds >= 0)
     {
@@ -125,7 +173,7 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
                 const double normal = on ? (interval * in.primaryRate / in.work) * maintenance
                                          : (1 - in.progress) * maintenance;
                 const double objective =
-                    normal + (on ? in.risk.qCurrentSample : in.risk.pFailBeforeFinish) * recovery;
+                    normal + (on ? in.risk.qCurrentSample : *out.pFailAfterInitReady) * recovery;
                 if (!std::isfinite(objective))
                     throw std::invalid_argument("frequency objective overflow");
                 const FrequencyCandidate candidate{config, objective, recovery, normal, *demand};
@@ -149,12 +197,14 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
         out.reason = "ON_MINIMUM_SCORE";
         return out;
     }
-    // Deferred START and OFF both pay one original INPUT after a fault.
-    // It is constant across frequency candidates, but must not bias START vs OFF.
-    out.jStart = cL + cR + out.selected->objective + in.risk.pFailBeforeFinish * faultInput;
+    // Pre-ready faults have no checkpoint benefit. Deferred INPUT is common to both
+    // alternatives and omitted from both scores, but remains in hard feasibility.
+    out.jStart = cL + cR + out.selected->objective;
     if (out.initializationSeconds >= in.remainingSeconds)
         out.reason = "INITIALIZATION_TOO_LATE";
-    else if ((!in.replayAvailable && in.risk.pFailBeforeFinish > 0) ||
+    else if (*out.pFailAfterInitReady == 0)
+        out.reason = "NO_FAULT_AFTER_INIT_READY";
+    else if ((!in.replayAvailable && *out.pFailAfterInitReady > 0) ||
              (out.jOff && *out.jStart < *out.jOff))
     {
         out.action = FrequencyAction::START;

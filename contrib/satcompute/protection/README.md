@@ -114,8 +114,15 @@ REPLICA_INPUT 全属额外流量；仅获胜 RESULT 属业务，败方已发送 
 不得重复扣除当前已用/已预留状态。未提供估计器会拒绝输入，不默认当成容量无限。
 G1 验证纯接口，G2 将实际库存和池快照接入同一求解器。
 
-- Eager OFF：`Joff=P_finish*(S/B_I+xW/muB)`；
-  `Jstart=cL+cR+min[(1-x)*(cL/delta+cR/(n*delta))+P_finish*Rbar]`。
+- OFF→START：先按候选节点的初始化估计计算 `t_ready`，复用 canonical predictor 的未来检查点
+  `(t_k,q_k)`，以 `w_k=q_k*prod(j<k,1-q_j)` 计算首次故障质量。
+  `P_ready=sum(t_k>=t_ready,w_k)`；初始化之前的风险仍参与 survival，不能重新归一化。
+  `x_k=min(1,x+muP*(t_k-now)/W)`，`x_hat_ready=sum(w_k*x_k)/P_ready`（只加 ready 后的点）。
+  `P_ready=0` 时代表进度留空，不启动保护；`sum(w_k)=P_finish`、`P_ready<=P_finish`。
+- Eager：`Joff=P_ready*(S/B_I+x_hat_ready*W/muB)`；
+  deferred：`Joff=P_ready*x_hat_ready*W/muB`。
+  两者均 `Jstart=cL+cR+min[(1-x)*(cL/delta+cR/(n*delta))+P_ready*Rbar]`。
+  正常保护项仍按完整剩余窗口计，不按预计存活时间折扣。
 - ON：`Jon=Delta_t*(muP/W)*(cL/delta+cR/(n*delta))+q_current_sample*Rbar`。
 - `Rbar=Kvar*(n-1)*delta/(2B)+cR*(n-1)/n+W*delta/(2muB)`。
 - `Rmax=deadline-now-W*(1-x)/muB`；eager 候选要求 `Rbar<=Rmax` 并通过存储约束。
@@ -123,8 +130,8 @@ G1 验证纯接口，G2 将实际库存和池快照接入同一求解器。
 - 枚举 delta=1%..10%、步长0.1个百分点，n=1..100，n×delta≤1；精确同分按
   `(objective,delta_permille,n)` 升序，不增加 epsilon 或新的同分目标。
 
-Deferred 的 Joff 不变，Jstart 在上述式子上加 `P_finish*S/B_I`，因此同一候选的
-故障 INPUT 成本在 START/OFF 两边一致；不能只从初始化删 INPUT、却保留偏向 START 的旧比较。
+Deferred 的故障 INPUT 是 START/OFF 共同成本，已从两个相对评分同时消去，
+不是免除真实恢复传输或从 deadline 中删除 INPUT。
 ON 相对评分及 `(delta,n)` 搜索不变，但硬约束改为 `S/B_I+Rbar<=Rmax`，
 初始化估计只含 `cL+Tstate+cR`。原 source→remote INPUT 路径成为硬条件。
 频率解析评分不额外计传播时延；它是保守估计，不强迫实际 INPUT/state 串行执行。
@@ -132,6 +139,10 @@ ON 相对评分及 `(delta,n)` 搜索不变，但硬约束改为 `S/B_I+Rbar<=Rm
 `MakeFrequencyRisk` 调用现有 `PredictComputeFailureBeforeFinish`，保留它的当前检查点、整数
 horizon 和 endpoint 语义；与故障侧提供的本轮联合 q 逐值核对。不用 next-1s 查询替代当前 q，
 不重写预测器、成本表或故障抽样。F1/F2 仍分别抽样，F3 不进入策略风险输入。
+代表性未来进度只用于 OFF 的预期收益，绝不写入实际 checkpoint、故障进度或恢复 WU。
+`frequency-decisions.csv` 新增 `p_fail_after_init_ready`、`representative_progress_after_ready`、
+`init_ready_time_ns`、`j_off_start_window`；`old_current_progress_loss` 仅保留旧当前进度损失的诊断值。
+预测 ready 点不替代真实 RemoteCommit，同纳秒故障仍不能使用刚提交的 checkpoint。
 
 周期决策网格对齐 fault-check，而非 task-start 的独立1秒定时器。在线按
 `更新因果状态 -> q/P_finish -> 提出决策 -> 执行本轮故障 -> 存活且仍计算才提交`
@@ -167,7 +178,7 @@ FFP 的 OFF 候选不预留资源，START 存活后固定节点对；ON 不换�
 当前真实 reservation；不由 Frequency 独自选第一条路径。恢复速率读 remote 的 ComputeService。
 primary→remote、primary→local、local→remote 是 START 的硬路径条件。
 Eager 的 source→remote INPUT 重放仅用于 OFF 成本比较：不可用时显式记录 `replay_available=0` 和
-原因，不虚构带宽/等待时间；P_finish>0 且 START 本身可行时允许启动，P_finish=0 不强制保护。
+原因，不虚构带宽/等待时间；P_ready>0 且 START 本身可行时允许启动，P_ready=0 不强制保护。
 source=remote 的 INPUT 重算沿用 LocalDelivery，分析带宽用最大有限值表示零序列化极限，实际不发 UDP。
 
 路径快照只存在于一次同步决策的栈内，以 `(source,destination)` 保存完整 reachable/admissible、
@@ -282,7 +293,7 @@ G1 的 CheckpointProgress 由单元测试显式驱动时刻，不自己调度仿
 
 - 非 LLM：`K(w)=floor(Kvar*w/W)`；eager 的 `Mstate(w)=S-floor(S*w/W)+K(w)`。
   剩余原始输入向上保留到整数 B，不采用 `S+K(w)` 或 `min(S,K)`。
-- LLM：`K(w)=floor(w/100)*114688 B`，`Mstate(w)=K(w)`；正式 checkpoint 只取完整 token。
+- LLM：`K(w)=floor(w/400)*114688 B`，`Mstate(w)=K(w)`；正式 checkpoint 只取完整 token。
 - L1：`D_L=K(w_new)-K(w_old)+H`，H 使用既有固定头加十进制 task ID 字节数，LLM H=0。
   batch 是所含实际 records 的字节和，不丢 H，也不额外发明一份 batch 头。
 - remote committed 的固定 metadata 暂为 0；历史 records 的 H 不累积进入长期状态。
@@ -293,14 +304,14 @@ Deferred 的四种 profile 统一 `Mstate(w)=K(w)`，包括迁移的 RECOVERY_ST
 图像保持 G1 的 tile/合成文件边界，LLM 保持完整 token；相同 WU 边界去重，不生成零进度 checkpoint。
 这是已披露的线性任务/状态预算，不声称能够真实恢复任意压缩器或 LLM 程序。
 
-代表性公式值（B；图像 INPUT=1 GB，LLM=5000 token/500000 WU、请求400 B）：
+代表性公式值（B；图像 INPUT=1 GB，LLM=1250 token/500000 WU、请求400 B）：
 
 | 类别 | 10% | 50% | 100% |
 |---|---:|---:|---:|
 | dense-image | 1000000762 | 1000003814 | 1000007629 |
 | sparse-inference | 900186906 | 500934532 | 1869064 |
 | compression | 954248130 | 771240653 | 542481307 |
-| LLM | 57344000 | 286720000 | 573440000 |
+| LLM | 14336000 | 71680000 | 143360000 |
 
 表为精确指定进度下的公式值；真实 checkpoint 先对齐合法应用边界，不强行在恰好10%处产生包。
 

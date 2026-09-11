@@ -183,7 +183,7 @@ SATCOMPUTE_POSITION_SLICES=output/n4c-g3-truncnormal-v3-20260909/orbit/topology 
 generate+shadow，以及仅供 N5A 验收的显式 validation-replay。默认为generate；概率CSV审计和shadow均默认关闭。
 输出必须是新目录，当前1300 s、800任务、66星、10 Gbps、1 ms、seed1/run11。
 
-当前最终场景移除前置任务 801，仅增大任务 120 到 800 MB；本次仅授权正式 B 组，
+N5B 最终场景移除前置任务 801，仅增大任务 120 到 800 MB；当时仅授权正式 B 组，
 使用 `--protection-mode=compfrr --placement-mode=ffp`，不追加 A/C 或 CI。
 `run-f3-protection-check.py --output-dir=新目录 --input-bytes 700000000 800000000`
 是保留真实故障模型/轨道的 B 组单任务大小初筛；首次通过后停止，完整负载仍须单独验收。
@@ -192,6 +192,15 @@ START 有收益、F3 前真实 ON、使用有效非零进度检查点且按期�
 `analyze-frequency-evaluation.py --runs B目录` 生成本次单组账本。
 历史 G3R2 的 801 任务 B/C 结果保留，不能与本次或旧 A 严格配对；双组分析也要求同场景、同代码。
 可行节点对、5 ms 释放、重复/部分释放、终态清理和无额外抽样测试位于既有 policy/runtime 单测。
+
+Pre-N5C 当前审计只重跑新 R4–R7：均 `--protection-mode=compfrr --placement-mode=ffp`，
+R4/R5 使用 eager，R6/R7 加 `--input-staging-policy=deferred`；R4/R6 加
+`--remote-busy-recovery-policy=recompute`，R5/R7 为 relocate。
+新 workload 为400 WU/token且总WU保持352513119；START使用初始化就绪后的风险加权进度，
+ON不变。输出放入 `output/n5-startscore-riskweighted-llm4x/` 下的新目录，不能复用旧eager结果。
+`integration/regression/analyze-riskweighted-start.py --r4 R4目录 --r5 R5目录 --r6 R6目录 --r7 R7目录
+--output 新JSON路径` 只读核对同代码/同workload、评分、实际浪费、流量、恢复和399/596/574。
+106项Python单测包含错误评分/INPUT/历史LLM状态口径的拒绝测试；生产不新增预测CSV总开关。
 
 历史 N5B-G3 的 800 任务在同一构建下手动各运行一次：A 使用 `--protection-mode=fixed`，B 使用
 `--protection-mode=compfrr`，C 再加 `--placement-mode=lrl`。三者均为在线 generate，

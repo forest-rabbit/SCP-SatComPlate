@@ -76,6 +76,10 @@ Pre-N5C uses one `feature/n5-baselines` branch for full Recompute and real 1+1,
 focused/maintained tests, frozen-B R5 compatibility, and R0-R4 online runs.
 Stop with a pushed Draft PR to `n5` for baseline audit; do not merge it or enter
 N5C. Do not tune workload, faults, deadlines, routing or seed/run for results.
+The accepted Pre-N5C START revision overrides only LLM token mapping: 400 WU/token,
+total scene WU exactly 352513119 and LLM WU exactly 61333200; whole-token balancing
+allows at most ±200 WU per LLM task. Re-run only new R4–R7 with risk-weighted OFF→START;
+leave ON, placement, faults, routing, deadlines and old evidence unchanged. Keep PR #97 Draft.
 1+1 requests exactly one resource-constrained replica at first TASK_RUNNING;
 failed admission is not retried. Normal replicas are fault-exposed; takeover
 and recovery immunity occur only after the complete same-ns fault batch.

@@ -51,7 +51,7 @@ WorkloadLayout::StateAt(uint64_t completedWork) const
 {
     if (completedWork > work)
         throw std::invalid_argument("shadow state exceeds task work");
-    return tokens ? (completedWork / 100) * 114688 : MulDiv(variableBytes, completedWork, work);
+    return tokens ? (completedWork / 400) * 114688 : MulDiv(variableBytes, completedWork, work);
 }
 
 uint64_t
@@ -98,15 +98,15 @@ MakeWorkloadLayout(const TaskDefinition& task)
     layout.applicationEnds.push_back(0);
     if (task.taskProfile == TaskProfile::LLM)
     {
-        if (layout.work % 100 || layout.work / 100 > 40960)
-            throw std::invalid_argument("shadow LLM must follow G1 100 WU/token and context limit");
+        if (layout.work % 400 || layout.work / 400 > 40960)
+            throw std::invalid_argument("shadow LLM must follow 400 WU/token and context limit");
         layout.tokens = true;
-        layout.extent = layout.work / 100;
-        layout.variableBytes = MulDiv(layout.work, 114688, 100);
-        for (uint64_t w = 100; w <= layout.work; w += 100)
+        layout.extent = layout.work / 400;
+        layout.variableBytes = MulDiv(layout.work, 114688, 400);
+        for (uint64_t w = 400; w <= layout.work; w += 400)
         {
             layout.boundaries.push_back(w);
-            layout.applicationEnds.push_back(w / 100);
+            layout.applicationEnds.push_back(w / 400);
         }
         return layout;
     }
