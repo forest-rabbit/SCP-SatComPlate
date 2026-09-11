@@ -71,10 +71,18 @@ branch and stops after each G1/G2/G3/G4 gate for user approval. The active
 contract is summarized in `contrib/satcompute/protection/README.md`; cL is an
 asynchronous generation delay and equivalent cost, never a primary compute pause.
 
-N5A is complete and merged into `n5` through PR #95. N5B uses one
-`feature/n5b-compfrr-frequency` branch and stops after G1/G2/G3 for user review.
-G1 implements pure frequency/placement policies and contract tests only; G2
-owns live fault-epoch/checkpoint integration. N5B/N5C formal algorithm experiments
+N5A and N5B are complete and merged into `n5` through PR #95 and PR #96.
+Pre-N5C uses one `feature/n5-baselines` branch for full Recompute and real 1+1,
+focused/maintained tests, frozen-B R5 compatibility, and R0-R4 online runs.
+Stop with a pushed Draft PR to `n5` for baseline audit; do not merge it or enter
+N5C. Do not tune workload, faults, deadlines, routing or seed/run for results.
+1+1 requests exactly one resource-constrained replica at first TASK_RUNNING;
+failed admission is not retried. Normal replicas are fault-exposed; takeover
+and recovery immunity occur only after the complete same-ns fault batch.
+Both attempts retain the original compute deadline, not a result-delivery
+deadline; the first valid delivered RESULT wins. Planned wait/WU are estimates;
+actual wait/WU come only from reservations and executed service.
+N5B/N5C formal algorithm experiments
 use online `generate`; `validation-replay` remains an N5A execution-test exception,
 not a production prediction input. Production policy must not depend on the
 shadow validator; test-only comparisons are allowed. Reuse the canonical fault

@@ -36,7 +36,9 @@ N4C G3/G4 经 PR #90/#91、最终收尾经 PR #92 集成到 n4c，再由 PR #93 
 N4 = COMPLETE，正式标签为 main 集成提交上的 `n4-complete`。
 N5 集成线已由该标签建立；[Pre-N5 审计 PR #94](https://github.com/forest-rabbit/SCP-SatComPlate/pull/94)
 已合入 `n5`，Gate A/B 通过。N5A 经 [PR #95](https://github.com/forest-rabbit/SCP-SatComPlate/pull/95)
-完成真实备份/恢复与资源验收；N5B-G1 纯策略已实现并通过本地验证、等待审阅，main 冻结结果不变。
+完成真实备份/恢复与资源验收；N5B 经 [PR #96](https://github.com/forest-rabbit/SCP-SatComPlate/pull/96)
+于 2026-09-11 通过阶段 CI 并合入 `n5`，完成动态频率与 busy-remote 恢复策略分离。
+最终受控 B 场景为 800/800 按时完成、83/83 恢复成功；`main` 冻结结果不变。
 
 ## N0：初始网络平台
 
