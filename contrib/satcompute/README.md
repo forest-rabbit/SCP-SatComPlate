@@ -96,6 +96,8 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 `remoteBusyRecoveryPolicy=relocate|recompute`
 仅切换远端计算忙时的恢复方式，默认 relocate。完整 `recompute` 为无常态保护的故障后从零重算，
 `one-plus-one` 为首次主计算启动时一次性申请的真实并行副本。
+`checkbullet` 为单备份星、完整 INPUT、连续日志且无 tail 的 CB-Sat 基线；须先完成
+[独立 MTBF 标定](protection/policy/baseline/checkbullet/README.md)，不使用单测参数。
 `inputStagingPolicy=eager` 保持旧行为；CompFRR 可显式设 `deferred`，常态只保护状态，
 故障后再向实际恢复星获取一次原始 INPUT，其他冻结参数不变。
 N5C 尚未实现；详见 [保护与恢复模块](protection/README.md)。

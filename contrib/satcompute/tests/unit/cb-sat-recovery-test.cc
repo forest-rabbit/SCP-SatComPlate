@@ -1,6 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "../support/config-factory.h"
 #include "ns3/cb-sat-recovery.h"
+#include "ns3/cb-sat-controller.h"
+#include "ns3/command-line.h"
+#include "ns3/task-metrics.h"
+#include "ns3/fault-metrics.h"
+#include <nlohmann/json.hpp>
 #include "ns3/fa-first-feasible-placement-policy.h"
 #include "ns3/fault-controller.h"
 #include "ns3/ipv4-address-generator.h"
@@ -9,6 +14,7 @@
 #include "ns3/simulator.h"
 #include <algorithm>
 #include <iostream>
+#include <fstream>
 #include <limits>
 #include <stdexcept>
 using namespace ns3;
@@ -17,6 +23,7 @@ using namespace ns3::protection::checkbullet;
 namespace
 {
 uint64_t checks{};
+std::string outputDir;
 constexpr int64_t END = 3000000000LL;
 void Check(bool condition, const char* message)
 {
@@ -48,6 +55,7 @@ struct Driver
     uint64_t nextFault{1};
     int64_t start{-1};
     bool failedTransfer{}, pressureApplied{};
+    FaultTrace trace;
 
     void Emit(uint32_t node, bool permanent = false, bool f2 = false)
     {
@@ -59,6 +67,7 @@ struct Driver
         f.f1Occurred = !permanent && !f2;
         f.f2Occurred = !permanent && f2;
         if (!permanent) { f.durationNs = 200000000; f.failureProbability = 0.2; }
+        trace.faults.push_back(f);
         fault->SubmitGeneratedBatch({{FaultEventType::START, f}});
     }
     Ptr<ComputeService> Service(uint32_t node)
@@ -200,6 +209,33 @@ CbRecoverySummary Run(const Options& options)
         if (options.busy) driver.Service(0)->CancelRecovery(998, 1);
         manager.ReleaseTask(999, "TEST_END");
         manager.Finalize();
+        if (!outputDir.empty())
+        {
+            const auto directory = std::filesystem::path(outputDir) / options.name;
+            WriteCbMetrics(manager, recovery, directory);
+            WriteTaskMetricsNs(*tasks, options.stop, directory.string());
+            fault->FinalizeGeneratedTrace(driver.trace);
+            WriteFaultMetrics(*fault, nullptr, nullptr, PeekPointer(tasks),
+                              manager.Network().CollectSummaries(), directory.string());
+            placement.WriteSelections(directory);
+            loads.WriteMetrics(directory);
+            std::ofstream parameterFile(directory / "cb-sat-parameters.json");
+            parameterFile << nlohmann::json({{"unit_fixture_only",true},
+                {"input_contract","full_original_input"},{"tail_enabled",false},
+                {"final_quiescent",manager.IsQuiescent()},{"final_loads_empty",loads.Empty()},
+                {"placement",placement.Name()},
+                {"simultaneous_global_storage_peak_bytes",manager.GlobalStoragePeakBytes()}}).dump(2);
+            // Current fields have no embedded commas; ensure every row matches its own schema.
+            for (const auto name : {"tasks", "decisions", "checkpoints", "events", "recovery", "storage", "transfers"})
+            {
+                std::ifstream csv(directory / (std::string("cb-sat-") + name + ".csv"));
+                std::string header, line;
+                Check(static_cast<bool>(std::getline(csv, header)), "CB CSV header missing");
+                const auto columns = std::count(header.begin(), header.end(), ',');
+                while (std::getline(csv, line))
+                    Check(std::count(line.begin(), line.end(), ',') == columns, "CB CSV columns shifted");
+            }
+        }
         const auto rows = recovery.Summaries();
         Check(rows.size() == 1, "CB created zero or multiple recovery attempts");
         result = rows.front();
@@ -284,10 +320,13 @@ CbRecoverySummary Run(const Options& options)
 }
 } // namespace
 
-int main()
+int main(int argc, char** argv)
 {
     try
     {
+        CommandLine command(__FILE__);
+        command.AddValue("outputDir", "Optional project test metrics directory", outputDir);
+        command.Parse(argc, argv);
         const auto direct = Run({});
         Check(direct.resumeWork == 60000 && direct.plannedCatchupWu == 5000, "direct did not use q=60 percent");
         auto options = Options{};

@@ -98,6 +98,7 @@ class CbSatManager
     const std::vector<CbFlow>& Flows() const { return m_flows; }
     const std::vector<CbDecision>& Decisions() const { return m_decisions; }
     const auto& Pools() const { return m_pools; }
+    const NetworkTransferEngine& Network() const { return *m_network; }
     uint64_t GlobalStoragePeakBytes() const { return m_globalPeak; }
 
     /** Explicit storage ownership API, also used by CB recovery temporary objects. */

@@ -52,3 +52,26 @@ cmake --build cmake-cache --target satcompute_test_satcompute-cb-sat-policy-test
 
 以上命令从仓库根目录执行，不开启 ns-3 全局 examples/tests。测试显式注入的 MTBF
 只用于构造边界场景；正式执行必须使用后续独立 pilot 得到的冻结统计值。
+
+## 接入与执行工具
+
+`cb-sat-config.*` 只读取独立统计 profile；`cb-sat-controller.*` 接入完整生命周期，
+`cb-sat-metrics.cc` 保存独立 `cb-sat-*.csv`。公共 task/transfer/link 指标继续保留。
+源缓存、INPUT、FULL 和 LOG 的逐对象变化在 events 中，storage 给出每节点峰值和最终占用。
+恢复 CSV 中 planned WU 与 actual WU 分列；网络统计使用真实发送量，失败/取消的已发字节也计入。
+`normal + execution waste + reserved idle` 可相加；已包含在 idle 中的恢复 cR 不再次相加。
+
+从仓库根目录按顺序执行（已有输出不会被覆盖）：
+
+```bash
+.venv/bin/python contrib/satcompute/protection/policy/baseline/checkbullet/tools/calibrate-cb-sat-mtbf.py --stage all --jobs 2
+.venv/bin/python contrib/satcompute/protection/policy/baseline/checkbullet/tools/run-cb-sat-matrix.py --stage smoke --jobs 2
+.venv/bin/python contrib/satcompute/protection/policy/baseline/checkbullet/tools/run-cb-sat-matrix.py --stage formal --jobs 2
+.venv/bin/python contrib/satcompute/protection/policy/baseline/checkbullet/tools/analyze-cb-sat-matrix.py --root output/cb-sat-v2
+```
+
+标定完成后先核对并提交 profile，再运行矩阵；runner 要求干净执行快照，但不会自动提交。
+10 个 off/F1/F2 pilot 使用相同 arrival trace、seed1/run101–110，F3 关闭。
+统计口径是“健康、普通主任务未完成的运行中检查点数 × 检查间隔”；联合命中只计一次，
+空闲事件不计入分子。实际连续服务暴露仅作诊断，不能混作分母；pooled MTBF 为总暴露/总事件，
+不是每次 MTBF 的平均。零命中显式表示无穷。八组矩阵不读取 run11 的未来故障来反推参数。

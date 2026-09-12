@@ -53,7 +53,7 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
 | `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，四种保护模式均可注入 |
-| `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
+| `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr/checkbullet 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
 | `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
@@ -71,6 +71,10 @@ Routing 是所有方案共用的基础设施，不属于其中任何算法开关
 单节点不要求一跳或虚构 local，允许 source/recovery/result 同星并沿用 LocalDelivery。
 四种策略均实现两种角色；当前 checkpoint 恢复目标仍统一按既有稳定 ID 与操作可行性选择，
 不会因切换 prefault LRL 而顺带改变恢复排序。
+
+`protectionMode=checkbullet` 接入独立的 [CB-Sat](policy/baseline/checkbullet/README.md)：
+单备份星保留完整 INPUT、状态根及连续日志，复用公共服务与四种 placement，但不继承双层 tail。
+内部 H/X 和独立标定 MTBF 均位于该子目录；平台 `para.cc` 不增加 CB 专有数值。
 
 `protectionMode=recompute` 是完整 baseline：没有常态保护；首次主计算故障后调用
 `PlacementPolicy::SelectBackupNode`，默认 FA-FFP 选非主、健康、空闲且可达结果端的节点，
