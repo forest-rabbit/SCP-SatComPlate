@@ -21,6 +21,18 @@ tests/
 日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动正式场景的原始指标
 保存在 gitignore 排除的本地 `output/`，完整正式场景运行不接入 `run-all.sh` 或 GitHub CI。
 
+Pre-N5C placement 消融入口为 `integration/regression/run-pre-n5c-placement-matrix.py`：
+`--stage gates` 先运行 R5/R7-FA-FFP 并与最新 capacity-resume 原始文件比较；
+`--stage remaining --jobs 8` 再运行其余 30 组，合计 32 组，每组 800 任务/1300 s，需显式授权。
+两阶段必须同一干净 HEAD，拒绝覆盖已有组目录。`analyze-pre-n5c-placement-matrix.py --root 输出目录`
+核对实际 WU/物理流/清理及频率公式，生成 master-summary CSV/JSON；不回写历史 CSV/JSON。
+`run-placement-baseline-smoke.py` 仅为 16 组四任务接线检查，纳入维护 smoke，不运行正式场景。
+原 FA fixture 保留；`n5b-policy-test.cc` 增加 minimal 布尔穷举和历史可行集 oracle，
+`frequency-runtime-test.cc` 验证真实链路拒绝与不搜索第二候选，R0/R1 测试验证真实 deadline 准入差异。
+`test_placement_matrix.py` 验证矩阵组数、零计数分布及 rename 比较不忽略业务差异。
+这 32 组已验收冻结，见[最终报告](../../../docs/n5/reviews/Pre-N5C-placement-baselines-final.md)；
+收尾及日常测试不重复正式矩阵。
+
 N5A-G4 的冻结故障验收仍复用 `integration/regression/run-final-scenario.py`，
 只在明确授权后手动运行；原始 N4 输出不可覆盖。例：
 
@@ -52,6 +64,8 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 | `protection-path-test.cc` | N5A-G2 真实 UDP 动态注册/乱序接收、ID、存储不足、非零初始化、取消与同纳秒计算结束 |
 | `frequency-runtime-test.cc` | N5B 实际故障 epoch、提案/提交、四类状态、动态频率、PAUSE/恢复、LRL 实时负载与重复运行一致性 |
 | `recovery-runtime-test.cc` | G3 受控 FaultController→备份/网络/计算/任务闭环，LocalDelivery、服务锁、F1/F2 免疫、F3、deadline、同纳秒实体快照和旧回调 |
+| `recompute-baseline-test.cc` | 无常态保护、FFP 全量重传、从零执行、planned/actual 与 deadline/F3 截断 |
+| `one-plus-one-baseline-test.cc` | 一次性副本准入、真实并行、正常故障暴露、完整 batch 后接管、首个 RESULT 与 loser 账本 |
 | `link-window-test.cc` | 10 Gbps、空闲、双向独立、跨窗/尾窗、可用性、队列与预留时间积分 |
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
 | `routing-policy-factory-test.cc` | 五种路由名到 next-hop/path policy 的映射 |
@@ -77,6 +91,7 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 | `test_fault_workload_fixtures.py` | 保留F1/F2/N4B固定fixture的角色与分布，不再依赖旧生成profile |
 | `test_link_metrics_report.py` | 通用链路统计分位数 |
 | `test_protection_contract.py` | 保护入口拒绝非法值与 shadow 混跑、generate 通过模式校验，以及生产模块无 shadow 依赖 |
+| `test_baseline_evaluation.py` | R5 严格比较、物理流去重、loser RESULT 保留、planned/actual 与故障身份配对 |
 
 C++另保留 `task-deadline-test.cc`（当前正式输入和deadline边界）以及
 `compfrr-shadow-model-test.cc`（成本分档、严格START、初始化不双计、频率枚举、
@@ -104,6 +119,11 @@ G2 smoke 为 16 星/4 类任务/15 s 的 off、fixed、重复、容量不足四�
 不提供 `--output-root` 时自动使用临时目录。核对精确字节、cL/cR、l/r/x、存储、普通计算时间
 及普通业务统计隔离；G3 新增受控恢复与平台入口 F3 对照，不是正式 800 任务/1300 s 实验。
 详见 [protection](../protection/README.md)。
+
+Pre-N5C 的 `run-baseline-smoke.py` 验证无故障 Recompute 与 off 的业务输出一致、
+真实 replica INPUT/RESULT、重复运行确定性和输出目录切换清理，已纳入维护 smoke。
+正式六组运行仍使用 `run-final-scenario.py`，先 R5 严格复现冻结 B，再 R0–R4；
+`analyze-baseline-evaluation.py` 离线检查物理流/WU/资源守恒并输出统一比较，普通运行不自动分析。
 
 | 脚本 | 主要覆盖 |
 |---|---|
@@ -175,7 +195,7 @@ SATCOMPUTE_POSITION_SLICES=output/n4c-g3-truncnormal-v3-20260909/orbit/topology 
 generate+shadow，以及仅供 N5A 验收的显式 validation-replay。默认为generate；概率CSV审计和shadow均默认关闭。
 输出必须是新目录，当前1300 s、800任务、66星、10 Gbps、1 ms、seed1/run11。
 
-当前最终场景移除前置任务 801，仅增大任务 120 到 800 MB；本次仅授权正式 B 组，
+N5B 最终场景移除前置任务 801，仅增大任务 120 到 800 MB；当时仅授权正式 B 组，
 使用 `--protection-mode=compfrr --placement-mode=ffp`，不追加 A/C 或 CI。
 `run-f3-protection-check.py --output-dir=新目录 --input-bytes 700000000 800000000`
 是保留真实故障模型/轨道的 B 组单任务大小初筛；首次通过后停止，完整负载仍须单独验收。
@@ -184,6 +204,20 @@ START 有收益、F3 前真实 ON、使用有效非零进度检查点且按期�
 `analyze-frequency-evaluation.py --runs B目录` 生成本次单组账本。
 历史 G3R2 的 801 任务 B/C 结果保留，不能与本次或旧 A 严格配对；双组分析也要求同场景、同代码。
 可行节点对、5 ms 释放、重复/部分释放、终态清理和无额外抽样测试位于既有 policy/runtime 单测。
+
+历史 Pre-N5C v6/ON-resume 审计只运行 R4–R7：当时均为
+`--protection-mode=compfrr --placement-mode=ffp`（该旧 FFP 现名为 `fa-ffp`），
+R4/R5 使用 eager，R6/R7 加 `--input-staging-policy=deferred`；R4/R6 加
+`--remote-busy-recovery-policy=recompute`，R5/R7 为 relocate。
+新 workload 为400 WU/token且总WU保持352513119；START使用初始化就绪后的风险加权进度，
+ON评分不变；后续容量修订为路径阻塞的ON增加释放重试（原节点对、无额外抽样）。
+历史输出在 `output/n5-on-capacity-resume/` 和 `output/n5-startscore-riskweighted-llm4x/`，
+均不覆盖；当前四种 placement 的冻结矩阵以本页开头的入口及报告为准。
+`integration/regression/analyze-riskweighted-start.py --r4 R4目录 --r5 R5目录 --r6 R6目录 --r7 R7目录
+--output 新JSON路径` 只读核对同代码/同workload、评分、实际浪费、流量、恢复和399/596/574。
+Python单测包含错误评分/INPUT/历史LLM状态口径及整数纳秒取整检查；生产不新增预测CSV总开关。
+既有 `frequency-runtime-test.cc` 覆盖自身L1在途占用、eager/deferred释放后恢复、重复通知、
+同纳秒故障/终止、存储阻塞及重复运行一致性；ON暂停与OFF等待分别记账。
 
 历史 N5B-G3 的 800 任务在同一构建下手动各运行一次：A 使用 `--protection-mode=fixed`，B 使用
 `--protection-mode=compfrr`，C 再加 `--placement-mode=lrl`。三者均为在线 generate，

@@ -3,6 +3,7 @@
 #define SATCOMPUTE_BACKUP_STORAGE_POOL_H
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <set>
@@ -33,6 +34,8 @@ class BackupStoragePool
   public:
     /** Construct with explicit capacity from platform parameters, in bytes. */
     explicit BackupStoragePool(uint64_t capacity);
+    /** Read-only callback after allocations/commits, for simultaneous cross-pool peaks. */
+    void SetPeakObserver(std::function<void()> observer) { m_peakObserver = std::move(observer); }
     BackupStoragePool(const BackupStoragePool&) = delete;
     BackupStoragePool& operator=(const BackupStoragePool&) = delete;
     /** Reserve bytes for a task; null means capacity exhaustion, not task failure. */
@@ -133,6 +136,7 @@ class BackupStoragePool
     std::map<uint64_t, StorageEntry> m_entries; ///< Stable object ledger.
     std::map<uint64_t, uint64_t> m_taskPeaks;   ///< Per-owner peak, retained after release.
     std::set<uint64_t> m_failedTasks;           ///< Unique failed allocation owners.
+    std::function<void()> m_peakObserver;       ///< Does not mutate pools or schedule events.
 };
 } // namespace ns3::protection
 #endif

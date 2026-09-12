@@ -16,7 +16,9 @@
 #include "ns3/flow-metrics.h"
 #include "ns3/fixed-protection-controller.h"
 #include "ns3/frequency-protection-controller.h"
-#include "ns3/least-recovery-load-placement-policy.h"
+#include "ns3/recompute-controller.h"
+#include "ns3/one-plus-one-controller.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
 #include "ns3/protection-metrics.h"
 #include "ns3/link-metrics-recorder.h"
 #include "ns3/online-orbit-constellation.h"
@@ -209,14 +211,16 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
     commandLine.AddValue("protectionMode",
-                         "off / fixed / compfrr: checkpoint protection and single-attempt recovery",
+                         "off / recompute / one-plus-one / fixed / compfrr: protection scheme",
                          config.protectionMode);
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
                          config.backupStorageBytesPerNode);
-    commandLine.AddValue("placementMode", "ffp baseline / lrl diagnostic (fixed or compfrr)", config.placementMode);
+    commandLine.AddValue("placementMode", "ffp/lrl minimal, fa-ffp/fa-lrl feasibility-aware", config.placementMode);
     commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; REMOTE_BUSY only, ignored by off",
                          config.remoteBusyRecoveryPolicy);
+    commandLine.AddValue("inputStagingPolicy", "eager / deferred; deferred requires compfrr",
+                         config.inputStagingPolicy);
     commandLine.AddValue("lrlRecoveryWeight", "Diagnostic active-recovery weight; G3 freezes 1", config.lrlRecoveryWeight);
     commandLine.AddValue("fixedProtectionDelta",
                          "Fixed progress interval (0.05 = 5%), per-mille precision",
@@ -374,14 +378,15 @@ ValidateConfig(const SatComputeConfig& config)
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
     RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one"});
-    RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "n5c"});
+    RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"});
     RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
-    if (config.protectionMode == "recompute" || config.protectionMode == "one-plus-one")
-        FailConfig("protectionMode", "NOT_IMPLEMENTED: full recompute / one-plus-one baseline is deferred");
+    RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred"});
+    if (config.inputStagingPolicy == "deferred" && config.protectionMode != "compfrr")
+        FailConfig("inputStagingPolicy", "deferred requires compfrr protection");
     if (config.placementMode == "n5c")
         FailConfig("placementMode", "NOT_IMPLEMENTED: N5C placement is deferred");
-    if (config.placementMode == "lrl" && config.protectionMode == "off")
-        FailConfig("placementMode", "lrl requires fixed or compfrr protection");
+    if ((config.placementMode == "lrl" || config.placementMode == "fa-lrl") && config.protectionMode == "off")
+        FailConfig("placementMode", "lrl requires an enabled protection scheme");
     if (config.protectionMode != "off" &&
         (config.topologyOnly || !hasComputeProfile || config.compfrrShadow))
     {
@@ -682,6 +687,10 @@ main(int argc, char* argv[])
             std::unique_ptr<compfrr::ShadowEvaluator> shadow;
             std::unique_ptr<protection::FixedProtectionController> protection;
             std::unique_ptr<protection::FrequencyProtectionController> frequency;
+            std::unique_ptr<protection::RecomputeController> recompute;
+            std::unique_ptr<protection::OnePlusOneController> replication;
+            for (const auto name : {"replica-summary.csv", "replica-attempts.csv", "replica-events.csv", "replica-transfers.csv"})
+                std::filesystem::remove(outputDirectory / name);
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
             std::filesystem::remove(outputDirectory / "frequency-pause-intervals.csv");
             std::filesystem::remove(outputDirectory / "frequency-capacity-waits.csv");
@@ -689,7 +698,11 @@ main(int argc, char* argv[])
             const auto makePlacement = [&]() -> std::unique_ptr<protection::PlacementPolicy> {
                 if (config.placementMode == "lrl")
                     return std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.lrlRecoveryWeight);
-                return std::make_unique<protection::FirstFeasiblePlacementPolicy>();
+                if (config.placementMode == "fa-lrl")
+                    return std::make_unique<protection::FaLeastRecoveryLoadPlacementPolicy>(config.lrlRecoveryWeight);
+                if (config.placementMode == "ffp")
+                    return std::make_unique<protection::FirstFeasiblePlacementPolicy>();
+                return std::make_unique<protection::FaFirstFeasiblePlacementPolicy>();
             };
             const auto busyPolicy = config.remoteBusyRecoveryPolicy == "recompute"
                 ? protection::RemoteBusyRecoveryPolicy::RECOMPUTE
@@ -710,7 +723,21 @@ main(int argc, char* argv[])
                 frequency = std::make_unique<protection::FrequencyProtectionController>(
                     taskCoordinator, topology, faultModelEngine,
                     config.backupStorageBytesPerNode, simulationDurationNs,
-                    makePlacement(), busyPolicy);
+                    makePlacement(), busyPolicy,
+                    config.inputStagingPolicy == "deferred" ? protection::InputStagingPolicy::DEFERRED
+                                                             : protection::InputStagingPolicy::EAGER);
+            }
+            else if (config.protectionMode == "recompute")
+            {
+                RemoveProtectionMetrics(outputDirectory);
+                recompute = std::make_unique<protection::RecomputeController>(
+                    taskCoordinator, topology, simulationDurationNs, makePlacement());
+            }
+            else if (config.protectionMode == "one-plus-one")
+            {
+                RemoveProtectionMetrics(outputDirectory);
+                replication = std::make_unique<protection::OnePlusOneController>(
+                    taskCoordinator, topology, simulationDurationNs, makePlacement());
             }
             else
             {
@@ -741,6 +768,22 @@ main(int argc, char* argv[])
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
             if (shadow) shadow->Finalize();
+            if (replication)
+            {
+                replication->Finalize();
+                WriteProtectionMetrics(replication->Manager().Ledger(), *transferEngine, outputDirectory);
+                replication->Manager().WriteMetrics(outputDirectory);
+                replication->Manager().Placement().WriteSelections(outputDirectory);
+                replication->Manager().PlacementLoads().WriteMetrics(outputDirectory);
+            }
+            if (recompute)
+            {
+                recompute->Finalize();
+                WriteProtectionMetrics(recompute->Manager(), *transferEngine, outputDirectory);
+                recompute->Recovery().WriteMetrics(outputDirectory);
+                recompute->Placement().WriteSelections(outputDirectory);
+                recompute->PlacementLoads().WriteMetrics(outputDirectory);
+            }
             if (frequency)
             {
                 frequency->Finalize();
@@ -748,12 +791,14 @@ main(int argc, char* argv[])
                 frequency->Recovery()->WriteMetrics(outputDirectory);
                 frequency->WriteDecisions(outputDirectory);
                 frequency->PlacementLoads().WriteMetrics(outputDirectory);
+                frequency->Placement().WriteSelections(outputDirectory);
             }
             if (protection)
             {
                 protection->Finalize();
                 WriteProtectionMetrics(protection->Manager(), *transferEngine, outputDirectory);
                 protection->PlacementLoads().WriteMetrics(outputDirectory);
+                protection->Placement().WriteSelections(outputDirectory);
                 if (protection->Recovery())
                     protection->Recovery()->WriteMetrics(outputDirectory);
                 else

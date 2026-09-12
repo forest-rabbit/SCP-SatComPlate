@@ -314,6 +314,8 @@ void
 TaskCoordinator::HandleComputeDeadline(uint64_t taskId)
 {
     TaskRuntime& task = GetTask(taskId);
+    if (task.parallelExecution && !IsTerminalTaskState(task.state))
+        return m_parallelHooks.deadline(taskId);
     if (IsTerminalTaskState(task.state) || task.computeCompleteTimeNs >= 0)
         return;
     if (task.attemptGeneration)
@@ -348,6 +350,8 @@ TaskCoordinator::HandleComputeComplete(uint64_t taskId,
                                        int64_t completionTimeNs)
 {
     TaskRuntime& task = GetTask(taskId);
+    if (task.parallelExecution)
+        return m_parallelHooks.primaryComputed(taskId, nodeId, completionTimeNs);
     if (task.attemptGeneration != 0)
         return;
     NS_ABORT_MSG_IF(task.definition.computeNodeId != nodeId,
@@ -396,7 +400,7 @@ TaskCoordinator::IsComplete() const
 {
     NS_ABORT_MSG_IF(!m_initialized, "TaskCoordinator is not initialized");
     const bool hasRecovery = std::any_of(m_tasks.begin(), m_tasks.end(), [](const auto& task) {
-        return task.attemptGeneration != 0;
+        return task.attemptGeneration != 0 || task.parallelExecution;
     });
     return (hasRecovery || m_transferEngine->AreAllTransfersCompleted(false)) &&
            std::all_of(m_tasks.begin(), m_tasks.end(), [](const TaskRuntime& task) {
@@ -419,7 +423,7 @@ TaskCoordinator::ValidateCompleted() const
                         "TaskCoordinator has an incomplete task transfer");
     }
     const bool hasRecovery = std::any_of(m_tasks.begin(), m_tasks.end(), [](const auto& task) {
-        return task.attemptGeneration != 0;
+        return task.attemptGeneration != 0 || task.parallelExecution;
     });
     NS_ABORT_MSG_IF(!hasRecovery && !m_transferEngine->AreAllTransfersCompleted(false),
                     "TaskCoordinator has incomplete network transfers");
@@ -772,7 +776,7 @@ TaskCoordinator::ApplyFaultBatch(
     for (const TaskFaultNodeChange& change : startedNodes)
     {
         // In fixed mode, exact compute completion precedes same-ns primary failure.
-        if (m_recoveryHandler)
+        if (m_recoveryHandler || m_parallelHooks.faultBatch)
         {
             auto service = FindComputeService(change.nodeId);
             if (service && service->HasRunningTask())
@@ -801,6 +805,12 @@ TaskCoordinator::ApplyFaultBatch(
     }
 
     const int64_t eventTimeNs = Simulator::Now().GetNanoSeconds();
+    if (m_parallelHooks.faultBatch)
+        for (const auto& [node, impact] : m_parallelHooks.faultBatch(startedNodes))
+        {
+            impacts.at(node).affectedTaskCount += impact.affectedTaskCount;
+            impacts.at(node).affectedTransferCount += impact.affectedTransferCount;
+        }
     if (m_recoveryHandler)
     {
         for (auto& task : m_tasks)
@@ -829,7 +839,7 @@ TaskCoordinator::ApplyFaultBatch(
     }
     for (TaskRuntime& task : m_tasks)
     {
-        if (task.attemptGeneration || IsTerminalTaskState(task.state) ||
+        if (task.attemptGeneration || task.parallelExecution || IsTerminalTaskState(task.state) ||
             (task.state == TASK_PENDING && task.definition.arrivalTimeNs != eventTimeNs))
         {
             continue;
@@ -906,7 +916,7 @@ TaskCoordinator::ApplyFaultBatch(
         TaskFaultImpact& nodeImpact = impacts.at(change.nodeId);
         for (TaskRuntime& task : m_tasks)
         {
-            if (task.attemptGeneration || IsTerminalTaskState(task.state) ||
+            if (task.attemptGeneration || task.parallelExecution || IsTerminalTaskState(task.state) ||
                 task.definition.computeNodeId != change.nodeId ||
                 task.state == TASK_RESULT_TRANSFERRING ||
                 (task.state == TASK_PENDING && task.definition.arrivalTimeNs != eventTimeNs))
@@ -944,7 +954,107 @@ void
 TaskCoordinator::SetRecoveryHandler(
     std::function<bool(const TaskRuntime&, const TaskFaultNodeChange&)> handler)
 {
+    NS_ABORT_MSG_IF(handler && m_parallelHooks.faultBatch, "cannot mix recovery and parallel owners");
     m_recoveryHandler = std::move(handler);
+}
+
+void
+TaskCoordinator::SetParallelAttemptHooks(ParallelAttemptHooks hooks)
+{
+    NS_ABORT_MSG_IF(hooks.faultBatch && m_recoveryHandler, "cannot mix parallel and recovery owners");
+    m_parallelHooks = std::move(hooks);
+}
+
+void
+TaskCoordinator::CompleteFaultBatch()
+{
+    if (m_parallelHooks.batchComplete) m_parallelHooks.batchComplete();
+}
+
+bool
+TaskCoordinator::BeginParallelExecution(uint64_t id)
+{
+    auto& task = GetTask(id);
+    if (task.state != TASK_RUNNING || task.parallelExecution || task.attemptGeneration ||
+        !m_parallelHooks.primaryComputed || !m_parallelHooks.deadline || !m_parallelHooks.faultBatch)
+        return false;
+    task.parallelExecution = true;
+    return true;
+}
+
+bool
+TaskCoordinator::ParallelComputed(uint64_t id, uint32_t node, int64_t at)
+{
+    auto& task = GetTask(id);
+    if (!task.parallelExecution || IsTerminalTaskState(task.state) || at != Simulator::Now().GetNanoSeconds() ||
+        at > task.computeDeadlineTimeNs || !IsSatelliteAvailable(node))
+        return false;
+    if (task.state == TASK_RUNNING)
+        TransitionTask(id, TASK_RESULT_TRANSFERRING, node, at, "PARALLEL_ATTEMPT_COMPUTE_COMPLETE");
+    return true;
+}
+
+bool
+TaskCoordinator::ParallelResult(uint64_t id, uint64_t generation, uint32_t node,
+    int64_t computeAt, int64_t resultStartedAt, uint64_t actualServiceNs, uint64_t transferId, bool local)
+{
+    auto& task = GetTask(id);
+    const auto now = Simulator::Now().GetNanoSeconds();
+    if (!task.parallelExecution || task.state != TASK_RESULT_TRANSFERRING || generation > 1 ||
+        computeAt < task.computeStartTimeNs || computeAt > task.computeDeadlineTimeNs ||
+        resultStartedAt < computeAt || resultStartedAt > now ||
+        !IsSatelliteAvailable(node) || !IsSatelliteAvailable(task.definition.resultNodeId))
+        return false;
+    NS_ABORT_MSG_IF(local ? (transferId || node != task.definition.resultNodeId)
+                          : (!transferId || !m_transferEngine->IsCompleted(transferId)),
+                    "parallel RESULT has not actually arrived");
+    task.computeCompleteTimeNs = computeAt;
+    task.resultTransferStartTimeNs = resultStartedAt;
+    task.activeComputeNodeId = node;
+    task.attemptGeneration = generation;
+    task.winningResultTransferId = transferId;
+    task.localResultDelivered = local;
+    task.actualComputeServiceNs = actualServiceNs;
+    CancelComputeDeadline(id);
+    TransitionTask(id, TASK_COMPLETED, task.definition.resultNodeId, now, "PARALLEL_RESULT_WINNER");
+    return true;
+}
+
+bool
+TaskCoordinator::FailParallel(uint64_t id, const std::string& cause, TaskFailureReason reason,
+                              uint64_t actualServiceNs)
+{
+    auto& task = GetTask(id);
+    if (!task.parallelExecution || IsTerminalTaskState(task.state)) return false;
+    const auto before = task.state;
+    const auto now = Simulator::Now().GetNanoSeconds();
+    task.actualComputeServiceNs = actualServiceNs;
+    CancelComputeDeadline(id);
+    task.FailIfActive(now, reason, cause);
+    m_taskEvents.push_back({now, id, before, TASK_FAILED, task.activeComputeNodeId, cause});
+    m_taskTransition(m_taskEvents.back());
+    return true;
+}
+
+void
+TaskCoordinator::RecordParallelFaultImpact(uint64_t id, const TaskFaultNodeChange& change,
+    const std::string& type, int64_t computeStart, std::optional<uint64_t> executedWork)
+{
+    const auto& task = GetTask(id);
+    NS_ABORT_MSG_IF(!task.parallelExecution || (executedWork && *executedWork > task.definition.computeWorkUnits),
+                    "invalid parallel fault snapshot");
+    FaultTaskImpactRecord row;
+    row.fault = change.fault;
+    row.taskId = id;
+    row.impactTimeNs = Simulator::Now().GetNanoSeconds();
+    row.stateBeforeImpact = task.state;
+    row.impactType = type;
+    row.computeStartTimeNs = computeStart;
+    row.deadlineTimeNs = task.computeDeadlineTimeNs;
+    row.progressValid = executedWork.has_value();
+    row.completedWorkUnits = executedWork.value_or(0);
+    row.remainingWorkUnits = executedWork ? task.definition.computeWorkUnits - *executedWork : 0;
+    m_faultTaskImpacts.push_back(std::move(row));
 }
 
 bool

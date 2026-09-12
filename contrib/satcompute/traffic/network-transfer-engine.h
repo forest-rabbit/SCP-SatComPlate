@@ -62,6 +62,8 @@ class NetworkTransferEngine : public Object
     bool IsRuntimeTransfer(uint64_t transferId) const;
     /** Runtime recovery RESULT is business traffic, unlike backup/input replay traffic. */
     bool IsProtectionTransfer(uint64_t transferId) const;
+    /** Classify RESULT after a parallel logical winner is known; never changes routing/bytes. */
+    void SetBusinessResult(uint64_t transferId, bool business);
     /** Current directed-link residual capacity for causal recovery estimates; reserves nothing. */
     uint64_t GetResidualRateBps(uint32_t source, const EcmpRouteCandidate& route) const;
     /** Preview the next runtime flow's current policy; actual registration rechecks admission. */
@@ -146,6 +148,7 @@ class NetworkTransferEngine : public Object
     std::map<uint32_t, Ptr<NetworkTransferReceiver>> m_receiversBySatellite;
     std::set<uint64_t> m_runtimeTransfers;
     std::set<uint64_t> m_businessResults;
+    std::set<uint64_t> m_redundantResults; ///< Real ordinary RESULTs excluded after losing arbitration.
     std::set<uint64_t> m_runtimeStarting;
     std::map<uint64_t, Callback<void, uint64_t, int64_t>> m_terminalObservers;
     std::function<void()> m_capacityReleaseObserver;

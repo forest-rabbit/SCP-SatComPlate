@@ -61,9 +61,10 @@ struct SatComputeConfig
     bool faultProbabilityAudit;  ///< 是否采集并输出概率一致性审计数据。
 
     // protection
-    std::string protectionMode; ///< off / fixed / compfrr；真实保护与恢复，compfrr 按在线故障 epoch 决策。
-    std::string placementMode; ///< ffp / lrl；fixed 与 CompFRR 共用 placement。
+    std::string protectionMode; ///< off / recompute / one-plus-one / fixed / compfrr；真实保护与恢复。
+    std::string placementMode; ///< ffp/lrl minimal; fa-ffp/fa-lrl feasibility-aware, default fa-ffp.
     std::string remoteBusyRecoveryPolicy; ///< relocate / recompute；只切换 REMOTE_BUSY 分支。
+    std::string inputStagingPolicy; ///< eager / deferred；CompFRR 原始 INPUT 预置或故障后获取。
     uint32_t lrlRecoveryWeight; ///< 当前恢复数量的整数权重，正式首轮固定 1，不扫描。
     uint64_t backupStorageBytesPerNode; ///< 每计算星额外备份存储容量，十进制字节。
     double fixedProtectionDelta; ///< 固定 checkpoint 进度间隔，0.05 表示 5%。

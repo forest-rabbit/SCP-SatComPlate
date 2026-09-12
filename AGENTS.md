@@ -71,10 +71,40 @@ branch and stops after each G1/G2/G3/G4 gate for user approval. The active
 contract is summarized in `contrib/satcompute/protection/README.md`; cL is an
 asynchronous generation delay and equivalent cost, never a primary compute pause.
 
-N5A is complete and merged into `n5` through PR #95. N5B uses one
-`feature/n5b-compfrr-frequency` branch and stops after G1/G2/G3 for user review.
-G1 implements pure frequency/placement policies and contract tests only; G2
-owns live fault-epoch/checkpoint integration. N5B/N5C formal algorithm experiments
+N5A and N5B are complete and merged into `n5` through PR #95 and PR #96.
+The 2026-09-12 user-approved Pre-N5C closeout supersedes the Draft-only stop:
+merge PR #97 (`feature/n5-baselines`) into `n5` after local verification, then
+delete that feature branch only after confirming its head is reachable from `n5`.
+Do not merge into `main`, add a tag, run extra GitHub CI, repeat the 32 formal
+simulations, or implement N5C. N5C needs its own accepted task contract.
+The frozen evidence is `docs/n5/reviews/Pre-N5C-placement-baselines-final.md`:
+32 runs at clean execution HEAD `b51cc9d63`, with offline audit `ae93f3679`.
+Preserve workload, faults, deadlines, routing, costs, seed/run and raw evidence.
+The accepted workload uses 400 WU/token, total scene WU exactly 352513119 and
+LLM WU exactly 61333200; whole-token balancing allows at most ±200 WU per LLM task.
+Risk-weighted OFF-to-START and InputDeferred remain frozen. ON retries only
+NO_ADMISSIBLE_PATH pauses on real capacity release, retaining the fixed pair and
+ON score; no new fault draws, reservation bypass or historical checkpoints.
+The four placements are ffp/lrl/fa-ffp/fa-lrl (default fa-ffp). Minimal ffp/lrl
+use only healthy, idle and structural eligibility, followed by real admission
+of one selected candidate. Never retry another candidate within that same
+decision; existing later decision/capacity-release events remain allowed.
+Four placements affect prefault checkpoint pairs and native R0/R1 single-node
+roles; checkpoint post-fault recovery ranking stays frozen. Use current active
+loads, not cumulative history. Super* is not the accepted naming.
+Computational resource costs must be labeled eq-WU / equivalent cost, with
+active overhead and total capacity-equivalent waste reported separately.
+Reserved-idle opportunity cost is not actual CPU execution. Raw task progress
+stays WU; use W_f-W_L and W_L-W_R for work differences, not dimensionless x-l.
+LRL/FA-LRL are strong N5C baselines: compare fairly, without presupposing which
+scheme wins or tuning the frozen scene to obtain a desired result.
+1+1 requests exactly one resource-constrained replica at first TASK_RUNNING;
+failed admission is not retried. Normal replicas are fault-exposed; takeover
+and recovery immunity occur only after the complete same-ns fault batch.
+Both attempts retain the original compute deadline, not a result-delivery
+deadline; the first valid delivered RESULT wins. Planned wait/WU are estimates;
+actual wait/WU come only from reservations and executed service.
+N5B/N5C formal algorithm experiments
 use online `generate`; `validation-replay` remains an N5A execution-test exception,
 not a production prediction input. Production policy must not depend on the
 shadow validator; test-only comparisons are allowed. Reuse the canonical fault

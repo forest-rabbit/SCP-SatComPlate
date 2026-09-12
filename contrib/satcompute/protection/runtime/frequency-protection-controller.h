@@ -2,7 +2,7 @@
 #ifndef SATCOMPUTE_FREQUENCY_PROTECTION_CONTROLLER_H
 #define SATCOMPUTE_FREQUENCY_PROTECTION_CONTROLLER_H
 #include "../../fault/runtime/fault-model-engine.h"
-#include "../policy/baseline/first-feasible-placement/first-feasible-placement-policy.h"
+#include "../policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
 #include "../policy/compfrr/frequency/frequency-decision-gate.h"
 #include "frequency-storage-estimator.h"
 #include "recovery-controller.h"
@@ -51,13 +51,15 @@ class FrequencyProtectionController : public ProtectionPolicy
                                   uint64_t capacity,
                                   int64_t stopNs,
                                   std::unique_ptr<PlacementPolicy> placement = nullptr,
-                                  RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE);
+                                  RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
+                                  InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER);
     ~FrequencyProtectionController() override;
     /** Finish the same actual ledgers as fixed protection. */
     void Finalize();
     /** Write only decision/prediction audit, not actual metrics. */
     void WriteDecisions(const std::filesystem::path& directory) const;
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
+    const PlacementPolicy& Placement() const { return *m_placement; }
     ///< Live ownership used by LRL and the same diagnostic output for FFP.
 
     const CheckpointManager& Manager() const
@@ -157,7 +159,8 @@ class FrequencyProtectionController : public ProtectionPolicy
     std::map<uint64_t, State> m_states;               ///< Per-primary frequency lifecycle.
     std::vector<FrequencyDecisionRecord> m_decisions; ///< Proposal/resolution audit.
     std::vector<PauseInterval> m_pauses;               ///< Actual committed PAUSE intervals.
-    std::set<uint64_t> m_waitingCapacity;
+    std::set<uint64_t> m_waitingCapacity; ///< OFF waiting for first protection admission.
+    std::set<uint64_t> m_pausedCapacity; ///< ON paused only for transient path capacity.
     std::vector<PauseInterval> m_capacityWaits; ///< Not a compute reservation or actual waste.
     EventId m_capacityDrain;
     bool m_finalized{};

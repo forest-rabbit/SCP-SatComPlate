@@ -92,12 +92,18 @@ class CheckpointManager : public ProtectionMechanism
      * @param topology Existing satellite runtime (no second network).
      * @param storageBytesPerNode Explicit per-node capacity; zero deliberately rejects all bases.
      * @param simulationStopNs Absolute simulation endpoint in ns.
+     * @param inputPolicy Explicit eager or deferred original INPUT staging.
      */
     CheckpointManager(Ptr<TaskCoordinator> tasks,
                       SatelliteRuntimeView& topology,
                       uint64_t storageBytesPerNode,
-                      int64_t simulationStopNs);
+                      int64_t simulationStopNs,
+                      InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER);
     ~CheckpointManager() override;
+    /** Single staging contract shared by storage admission and actual recovery. */
+    InputStagingPolicy InputPolicy() const { return m_inputPolicy; }
+    /** True simultaneous used+reserved maximum, never the sum of per-node maxima. */
+    uint64_t GlobalStoragePeakBytes() const { return m_globalStoragePeakBytes; }
     bool Supports(ActionKind kind) const override;
     void Execute(const ProtectionContext& context, const ProtectionAction& action) override;
     bool OnComputeFault(const ProtectionContext&) override;
@@ -265,6 +271,8 @@ class CheckpointManager : public ProtectionMechanism
     Ptr<TaskCoordinator> m_tasks;         ///< Existing ordinary runtime owner.
     Ptr<NetworkTransferEngine> m_network; ///< Shared real traffic engine.
     int64_t m_stopNs;                     ///< Absolute simulation endpoint.
+    InputStagingPolicy m_inputPolicy;     ///< Immutable per-run INPUT staging contract.
+    uint64_t m_globalStoragePeakBytes{};  ///< Observed after every potentially increasing mutation.
     ProtectionTransferIds m_ids;          ///< Disjoint non-recycled flow ID allocator.
     std::map<uint64_t, std::unique_ptr<State>> m_states;            ///< Stable task ownership.
     std::map<uint32_t, std::unique_ptr<BackupStoragePool>> m_pools; ///< Shared per-node capacity.

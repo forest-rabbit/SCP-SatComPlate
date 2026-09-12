@@ -37,13 +37,13 @@ TaskStateAdapter::TaskStateAdapter(const TaskDefinition& task)
         throw std::invalid_argument("protection needs positive task ID, INPUT and WU");
     if (m_llm)
     {
-        if (m_work % 100 || m_work / 100 > 40960)
-            throw std::invalid_argument("LLM must use 100 WU/token and frozen context bound");
-        m_extent = m_work / 100;
-        m_variable = Scale(m_extent, 114688, 1);
+        if (m_work % LLM_WORK_UNITS_PER_TOKEN || m_work / LLM_WORK_UNITS_PER_TOKEN > 40960)
+            throw std::invalid_argument("LLM must use 400 WU/token and frozen context bound");
+        m_extent = m_work / LLM_WORK_UNITS_PER_TOKEN;
+        m_variable = Scale(m_extent, LLM_STATE_BYTES_PER_TOKEN, 1);
         for (uint64_t token = 1; token <= m_extent; ++token)
         {
-            m_boundaries.push_back(token * 100);
+            m_boundaries.push_back(token * LLM_WORK_UNITS_PER_TOKEN);
             m_ends.push_back(token);
         }
         return;
@@ -101,7 +101,8 @@ uint64_t
 TaskStateAdapter::StateBytes(uint64_t work) const
 {
     CheckWork(work);
-    return m_llm ? (work / 100) * 114688 : Scale(m_variable, work, m_work);
+    return m_llm ? (work / LLM_WORK_UNITS_PER_TOKEN) * LLM_STATE_BYTES_PER_TOKEN
+                 : Scale(m_variable, work, m_work);
 }
 
 uint64_t
@@ -110,6 +111,12 @@ TaskStateAdapter::CommittedStateBytes(uint64_t work) const
     CheckWork(work);
     // ceil(S*(W-w)/W): retain fractional input bytes conservatively.
     return m_llm ? StateBytes(work) : Add(m_input - Scale(m_input, work, m_work), StateBytes(work));
+}
+
+uint64_t
+TaskStateAdapter::CommittedStateBytes(uint64_t work, InputStagingPolicy policy) const
+{
+    return policy == InputStagingPolicy::DEFERRED ? StateBytes(work) : CommittedStateBytes(work);
 }
 
 uint64_t

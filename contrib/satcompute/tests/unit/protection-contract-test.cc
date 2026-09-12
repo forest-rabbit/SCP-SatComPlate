@@ -11,6 +11,7 @@
 #include <iostream>
 #include <limits>
 #include <nlohmann/json.hpp>
+#include <source_location>
 #include <stdexcept>
 
 using namespace ns3;
@@ -32,7 +33,7 @@ Check(bool ok, const char* message)
 /** Reject programmer-invalid input without changing global simulator state. */
 template <class F>
 void
-Reject(F operation)
+Reject(F operation, const std::source_location where = std::source_location::current())
 {
     try
     {
@@ -43,7 +44,8 @@ Reject(F operation)
         ++checks;
         return;
     }
-    throw std::runtime_error("invalid protection input accepted");
+    throw std::runtime_error("invalid protection input accepted at line " +
+                             std::to_string(where.line()));
 }
 
 /** Construct a representative frozen task without a network fixture. */
@@ -159,6 +161,15 @@ StateChecks()
         const auto task = Task(profile);
         LayoutCheck(task);
         TaskStateAdapter a(task);
+        for (auto work : {uint64_t{0}, a.Floor(a.Work() / 2), a.Work()})
+        {
+            Check(a.CommittedStateBytes(work, InputStagingPolicy::EAGER) == a.CommittedStateBytes(work),
+                  "explicit eager changed legacy state size");
+            Check(a.CommittedStateBytes(work, InputStagingPolicy::DEFERRED) == a.StateBytes(work),
+                  "deferred state contains original INPUT or H");
+        }
+        Check(a.CommittedStateBytes(0, InputStagingPolicy::DEFERRED) == 0,
+              "logical zero state unexpectedly contains bytes");
         const auto before = a.CommittedStateBytes(0);
         Check(before == (profile == TaskProfile::LLM ? 0 : task.inputBytes),
               "initial base storage");
@@ -180,7 +191,8 @@ StateChecks()
           "compression half-progress hand calculation");
     Check(sparse.CommittedStateBytes(750000) == 500934532, "sparse half-progress hand calculation");
     TaskStateAdapter llm(Task(TaskProfile::LLM));
-    Check(llm.StateBytes(199) == 114688 && llm.CommittedStateBytes(250000) == 286720000,
+    Check(llm.StateBytes(399) == 0 && llm.StateBytes(400) == 114688 &&
+              llm.StateBytes(800) == 229376 && llm.CommittedStateBytes(250000) == 71680000,
           "whole token KV");
     LayoutCheck(Task(TaskProfile::DENSE_IMAGE, 1));
     LayoutCheck(Task(TaskProfile::SPARSE_INFERENCE, 667));
@@ -196,7 +208,10 @@ StateChecks()
 void
 CheckpointChecks()
 {
-    TaskStateAdapter layout(Task(TaskProfile::LLM));
+    auto task = Task(TaskProfile::LLM);
+    // Preserve the timing fixture: 5000 tokens (>500 MB KV), cL=2 ms / cR=8 ms.
+    task.computeWorkUnits = 5000 * TaskStateAdapter::LLM_WORK_UNITS_PER_TOKEN;
+    TaskStateAdapter layout(task);
     CheckpointProgress progress(layout, 0, 0);
     Check(!progress.Current().initialized, "zero state is not automatic initialization");
     Reject([&] { progress.ReceiveInitialization(3000000, 1000000); });
@@ -206,40 +221,40 @@ CheckpointChecks()
     Check(progress.CommitRemote(11000000) == 0, "zero-byte initialization commits");
     Check(!progress.BeforeFault(11000000).initialized && progress.BeforeFault(11000001).initialized,
           "same-ns init not usable");
-    Check(progress.Capture(100, 100, 20000000) == 22000000, "cL delays generation");
-    Check(progress.Capture(200, 300, 21000000) == 23000000, "capture immutable despite new work");
-    Reject([&] { progress.ReceiveLocal(100, 21999999); });
-    Check(progress.ReceiveLocal(200, 24000000) && progress.Current().localWork == 0,
+    Check(progress.Capture(400, 400, 20000000) == 22000000, "cL delays generation");
+    Check(progress.Capture(800, 1200, 21000000) == 23000000, "capture immutable despite new work");
+    Reject([&] { progress.ReceiveLocal(400, 21999999); });
+    Check(progress.ReceiveLocal(800, 24000000) && progress.Current().localWork == 0,
           "out-of-order gap blocks local prefix");
-    Check(progress.ReceiveLocal(100, 25000000) && progress.Current().localWork == 200,
-          "gap closed advances prefix, not to 300");
+    Check(progress.ReceiveLocal(400, 25000000) && progress.Current().localWork == 800,
+          "gap closed advances prefix, not to 1200");
     Check(progress.BeforeFault(25000000).localWork == 0 &&
-              progress.BeforeFault(25000001).localWork == 200,
+              progress.BeforeFault(25000001).localWork == 800,
           "local same-ns fault conservative");
-    Check(!progress.ReceiveLocal(100, 26000000), "duplicate receive ignored");
+    Check(!progress.ReceiveLocal(400, 26000000), "duplicate receive ignored");
     BackupStoragePool local(1000000), remote(1000000);
-    const auto l1 = *local.Allocate(123, StorageKind::LOCAL_RECORD, layout.RecordBytes(0, 100));
-    const auto l2 = *local.Allocate(123, StorageKind::LOCAL_RECORD, layout.RecordBytes(100, 200));
+    const auto l1 = *local.Allocate(123, StorageKind::LOCAL_RECORD, layout.RecordBytes(0, 400));
+    const auto l2 = *local.Allocate(123, StorageKind::LOCAL_RECORD, layout.RecordBytes(400, 800));
     const auto base = *remote.Allocate(123, StorageKind::REMOTE_STATE, 0);
     const auto batch = *remote.TryReserve(123, StorageKind::REMOTE_BATCH, 229376);
-    Check(progress.ReceiveRemote(200, 30000000) == 38000000, "remote cR delay");
+    Check(progress.ReceiveRemote(800, 30000000) == 38000000, "remote cR delay");
     Check(remote.CommitReservation(batch), "remote receiver materializes temp batch");
     Check(progress.Current().remoteWork == 0 && local.Used() == 229376,
           "receipt is not commit or cleanup");
     Reject([&] { progress.CommitRemote(37999999); });
-    Check(progress.CommitRemote(38000000) == 200 &&
-              remote.Merge(base, batch, layout.CommittedStateBytes(200)),
+    Check(progress.CommitRemote(38000000) == 800 &&
+              remote.Merge(base, batch, layout.CommittedStateBytes(800)),
           "RemoteCommit updates state atomically");
     Check(local.Release(l1) && local.Release(l2) && local.Used() == 0,
           "only commit covers local records");
     Check(progress.BeforeFault(38000000).remoteWork == 0 &&
-              progress.BeforeFault(38000001).remoteWork == 200,
+              progress.BeforeFault(38000001).remoteWork == 800,
           "same-ns remote state excluded");
     Check(!progress.CommitRemote(38000001), "commit only once");
     Check(remote.Used() == 229376 && remote.Reserved() == 0, "one committed remote state");
     Check(remote.ReleaseTask(123) == 1, "takeover releases backup-only memory");
     progress.Stop();
-    Check(!progress.ReceiveLocal(200, 40000000) && !progress.CommitRemote(40000000),
+    Check(!progress.ReceiveLocal(800, 40000000) && !progress.CommitRemote(40000000),
           "stale callbacks cannot revive stopped protection");
     CheckpointProgress miss(layout, 0, 0);
     miss.ReceiveInitialization(3000000, 2000000);
@@ -249,8 +264,8 @@ CheckpointChecks()
     CheckpointProgress future(layout, 0, 0);
     future.ReceiveInitialization(3000000, 2000000);
     future.CommitRemote(11000000);
-    Reject([&] { future.Capture(200, 100, 20000000); });
-    Reject([&] { future.Capture(150, 200, 20000000); });
+    Reject([&] { future.Capture(800, 400, 20000000); });
+    Reject([&] { future.Capture(600, 800, 20000000); });
 }
 
 /** Callback identity, recovery immunity and causal path selection. */

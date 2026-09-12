@@ -17,12 +17,13 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
                                                              uint64_t capacity,
     int64_t stopNs,
     std::unique_ptr<PlacementPolicy> placement,
-    RemoteBusyRecoveryPolicy busyPolicy)
+    RemoteBusyRecoveryPolicy busyPolicy,
+    InputStagingPolicy inputPolicy)
     : m_tasks(tasks),
       m_topology(topology),
       m_faults(faults),
-      m_manager(tasks, topology, capacity, stopNs),
-      m_placement(placement ? std::move(placement) : std::make_unique<FirstFeasiblePlacementPolicy>())
+      m_manager(tasks, topology, capacity, stopNs, inputPolicy),
+      m_placement(placement ? std::move(placement) : std::make_unique<FaFirstFeasiblePlacementPolicy>())
 {
     if (!faults)
         throw std::invalid_argument("frequency protection requires online generate epochs");
@@ -121,7 +122,8 @@ void FrequencyProtectionController::CloseCapacityWait(uint64_t id, State& state,
 
 void FrequencyProtectionController::CapacityReleased()
 {
-    if (!m_finalized && !m_waitingCapacity.empty() && !m_capacityDrain.IsPending())
+    if (!m_finalized && (!m_waitingCapacity.empty() || !m_pausedCapacity.empty()) &&
+        !m_capacityDrain.IsPending())
         m_capacityDrain = Simulator::ScheduleNow(&FrequencyProtectionController::DrainCapacityRetries, this);
 }
 
@@ -129,19 +131,23 @@ void FrequencyProtectionController::DrainCapacityRetries()
 {
     if (m_finalized) return;
     // Stable IDs, fresh snapshots, no old proposal and no synthetic fault sample.
-    const auto waiting = m_waitingCapacity;
+    auto waiting = m_waitingCapacity;
+    waiting.insert(m_pausedCapacity.begin(), m_pausedCapacity.end());
     const auto now = Simulator::Now().GetNanoSeconds();
     for (const auto id : waiting)
     {
         auto& state = m_states.at(id);
         const auto& task = Task(id);
-        if (task.state != TASK_RUNNING || task.attemptGeneration ||
-            state.gate.Phase() != ProtectionPhase::OFF)
+        const bool off = state.gate.Phase() == ProtectionPhase::OFF;
+        const bool paused = state.gate.Phase() == ProtectionPhase::ON &&
+                            state.gate.Paused() && state.pauseReason == "NO_ADMISSIBLE_PATH";
+        if (task.state != TASK_RUNNING || task.attemptGeneration || (!off && !paused))
         {
-            CloseCapacityWait(id, state, now, "NOT_WAITING_OFF");
+            CloseCapacityWait(id, state, now, "NOT_WAITING_CAPACITY");
+            m_pausedCapacity.erase(id);
             continue;
         }
-        if (state.lastCapacityDecisionNs == now) continue;
+        if (state.pending || state.lastCapacityDecisionNs == now) continue;
         const auto live = Service(task.definition.computeNodeId)->GetRunningTaskSnapshot();
         if (!live || live->taskId != id) continue;
         const auto prediction = m_faults->QueryTaskPrediction(task.definition.computeNodeId,
@@ -157,6 +163,7 @@ void FrequencyProtectionController::DrainCapacityRetries()
 
 void FrequencyProtectionController::ClosePause(uint64_t task, State& state, int64_t time)
 {
+    m_pausedCapacity.erase(task);
     if (state.pauseStart)
     {
         const auto inventory = m_manager.Inventory(task);
@@ -232,6 +239,7 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
                                                    State& state, DecisionPathSnapshot& paths)
 {
     auto& input = row.input;
+    input.inputPolicy = m_manager.InputPolicy();
     row.pair = row.pair ? row.pair : state.pair ? state.pair
                           : m_placement->SelectCheckpointPair({task.definition.computeNodeId,
                                                 Candidates(task.definition.computeNodeId)});
@@ -263,23 +271,25 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
     const auto l1 = EstimatePath(paths, task.definition.computeNodeId, pair.localNode, &localReason);
     const auto tail = EstimatePath(paths, pair.localNode, pair.remoteNode, &tailReason);
     input.replayAvailable = replay.has_value();
-    input.pathAvailable = base && l1 && tail;
+    input.pathAvailable = base && l1 && tail &&
+        (input.inputPolicy == InputStagingPolicy::EAGER || replay);
     if (!input.pathAvailable)
     {
         if (row.resourceReason.empty())
-            row.resourceReason = !base ? baseReason : !l1 ? localReason : tailReason;
+            row.resourceReason = !base ? baseReason : !l1 ? localReason : !tail ? tailReason : row.replayReason;
         return false;
     }
     input.inputBandwidth = replay ? replay->bytesPerSecond : 0;
     input.backupBandwidth = std::min(l1->bytesPerSecond, tail->bytesPerSecond);
     TaskStateAdapter layout(task.definition);
     const auto initial = layout.Floor(row.progressWork);
-    input.baseTransferSeconds = base->Seconds(task.definition.inputBytes);
+    input.baseTransferSeconds = input.inputPolicy == InputStagingPolicy::DEFERRED
+        ? 0 : base->Seconds(task.definition.inputBytes);
     input.stateTransferSeconds =
         base->Seconds(initial ? layout.StateBytes(initial) + layout.HeaderBytes() : 0);
     input.storageDemand = MakeFrequencyStorageEstimator(task.definition,
                                                         row.progressWork,
-                                                        m_manager.Inventory(row.taskId));
+                                                        m_manager.Inventory(row.taskId), input.inputPolicy);
     return true;
 }
 
@@ -289,9 +299,32 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
 {
     const PlacementContext context{task.definition.computeNodeId,
                                    Candidates(task.definition.computeNodeId)};
-    row.pairStats = BuildFeasiblePlacementPairs(context, [&](auto source, auto destination) {
+    const bool minimal = m_placement->Eligibility() == PlacementEligibility::MINIMAL;
+    row.pairStats = m_placement->BuildPairs(context, [&](auto source, auto destination) {
         return paths.Availability(source, destination);
     });
+    if (!minimal && m_manager.InputPolicy() == InputStagingPolicy::DEFERRED)
+    {
+        // INPUT is an operation-specific fourth path, not a new placement ranking.
+        // Filter before selecting a pair so a blocked source path can retry on capacity
+        // release or try another pair instead of violating the three-path preview assertion.
+        auto& stats = row.pairStats;
+        std::erase_if(stats.pairs, [&](const auto& pair) {
+            const auto p = paths.Availability(task.definition.sourceNodeId, pair.remoteNode);
+            if (!m_tasks->IsSatelliteAvailable(task.definition.sourceNodeId) || !p.reachable)
+                ++stats.skipNoRoute;
+            else if (p.admissible)
+                return false;
+            else if (p.reason == "NO_ADMISSIBLE_PATH")
+                ++stats.skipNoCapacity;
+            else
+                ++stats.skipOther;
+            return true;
+        });
+        if (stats.nodeFeasible && stats.pairs.empty())
+            stats.reason = stats.skipNoCapacity ? "NO_CAPACITY_NOW"
+                         : stats.skipOther ? "PATH_ADMISSION_UNAVAILABLE" : "NO_ROUTE";
+    }
     auto pairs = std::move(row.pairStats.pairs);
     row.pairPathFeasible = pairs.size();
     m_placement->RankPairs(pairs, context);
@@ -309,7 +342,14 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
         row.pair = pair;
         row.resourceReason.clear();
         if (!BuildResources(row, task, state, paths))
-            throw std::logic_error("read-only pair preview changed within one decision");
+        {
+            if (!minimal) throw std::logic_error("read-only pair preview changed within one decision");
+            if (row.resourceReason == "NO_ADMISSIBLE_PATH") row.resourceReason = "NO_CAPACITY_NOW";
+            row.proposal.phase = ProtectionPhase::OFF;
+            row.proposal.epochNs = row.input.risk.epochNs;
+            row.proposal.reason = row.resourceReason;
+            return; // Selected candidate failed actual checks; never try another pair here.
+        }
         ++row.pairHardChecked;
         row.proposal = m_policy.Evaluate(row.input);
         const auto& reason = row.proposal.reason;
@@ -322,6 +362,7 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
             return;
         }
         row.resourceReason = reason == "INITIALIZATION_TOO_LATE" ? "DEADLINE_INFEASIBLE" : reason;
+        if (minimal) return;
     }
 }
 
@@ -453,6 +494,12 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
                        : row.trigger == "TASK_RUNNING" ? "START_TASK_RUNNING" : "START_FAULT_EPOCH";
             row.capacityRetrySuccess = row.trigger == "CAPACITY_RELEASE";
         }
+        else if (row.committed && row.proposal.action == FrequencyAction::UPDATE &&
+                 row.trigger == "CAPACITY_RELEASE")
+        {
+            row.reason = "RESUME_AFTER_CAPACITY_RELEASE";
+            row.capacityRetrySuccess = true;
+        }
         row.waitingAfter = state.capacityWaitStart.has_value();
         if (!row.waitingAfter && row.capacityWaitStartNs >= 0 && row.capacityWaitEndNs < 0)
             row.capacityWaitEndNs = time;
@@ -467,6 +514,7 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
                     state.pauseStart = time;
                     state.pauseReason = reason;
                 }
+                if (reason == "NO_ADMISSIBLE_PATH") m_pausedCapacity.insert(row.taskId);
             }
             else ClosePause(row.taskId, state, time);
             const auto config = state.gate.CurrentConfig();
@@ -501,6 +549,15 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
         }
         row.committedConfig = state.gate.CurrentConfig();
         row.phaseAfter = state.gate.Phase();
+        if (row.input.phase == ProtectionPhase::OFF)
+        {
+            const auto inventory = m_manager.Inventory(row.taskId);
+            const bool admitted = row.committed && row.proposal.action == FrequencyAction::START &&
+                                  inventory && inventory->active;
+            m_placement->RecordSelection({row.taskId, time, task.definition.computeNodeId,
+                row.pair, {}, admitted ? "ACCEPTED" : "NOT_ADMITTED",
+                row.resourceReason.empty() ? row.reason : row.resourceReason});
+        }
     }
 }
 

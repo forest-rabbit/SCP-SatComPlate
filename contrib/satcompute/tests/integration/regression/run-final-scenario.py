@@ -12,14 +12,16 @@ SCENE = "contrib/satcompute/input/experiments/leo-66"
 
 
 def arguments(output, fault_mode="generate", audit=False, shadow=False,
-              validation_trace=None, protection_mode="off", placement_mode="ffp", lrl_weight=1,
-              remote_busy_recovery_policy="relocate"):
-    if protection_mode not in ("off", "fixed", "compfrr") or placement_mode not in ("ffp", "lrl"):
+              validation_trace=None, protection_mode="off", placement_mode="fa-ffp", lrl_weight=1,
+              remote_busy_recovery_policy="relocate", input_staging_policy="eager"):
+    if protection_mode not in ("off", "fixed", "compfrr", "recompute", "one-plus-one") or placement_mode not in ("ffp", "lrl", "fa-ffp", "fa-lrl"):
         raise ValueError("unsupported protection/placement mode")
-    if placement_mode == "lrl" and protection_mode not in ("fixed", "compfrr"):
-        raise ValueError("LRL requires fixed or CompFRR protection")
+    if placement_mode in ("lrl", "fa-lrl") and protection_mode == "off":
+        raise ValueError("LRL requires an enabled protection scheme")
     if remote_busy_recovery_policy not in ("recompute", "relocate"):
         raise ValueError("unsupported remote-busy recovery policy")
+    if input_staging_policy not in ("eager", "deferred") or (input_staging_policy == "deferred" and protection_mode != "compfrr"):
+        raise ValueError("deferred INPUT requires CompFRR")
     if lrl_weight != 1:
         raise ValueError("G3 freezes LRL lambda=1; no weight sweep")
     if protection_mode == "compfrr" and fault_mode != "generate":
@@ -63,6 +65,8 @@ def arguments(output, fault_mode="generate", audit=False, shadow=False,
                    "--fixedProtectionDelta=0.05", "--fixedProtectionBatchN=4",
                    f"--placementMode={placement_mode}", f"--lrlRecoveryWeight={lrl_weight}",
                    f"--remoteBusyRecoveryPolicy={remote_busy_recovery_policy}"]
+    if input_staging_policy == "deferred":
+        result += ["--inputStagingPolicy=deferred"]
     return result
 
 
@@ -71,9 +75,10 @@ def main():
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--fault-mode", choices=("none", "generate", "validation-replay"), default="generate")
     parser.add_argument("--validation-trace", type=Path)
-    parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr"), default="off")
-    parser.add_argument("--placement-mode", choices=("ffp", "lrl"), default="ffp")
+    parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr", "recompute", "one-plus-one"), default="off")
+    parser.add_argument("--placement-mode", choices=("ffp", "lrl", "fa-ffp", "fa-lrl"), default="fa-ffp")
     parser.add_argument("--remote-busy-recovery-policy", choices=("relocate", "recompute"), default="relocate")
+    parser.add_argument("--input-staging-policy", choices=("eager", "deferred"), default="eager")
     parser.add_argument("--audit", action="store_true")
     parser.add_argument("--shadow", action="store_true", help="Read-only G4 validation, not real backup")
     args = parser.parse_args()
@@ -82,7 +87,8 @@ def main():
         command = [str(ROOT / "ns3"), "run", "--no-build",
                    shlex.join(arguments(output, args.fault_mode, args.audit, args.shadow,
                                         args.validation_trace, args.protection_mode, args.placement_mode,
-                                        remote_busy_recovery_policy=args.remote_busy_recovery_policy))]
+                                        remote_busy_recovery_policy=args.remote_busy_recovery_policy,
+                                        input_staging_policy=args.input_staging_policy))]
         if output.exists():
             raise ValueError("refusing to overwrite an existing output directory")
     except (ValueError, OSError, KeyError) as error:
@@ -93,6 +99,7 @@ def main():
                 "protection_mode": args.protection_mode,
                 "placement_mode": args.placement_mode, "lrl_recovery_weight": 1,
                 "remote_busy_recovery_policy": args.remote_busy_recovery_policy,
+                "input_staging_policy": args.input_staging_policy,
                 "task_trace": f"{SCENE}/workload/task-trace.json", "f3_manifest": f"{SCENE}/fault/f3-manifest.json",
                 "audit": args.audit, "shadow": args.shadow, "simulation_duration_s": 1300,
                 "fixed_delay_seconds": 0.001,

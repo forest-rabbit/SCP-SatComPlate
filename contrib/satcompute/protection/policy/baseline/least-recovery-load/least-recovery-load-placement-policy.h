@@ -5,12 +5,12 @@
 
 namespace ns3::protection
 {
-/** Diagnostic only: assignment count + weight * active recovery count, then stable ID. */
+/** Minimal LRL: active assignment + weight * active recovery count, then stable ID. */
 class LeastRecoveryLoadPlacementPolicy : public PlacementPolicy
 {
   public:
     const char* Name() const override { return "lrl"; }
-    /** Explicit nonnegative integer weight, frozen before a diagnostic experiment. */
+    /** Explicit nonnegative integer weight, frozen before the baseline experiment. */
     explicit LeastRecoveryLoadPlacementPolicy(uint32_t recoveryWeight);
     void RankBackupNodes(std::vector<uint32_t>& nodes,
                          const PlacementContext& context) const override;
@@ -18,7 +18,7 @@ class LeastRecoveryLoadPlacementPolicy : public PlacementPolicy
                    const PlacementContext& context) const override;
 
   private:
-    uint32_t m_recoveryWeight; ///< Diagnostic weight, never an N5B main-scene setting.
+    uint32_t m_recoveryWeight; ///< Frozen active-recovery weight for the LRL baseline.
 };
 } // namespace ns3::protection
 #endif

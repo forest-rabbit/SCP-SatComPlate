@@ -5,10 +5,10 @@
 #include "ns3/compfrr-frequency-policy.h"
 #include "ns3/compfrr-shadow-model.h" // Independent test oracle only.
 #include "ns3/compute-fault-combination.h"
-#include "ns3/first-feasible-placement-policy.h"
+#include "ns3/fa-first-feasible-placement-policy.h"
 #include "ns3/fixed-protection-policy.h"
 #include "ns3/frequency-decision-gate.h"
-#include "ns3/least-recovery-load-placement-policy.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
 
 #include <algorithm>
 #include <cmath>
@@ -69,7 +69,7 @@ std::optional<PlacementDecision> LegacyPair(const PlacementContext& c)
 
 void PlacementChecks()
 {
-    FirstFeasiblePlacementPolicy ffp;
+    FaFirstFeasiblePlacementPolicy ffp;
     PlacementContext c{2, {{3}, {0}, {2}, {1}}};
     for (uint32_t mask = 0; mask < 65536; ++mask)
     {
@@ -84,7 +84,7 @@ void PlacementChecks()
         }
         const auto expected = LegacyPair(c);
         Check(ffp.SelectCheckpointPair(c) == expected, "FFP differs from N5A pair rule");
-        const auto ranked = LeastRecoveryLoadPlacementPolicy(1).SelectCheckpointPair(c);
+        const auto ranked = FaLeastRecoveryLoadPlacementPolicy(1).SelectCheckpointPair(c);
         Check(bool(ranked) == bool(expected), "LRL/FFP hard-feasible sets differ");
         if (ranked)
         {
@@ -123,7 +123,7 @@ void PlacementChecks()
     std::reverse(c.candidates.begin(), c.candidates.end());
     Check(ffp.SelectCheckpointPair(c) == expected, "stable ID not input order");
 
-    LeastRecoveryLoadPlacementPolicy lrl(2);
+    FaLeastRecoveryLoadPlacementPolicy lrl(2);
     Check(ffp.SelectBackupNode(c) == 0 && lrl.SelectBackupNode(c) != 0,
           "single-node role must use injected ranking, without a fake pair");
     Check(ffp.SelectBackupNode(c, [](auto n) { return n == 3; }) == 3,
@@ -145,7 +145,7 @@ void PlacementChecks()
     fixedContext.primaryNode = c.primaryNode;
     fixedContext.firstComputeStart = fixedContext.taskSelected = true;
     fixedContext.candidates = c.candidates;
-    FixedProtectionPolicy injected(50, 4, std::make_unique<LeastRecoveryLoadPlacementPolicy>(2));
+    FixedProtectionPolicy injected(50, 4, std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(2));
     const auto injectedPair = injected.OnTaskComputeStart(fixedContext).checkpoint;
     const auto rankedPair = lrl.SelectCheckpointPair(c);
     Check(injectedPair && injectedPair->localNode == rankedPair->localNode &&
@@ -188,12 +188,75 @@ void PlacementChecks()
     Check(loads.Empty() && loads.Get(1).peakRecovery == 1, "load counters leak/underflow");
 }
 
+void MinimalPlacementChecks()
+{
+    FirstFeasiblePlacementPolicy ffp;
+    LeastRecoveryLoadPlacementPolicy lrl(1);
+    FaFirstFeasiblePlacementPolicy fa;
+    FaLeastRecoveryLoadPlacementPolicy faLrl(1);
+    for (uint32_t mask = 0; mask < 512; ++mask)
+    {
+        PlacementContext c{3, {{0, bool(mask & 1), bool(mask & 2), bool(mask & 4), bool(mask & 8)},
+                               {1, true, true, true, false}, {2, true, true, true, true},
+                               {3, true, true, true, true}}};
+        c.candidates[0].backupAssignmentCount = 2;
+        c.candidates[0].activeRecoveryCount = 1;
+        c.candidates[0].storageFreeBytes = (mask & 128) ? 999 : 0;
+        uint64_t previews = 0, operations = 0;
+        auto preview = [&](uint32_t a, uint32_t b) {
+            ++previews;
+            const bool touches = a == 0 || b == 0;
+            return PlacementPathAvailability{!touches || bool(mask & 16),
+                !touches || ((mask & 32) && (mask & 64)), "NO_ADMISSIBLE_PATH"};
+        };
+        auto operation = [&](auto node) { ++operations; return node != 0 || ((mask & 128) && (mask & 256)); };
+        const auto pairs = ffp.BuildPairs(c, preview).pairs;
+        Check(pairs == lrl.BuildPairs(c, preview).pairs, "minimal FFP/LRL candidate sets differ");
+        const auto selected = ffp.SelectCheckpointPair(c, preview);
+        const auto single = ffp.SelectBackupNode(c, operation);
+        lrl.SelectCheckpointPair(c, preview);
+        lrl.SelectBackupNode(c, operation);
+        Check(previews == 0 && operations == 0, "minimal selection leaked system feasibility preview");
+        const bool eligible = (mask & 1) && (mask & 2);
+        Check(single == (eligible ? 0u : 1u), "minimal single node used non-minimal attributes");
+        const PlacementDecision expected = eligible && (mask & 8) ? PlacementDecision{0,1}
+            : PlacementDecision{2, eligible ? 0u : 1u};
+        Check(selected == expected, "minimal pair ignored structure or used reachability");
+        for (const auto& p : pairs)
+            Check(p.localNode != 3 && p.remoteNode != 3 && p.localNode != p.remoteNode,
+                  "invalid structural pair");
+
+        // Independent pre-ablation oracle, not a call back into a production builder.
+        std::vector<PlacementDecision> legacy;
+        for (const auto& a : c.candidates)
+            for (const auto& b : c.candidates)
+            {
+                if (a.nodeId == 3 || b.nodeId == 3 || a.nodeId == b.nodeId || !a.healthy ||
+                    !a.idle || !a.reachable || !a.oneHop || !b.healthy || !b.idle || !b.reachable) continue;
+                bool valid = true;
+                for (const auto [s, d] : {std::pair{3u,a.nodeId}, std::pair{3u,b.nodeId}, std::pair{a.nodeId,b.nodeId}})
+                { const auto p = preview(s,d); valid &= p.reachable && p.admissible; }
+                if (valid) legacy.push_back({a.nodeId,b.nodeId});
+            }
+        auto actual = fa.BuildPairs(c, preview).pairs;
+        Check(actual == legacy && actual == faLrl.BuildPairs(c, preview).pairs,
+              "FA rename changed historical feasible candidate sets");
+        std::sort(legacy.begin(), legacy.end(), [](const auto& a, const auto& b) {
+            return std::pair{a.localNode,a.remoteNode} < std::pair{b.localNode,b.remoteNode};
+        });
+        Check(fa.SelectCheckpointPair(c, preview) == (legacy.empty() ? std::nullopt : std::optional{legacy.front()}),
+              "FA-FFP rename changed historical choice");
+    }
+    PlacementContext empty{0, {{0,true,true,true,true}}};
+    Check(!ffp.SelectBackupNode(empty) && !lrl.SelectCheckpointPair(empty), "self-only context admitted");
+}
+
 void FeasiblePairChecks()
 {
     PlacementContext c{3, {{0, true, true, true, true}, {1, true, true, true, true},
                            {2, true, true, true, false}, {3, true, true, true, true}}};
-    FirstFeasiblePlacementPolicy ffp;
-    LeastRecoveryLoadPlacementPolicy lrl(1);
+    FaFirstFeasiblePlacementPolicy ffp;
+    FaLeastRecoveryLoadPlacementPolicy lrl(1);
     uint64_t probes = 0;
     auto probe = [&](uint32_t s, uint32_t d) {
         ++probes;
@@ -249,6 +312,7 @@ FrequencyInput Toy()
 {
     FrequencyInput in;
     in.risk = {10000000000, 1000000000, .2, .8};
+    in.risk.futureSteps = {{11000000000, .5}, {12000000000, .6}};
     in.inputBytes = 1000000000;
     in.work = 1500000;
     in.variableBytes = 500000000;
@@ -266,6 +330,90 @@ FrequencyInput Toy()
     return in;
 }
 
+void RiskWeightedStartChecks()
+{
+    auto in = Toy();
+    in.progress = 0;
+    in.remainingSeconds = 15;
+    in.deadlineNs = 30000000000;
+    in.inputPolicy = InputStagingPolicy::DEFERRED;
+    in.risk.pFailBeforeFinish = .75;
+    in.risk.futureSteps = {{11000000000, .5}, {14000000000, .5}};
+    auto result = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Near(*result.pFailAfterInitReady, .75, "first failure mass conservation");
+    Near(*result.representativeProgressAfterReady, (0.5/15 + 0.25*4/15)/.75,
+         "survival-weighted future progress, not midpoint or raw-q average");
+    Near(*result.jOff, 1.5, "zero current progress still has future work loss");
+    Check(result.action == FrequencyAction::START && in.progress == 0,
+          "risk aggregation mutated actual progress or rejected zero-progress protection");
+    in.stateTransferSeconds = 2;
+    result = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Near(*result.pFailAfterInitReady, .25, "pre-ready hazards must reduce surviving mass");
+    Near(*result.representativeProgressAfterReady, 4./15, "conditional post-ready progress");
+    in.stateTransferSeconds = 5;
+    result = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Check(result.pFailAfterInitReady == 0 && !result.representativeProgressAfterReady &&
+              result.action == FrequencyAction::NONE,
+          "all faults before ready cannot create protection benefit");
+    in.stateTransferSeconds = 0;
+    in.costs = {0,0};
+    in.risk = {10000000000, 1000000000, .2, .75, {{10000000000,.5},{11000000000,.5}}};
+    result = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Near(*result.pFailAfterInitReady, .75, "nominal ready equality follows specified inclusive filter");
+    for (auto steps : {std::vector<FrequencyRiskStep>{{11000000000,.75}},
+                       std::vector<FrequencyRiskStep>{{14000000000,.75}}})
+    {
+        in.risk.futureSteps = steps;
+        const auto r = CompFrrFrequencyPolicy{}.Evaluate(in);
+        Near(*r.representativeProgressAfterReady, (steps[0].targetTimeNs-1e10)/1.5e10,
+             "early/late risk follows canonical timing");
+    }
+    in.risk.futureSteps = {{11000000000,1},{12000000000,.9}};
+    in.risk.pFailBeforeFinish = 1;
+    result = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Near(*result.representativeProgressAfterReady, 1./15, "certain early failure excludes later mass");
+    in.risk.futureSteps.clear();
+    Reject([&] { CompFrrFrequencyPolicy{}.Evaluate(in); });
+    in.risk.futureSteps = {{9000000000,1}};
+    Reject([&] { CompFrrFrequencyPolicy{}.Evaluate(in); });
+    in.risk.futureSteps = {{11000000000,.5},{11000000000,1}};
+    Reject([&] { CompFrrFrequencyPolicy{}.Evaluate(in); });
+    in.risk.futureSteps = {{11000000000,1.1}};
+    Reject([&] { CompFrrFrequencyPolicy{}.Evaluate(in); });
+    in = Toy();
+    in.risk.epochNs = std::numeric_limits<int64_t>::max();
+    in.deadlineNs = in.risk.epochNs;
+    Reject([&] { CompFrrFrequencyPolicy{}.Evaluate(in); });
+}
+
+void DeferredChecks()
+{
+    auto in = Toy();
+    const auto eager = CompFrrFrequencyPolicy{}.Evaluate(in);
+    in.inputPolicy = InputStagingPolicy::DEFERRED;
+    const auto deferred = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Check(eager.selected && deferred.selected && eager.selected->config == deferred.selected->config,
+          "constant INPUT cost changed unconstrained frequency optimum");
+    Near(*deferred.jStart, *eager.jStart, "shared INPUT not cancelled from deferred START");
+    Near(*eager.jOff - *deferred.jOff, in.risk.pFailBeforeFinish * in.inputBytes / in.inputBandwidth,
+         "eager ready-window INPUT saving missing");
+    Near(deferred.initializationSeconds, in.costs.localNs / 1e9 + in.stateTransferSeconds + in.costs.remoteNs / 1e9,
+         "deferred initialization charged INPUT staging");
+    in.phase = ProtectionPhase::ON;
+    const auto on = CompFrrFrequencyPolicy{}.Evaluate(in);
+    in.inputPolicy = InputStagingPolicy::EAGER;
+    const auto oldOn = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Near(on.selected->objective, oldOn.selected->objective, "ON relative score includes constant INPUT");
+    in.inputPolicy = InputStagingPolicy::DEFERRED;
+    in.deadlineNs = 16800000000; // 0.8 s slack: INPUT alone consumes it.
+    Check(!CompFrrFrequencyPolicy{}.Evaluate(in).selected, "deferred deadline omitted INPUT wait");
+    in = Toy();
+    in.inputPolicy = InputStagingPolicy::DEFERRED;
+    in.replayAvailable = false;
+    in.inputBandwidth = 0;
+    Check(!CompFrrFrequencyPolicy{}.Evaluate(in).selected, "deferred admitted without original INPUT path");
+}
+
 void Oracle(const FrequencyInput& in, const char* label)
 {
     const auto actual = CompFrrFrequencyPolicy().Evaluate(in);
@@ -280,16 +428,31 @@ void Oracle(const FrequencyInput& in, const char* label)
     oracle.remainingSeconds = in.remainingSeconds;
     oracle.deadlineSlack = actual.deadlineSlackSeconds;
     oracle.qOneSecond = in.risk.qCurrentSample;
-    oracle.pFinish = in.risk.pFailBeforeFinish;
+    double survival = 1, ready = 0, weighted = 0;
+    for (const auto& s : in.risk.futureSteps)
+    {
+        const auto mass = survival * s.combinedStepFailureProbability;
+        survival *= 1-s.combinedStepFailureProbability;
+        if (!on && s.targetTimeNs >= *actual.initReadyTimeNs)
+        {
+            ready += mass;
+            weighted += mass * std::min(1., in.progress +
+                in.primaryRate * ((s.targetTimeNs-in.risk.epochNs)/1e9) / in.work);
+        }
+    }
+    oracle.pFinish = ready;
     oracle.costs = {in.costs.localNs / 1e9, in.costs.remoteNs / 1e9, 0};
     oracle.nodeAvailable = in.nodeAvailable;
     oracle.pathAvailable = in.pathAvailable;
     const auto expected = compfrr::SelectFrequency(oracle, on);
     Check(bool(actual.selected) == bool(expected.best), "oracle feasible result");
     Check(actual.feasibleCount == expected.feasibleCount, "oracle feasible count");
-    Near(*actual.jOff,
+    Near(*actual.legacyCurrentProgressLoss,
          in.risk.pFailBeforeFinish * compfrr::RecomputeCatchUp(oracle),
-         "oracle J_OFF");
+         "legacy current-progress diagnostic");
+    if (!on)
+        Near(*actual.jOff, ready*in.inputBytes/in.inputBandwidth + weighted*in.work/in.recoveryRate,
+             "risk-weighted ready-window OFF");
     if (actual.selected)
     {
         const auto& a = *actual.selected;
@@ -306,7 +469,8 @@ void Oracle(const FrequencyInput& in, const char* label)
                  "oracle J_START");
             Check(
                 (actual.action == FrequencyAction::START) ==
-                    compfrr::ShouldStartProtection(oracle, expected, actual.initializationSeconds),
+                    (ready > 0 && actual.initializationSeconds < in.remainingSeconds &&
+                     *actual.jStart < *actual.jOff),
                 "oracle START strict comparison");
         }
         if (label)
@@ -326,6 +490,7 @@ void SolverChecks()
     Check(!protectWithoutReplay.jOff && protectWithoutReplay.action == FrequencyAction::START,
           "unavailable OFF input incorrectly vetoed executable protection");
     unavailable.risk.pFailBeforeFinish = 0;
+    unavailable.risk.futureSteps.clear();
     const auto noRisk = CompFrrFrequencyPolicy().Evaluate(unavailable);
     Check(noRisk.jOff == 0 && noRisk.action == FrequencyAction::NONE,
           "unavailable OFF input forced zero-risk protection");
@@ -333,7 +498,7 @@ void SolverChecks()
     auto in = Toy();
     Oracle(in, "OFF/START anchor");
     const auto start = policy.Evaluate(in);
-    Near(*start.jOff, 7.84, "hand OFF");
+    Near(*start.jOff, 8.94, "hand risk-weighted OFF");
     Near(*start.jStart, .1049, "hand START");
     Near(start.initializationSeconds, .802, "cL/base concurrent initialization");
     Check(start.action == FrequencyAction::START, "high P starts");
@@ -353,9 +518,11 @@ void SolverChecks()
           "exact tie smaller delta then n");
     in.phase = ProtectionPhase::OFF;
     in.risk.pFailBeforeFinish = 0;
+    in.risk.futureSteps.clear();
     Check(policy.Evaluate(in).action == FrequencyAction::NONE, "exact START tie stays OFF");
     in = Toy();
     in.risk.pFailBeforeFinish = 0;
+    in.risk.futureSteps.clear();
     Check(policy.Evaluate(in).action == FrequencyAction::NONE, "zero P never START");
     in = Toy();
     in.baseTransferSeconds = in.remainingSeconds - in.costs.remoteNs / 1e9;
@@ -371,6 +538,8 @@ void SolverChecks()
                     sample.progress = x;
                     sample.remainingSeconds = (1 - x) * sample.work / sample.primaryRate;
                     sample.risk.qCurrentSample = sample.risk.pFailBeforeFinish = p;
+                    sample.risk.futureSteps = {{sample.risk.epochNs +
+                        static_cast<int64_t>(sample.remainingSeconds * 5e8), p}};
                     sample.variableBytes = bytes;
                     sample.costs = GetProtectionCosts(bytes);
                     Oracle(sample, nullptr);
@@ -426,7 +595,7 @@ void SolverChecks()
     in = Toy();
     in.recoveryRate = 200000;
     in.inputBandwidth /= 2;
-    Near(*policy.Evaluate(in).jOff, .8 * (1.6 + 4.5), "independent input path and recovery rate");
+    Near(*policy.Evaluate(in).jOff, .8 * 1.6 + 4.15, "independent input path and recovery rate");
     Near(policy.Evaluate(in).deadlineSlackSeconds, 7.5, "Rmax uses recovery rate");
     in = Toy();
     in.storageDemand = {};
@@ -469,6 +638,12 @@ void ProbabilityChecks()
               prediction.steps.front().targetTimeNs == input.predictionTimeNs,
           "policy takes CURRENT actual sample probability");
     Check(prediction.steps.size() == 3, "canonical inclusive endpoint unchanged");
+    Check(risk.futureSteps.size() == prediction.steps.size(), "canonical START trajectory retained");
+    for (size_t i = 0; i < prediction.steps.size(); ++i)
+        Check(risk.futureSteps[i].targetTimeNs == prediction.steps[i].targetTimeNs &&
+                  risk.futureSteps[i].combinedStepFailureProbability ==
+                      prediction.steps[i].combinedStepFailureProbability,
+              "START uses identical canonical steps without a second predictor");
     Check(prediction.steps[1].combinedStepFailureProbability != q, "current and next q differ");
     Reject([&] { MakeFrequencyRisk(prediction.steps[1].combinedStepFailureProbability, input); });
     double survival = 1;
@@ -582,7 +757,8 @@ void GateChecks()
         Check(target && *target > current && layout.Floor(*target) == *target,
               "four profiles forward-only legal target, no historical catch-up generation");
         if (profile == TaskProfile::LLM)
-            Check(*target % 100 == 0, "whole-token checkpoint");
+            Check(*target % TaskStateAdapter::LLM_WORK_UNITS_PER_TOKEN == 0,
+                  "whole-token checkpoint");
         Check(!gate.NextTarget(layout, layout.Work(), triggered), "no checkpoint after finish");
     }
     TaskStateAdapter layout(Task(TaskProfile::DENSE_IMAGE));
@@ -604,10 +780,20 @@ void GateChecks()
     Check(progress.Current().initialized == prior.initialized &&
               progress.Current().remoteWork == prior.remoteWork,
           "policy gate never rewrites real committed state");
-    update.epochNs = pause.epochNs + 1;
-    gate.Propose(update);
+    update.epochNs = pause.epochNs;
+    Reject([&] { gate.Propose(update); });
+    gate.Propose(update, true);
     gate.Resolve(update.epochNs, false, true);
     Check(!gate.Paused() && gate.NewBatchRecordCount(8) == 8, "resume consumes retained pending");
+    Reject([&] { gate.Propose(update, true); });
+    ++update.epochNs;
+    Reject([&] { gate.Propose(update, true); }); // Unpaused ON has no release interest.
+    pause.epochNs = update.epochNs;
+    gate.Propose(pause);
+    gate.Resolve(pause.epochNs, false, true);
+    gate.Propose(update, true);
+    Check(!gate.Resolve(update.epochNs, true, false) && gate.Paused(),
+          "same-ns fault must veto ON capacity resume");
     Reject([&] { gate.Stop(ProtectionPhase::OFF); });
     gate.Stop(ProtectionPhase::RECOVERING);
     Check(!gate.NextTarget(layout, 100000, 0), "recovery stops primary policy");
@@ -622,8 +808,11 @@ int main()
     try
     {
         PlacementChecks();
+        MinimalPlacementChecks();
         FeasiblePairChecks();
         SolverChecks();
+        RiskWeightedStartChecks();
+        DeferredChecks();
         ProbabilityChecks();
         GateChecks();
         std::cout << "N5B policy: " << checks << " checks passed\n";

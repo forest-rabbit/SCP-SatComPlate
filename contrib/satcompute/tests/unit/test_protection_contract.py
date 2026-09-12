@@ -44,13 +44,23 @@ class ProtectionConfigTests(unittest.TestCase):
         self.assertIn("fixedProtectionDelta", result.stdout)
         self.assertNotIn("lrl requires", result.stdout)
 
-    def test_future_baselines_and_placement_are_explicitly_unimplemented(self):
-        for options in ("--protectionMode=recompute", "--protectionMode=one-plus-one",
-                        "--protectionMode=fixed --placementMode=n5c"):
+    def test_future_placement_is_explicitly_unimplemented(self):
+        for options in ("--protectionMode=fixed --placementMode=n5c",
+                        "--protectionMode=one-plus-one --placementMode=n5c"):
             with self.subTest(options=options):
                 result = self.run_cli(options)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("NOT_IMPLEMENTED", result.stdout)
+
+    def test_full_baselines_guard_and_four_placements(self):
+        for mode in ("recompute", "one-plus-one"):
+            result = self.run_cli(f"--protectionMode={mode} --fixedProtectionDelta=0")
+            self.assertIn("fixedProtectionDelta", result.stdout)
+            self.assertNotIn("NOT_IMPLEMENTED", result.stdout)
+            for placement in ("ffp", "lrl", "fa-ffp", "fa-lrl"):
+                result = self.run_cli(f"--protectionMode={mode} --placementMode={placement} --fixedProtectionDelta=0")
+                self.assertIn("fixedProtectionDelta", result.stdout)
+                self.assertNotIn("ERROR: placementMode", result.stdout)
 
     def test_busy_policy_guard_and_off_ignores_valid_values(self):
         result = self.run_cli("--remoteBusyRecoveryPolicy=unsupported")

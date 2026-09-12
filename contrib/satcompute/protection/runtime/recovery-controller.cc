@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "recovery-controller.h"
-#include "../policy/baseline/first-feasible-placement/first-feasible-placement-policy.h"
+#include "../policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
 
 #include "ns3/simulator.h"
 
@@ -60,10 +60,11 @@ RecoveryController::RecoveryController(Ptr<TaskCoordinator> tasks,
                                        CheckpointManager& manager,
                                        int64_t stopNs,
                                        ProtectionPolicy& policy,
-                                       RemoteBusyRecoveryPolicy busyPolicy)
+                                       RemoteBusyRecoveryPolicy busyPolicy,
+                                       PlacementPolicy* recomputePlacement)
     : m_tasks(tasks), m_topology(topology), m_manager(manager),
       m_network(tasks->GetTransferEngine()), m_stopNs(stopNs), m_faultRuntime(policy, {this}),
-      m_busyPolicy(busyPolicy)
+      m_busyPolicy(busyPolicy), m_recomputePlacement(recomputePlacement)
 {
     m_manager.EnableRecoveryRetention();
     m_tasks->SetRecoveryHandler(
@@ -132,7 +133,7 @@ RecoveryController::Fault(const TaskRuntime& task, const TaskFaultNodeChange& ch
             m_manager.Pool(change.nodeId).ReleaseTask(task.definition.taskId);
         // F3 always affects the current recovery node and RESULT endpoint. Input/tail
         // sources remain dependencies only until their respective receiver completed.
-        const bool inputLost = state.summary.path == "RECOMPUTE" &&
+        const bool inputLost = (Deferred() || state.summary.path == "RECOMPUTE") &&
                                state.summary.inputReceivedNs < 0 &&
                                task.definition.sourceNodeId == change.nodeId;
         const bool tailLost =
@@ -188,9 +189,17 @@ RecoveryController::Fault(const TaskRuntime& task, const TaskFaultNodeChange& ch
     auto snapshot = m_manager.FreezeRecoverySnapshot(task.definition.taskId, Now());
     auto owned = std::make_unique<State>(task, snapshot, change.fault);
     auto& state = *owned;
+    if (m_recomputePlacement)
+    {
+        Require(snapshot.phase == "OFF", "full Recompute cannot own checkpoint state");
+        state.summary.plannedCatchupRedoWu = snapshot.actualWork;
+        state.summary.plannedPostCatchupWu = task.definition.computeWorkUnits - snapshot.actualWork;
+        state.summary.plannedTotalRecoveryWu = task.definition.computeWorkUnits;
+    }
     state.summary.checkpointStateExists = snapshot.phase == "ON" && snapshot.remoteObject;
     if (state.summary.checkpointStateExists)
-        state.summary.checkpointStateBytes = state.layout.CommittedStateBytes(snapshot.remoteWork);
+        state.summary.checkpointStateBytes =
+            state.layout.CommittedStateBytes(snapshot.remoteWork, m_manager.InputPolicy());
     if (snapshot.phase != "OFF")
     {
         const auto remote = Service(snapshot.remoteNode);
@@ -282,15 +291,23 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
         r.checkpointFallbackReason = "OTHER";
     if (f.phase == "ON" && base && !base->reserved && Eligible(f.remoteNode, state))
     {
+        const auto input = Deferred() ? Estimate(state.task.definition.sourceNodeId, f.remoteNode,
+                                                 state.task.definition.inputBytes)
+                                      : std::optional<int64_t>{0};
+        if (!input)
+        {
+            r.checkpointFallbackReason = "INPUT_PATH_UNAVAILABLE";
+            return false;
+        }
         const auto rate = Service(f.remoteNode)->GetComputeRateWorkUnitsPerSecond();
-        r.estimatedRedoNs = Duration(f.actualWork - f.remoteWork, rate);
+        r.estimatedRedoNs = *input + Duration(f.actualWork - f.remoteWork, rate);
         auto transfer = f.localWork > f.remoteWork && f.tailBytes &&
                                 m_manager.Pool(f.remoteNode).Free() >= f.tailBytes
                             ? Estimate(f.localNode, f.remoteNode, f.tailBytes)
                             : std::nullopt;
         if (transfer)
             r.estimatedTailNs =
-                *transfer + f.remoteCostNs + Duration(f.actualWork - f.localWork, rate);
+                std::max(*input, *transfer + f.remoteCostNs) + Duration(f.actualWork - f.localWork, rate);
         const auto choice = ChooseRecoveryPath(
             transfer ? std::optional{r.estimatedTailNs} : std::nullopt, r.estimatedRedoNs);
         r.path = choice == RecoveryPath::TAIL ? "TAIL" : "REMOTE_REDO";
@@ -317,7 +334,7 @@ RecoveryController::Candidates(const State& state) const
     auto nodes = BuildFeasibleBackupNodes(context);
     // Recovery targets retain the established stable-ID baseline for BOTH pair policies.
     // N5C can later replace this ranking without duplicating operation feasibility.
-    FirstFeasiblePlacementPolicy{}.RankBackupNodes(nodes, context);
+    FaFirstFeasiblePlacementPolicy{}.RankBackupNodes(nodes, context);
     return nodes;
 }
 
@@ -329,7 +346,7 @@ RecoveryController::TryRelocate(State& state)
     r.relocationAttempted = true;
     r.relocationTrigger = r.checkpointFallbackReason;
     r.relocationFailureReason = "NO_ELIGIBLE_RECOVERY_NODE";
-    const auto bytes = state.layout.CommittedStateBytes(f.remoteWork);
+    const auto bytes = state.layout.CommittedStateBytes(f.remoteWork, m_manager.InputPolicy());
     const auto old = m_manager.Pool(f.remoteNode).Find(f.remoteObject);
     Require(old && !old->reserved && old->bytes == bytes,
             "relocation requires exact committed state");
@@ -337,6 +354,14 @@ RecoveryController::TryRelocate(State& state)
     {
         if (candidate == f.remoteNode || !Eligible(candidate, state))
             continue;
+        const auto input = Deferred() ? Estimate(state.task.definition.sourceNodeId, candidate,
+                                                 state.task.definition.inputBytes)
+                                      : std::optional<int64_t>{0};
+        if (!input)
+        {
+            r.relocationFailureReason = "INPUT_PATH_UNAVAILABLE";
+            continue;
+        }
         const auto& pool = m_manager.Pools().at(candidate);
         if (pool->Free() < bytes)
         {
@@ -352,13 +377,13 @@ RecoveryController::TryRelocate(State& state)
         }
         const auto rate = Service(candidate)->GetComputeRateWorkUnitsPerSecond();
         const auto remaining = Duration(state.layout.Work() - f.actualWork, rate);
-        const auto redo = *transfer + Duration(f.actualWork - f.remoteWork, rate);
+        const auto redo = std::max(*input, *transfer) + Duration(f.actualWork - f.remoteWork, rate);
         std::optional<int64_t> tail;
         if (f.localWork > f.remoteWork && f.tailBytes && pool->Free() - bytes >= f.tailBytes)
         {
             const auto tailTransfer = Estimate(f.localNode, candidate, f.tailBytes);
             if (tailTransfer)
-                tail = std::max(*transfer, *tailTransfer) + f.remoteCostNs +
+                tail = std::max(*input, std::max(*transfer, *tailTransfer) + f.remoteCostNs) +
                        Duration(f.actualWork - f.localWork, rate);
         }
         const auto budget = f.deadlineNs - Now() - remaining;
@@ -395,6 +420,39 @@ RecoveryController::Execute(const ProtectionContext& context, const ProtectionAc
     auto& state = *m_states.at(context.attempt.taskId);
     state.summary.path = "RECOMPUTE";
     state.startWork = 0;
+    if (m_recomputePlacement)
+    {
+        PlacementContext placement{state.summary.primaryNode, {}};
+        for (const auto& service : m_tasks->GetComputeServices())
+        {
+            const auto node = service->GetNodeId();
+            const auto load = m_placementLoads ? m_placementLoads->Get(node) : PlacementNodeLoad{};
+            placement.candidates.push_back({node,
+                m_tasks->IsComputeAvailable(node) && m_tasks->IsSatelliteAvailable(node),
+                service->IsIdle(), Reachable(node, state.task.definition.resultNodeId),
+                false, 0, 0, load.activeBackup, load.activeRecovery});
+        }
+        const auto feasible = [&](uint32_t candidate) {
+            const auto input = Estimate(state.task.definition.sourceNodeId, candidate,
+                                         state.task.definition.inputBytes);
+            const auto work = Duration(state.layout.Work(), Service(candidate)->GetComputeRateWorkUnitsPerSecond());
+            const auto budget = state.summary.snapshot.deadlineNs - Now();
+            return input && work <= budget && *input <= budget - work;
+        };
+        const auto node = m_recomputePlacement->SelectBackupNode(placement, feasible);
+        m_recomputePlacement->RecordSelection({state.task.definition.taskId, Now(),
+            state.summary.primaryNode, {}, node, "REJECTED", "NO_FEASIBLE_RECOMPUTE_NODE_INPUT_OR_DEADLINE"});
+        // Minimal policies choose first; validate only that node, never retry a second one.
+        const bool selectedFeasible = node && (m_recomputePlacement->Eligibility() != PlacementEligibility::MINIMAL ||
+            (Reachable(*node, state.task.definition.resultNodeId) && feasible(*node)));
+        if (selectedFeasible && AcceptAndExecute(state, *node))
+        {
+            m_recomputePlacement->RecordAdmission(state.task.definition.taskId, Now(), "ACCEPTED", "RECOVERY_ACCEPTED");
+            return;
+        }
+        Log(state, "RECOVERY_DECISION");
+        return Fail(state, "NO_FEASIBLE_RECOMPUTE_NODE_INPUT_OR_DEADLINE");
+    }
     for (const auto candidate : Candidates(state))
     {
         if (Eligible(candidate, state) &&
@@ -411,6 +469,8 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
 {
     auto& r = state.summary;
     const auto& f = r.snapshot;
+    if (Deferred() && !Estimate(state.task.definition.sourceNodeId, node, state.task.definition.inputBytes))
+        return false;
     state.service = Service(node);
     if (!state.service->ReserveRecovery(state.task.definition.taskId, 1))
         return false;
@@ -419,13 +479,16 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     r.recoveryNode = node;
     r.acceptedNs = Now();
     if (m_loadObserver) m_loadObserver(state.task.definition.taskId, node, true);
-    if (r.path == "RECOMPUTE")
+    if (Deferred() || r.path == "RECOMPUTE")
         if (const auto estimate = Estimate(state.task.definition.sourceNodeId,
                                            node,
                                            state.task.definition.inputBytes))
+        {
+            r.plannedInputWaitNs = *estimate;
             r.estimatedRecomputeNs =
                 *estimate +
                 Duration(f.actualWork, state.service->GetComputeRateWorkUnitsPerSecond());
+        }
     // For from-zero recompute this is xf*W planned full catch-up, not charged work.
     // Completion/interruption callbacks separately record only actually executed WU.
     r.plannedCatchupRedoWu = f.actualWork - state.startWork;
@@ -433,6 +496,17 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     r.plannedTotalRecoveryWu = state.layout.Work() - state.startWork;
     r.recoveryRate = state.service->GetComputeRateWorkUnitsPerSecond();
     Log(state, "RECOVERY_ACCEPTED");
+    if (Deferred())
+    {
+        if (r.path == "RECOMPUTE" || r.path == "REMOTE_REDO")
+            r.stateReadyNs = Now();
+        // Independent flows are all requested now. Canonical registration and the
+        // shared network decide actual admission/contention; no artificial serialization.
+        Deliver(state, ProtectionTransferKind::RECOVERY_INPUT,
+                state.task.definition.sourceNodeId, node, state.task.definition.inputBytes);
+        if (!state.live)
+            return true;
+    }
     if (r.path.starts_with("MIGRATE_"))
     {
         auto& pool = m_manager.Pool(node);
@@ -490,7 +564,7 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     else if (r.path == "RECOMPUTE")
     {
         m_manager.ReleaseRecoveryState(state.task.definition.taskId);
-        Deliver(state,
+        if (!Deferred()) Deliver(state,
                 ProtectionTransferKind::RECOVERY_INPUT,
                 state.task.definition.sourceNodeId,
                 node,
@@ -523,6 +597,7 @@ RecoveryController::Deliver(State& state,
     auto& r = state.summary;
     if (kind == ProtectionTransferKind::RECOVERY_INPUT)
     {
+        Require(r.inputStartedNs < 0, "original recovery INPUT requested more than once");
         r.inputStartedNs = Now();
         r.inputMode = mode;
     }
@@ -648,7 +723,7 @@ RecoveryController::Received(State& state,
             Require(m_manager.Pool(*state.summary.recoveryNode)
                         .Merge(f.remoteObject,
                                state.tailObject,
-                               state.layout.CommittedStateBytes(f.localWork)),
+                               state.layout.CommittedStateBytes(f.localWork, m_manager.InputPolicy())),
                     "tail merge lost state");
             state.tailObject = 0;
             state.summary.tailCommitNs = Now();
@@ -678,7 +753,7 @@ RecoveryController::MigrationReady(State& state)
         Require(m_manager.Pool(*r.recoveryNode)
                     .Merge(state.relocatedObject,
                            state.tailObject,
-                           state.layout.CommittedStateBytes(r.snapshot.localWork)),
+                           state.layout.CommittedStateBytes(r.snapshot.localWork, m_manager.InputPolicy())),
                 "migration merge lost state");
         state.tailObject = 0;
         r.tailCommitNs = Now();
@@ -690,6 +765,23 @@ RecoveryController::MigrationReady(State& state)
 void
 RecoveryController::StartCompute(State& state)
 {
+    if (!state.live || state.summary.computeStartedNs >= 0)
+        return;
+    if (Deferred())
+    {
+        auto& r = state.summary;
+        const bool stateReady = r.path == "RECOMPUTE" || r.path == "REMOTE_REDO" ||
+            (r.path == "MIGRATE_REDO" && r.stateReceivedNs >= 0) ||
+            ((r.path == "TAIL" || r.path == "MIGRATE_TAIL") && r.tailCommitNs >= 0);
+        if (!stateReady)
+            return;
+        if (r.stateReadyNs < 0)
+            r.stateReadyNs = Now();
+        if (r.inputReceivedNs < 0)
+            return;
+        Require(Now() >= std::max(r.inputReceivedNs, r.stateReadyNs),
+                "recovery compute preceded its dependency join");
+    }
     if (!state.attempt.StartRecovery({state.task.definition.taskId, 1}, Now()))
         return Fail(state, "RECOVERY_COMPUTE_DEADLINE");
     // Adopt valid state into active compute memory; it is no longer extra backup storage.

@@ -94,24 +94,27 @@ class WorkloadModelTests(unittest.TestCase):
         self.assertEqual(replace(parameters, kv_heads=4).kv_bytes(100),
                          parameters.kv_bytes(100) // 2)
         budget = model.llm_budget(768, 200, 500, parameters)
-        self.assertEqual(budget.compute_work_units, 70_000)
+        self.assertEqual(budget.compute_work_units, 280_000)
         self.assertEqual(budget.k_variable_bytes, 700 * 114_688)
         self.assertEqual(budget.output_bytes, 2000)
         self.assertIsNone(budget.rho_variable)
-        self.assertEqual(budget.sigma_variable_bytes_per_work_unit, Fraction(114_688, 100))
-        self.assertEqual(budget.state_at_work(20_000), parameters.kv_bytes(200))
-        self.assertEqual(budget.state_at_work(20_099), parameters.kv_bytes(200))
-        self.assertEqual(budget.state_at_work(20_100), parameters.kv_bytes(201))
-        initial = budget.state_at_work(20_000)
-        increments = [budget.state_at_work(end) - budget.state_at_work(end - 100)
-                      for end in range(20_100, 70_001, 100)]
+        self.assertEqual(budget.sigma_variable_bytes_per_work_unit, Fraction(114_688, 400))
+        self.assertEqual(budget.state_at_work(80_000), parameters.kv_bytes(200))
+        self.assertEqual(budget.state_at_work(80_399), parameters.kv_bytes(200))
+        self.assertEqual(budget.state_at_work(80_400), parameters.kv_bytes(201))
+        self.assertEqual(budget.state_at_work(399), 0)
+        self.assertEqual(budget.state_at_work(400), 114688)
+        self.assertEqual(budget.state_at_work(800), 229376)
+        initial = budget.state_at_work(80_000)
+        increments = [budget.state_at_work(end) - budget.state_at_work(end - 400)
+                      for end in range(80_400, 280_001, 400)]
         self.assertEqual(initial + sum(increments), budget.k_variable_bytes)
         self.assertEqual(model.llm_budget(9999, 200, 500), replace(budget, input_bytes=9999))
         for tokens in (5000, 7500, 10000):
             revised = model.llm_budget(768, 200, tokens - 200)
             self.assertEqual(revised.k_variable_bytes, tokens * 114_688)
-            self.assertEqual(model.service_time_ns(revised.compute_work_units, 100_000), tokens * 1_000_000)
-            self.assertEqual(revised.sigma_variable_bytes_per_work_unit, Fraction(114_688, 100))
+            self.assertEqual(model.service_time_ns(revised.compute_work_units, 100_000), tokens * 4_000_000)
+            self.assertEqual(revised.sigma_variable_bytes_per_work_unit, Fraction(114_688, 400))
 
     def test_service_time_matches_platform_nanosecond_contract(self):
         self.assertEqual(model.service_time_ns(5_000_000, 1_500_000), 3_333_333_334)

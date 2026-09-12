@@ -521,6 +521,9 @@ FaultController::ProcessBatch(int64_t simulationTimeNs)
             m_events[topologyRecordIndexes.back()].routeRecomputed = true;
         }
     }
+    // Replica takeover must see every failure plus the applied communication overlay.
+    if (m_taskCoordinator != nullptr)
+        m_taskCoordinator->CompleteFaultBatch();
 }
 
 const FaultTrace&

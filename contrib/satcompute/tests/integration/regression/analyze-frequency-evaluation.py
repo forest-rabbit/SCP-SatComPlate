@@ -18,6 +18,19 @@ NS = 10**9
 def verify_pair_retries(decisions, waits):
     retries = set()
     for r in decisions:
+        if r.get("decision_trigger") == "CAPACITY_RELEASE":
+            key = (r["task_id"], r["fault_epoch_time_ns"])
+            phase = r["phase_before"]
+            action = "START" if phase == "OFF" else "UPDATE"
+            require(key not in retries and phase in ("OFF", "ON") and
+                    r["actual_fault_sampled"] == r["actual_fault_hit"] == "0", "invalid or duplicate capacity retry")
+            retries.add(key)
+            require((r["capacity_retry_success"] == "1") ==
+                    (r["decision_committed"] == "1" and r["proposed_action"] == action), "retry success differs")
+            if phase == "ON":
+                require(r["proposed_action"] in ("UPDATE", "PAUSE") and
+                        not r.get("capacity_wait_start_ns") and not r.get("capacity_wait_end_ns"),
+                        "ON retry restarted protection or mixed OFF waiting")
         if not r.get("pair_candidates_total"):
             continue  # Historical rows and fixed-ON pair records.
         n = lambda k: int(r[k])
@@ -27,13 +40,6 @@ def verify_pair_retries(decisions, waits):
         require(n("pair_hard_checked") == n("pair_hard_feasible") + n("pair_skip_storage") + n("pair_skip_deadline")
                 and n("pair_hard_checked") <= n("pair_path_feasible") and n("pair_hard_feasible") <= 1,
                 "hard-feasibility ranked prefix differs")
-        if r.get("decision_trigger") == "CAPACITY_RELEASE":
-            key = (r["task_id"], r["fault_epoch_time_ns"])
-            require(key not in retries and r["phase_before"] == "OFF" and
-                    r["actual_fault_sampled"] == r["actual_fault_hit"] == "0", "invalid or duplicate capacity retry")
-            retries.add(key)
-            require((r["capacity_retry_success"] == "1") ==
-                    (r["decision_committed"] == "1" and r["proposed_action"] == "START"), "retry success differs")
     intervals = defaultdict(list)
     for r in waits:
         a, b = int(r["start_time_ns"]), int(r["end_time_ns"])
@@ -181,6 +187,10 @@ def frequency(root, task_profiles, protected, recoveries):
             "start_by_trigger": dict(Counter(r.get("decision_trigger") for r in starts)),
             "capacity_retry_count": sum(r.get("decision_trigger") == "CAPACITY_RELEASE" for r in ds),
             "capacity_retry_success": sum(r.get("capacity_retry_success") == "1" for r in ds),
+            "on_capacity_retry_count": sum(r.get("decision_trigger") == "CAPACITY_RELEASE" and
+                                           r["phase_before"] == "ON" for r in ds),
+            "on_capacity_resume_count": sum(r.get("capacity_retry_success") == "1" and
+                                            r["phase_before"] == "ON" for r in ds),
             "capacity_wait_tasks": len({r["task_id"] for r in capacity_waits if r["task_id"] in ids}),
             "capacity_wait_ns": stats([int(r["duration_ns"]) for r in capacity_waits if r["task_id"] in ids]),
             "pair_counts_at_off_decisions": {k: stats([int(r[k]) for r in ds if r.get(k)]) for k in

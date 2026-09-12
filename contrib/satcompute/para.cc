@@ -114,13 +114,18 @@ GetDefaultSatComputeConfig()
     // protection
 
     // --protectionMode：默认 off 保持 N4 行为；fixed 启用真实检查点与一次故障恢复。
+    // recompute 不做常态保护，故障后通过 FFP 选择可行节点、原始 INPUT 重传、从零重算。
+    // one-plus-one 在首次 TASK_RUNNING 一次申请真实完整副本；无可行资源则不重试。
     config.protectionMode = "off";
 
-    // --placementMode：FFP 为默认基线；fixed / compfrr 均可注入 LRL 作负载排名诊断。
-    config.placementMode = "ffp";
+    // --placementMode：fa-ffp 保留历史行为；ffp/lrl 是最小筛选，fa-lrl 是可行性筛选加负载排序。
+    config.placementMode = "fa-ffp";
     // --remoteBusyRecoveryPolicy：仅 remote 计算忙但检查点可读时生效。
     // relocate 迁移状态后继续；recompute 放弃检查点，从原始 INPUT 重算；off 忽略本参数。
     config.remoteBusyRecoveryPolicy = "relocate";
+    // --inputStagingPolicy：eager 保持原始 INPUT 常态预置；deferred 仅用于 CompFRR，
+    // 常态只传递状态，故障后向实际恢复星获取一次完整 INPUT，不改变 WU、状态量和成本档位。
+    config.inputStagingPolicy = "eager";
 
     // --lrlRecoveryWeight：L = active backup assignments + weight * active recoveries。
     // G3 在看到 A/B/C 结果之前预先冻结为 1，不扫描、不按结果调整。

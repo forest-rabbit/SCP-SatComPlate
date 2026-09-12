@@ -102,7 +102,7 @@ class LlmParameters:
     kv_heads: int = 8
     head_dim: int = 128
     bytes_per_element: int = 2
-    work_units_per_token: int = 100
+    work_units_per_token: int = 400
     header_bytes: int = 0
     max_cached_tokens: int = 40960
 

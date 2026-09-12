@@ -13,6 +13,7 @@ namespace ns3::protection
 FrequencyStorageEstimator MakeFrequencyStorageEstimator(
     const TaskDefinition& task,
     uint64_t actual,
-    std::optional<CheckpointInventory> inventory);
+    std::optional<CheckpointInventory> inventory,
+    InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER);
 } // namespace ns3::protection
 #endif

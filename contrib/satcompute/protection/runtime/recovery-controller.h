@@ -4,6 +4,8 @@
 #include "../../traffic/local-delivery.h"
 #include "../mechanism/checkpoint/checkpoint-manager.h"
 #include "../policy/recovery-policy.h"
+#include "../policy/placement-policy.h"
+#include "placement-load-ledger.h"
 #include <filesystem>
 
 namespace ns3::protection
@@ -33,6 +35,8 @@ struct RecoverySummary
     std::string relocationFailureReason, relocationTrigger;
     int64_t estimatedMigrateTailNs{-1}, estimatedMigrateRedoNs{-1}, estimatedRecomputeNs{-1},
         stateStartedNs{-1}, stateReceivedNs{-1};
+    int64_t plannedInputWaitNs{-1}; ///< Decision-time INPUT estimate, never actual reservation wait.
+    int64_t stateReadyNs{-1}; ///< Actual state/tail/merge dependency join, independent of INPUT.
 };
 
 /** One recovery event, including local logical deliveries which have no transfer ID. */
@@ -54,7 +58,8 @@ class RecoveryController : public ProtectionMechanism
                        CheckpointManager& manager,
                        int64_t stopNs,
                        ProtectionPolicy& policy,
-                       RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE);
+                       RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
+                       PlacementPolicy* recomputePlacement = nullptr);
     ~RecoveryController();
     bool Supports(ActionKind kind) const override;
     void Execute(const ProtectionContext& context, const ProtectionAction& action) override;
@@ -81,6 +86,7 @@ class RecoveryController : public ProtectionMechanism
     /** Observe accepted/finished execution ownership; no change to recovery scheduling. */
     void SetLoadObserver(std::function<void(uint64_t, uint32_t, bool)> observer)
     { m_loadObserver = std::move(observer); }
+    void SetPlacementLoads(const PlacementLoadLedger* loads) { m_placementLoads = loads; }
 
   private:
     /** Stable heap-owned attempt and asynchronous resources. */
@@ -120,6 +126,8 @@ class RecoveryController : public ProtectionMechanism
     void TransferTerminal(uint64_t transferId, int64_t timeNs);
     void Received(State& state, ProtectionTransferKind kind, uint64_t bytes, uint64_t transferId);
     void StartCompute(State& state);
+    /** Immutable input contract from the checkpoint owner, not a second configuration. */
+    bool Deferred() const { return m_manager.InputPolicy() == InputStagingPolicy::DEFERRED; }
     void Started(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
     void Catchup(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
     void Computed(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
@@ -139,6 +147,8 @@ class RecoveryController : public ProtectionMechanism
     int64_t m_stopNs;                     ///< Absolute simulation endpoint.
     ProtectionRuntime m_faultRuntime;     ///< Established mechanism first, then policy fallback.
     RemoteBusyRecoveryPolicy m_busyPolicy; ///< Changes REMOTE_BUSY only, not fault availability.
+    PlacementPolicy* m_recomputePlacement; ///< Non-null only for full Recompute: strict operation feasibility.
+    const PlacementLoadLedger* m_placementLoads{}; ///< Native R0 active loads; no checkpoint ranking change.
     std::map<uint64_t, std::unique_ptr<State>> m_states; ///< Sole recovery per task.
     std::map<uint64_t, std::pair<uint64_t, ProtectionTransferKind>> m_flows; ///< Real callbacks.
     std::vector<RecoveryEvent> m_events; ///< Append-only causal history.

@@ -2,7 +2,7 @@
 #ifndef SATCOMPUTE_FIXED_PROTECTION_POLICY_H
 #define SATCOMPUTE_FIXED_PROTECTION_POLICY_H
 #include "../../runtime/protection-runtime.h"
-#include "../baseline/first-feasible-placement/first-feasible-placement-policy.h"
+#include "../baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
 #include <set>
 #include <memory>
 
@@ -20,6 +20,8 @@ class FixedProtectionPolicy : public ProtectionPolicy
     ProtectionAction OnComputeFault(const ProtectionContext& context) override;
     void OnTaskComputeComplete(AttemptKey attempt) override;
     void OnTaskTerminal(uint64_t taskId) override;
+    PlacementPolicy& Placement() { return *m_placement; }
+    const PlacementPolicy& Placement() const { return *m_placement; }
 
   private:
     std::unique_ptr<PlacementPolicy> m_placement; ///< Injected ranking; FFP by default.

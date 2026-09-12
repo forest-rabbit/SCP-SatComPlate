@@ -13,7 +13,7 @@ build_lib(
     protection/policy/compfrr/frequency/frequency-decision-gate.cc
     protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.cc
     protection/policy/feasible-placement-pairs.cc
-    protection/policy/experimental/least-recovery-load/least-recovery-load-placement-policy.cc
+    protection/policy/baseline/least-recovery-load/least-recovery-load-placement-policy.cc
     protection/mechanism/checkpoint/checkpoint-progress.cc
     protection/mechanism/checkpoint/checkpoint-manager.cc
     protection/runtime/fixed-protection-controller.cc
@@ -22,6 +22,10 @@ build_lib(
     protection/runtime/placement-load-ledger.cc
     metrics/core/placement-load-metrics.cc
     protection/runtime/recovery-controller.cc
+    protection/runtime/recompute-controller.cc
+    protection/runtime/one-plus-one-controller.cc
+    protection/mechanism/replication/replica-manager.cc
+    metrics/core/replica-metrics.cc
     metrics/core/recovery-metrics.cc
     metrics/core/frequency-metrics.cc
     metrics/core/protection-metrics.cc
@@ -102,7 +106,9 @@ build_lib(
     protection/policy/recovery-policy.h
     protection/runtime/decision-path-snapshot.h
     protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.h
-    protection/policy/experimental/least-recovery-load/least-recovery-load-placement-policy.h
+    protection/policy/baseline/least-recovery-load/least-recovery-load-placement-policy.h
+    protection/policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h
+    protection/policy/baseline/fa-least-recovery-load/fa-least-recovery-load-placement-policy.h
     protection/mechanism/checkpoint/checkpoint-progress.h
     protection/mechanism/checkpoint/checkpoint-manager.h
     protection/runtime/fixed-protection-controller.h
@@ -110,6 +116,11 @@ build_lib(
     protection/runtime/frequency-storage-estimator.h
     protection/runtime/placement-load-ledger.h
     protection/runtime/recovery-controller.h
+    protection/runtime/recompute-controller.h
+    protection/runtime/one-plus-one-controller.h
+    protection/mechanism/replication/replica-manager.h
+    protection/policy/baseline/one-plus-one/one-plus-one-policy.h
+    protection/policy/baseline/recompute/recompute-policy.h
     protection/runtime/protection-transfer-key.h
     metrics/core/protection-metrics.h
     tools/validation/compfrr-shadow/compfrr-shadow-model.h
@@ -256,6 +267,22 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-one-plus-one-baseline-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/one-plus-one-baseline-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-recompute-baseline-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/recompute-baseline-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-frequency-runtime-test
   EXECNAME_PREFIX satcompute_test_

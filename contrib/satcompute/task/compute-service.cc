@@ -160,7 +160,7 @@ ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
 bool
 ComputeService::CompleteTaskIfDue(uint64_t taskId)
 {
-    if (!m_isRunning || (!m_computeAvailable && !m_runningRecovery) || !m_hasCurrentTask ||
+    if (!m_isRunning || (!m_computeAvailable && !(m_runningRecovery && m_recoveryImmune)) || !m_hasCurrentTask ||
         m_currentTask.taskId != taskId ||
         Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs != m_currentTaskServiceTimeNs)
     {
@@ -261,7 +261,7 @@ ComputeService::DispatchNextTask()
 void
 ComputeService::CompleteCurrentTask()
 {
-    NS_ABORT_MSG_IF(!m_isRunning || (!m_computeAvailable && !m_runningRecovery) ||
+    NS_ABORT_MSG_IF(!m_isRunning || (!m_computeAvailable && !(m_runningRecovery && m_recoveryImmune)) ||
                         !m_hasCurrentTask,
                     "ComputeService completion has no running task");
     const int64_t completionTimeNs = Simulator::Now().GetNanoSeconds();
@@ -325,7 +325,7 @@ void
 ComputeService::NotifyComputeState()
 {
     m_computeState(m_nodeId,
-                   m_isRunning && (m_computeAvailable || m_runningRecovery) && m_hasCurrentTask);
+                   m_isRunning && (m_computeAvailable || (m_runningRecovery && m_recoveryImmune)) && m_hasCurrentTask);
 }
 
 uint64_t
@@ -422,6 +422,7 @@ ComputeService::ReserveRecovery(uint64_t id, uint64_t generation)
         m_knownTaskIds.contains(id))
         return false;
     m_recoveryOwner = std::pair{id, generation};
+    m_recoveryImmune = false;
     Simulator::Cancel(m_dispatchEvent);
     return true;
 }
@@ -451,9 +452,35 @@ ComputeService::StartRecovery(uint64_t id,
                               Callback<void, uint64_t, uint64_t, uint32_t, int64_t> catchup,
                               Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed)
 {
+    return StartReservedAttempt(id, generation, work, catchupWork, started, catchup, completed, true);
+}
+
+bool
+ComputeService::StartReplica(uint64_t id, uint64_t generation, uint64_t work,
+                             Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+                             Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed)
+{
+    return StartReservedAttempt(id, generation, work, 0, started, {}, completed, m_recoveryImmune);
+}
+
+bool
+ComputeService::PromoteReplica(uint64_t id, uint64_t generation)
+{
+    if (m_recoveryOwner != std::optional{std::pair{id, generation}} || !m_computeAvailable)
+        return false;
+    m_recoveryImmune = true;
+    return true;
+}
+
+bool
+ComputeService::StartReservedAttempt(uint64_t id, uint64_t generation, uint64_t work,
+    uint64_t catchupWork, Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+    Callback<void, uint64_t, uint64_t, uint32_t, int64_t> catchup,
+    Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed, bool immune)
+{
     if (m_recoveryOwner != std::optional{std::pair{id, generation}} || !m_isRunning ||
-        m_hasCurrentTask || !work || catchupWork > work || started.IsNull() || catchup.IsNull() ||
-        completed.IsNull())
+        m_hasCurrentTask || !work || catchupWork > work || started.IsNull() ||
+        (catchupWork && catchup.IsNull()) || completed.IsNull() || (!immune && !m_computeAvailable))
         return false;
     m_knownTaskIds.insert(id);
     ++m_enqueuedTaskCount;
@@ -462,6 +489,7 @@ ComputeService::StartRecovery(uint64_t id,
     m_currentTaskServiceTimeNs = CalculateServiceTimeNs(work, m_computeRateWorkUnitsPerSecond);
     m_hasCurrentTask = true;
     m_runningRecovery = true;
+    m_recoveryImmune = immune;
     m_recoveryAccounting[{id, generation}] = {work, 0, m_computeRateWorkUnitsPerSecond, 0};
     m_recoveryCatchup = catchup;
     m_recoveryCompleted = completed;
@@ -471,8 +499,9 @@ ComputeService::StartRecovery(uint64_t id,
         return true; // A synchronous terminal observer cancelled this accepted dispatch.
     const auto catchupNs =
         catchupWork == 0 ? 0 : CalculateServiceTimeNs(catchupWork, m_computeRateWorkUnitsPerSecond);
-    m_catchupEvent = Simulator::Schedule(
-        NanoSeconds(catchupNs), &ComputeService::RecoveryCatchup, this, id, generation);
+    if (!catchup.IsNull())
+        m_catchupEvent = Simulator::Schedule(
+            NanoSeconds(catchupNs), &ComputeService::RecoveryCatchup, this, id, generation);
     m_completionEvent = Simulator::Schedule(
         NanoSeconds(m_currentTaskServiceTimeNs), &ComputeService::CompleteCurrentTask, this);
     return true;

@@ -7,7 +7,7 @@
 #include "ns3/placement-policy.h"
 #include "ns3/decision-path-snapshot.h"
 #include "ns3/fixed-protection-controller.h"
-#include "ns3/least-recovery-load-placement-policy.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
 #include "ns3/protection-transfer-key.h"
 #include "ns3/simulator.h"
 #include <algorithm>
@@ -108,7 +108,7 @@ class Driver
         {
             if (sameNs)
                 Simulator::Schedule(
-                    NanoSeconds(999500000), &Driver::Start, this, event.taskId, event.nodeId);
+                    NanoSeconds(999900000), &Driver::Start, this, event.taskId, event.nodeId);
             else if (delayed)
                 Simulator::Schedule(
                     NanoSeconds(20000000), &Driver::Start, this, event.taskId, event.nodeId);
@@ -246,7 +246,7 @@ Lifecycle(const std::string& stopAt,
                       [](const auto& f) { return f.key.kind == ProtectionTransferKind::L1; }),
                   "unreserved L1 sent packets");
         }
-        if (capacity == 30000000)
+        if (capacity == 7500000)
         {
             Check(summary.localCommits >= 8 && summary.remoteWork > 0 &&
                       summary.remoteWork < summary.localWork,
@@ -567,7 +567,7 @@ FixedPlacement(bool lrl)
                           config.parameters.islMtuBytes, config.parameters.receiverRcvBufBytes,
                           false, END);
         FixedProtectionController controller(tasks, topology, 10000000000ULL, END, 50, 4, false,
-            lrl ? std::make_unique<LeastRecoveryLoadPlacementPolicy>(1)
+            lrl ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
                 : std::unique_ptr<PlacementPolicy>{});
         Simulator::Stop(NanoSeconds(END));
         Simulator::Run();
@@ -667,8 +667,9 @@ InclusiveCompletionBeforeUid()
         topology.Initialize();
         auto tasks = CreateObject<TaskCoordinator>();
         auto definition = Llm(1);
-        definition.computeWorkUnits = 100;
-        ComputeProfile profile{{{0, 1000000}, {2, 1000000}, {3, 1000000}}};
+        definition.computeWorkUnits = TaskStateAdapter::LLM_WORK_UNITS_PER_TOKEN;
+        // One complete token must still finish at the same 0.1 ms cL callback.
+        ComputeProfile profile{{{0, 4000000}, {2, 4000000}, {3, 4000000}}};
         tasks->Initialize(profile,
                           TaskTrace{{definition}},
                           topology,
@@ -722,7 +723,7 @@ main()
         Lifecycle("FAIL_L1");
         Lifecycle("", 1);
         Lifecycle("", 1000000);
-        Lifecycle("", 30000000);
+        Lifecycle("", 7500000);
         Lifecycle("", 10000000000ULL, true);
         Lifecycle("", 10000000000ULL, false, true);
         Lifecycle("", 10000000000ULL, false, false, true);

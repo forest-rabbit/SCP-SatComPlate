@@ -14,7 +14,7 @@ void LeastRecoveryLoadPlacementPolicy::RankPairs(std::vector<PlacementDecision>&
     for (const auto& node : context.candidates)
         loads[node.nodeId] = static_cast<unsigned __int128>(node.backupAssignmentCount) +
                             static_cast<unsigned __int128>(m_recoveryWeight) * node.activeRecoveryCount;
-    // Preserve the existing local-first, then remote load ranking and stable-ID ties.
+    // Same local-first ranking in minimal LRL and historical FA-LRL.
     auto key = [&](const auto& p) {
         return std::tuple{loads.at(p.localNode), p.localNode, loads.at(p.remoteNode), p.remoteNode};
     };

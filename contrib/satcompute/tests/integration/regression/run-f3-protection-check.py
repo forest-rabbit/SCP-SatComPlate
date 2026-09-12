@@ -71,7 +71,7 @@ def pilot(output, input_bytes):
     task.update(input_bytes=budget.input_bytes, output_bytes=budget.output_bytes, compute_work_units=budget.compute_work_units)
     trace = output / "task-120.json"
     trace.write_text(json.dumps({"tasks": [task]}, indent=2) + "\n")
-    command = RUN["arguments"](output, protection_mode="compfrr", placement_mode="ffp")
+    command = RUN["arguments"](output, protection_mode="compfrr", placement_mode="fa-ffp")
     command = [f"--taskTrace={trace}" if arg.startswith("--taskTrace=") else arg for arg in command]
     started = time.monotonic()
     with (output / "run.log").open("w") as log:
@@ -101,7 +101,7 @@ def main():
         result["checks"]["full_clean_b_run"] = (
             result["task_count"] == 800 and execution["returncode"] == 0
             and identity["simulation_duration_s"] == 1300 and not identity["worktree_dirty"]
-            and identity["protection_mode"] == "compfrr" and identity["placement_mode"] == "ffp"
+            and identity["protection_mode"] == "compfrr" and identity["placement_mode"] in ("ffp", "fa-ffp")
             and identity["fault_mode"] == "generate" and identity["seed"] == 1 and identity["run"] == 11
             and not identity["audit"] and not identity["shadow"])
         result["eligible"] = all(result["checks"].values())

@@ -5,7 +5,7 @@
 
 namespace ns3::protection
 {
-/** FFP: smallest feasible stable ID for local, then for distinct remote. */
+/** Minimal FFP: healthy/idle structural candidates, stable-ID ranking only. */
 class FirstFeasiblePlacementPolicy : public PlacementPolicy
 {
   public:
