@@ -87,6 +87,10 @@ class CbSatManager
     CbRecoverySnapshot Freeze(uint64_t task, int64_t faultNs);
     void RetainForRecovery(const CbRecoverySnapshot& snapshot);
     void ReleaseTask(uint64_t task, const std::string& reason);
+    void InvalidateNode(uint32_t node); ///< F3 removes only physical objects on the damaged node.
+    /** Apply exactly the approved frozen chain at its declared current holder; never discover state. */
+    bool ApplyStoredLogs(const CbRecoverySnapshot& snapshot, uint32_t holder,
+                         uint64_t root, const std::map<uint64_t, uint64_t>& logs);
     std::optional<CbSnapshot> Snapshot(uint64_t task) const;
     const CbState* State(uint64_t task) const;
     std::vector<CbTaskSummary> Summaries() const;

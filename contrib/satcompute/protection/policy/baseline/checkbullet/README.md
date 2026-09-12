@@ -33,14 +33,21 @@ fa-ffp/fa-lrl 先筛选真实路径及存储可行性。常态保护一旦选定
 
 ## 验证
 
+`cb-sat-recovery.h/.cc` 独立编排一次恢复：空闲 B 从 q 直接继续；仅在 REMOTE_BUSY
+按公共开关选择从零重算或把 B 的完整 INPUT、根和已存日志迁移至 C。迁移不提高 q。
+其他不可用回退沿用公共恢复许可，不把 busy 开关扩大到所有故障。故障决策在完整
+同纳秒 fault batch 后执行；F1/F2 只对已接受的恢复 attempt 免疫，F3 仍中断真实依赖。
+复用原 compute deadline，实际执行 WU 与计划追平 WU 分账；同星交付不创建 UDP。
+
 测试仍在项目统一的 `tests/unit`，不在本目录建立另一套测试体系：
 
 ```bash
 source .venv/bin/activate
 cmake --build cmake-cache --target satcompute_test_satcompute-cb-sat-policy-test \
-  satcompute_test_satcompute-cb-sat-runtime-test -j 2
+  satcompute_test_satcompute-cb-sat-runtime-test satcompute_test_satcompute-cb-sat-recovery-test -j 2
 ./ns3 run --no-build satcompute-cb-sat-policy-test
 ./ns3 run --no-build satcompute-cb-sat-runtime-test
+./ns3 run --no-build satcompute-cb-sat-recovery-test
 ```
 
 以上命令从仓库根目录执行，不开启 ns-3 全局 examples/tests。测试显式注入的 MTBF

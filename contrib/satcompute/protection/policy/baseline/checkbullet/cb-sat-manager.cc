@@ -758,6 +758,68 @@ std::vector<CbTaskSummary> CbSatManager::Summaries() const
     return out;
 }
 
+void CbSatManager::InvalidateNode(uint32_t node)
+{
+    if (!m_pools.contains(node)) return;
+    for (auto& [task, normal] : m_normal)
+        if (normal->live && normal->summary.backup == node) Stop(*normal, "BACKUP_F3");
+    std::vector<uint64_t> objects;
+    for (const auto& [object, role] : m_roles.at(node)) objects.push_back(object);
+    for (auto object : objects) ReleaseObject(node, object, "F3_OBJECT_LOST");
+}
+
+bool CbSatManager::ApplyStoredLogs(const CbRecoverySnapshot& snapshot, uint32_t holder,
+                                  uint64_t rootObject, const std::map<uint64_t, uint64_t>& logs)
+{
+    const auto state = State(snapshot.state.taskId);
+    if (!state || !snapshot.state.rootReady || snapshot.cutoffNs > Now() || !m_pools.contains(holder) ||
+        logs.size() != snapshot.state.logSequences.size()) return false;
+    const auto approved = state->BeforeFault(snapshot.cutoffNs);
+    if (!approved.rootReady || approved.rootSequence != snapshot.state.rootSequence ||
+        approved.attemptGeneration != snapshot.state.attemptGeneration ||
+        approved.backupNode != snapshot.state.backupNode ||
+        approved.rootWork != snapshot.state.rootWork ||
+        approved.recoverableWork != snapshot.state.recoverableWork ||
+        approved.logSequences != snapshot.state.logSequences) return false;
+    auto& pool = *m_pools.at(holder);
+    const auto root = pool.Find(rootObject);
+    if (!root || root->reserved || root->taskId != snapshot.state.taskId ||
+        root->bytes != state->FullBytes(snapshot.state.rootWork)) return false;
+    auto previous = snapshot.state.rootWork;
+    auto version = snapshot.state.rootSequence;
+    std::set<uint64_t> unique{rootObject};
+    for (auto sequence : snapshot.state.logSequences)
+    {
+        const auto record = state->Records().find(sequence);
+        const auto object = logs.find(sequence);
+        if (record == state->Records().end() || object == logs.end() ||
+            !unique.insert(object->second).second) return false;
+        const auto& row = record->second;
+        const auto entry = pool.Find(object->second);
+        if (!entry || entry->reserved || entry->taskId != snapshot.state.taskId ||
+            entry->bytes != row.bytes || row.key.fromWork != previous ||
+            row.key.baseVersion != version || row.key.attemptGeneration != snapshot.state.attemptGeneration ||
+            row.receivedNs < 0 || row.receivedNs >= snapshot.cutoffNs ||
+            row.committedNs < 0 || row.committedNs >= snapshot.cutoffNs) return false;
+        previous = row.key.toWork;
+        version = sequence;
+    }
+    if (previous != snapshot.state.recoverableWork || previous > snapshot.actualWork) return false;
+    // All identities, byte sizes, versions and the observed cutoff were checked before mutation.
+    for (auto sequence : snapshot.state.logSequences)
+    {
+        const auto object = logs.at(sequence);
+        const auto& row = state->Records().at(sequence);
+        Require(pool.Merge(rootObject, object, state->FullBytes(row.key.toWork)),
+                "approved CB recovery merge failed");
+        m_roles.at(holder).erase(object);
+        Log(snapshot.state.taskId, "RECOVERY_LOG_APPLIED", holder, object,
+            sequence, row.key.toWork, row.bytes);
+    }
+    Changed(holder);
+    return true;
+}
+
 void CbSatManager::Finalize()
 {
     for (auto& [task, normal] : m_normal) ReleaseTask(task, "SIMULATION_END");
