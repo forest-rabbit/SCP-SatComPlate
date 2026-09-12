@@ -27,4 +27,9 @@ cL/cR equivalent cost，再加恢复 reserved-idle equivalent cost。恢复融�
 reserved-idle 时不重复加入；planned catch-up 不能替代实际服务 WU。
 网络采用源端实际应用发送 Byte（包含失败/取消已发量），不是逐跳 byte-hop。
 
-本轮尚未写入标定或正式性能结果；不能把单测 MTBF/人为故障点当作正式参数来源。
+独立标定已完成：执行 HEAD `a47128a1d`，证据目录
+`output/cb-sat-v2/20260912T163425212424Z-calibration`。
+10 次完整 1300 s pilot 的有效检查/暴露为 33430 次/33430 s，联合命中 806 次，
+故 `TF=33430/806=41.47642679900744 s`。64 颗星有有效暴露；另外 32 次范围外事件
+不计入分子。连续主计算服务时间为 32897.853004236 s，不替代离散检查分母。
+逐 run/逐节点证据已保存于 profile；正式 run11 与单测参数均未参与标定。

@@ -8,6 +8,7 @@ from pathlib import Path
 import runpy
 import shlex
 import subprocess
+import threading
 import time
 
 BASE = Path(__file__).resolve().parents[1]
@@ -115,8 +116,12 @@ def execute(directory, arguments, head, identity):
 def batch(root, jobs, commands, head, identity):
     require(1 <= jobs <= 8, "jobs must be in 1..8")
     statuses = {name: "PENDING" for name in commands}
+    status_lock = threading.Lock()
     write_json(root / "matrix-status.json", dict(commit=head, groups=statuses))
     def run(name, args):
+        with status_lock:
+            statuses[name] = "RUNNING"
+            write_json(root / "matrix-status.json", dict(commit=head, groups=statuses))
         print(f"START {name}", flush=True)
         return execute(root / name, args, head, identity)
     with ThreadPoolExecutor(max_workers=jobs) as pool:
@@ -126,9 +131,11 @@ def batch(root, jobs, commands, head, identity):
             name = futures[future]
             try:
                 future.result()
-                statuses[name] = "FINISHED"
+                status = "FINISHED"
             except Exception as error:
-                statuses[name] = "FAILED"
+                status = "FAILED"
                 failed.append(f"{name}: {error}")
-            write_json(root / "matrix-status.json", dict(commit=head, groups=statuses, errors=failed))
+            with status_lock:
+                statuses[name] = status
+                write_json(root / "matrix-status.json", dict(commit=head, groups=statuses, errors=failed))
     require(not failed, "; ".join(failed))

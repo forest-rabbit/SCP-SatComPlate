@@ -2,7 +2,7 @@
 
 CheckBullet 的卫星平台适配基线：一个备份节点，保存完整 INPUT、一个状态根和连续增量日志。
 不继承 Fixed/CompFRR 的双层部署或跨节点 tail 获取能力。当前实施进度见
-[preflight.md](preflight.md)；正式 MTBF 校准及八组实验尚未完成。
+[preflight.md](preflight.md)。独立校准已冻结 MTBF=41.47642679900744 s；八组正式实验待验收。
 
 ## 状态与正常保护
 
@@ -51,7 +51,7 @@ cmake --build cmake-cache --target satcompute_test_satcompute-cb-sat-policy-test
 ```
 
 以上命令从仓库根目录执行，不开启 ns-3 全局 examples/tests。测试显式注入的 MTBF
-只用于构造边界场景；正式执行必须使用后续独立 pilot 得到的冻结统计值。
+只用于构造边界场景；正式执行使用已提交的独立 pilot 冻结统计值。
 
 ## 接入与执行工具
 
@@ -64,13 +64,15 @@ cmake --build cmake-cache --target satcompute_test_satcompute-cb-sat-policy-test
 从仓库根目录按顺序执行（已有输出不会被覆盖）：
 
 ```bash
-.venv/bin/python contrib/satcompute/protection/policy/baseline/checkbullet/tools/calibrate-cb-sat-mtbf.py --stage all --jobs 2
 .venv/bin/python contrib/satcompute/protection/policy/baseline/checkbullet/tools/run-cb-sat-matrix.py --stage smoke --jobs 2
 .venv/bin/python contrib/satcompute/protection/policy/baseline/checkbullet/tools/run-cb-sat-matrix.py --stage formal --jobs 2
 .venv/bin/python contrib/satcompute/protection/policy/baseline/checkbullet/tools/analyze-cb-sat-matrix.py --root output/cb-sat-v2
 ```
 
-标定完成后先核对并提交 profile，再运行矩阵；runner 要求干净执行快照，但不会自动提交。
+runner 要求干净执行快照，但不会自动提交。正常使用无需重复标定：已提交的
+`calibration/frozen-mtbf-profile.json` 来自 33430 s 有效暴露和 806 次联合故障。
+`calibrate-cb-sat-mtbf.py --stage all --jobs 2` 是首次标定接口，已有 profile 时主动拒绝覆盖；
+改变校准合同应作为另一次明确的实验，不能悄悄重调当前参数。
 10 个 off/F1/F2 pilot 使用相同 arrival trace、seed1/run101–110，F3 关闭。
 统计口径是“健康、普通主任务未完成的运行中检查点数 × 检查间隔”；联合命中只计一次，
 空闲事件不计入分子。实际连续服务暴露仅作诊断，不能混作分母；pooled MTBF 为总暴露/总事件，
