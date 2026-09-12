@@ -11,6 +11,7 @@ trap 'rm -rf "$test_output"' EXIT
 ./ns3 run --no-build "satcompute-para-test"
 ./ns3 run --no-build "satcompute-protection-contract-test"
 ./ns3 run --no-build "satcompute-cb-sat-policy-test"
+./ns3 run --no-build "satcompute-cb-sat-runtime-test"
 ./ns3 run --no-build "satcompute-n5b-policy-test"
 ./ns3 run --no-build "satcompute-frequency-runtime-test --outputDir=$test_output/frequency"
 ./ns3 run --no-build "satcompute-protection-path-test"

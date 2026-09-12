@@ -1,0 +1,47 @@
+# CB-Sat v2
+
+CheckBullet 的卫星平台适配基线：一个备份节点，保存完整 INPUT、一个状态根和连续增量日志。
+不继承 Fixed/CompFRR 的双层部署或跨节点 tail 获取能力。当前实施进度见
+[preflight.md](preflight.md)；正式 MTBF 校准及八组实验尚未完成。
+
+## 状态与正常保护
+
+- `cb-sat-policy.h/.cc`：第一次普通计算开始时求 `g=sqrt(2*MTBF*(cL+cR))`、
+  `H=g/T0`。当 H 不小于 1 时不产生周期检查点；否则按原任务进度对齐公共合法边界。
+  X 使用恢复预算、实际日志大小与当前存储份额求解，不固定为 4，不把不可行值夹成 1。
+- `cb-sat-state.h/.cc`：`r` 是已融合根的 WU，`q` 是该备份节点已保存连续日志可覆盖的 WU。
+  初始化的 FULL 不含 INPUT，且不是额外的第一份 DELTA。接收乱序不能跨缺口推进 q。
+  故障只使用严格早于该纳秒的提交，停止后拒绝迟到回调。
+- `cb-sat-manager.h/.cc`：在第一个 H 边界选择单节点，真实发送 P→B 的完整 INPUT/FULL。
+  后续每份增量完成异步 cL 后立即申请传输，不等累计到 X 才发送；B 收齐连续日志达到 X
+  后执行本地 cR 合并。源端未确认记录、接收 reserved、INPUT/根/日志均占用公共存储池。
+  失败传输只在下一个 H 边界重试同一份记录；源端空间不足时跳过尚未捕获的边界，
+  下一次从最后实际捕获的位置生成较长增量，不伪造过去快照。
+
+四种 placement 使用公共单节点接口：minimal 的 ffp/lrl 只实际尝试当次选中的一颗星；
+fa-ffp/fa-lrl 先筛选真实路径及存储可行性。常态保护一旦选定 B 就不偷偷重新部署。
+恢复时的节点排序与常态 placement 是不同决策，不能据目录名称混为一谈。
+
+当前恢复成本起步约定是零读取、非空日志集合一次公共 cR。因此恢复预算足够时
+`X_R` 不形成有限上界，X 主要受实际存储和剩余合法事件限制；这不是已测量的线性读取模型。
+节点共享容量按“各 owner 已占用量 + 均分剩余空间”规划，最终由真实 pool 准入。
+根/日志原地融合不分配第二份 FULL，完整 INPUT 不参与裁剪。旧对象延迟至下一纳秒清理，
+以保障故障同纳秒的严格截止语义。
+
+所有耗时在内部使用整数 ns；cL/cR 不暂停主任务。仅完成的正常操作计 equivalent cost，
+尚未完成就取消的生成/合并不冒充已执行完成。实际网络字节仍由公共传输引擎计量。
+
+## 验证
+
+测试仍在项目统一的 `tests/unit`，不在本目录建立另一套测试体系：
+
+```bash
+source .venv/bin/activate
+cmake --build cmake-cache --target satcompute_test_satcompute-cb-sat-policy-test \
+  satcompute_test_satcompute-cb-sat-runtime-test -j 2
+./ns3 run --no-build satcompute-cb-sat-policy-test
+./ns3 run --no-build satcompute-cb-sat-runtime-test
+```
+
+以上命令从仓库根目录执行，不开启 ns-3 全局 examples/tests。测试显式注入的 MTBF
+只用于构造边界场景；正式执行必须使用后续独立 pilot 得到的冻结统计值。
