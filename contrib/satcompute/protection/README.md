@@ -48,11 +48,11 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 
 | 参数 | 默认 | 说明 |
 |---|---:|---|
-| `protectionMode` | `off` | `recompute` 完整从零重算；`one-plus-one` 真实热副本；`fixed` 固定检查点；`compfrr` 动态频率，仅后者要求 generate 且启用 F1/F2 至少一个来源；保护模式均要求网络任务、shadow 关闭 |
+| `protectionMode` | `off` | `recompute` 完整从零重算；`one-plus-one` 真实热副本；`fixed` 固定检查点；`compfrr` 动态频率；`checkbullet` 单备份星完整 INPUT/日志；仅 compfrr 要求 generate 且启用 F1/F2 至少一个来源；保护模式均要求网络任务、shadow 关闭 |
 | `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
-| `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，四种保护模式均可注入 |
+| `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入 |
 | `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr/checkbullet 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
 | `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |

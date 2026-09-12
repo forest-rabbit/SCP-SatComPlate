@@ -41,6 +41,13 @@ def distribution(values):
                 p50=q(.5), p95=q(.95), max=max(values, default=None))
 
 
+def completed_execution(run, identity, outcome):
+    """PARTIAL is a task outcome, not an interrupted simulator execution."""
+    require(outcome["returncode"] == 0 and outcome["status"] == "FINISHED", "execution did not finish")
+    require(run["run_status"] in ("COMPLETE", "PARTIAL") and run["simulation_duration_ns"] ==
+            round(identity["simulation_duration_s"]*NS), "simulation horizon incomplete")
+
+
 def audit(root):
     task_rows = rows(root, "task-summary.csv")
     tasks = {t["task_id"]:t for t in task_rows}
@@ -56,9 +63,7 @@ def audit(root):
         execution_identity = json.loads((root/"execution.json").read_text())
         outcome = json.loads((root/"execution-result.json").read_text())
         run = json.loads((root/"run-summary.json").read_text())
-        require(outcome["returncode"] == 0 and outcome["status"] == "FINISHED", "execution did not finish")
-        require(run["run_status"] == "COMPLETE" and run["simulation_duration_ns"] ==
-                round(execution_identity["simulation_duration_s"]*NS), "simulation horizon incomplete")
+        completed_execution(run, execution_identity, outcome)
         require(not execution_identity["worktree_dirty"], "dirty execution snapshot")
         require(not parameters.get("unit_fixture_only",False), "unit fixture leaked into platform execution")
         require(parameters["mtbf_seconds"] == execution_identity["mtbf_seconds"], "production MTBF differs from frozen execution")
@@ -78,6 +83,7 @@ def audit(root):
             require((len(tasks),run["total_input_bytes"],run["total_output_bytes"],run["total_compute_work_units"],
                      run["compute_node_count"]) == (800,194119753287,100166291859,352513119,66), "formal workload changed")
     require(len(tasks) == len(task_rows), "duplicate logical tasks")
+    require(all(t["final_state"] in ("COMPLETED", "FAILED") for t in task_rows), "nonterminal logical task")
     require(len(recovery) == len(rows(root,"cb-sat-recovery.csv")), "more than one CB recovery per task")
     require(yes(parameters["final_quiescent"]) and yes(parameters["final_loads_empty"]), "CB did not finalize")
     require(parameters["input_contract"] == "full_original_input" and not parameters["tail_enabled"], "wrong CB contract")
@@ -173,7 +179,8 @@ def audit(root):
             require(number(r,"resume_work_units") == wq, "CB upgraded beyond approved q")
             seq = number(r,"root_sequence")
             roots = [e for e in by_task[tid] if e["event"] in ("ROOT_COMMIT","MERGE_COMMIT") and
-                     number(e,"sequence") == seq and number(e,"time_ns") < cutoff]
+                     number(e,"sequence") == seq and number(e,"time_ns") < cutoff and
+                     e["object_id"] == r["root_object_id"] and e["node_id"] == r["backup_node"]]
             require(len(roots) == 1, "saved root missing strict-before commit")
             for token in filter(None,r["log_objects"].split(';')):
                 sequence,object_id = token.split(':'); record = by_record[(tid,int(sequence))]
@@ -185,6 +192,28 @@ def audit(root):
             require(start >= max(number(r,"input_received_time_ns"),number(r,"state_ready_time_ns")), "compute before ready")
             require(number(r,"reserved_idle_ns") == start-number(r,"recovery_accept_time_ns"), "idle not actual wait")
         require(number(r,"restore_processing_ns_included_in_idle") <= number(r,"reserved_idle_ns"), "restore diagnostic outside actual idle")
+        if r["state_ready_time_ns"] and r["chosen_path"] in ("DIRECT", "RELOCATE"):
+            saved = dict(token.split(':') for token in filter(None,r["log_objects"].split(';')))
+            applied = [e for e in by_task[tid] if e["event"] == "RECOVERY_LOG_APPLIED"]
+            require(len(applied) == len(saved) and {e["sequence"] for e in applied} == set(saved),
+                    "actual restored chain differs from approved snapshot")
+            for e in applied:
+                require(e["node_id"] == r["recovery_node"] and number(e,"time_ns") <= number(r,"state_ready_time_ns"),
+                        "log applied on wrong holder or after ready")
+                if r["chosen_path"] == "DIRECT":
+                    require(e["object_id"] == saved[e["sequence"]], "direct used another object's same-sized data")
+            if r["chosen_path"] == "RELOCATE":
+                wanted = [("CB_RELOCATE_FULL",r["root_sequence"],
+                           state_bytes(normal[tid],wr)+header(normal[tid]),None)]
+                wanted += [("CB_RELOCATE_LOG",e["sequence"],number(by_record[(tid,number(e,"sequence"))],"record_bytes"),
+                            e["object_id"]) for e in applied]
+                for kind,sequence,bytes_,object_id in wanted:
+                    delivered = [f for f in flows if f["task_id"] == tid and f["kind"] == kind and f["sequence"] == sequence
+                        and f["source_node"] == r["backup_node"] and f["destination_node"] == r["recovery_node"]
+                        and f["attempt_generation"] == "1" and f["state"] == "COMPLETED" and number(f,"bytes") == bytes_
+                        and number(f,"registered_time_ns") > cutoff and number(f,"terminal_time_ns") <= number(r,"state_ready_time_ns")
+                        and (object_id is None or f["destination_object_id"] == object_id)]
+                    require(len(delivered) == 1, "new holder's objects lack approved actual B-to-C delivery")
     placement = rows(root,"placement-selections.csv")
     require(all(not p["local_node"] and not p["remote_node"] for p in placement), "fabricated double-tier pair")
     require(all(p["placement_mode"] == parameters["placement"] for p in placement), "placement label differs from actual class")
@@ -238,7 +267,7 @@ def audit(root):
     checks = dict(full_input=True,checkpoint_lineage_and_size=True,strict_before_fault_state=True,
         no_tail=True,single_backup_placement=True,physical_network_and_reservations=True,
         storage_and_load_finalization=True,actual_execution_conservation=True,normal_idle_no_double_count=True,
-        interval_and_threshold_equations=True)
+        interval_and_threshold_equations=True,available_state_source_authorized=True)
     fault_events = rows(root,"fault-events.csv") if (root/"fault-events.csv").exists() else []
     starts = [f for f in fault_events if f["event_type"] == "START"]
     def group_recovery(selected):

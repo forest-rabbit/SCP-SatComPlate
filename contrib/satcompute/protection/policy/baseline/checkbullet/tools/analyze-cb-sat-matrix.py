@@ -180,6 +180,8 @@ def analyze(root):
             write_json(directory/"cb-sat-audit.json",dict(status="FAIL",error=str(error)))
     require(results or failures,"no actual CB execution evidence found")
     matrices = {}
+    audit_snapshot = dict(commit=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),
+        worktree_dirty=bool(subprocess.check_output(["git","status","--porcelain"],cwd=ROOT)))
     for parent in sorted({str(Path(r["directory"]).parent) for r in results if r["stage"] == "formal"}):
         formal = [r for r in results if r["stage"] == "formal" and str(Path(r["directory"]).parent) == parent]
         matrices[parent] = coverage(formal)
@@ -187,7 +189,16 @@ def analyze(root):
             failures.append(dict(directory=parent,error="incomplete or mixed-version formal matrix"))
         else:
             comparison(Path(parent),formal)
+            status_path = Path(parent)/"matrix-status.json"
+            if status_path.exists() and not (Path(parent)/"initial-matrix-status.json").exists():
+                write_json(Path(parent)/"initial-matrix-status.json",json.loads(status_path.read_text()))
+            write_json(status_path,dict(commit=formal[0]["commit"],stage="formal",audit_snapshot=audit_snapshot,
+                groups={r["group"]:"AUDIT_PASS" for r in formal}))
+            write_json(Path(parent)/"run-manifest.json",dict(execution_commit=formal[0]["commit"],
+                audit_snapshot=audit_snapshot,coverage=matrices[parent],groups=[dict(group=r["group"],
+                directory=r["directory"],execution="execution.json",outcome="execution-result.json",audit="cb-sat-audit.json") for r in formal]))
     write_json(root/"cb-sat-matrix-summary.json",dict(runs=results,failed_or_incomplete=failures,formal_matrices=matrices,
+        audit_snapshot=audit_snapshot,
         unprepared_workloads={"50GB":"NOT_PREPARED: no approved input manifest","100GB":"NOT_PREPARED: no approved input manifest"},
         note="Eight configurations, not independent repeats. Calibration pilots are not success-rate samples."))
     csv_table(root/"cb-sat-matrix-summary.csv",results)

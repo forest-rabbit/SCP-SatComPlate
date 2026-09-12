@@ -805,6 +805,29 @@ bool CbSatManager::ApplyStoredLogs(const CbRecoverySnapshot& snapshot, uint32_t 
         version = sequence;
     }
     if (previous != snapshot.state.recoverableWork || previous > snapshot.actualWork) return false;
+    if (holder == snapshot.state.backupNode)
+    {
+        if (rootObject != snapshot.rootObject || logs != snapshot.logObjects) return false;
+    }
+    else
+    {
+        // A new holder needs actual deliveries of this approved chain, not merely
+        // same-sized objects bearing the same task ID in some other local pool.
+        const auto delivered = [&](CbFlowKind kind, uint64_t sequence,
+                                   uint64_t object, uint64_t bytes) {
+            return std::any_of(m_flows.begin(), m_flows.end(), [&](const auto& flow) {
+                return flow.task == snapshot.state.taskId && flow.generation == 1 &&
+                    flow.kind == kind && flow.sequence == sequence && flow.object == object &&
+                    flow.source == snapshot.state.backupNode && flow.destination == holder &&
+                    flow.bytes == bytes && flow.completed && flow.registeredNs > snapshot.cutoffNs;
+            });
+        };
+        if (!delivered(CbFlowKind::RELOCATE_FULL, snapshot.state.rootSequence,
+                       rootObject, state->FullBytes(snapshot.state.rootWork))) return false;
+        for (const auto& [sequence, object] : logs)
+            if (!delivered(CbFlowKind::RELOCATE_LOG, sequence, object,
+                           state->Records().at(sequence).bytes)) return false;
+    }
     // All identities, byte sizes, versions and the observed cutoff were checked before mutation.
     for (auto sequence : snapshot.state.logSequences)
     {

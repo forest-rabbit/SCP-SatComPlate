@@ -7,7 +7,7 @@
 | cL / cR | 公共 `GetProtectionCosts(TaskStateAdapter::VariableBytes())`；无 CB 私有成本表，不按局部 checkpoint 大小重新选档 |
 | INPUT / F / D | 完整原始 S 单独保存；F=公共状态 K(w)+H_header；D=两实际捕获点间的状态差+H_header。不使用旧双层的剩余 INPUT 接口 |
 | 恢复读取与融合 | 工程起步：base/read=0；非空日志一次公共 cR。不是原论文测量结果，也不是已校准的线性日志读耗时 |
-| X_R | 用上述恢复成本及原 compute deadline 剩余预算求解；预算够用时可无穷，不硬填有限值 |
+| X_R | 用上述恢复成本与首次运行时冻结的松弛预算 `R_cp=max(0,deadline-start-T0)` 求解；不是每次按墙钟收紧预算，预算够用时可无穷 |
 | X_S / 份额 | 真实待保存日志字节；已占用 U 保底，余量 Free 按 owner 数均分，稳定 ID 分配余数字节；实际申请仍受物理池约束 |
 | X | 恢复、存储与剩余合法目标的最小约束，无固定 X=4、无隐含实现 cap，不把不可行值夹成 1 |
 | Placement / busy | 公共四 placement；busy 开关仅作用于 REMOTE_BUSY。恢复排序与常态部署不是同一决策 |

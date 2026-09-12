@@ -37,7 +37,7 @@ void Reset()
 struct Options
 {
     std::string name{"direct"}, expected{"DIRECT"};
-    bool busy{}, success{true}, merge40{true}, primaryF3{}, noCheckpoint{};
+    bool busy{}, success{true}, merge40{true}, primaryF3{}, primaryF2{}, noCheckpoint{};
     std::string damage;
     RemoteBusyRecoveryPolicy busyPolicy{RemoteBusyRecoveryPolicy::RELOCATE};
     double deadline{1.3};
@@ -56,6 +56,8 @@ struct Driver
     int64_t start{-1};
     bool failedTransfer{}, pressureApplied{};
     FaultTrace trace;
+    BackupStoragePool foreignStorage{20000000};
+    std::optional<uint64_t> foreignObject;
 
     void Emit(uint32_t node, bool permanent = false, bool f2 = false)
     {
@@ -123,14 +125,12 @@ struct Driver
             Simulator::Schedule(NanoSeconds(options.faultDelay - 10000000), [this] { Emit(0, true); });
         if (options.damage == "foreign-state")
             Simulator::Schedule(NanoSeconds(660000000), [this] {
-                // An explicitly foreign mechanism owns real nearby 66% state. CB has no
-                // authority to discover or consume it, even if this node becomes C.
-                const auto object = manager.Reserve(999, 2, "TEST_FOREIGN_STATE", 165 * 114688);
-                Check(object.has_value(), "nearby foreign state was not physically allocated");
-                manager.CommitObject(2, *object);
-                manager.Log(999, "TEST_FOREIGN_STATE_READY", 2, *object, 0, 66000, 165 * 114688);
+                // A separate mechanism's real nearby node-2 pool holds 66% of THIS task.
+                // It stays present through recovery; CB may not discover or consume it.
+                foreignObject = foreignStorage.Allocate(1, StorageKind::REMOTE_STATE, 165 * 114688);
+                Check(foreignObject.has_value(), "nearby same-task foreign state not physically allocated");
             });
-        Simulator::Schedule(NanoSeconds(options.faultDelay), [this] { Emit(3, options.primaryF3); });
+        Simulator::Schedule(NanoSeconds(options.faultDelay), [this] { Emit(3, options.primaryF3, options.primaryF2); });
         // Scheduled before the fault creates its +1ns decision: audit only the frozen plan,
         // before any restore can consume its objects. Rejected plans must have no side effects.
         Simulator::Schedule(NanoSeconds(options.faultDelay + 1), [this] {
@@ -163,6 +163,24 @@ struct Driver
             }
             Check(pool.Used() == used && pool.Reserved() == reserved,
                   "rejected restore plan partially mutated storage");
+            // Mere task ownership and matching byte sizes do not authorize a new holder.
+            std::vector<uint64_t> fabricated;
+            const auto make = [&](const char* role, uint64_t bytes) {
+                const auto object = manager.Reserve(1, 4, role, bytes);
+                Check(object.has_value(), "fake-plan storage fixture failed");
+                manager.CommitObject(4, *object);
+                fabricated.push_back(*object);
+                return *object;
+            };
+            const auto fakeRoot = make("FULL", manager.State(1)->FullBytes(snapshot.state.rootWork));
+            std::map<uint64_t,uint64_t> fakeLogs;
+            for (auto sequence : snapshot.state.logSequences)
+                fakeLogs.emplace(sequence, make("LOG", manager.State(1)->Records().at(sequence).bytes));
+            const auto before = manager.Pools().at(4)->Used();
+            Check(!manager.ApplyStoredLogs(snapshot, 4, fakeRoot, fakeLogs),
+                  "same-task same-sized objects bypassed approved state delivery");
+            Check(manager.Pools().at(4)->Used() == before, "unapproved-holder rejection mutated objects");
+            for (auto object : fabricated) manager.ReleaseObject(4, object, "TEST_PLAN_RELEASE");
         });
         if (options.damage == "recovery-f1" || options.damage == "recovery-f2")
             Simulator::Schedule(NanoSeconds(options.faultDelay + 10000000), [this] {
@@ -231,6 +249,15 @@ CbRecoverySummary Run(const Options& options)
         if (options.busy) driver.Service(0)->CancelRecovery(998, 1);
         manager.ReleaseTask(999, "TEST_END");
         manager.Finalize();
+        if (options.damage == "foreign-state")
+        {
+            Check(driver.foreignObject && driver.foreignStorage.Find(*driver.foreignObject)->taskId == 1 &&
+                  driver.foreignStorage.Used() == 165 * 114688,
+                  "CB consumed or erased another mechanism's same-task 66% state");
+            Check(driver.foreignStorage.Used() + manager.Pools().at(2)->PeakTotal() <= 100000000,
+                  "foreign-state fixture exceeded combined node storage capacity");
+            Check(driver.foreignStorage.Release(*driver.foreignObject), "foreign fixture cleanup failed");
+        }
         if (!outputDir.empty())
         {
             const auto directory = std::filesystem::path(outputDir) / options.name;
@@ -368,6 +395,7 @@ int main(int argc, char** argv)
         options.name = "busy-recompute-deadline"; options.deadline = 1.3; options.success = false;
         Run(options);
         options = {}; options.name = "primary-f3"; options.primaryF3 = true; Run(options);
+        options = {}; options.name = "primary-f2"; options.primaryF2 = true; Run(options);
         options = {}; options.name = "simulation-cutoff"; options.stop = 700000000;
         options.success = false; Run(options);
         for (bool busy : {false, true})

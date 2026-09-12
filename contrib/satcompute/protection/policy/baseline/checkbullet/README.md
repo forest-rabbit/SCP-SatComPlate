@@ -2,7 +2,8 @@
 
 CheckBullet 的卫星平台适配基线：一个备份节点，保存完整 INPUT、一个状态根和连续增量日志。
 不继承 Fixed/CompFRR 的双层部署或跨节点 tail 获取能力。当前实施进度见
-[preflight.md](preflight.md)。独立校准已冻结 MTBF=41.47642679900744 s；八组正式实验待验收。
+[preflight.md](preflight.md)。MTBF=41.47642679900744 s；八组正式 1300 s 已执行并审计，
+结果与边界见[验收报告](../../../../../../docs/n5/reviews/Pre-N5C-cb-sat-v2.md)。
 
 ## 状态与正常保护
 
@@ -11,7 +12,7 @@ CheckBullet 的卫星平台适配基线：一个备份节点，保存完整 INPU
   X 使用恢复预算、实际日志大小与当前存储份额求解，不固定为 4，不把不可行值夹成 1。
 - `cb-sat-state.h/.cc`：`r` 是已融合根的 WU，`q` 是该备份节点已保存连续日志可覆盖的 WU。
   初始化的 FULL 不含 INPUT，且不是额外的第一份 DELTA。接收乱序不能跨缺口推进 q。
-  故障只使用严格早于该纳秒的提交，停止后拒绝迟到回调。
+故障只使用严格早于该纳秒的提交，停止后拒绝迟到回调。
 - `cb-sat-manager.h/.cc`：在第一个 H 边界选择单节点，真实发送 P→B 的完整 INPUT/FULL。
   后续每份增量完成异步 cL 后立即申请传输，不等累计到 X 才发送；B 收齐连续日志达到 X
   后执行本地 cR 合并。源端未确认记录、接收 reserved、INPUT/根/日志均占用公共存储池。
@@ -60,6 +61,9 @@ cmake --build cmake-cache --target satcompute_test_satcompute-cb-sat-policy-test
 源缓存、INPUT、FULL 和 LOG 的逐对象变化在 events 中，storage 给出每节点峰值和最终占用。
 恢复 CSV 中 planned WU 与 actual WU 分列；网络统计使用真实发送量，失败/取消的已发字节也计入。
 `normal + execution waste + reserved idle` 可相加；已包含在 idle 中的恢复 cR 不再次相加。
+task 表的 r/q 为保留的历史末状态，不表示结束后仍占有对象；故障实际可用状态以 recovery
+表的严格 cutoff 为准。B 上使用冻结对象 ID；迁移后的每个根/日志必须有真实 B→C 完成传输。
+`PARTIAL` 表示存在失败任务，不等于仿真截断，不能用 800/800 作为语义审计门槛。
 
 从仓库根目录按顺序执行（已有输出不会被覆盖）：
 
@@ -77,3 +81,8 @@ runner 要求干净执行快照，但不会自动提交。正常使用无需重�
 统计口径是“健康、普通主任务未完成的运行中检查点数 × 检查间隔”；联合命中只计一次，
 空闲事件不计入分子。实际连续服务暴露仅作诊断，不能混作分母；pooled MTBF 为总暴露/总事件，
 不是每次 MTBF 的平均。零命中显式表示无穷。八组矩阵不读取 run11 的未来故障来反推参数。
+
+正式证据目录为 `output/cb-sat-v2/20260912T171143276614Z-formal`。
+离线汇总生成公共 40 行表、checkpoint 恢复附表、独立 1+1 takeover 附表及百分比变化表；
+逐 profile、F1/F2/F3、恢复路径、H/X 与失败原因在每组 `cb-sat-audit.json`。
+这是固定单 seed 受控场景、零读取成本起步模型，不是多 seed 或真实应用恢复证明。

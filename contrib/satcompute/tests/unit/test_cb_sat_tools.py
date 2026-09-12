@@ -97,6 +97,20 @@ class CbCalibrationTests(unittest.TestCase):
         bad = deepcopy(runs); bad[0]["mtbf_seconds"] = 1
         self.assertEqual(MATRIX["coverage"](bad)["status"], "INCOMPLETE")
 
+    def test_partial_task_outcome_is_not_truncated_execution(self):
+        complete = MATRIX["AUDIT"]["completed_execution"]
+        identity = dict(simulation_duration_s=1300)
+        outcome = dict(returncode=0,status="FINISHED")
+        for status in ("COMPLETE", "PARTIAL"):
+            complete(dict(run_status=status,simulation_duration_ns=1300*10**9),identity,outcome)
+        for bad in (dict(run_status="INCOMPLETE",simulation_duration_ns=1300*10**9),
+                    dict(run_status="PARTIAL",simulation_duration_ns=1000*10**9)):
+            with self.assertRaisesRegex(ValueError,"horizon"):
+                complete(bad,identity,outcome)
+        with self.assertRaisesRegex(ValueError,"finish"):
+            complete(dict(run_status="PARTIAL",simulation_duration_ns=1300*10**9),identity,
+                     dict(returncode=1,status="FAILED"))
+
 
 if __name__ == "__main__":
     unittest.main()

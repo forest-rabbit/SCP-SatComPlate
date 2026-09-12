@@ -19,8 +19,8 @@ def main():
     parser.add_argument("--root",type=Path,required=True)
     args = parser.parse_args()
     paths = [p for p in sorted(args.root.iterdir()) if p.is_dir()]
-    if len(paths) != 25:
-        raise ValueError("expected all 25 current C++ recovery fixtures")
+    if len(paths) != 26:
+        raise ValueError("expected all 26 current C++ recovery fixtures")
     for directory in paths:
         AUDIT(directory)
     corruptions = [
@@ -34,6 +34,7 @@ def main():
         ("cb-sat-checkpoints.csv","record_bytes","1"),
         ("cb-sat-tasks.csv","interval_seconds","1"),
         ("cb-sat-decisions.csv","threshold","999"),
+        ("cb-sat-recovery.csv","root_object_id","999999"),
     ]
     for name,key,value in corruptions:
         with tempfile.TemporaryDirectory(prefix="cb-evidence-corruption-") as tmp:
