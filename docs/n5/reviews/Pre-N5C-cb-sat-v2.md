@@ -13,6 +13,7 @@ G0–G7 本地实施与验收连续完成；尚未发布 PR、合并、打 tag �
 | 参数冻结 | 33430 次有效检查、33430 s 等效暴露、806 次联合故障，覆盖 64 星；`MTBF=41.47642679900744 s` |
 | 八组小场景及重复 | `output/cb-sat-v2/20260912T170241158297Z-smoke`；HEAD `1a43a1431`，四 placement × 两 busy，加 FA-LRL/relocate 重复，26 个文件确定性匹配 |
 | 八组正式场景 | `output/cb-sat-v2/20260912T171143276614Z-formal`；统一干净执行 HEAD `494e133c5`，全部 1300 s、退出码 0；单组墙钟 3091.8–3345.0 s，最多八组并行 |
+| 最终代码小场景复核 | `output/cb-sat-v2/20260912T182403752476Z-smoke`；HEAD `17fd3cc49`，八组及重复通过；与原 smoke 每组 26 个文件确定性匹配，排除执行身份/路径/墙钟，离线审计使用同一版本 |
 | 最终审计 | 上述正式目录的 `run-manifest.json`、`cb-sat-matrix-summary.csv/.json`、每组 `cb-sat-audit.json`；分析提交与执行提交分开记录 |
 
 正式输入没有修改：66 星/66 计算星、800 任务、INPUT=194119753287 B、
@@ -131,8 +132,8 @@ CB FA-LRL 的全程平均链路利用率为 0.701983%，单链路最高全程平
 
 ## 可复查命令
 
-以下是本轮实际使用的入口（从仓库根目录启用 `.venv`）；正式运行曾用 `--jobs 8`，
-校准用 `--jobs 2`。正式及校准均已完成，不需为了审阅重复执行。新运行自动使用新目录，
+以下是本轮实际使用的入口（从仓库根目录启用 `.venv`）；正式与校准均用 `--jobs 8`，
+最终 smoke 用 `--jobs 2`。正式及校准均已完成，不需为了审阅重复执行。新运行自动使用新目录，
 已有 MTBF profile 会拒绝重新标定覆盖。
 
 ```bash
@@ -142,7 +143,7 @@ contrib/satcompute/tests/unit/run-cpp-tests.sh
 python -m unittest discover -s contrib/satcompute/tests/unit -p 'test_*.py' -v
 contrib/satcompute/tests/integration/smoke/run-all.sh
 contrib/satcompute/tests/integration/regression/run-all.sh
-python contrib/satcompute/protection/policy/baseline/checkbullet/tools/calibrate-cb-sat-mtbf.py --stage all --jobs 2
+python contrib/satcompute/protection/policy/baseline/checkbullet/tools/calibrate-cb-sat-mtbf.py --stage all --jobs 8
 python contrib/satcompute/protection/policy/baseline/checkbullet/tools/run-cb-sat-matrix.py --stage smoke --jobs 2
 python contrib/satcompute/protection/policy/baseline/checkbullet/tools/run-cb-sat-matrix.py --stage formal --jobs 8
 python contrib/satcompute/protection/policy/baseline/checkbullet/tools/analyze-cb-sat-matrix.py --root output/cb-sat-v2/20260912T171143276614Z-formal
