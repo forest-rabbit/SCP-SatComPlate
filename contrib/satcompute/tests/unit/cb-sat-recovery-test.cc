@@ -68,7 +68,20 @@ struct Driver
         f.f2Occurred = !permanent && f2;
         if (!permanent) { f.durationNs = 200000000; f.failureProbability = 0.2; }
         trace.faults.push_back(f);
-        fault->SubmitGeneratedBatch({{FaultEventType::START, f}});
+        std::vector<GeneratedFaultEvent> batch{{FaultEventType::START, f}};
+        if (node == 3 && options.damage == "backup-f3-same")
+        {
+            auto other = f;
+            other.faultId = nextFault++;
+            other.nodeId = 0;
+            other.faultType = FaultType::SATELLITE;
+            other.durationNs.reset();
+            other.failureProbability.reset();
+            other.f1Occurred = false;
+            trace.faults.push_back(other);
+            batch.push_back({FaultEventType::START, other});
+        }
+        fault->SubmitGeneratedBatch(batch);
     }
     Ptr<ComputeService> Service(uint32_t node)
     {
@@ -108,6 +121,15 @@ struct Driver
             Simulator::Schedule(NanoSeconds(options.faultDelay - 10000000), [this] { Emit(0); });
         if (options.damage == "backup-f3-before")
             Simulator::Schedule(NanoSeconds(options.faultDelay - 10000000), [this] { Emit(0, true); });
+        if (options.damage == "foreign-state")
+            Simulator::Schedule(NanoSeconds(660000000), [this] {
+                // An explicitly foreign mechanism owns real nearby 66% state. CB has no
+                // authority to discover or consume it, even if this node becomes C.
+                const auto object = manager.Reserve(999, 2, "TEST_FOREIGN_STATE", 165 * 114688);
+                Check(object.has_value(), "nearby foreign state was not physically allocated");
+                manager.CommitObject(2, *object);
+                manager.Log(999, "TEST_FOREIGN_STATE_READY", 2, *object, 0, 66000, 165 * 114688);
+            });
         Simulator::Schedule(NanoSeconds(options.faultDelay), [this] { Emit(3, options.primaryF3); });
         // Scheduled before the fault creates its +1ns decision: audit only the frozen plan,
         // before any restore can consume its objects. Rejected plans must have no side effects.
@@ -252,11 +274,12 @@ CbRecoverySummary Run(const Options& options)
         Check(result.actualCatchupWu <= result.plannedCatchupWu &&
               result.actualRecoveryWu == result.actualCatchupWu + result.actualRemainingWu,
               "CB counted planned rather than actual WU");
-        if (options.merge40 && options.damage != "backup-f3-before")
+        if (options.merge40 && options.damage != "backup-f3-before" && options.damage != "backup-f3-same")
         {
             Check(driver.pressureApplied, "real X pressure fixture not applied");
             Check(result.snapshot.state.rootWork == 40000 && result.snapshot.state.recoverableWork == 60000 &&
-                  result.snapshot.actualWork == 65000, "fault did not freeze exact 65/40/60 fixture");
+                  result.snapshot.actualWork == static_cast<uint64_t>(options.faultDelay / 10000),
+                  "fault did not freeze exact Wf/40/60 fixture");
         }
         if (result.computeStartedNs >= 0)
         {
@@ -345,6 +368,19 @@ int main(int argc, char** argv)
         options.name = "busy-recompute-deadline"; options.deadline = 1.3; options.success = false;
         Run(options);
         options = {}; options.name = "primary-f3"; options.primaryF3 = true; Run(options);
+        options = {}; options.name = "simulation-cutoff"; options.stop = 700000000;
+        options.success = false; Run(options);
+        for (bool busy : {false, true})
+        {
+            options = {}; options.name = busy ? "foreign-66-relocate" : "foreign-66-direct";
+            options.damage = "foreign-state"; options.faultDelay = 680000000;
+            options.busy = busy; options.expected = busy ? "RELOCATE" : "DIRECT";
+            const auto foreign = Run(options);
+            Check(foreign.snapshot.actualWork == 68000 && foreign.resumeWork == 60000 &&
+                  foreign.plannedCatchupWu == 8000, "CB consumed unauthorized nearby 66% state");
+        }
+        options = {}; options.name = "backup-f3-same-batch"; options.damage = "backup-f3-same";
+        options.expected = "RECOMPUTE"; options.source = 2; options.deadline = 2.0; Run(options);
         options = {}; options.name = "local-result"; options.result = 0; Run(options);
         for (const auto& damage : {"recovery-f1", "recovery-f2", "recovery-f3", "result-f3"})
         {

@@ -6,7 +6,8 @@ import json
 import math
 from pathlib import Path
 import runpy
-from cb_tools import REGRESSION, require, rows, write_json
+import shlex
+from cb_tools import REGRESSION, SCENE_HELPER, flags, require, rows, scene_identity, write_json
 
 ACCOUNT = runpy.run_path(str(REGRESSION / "analyze-baseline-evaluation.py"))
 NS = 10**9
@@ -53,8 +54,29 @@ def audit(root):
     parameters = json.loads((root / "cb-sat-parameters.json").read_text())
     if (root/"execution.json").exists():
         execution_identity = json.loads((root/"execution.json").read_text())
+        outcome = json.loads((root/"execution-result.json").read_text())
+        run = json.loads((root/"run-summary.json").read_text())
+        require(outcome["returncode"] == 0 and outcome["status"] == "FINISHED", "execution did not finish")
+        require(run["run_status"] == "COMPLETE" and run["simulation_duration_ns"] ==
+                round(execution_identity["simulation_duration_s"]*NS), "simulation horizon incomplete")
+        require(not execution_identity["worktree_dirty"], "dirty execution snapshot")
         require(not parameters.get("unit_fixture_only",False), "unit fixture leaked into platform execution")
         require(parameters["mtbf_seconds"] == execution_identity["mtbf_seconds"], "production MTBF differs from frozen execution")
+        require(parameters["placement"] == execution_identity["placement_mode"] and
+                parameters["remote_busy_policy"] == execution_identity["remote_busy_recovery_policy"],
+                "actual policy differs from execution identity")
+        require(math.isclose(parameters["eligible_exposure_seconds"],
+                parameters["eligible_check_count"]*parameters["check_interval_ns"]/NS), "MTBF exposure clock mismatch")
+        require(parameters["joint_failure_count"] == 0 if parameters["mtbf_seconds"] is None else
+                math.isclose(parameters["mtbf_seconds"]*parameters["joint_failure_count"],
+                             parameters["eligible_exposure_seconds"]), "MTBF pooled ratio mismatch")
+        if execution_identity["stage"] == "formal":
+            expected = SCENE_HELPER["arguments"](root,protection_mode="checkbullet",
+                placement_mode=parameters["placement"],remote_busy_recovery_policy=parameters["remote_busy_policy"])
+            require(flags(shlex.split(execution_identity["command"][-1])) == flags(expected), "formal command differs from frozen helper")
+            require(execution_identity["scene"] == scene_identity(), "formal input identity changed")
+            require((len(tasks),run["total_input_bytes"],run["total_output_bytes"],run["total_compute_work_units"],
+                     run["compute_node_count"]) == (800,194119753287,100166291859,352513119,66), "formal workload changed")
     require(len(tasks) == len(task_rows), "duplicate logical tasks")
     require(len(recovery) == len(rows(root,"cb-sat-recovery.csv")), "more than one CB recovery per task")
     require(yes(parameters["final_quiescent"]) and yes(parameters["final_loads_empty"]), "CB did not finalize")
@@ -63,10 +85,21 @@ def audit(root):
     for e in events:
         by_task[e["task_id"]].append(e)
     by_record = {(r["task_id"],number(r,"sequence")):r for r in records}
+    task_records = defaultdict(list)
+    for r in records:
+        task_records[r["task_id"]].append(r)
     require(len(by_record) == len(records), "duplicate checkpoint identity")
     for tid,t in normal.items():
         t["task_profile"] = tasks[tid]["task_profile"]
         require(number(t,"input_bytes") == number(tasks[tid],"input_bytes"), "INPUT size was trimmed")
+        tf = float(t["mtbf_seconds"]) if t["mtbf_seconds"] not in ("", "null") else math.inf
+        g = math.sqrt(2*tf*float(t["reference_cost_seconds"]))
+        require(math.isclose(float(t["interval_seconds"]),g) if math.isfinite(g) else t["interval_seconds"] in ("", "null"),
+                "H interval differs from frozen Young equation")
+        if math.isfinite(g):
+            h = g/float(t["task_seconds"])
+            require(math.isclose(float(t["raw_fraction"]),h), "H fraction mismatch")
+            require(number(t,"delta_permille") == (0 if h >= 1 else max(1,math.floor(1000*h))), "H cadence mismatch")
         expected = number(t,"generated_count")*number(t,"local_cost_ns") + (
             number(t,"initial_commits")+number(t,"merge_count"))*number(t,"remote_cost_ns")
         require(expected == number(t,"normal_protection_cost_ns"), "normal cL/cR charged incorrectly")
@@ -77,7 +110,7 @@ def audit(root):
         require(sum(e["event"] == "REMOTE_COST_COMMITTED" for e in by_task[tid]) ==
                 number(t,"initial_commits")+number(t,"merge_count"), "merge cost lacks completed event")
         previous = 0
-        for r in sorted((r for r in records if r["task_id"] == tid), key=lambda r:number(r,"sequence")):
+        for r in sorted(task_records[tid], key=lambda r:number(r,"sequence")):
             seq,w = number(r,"sequence"),number(r,"to_work_units")
             require(number(r,"from_work_units") == previous and 0 < w < number(t,"total_work_units"), "checkpoint chain discontinuity")
             require(number(r,"record_bytes") == state_bytes(t,w)-state_bytes(t,previous)+header(t), "CB record bytes/H mismatch")
@@ -87,6 +120,12 @@ def audit(root):
             if r["received_time_ns"]:
                 require(r["generated_time_ns"] and number(r,"received_time_ns") >= number(r,"generated_time_ns"), "receipt before generation")
             previous = w
+    for d in decisions:
+        limits = [number(d,k) for k in ("storage_limit","natural_limit","implementation_limit")]
+        if d["recovery_limit"]:
+            limits.append(number(d,"recovery_limit"))
+        require(number(d,"threshold") == min(limits) and yes(d["feasible"]) == (min(limits) > 0),
+                "X not min of actual limits or zero clamped to one")
     physical_ids = set()
     for f in flows:
         tid,kind = f["task_id"],f["kind"]
@@ -171,7 +210,8 @@ def audit(root):
         initialized=sum(bool(t["initialized_time_ns"]) for t in normal.values()),
         no_checkpoint_interval=sum(t["target_count"] == "0" for t in normal.values()),
         admission_rejections=sum(e["event"] == "BOUNDARY_ADMISSION_REJECTED" for e in events),
-        recovery_attempted=sum(bool(r["recovery_accept_time_ns"]) for r in recovery.values()),
+        recovery_attempted=len(recovery),
+        recovery_accepted=sum(bool(r["recovery_accept_time_ns"]) for r in recovery.values()),
         recovery_success=sum(r["terminal_state"] == "COMPLETED" for r in recovery.values()),
         recovery_failed=sum(r["terminal_state"] != "COMPLETED" for r in recovery.values()),
         recovery_paths=dict(Counter(r["chosen_path"] or "REJECTED" for r in recovery.values())),
@@ -188,6 +228,8 @@ def audit(root):
         summary[key] = sum(e[key] for e in execution)
     summary["active_eq_cost"] = summary["task_execution_waste_wu"]+summary["normal_protection_eq_wu"]
     summary["extra_sent_bytes"] = summary["normal_ft_sent_bytes"]+summary["recovery_ft_sent_bytes"]
+    summary["lost_work_units"] = sum(number(r,"actual_work_units")-number(r,"resume_work_units") for r in recovery.values())
+    summary["failed_task_ids"] = [t["task_id"] for t in task_rows if t["task_success"] != "1"]
     if (root/"link-summary.csv").exists():
         links = rows(root,"link-summary.csv")
         summary.update(mean_link_utilization_percent=sum(float(l["utilization_percent"]) for l in links)/len(links),
@@ -195,11 +237,52 @@ def audit(root):
             peak_link_window_utilization_percent=max(float(l["peak_window_utilization_percent"]) for l in links))
     checks = dict(full_input=True,checkpoint_lineage_and_size=True,strict_before_fault_state=True,
         no_tail=True,single_backup_placement=True,physical_network_and_reservations=True,
-        storage_and_load_finalization=True,actual_execution_conservation=True,normal_idle_no_double_count=True)
+        storage_and_load_finalization=True,actual_execution_conservation=True,normal_idle_no_double_count=True,
+        interval_and_threshold_equations=True)
+    fault_events = rows(root,"fault-events.csv") if (root/"fault-events.csv").exists() else []
+    starts = [f for f in fault_events if f["event_type"] == "START"]
+    def group_recovery(selected):
+        return dict(attempted=len(selected),accepted=sum(bool(r["recovery_accept_time_ns"]) for r in selected),
+            completed=sum(r["terminal_state"] == "COMPLETED" for r in selected),
+            failed=sum(r["terminal_state"] != "COMPLETED" for r in selected),
+            lost_work_units=sum(number(r,"actual_work_units")-number(r,"resume_work_units") for r in selected),
+            resume_seconds=distribution([(number(r,"recovery_compute_start_time_ns")-number(r,"cutoff_time_ns"))/NS
+                for r in selected if r["recovery_compute_start_time_ns"]]),
+            catchup_seconds=distribution([number(r,"actual_T_catch_ns")/NS for r in selected if r["actual_T_catch_ns"]]),
+            terminal_reasons=dict(Counter(r["terminal_reason"] for r in selected)))
+    fault_by_id = {f["fault_id"]:f for f in starts}
+    profiles = {}
+    for profile in sorted({t["task_profile"] for t in task_rows}):
+        selected = [t for t in task_rows if t["task_profile"] == profile]
+        costs = [e for e in execution if e["task_profile"] == profile]
+        profiles[profile] = dict(tasks=len(selected),completed=sum(t["task_success"] == "1" for t in selected),
+            failed=sum(t["task_success"] != "1" for t in selected),
+            recovery=group_recovery([r for r in recovery.values() if tasks[r["task_id"]]["task_profile"] == profile]),
+            **{k:sum(e[k] for e in costs) for k in ("task_execution_waste_wu","normal_protection_eq_wu","reserved_idle_eq_wu","w_waste_actual")})
+    breakdown = dict(profiles=profiles,flow_kinds={kind:dict(flows=sum(f["kind"] == kind for f in flows),
+        sent_bytes=sum(number(f,"sent_bytes") for f in flows if f["kind"] == kind)) for kind in sorted({f["kind"] for f in flows})},
+        fault_starts=dict(Counter(f["fault_source"] for f in starts)),
+        primary_running_victims=dict(Counter(i["fault_type"] for i in impacts
+            if i["task_state_before_fault"] == "RUNNING" and i["progress_valid"] == "1")),
+        fault_recovery={source:group_recovery([r for r in recovery.values()
+            if fault_by_id.get(r["fault_id"],{}).get("fault_source") == source]) for source in sorted({f["fault_source"] for f in starts})},
+        recovery_paths={path:group_recovery([r for r in recovery.values() if r["chosen_path"] == path])
+            for path in sorted({r["chosen_path"] for r in recovery.values()})},
+        failure_reasons=dict(Counter(t["failure_reason"] for t in task_rows if t["task_success"] != "1")))
+    diagnostics = dict(H=distribution([float(t["raw_fraction"]) for t in normal.values() if t["raw_fraction"] not in ("", "null")]),
+        X=distribution([number(d,"threshold") for d in decisions]),
+        X_reasons=dict(Counter(d["threshold_reason"] for d in decisions)),
+        unbounded_X_R_decisions=sum(not d["recovery_limit"] for d in decisions),
+        restore_processing_ns=distribution([number(r,"restore_processing_ns_included_in_idle") for r in recovery.values()]),
+        r_equals_q_at_fault=sum(r["root_work_units"] == r["recoverable_work_units"] for r in recovery.values()),
+        r_below_q_at_fault=sum(number(r,"root_work_units") < number(r,"recoverable_work_units") for r in recovery.values()),
+        events=dict(Counter(e["event"] for e in events)),
+        failed_recoveries=[r for r in recovery.values() if r["terminal_state"] != "COMPLETED"])
     result = dict(status="PASS",checks=checks,samples=dict(tasks=len(tasks),records=len(records),flows=len(flows),
         recoveries=len(recovery),placement_decisions=len(placement)),summary=summary,
         recovery_sampling_note="Resume/catchup include only observed corresponding milestones; failures reported separately.",
-        resource_units="physical progress in WU; active/total/normal/idle costs in eq-WU",task_execution=execution)
+        resource_units="physical progress in WU; active/total/normal/idle costs in eq-WU",task_execution=execution,
+        breakdown=breakdown,diagnostics=diagnostics)
     write_json(root/"cb-sat-audit.json",result)
     return result
 

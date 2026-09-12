@@ -10,7 +10,8 @@ MODULE = Path(__file__).resolve().parents[2]
 TOOLS = MODULE / "protection/policy/baseline/checkbullet/tools"
 sys.path.insert(0, str(TOOLS))
 CAL = runpy.run_path(str(TOOLS / "calibrate-cb-sat-mtbf.py"))
-from cb_tools import SCENE_HELPER, flags, replace_flag, scene_identity
+MATRIX = runpy.run_path(str(TOOLS / "analyze-cb-sat-matrix.py"))
+from cb_tools import SCENE_HELPER, GROUPS, flags, replace_flag, scene_identity
 
 
 class CbCalibrationTests(unittest.TestCase):
@@ -85,6 +86,16 @@ class CbCalibrationTests(unittest.TestCase):
         self.assertEqual(flags(pilot)["randomRun"], "101")
         self.assertEqual(flags(pilot)["faultEnableF3"], "0")
         self.assertEqual(scene_identity()["work_units"], 352513119)
+
+    def test_formal_matrix_missing_duplicate_and_mixed_snapshot_rejected(self):
+        runs = [dict(group=f"CB-{p}-{b}",commit="execution",mtbf_seconds=41) for p,b in GROUPS]
+        self.assertEqual(MATRIX["coverage"](runs)["status"], "PASS")
+        for bad in (runs[:-1], runs+[runs[0]], []):
+            self.assertEqual(MATRIX["coverage"](bad)["status"], "INCOMPLETE")
+        bad = deepcopy(runs); bad[0]["commit"] = "changed"
+        self.assertEqual(MATRIX["coverage"](bad)["status"], "INCOMPLETE")
+        bad = deepcopy(runs); bad[0]["mtbf_seconds"] = 1
+        self.assertEqual(MATRIX["coverage"](bad)["status"], "INCOMPLETE")
 
 
 if __name__ == "__main__":
