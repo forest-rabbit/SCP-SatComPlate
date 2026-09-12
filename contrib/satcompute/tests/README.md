@@ -30,6 +30,8 @@ Pre-N5C placement 消融入口为 `integration/regression/run-pre-n5c-placement-
 原 FA fixture 保留；`n5b-policy-test.cc` 增加 minimal 布尔穷举和历史可行集 oracle，
 `frequency-runtime-test.cc` 验证真实链路拒绝与不搜索第二候选，R0/R1 测试验证真实 deadline 准入差异。
 `test_placement_matrix.py` 验证矩阵组数、零计数分布及 rename 比较不忽略业务差异。
+这 32 组已验收冻结，见[最终报告](../../../docs/n5/reviews/Pre-N5C-placement-baselines-final.md)；
+收尾及日常测试不重复正式矩阵。
 
 N5A-G4 的冻结故障验收仍复用 `integration/regression/run-final-scenario.py`，
 只在明确授权后手动运行；原始 N4 输出不可覆盖。例：
@@ -203,12 +205,14 @@ START 有收益、F3 前真实 ON、使用有效非零进度检查点且按期�
 历史 G3R2 的 801 任务 B/C 结果保留，不能与本次或旧 A 严格配对；双组分析也要求同场景、同代码。
 可行节点对、5 ms 释放、重复/部分释放、终态清理和无额外抽样测试位于既有 policy/runtime 单测。
 
-Pre-N5C 当前审计只重跑新 R4–R7：均 `--protection-mode=compfrr --placement-mode=ffp`，
+历史 Pre-N5C v6/ON-resume 审计只运行 R4–R7：当时均为
+`--protection-mode=compfrr --placement-mode=ffp`（该旧 FFP 现名为 `fa-ffp`），
 R4/R5 使用 eager，R6/R7 加 `--input-staging-policy=deferred`；R4/R6 加
 `--remote-busy-recovery-policy=recompute`，R5/R7 为 relocate。
 新 workload 为400 WU/token且总WU保持352513119；START使用初始化就绪后的风险加权进度，
 ON评分不变；后续容量修订为路径阻塞的ON增加释放重试（原节点对、无额外抽样）。
-本轮输出放入 `output/n5-on-capacity-resume/`，保留上一轮 `output/n5-startscore-riskweighted-llm4x/`。
+历史输出在 `output/n5-on-capacity-resume/` 和 `output/n5-startscore-riskweighted-llm4x/`，
+均不覆盖；当前四种 placement 的冻结矩阵以本页开头的入口及报告为准。
 `integration/regression/analyze-riskweighted-start.py --r4 R4目录 --r5 R5目录 --r6 R6目录 --r7 R7目录
 --output 新JSON路径` 只读核对同代码/同workload、评分、实际浪费、流量、恢复和399/596/574。
 Python单测包含错误评分/INPUT/历史LLM状态口径及整数纳秒取整检查；生产不新增预测CSV总开关。

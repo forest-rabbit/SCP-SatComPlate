@@ -363,7 +363,7 @@ G2 在注册/发包之前预留接收端对象；收到完整流才转 used。
 
 ## G2 输出与小规模复现
 
-四个输出由 `metrics/core/protection-metrics.h/.cc` 写入普通 outputDir，仅 fixed 开启：
+四个输出由 `metrics/core/protection-metrics.h/.cc` 写入普通 outputDir，fixed/compfrr 开启：
 
 | 文件 | 内容 |
 |---|---|
@@ -479,7 +479,38 @@ G3 将 RemoteCommit 的物理融合/旧记录清理延后 1 ns，名义有效时
 受控测试反转同纳秒 fault/commit UID，检查相同实体对象、有效进度和最终结果时间；
 另检查同 ns deadline 完成与 stale primary 回调。
 
-## G4 资源账本
+## 资源账本与 Pre-N5C 冻结口径
+
+跨方案计算资源指标统一标注 **eq-WU（equivalent cost）**：
+
+- `W_execution`：全部物理 attempt 的实际执行 WU，减去每个成功逻辑任务一份有效 W；
+  成功任务的多执行与失败任务的全部已执行量分列，在资源汇总中按等值 eq-WU 记账。
+- `W_normal`：已完成保护事件的等价成本，单位 eq-WU；cL/cR 不占主 ComputeService，
+  不能将这部分声称为测得的额外 CPU 执行量。
+- `W_reserved_idle`：真实恢复/副本预留期间未计算的容量机会成本，单位 eq-WU；
+  不表示当时必然存在被阻塞的其他任务，更不是实际 CPU 重算。
+- **Active equivalent compute overhead**：`W_active = W_execution + W_normal`（eq-WU）。
+- **Total compute-capacity equivalent waste**：
+  `W_total = W_active + W_reserved_idle`（eq-WU），对应统一 analyzer 的 `w_waste_actual`。
+
+planned 不补 actual；catchup/post-catchup 是执行剖面，不再次加到 `W_total`。
+原始任务工作量、已完成/检查点进度仍是整数 WU，网络与存储仍用 Byte，不改变字段合同或量纲。
+故障时已执行量写为 `W_f`，local/remote 有效检查点写为 `W_L/W_R`，
+检查点落后量为 `W_f-W_L`、`W_L-W_R`（WU）；比例需要另除以任务总 W。
+
+例如 FA-LRL 的 R5/R7 均完成800任务：`W_active` 为1.152619/1.068858百万eq-WU，
+`W_total` 为1.452554/3.056674百万eq-WU。deferred 的主要增加项是预留等待机会成本，
+不是更多 CPU 重算。完整冻结证据见
+[32组正式报告](../../../docs/n5/reviews/Pre-N5C-placement-baselines-final.md)。
+
+`T_catch` 是故障到恢复计算追平 `W_f` 的时间，不是 RESULT 交付时延；
+未追平的任务没有样本，不记为零。比较同时给出样本数、mean/P50/P90/max；
+严格逐任务时延比较使用双方成功且故障时刻一致的样本，并说明选择范围。
+
+LRL/FA-LRL 是 N5C 的强 baseline，必须在同一受控合同下公平比较，不预设结果；
+不为获得优势调整冻结输入。multi-seed 不是本阶段门槛，结论只适用于受控场景。
+
+### 计划与实际执行
 
 `recovery-summary.csv` 区分 planned 与 actual 三列：catchup_redo、post_catchup、total，单位 WU。
 TAIL（含 MIGRATE_TAIL）/REMOTE_REDO（含 MIGRATE_REDO）/RECOMPUTE 的起始进度分别为 lf/rf/0，计划 catch-up 为 `xf-start`，
@@ -494,12 +525,16 @@ TAIL（含 MIGRATE_TAIL）/REMOTE_REDO（含 MIGRATE_REDO）/RECOMPUTE 的起始
 后续 `L1_GENERATED*cL + REMOTE_COST_COMMITTED*cR`，初始化不再计入后续次数。
 尚未完成生成/物理提交的取消操作不按完整 cL/cR 收费；这是事件完成计费，不是假设占用了真实 CPU。
 物理提交成本事件与名义 RemoteCommit 区分，同 ns fault 导致未物理提交的操作不计提交成本。
-任务保护表保存四项次数、成本 ns、主星速率和 normal 等效 WU。
+任务保护表保存四项次数、成本 ns、主星速率和 normal eq-WU（equivalent cost）。
 
-主 waste = `normal_protection_eq_wu + recovery_reserved_idle_eq_wu + recovery_catchup_actual_wu`。
+N5A 历史机制诊断列为
+`normal_protection_eq_wu + recovery_reserved_idle_eq_wu + recovery_catchup_actual_wu`（eq-WU）。
+它不包含最终失败任务的全部执行浪费，不能直接当作当前跨方案的 `W_total`；
+统一统计使用 `analyze-baseline-evaluation.py` 从实际账本重建上述 `W_execution/W_total`。
 normal 用主星速率换算；reserved-idle 用恢复星速率，区间是 accepted 到 compute start，
 从未开始则到释放/失败。等待 tail 的 cR 已在该区间内，不重复加一次。
-恢复后的正常剩余计算、业务 RESULT 网络流量均不计入上述 waste/备份网络主项。
+该历史机制诊断不计恢复后的正常剩余计算；当前 `W_total` 仍计入失败任务的全部实际执行量。
+唯一 winner 的业务 RESULT 不计入额外备份网络开销。
 
 存储表保留各节点 used/reserved/total 峰值及 final used/reserved；任务表的 local/remote peak
 是本任务在该节点的同时 used+reserved 峰值，不拿整个共享池峰值冒充。
@@ -507,8 +542,8 @@ normal 用主星速率换算；reserved-idle 用恢复星速率，区间是 acce
 并列出容量分配失败的任务 ID。fixed 仿真结束还将未终结任务标为 `FAILED/SIMULATION_ENDED`；
 off 的原有截断合同不变。
 
-离线脚本 `tests/integration/regression/analyze-protection-accounting.py` 从真实 CSV 校验并生成
-全局、四类任务、恢复路径/终态分组的 planned/actual、waste、存储/网络与完成/deadline 统计。
+历史机制校验脚本 `tests/integration/regression/analyze-protection-accounting.py` 从真实 CSV 校验并生成
+全局、四类任务、恢复路径/终态分组的 planned/actual WU、机制诊断 eq-WU、存储/网络与完成/deadline 统计。
 网络分别保留 declared/sent/received，主备份开销使用实际 sent payload；同星交付 network=0，
 跨星恢复 RESULT 单列。脚本默认不随平台或 CI 启动，不修改原始 CSV。
 

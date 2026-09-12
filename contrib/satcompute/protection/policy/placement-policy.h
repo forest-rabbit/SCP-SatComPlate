@@ -20,7 +20,7 @@ struct PlacementContext
 struct PlacementDecision
 {
     uint32_t localNode{};  ///< One-hop local incremental state receiver.
-    uint32_t remoteNode{}; ///< Reachable committed-state receiver.
+    uint32_t remoteNode{}; ///< Selected committed-state receiver; real admission is separate.
     bool operator==(const PlacementDecision&) const = default;
 };
 
@@ -88,7 +88,7 @@ class PlacementPolicy
     std::vector<PlacementSelection> m_selections; ///< Diagnostics, not a policy input.
 };
 
-/** Shared baseline predicates, deliberately not storage/load optimization. */
+/** Feasibility-aware node predicate, including reachability. Minimal builders do not use it. */
 inline bool IsPlacementCandidate(const BackupCandidate& node, uint32_t primary)
 {
     return node.nodeId != primary && node.healthy && node.idle && node.reachable;

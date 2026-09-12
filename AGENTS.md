@@ -72,29 +72,32 @@ contract is summarized in `contrib/satcompute/protection/README.md`; cL is an
 asynchronous generation delay and equivalent cost, never a primary compute pause.
 
 N5A and N5B are complete and merged into `n5` through PR #95 and PR #96.
-Pre-N5C uses one `feature/n5-baselines` branch for full Recompute and real 1+1,
-focused/maintained tests, frozen-B R5 compatibility, and R0-R4 online runs.
-Stop with a pushed Draft PR to `n5` for baseline audit; do not merge it or enter
-N5C. Do not tune workload, faults, deadlines, routing or seed/run for results.
-The accepted Pre-N5C START revision overrides only LLM token mapping: 400 WU/token,
-total scene WU exactly 352513119 and LLM WU exactly 61333200; whole-token balancing
-allows at most ±200 WU per LLM task. Re-run only new R4–R7 with risk-weighted OFF→START;
-leave placement, faults, routing, deadlines and old evidence unchanged. Keep PR #97 Draft.
-The subsequent user-approved ON correction retries only NO_ADMISSIBLE_PATH pauses on
-real capacity release, retaining the fixed pair and ON score; no new fault draws,
-reservation bypass or historical checkpoints. Re-run R4-R7 in a new output directory.
-The accepted final Pre-N5C feasibility ablation supersedes that four-run limit:
-retain current behavior as fa-ffp/fa-lrl (default fa-ffp); ffp/lrl use only healthy,
-idle and structural eligibility, followed by real admission of one selected candidate.
-Never retry another candidate within the same minimal decision. Existing later
-decision/capacity-release events remain allowed; 1+1 is still one-shot.
-Four placements affect prefault checkpoint pairs and native R0/R1 single-node roles;
-checkpoint post-fault recovery ranking stays frozen. Use current active loads,
-not cumulative history. R5/R7 fa-ffp must reproduce the latest ON-resume evidence
-before the remaining 30 runs. All 32 use one clean execution HEAD, 800 tasks/1300 s,
-unchanged workload/faults/routing/costs/seed. New output only; keep historical raw
-evidence unchanged. Update Draft PR #97 after verification; no merge/tag/branch
-cleanup, extra GitHub CI, or N5C implementation. Super* is not the accepted naming.
+The 2026-09-12 user-approved Pre-N5C closeout supersedes the Draft-only stop:
+merge PR #97 (`feature/n5-baselines`) into `n5` after local verification, then
+delete that feature branch only after confirming its head is reachable from `n5`.
+Do not merge into `main`, add a tag, run extra GitHub CI, repeat the 32 formal
+simulations, or implement N5C. N5C needs its own accepted task contract.
+The frozen evidence is `docs/n5/reviews/Pre-N5C-placement-baselines-final.md`:
+32 runs at clean execution HEAD `b51cc9d63`, with offline audit `ae93f3679`.
+Preserve workload, faults, deadlines, routing, costs, seed/run and raw evidence.
+The accepted workload uses 400 WU/token, total scene WU exactly 352513119 and
+LLM WU exactly 61333200; whole-token balancing allows at most ±200 WU per LLM task.
+Risk-weighted OFF-to-START and InputDeferred remain frozen. ON retries only
+NO_ADMISSIBLE_PATH pauses on real capacity release, retaining the fixed pair and
+ON score; no new fault draws, reservation bypass or historical checkpoints.
+The four placements are ffp/lrl/fa-ffp/fa-lrl (default fa-ffp). Minimal ffp/lrl
+use only healthy, idle and structural eligibility, followed by real admission
+of one selected candidate. Never retry another candidate within that same
+decision; existing later decision/capacity-release events remain allowed.
+Four placements affect prefault checkpoint pairs and native R0/R1 single-node
+roles; checkpoint post-fault recovery ranking stays frozen. Use current active
+loads, not cumulative history. Super* is not the accepted naming.
+Computational resource costs must be labeled eq-WU / equivalent cost, with
+active overhead and total capacity-equivalent waste reported separately.
+Reserved-idle opportunity cost is not actual CPU execution. Raw task progress
+stays WU; use W_f-W_L and W_L-W_R for work differences, not dimensionless x-l.
+LRL/FA-LRL are strong N5C baselines: compare fairly, without presupposing which
+scheme wins or tuning the frozen scene to obtain a desired result.
 1+1 requests exactly one resource-constrained replica at first TASK_RUNNING;
 failed admission is not retried. Normal replicas are fault-exposed; takeover
 and recovery immunity occur only after the complete same-ns fault batch.

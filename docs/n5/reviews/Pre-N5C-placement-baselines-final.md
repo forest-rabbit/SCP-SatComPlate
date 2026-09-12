@@ -3,6 +3,8 @@
 本轮把“筛选候选”与“候选排序”分开，保留最新历史行为为 **FA-FFP / FA-LRL**，
 增加 minimal FFP / LRL；不实现 N5C，不改 checkpoint 故障后的恢复节点排序。
 正式执行版本为 `b51cc9d638c2630068b5174bacfcaf1500d7d7e5`，分支 `feature/n5-baselines`。
+2026-09-12 验收冻结：本次收尾只澄清资源单位、574 的工作量差及公平比较边界，
+保留全部正式输入、运行时与原始结果，不重跑 32 组；经 PR #97 集成到 `n5`。
 
 ## 定义与验证边界
 
@@ -57,9 +59,20 @@ R1 的 recovery attempted/accepted/success 分别表示主 attempt 故障、真�
 故障后副本获胜；一次性副本 requested/admitted 单独统计。direct victims 包含被中断的
 primary 或普通 replica 所属任务，不应与 takeover 次数混为一谈。
 
-统一实际浪费：所有物理 attempt 真正执行的 WU，减去按 compute deadline 成功的每个逻辑任务
-一份有效 W，再加正常保护 eq-WU 与真实 reserved-idle eq-WU。失败任务的已执行量全部是浪费；
-planned 不补 actual，catchup/post-catchup 另列且不重复相加。RESULT 沿用 compute deadline 合同。
+计算资源统一采用 eq-WU（equivalent cost），不是全部都代表实际 CPU 执行：
+
+- `W_execution`：所有物理 attempt 真正执行的 WU，减去按 compute deadline 成功的每个
+  逻辑任务一份有效 W；执行量按 1 WU = 1 eq-WU 纳入成本。失败任务的已执行量全部计入。
+- `W_normal`：实际完成的常态保护等效成本；cL/cR 不表示暂停主计算或额外执行同量 CPU 工作。
+- `W_reserved_idle`：真实预留空闲容量的机会成本，不等于已执行 WU，也不宣称实际挤占了同量其他任务。
+- `W_active = W_execution + W_normal`：Active equivalent compute overhead，单位 eq-WU。
+- `W_total = W_active + W_reserved_idle`：Total compute-capacity equivalent waste，单位 eq-WU；
+  对应统一分析器的 `w_waste_actual`，下文“总浪费”均指此口径。
+
+planned 不补 actual，catchup/post-catchup 是实际执行剖面，不重复相加到上述浪费。
+任务本身的工作量、检查点位置和执行速率仍用 WU/WU/s；网络/存储仍用 Byte，不改数据字段。
+RESULT 沿用 compute deadline 合同；旧 `recovery-summary.csv` 同名 waste 列是历史机制账本，
+跨方案统计必须使用 `analyze-baseline-evaluation.py` 的统一实际执行口径。
 
 网络是实际源端应用载荷，十进制 GB，不是 hop-byte 或线速字节。normal/fault 按容错操作类型
 划分，不是简单按墙钟故障时刻切开。1+1 计入真实 replica INPUT 和所有 losing RESULT，
@@ -71,7 +84,7 @@ R0/R1 的 checkpoint pair 和备份池为 N/A，不把未量化的 active workin
 
 每组完成数也等于按 compute deadline 成功并交付 RESULT 的任务数。浪费为百万 eq-WU，网络为 GB，利用率为百分比。正常/故障 FT 的和为总额外流量。
 
-| 组 | 完成/失败 | 实际总浪费 | 正常 FT | 故障 FT | 总 FT | 平均链路利用率 | 最高单链路均值 |
+| 组 | 完成/失败 | 总容量等效浪费（百万 eq-WU） | 正常 FT | 故障 FT | 总 FT | 平均链路利用率 | 最高单链路均值 |
 |---|---|---|---|---|---|---|---|
 | R0-ffp | 737/63 | 24.460778 | 0.000 | 6.372 | 6.372 | 0.3551 | 1.1120 |
 | R0-lrl | 737/63 | 24.460778 | 0.000 | 6.372 | 6.372 | 0.3551 | 1.1120 |
@@ -105,6 +118,14 @@ R0/R1 的 checkpoint pair 和备份池为 N/A，不把未量化的 active workin
 | R7-lrl | 800/0 | 2.991927 | 82.032 | 24.296 | 106.329 | 0.4296 | 1.5791 |
 | R7-fa-ffp | 799/1 | 4.295718 | 80.032 | 25.366 | 105.398 | 0.4262 | 1.6100 |
 | R7-fa-lrl | 800/0 | 3.056674 | 82.509 | 25.215 | 107.725 | 0.4316 | 1.4459 |
+
+为避免把预留成本误读为 CPU 重算，下表单列均完成 800 任务的 FA-LRL 对照。
+R7 的 active equivalent cost 更低，但预留空闲更多，因此 total equivalent cost 更高。
+
+| 组 | W_active（百万 eq-WU） | W_reserved_idle（百万 eq-WU） | W_total（百万 eq-WU） |
+|---|---:|---:|---:|
+| R5-fa-lrl | 1.152619 | 0.299935 | 1.452554 |
+| R7-fa-lrl | 1.068858 | 1.987816 | 3.056674 |
 
 ### 可靠性与实际执行分账
 
@@ -147,7 +168,9 @@ R0/R1 的 checkpoint pair 和备份池为 N/A，不把未量化的 active workin
 | R7-fa-ffp | 83/83/82/1 | 574 |
 | R7-fa-lrl | 83/83/83/0 | — |
 
-下表均为百万 WU 或百万 eq-WU：执行浪费 = 成功任务多执行 + 失败任务全部执行；总浪费再加常态保护与真实预留空闲。catchup/post-catchup 是恢复执行的剖面，不再相加到浪费上。1+1 不套用 checkpoint catchup。
+下表前五个成本列为百万 eq-WU；最后两个 actual 执行列为百万 WU。
+执行浪费 = 成功任务多执行 + 失败任务全部执行；总浪费再加常态保护与真实预留空闲。
+catchup/post-catchup 是恢复执行的剖面，不再相加到浪费上。1+1 不套用 checkpoint catchup。
 
 | 组 | 成功多执行 | 失败全执行 | 执行浪费 | 常态保护 | 预留空闲 | actual catchup | actual post-catchup |
 |---|---|---|---|---|---|---|---|
@@ -269,7 +292,7 @@ local、remote、single、accepted-recovery 独立统计；assignment 建立/释
 
 固定同一 ranking，由 minimal 改为 FA 的本场景变化如下。正号表示增加；这是单次在线系统结果，不是多 seed 统计显著性。R0/R1 的故障 realization 可因负载变化而不同。
 
-| 场景/ranking | 完成数变化 | 实际浪费变化 % | 额外网络变化 % | 节点峰值 GB：minimal→FA |
+| 场景/ranking | 完成数变化 | 总容量等效浪费变化 % | 额外网络变化 % | 节点峰值 GB：minimal→FA |
 |---|---|---|---|---|
 | R0/ffp | 5 | -0.28 | 0.00 | N/A |
 | R0/lrl | 5 | -0.28 | 0.00 | N/A |
@@ -329,8 +352,10 @@ minimal-LRL 的 596 以 x≈1.880% START，minimal-FFP 的 596 仍 x=0。
 以下以 R7 展示四种 placement 的完整争用差别。均在选择时 healthy/idle，
 不是把故障时的空闲状态倒用于选择；“前窗/提交窗”沿用上一节定义。
 后续占用包含实际进入服务的普通任务与已接受的恢复，完整区间保存在 JSON sentinel。
+`W_f` 为故障时已执行工作量，`W_L`/`W_R` 为 local/remote 已提交的工作量位置，均为 WU；
+差值 `W_f-W_L` 是未保存进度，`W_L-W_R` 是尚未同步到 remote 的 tail 工作量。
 
-| R7 placement / task | remote | 后续占用来源 | 故障忙 | 前窗/提交窗忙 | xW-lW / lW-rW | 结果 |
+| R7 placement / task | remote | 后续占用来源 | 故障忙 | 前窗/提交窗忙 | W_f-W_L / W_L-W_R（WU） | 结果 |
 |---|---:|---|---|---|---:|---|
 | ffp /114 | 0 | 普通158 | 是 | 是/是 | 6587/695380 | MIGRATE_TAIL 完成 |
 | lrl /114 | 0 | 普通158 | 是 | 是/是 | 6587/695380 | MIGRATE_TAIL 完成 |
@@ -348,7 +373,10 @@ minimal-LRL 的 596 以 x≈1.880% START，minimal-FFP 的 596 仍 x=0。
 R7-FA-FFP 的 574 最后 local commit 在 176.943382132 s，
 remote0 被恢复552占用至 179.239957684 s；177–180 s 的 REMOTE_BUSY 暂停累计3 s。
 180 s 故障时 remote 已空闲，最近名义检查点窗口也看不到之前占用，
-但从最后实际 commit 看得到；x-l≈36.81%、l-r≈9.64%。FA-LRL 对应仅 x-l≈0.60%、l-r=0。
+但从最后实际 commit 看得到。两组故障时均 `W_f=782779 WU`；
+FA-FFP 的 `W_L=476579 WU`、`W_R=396363 WU`，故 `W_f-W_L=306200 WU`、
+`W_L-W_R=80216 WU`。FA-LRL 的 `W_L=W_R=777782 WU`，
+对应 `W_f-W_L=4997 WU`、`W_L-W_R=0 WU`。这些都是工作量差，不是无量纲完成度。
 REMOTE_BUSY 仍按既有检查时刻重评，不能把全部陈旧量只归因于 placement；
 本轮没有新增 busy-clear immediate resume。
 
@@ -387,6 +415,8 @@ deferred 的 FA-FFP 也选择2，因此 R6-FA-FFP 的252完成；minimal-FFP 仍
 14. 114/252/574完整结果见上节；忙时迁移与在故障前避免陈旧检查点是不同问题。
 15. N5C的真实动机是remote分配集中、选择时idle无法保证以后idle、忙碌期间检查点陈旧，
     以及local-first ranking的角色耦合。它们尚不证明某个未来评分最优；
+    LRL/FA-LRL是N5C的强baseline，必须在共同合同下公平比较，不预设N5C一定更优。
+    不为结果调整冻结场景，多seed验证留给后续实验，不作为本次收尾的新增门禁。
     本轮没有实现历史负载评分、未来风险、时延评分、共享预留或Multi-tree。
 
 ### 证据索引
@@ -403,6 +433,10 @@ deferred 的 FA-FFP 也选择2，因此 R6-FA-FFP 的252完成；minimal-FFP 仍
 | diagnostics.sentinels | 120/399/596/447/457/114/252/574的selection、START、pause、recovery |
 | selection | 同步准入、拒绝原因、OFF事件联查与同纳秒合法重试数 |
 
+`T_catch_s` 是故障到恢复计算追平 `W_f` 的时间，不是 RESULT 交付时延。
+JSON 保留 count/sum/P50/P90/max，mean 由 sum/count 得到；未追平者没有样本，不补零。
+不同样本集的均值不能解释为严格逐任务加速比；配对比较另取双方成功且故障时刻相同的任务。
+
 原始数据不改，分析只写新目录的汇总；最后增加的5项Python测试验证事件关联和实际commit窗口，
 并补空窗口边界。118项Python unit共117通过、1项条件跳过；最终32组再审计PASS，
 64106条可行频率评分逐行复算PASS。独立核对全部800行任务定义和公共运行参数一致，
@@ -414,7 +448,8 @@ deferred 的 FA-FFP 也选择2，因此 R6-FA-FFP 的252完成；minimal-FFP 仍
 下表是问题与合同的演进，不是跨版本排行榜。`Historical` 表示必须按原提交解释；
 `FA-like` 仅说明已加入强筛选，不能把所有旧 FFP/LRL 一概重命名为本轮 FA。
 早期报告的 waste 采用当时的 normal+idle+catchup，未统一计入最终失败任务全部已执行量，
-因此保留原报告、不与本轮统一 actual waste 混算。
+因此保留原报告、不与本轮统一 actual waste 混算。表中所有计算成本的 M 均指百万 eq-WU，
+不代表同量实际 CPU 执行；原始任务工作量仍为 WU。
 
 | 阶段 / 执行提交 | workload、频率 / INPUT / 容量恢复 | 当时 placement → 当前最接近语义 | 原始证据与结果 |
 |---|---|---|---|
@@ -437,7 +472,7 @@ deferred 的 FA-FFP 也选择2，因此 R6-FA-FFP 的252完成；minimal-FFP 仍
 这些是旧 100 WU/token 数据，不与本轮 400 WU/token 直接计算纯 placement 增益。
 v5→v6 同时变了 START 和 LLM 状态字节，也不能把全部收益归因于 START。
 
-## 复现与停止位置
+## 复现与收尾边界
 
 执行代码和审计报告分开提交。全部原始输出保留在新目录
 `output/pre-n5c-placement-final/`；`execution.json` 含完整命令和执行身份，
@@ -454,5 +489,10 @@ v5→v6 同时变了 START 和 LLM 状态字节，也不能把全部收益归因
 这是单 seed/run 的受控工程消融，场景曾按 B 的 task120 F3 保护行为确定，
 不是无偏多 seed 论文样本。相同 generate 参数不保证不同负载产生同一 F1 realization；
 若 trace 不同，报告整体工程结果，不把不同故障事件强行配对。
-本轮仅更新 Draft PR #97 到 `n5`：不 Ready、不合并、不运行 CI、不打 tag、不清理分支、
-不实现 N5C score/risk-aware placement/Multi-tree。
+前一轮停在 Draft PR #97 等待审阅；2026-09-12 用户接受三项口径修订并授权收尾，
+因此本次完成本地验证后转 Ready、合入 `n5`，核验提交可达后清理该特性分支。
+不额外运行 GitHub CI、不重复正式矩阵、不打 tag；`main` 保持不变，
+不实现 N5C score/risk-aware placement/Multi-tree。N5 总阶段 CI 留在最终集成到 `main` 前。
+收尾本地复验：构建、23 个 C++ 程序、Python 117 通过/1 条件跳过、全部维护
+smoke/regression（含 16 组 placement 小场景）通过；文档链接、成本恒等式及 574 工作量差核对通过。
+两处 C++ 头文件仅改注释；正式输出目录的文件集合、大小与修改时间保持不变。
