@@ -56,6 +56,9 @@ CbThreshold SolveThreshold(uint64_t quotaBytes, uint64_t heldBytes,
                            const CbRestoreCosts& costs,
                            std::optional<uint64_t> implementationCap = std::nullopt);
 
+/** Saturating remaining quota, including defensive inconsistent-snapshot inputs. */
+uint64_t AvailableQuota(uint64_t quota, uint64_t occupied);
+
 /** Occupancy-preserving equal shares of free capacity; stable IDs receive remainders. */
 std::map<uint64_t, uint64_t> ShareStorage(uint64_t capacity,
                                        const std::map<uint64_t, uint64_t>& ownerOccupancy);

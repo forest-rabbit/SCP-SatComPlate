@@ -225,7 +225,7 @@ bool CbSatRecovery::TryRelocate(State& state)
     {
         if (node == backup || !Eligible(state, node)) continue;
         const auto total = stateBytes + state.task.definition.inputBytes;
-        if (total > m_manager.Quota(node, r.task) - m_manager.Occupied(node, r.task))
+        if (total > AvailableQuota(m_manager.Quota(node, r.task), m_manager.Occupied(node, r.task)))
         {
             r.relocationFailure = "DESTINATION_STORAGE_UNAVAILABLE";
             continue;

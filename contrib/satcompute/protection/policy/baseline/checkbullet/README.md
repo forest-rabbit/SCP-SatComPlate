@@ -4,8 +4,8 @@ CheckBullet 的卫星平台适配基线：一个备份节点，保存完整 INPU
 不继承 Fixed/CompFRR 的双层部署或跨节点 tail 获取能力。当前实施进度见
 [preflight.md](preflight.md)。MTBF=41.47642679900744 s；旧八组结果保留在
 [历史验收报告](../../../../../../docs/n5/reviews/Pre-N5C-cb-sat-v2.md)。2026-09-13 审计发现
-部分初始化恢复未要求完整 INPUT，本次修订与重跑状态见
-[联合审计](../../../../../../docs/n5/reviews/Pre-N5C-v7-cbsat-joint-audit.md)。
+部分初始化恢复未要求完整 INPUT；修正后的证据与本轮 quota 复核见
+[收口审计](../../../../../../docs/n5/reviews/N5B-closeout-N5C-kickoff.md)。
 
 ## 状态与正常保护
 
@@ -28,6 +28,8 @@ fa-ffp/fa-lrl 先筛选真实路径及存储可行性。常态保护一旦选定
 当前恢复成本起步约定是零读取、非空日志集合一次公共 cR。因此恢复预算足够时
 `X_R` 不形成有限上界，X 主要受实际存储和剩余合法事件限制；这不是已测量的线性读取模型。
 节点共享容量按“各 owner 已占用量 + 均分剩余空间”规划，最终由真实 pool 准入。
+新增 owner 只压缩剩余额度，不把 quota 压到既有占用以下。`AvailableQuota(quota, occupied)`
+统一作饱和减法，异常输入时归零；这是防御性保护，不修改 ShareStorage 或证明历史存在下溢。
 根/日志原地融合不分配第二份 FULL，完整 INPUT 不参与裁剪。旧对象延迟至下一纳秒清理，
 以保障故障同纳秒的严格截止语义。
 
@@ -95,8 +97,11 @@ runner 要求干净执行快照，但不会自动提交。正常使用无需重�
 完整 INPUT 修正后的八组目录为 `output/cb-sat-v2/20260913T070155626344Z-formal`；
 八组均完整执行 1300 s 并通过审计，执行版本为 `367f23f39`，不是离线审计版本。
 FFP/LRL/FA-FFP/FA-LRL 的 recompute 完成数为 795/797/795/798，relocate 均为 800；
-对完整 INPUT 的复核不再发现非法 q 恢复。最终对比以联合审计为准。
+对完整 INPUT 的复核不再发现非法 q 恢复；执行身份不因离线 quota 审计更新。
 逐 profile、F1/F2/F3、恢复路径、H/X 与失败原因在每组 `cb-sat-audit.json`。
-V7 改动共享代码后的跨方案比较使用 `tests/integration/regression/analyze-v7-cbsat-joint.py`；
+V7 联合比较及其分析器保留在实验分支，不成为正式主线依赖，见
+[历史联合审计](https://github.com/forest-rabbit/SCP-SatComPlate/blob/2ff3c5c98d58ed68c192f97cf47dff7a7e45cefd/docs/n5/reviews/Pre-N5C-v7-cbsat-joint-audit.md)。
 上面的旧分析器保留初版的严格共享源码等价门槛，不用于冒充新版本的完整等价证明。
+`tools/audit-cb-sat-quota.py --root <正式八组根目录> --output <新JSON路径>`
+只读复核 quota 快照和所有获准对象申请；不覆盖原数据，同纳秒顺序有歧义时不能判定完成。
 这是固定单 seed 受控场景、零读取成本起步模型，不是多 seed 或真实应用恢复证明。

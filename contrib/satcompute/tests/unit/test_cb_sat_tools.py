@@ -12,10 +12,69 @@ sys.path.insert(0, str(TOOLS))
 CAL = runpy.run_path(str(TOOLS / "calibrate-cb-sat-mtbf.py"))
 MATRIX = runpy.run_path(str(TOOLS / "analyze-cb-sat-matrix.py"))
 ADJUST = runpy.run_path(str(TOOLS / "audit-cb-sat-adjustment.py"))
+QUOTA = runpy.run_path(str(TOOLS / "audit-cb-sat-quota.py"))
 from cb_tools import SCENE_HELPER, GROUPS, flags, replace_flag, scene_identity
 
 
 class CbCalibrationTests(unittest.TestCase):
+    @staticmethod
+    def quota_case(request=20, time=3):
+        def event(task, at, total, kind, size=0, object_id=0):
+            return dict(task_id=str(task), node_id="0", time_ns=str(at), event=kind,
+                bytes=str(size), object_id=str(object_id), node_used_bytes="0",
+                node_reserved_bytes=str(total))
+        events = [event(1, 1, 60, "STORAGE_RESERVED", 60, 1),
+                  event(1, time, 60 + request, "STORAGE_RESERVED", request, 2),
+                  event(1, 4, 0, "TASK_TERMINAL")]
+        loads = [dict(task_id=str(task), node_id="0", time_ns=str(at), event=kind)
+                 for task, at, kind in ((1, 0, "ASSIGNMENT_ESTABLISHED"),
+                                       (2, 2, "ASSIGNMENT_ESTABLISHED"),
+                                       (2, 8, "ASSIGNMENT_RELEASED"),
+                                       (1, 9, "ASSIGNMENT_RELEASED"))]
+        pools = [dict(node_id="0", capacity_bytes="100", final_used_bytes="0", final_reserved_bytes="0")]
+        return [], events, pools, loads
+
+    def test_quota_audit_accepts_inclusive_share_and_preserves_input(self):
+        result = QUOTA["inspect_rows"](*self.quota_case())
+        self.assertEqual((result["affected_count"], result["ambiguous_count"],
+                          result["accepted_reservation_count"]), (0, 0, 2))
+
+    def test_quota_audit_detects_accepted_request_above_share(self):
+        result = QUOTA["inspect_rows"](*self.quota_case(request=21))
+        self.assertEqual(result["affected_count"], 1)
+        self.assertEqual(result["affected_records"][0]["available_upper_bytes"], 20)
+
+    def test_quota_audit_does_not_invent_cross_csv_same_ns_order(self):
+        result = QUOTA["inspect_rows"](*self.quota_case(request=30, time=2))
+        self.assertEqual((result["affected_count"], result["ambiguous_count"]), (0, 1))
+        self.assertEqual(result["ambiguous_records"][0]["available_lower_bytes"], 20)
+        self.assertEqual(result["ambiguous_records"][0]["available_upper_bytes"], 40)
+        result = QUOTA["inspect_rows"](*self.quota_case(request=20, time=2))
+        self.assertEqual(result["ambiguous_count"], 0)
+
+    def test_quota_audit_flags_inconsistent_recorded_snapshot(self):
+        args = self.quota_case()
+        args[0].append(dict(task_id="1", time_ns="3", quota_bytes="59", occupied_bytes="60"))
+        result = QUOTA["inspect_rows"](*args)
+        self.assertEqual((result["affected_count"], result["max_occupied_minus_quota_bytes"]), (1, 1))
+
+    def test_quota_audit_rejects_missing_delta_and_wrong_owner(self):
+        for field, value in (("bytes", "19"), ("task_id", "99")):
+            args = self.quota_case()
+            args[1][1 if field == "bytes" else 2][field] = value
+            with self.assertRaises(ValueError):
+                QUOTA["inspect_rows"](*args)
+
+    def test_quota_audit_requires_physical_capacity_and_final_release(self):
+        args = self.quota_case()
+        args[2][0]["capacity_bytes"] = "79"
+        with self.assertRaisesRegex(ValueError, "capacity"):
+            QUOTA["inspect_rows"](*args)
+        args = self.quota_case()
+        args[1].pop()
+        with self.assertRaisesRegex(ValueError, "final"):
+            QUOTA["inspect_rows"](*args)
+
     def test_input_adjustment_only_flags_checkpoint_without_complete_input(self):
         base = dict(task_id="325", fault_time_ns="669000000000", chosen_path="DIRECT",
                     input_ready="false", root_ready="true", input_object_id="0",

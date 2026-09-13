@@ -1,7 +1,7 @@
 # CB-Sat 实施进度与边界
 
 本页保留初版 G0–G7 的执行历史。完整 INPUT 修正及新八组结果以
-[联合审计](../../../../../../docs/n5/reviews/Pre-N5C-v7-cbsat-joint-audit.md) 为准；
+[收口审计](../../../../../../docs/n5/reviews/N5B-closeout-N5C-kickoff.md) 为准；
 原正式输出不改写。PR #98 已发布，以下“未发布”等表述仅描述当时状态。
 
 依据项目外的 `CB_Sat_v2_Codex_Implementation_Plan_Final.md` 与

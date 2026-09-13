@@ -246,10 +246,11 @@ bool CbSatManager::Select(Normal& normal, CbTarget target)
     auto reason = [&](uint32_t node) -> std::string {
         const auto path = m_network->EstimateAdmissiblePath(context.primaryNode, node);
         if (!path.reachable || !path.admissible) return "NO_ADMISSIBLE_PATH";
-        if (full > Quota(context.primaryNode, task) - Occupied(context.primaryNode, task))
+        if (full > AvailableQuota(Quota(context.primaryNode, task), Occupied(context.primaryNode, task)))
             return "SOURCE_CACHE_FULL";
         const auto quota = Quota(node, task);
-        if (normal.summary.inputBytes > quota || full > quota - normal.summary.inputBytes)
+        if (normal.summary.inputBytes > quota ||
+            full > AvailableQuota(quota, normal.summary.inputBytes))
             return "NO_STORAGE_SHARE";
         const auto threshold = Threshold(normal, node, target.work);
         if (threshold.naturalLimit && !threshold.feasible) return "CHECKPOINT_INFEASIBLE";
@@ -482,7 +483,7 @@ std::optional<uint64_t> CbSatManager::Reserve(uint64_t task, uint32_t node,
     // Quota is an ownership-floor plan, and the real pool remains the final authority.
     const auto occupied = Occupied(node, task);
     const auto quota = Quota(node, task);
-    if (bytes > quota - occupied)
+    if (bytes > AvailableQuota(quota, occupied))
     {
         Log(task, "STORAGE_SHARE_REJECTED", node, 0, 0, 0, bytes, 0, role);
         return std::nullopt;

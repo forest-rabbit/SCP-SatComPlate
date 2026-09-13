@@ -132,6 +132,28 @@ void Thresholds()
     Reject([] { ShareStorage(5, {{0, 0}}); });
 }
 
+void Quotas()
+{
+    const auto max = std::numeric_limits<uint64_t>::max();
+    for (const auto quota : {uint64_t{0}, uint64_t{1}, uint64_t{99}, max - 1, max})
+        for (const auto occupied : {uint64_t{0}, uint64_t{1}, uint64_t{100}, max - 1, max})
+        {
+            const auto free = AvailableQuota(quota, occupied);
+            Check(free <= quota, "remaining quota wrapped around");
+            Check(occupied >= quota ? free == 0 : free + occupied == quota,
+                  "remaining quota must saturate only at exhaustion");
+        }
+    // Deliberately inconsistent inputs test hardening, not ShareStorage behavior.
+    for (const auto bytes : {uint64_t{1}, uint64_t{200}, max})
+        Check(bytes > AvailableQuota(99, 100), "over-quota LOG/FULL/relocation fits");
+    const auto before = ShareStorage(1000, {{1, 600}});
+    const auto after = ShareStorage(1000, {{1, 600}, {2, 0}});
+    Check(before.at(1) == 1000 && after.at(1) == 800 && after.at(2) == 200,
+          "joining owner must shrink only the remaining free share");
+    Check(after.at(1) >= 600 && AvailableQuota(after.at(1), 600) == 200,
+          "ownership floor must remain intact");
+}
+
 void State()
 {
     const auto task = Task();
@@ -210,6 +232,7 @@ int main()
     {
         Intervals();
         Thresholds();
+        Quotas();
         State();
         std::cout << "CB-Sat G1: " << checks << " invariant checks passed\n";
         return 0;

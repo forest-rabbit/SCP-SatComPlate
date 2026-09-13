@@ -99,6 +99,12 @@ SolveThreshold(uint64_t quotaBytes, uint64_t heldBytes,
     return out;
 }
 
+uint64_t
+AvailableQuota(uint64_t quota, uint64_t occupied)
+{
+    return occupied >= quota ? 0 : quota - occupied;
+}
+
 std::map<uint64_t, uint64_t>
 ShareStorage(uint64_t capacity, const std::map<uint64_t, uint64_t>& ownerOccupancy)
 {

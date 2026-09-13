@@ -136,6 +136,53 @@ struct Driver
     }
 };
 
+/** Real manager admission across owner joins, independent of checkpoint timing. */
+void QuotaAdmission()
+{
+    {
+        auto config = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        auto tasks = CreateObject<TaskCoordinator>();
+        tasks->Initialize(ComputeProfile{{{0, 100000}, {3, 100000}}},
+            TaskTrace{{Definition(TaskProfile::LLM)}}, topology, "size-aware", 1024,
+            config.parameters.islMtuBytes, config.parameters.receiverRcvBufBytes, false, END);
+        PlacementLoadLedger loads;
+        FaFirstFeasiblePlacementPolicy placement;
+        CbSatManager manager(tasks, topology, 1000, END, 1.0, placement, loads);
+        const auto first = manager.Reserve(100, 0, "INPUT", 600);
+        Check(first.has_value(), "first owner cannot reserve INPUT");
+        manager.CommitObject(0, *first);
+        const auto before = AvailableQuota(manager.Quota(0, 100), manager.Occupied(0, 100));
+        const auto second = manager.Reserve(200, 0, "FULL", 100);
+        Check(second.has_value(), "second owner cannot join");
+        const auto quota = manager.Quota(0, 100);
+        const auto available = AvailableQuota(quota, manager.Occupied(0, 100));
+        Check(before == 400 && quota == 750 && available == 150,
+              "owner join must reduce free quota without evicting the first INPUT");
+        for (const auto& role : {"LOG", "FULL", "RELOCATION_ROOT"})
+            Check(!manager.Reserve(100, 0, role, available + 1),
+                  "real pool accepted a request above the dynamic share");
+        const auto& pool = *manager.Pools().at(0);
+        Check(pool.Used() == 600 && pool.Reserved() == 100 && pool.Free() == 300,
+              "quota rejection altered existing objects or physical capacity");
+        Check(pool.Find(*first) && !pool.Find(*first)->reserved && pool.Find(*first)->bytes == 600 &&
+              pool.Find(*second) && pool.Find(*second)->reserved,
+              "owner join/rejection deleted a legal object");
+        const auto exact = manager.Reserve(100, 0, "LOG", available);
+        Check(exact.has_value(), "inclusive remaining-quota boundary rejected");
+        manager.CommitObject(0, *exact);
+        Check(pool.Used() + pool.Reserved() <= pool.Capacity(), "physical pool overcommitted");
+        manager.ReleaseTask(200, "TEST_RELEASE");
+        Check(manager.Quota(0, 100) == pool.Capacity(), "released owner retained a share");
+        manager.ReleaseTask(100, "TEST_RELEASE");
+        manager.Finalize();
+        Check(pool.Used() == 0 && pool.Reserved() == 0 && manager.IsQuiescent() && loads.Empty(),
+              "quota fixture leaked storage or ownership");
+    }
+    Reset();
+}
+
 void Run(TaskProfile profile, const std::string& mode, PlacementPolicy& placement,
          uint64_t capacity = 10000000000ULL)
 {
@@ -275,6 +322,7 @@ int main()
 {
     try
     {
+        QuotaAdmission();
         for (auto profile : {TaskProfile::DENSE_IMAGE, TaskProfile::SPARSE_INFERENCE,
                              TaskProfile::COMPRESSION, TaskProfile::LLM})
         {
