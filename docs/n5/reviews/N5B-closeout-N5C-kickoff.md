@@ -71,10 +71,10 @@ N5C 前后本轮均不实现阈值、预算、JIT-next 或新优化器。
 - V4 恢复时间只用于候选估计，不修改真实 INPUT/state 并发传输、恢复随机流或 deadline。
 - 保留 FA-FFP/FA-LRL 等原策略行为；N5C 只选择 CompFRR 的 designated remote，
   不进入恢复策略或 Routing。首轮 Eager/Deferred 各一组，稳定后 Deferred 三项消融。
-- 原 32 组 `output/pre-n5c-placement-final`（执行 `b51cc9d63`）保持只读；未来只有
-  FA-FFP 回归等价门槛成立才复用相应对照，不在本次收口宣称 N5C 已通过该门槛。
+- 原 32 组 `output/pre-n5c-placement-final`（执行 `b51cc9d63`）保持只读；
+  相应 FA-FFP 对照仅在下述完整回归等价门槛通过后复用。
 
-## G4 验证与当前停止点
+## G4 收口验证
 
 目标模块及维护测试已编译；C++ 全部维护测试通过（CB policy 89262、runtime 881308
 次检查，含新增 quota fixture）；Python 136 项，135 通过、1 项可选环境测试跳过。
@@ -96,13 +96,92 @@ N5C 前后本轮均不实现阈值、预算、JIT-next 或新优化器。
 `feature/n5c-backup-placement-v4` 由该新 n5 创建，main 不变，PR #99/JIT 不进入基线。
 CB 分支仍作为 PR #99 的 base，暂不删除；不新增 GitHub CI，不合 main、不打 tag。
 
-## N5C 实施进度
+## N5C V4 实施与验收
 
-V4 评分、固定 reference/实际 remote 适配、ON quota 替换和只读资源积分已接入。
-先通过维护测试及两个完整 FA-FFP 回归等价门槛，再执行 Eager/Deferred 主实验和 Deferred 三项消融。
-公式与代码字段见 protection README，本页仅回填验收证据，不重复扩写模型。
+V4 评分、固定 reference/实际 remote 适配、ON quota 替换和只读资源积分已接入；
+公式与代码字段见 protection README，不在本页重复模型。执行版本为干净提交
+`c7f1a91e12f57064646af4f52705724dc27cb990`，七组均完整运行 1300 s：两个 FA-FFP 等价
+门槛、Eager/Deferred 两组主实验、Deferred noR/noU/noM 三组消融。66 星、800 任务、
+10 Gbps、1 ms、seed=1/run=11、352513119 WU 及故障参数均未修改。
 
-提交前检查：目标构建与全部 C++ 维护测试通过，新增 V4 2373 项检查，frequency runtime
-5250 项（含 START 单次求解、实际 remote、同纳秒故障/配额竞争、ON 固定 pair）；
-Python 140 项、139 通过/1 可选跳过；完整 smoke/regression 通过，包括 16 placement 组、
-100 任务联合故障与 483 条概率一致性记录。日志 `output/n5c-v4/`。正式比较尚待回填。
+新 FA-FFP 对旧执行 `b51cc9d63` 的每组 26 份 CSV 逐字节一致，业务/状态 JSON 及其余
+JSON 等价（仅排除身份、路径、墙钟）。`fa-ffp-equivalence.json` 通过后才运行 N5C；
+主实验审计通过后才启动消融。旧证据未覆盖，JIT 未参与。
+
+### 正式主结果
+
+R5=Eager，R7=Deferred，均使用 busy=relocate。流量为额外应用层实际发送的十进制 GB，
+不是逐跳字节；waste 为 total compute-capacity equivalent waste，含预留空闲机会成本，
+不等同实际 CPU 浪费。catch 为故障到追平 W_f；未追平不填零。
+
+| 组 | 完成/800 | catch 样本 | mean / P50 / P95（ms） | total waste（百万 eq-WU） | 额外应用流量（GB） |
+|---|---:|---:|---:|---:|---:|
+| R5 FA-FFP | 800 | 83 | 150.59 / 67.24 / 418.55 | 1.666240 | 197.947086 |
+| R5 N5C | 800 | 83 | 116.16 / 65.75 / 374.85 | 1.388899 | 198.236345 |
+| R7 FA-FFP | 799 | 82 | 340.03 / 282.48 / 734.06 | 4.295718 | 105.397737 |
+| R7 N5C | 799 | 83 | 343.54 / 279.19 / 638.71 | 3.726479 | 107.665407 |
+
+R5 的 total waste 降低 16.64%、平均 catch 降低 22.87%，额外流量增加 0.15%。R7 的
+total waste 降低 13.25%、额外流量增加 2.15%；双方共同观测到 catch 的 82 个任务，
+均值为 340.03→341.68 ms（增加 0.48%），不把样本不同的总体均值当作逐任务提速。
+实际执行浪费分别为 R5 913174→674949 WU、R7 1871067→1315083 WU；
+normal protection、reserved-idle 与 active/total eq-WU 在机器汇总中严格分列。
+
+### 恢复与热点
+
+以下动作比例的分母均为 recovery_attempted=83；busy 的分母是故障时有 designated
+backup 的 83 次事件。failed 是结果，可与 direct/relocate/recompute 重叠，不是第四条互斥路径。
+所有节点（含零负载节点）均计入集中度；storage HHI 使用实际 byte-time 积分。
+
+| 组 | direct / relocate / recompute | busy/83 | recovery failed | assignment Top-1 | assignment HHI | storage HHI |
+|---|---:|---:|---:|---:|---:|---:|
+| R5 FA-FFP | 75 / 3 / 5 | 3 | 0 | 62.41% | 0.454566 | 0.336525 |
+| R5 N5C | 77 / 1 / 5 | 1 | 0 | 10.69% | 0.057069 | 0.051187 |
+| R7 FA-FFP | 81 / 2 / 0 | 2 | 1 | 61.12% | 0.439374 | 0.129259 |
+| R7 N5C | 82 / 1 / 0 | 1 | 1 | 8.31% | 0.042079 | 0.051705 |
+
+R7 FA-FFP 失败任务为 574，N5C 为 140：N5C 修复了 574 的远端状态落后，但 140 在
+316 s 故障时 remote 15 空闲、tail 路径却为 NO_ADMISSIBLE_PATH，转 REMOTE_REDO；
+W_f=247785、W_L=242885、W_R=0 WU，剩余 deadline 4.6815 s，不足以完成从零重算。
+它不是 busy 导致，也不是取消 Frequency 更新导致。当前候选可行性不保证未来路径可用，
+保留原恢复合同、不为这一任务重新选点或调整 deadline。
+
+R7 FA-FFP 的迁移 state 逻辑字节虽为 0，迁移操作仍实际发送 0.879831 GB INPUT/tail；
+N5C 为 0.729411 GB INPUT/state。汇总已区分逻辑 state 与实际三类流量，包含部分发送与取消。
+R5/R7 的全网平均链路利用率分别为 0.504055%→0.424468%、0.426223%→0.413902%；
+与应用流量变化方向不同并不矛盾，链路指标还取决于经过哪些路径。
+
+### Deferred 消融与停止诊断
+
+| 版本 | 完成/800 | busy / relocate | mean / P95 catch（ms） | total waste（百万 eq-WU） | 额外流量（GB） | assignment HHI |
+|---|---:|---:|---:|---:|---:|---:|
+| full | 799 | 1 / 1 | 343.54 / 638.71 | 3.726479 | 107.665407 | 0.042079 |
+| noR | 799 | 1 / 1 | 343.64 / 638.71 | 3.727208 | 107.665405 | 0.042282 |
+| noU | 800 | 0 / 0 | 316.82 / 604.39 | 3.066511 | 107.799429 | 0.071239 |
+| noM | 799 | 2 / 2 | 354.33 / 858.27 | 3.818691 | 107.352108 | 0.033563 |
+
+各版本均有 83 次恢复尝试、83 个 catch 样本，无 RECOMPUTE；Deferred 四组生成的故障
+JSON 完全一致，恢复任务/故障时刻/类型一致。三项消融均保留所有硬约束。
+noU 的 140 选择 remote 13，故障时走 TAIL 并完成；该场景中 noU 的完成数/浪费优于 full，
+但 assignment 更集中。noM 更分散却出现更多 busy、更慢追平；不把均衡本身当作可靠性保证。
+
+Eager/Deferred 平均可行候选为 56.90/56.50，不是被硬约束压缩成单候选。Eager 421 次
+选择均由 M 主导；Deferred 为 M 370 次、U 39 次。R 在可行候选中最大约 0.955，但大多
+为零，full 的最终选择只有 2 次非零 R；因此 noR 影响很小。主导维度不表示其他维度未参与
+淘汰候选；noM 的 R 主导标签还包含全零并列，不据此声称竞争风险已充分验证。
+U、M 均有动态范围，观测 exposure 与物理账本通过检查。按 G12 保留这些局限，
+不调权重、不新增优化器，也不预设优于历史 FA-LRL（其 R7 为 800 完成）。
+
+### 验证与交付边界
+
+目标构建与全部维护 C++ 测试通过：V4 2373 项、frequency runtime 5252 项（新增真实
+共享 remote 的非零竞争预测检查），8 组空间 fixture / 10 个提案的独立审计通过。
+Python 143 项、142 通过/1 可选跳过；完整 smoke/regression 在执行提交前通过，包括
+16 placement 组、100 任务联合故障与 483 条概率一致性记录；收尾再次通过 16 组 placement smoke。
+
+原始结果、七组 `comparison.json/.csv`、等价门槛在 `output/n5c-v4/formal/`；构建/测试日志
+在 `output/n5c-v4/`。七组统一离线审计为 AUDIT_PASS，包含原 Frequency 独立校验、
+固定配置与确定性胜者、actual/quota、完整释放、assignment/storage 积分和实际资源守恒。
+执行提交之后只修改 CLI 帮助、测试、离线统计与文档，不改仿真模型或场景。
+N5C 分支提交供人工审阅；不自动合入 n5/main、不运行额外 GitHub CI、不打 tag，
+保留 PR #99 及其依赖分支和历史实验。

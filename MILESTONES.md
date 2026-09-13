@@ -27,6 +27,8 @@ N0–N2 是 ns-3.33 版本的原始里程碑，相关 PR 位于旧 SatCompute �
 | N5A：真实保护与恢复运行时 | 已完成，集成到 `n5` | PR #95 | 2026-09-10 |
 | N5B：CompFRR 动态频率 | 已完成，集成到 `n5` | PR #96 | 2026-09-11 |
 | N5B 后续 / Pre-N5C：基线与可行性消融 | 已验收冻结 | PR #97 / 执行 `b51cc9d63` | 2026-09-12 |
+| Pre-N5C：CB-Sat 基线收口 | 已完成，集成到 `n5`，JIT 留作历史 | PR #98 / `17c4414dc` | 2026-09-13 |
+| N5C：V4 备份节点选择 | 实施及七组验证完成，待人工审阅 | 执行 `c7f1a91e1` | 2026-09-13 |
 
 N2 的最终发布链固定为 `feature/n2-integration` 合入旧仓库 `main`，并以
 annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移动 N0、N1
@@ -47,8 +49,14 @@ N5 集成线已由该标签建立；[Pre-N5 审计 PR #94](https://github.com/fo
 收尾，冻结 Frequency v6、InputDeferred、ON容量即时恢复及四种placement的32组正式结果。
 同为66星/800任务/1300 s，R5四模式均800完成，R7两种FFP为799、两种LRL为800。
 计算资源统一区分 active/total eq-WU（equivalent cost），不把预留空闲称为CPU重算。
-LRL/FA-LRL是N5C的强baseline，须公平比较、不预设结果；N5C尚未开始，`main`不变。
+LRL/FA-LRL是N5C的强baseline，须公平比较、不预设结果；当时N5C尚未开始，`main`不变。
 细节仅保留在[最终报告](docs/n5/reviews/Pre-N5C-placement-baselines-final.md)，不在里程碑展开实验流水。
+
+2026-09-13：PR #98 合入 `n5` 后，从新基线实施 N5C V4，保留一次 reference Frequency、
+固定 local 和 ON 不重选合同。七组 1300 s 验证通过，FA-FFP 与旧行为严格等价；
+N5C Eager/Deferred 分别完成 800/799，备份热点和 total eq-WU 下降，但 Deferred 非全面占优，
+noU 在该场景完成 800。完整对照、消融与局限仅记录在
+[N5C 验收](docs/n5/reviews/N5B-closeout-N5C-kickoff.md)，不据此改写模型或预设算法排名。
 
 ## N0：初始网络平台
 

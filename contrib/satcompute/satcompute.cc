@@ -217,7 +217,7 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
                          config.backupStorageBytesPerNode);
-    commandLine.AddValue("placementMode", "ffp/lrl minimal, fa-ffp/fa-lrl feasibility-aware", config.placementMode);
+    commandLine.AddValue("placementMode", "ffp/lrl minimal, fa-ffp/fa-lrl feasibility-aware, n5c CompFRR V4", config.placementMode);
     commandLine.AddValue("n5cVariant", "N5C V4 scoring: full/noR/noU/noM; hard constraints unchanged", config.n5cVariant);
     commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; REMOTE_BUSY only, ignored by off",
                          config.remoteBusyRecoveryPolicy);

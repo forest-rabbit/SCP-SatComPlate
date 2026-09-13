@@ -129,6 +129,44 @@ def spatial(root):
                     "recovery_conflict","historical_utilization","storage_pressure")})
 
 
+def recovery_composition(recoveries, transfers):
+    """Attempts and outcomes overlap; logical relocated state is not physical traffic."""
+    total = len(recoveries)
+    counts = dict(direct_count=0, relocate_count=0, recompute_count=0, unselected_count=0)
+    migrated = set()
+    for r in recoveries:
+        path = r["chosen_path"]
+        if path in ("TAIL", "REMOTE_REDO"):
+            counts["direct_count"] += 1
+        elif path in ("MIGRATE_TAIL", "MIGRATE_REDO"):
+            counts["relocate_count"] += 1
+            migrated.add((r["task_id"], r["attempt_generation"]))
+        elif path == "RECOMPUTE":
+            counts["recompute_count"] += 1
+        else:
+            counts["unselected_count"] += 1
+    counts["recovery_failed_count"] = sum(r["terminal_state"] == "FAILED" for r in recoveries)
+    sent = dict.fromkeys(("RECOVERY_INPUT", "RECOVERY_STATE", "RECOVERY_TAIL"), 0)
+    flows = {}
+    for r in transfers:
+        if (r["task_id"], r["attempt_generation"]) not in migrated or r["kind"] not in sent:
+            continue
+        value = (r["kind"], int(r["sent_bytes"]))
+        require(value[1] >= 0, "negative migration traffic")
+        require(r["transfer_id"] not in flows or flows[r["transfer_id"]] == value,
+                "duplicate migration flow evidence disagrees")
+        flows[r["transfer_id"]] = value
+    for kind, size in flows.values():
+        sent[kind] += size
+    return dict(**counts,
+        action_ratios={k.removesuffix("_count"):v/total if total else None for k,v in counts.items()},
+        relocated_state_logical_bytes=sum(int(r["checkpoint_relocation_bytes"]) for r in recoveries),
+        migration_sent_bytes_by_kind=sent, migration_total_sent_bytes=sum(sent.values()),
+        migration_traffic_note="Actual sent payload for MIGRATE_* attempts, including partial/cancelled flows; "
+            "INPUT belongs to this operation but is not all uniquely incremental versus direct recovery. "
+            "LocalDelivery has no physical flow. Failed outcomes can overlap any action category.")
+
+
 def analyze(root):
     value = BASE["analyze"](root)  # Corrected successful useful-WU subtraction and failed-task waste.
     value["resource_concentration"] = resources(root)
@@ -146,7 +184,7 @@ def analyze(root):
         resume_seconds=distribution((int(r["recovery_compute_start_time_ns"])-int(r["fault_time_ns"]))/NS
                                     for r in recoveries if r["recovery_compute_start_time_ns"]),
         without_catch=sum(not r["actual_T_catch_ns"] for r in recoveries),
-        relocation_bytes=sum(int(r["checkpoint_relocation_bytes"]) for r in recoveries))
+        **recovery_composition(recoveries, rows(root,"protection-transfers.csv",True)))
     value["links"]["max_single_link_full_mean_utilization_percent"] = max(
         100*float(r["tx_busy_time_s"])/float(r["measurement_duration_s"]) for r in rows(root,"link-summary.csv"))
     tasks = {r["task_id"]:r for r in rows(root,"task-summary.csv")}
@@ -188,7 +226,11 @@ def main():
             total_capacity_equivalent_waste_eq_wu=s["w_waste_actual"],
             actual_execution_waste_wu=s["task_execution_waste_wu"],
             normal_protection_eq_wu=s["normal_protection_eq_wu"],reserved_idle_eq_wu=s["reserved_idle_eq_wu"],
-            extra_application_sent_bytes=r["network"]["extra_sent_bytes"],relocation_bytes=p["relocation_bytes"],
+            extra_application_sent_bytes=r["network"]["extra_sent_bytes"],
+            direct_count=p["direct_count"],relocate_count=p["relocate_count"],
+            recompute_count=p["recompute_count"],recovery_failed_count=p["recovery_failed_count"],
+            relocated_state_logical_bytes=p["relocated_state_logical_bytes"],
+            migration_total_sent_bytes=p["migration_total_sent_bytes"],
             mean_link_utilization_percent=r["links"]["mean_utilization_percent"]))
     with (args.root/"comparison.csv").open("w") as stream:
         writer=csv.DictWriter(stream,fieldnames=table[0])

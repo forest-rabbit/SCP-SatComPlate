@@ -45,6 +45,17 @@ def verify_gate(reference, candidate):
     return report
 
 
+def verify_main_audit(root, head):
+    """An unrelated/gate-only comparison is not an audited main experiment."""
+    audit=json.loads((root/"comparison.json").read_text())
+    for group in PHASES["main"]:
+        current=json.loads((root/group/"execution.json").read_text())
+        record=audit.get(group,{})
+        MATRIX["require"](current["commit"] == head and not current["worktree_dirty"] and
+                          record.get("execution") == current and record.get("n5c") is not None,
+                          "audit both same-code main runs before ablations")
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root",type=Path,required=True)
@@ -65,7 +76,7 @@ def main():
             e=json.loads((args.root/group/"execution.json").read_text())
             require(e["commit"] == head and not e["worktree_dirty"],"ablation changed code")
             require(json.loads((args.root/group/"execution-result.json").read_text())["returncode"] == 0,"main run incomplete")
-        require((args.root/"comparison.json").exists(),"audit both main runs before ablations")
+        verify_main_audit(args.root,head)
     def run(group):
         require(MATRIX["identity"]() == head,"source changed before execution")
         require(not (args.root/group).exists(),"refuse to overwrite raw evidence")

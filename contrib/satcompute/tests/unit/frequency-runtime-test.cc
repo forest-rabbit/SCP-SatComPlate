@@ -516,8 +516,8 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
             next.taskId = 2;
             next.inputTransferId = 3;
             next.resultTransferId = 4;
-            next.computeNodeId = 5;
-            next.arrivalTimeNs = 150000000;
+            next.computeNodeId = n5c ? 9 : 5;
+            next.arrivalTimeNs = n5c ? 50000000 : 150000000;
             workload.tasks.push_back(next);
         }
         tasks->Initialize(compute, workload,
@@ -625,6 +625,7 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         }
         if (n5c)
         {
+            bool competingPeer = false;
             Check(controller.N5c() && controller.N5c()->QuotasEmpty() &&
                   !controller.N5c()->Decisions().empty(), "N5C did not exercise START/release");
             for (const auto& row : controller.Decisions())
@@ -643,12 +644,16 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
                           "N5C proposal was confused with actual commitment");
                     for (const auto& s : spatial.selection.scores)
                         if (s.feasible)
+                        {
+                            competingPeer = competingPeer || (s.peerCount && s.recoveryConflict > 0);
                             Check(s.recoveryConflict >= 0 && s.recoveryConflict <= 1 &&
                                   s.historicalUtilization >= 0 && s.historicalUtilization <= 1 &&
                                   s.storagePressure >= 0 && s.storagePressure <= 1,
                                   "N5C normalized pressure outside unit range");
+                        }
                 }
             }
+            Check(competingPeer, "N5C runtime did not exercise a shared-remote competing forecast");
         }
         if (paired && !n5c)
         {

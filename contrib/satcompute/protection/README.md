@@ -52,7 +52,8 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；N5C V4 在�
 | `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
-| `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入 |
+| `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入；`n5c` 仅用于 CompFRR |
+| `n5cVariant` | `full` | `full/noR/noU/noM`；仅移除评分维度，不移除硬约束，消融要求 placement=n5c |
 | `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr/checkbullet 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
 | `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
@@ -521,7 +522,12 @@ ON 更新替换自身旧 quota，不重复计占用，任务离开主计算后�
 原 `frequency-decisions.csv` 的 OFF 标量和评分仍属于 reference，local/remote 列为实际提案；ON 均为实际 pair。
 `placement-resource-summary.csv` 对平台 CompFRR 各 placement 输出相同的只读计数/积分/峰值；
 FA-FFP 等不会因此启用 N5C quota。原场景、故障随机流、Routing、恢复策略和工作量标度不变。
-正式运行与审计入口见 [测试说明](../tests/README.md)。
+正式运行与审计入口见 [测试说明](../tests/README.md)，结果见
+[N5C 验收记录](../../../docs/n5/reviews/N5B-closeout-N5C-kickoff.md)。
+离线汇总的 direct/relocate/recompute 比例以恢复尝试数为分母，failed 是可与这些动作重叠的结果；
+未追平不记零延迟。`relocated_state_logical_bytes` 仅为迁移检查点逻辑大小；
+`migration_sent_bytes_by_kind` / `migration_total_sent_bytes` 才是 MIGRATE 操作实际发送的
+INPUT/state/tail（含部分发送、取消，按真实流去重），同星交付不凭空增加网络字节。
 
 ## 资源账本与 Pre-N5C 冻结口径
 
