@@ -14,7 +14,7 @@ SCENE = "contrib/satcompute/input/experiments/leo-66"
 def arguments(output, fault_mode="generate", audit=False, shadow=False,
               validation_trace=None, protection_mode="off", placement_mode="fa-ffp", lrl_weight=1,
               remote_busy_recovery_policy="relocate", input_staging_policy="eager"):
-    if protection_mode not in ("off", "fixed", "compfrr", "recompute", "one-plus-one") or placement_mode not in ("ffp", "lrl", "fa-ffp", "fa-lrl"):
+    if protection_mode not in ("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet") or placement_mode not in ("ffp", "lrl", "fa-ffp", "fa-lrl"):
         raise ValueError("unsupported protection/placement mode")
     if placement_mode in ("lrl", "fa-lrl") and protection_mode == "off":
         raise ValueError("LRL requires an enabled protection scheme")
@@ -75,7 +75,7 @@ def main():
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--fault-mode", choices=("none", "generate", "validation-replay"), default="generate")
     parser.add_argument("--validation-trace", type=Path)
-    parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr", "recompute", "one-plus-one"), default="off")
+    parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"), default="off")
     parser.add_argument("--placement-mode", choices=("ffp", "lrl", "fa-ffp", "fa-lrl"), default="fa-ffp")
     parser.add_argument("--remote-busy-recovery-policy", choices=("relocate", "recompute"), default="relocate")
     parser.add_argument("--input-staging-policy", choices=("eager", "deferred"), default="eager")

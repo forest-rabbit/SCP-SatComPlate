@@ -6,6 +6,13 @@ build_lib(
     protection/common/protection-types.cc
     traffic/local-delivery.cc
     protection/common/task-state-adapter.cc
+    protection/policy/baseline/checkbullet/cb-sat-policy.cc
+    protection/policy/baseline/checkbullet/cb-sat-state.cc
+    protection/policy/baseline/checkbullet/cb-sat-manager.cc
+    protection/policy/baseline/checkbullet/cb-sat-recovery.cc
+    protection/policy/baseline/checkbullet/cb-sat-config.cc
+    protection/policy/baseline/checkbullet/cb-sat-controller.cc
+    protection/policy/baseline/checkbullet/cb-sat-metrics.cc
     protection/storage/backup-storage-pool.cc
     protection/runtime/protection-runtime.cc
     protection/policy/fixed/fixed-protection-policy.cc
@@ -97,6 +104,12 @@ build_lib(
     protection/common/protection-types.h
     traffic/local-delivery.h
     protection/common/task-state-adapter.h
+    protection/policy/baseline/checkbullet/cb-sat-policy.h
+    protection/policy/baseline/checkbullet/cb-sat-state.h
+    protection/policy/baseline/checkbullet/cb-sat-manager.h
+    protection/policy/baseline/checkbullet/cb-sat-recovery.h
+    protection/policy/baseline/checkbullet/cb-sat-config.h
+    protection/policy/baseline/checkbullet/cb-sat-controller.h
     protection/storage/backup-storage-pool.h
     protection/runtime/protection-runtime.h
     protection/policy/fixed/fixed-protection-policy.h
@@ -216,6 +229,11 @@ target_include_directories(
   satcompute
   PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third-party>
 )
+set_source_files_properties(
+  protection/policy/baseline/checkbullet/cb-sat-config.cc
+  PROPERTIES COMPILE_DEFINITIONS
+    "SATCOMPUTE_CB_MTBF_PROFILE=\"${CMAKE_CURRENT_SOURCE_DIR}/protection/policy/baseline/checkbullet/calibration/frozen-mtbf-profile.json\""
+)
 
 # The platform entry point is a project executable, not an ns-3 example.  It is
 # therefore available when the global examples and tests switches are disabled.
@@ -267,6 +285,38 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-cb-sat-config-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/cb-sat-config-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-cb-sat-recovery-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/cb-sat-recovery-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-cb-sat-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/cb-sat-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-cb-sat-policy-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/cb-sat-policy-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-one-plus-one-baseline-test
   EXECNAME_PREFIX satcompute_test_
