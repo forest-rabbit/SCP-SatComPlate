@@ -110,6 +110,21 @@ not a production prediction input. Production policy must not depend on the
 shadow validator; test-only comparisons are allowed. Reuse the canonical fault
 predictor, current sampling probabilities, state adapter and production cost tiers.
 
+### Active N5C contract (2026-09-13)
+
+The user authorized merging PR #98 into `n5` and continuing N5C on
+`feature/n5c-backup-placement-v4`. This supersedes the earlier pre-N5C stop above.
+PR #98 is merged at `17c4414dcd61a34a2068a84fefb8ccda7e6b7079`; keep PR #99/JIT
+out of this branch and preserve its dependent CB branch. Use the accepted V4 and
+eight clarified interfaces recorded in `protection/README.md` and
+`docs/n5/reviews/N5B-closeout-N5C-kickoff.md`. N5C ranks only the actual remote after
+one read-only FA-FFP reference Frequency solve, retains that local, and never
+reranks ON. Do not change the frozen scene, fault RNG, frequency equations,
+checkpoint/recovery mechanics, or routing. Run the two strict FA-FFP equivalence
+gates, two N5C Eager/Deferred main runs, then three Deferred scoring ablations;
+do not repeat the old 32-run matrix or mix JIT into comparisons. No extra GitHub
+CI, main merge, release tag or N5C integration merge without final user review.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.

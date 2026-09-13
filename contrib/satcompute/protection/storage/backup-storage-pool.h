@@ -36,6 +36,10 @@ class BackupStoragePool
     explicit BackupStoragePool(uint64_t capacity);
     /** Read-only callback after allocations/commits, for simultaneous cross-pool peaks. */
     void SetPeakObserver(std::function<void()> observer) { m_peakObserver = std::move(observer); }
+    /** Read-only instrumentation after every actual occupancy change, including release/merge. */
+    void SetChangeObserver(std::function<void()> observer) { m_changeObserver = std::move(observer); }
+    /** Simultaneous used plus reserved bytes by task, without predicted peak promises. */
+    std::map<uint64_t, uint64_t> OccupancyByTask() const;
     BackupStoragePool(const BackupStoragePool&) = delete;
     BackupStoragePool& operator=(const BackupStoragePool&) = delete;
     /** Reserve bytes for a task; null means capacity exhaustion, not task failure. */
@@ -137,6 +141,7 @@ class BackupStoragePool
     std::map<uint64_t, uint64_t> m_taskPeaks;   ///< Per-owner peak, retained after release.
     std::set<uint64_t> m_failedTasks;           ///< Unique failed allocation owners.
     std::function<void()> m_peakObserver;       ///< Does not mutate pools or schedule events.
+    std::function<void()> m_changeObserver;     ///< Optional exact byte-time instrumentation.
 };
 } // namespace ns3::protection
 #endif

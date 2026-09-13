@@ -23,6 +23,15 @@ BackupStoragePool::UpdatePeaks()
         m_taskPeaks[task] = std::max(m_taskPeaks[task], bytes);
     if (m_peakObserver)
         m_peakObserver();
+    if (m_changeObserver) m_changeObserver();
+}
+
+std::map<uint64_t, uint64_t>
+BackupStoragePool::OccupancyByTask() const
+{
+    std::map<uint64_t, uint64_t> result;
+    for (const auto& [id, entry] : m_entries) result[entry.taskId] += entry.bytes;
+    return result;
 }
 
 std::optional<uint64_t>
@@ -88,6 +97,7 @@ BackupStoragePool::ReleaseReservation(uint64_t id)
         return false;
     m_reserved -= it->second.bytes;
     m_entries.erase(it);
+    if (m_changeObserver) m_changeObserver();
     return true;
 }
 
@@ -99,6 +109,7 @@ BackupStoragePool::Release(uint64_t id)
         return false;
     m_used -= it->second.bytes;
     m_entries.erase(it);
+    if (m_changeObserver) m_changeObserver();
     return true;
 }
 
@@ -119,6 +130,7 @@ BackupStoragePool::Merge(uint64_t stateId, uint64_t batchId, uint64_t committedB
     m_used -= before - committedBytes;
     state->second.bytes = committedBytes;
     m_entries.erase(batch);
+    if (m_changeObserver) m_changeObserver();
     return true;
 }
 
@@ -143,6 +155,7 @@ BackupStoragePool::ReleaseTaskExcept(uint64_t taskId, const std::set<uint64_t>& 
         it = m_entries.erase(it);
         ++count;
     }
+    if (count && m_changeObserver) m_changeObserver();
     return count;
 }
 } // namespace ns3::protection

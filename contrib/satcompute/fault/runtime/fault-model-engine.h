@@ -175,6 +175,11 @@ class FaultModelEngine : public Object
     /** Current causal copies and actual next sampling point; no RNG or future F3 access. */
     std::optional<ComputeFailurePredictionInput> QueryTaskPrediction(uint32_t nodeId,
                                                                      int64_t remainingNs) const;
+    /** Observed alive time from simulation start; only already executed F3 truncates exposure.
+     * F1/F2 outage and recovery immunity do not change this observation denominator.
+     * No future schedule, fault prediction or random stream is consulted.
+     */
+    uint64_t ObservedSurvivalExposureNs(uint32_t nodeId) const;
 
     const std::vector<F3ComputeRiskRecord>& GetF3ComputeRiskRecords() const
     {

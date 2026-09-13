@@ -159,6 +159,7 @@ struct Driver
     uint64_t immutableBytes{}, immutableWork{};
     int64_t pauseTime{};
     std::optional<uint64_t> localBlock, remoteBlock;
+    std::function<void(const FrequencyDecisionRecord&)> betweenProposalAndResolution;
 
     void Epoch(double q, bool hit = false)
     {
@@ -183,6 +184,7 @@ struct Driver
         input.remainingComputeTimeNs = live->remainingTimeNs;
         FrequencyRuntimeTestAccess::Before(controller, {3, 1, q, input});
         const auto proposal = controller.Decisions().back();
+        if (betweenProposalAndResolution) betweenProposalAndResolution(proposal);
         Check(proposal.input.risk.qCurrentSample == q, "current q changed");
         Check(proposal.input.risk.pFailBeforeFinish ==
                   PredictComputeFailureBeforeFinish(input).predictedFailureProbability,
@@ -486,7 +488,8 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         parameters.f3.mode = "controlled";
         parameters.f3.controlledNodeId = 3;
         parameters.f3.controlledStartSeconds = 0.1;
-        const bool paired = mode == "ffp-two" || mode == "lrl-two";
+        const bool n5c = mode.starts_with("n5c");
+        const bool paired = mode == "ffp-two" || mode == "lrl-two" || n5c;
         const std::vector<uint32_t> computeNodes = paired ? ids : std::vector<uint32_t>{0, 2, 3, 4};
         engine->Configure(parameters, ids, computeNodes, END, executor, true);
         if (mode == "phase-boundary")
@@ -528,8 +531,22 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         executor->BindTaskCoordinator(tasks);
         engine->BindTaskCoordinator(tasks);
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            n5c ? std::unique_ptr<PlacementPolicy>(std::make_unique<N5cPlacementPolicy>()) :
             mode == "lrl-two" ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
-                               : std::unique_ptr<PlacementPolicy>{});
+                               : std::unique_ptr<PlacementPolicy>{}, RemoteBusyRecoveryPolicy::RELOCATE,
+            mode == "n5c-deferred" ? InputStagingPolicy::DEFERRED : InputStagingPolicy::EAGER);
+        if (mode == "f3")
+        {
+            Simulator::Schedule(NanoSeconds(50000000), [&] {
+                Check(engine->ObservedSurvivalExposureNs(3) == 50000000,
+                      "exposure read future controlled F3 instead of observed survival");
+            });
+            Simulator::Schedule(NanoSeconds(200000000), [&] {
+                Check(engine->ObservedSurvivalExposureNs(3) == 100000000 &&
+                      engine->ObservedSurvivalExposureNs(0) == 200000000,
+                      "actual permanent fault failed to truncate alive exposure");
+            });
+        }
         Simulator::Stop(NanoSeconds(END));
         Simulator::Run();
         controller.Finalize();
@@ -606,7 +623,34 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
                       snapshot.pFinish >= snapshot.qCompute,
                   "F3 victim causal probability was disabled");
         }
-        if (paired)
+        if (n5c)
+        {
+            Check(controller.N5c() && controller.N5c()->QuotasEmpty() &&
+                  !controller.N5c()->Decisions().empty(), "N5C did not exercise START/release");
+            for (const auto& row : controller.Decisions())
+            {
+                if (row.input.phase == ProtectionPhase::OFF && row.pairPathFeasible)
+                    Check(row.pairHardChecked == 1, "N5C reran Frequency per remote");
+                if (row.input.phase == ProtectionPhase::ON)
+                    Check(!row.n5cTrace, "ON reranked N5C remote");
+                if (row.n5cTrace)
+                {
+                    const auto& spatial = controller.N5c()->Decision(*row.n5cTrace);
+                    Check(spatial.reference.localNode == row.pair->localNode &&
+                          spatial.config == row.proposal.selected->config,
+                          "N5C changed reference local or Frequency configuration");
+                    Check(spatial.committed == (row.committed && row.proposal.action == FrequencyAction::START),
+                          "N5C proposal was confused with actual commitment");
+                    for (const auto& s : spatial.selection.scores)
+                        if (s.feasible)
+                            Check(s.recoveryConflict >= 0 && s.recoveryConflict <= 1 &&
+                                  s.historicalUtilization >= 0 && s.historicalUtilization <= 1 &&
+                                  s.storagePressure >= 0 && s.storagePressure <= 1,
+                                  "N5C normalized pressure outside unit range");
+                }
+            }
+        }
+        if (paired && !n5c)
         {
             std::map<uint64_t, uint32_t> selected;
             for (const auto& row : controller.Decisions())
@@ -635,6 +679,77 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
     }
     Reset();
 }
+/** Force a different actual remote, then test readonly proposal, quota race and ON resource use. */
+void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging, const std::string& mode)
+{
+    RngSeedManager::SetSeed(1); RngSeedManager::SetRun(11);
+    {
+        auto cfg = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        cfg.parameters.fixedDelaySeconds = .001;
+        cfg.parameters.islBandwidthBps = 10000000000ULL;
+        OnlineTopologyController topology(cfg.parameters, cfg.constellation);
+        topology.Initialize();
+        auto tasks = CreateObject<TaskCoordinator>();
+        auto definition = Definition(TaskProfile::LLM);
+        definition.sourceNodeId = 4; // Legal LocalDelivery on the selected actual remote.
+        tasks->Initialize(ComputeProfile{{{0,125000},{2,100000},{3,100000},{4,100000}}},
+            TaskTrace{{definition}}, topology, "size-aware", 1024, cfg.parameters.islMtuBytes,
+            cfg.parameters.receiverRcvBufBytes, false, END);
+        const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+        auto executor = CreateObject<FaultController>();
+        executor->ConfigureGeneration(ids, END); executor->BindTopology(topology);
+        executor->BindTaskCoordinator(tasks);
+        auto engine = CreateObject<FaultModelEngine>();
+        auto fp = GetDefaultFaultParameters();
+        fp.checkIntervalSeconds = 10; fp.f2.enabled = fp.f3.enabled = false;
+        engine->Configure(fp, ids, {0,2,3,4}, END, executor, true);
+        engine->BindTaskCoordinator(tasks);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            std::make_unique<N5cPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE, staging);
+        auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
+        const auto held = manager.Pool(0).TryReserve(999, StorageKind::INIT_TEMP, 4000000000ULL);
+        Check(held.has_value(), "test pressure reservation failed");
+        Driver driver{controller, tasks, executor, F1SelfStateFaultModel(GetDefaultFaultParameters().f1), mode};
+        std::optional<uint64_t> race;
+        driver.betweenProposalAndResolution = [&](const auto& row) {
+            if (row.input.phase != ProtectionPhase::OFF) return;
+            Check(row.n5cTrace && row.pair->localNode == 2 && row.pair->remoteNode == 4 &&
+                  manager.Summaries().empty(), "N5C did not retain local/select actual remote without allocation");
+            const auto& trace = controller.N5c()->Decision(*row.n5cTrace);
+            Check(trace.reference.remoteNode == 0 && trace.referenceInput.recoveryRate == 125000 &&
+                  row.pairHardChecked == 1, "reference resources or one-solve contract changed");
+            Check(!trace.committed, "readonly candidate created actual ownership");
+            if (mode == "race")
+                race = manager.Pool(4).TryReserve(998, StorageKind::INIT_TEMP, manager.Pool(4).Free());
+        };
+        Simulator::Schedule(NanoSeconds(200000000), [&] {
+            driver.Epoch(.4, mode == "hit");
+            const auto& row = controller.Decisions().back();
+            Check(row.committed == (mode == "normal"), "post-batch hit/quota admission mismatch");
+            if (mode != "normal") Check(manager.Summaries().empty(), "rejected START allocated state");
+        });
+        Simulator::Schedule(NanoSeconds(400000000), [&] {
+            if (mode != "normal") return;
+            const auto count = controller.N5c()->Decisions().size();
+            Check(manager.Inventory(1)->initialized, "N5C initialization never became physically ready");
+            driver.Epoch(.5);
+            const auto& row = controller.Decisions().back();
+            Check(row.input.phase == ProtectionPhase::ON && row.input.recoveryRate == 100000 &&
+                  row.pair->remoteNode == 4 && controller.N5c()->Decisions().size() == count,
+                  "ON used reference resources or reran spatial ranking");
+            Check(controller.N5c()->ReadyAfter(1).has_value(), "actual ready timestamp absent");
+        });
+        Simulator::Stop(NanoSeconds(800000000));
+        Simulator::Run();
+        manager.Pool(0).ReleaseReservation(*held);
+        if (race) manager.Pool(4).ReleaseReservation(*race);
+        controller.Finalize(); engine->Finalize();
+        Check(controller.N5c()->QuotasEmpty() && manager.IsQuiescent(), "N5C quota/storage leaked");
+        controller.WriteDecisions(output);
+    }
+    Reset();
+}
+
 /** Real capacity reservations, sub-epoch releases and fresh online predictions. */
 struct RetryDriver
 {
@@ -1060,6 +1175,12 @@ int main(int argc, char** argv)
     try
     {
         Storage();
+        for (auto staging : {InputStagingPolicy::EAGER, InputStagingPolicy::DEFERRED})
+            for (const auto& mode : {"normal", "hit", "race"})
+                N5cBoundary(std::filesystem::path(output) / (std::string("n5c-boundary-") +
+                    (staging == InputStagingPolicy::EAGER ? "eager-" : "deferred-") + mode), staging, mode);
+        Online(std::filesystem::path(output) / "online-n5c", "n5c");
+        Online(std::filesystem::path(output) / "online-n5c-deferred", "n5c-deferred");
         for (bool minimal : {false, true})
             for (bool lrl : {false, true})
                 PlacementAdmission(std::filesystem::path(output) / (std::string("placement-") +

@@ -668,6 +668,19 @@ FaultModelEngine::QueryTaskPrediction(uint32_t nodeId, int64_t remainingNs) cons
     return input;
 }
 
+uint64_t
+FaultModelEngine::ObservedSurvivalExposureNs(uint32_t nodeId) const
+{
+    if (!m_configured || !m_nodes.contains(nodeId))
+        throw FaultModelEngineError("survival exposure requires a configured node");
+    auto end = std::min(Simulator::Now().GetNanoSeconds(), m_simulationDurationNs);
+    for (const auto& event : m_faultController->GetEvents())
+        if (event.nodeId == nodeId && event.faultType == FaultType::SATELLITE &&
+            event.eventType == FaultEventType::START && event.simulationTimeNs <= end)
+            end = event.simulationTimeNs;
+    return static_cast<uint64_t>(end);
+}
+
 ComputeRiskSnapshot
 FaultModelEngine::QueryComputeRisk(uint32_t nodeId, int64_t horizonNs) const
 {

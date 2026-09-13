@@ -13,9 +13,13 @@ SCENE = "contrib/satcompute/input/experiments/leo-66"
 
 def arguments(output, fault_mode="generate", audit=False, shadow=False,
               validation_trace=None, protection_mode="off", placement_mode="fa-ffp", lrl_weight=1,
-              remote_busy_recovery_policy="relocate", input_staging_policy="eager"):
-    if protection_mode not in ("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet") or placement_mode not in ("ffp", "lrl", "fa-ffp", "fa-lrl"):
+              remote_busy_recovery_policy="relocate", input_staging_policy="eager", n5c_variant="full"):
+    if protection_mode not in ("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet") or placement_mode not in ("ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"):
         raise ValueError("unsupported protection/placement mode")
+    if placement_mode == "n5c" and protection_mode != "compfrr":
+        raise ValueError("N5C requires CompFRR")
+    if n5c_variant not in ("full", "noR", "noU", "noM") or (placement_mode != "n5c" and n5c_variant != "full"):
+        raise ValueError("invalid N5C ablation")
     if placement_mode in ("lrl", "fa-lrl") and protection_mode == "off":
         raise ValueError("LRL requires an enabled protection scheme")
     if remote_busy_recovery_policy not in ("recompute", "relocate"):
@@ -67,6 +71,8 @@ def arguments(output, fault_mode="generate", audit=False, shadow=False,
                    f"--remoteBusyRecoveryPolicy={remote_busy_recovery_policy}"]
     if input_staging_policy == "deferred":
         result += ["--inputStagingPolicy=deferred"]
+    if placement_mode == "n5c":
+        result += [f"--n5cVariant={n5c_variant}"]
     return result
 
 
@@ -76,7 +82,8 @@ def main():
     parser.add_argument("--fault-mode", choices=("none", "generate", "validation-replay"), default="generate")
     parser.add_argument("--validation-trace", type=Path)
     parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"), default="off")
-    parser.add_argument("--placement-mode", choices=("ffp", "lrl", "fa-ffp", "fa-lrl"), default="fa-ffp")
+    parser.add_argument("--placement-mode", choices=("ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"), default="fa-ffp")
+    parser.add_argument("--n5c-variant", choices=("full", "noR", "noU", "noM"), default="full")
     parser.add_argument("--remote-busy-recovery-policy", choices=("relocate", "recompute"), default="relocate")
     parser.add_argument("--input-staging-policy", choices=("eager", "deferred"), default="eager")
     parser.add_argument("--audit", action="store_true")
@@ -88,7 +95,7 @@ def main():
                    shlex.join(arguments(output, args.fault_mode, args.audit, args.shadow,
                                         args.validation_trace, args.protection_mode, args.placement_mode,
                                         remote_busy_recovery_policy=args.remote_busy_recovery_policy,
-                                        input_staging_policy=args.input_staging_policy))]
+                                        input_staging_policy=args.input_staging_policy, n5c_variant=args.n5c_variant))]
         if output.exists():
             raise ValueError("refusing to overwrite an existing output directory")
     except (ValueError, OSError, KeyError) as error:
@@ -105,6 +112,8 @@ def main():
                 "fixed_delay_seconds": 0.001,
                 "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                 "worktree_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT))}
+    if args.placement_mode == "n5c":
+        identity["n5c_variant"] = args.n5c_variant
     (output / "execution.json").write_text(json.dumps(identity, indent=2)+"\n")
     started = time.monotonic()
     with (output / "run.log").open("w") as log:

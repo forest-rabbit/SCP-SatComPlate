@@ -21,6 +21,24 @@ tests/
 日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动正式场景的原始指标
 保存在 gitignore 排除的本地 `output/`，完整正式场景运行不接入 `run-all.sh` 或 GitHub CI。
 
+N5C V4 使用 `integration/regression/run-n5c-placement.py`，保持冻结的 800 任务 / 1300 s / seed 1 / run 11。
+激活项目 uv 环境并完成构建、保持干净提交后，依次运行：
+
+```bash
+python contrib/satcompute/tests/integration/regression/run-n5c-placement.py --root output/n5c-v4/formal --phase gate
+python contrib/satcompute/tests/integration/regression/run-n5c-placement.py --root output/n5c-v4/formal --phase main
+python contrib/satcompute/tests/integration/regression/analyze-n5c-placement.py --root output/n5c-v4/formal
+python contrib/satcompute/tests/integration/regression/run-n5c-placement.py --root output/n5c-v4/formal --phase ablation
+python contrib/satcompute/tests/integration/regression/analyze-n5c-placement.py --root output/n5c-v4/formal
+```
+
+gate 只重跑 R5/R7 FA-FFP，与旧输出逐 CSV/JSON 核验；主实验只新增 Eager/Deferred 两组，
+消融为 Deferred 的 noR/noU/noM，复用 full。拒绝覆盖输出或混用运行 commit。
+新增 `satcompute-n5c-placement-test` 和既有 frequency runtime 中的 N5C 边界 fixture；
+离线审计核查 min-max、固定配置、存活 exposure、assignment 积分和实际资源守恒。
+`comparison.json/csv` 中 WU 与 eq-WU 分开、路径比例分母为 recovery_attempted，busy 分母为故障时具有 designated backup 的任务。
+这是单一固定场景的描述性比较，不预设 N5C 优于 FA-FFP/FA-LRL。
+
 Pre-N5C placement 消融入口为 `integration/regression/run-pre-n5c-placement-matrix.py`：
 `--stage gates` 先运行 R5/R7-FA-FFP 并与最新 capacity-resume 原始文件比较；
 `--stage remaining --jobs 8` 再运行其余 30 组，合计 32 组，每组 800 任务/1300 s，需显式授权。

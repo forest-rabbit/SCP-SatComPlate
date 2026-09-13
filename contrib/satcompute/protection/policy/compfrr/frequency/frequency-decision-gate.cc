@@ -33,7 +33,8 @@ void FrequencyDecisionGate::Propose(const FrequencyDecision& decision, bool capa
     m_lastEpoch = decision.epochNs;
 }
 
-bool FrequencyDecisionGate::Resolve(int64_t epochNs, bool currentFaultHit, bool primaryStillRunning)
+bool FrequencyDecisionGate::Resolve(int64_t epochNs, bool currentFaultHit, bool primaryStillRunning,
+                                    bool fixedConfigStillFeasible)
 {
     if (!m_proposal || m_proposal->epochNs != epochNs)
         throw std::invalid_argument("frequency resolution must match the pending fault epoch");
@@ -41,6 +42,12 @@ bool FrequencyDecisionGate::Resolve(int64_t epochNs, bool currentFaultHit, bool 
     m_proposal.reset();
     if (currentFaultHit || !primaryStillRunning || decision.action == FrequencyAction::NONE)
         return false;
+    if (!fixedConfigStillFeasible)
+    {
+        if (m_phase == ProtectionPhase::OFF) return false;
+        m_paused = true;
+        return true;
+    }
     if (decision.action == FrequencyAction::PAUSE)
     {
         m_paused = true;

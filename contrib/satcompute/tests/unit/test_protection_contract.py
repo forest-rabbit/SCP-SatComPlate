@@ -44,13 +44,18 @@ class ProtectionConfigTests(unittest.TestCase):
         self.assertIn("fixedProtectionDelta", result.stdout)
         self.assertNotIn("lrl requires", result.stdout)
 
-    def test_future_placement_is_explicitly_unimplemented(self):
+    def test_n5c_is_only_compfrr_designated_remote_placement(self):
         for options in ("--protectionMode=fixed --placementMode=n5c",
                         "--protectionMode=one-plus-one --placementMode=n5c"):
             with self.subTest(options=options):
                 result = self.run_cli(options)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("NOT_IMPLEMENTED", result.stdout)
+                self.assertIn("n5c requires compfrr", result.stdout)
+        for variant in ("full", "noR", "noU", "noM"):
+            result = self.run_cli(f"--protectionMode=compfrr --placementMode=n5c --n5cVariant={variant} --fixedProtectionDelta=0")
+            self.assertIn("fixedProtectionDelta", result.stdout)
+        result = self.run_cli("--placementMode=fa-ffp --n5cVariant=noM")
+        self.assertIn("ablations require placementMode=n5c", result.stdout)
 
     def test_full_baselines_guard_and_four_placements(self):
         for mode in ("recompute", "one-plus-one"):

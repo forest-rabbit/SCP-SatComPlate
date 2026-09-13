@@ -18,7 +18,8 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
     int64_t stopNs,
     std::unique_ptr<PlacementPolicy> placement,
     RemoteBusyRecoveryPolicy busyPolicy,
-    InputStagingPolicy inputPolicy)
+    InputStagingPolicy inputPolicy,
+    bool observePlacementResources)
     : m_tasks(tasks),
       m_topology(topology),
       m_faults(faults),
@@ -27,9 +28,15 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
 {
     if (!faults)
         throw std::invalid_argument("frequency protection requires online generate epochs");
+    const auto spatial = dynamic_cast<const N5cPlacementPolicy*>(m_placement.get());
+    if (spatial || observePlacementResources)
+        m_placementObservation = std::make_unique<N5cPlacementTracker>(tasks, faults, m_manager, stopNs,
+            spatial ? spatial->Variant() : N5cVariant::FULL, spatial != nullptr);
+    if (spatial) m_n5c = m_placementObservation.get();
     for (auto service : tasks->GetComputeServices()) m_loads.RegisterNode(service->GetNodeId());
     m_manager.SetAssignmentObserver([this](auto task, auto node, bool active) {
         m_loads.Assignment(task, node, active, Simulator::Now().GetNanoSeconds());
+        if (m_placementObservation) m_placementObservation->Assignment(task, node, active);
     });
     tasks->ConnectTaskObserver(MakeCallback(&FrequencyProtectionController::OnTask, this));
     m_manager.SetInitializationObserver([this](uint64_t id) { Initialized(id); });
@@ -45,6 +52,8 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
 
 FrequencyProtectionController::~FrequencyProtectionController()
 {
+    m_manager.SetAssignmentObserver({});
+    m_manager.SetInitializationObserver({});
     m_tasks->GetTransferEngine()->SetCapacityReleaseObserver({});
     if (m_capacityDrain.IsPending()) Simulator::Cancel(m_capacityDrain);
     m_faults->SetEpochObservers({}, {});
@@ -99,6 +108,7 @@ void FrequencyProtectionController::OnTask(const TaskEventRecord& event)
         m_manager.OnTaskTerminal(event.taskId);
     if (terminal || recovery || complete)
     {
+        if (m_n5c) m_n5c->ReleaseQuota(event.taskId);
         CloseCapacityWait(event.taskId, state, event.simulationTimeNs, "TASK_LEFT_PRIMARY_COMPUTE");
         ClosePause(event.taskId, state, event.simulationTimeNs);
         const auto phase = recovery ? ProtectionPhase::RECOVERING : ProtectionPhase::DONE;
@@ -177,6 +187,7 @@ void FrequencyProtectionController::ClosePause(uint64_t task, State& state, int6
 
 void FrequencyProtectionController::Initialized(uint64_t id)
 {
+    if (m_n5c) m_n5c->Initialized(id);
     auto& state = m_states.at(id);
     if (state.gate.Phase() == ProtectionPhase::INITIALIZING)
         state.gate.InitializationCommitted();
@@ -254,6 +265,11 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
     row.remoteLoad = m_loads.Get(pair.remoteNode);
     input.localFreeBytes = m_manager.Pools().at(pair.localNode)->Free();
     input.remoteFreeBytes = m_manager.Pools().at(pair.remoteNode)->Free();
+    if (m_n5c)
+    {
+        input.localFreeBytes = m_n5c->FreeFor(pair.localNode, row.taskId);
+        input.remoteFreeBytes = m_n5c->FreeFor(pair.remoteNode, row.taskId);
+    }
     input.recoveryRate = remote->GetComputeRateWorkUnitsPerSecond();
     input.nodeAvailable = m_tasks->IsComputeAvailable(pair.localNode) &&
                           m_tasks->IsSatelliteAvailable(pair.localNode) && local->IsIdle() &&
@@ -337,6 +353,24 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
         return;
     }
     // Feasibility before ranking, then first frequency-hard-feasible pair. Never shop by J.
+    if (m_n5c)
+    {
+        // A read-only FA-FFP reference, one Frequency solve, then a fixed-local spatial choice.
+        row.pair = pairs.front();
+        if (!BuildResources(row, task, state, paths))
+            throw std::logic_error("N5C reference preview changed within one decision");
+        ++row.pairHardChecked;
+        row.proposal = m_policy.Evaluate(row.input);
+        if (row.proposal.reason == "STORAGE_INFEASIBLE") ++row.pairSkipStorage;
+        else if (row.proposal.reason == "DEADLINE_INFEASIBLE" || row.proposal.reason == "INITIALIZATION_TOO_LATE")
+            ++row.pairSkipDeadline;
+        else ++row.pairHardFeasible;
+        if (row.proposal.action == FrequencyAction::START)
+        {
+            SelectN5cRemote(row, task, state, paths, pairs);
+        }
+        return;
+    }
     for (const auto& pair : pairs)
     {
         row.pair = pair;
@@ -433,7 +467,12 @@ FrequencyProtectionController::Evaluate(const FaultEpochInput& epoch, const std:
     if (phase == ProtectionPhase::OFF)
         EvaluateOffPairs(row, task, state, paths);
     else if (BuildResources(row, task, state, paths))
+    {
         row.proposal = m_policy.Evaluate(in);
+        if (m_n5c && row.proposal.action == FrequencyAction::UPDATE)
+            row.n5cPeak = m_n5c->PeakFor(row.pair->remoteNode, row.taskId,
+                                       row.proposal.selected->storage.remoteAdditionalBytes);
+    }
     else
     {
         row.proposal.phase = phase;
@@ -483,10 +522,21 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
         }
         row.sampled = outcome.sampled;
         row.faultHit = outcome.faultHit;
-        row.committed = state.gate.Resolve(time, outcome.faultHit, running);
+        bool configFeasible = true;
+        if (running && !outcome.faultHit && m_n5c &&
+            (row.proposal.action == FrequencyAction::START || row.proposal.action == FrequencyAction::UPDATE))
+            configFeasible = RevalidateN5c(row, task, state);
+        row.committed = state.gate.Resolve(time, outcome.faultHit, running, configFeasible);
+        if (row.committed && !configFeasible)
+        {
+            row.proposal.action = FrequencyAction::PAUSE;
+            row.proposal.reason = row.resourceReason;
+            row.n5cPeak.reset();
+        }
         state.pending.reset();
         row.reason = outcome.faultHit ? "CURRENT_FAULT_HIT"
                      : !running       ? "POST_FAULT_UNAVAILABLE"
+                     : !configFeasible ? row.resourceReason
                                       : row.proposal.reason;
         if (row.committed && row.proposal.action == FrequencyAction::START)
         {
@@ -541,6 +591,12 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
             }
             else if (!m_manager.PauseFutureProtection(row.taskId))
                 throw std::logic_error("surviving frequency pause lost live mechanism");
+            if (m_n5c && row.n5cPeak)
+            {
+                const auto inventory = m_manager.Inventory(row.taskId);
+                if (inventory && inventory->active)
+                    m_n5c->CommitQuota(row.taskId, row.pair->remoteNode, *row.n5cPeak);
+            }
         }
         if (state.stopped)
         {
@@ -554,6 +610,9 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
             const auto inventory = m_manager.Inventory(row.taskId);
             const bool admitted = row.committed && row.proposal.action == FrequencyAction::START &&
                                   inventory && inventory->active;
+            if (m_n5c && row.n5cTrace)
+                m_n5c->Resolve(*row.n5cTrace, admitted,
+                              row.resourceReason.empty() ? row.reason : row.resourceReason);
             m_placement->RecordSelection({row.taskId, time, task.definition.computeNodeId,
                 row.pair, {}, admitted ? "ACCEPTED" : "NOT_ADMITTED",
                 row.resourceReason.empty() ? row.reason : row.resourceReason});
@@ -583,6 +642,7 @@ void FrequencyProtectionController::Finalize()
         CloseCapacityWait(id, state, Simulator::Now().GetNanoSeconds(), "FINALIZE");
     }
     if (!m_loads.Empty()) throw std::logic_error("frequency placement ownership leaked");
+    if (m_placementObservation) m_placementObservation->Finalize();
 }
 
 } // namespace ns3::protection

@@ -218,6 +218,7 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Backup-only storage capacity in decimal bytes",
                          config.backupStorageBytesPerNode);
     commandLine.AddValue("placementMode", "ffp/lrl minimal, fa-ffp/fa-lrl feasibility-aware", config.placementMode);
+    commandLine.AddValue("n5cVariant", "N5C V4 scoring: full/noR/noU/noM; hard constraints unchanged", config.n5cVariant);
     commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; REMOTE_BUSY only, ignored by off",
                          config.remoteBusyRecoveryPolicy);
     commandLine.AddValue("inputStagingPolicy", "eager / deferred; deferred requires compfrr",
@@ -384,8 +385,11 @@ ValidateConfig(const SatComputeConfig& config)
     RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred"});
     if (config.inputStagingPolicy == "deferred" && config.protectionMode != "compfrr")
         FailConfig("inputStagingPolicy", "deferred requires compfrr protection");
-    if (config.placementMode == "n5c")
-        FailConfig("placementMode", "NOT_IMPLEMENTED: N5C placement is deferred");
+    RequireChoice(config.n5cVariant, "n5cVariant", {"full", "noR", "noU", "noM"});
+    if (config.placementMode == "n5c" && config.protectionMode != "compfrr")
+        FailConfig("placementMode", "n5c requires compfrr protection");
+    if (config.placementMode != "n5c" && config.n5cVariant != "full")
+        FailConfig("n5cVariant", "ablations require placementMode=n5c");
     if ((config.placementMode == "lrl" || config.placementMode == "fa-lrl") && config.protectionMode == "off")
         FailConfig("placementMode", "lrl requires an enabled protection scheme");
     if (config.protectionMode != "off" &&
@@ -697,8 +701,12 @@ main(int argc, char* argv[])
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
             std::filesystem::remove(outputDirectory / "frequency-pause-intervals.csv");
             std::filesystem::remove(outputDirectory / "frequency-capacity-waits.csv");
+            std::filesystem::remove(outputDirectory / "n5c-placement-decisions.csv");
+            std::filesystem::remove(outputDirectory / "placement-resource-summary.csv");
             std::filesystem::remove(outputDirectory / "f3-compute-risk-snapshots.csv");
             const auto makePlacement = [&]() -> std::unique_ptr<protection::PlacementPolicy> {
+                if (config.placementMode == "n5c")
+                    return std::make_unique<protection::N5cPlacementPolicy>(protection::ParseN5cVariant(config.n5cVariant));
                 if (config.placementMode == "lrl")
                     return std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.lrlRecoveryWeight);
                 if (config.placementMode == "fa-lrl")
@@ -728,7 +736,8 @@ main(int argc, char* argv[])
                     config.backupStorageBytesPerNode, simulationDurationNs,
                     makePlacement(), busyPolicy,
                     config.inputStagingPolicy == "deferred" ? protection::InputStagingPolicy::DEFERRED
-                                                             : protection::InputStagingPolicy::EAGER);
+                                                             : protection::InputStagingPolicy::EAGER,
+                    true); // Read-only placement resource metrics for comparable baseline/N5C accounting.
             }
             else if (config.protectionMode == "checkbullet")
             {

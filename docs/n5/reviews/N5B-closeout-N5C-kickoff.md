@@ -2,7 +2,7 @@
 
 2026-09-13。依据项目外 `N5B_Closeout_and_N5C_Kickoff_Codex_Taskbook.md`、
 `V4_N5C_Complete_Model_and_Backup_Node_Selection_Algorithm (1).md` 及用户确认的八点修订。
-本页记录当前收口，不覆盖历史报告；本轮不改变冻结场景或执行 N5C 大实验。
+本页记录收口与用户随后授权的 N5C 实施，不覆盖历史报告、不改变冻结场景。
 
 ## G0 身份与分支
 
@@ -56,7 +56,7 @@ Post-N5C 备忘录合并在本页，不另建档案：未来可讨论 SEND NOW �
 EVALUATION 的首次故障概率加权等待收益；网络成本与时间收益的统一口径尚未确定。
 N5C 前后本轮均不实现阈值、预算、JIT-next 或新优化器。
 
-## 已确认的 N5C 接口（尚未实现）
+## 已确认的 N5C 接口
 
 - START：现有 FA-FFP 只读 reference pair 提供参考资源，不占用资源；求一次 START/
   `(delta,n)` 后保留 local。START 成立才在可兑现固定配置的 remote 中按 V4 排名；
@@ -91,6 +91,18 @@ N5C 前后本轮均不实现阈值、预算、JIT-next 或新优化器。
 - 其他阶段日志在 `output/audits/n5b-closeout-checks/`；`*-working.json` 仅是早期试审计，
   不替代最终文件。本页后续提交只回填证据，不改变已验证代码。
 
-**当前 Gate：READY_FOR_USER_MERGE，不写 N5B CLOSED。** 本地修正、影响审计与必要回归
-完成，未发现必须重跑的正式组。PR #98 更新后仍需明确合并授权；未合并前不创建正式
-N5C 分支，不运行 GitHub CI、不合 main、不打 tag、不删除任何分支。
+**N5B CLOSED。** 用户随后明确授权合并 PR #98：GitHub 确认已合并，merge commit 为
+`17c4414dcd61a34a2068a84fefb8ccda7e6b7079`，含修正 head `9a2f029cf`。
+`feature/n5c-backup-placement-v4` 由该新 n5 创建，main 不变，PR #99/JIT 不进入基线。
+CB 分支仍作为 PR #99 的 base，暂不删除；不新增 GitHub CI，不合 main、不打 tag。
+
+## N5C 实施进度
+
+V4 评分、固定 reference/实际 remote 适配、ON quota 替换和只读资源积分已接入。
+先通过维护测试及两个完整 FA-FFP 回归等价门槛，再执行 Eager/Deferred 主实验和 Deferred 三项消融。
+公式与代码字段见 protection README，本页仅回填验收证据，不重复扩写模型。
+
+提交前检查：目标构建与全部 C++ 维护测试通过，新增 V4 2373 项检查，frequency runtime
+5250 项（含 START 单次求解、实际 remote、同纳秒故障/配额竞争、ON 固定 pair）；
+Python 140 项、139 通过/1 可选跳过；完整 smoke/regression 通过，包括 16 placement 组、
+100 任务联合故障与 483 条概率一致性记录。日志 `output/n5c-v4/`。正式比较尚待回填。

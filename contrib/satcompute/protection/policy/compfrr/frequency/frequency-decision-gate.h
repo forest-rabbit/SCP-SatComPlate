@@ -16,7 +16,9 @@ class FrequencyDecisionGate
     /** Stage one decision without changing current config or effective phase. */
     void Propose(const FrequencyDecision& decision, bool capacityRetry = false);
     /** Consume exactly one same-epoch proposal after fault execution/liveness resolution. */
-    bool Resolve(int64_t epochNs, bool currentFaultHit, bool primaryStillRunning);
+    bool Resolve(int64_t epochNs, bool currentFaultHit, bool primaryStillRunning,
+                 bool fixedConfigStillFeasible = true);
+    ///< Post-batch resource rejection cancels OFF admission or pauses ON without replacing its config.
     /** External physical initialization commit, never caused by a policy proposal. */
     void InitializationCommitted();
     /** Stop policy work on recovery or terminal entry; no return to OFF is allowed. */

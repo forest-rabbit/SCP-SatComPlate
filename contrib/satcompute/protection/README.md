@@ -4,7 +4,7 @@ N5A 回答“怎样执行保护”，N5B 才决定启动/频率，N5C 才优化�
 当前接入单次故障恢复闭环和 **G4 planned/actual 资源账本**：真实备份路径、故障快照、
 恢复服务预留、直接/迁移 checkpoint recovery、RECOMPUTE 和 winning RESULT。cL/cR 不占用主 ComputeService。
 FIXED 正式场景仅为执行验收，不代表 CompFRR 算法效果。N5A 已合入 n5；
-N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比固定/动态频率与 LRL 诊断，N5C 未实现。
+N5B 已将独立频率策略接入在线故障与真实 checkpoint；N5C V4 在其后选择 designated remote。
 
 ## 文件与职责
 
@@ -83,7 +83,7 @@ Routing 是所有方案共用的基础设施，不属于其中任何算法开关
 `recompute-controller.*` 接线、`policy/baseline/recompute/recompute-policy.h` 只决定故障后重算。
 `recovery-summary.csv` 对此模式增加 planned INPUT 等待及 planned 浪费列，实际值仍取真实执行。
 该严格筛选仅适用于完整 baseline，不改变 checkpoint 方案既有的 RECOMPUTE 后备行为。
-完整 recompute 与 one-plus-one 均支持四种 placement；`placementMode=n5c` 仍明确报 `NOT_IMPLEMENTED`。
+完整 recompute 与 one-plus-one 均支持四种 baseline placement；`placementMode=n5c` 仅允许 CompFRR。
 
 ### Pre-N5C 可行性筛选消融
 
@@ -482,6 +482,46 @@ G3 将 RemoteCommit 的物理融合/旧记录清理延后 1 ns，名义有效时
 正常完成/保护放弃走 Stop 全清理；QuiesceForRecovery 不清空有效备份。
 受控测试反转同纳秒 fault/commit UID，检查相同实体对象、有效进度和最终结果时间；
 另检查同 ns deadline 完成与 stale primary 回调。
+
+## N5C V4：固定配置后的备份节点选择
+
+启用 `--protectionMode=compfrr --placementMode=n5c`，支持 Eager/Deferred，默认参数不替换 FA-FFP。
+`--n5cVariant=full/noR/noU/noM` 仅控制评分维度；消融仍记录三项原值，保留全部硬约束。
+
+| 文件 | 职责 |
+|---|---|
+| `policy/compfrr/placement/n5c-placement-policy.h/.cc` | V4 恢复冲突、历史利用率、存储压力、确定性 min-max 排名和远端 peak quota 账本 |
+| `runtime/frequency-n5c-adapter.cc` | 当前状态/原生预测器到候选的只读适配，不重新求解 Frequency |
+| `runtime/n5c-placement-tracker.h/.cc` | quota 替换/释放、实际 READY、assignment 时间积分和真实 storage byte-time 观察 |
+| `../metrics/core/n5c-placement-metrics.cc` | 候选决策与节点资源诊断，绝不代替真实网络/计算账本 |
+
+START 先用 FA-FFP 公共节点/路径筛选后的首个 reference pair 求解一次启动及 `(δ,n)`；
+不对各 remote 重跑 Frequency，也不在 reference 不可行时另做联合搜索。保留 reference local，
+然后用实际 remote 的算力、带宽、存储验证固定配置，按 V4 排名。未越过完整同纳秒故障批次
+之前不占用资源；提交前再次检查同一 pair/config，不可行则拒绝 START 或暂停 ON。
+ON 始终使用 committed 实际 pair 的资源更新配置，不重新 placement。
+
+三个归一化量：`R = 加权冲突质量 / 本任务可恢复首次故障质量`，
+`U = (普通实际忙时 + 恢复实际忙时) / 存活观测时间`，`M = 提交后的实际与配额不重复占用 / 容量`。
+选择 `max(R,U,M)` 最小者；并列依次比较主星到 remote 的传播时延、稳定卫星 ID。
+R 是当前活跃任务的竞争风险代理，不是已校准的真实 busy 概率；不读取未来到达任务或故障结果。
+
+每个未来抽样点的首次故障质量为此前存活概率乘该点 `q_comp`。Ready 之前的概率仍扣减存活，
+不重新归一化；恢复占用窗口左闭右开。Eager 的 Ready 包含预置 INPUT，Deferred 只要求状态就绪及
+故障时完整 INPUT 路径/deadline 可行，同星 INPUT 的估计网络等待精确为零。
+已初始化任务使用实际 READY 时间；初始化中的任务使用当前完整初始化的保守估计，不能冒称真实就绪。
+V4 的串加时间只作候选估计，实际恢复仍按既有 INPUT/state 并发屏障执行。
+
+quota 按节点逐任务累加 `max(实际 used+reserved, 当前远端 peak quota)`，其余物理对象按实际计入；
+ON 更新替换自身旧 quota，不重复计占用，任务离开主计算后释放未来承诺，实际对象仍由原生命周期释放。
+历史利用率的分母从仿真起点到当前观测时刻，整星故障后截止于实际 F3；F1/F2 不扣除恢复免疫执行时间。
+无 exposure 或无预测需求分别记录 `history_unavailable` / `no_predicted_demand`，不靠截断掩盖错误。
+
+`n5c-placement-decisions.csv` 只记录 START 后的空间提案，区分 reference/实际资源、候选及最终准入。
+原 `frequency-decisions.csv` 的 OFF 标量和评分仍属于 reference，local/remote 列为实际提案；ON 均为实际 pair。
+`placement-resource-summary.csv` 对平台 CompFRR 各 placement 输出相同的只读计数/积分/峰值；
+FA-FFP 等不会因此启用 N5C quota。原场景、故障随机流、Routing、恢复策略和工作量标度不变。
+正式运行与审计入口见 [测试说明](../tests/README.md)。
 
 ## 资源账本与 Pre-N5C 冻结口径
 

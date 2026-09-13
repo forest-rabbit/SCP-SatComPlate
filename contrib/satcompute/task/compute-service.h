@@ -73,6 +73,8 @@ class ComputeService : public Application
     uint64_t GetEnqueuedTaskCount() const;
     uint64_t GetCompletedTaskCount() const;
     uint64_t GetBusyTimeNs() const;
+    /** Actual external-attempt compute time, including its live prefix; excludes reserved idle. */
+    uint64_t GetRecoveryBusyTimeNs() const;
     uint32_t GetMaxQueueLength() const;
     uint32_t GetQueueSize() const;
     bool IsComputeAvailable() const;
