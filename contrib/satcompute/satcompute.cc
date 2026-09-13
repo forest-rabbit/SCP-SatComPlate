@@ -18,6 +18,7 @@
 #include "ns3/frequency-protection-controller.h"
 #include "ns3/recompute-controller.h"
 #include "ns3/one-plus-one-controller.h"
+#include "ns3/cb-sat-controller.h"
 #include "ns3/fa-least-recovery-load-placement-policy.h"
 #include "ns3/protection-metrics.h"
 #include "ns3/link-metrics-recorder.h"
@@ -211,7 +212,7 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
     commandLine.AddValue("protectionMode",
-                         "off / recompute / one-plus-one / fixed / compfrr: protection scheme",
+                         "off / recompute / one-plus-one / fixed / compfrr / checkbullet: protection scheme",
                          config.protectionMode);
     commandLine.AddValue("backupStorageBytesPerNode",
                          "Backup-only storage capacity in decimal bytes",
@@ -377,7 +378,7 @@ ValidateConfig(const SatComputeConfig& config)
         }
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
-    RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one"});
+    RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"});
     RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"});
     RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
     RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred"});
@@ -689,6 +690,8 @@ main(int argc, char* argv[])
             std::unique_ptr<protection::FrequencyProtectionController> frequency;
             std::unique_ptr<protection::RecomputeController> recompute;
             std::unique_ptr<protection::OnePlusOneController> replication;
+            std::unique_ptr<protection::checkbullet::CbSatController> checkbullet;
+            protection::checkbullet::CbSatController::RemoveOutputs(outputDirectory);
             for (const auto name : {"replica-summary.csv", "replica-attempts.csv", "replica-events.csv", "replica-transfers.csv"})
                 std::filesystem::remove(outputDirectory / name);
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
@@ -726,6 +729,13 @@ main(int argc, char* argv[])
                     makePlacement(), busyPolicy,
                     config.inputStagingPolicy == "deferred" ? protection::InputStagingPolicy::DEFERRED
                                                              : protection::InputStagingPolicy::EAGER);
+            }
+            else if (config.protectionMode == "checkbullet")
+            {
+                RemoveProtectionMetrics(outputDirectory);
+                checkbullet = std::make_unique<protection::checkbullet::CbSatController>(
+                    taskCoordinator, topology, config.backupStorageBytesPerNode,
+                    simulationDurationNs, makePlacement(), busyPolicy);
             }
             else if (config.protectionMode == "recompute")
             {
@@ -768,6 +778,11 @@ main(int argc, char* argv[])
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
             if (shadow) shadow->Finalize();
+            if (checkbullet)
+            {
+                checkbullet->Finalize();
+                checkbullet->WriteMetrics(outputDirectory);
+            }
             if (replication)
             {
                 replication->Finalize();
