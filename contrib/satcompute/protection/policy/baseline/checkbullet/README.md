@@ -91,7 +91,12 @@ runner 要求干净执行快照，但不会自动提交。正常使用无需重�
 空闲事件不计入分子。实际连续服务暴露仅作诊断，不能混作分母；pooled MTBF 为总暴露/总事件，
 不是每次 MTBF 的平均。零命中显式表示无穷。八组矩阵不读取 run11 的未来故障来反推参数。
 
-正式证据目录为 `output/cb-sat-v2/20260912T171143276614Z-formal`。
-离线汇总生成公共 40 行表、checkpoint 恢复附表、独立 1+1 takeover 附表及百分比变化表；
+修订前的正式证据为 `output/cb-sat-v2/20260912T171143276614Z-formal`，保持只读。
+完整 INPUT 修正后的八组目录为 `output/cb-sat-v2/20260913T070155626344Z-formal`；
+八组均完整执行 1300 s 并通过审计，执行版本为 `367f23f39`，不是离线审计版本。
+FFP/LRL/FA-FFP/FA-LRL 的 recompute 完成数为 795/797/795/798，relocate 均为 800；
+对完整 INPUT 的复核不再发现非法 q 恢复。最终对比以联合审计为准。
 逐 profile、F1/F2/F3、恢复路径、H/X 与失败原因在每组 `cb-sat-audit.json`。
+V7 改动共享代码后的跨方案比较使用 `tests/integration/regression/analyze-v7-cbsat-joint.py`；
+上面的旧分析器保留初版的严格共享源码等价门槛，不用于冒充新版本的完整等价证明。
 这是固定单 seed 受控场景、零读取成本起步模型，不是多 seed 或真实应用恢复证明。
