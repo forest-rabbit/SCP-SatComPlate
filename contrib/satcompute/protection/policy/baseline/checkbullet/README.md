@@ -2,8 +2,10 @@
 
 CheckBullet 的卫星平台适配基线：一个备份节点，保存完整 INPUT、一个状态根和连续增量日志。
 不继承 Fixed/CompFRR 的双层部署或跨节点 tail 获取能力。当前实施进度见
-[preflight.md](preflight.md)。MTBF=41.47642679900744 s；八组正式 1300 s 已执行并审计，
-结果与边界见[验收报告](../../../../../../docs/n5/reviews/Pre-N5C-cb-sat-v2.md)。
+[preflight.md](preflight.md)。MTBF=41.47642679900744 s；旧八组结果保留在
+[历史验收报告](../../../../../../docs/n5/reviews/Pre-N5C-cb-sat-v2.md)。2026-09-13 审计发现
+部分初始化恢复未要求完整 INPUT，本次修订与重跑状态见
+[联合审计](../../../../../../docs/n5/reviews/Pre-N5C-v7-cbsat-joint-audit.md)。
 
 ## 状态与正常保护
 
@@ -29,12 +31,19 @@ fa-ffp/fa-lrl 先筛选真实路径及存储可行性。常态保护一旦选定
 根/日志原地融合不分配第二份 FULL，完整 INPUT 不参与裁剪。旧对象延迟至下一纳秒清理，
 以保障故障同纳秒的严格截止语义。
 
+X=0 不能统一解释为紧急压缩：首次分配时的 `NO_REMAINING_LOGS` 表示没有后续正常日志。
+若已有合法非空日志而阈值变为 0，原即时合并行为保持，decision reason 与 MERGE_START role
+显式标为 `EMERGENCY_COMPACTION`；不改 H/X，不把 0 夹成 1。
+
 所有耗时在内部使用整数 ns；cL/cR 不暂停主任务。仅完成的正常操作计 equivalent cost，
 尚未完成就取消的生成/合并不冒充已执行完成。实际网络字节仍由公共传输引擎计量。
 
 ## 验证
 
-`cb-sat-recovery.h/.cc` 独立编排一次恢复：空闲 B 从 q 直接继续；仅在 REMOTE_BUSY
+`cb-sat-recovery.h/.cc` 独立编排一次恢复：只有完整 INPUT 与有效 root/连续日志均在
+故障 cutoff 前就绪，空闲 B 才能从 q 直接继续。只有状态而 INPUT 未完成时必须从零重算，
+不能故障后补 INPUT 再利用旧 q。正式主 baseline 使用 `busy=recompute`；relocate 是扩展迁移版。
+仅在 REMOTE_BUSY
 按公共开关选择从零重算或把 B 的完整 INPUT、根和已存日志迁移至 C。迁移不提高 q。
 其他不可用回退沿用公共恢复许可，不把 busy 开关扩大到所有故障。故障决策在完整
 同纳秒 fault batch 后执行；F1/F2 只对已接受的恢复 attempt 免疫，F3 仍中断真实依赖。

@@ -176,6 +176,20 @@ def audit(root):
         if r["chosen_path"] == "RECOMPUTE":
             require(number(r,"resume_work_units") == 0, "recompute used checkpoint")
         elif r["chosen_path"] in ("DIRECT","RELOCATE"):
+            require(yes(r["input_ready"]) and yes(r["root_ready"]) and number(r,"input_object_id") > 0,
+                    "checkpoint recovery requires complete INPUT and root before fault")
+            receipts = [e for e in by_task[tid] if e["event"] == "RECEIVED" and
+                        number(e,"sequence") == 0 and e["object_id"] == r["input_object_id"] and
+                        e["node_id"] == r["backup_node"] and number(e,"time_ns") < cutoff]
+            inputs = [e for e in by_task[tid] if e["event"] == "STORAGE_USED" and e["role"] == "INPUT" and
+                      e["object_id"] == r["input_object_id"] and e["node_id"] == r["backup_node"] and
+                      number(e,"time_ns") < cutoff]
+            reservations = [e for e in by_task[tid] if e["event"] == "STORAGE_RESERVED" and
+                            e["role"] == "INPUT" and e["object_id"] == r["input_object_id"] and
+                            e["node_id"] == r["backup_node"] and number(e,"time_ns") < cutoff and
+                            number(e,"bytes") == number(tasks[tid],"input_bytes")]
+            require(len(receipts) == len(inputs) == len(reservations) == 1,
+                    "saved complete INPUT lacks strict-before physical receipt/object")
             require(number(r,"resume_work_units") == wq, "CB upgraded beyond approved q")
             seq = number(r,"root_sequence")
             roots = [e for e in by_task[tid] if e["event"] in ("ROOT_COMMIT","MERGE_COMMIT") and

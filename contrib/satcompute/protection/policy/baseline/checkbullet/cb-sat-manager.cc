@@ -413,7 +413,7 @@ void CbSatManager::TryMerge(Normal& normal)
     const auto threshold = Threshold(normal, node);
     m_decisions.push_back({normal.summary.task, ++normal.decision, snapshot.recoverableWork,
         Quota(node, normal.summary.task), Occupied(node, normal.summary.task), Now(),
-        node, threshold, "X_REEVALUATED"});
+        node, threshold, threshold.value ? "X_REEVALUATED" : "EMERGENCY_COMPACTION"});
     // A share contraction may require immediate compaction of already owned logs.
     // X=0 does not manufacture a checkpoint; it only releases space from valid existing objects.
     if (threshold.value && snapshot.logSequences.size() < threshold.value) return;
@@ -423,7 +423,8 @@ void CbSatManager::TryMerge(Normal& normal)
     Require(ready.has_value(), "CB contiguous merge rejected");
     normal.merging = true;
     Log(normal.summary.task, "MERGE_START", node, normal.rootObject,
-        normal.mergeSequence, snapshot.recoverableWork);
+        normal.mergeSequence, snapshot.recoverableWork, 0, 0,
+        threshold.value ? "" : "EMERGENCY_COMPACTION");
     Later(normal, *ready, [this, &normal] {
         Require(normal.state->CommitMerge(Now()), "CB merge commit rejected");
         normal.physicalCommit = Now();

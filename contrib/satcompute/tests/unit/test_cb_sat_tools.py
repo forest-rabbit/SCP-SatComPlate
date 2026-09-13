@@ -11,10 +11,31 @@ TOOLS = MODULE / "protection/policy/baseline/checkbullet/tools"
 sys.path.insert(0, str(TOOLS))
 CAL = runpy.run_path(str(TOOLS / "calibrate-cb-sat-mtbf.py"))
 MATRIX = runpy.run_path(str(TOOLS / "analyze-cb-sat-matrix.py"))
+ADJUST = runpy.run_path(str(TOOLS / "audit-cb-sat-adjustment.py"))
 from cb_tools import SCENE_HELPER, GROUPS, flags, replace_flag, scene_identity
 
 
 class CbCalibrationTests(unittest.TestCase):
+    def test_input_adjustment_only_flags_checkpoint_without_complete_input(self):
+        base = dict(task_id="325", fault_time_ns="669000000000", chosen_path="DIRECT",
+                    input_ready="false", root_ready="true", input_object_id="0",
+                    resume_work_units="22435", terminal_state="COMPLETED")
+        rows = [base, dict(base, chosen_path="RELOCATE"), dict(base, input_ready="true"),
+                dict(base, chosen_path="RECOMPUTE", resume_work_units="0")]
+        self.assertEqual(ADJUST["input_impact"](rows)["affected_count"], 2)
+        with self.assertRaisesRegex(ValueError, "readiness"):
+            ADJUST["input_impact"]([dict(base, input_ready="")])
+
+    def test_x_zero_assignment_is_not_emergency_compaction(self):
+        row = dict(task_id="64", time_ns="10", threshold="0", threshold_reason="NO_REMAINING_LOGS",
+                   reason="", natural_limit="0")
+        result = ADJUST["zero_thresholds"]([row], [dict(task_id="64", time_ns="10", event="BACKUP_ASSIGNED")])
+        self.assertEqual(result["observations"][0]["classification"], "INITIAL_ASSIGNMENT_NO_REMAINING_LOGS")
+        merge = dict(task_id="64", time_ns="10", event="MERGE_START", root_work_units="10",
+                     recoverable_work_units="20")
+        result = ADJUST["zero_thresholds"]([dict(row, reason="EMERGENCY_COMPACTION")], [merge])
+        self.assertEqual(result["observations"][0]["classification"], "EXISTING_LOG_COMPACTION")
+
     @staticmethod
     def data():
         probabilities, states = [], []

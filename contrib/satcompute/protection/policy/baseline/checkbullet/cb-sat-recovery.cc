@@ -186,9 +186,11 @@ void CbSatRecovery::Decide(State& state)
     if (Now() >= snapshot.deadlineNs) return Fail(state, "DEADLINE_BEFORE_RECOVERY_ACCEPTANCE");
     if (!m_tasks->IsSatelliteAvailable(state.task.definition.resultNodeId))
         return Fail(state, "RESULT_SATELLITE_UNAVAILABLE");
-    const bool saved = HasState(state);
+    const bool storedState = HasState(state);
+    const bool saved = storedState && HasInput(state);
     if (snapshot.rootObject && !m_tasks->IsSatelliteAvailable(backup)) r.fallbackReason = "REMOTE_F3";
-    else if (!saved) r.fallbackReason = "STATE_MISSING";
+    else if (!storedState) r.fallbackReason = "STATE_MISSING";
+    else if (!saved) r.fallbackReason = "COMPLETE_INPUT_MISSING";
     else if (!m_tasks->IsComputeAvailable(backup)) r.fallbackReason = "REMOTE_UNAVAILABLE";
     else if (!Service(backup)->IsIdle()) r.fallbackReason = "REMOTE_BUSY";
     else if (!Reachable(backup, state.task.definition.resultNodeId)) r.fallbackReason = "PATH_UNAVAILABLE";
@@ -261,6 +263,9 @@ bool CbSatRecovery::Accept(State& state, uint32_t node, const std::string& path)
     const auto& snapshot = r.snapshot;
     const auto backup = snapshot.state.backupNode;
     const bool checkpoint = path != "RECOMPUTE";
+    // Full INPUT must already belong to the strict-before-fault checkpoint.
+    // Fetching INPUT after the fault must not turn partial initialization into q recovery.
+    if (checkpoint && !(HasState(state) && HasInput(state))) return false;
     const bool inputHere = node == backup && HasInput(state);
     const bool movingInput = path == "RELOCATE" && HasInput(state);
     const auto inputSource = movingInput ? backup : state.task.definition.sourceNodeId;

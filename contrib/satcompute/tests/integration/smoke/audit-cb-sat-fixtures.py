@@ -35,6 +35,8 @@ def main():
         ("cb-sat-tasks.csv","interval_seconds","1"),
         ("cb-sat-decisions.csv","threshold","999"),
         ("cb-sat-recovery.csv","root_object_id","999999"),
+        ("cb-sat-recovery.csv","input_ready","false"),
+        ("cb-sat-recovery.csv","input_object_id","999999"),
     ]
     for name,key,value in corruptions:
         with tempfile.TemporaryDirectory(prefix="cb-evidence-corruption-") as tmp:

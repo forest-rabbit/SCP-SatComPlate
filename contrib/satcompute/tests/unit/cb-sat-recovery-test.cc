@@ -346,6 +346,9 @@ CbRecoverySummary Run(const Options& options)
         }
         if (result.path == "DIRECT" && result.snapshot.state.inputReady)
             Check(recoveryInput == 0 && result.inputMode == "STORED_LOCAL", "CB direct resent complete INPUT");
+        if (result.path == "DIRECT" || result.path == "RELOCATE")
+            Check(result.snapshot.state.Protected() && result.snapshot.inputObject,
+                  "checkpoint recovery bypassed complete INPUT at fault cutoff");
         if (result.path == "RELOCATE")
         {
             Check(relocation == result.relocationBytes && result.resumeWork == result.snapshot.state.recoverableWork,
@@ -426,8 +429,12 @@ int main(int argc, char** argv)
         {
             options = {}; options.name = damage; options.damage = damage;
             options.merge40 = false; options.faultDelay = 150000000;
-            if (options.damage == "root-missing") options.expected = "RECOMPUTE";
-            Run(options);
+            options.expected = "RECOMPUTE";
+            const auto partial = Run(options);
+            if (options.damage == "input-missing")
+                Check(partial.snapshot.state.rootReady && !partial.snapshot.state.inputReady &&
+                      partial.resumeWork == 0 && partial.fallbackReason == "COMPLETE_INPUT_MISSING",
+                      "root-only initialization was accepted as complete checkpoint");
         }
         options = {}; options.name = "no-checkpoint"; options.noCheckpoint = true;
         options.merge40 = false; options.expected = "RECOMPUTE"; options.deadline = 2.0; Run(options);
