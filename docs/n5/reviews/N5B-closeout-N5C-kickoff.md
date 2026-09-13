@@ -33,7 +33,7 @@ owner、超额 LOG/FULL/relocation 拒绝、边界准入、既有对象保留和
 该执行版本与修正前 PR #98 的 CB policy/manager/recovery 源码一致。
 旧 `20260912T171143276614Z-formal` 已被 INPUT 修正取代，仅作为历史保留。
 
-本次工作区审计覆盖 328909 条 quota decision、981783 条事件、151780 次获准对象申请：
+最终离线审计覆盖 328909 条 quota decision、981783 条事件、151780 次获准对象申请：
 `affected_count=0`、`max_occupied_minus_quota_bytes=0`、`ambiguous_count=0`。
 逐 owner 的实际占用与物理池一致，最终全释放。饱和保护不要求重跑八组正式仿真。
 未记录的被拒绝 preview 不伪称逐条重建；跨 CSV 同纳秒用所有可能 owner 的上下界，
@@ -79,9 +79,18 @@ N5C 前后本轮均不实现阈值、预算、JIT-next 或新优化器。
 目标模块及维护测试已编译；C++ 全部维护测试通过（CB policy 89262、runtime 881308
 次检查，含新增 quota fixture）；Python 136 项，135 通过、1 项可选环境测试跳过。
 完整维护 smoke/regression 已通过，包括 16 组 placement smoke、100 任务故障回归及
-483 条在线模型/预测概率一致性记录；干净 commit 的 CB smoke 和最终审计身份待回填。
-阶段日志在 `output/audits/n5b-closeout-checks/`，工作区试审计为
-`output/audits/cb-quota-underflow-impact-working.json`。
+483 条在线模型/预测概率一致性记录；CB 26 个恢复 fixture、13 类损坏拒绝仍通过。
 
-此时不写 `N5B CLOSED`。修正与证据提交到 PR #98 后，仍需用户明确授权合并；
-未合并前不创建正式 N5C 分支，不运行 GitHub CI、不合 main、不打 tag、不删除分支。
+代码与审计工具提交 `48e5ac4f443bb2e454a5df5b94ebb3572b2ee314`，干净工作区执行：
+
+- CB 四种 placement × 两种 busy 的 8 组 smoke，全部 `AUDIT_PASS`；每组 15 s、4 任务。
+  目录 `output/cb-sat-v2/20260913T091407898587Z-smoke`；FA-LRL/relocate 再执行一次，
+  26 份 CSV/JSON 确定性一致（仅忽略运行身份、输出路径和墙钟）。这不是新的正式 1300 s 仿真。
+- 最终审计 `output/audits/cb-quota-underflow-impact.json`：audit commit 为上述版本，
+  `audit_worktree_dirty=false`，source execution 仍为 `367f23f39`，不重写历史运行身份。
+- 其他阶段日志在 `output/audits/n5b-closeout-checks/`；`*-working.json` 仅是早期试审计，
+  不替代最终文件。本页后续提交只回填证据，不改变已验证代码。
+
+**当前 Gate：READY_FOR_USER_MERGE，不写 N5B CLOSED。** 本地修正、影响审计与必要回归
+完成，未发现必须重跑的正式组。PR #98 更新后仍需明确合并授权；未合并前不创建正式
+N5C 分支，不运行 GitHub CI、不合 main、不打 tag、不删除任何分支。
