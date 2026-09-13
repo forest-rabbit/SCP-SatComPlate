@@ -39,6 +39,23 @@ gate 只重跑 R5/R7 FA-FFP，与旧输出逐 CSV/JSON 核验；主实验只新�
 `comparison.json/csv` 中 WU 与 eq-WU 分开、路径比例分母为 recovery_attempted，busy 分母为故障时具有 designated backup 的任务。
 这是单一固定场景的描述性比较，不预设 N5C 优于 FA-FFP/FA-LRL。
 
+U 专项 Gate A 只增加 seed 1 / run 12–15 的 Deferred FA-FFP/full/noU（十二组），
+复用通过身份、命令和源代码等价核验的 run 11 三组。干净提交、构建后运行：
+
+```bash
+python contrib/satcompute/tests/integration/regression/run-n5c-u-audit.py --root output/n5c-u-audit --phase prepare
+python contrib/satcompute/tests/integration/regression/run-n5c-u-audit.py --root output/n5c-u-audit --phase run --jobs 4
+python contrib/satcompute/tests/integration/regression/analyze-n5c-u-audit.py --root output/n5c-u-audit
+```
+
+prepare 还重复执行既有 frequency runtime fixture，核验输出确定性（不是新增正式仿真）。
+运行阶段禁止改变 HEAD/工作区；`--resume` 只复用已成功且身份完全相符的组，不覆盖部分输出。
+离线输出 `summary.csv`、`full-vs-noU-task-diff.csv`、`u-decision-audit.csv`、
+`paired-comparison.json` 和各 run 的 `task140-u-diagnostic.json`。
+`test_n5c_u_audit.py` 检查冻结矩阵、历史截断、反事实 tie-break、缺失样本与元数据拒绝。
+同快照反事实与完整 full/noU 轨迹差异分列；真实生成故障不强制相等。
+完成后只进入[共同审阅](../../../docs/n5/reviews/N5C-U-multirun-audit.md)，不自动实现 recent-U。
+
 Pre-N5C placement 消融入口为 `integration/regression/run-pre-n5c-placement-matrix.py`：
 `--stage gates` 先运行 R5/R7-FA-FFP 并与最新 capacity-resume 原始文件比较；
 `--stage remaining --jobs 8` 再运行其余 30 组，合计 32 组，每组 800 任务/1300 s，需显式授权。

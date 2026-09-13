@@ -125,6 +125,16 @@ gates, two N5C Eager/Deferred main runs, then three Deferred scoring ablations;
 do not repeat the old 32-run matrix or mix JIT into comparisons. No extra GitHub
 CI, main merge, release tag or N5C integration merge without final user review.
 
+The subsequent user-approved U audit runs on child `feature/n5c-u-refinement`
+from PR #100 head `f5a479ae36c15e356cddd063235b33318856a86e`; keep #100 open.
+Gate A only: seed 1, runs 11-15, Deferred FA-FFP/full/noU; reuse verified run 11,
+add twelve executions without overwriting V4 evidence. No model/runtime changes,
+T threshold, 5% tolerance or automatic Gate B decision. Report paired and whole
+cohorts, same-snapshot noU counterfactuals, causal history diagnostics and actual
+fault differences; identical fault models/streams need not produce identical
+realized faults under online generate. Await joint evidence review before any
+recent-U implementation. Keep tests in the existing tree and do not add CI.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.

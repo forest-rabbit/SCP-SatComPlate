@@ -13,7 +13,10 @@ SCENE = "contrib/satcompute/input/experiments/leo-66"
 
 def arguments(output, fault_mode="generate", audit=False, shadow=False,
               validation_trace=None, protection_mode="off", placement_mode="fa-ffp", lrl_weight=1,
-              remote_busy_recovery_policy="relocate", input_staging_policy="eager", n5c_variant="full"):
+              remote_busy_recovery_policy="relocate", input_staging_policy="eager", n5c_variant="full",
+              random_run=11):
+    if type(random_run) is not int or not 1 <= random_run < 2**63:
+        raise ValueError("random run must be a positive integer below 2^63")
     if protection_mode not in ("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet") or placement_mode not in ("ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"):
         raise ValueError("unsupported protection/placement mode")
     if placement_mode == "n5c" and protection_mode != "compfrr":
@@ -52,7 +55,7 @@ def arguments(output, fault_mode="generate", audit=False, shadow=False,
               "--routingMode=global-capacity-aware-hrw", "--transferChunkMode=size-aware",
               "--islMtuBytes=64028", "--islQueueBytes=1500000", "--receiverRcvBufBytes=131072",
               "--linkMetricsInterval=1", "--maxIslDistance=6171353",
-              "--randomSeed=1", "--randomRun=11", "--ecmpHashSeed=1",
+              "--randomSeed=1", f"--randomRun={random_run}", "--ecmpHashSeed=1",
               f"--faultMode={fault_mode}", f"--outputDir={output}",
               f"--compfrr-shadow={int(shadow)}", f"--faultProbabilityAudit={int(audit)}"]
     if fault_mode == "generate":
@@ -84,6 +87,7 @@ def main():
     parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"), default="off")
     parser.add_argument("--placement-mode", choices=("ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"), default="fa-ffp")
     parser.add_argument("--n5c-variant", choices=("full", "noR", "noU", "noM"), default="full")
+    parser.add_argument("--random-run", type=int, default=11, help="Explicit replicate; frozen default remains 11")
     parser.add_argument("--remote-busy-recovery-policy", choices=("relocate", "recompute"), default="relocate")
     parser.add_argument("--input-staging-policy", choices=("eager", "deferred"), default="eager")
     parser.add_argument("--audit", action="store_true")
@@ -95,13 +99,14 @@ def main():
                    shlex.join(arguments(output, args.fault_mode, args.audit, args.shadow,
                                         args.validation_trace, args.protection_mode, args.placement_mode,
                                         remote_busy_recovery_policy=args.remote_busy_recovery_policy,
-                                        input_staging_policy=args.input_staging_policy, n5c_variant=args.n5c_variant))]
+                                        input_staging_policy=args.input_staging_policy, n5c_variant=args.n5c_variant,
+                                        random_run=args.random_run))]
         if output.exists():
             raise ValueError("refusing to overwrite an existing output directory")
     except (ValueError, OSError, KeyError) as error:
         parser.error(str(error))
     output.mkdir(parents=True)
-    identity = {"command": command, "seed": 1, "run": 11, "fault_mode": args.fault_mode,
+    identity = {"command": command, "seed": 1, "run": args.random_run, "fault_mode": args.fault_mode,
                 "validation_fault_trace": str(args.validation_trace.resolve()) if args.validation_trace else None,
                 "protection_mode": args.protection_mode,
                 "placement_mode": args.placement_mode, "lrl_recovery_weight": 1,
