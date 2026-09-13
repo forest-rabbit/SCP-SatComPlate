@@ -66,3 +66,10 @@ CB 修复后的本地验证（2026-09-13）：
   frequency、baseline 及 16 组 placement。
 
 尚未执行修复后的正式重跑。离线审计版本与真实仿真执行版本分别记录。
+
+CB 修复执行提交 `b1a41d7d9`（干净工作树）：
+
+- 历史只读影响审计：`output/v7-cbsat-adjustment/20260913-input-audit`，
+  四条受影响记录均为 task325，强制八组正式重跑；两个 X=0 均为首次分配无剩余日志。
+- `run-cb-sat-matrix.py --stage smoke --jobs 4`：八组与 FA-LRL relocate 重复运行通过；
+  `output/cb-sat-v2/20260913T060835526989Z-smoke`。
