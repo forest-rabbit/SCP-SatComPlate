@@ -1,6 +1,7 @@
 """Causal Rational-U features, deterministic ranks and diagnostic-only zero counts."""
 from pathlib import Path
 import json
+import os
 import runpy
 import shlex
 import tempfile
@@ -74,6 +75,7 @@ class RationalUTests(unittest.TestCase):
                 (root / "execution.json").write_text(json.dumps(value))
                 return RUN["verify"](root, "clean")
             self.assertEqual(verify(metadata), metadata)
+            self.assertEqual(RUN["verify"](Path(os.path.relpath(root)), "clean"), metadata)
             for field, bad in (("run", 12), ("commit", "stale"), ("worktree_dirty", True),
                                ("fault_mode", "validation-replay"), ("n5c_variant", "full")):
                 with self.subTest(field=field), self.assertRaises(ValueError):

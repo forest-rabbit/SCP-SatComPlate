@@ -190,6 +190,7 @@ def audit_actual(directory, reconstructed=None):
 
 
 def compare(root):
+    root = root.resolve()
     run = runpy.run_path(str(HERE / "run-n5c-rational-u.py"))
     plan = json.loads((root / "execution-plan.json").read_text())
     require(plan["run"] == 11 and plan["variant"] == "rational-U" and

@@ -166,6 +166,13 @@ No exponential, run12-15 expansion, CI, merge, tag or automatic default promotio
 Near-zero thresholds are diagnostics only. Distinguish primary work at fault,
 uncheckpointed work and actual execution waste; never double-add these quantities.
 
+Rational-U B0/B1 is now complete: one clean run11 at `99be7b760d04e8ba557ecde83e0c3fb156982950`,
+800/800 completed, 83 successful recoveries, all audits passed. Both reused legacy
+formal gates and 425-file old fixture equivalence passed. Read
+`docs/n5/reviews/N5C-rational-U-main-scenario.md` before continuing: gains are
+tail-dominated, not broad superiority; keep default FULL. Stop for user review;
+do not launch run12-15/exponential, resume recent-U, merge #100/#101 or run CI.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.

@@ -22,6 +22,7 @@ def arguments(directory):
 
 
 def verify(directory, head):
+    directory = directory.resolve()
     value = json.loads((directory / "execution.json").read_text())
     require(value["commit"] == head and not value["worktree_dirty"], "execution identity mismatch")
     require((value["seed"], value["run"], value["simulation_duration_s"]) == (1, 11, 1300), "wrong run/horizon")
