@@ -76,6 +76,7 @@ void N5cPlacementTracker::FillResources(N5cCandidate& c, int64_t remainingTimeNs
     c.exposureNs = m_faults->ObservedSurvivalExposureNs(c.remoteNode);
     VerifyHistory(c.remoteNode);
     c.historyHorizonNs = remainingTimeNs;
+    c.continuousIdleNs = m_computeHistory.IdleTimeNs(c.remoteNode, Now());
     c.historyWindowEndNs = Now();
     c.historyWindowBeginNs = std::max<int64_t>(0, Now() - remainingTimeNs);
     const auto recent = m_computeHistory.Query(c.remoteNode, c.historyWindowBeginNs,

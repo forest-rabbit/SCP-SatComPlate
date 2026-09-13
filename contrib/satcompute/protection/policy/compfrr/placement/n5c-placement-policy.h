@@ -8,7 +8,7 @@
 namespace ns3::protection
 {
 /** Only the ranking dimensions change in ablations; all hard constraints remain. */
-enum class N5cVariant { FULL, NO_R, NO_U, NO_M, RECENT_U };
+enum class N5cVariant { FULL, NO_R, NO_U, NO_M, RECENT_U, RATIONAL_U };
 N5cVariant ParseN5cVariant(const std::string& name);
 const char* N5cVariantName(N5cVariant variant);
 
@@ -39,6 +39,7 @@ struct N5cCandidate
     std::vector<N5cForecast> peers;
     uint64_t normalBusyNs{}, recoveryBusyNs{}, exposureNs{};
     int64_t historyHorizonNs{}, historyWindowBeginNs{}, historyWindowEndNs{}; ///< Exact primary horizon.
+    int64_t continuousIdleNs{}; ///< Since the last actual normal/recovery service ended.
     uint64_t recentNormalBusyNs{}, recentRecoveryBusyNs{}, recentExposureNs{}; ///< Past-only window.
     uint64_t capacityBytes{}, accountedBytes{}, additionalQuotaBytes{};
     int64_t propagationNs{};
@@ -52,6 +53,7 @@ struct N5cScore
     bool feasible{}, historyUnavailable{}, noPredictedDemand{};
     double recoveryConflict{}, historicalUtilization{}, storagePressure{}, bottleneck{};
     double recentUtilization{}; ///< Used only by RECENT_U; cumulative U keeps its original meaning.
+    double rationalPressure{}; ///< RATIONAL_U only; not a replacement for measured utilization.
     double demandProbability{}, weightedConflict{}, catchSeconds{}, budgetSeconds{};
     int64_t propagationNs{};
     uint64_t peerCount{}, windowCount{};
@@ -72,6 +74,11 @@ double N5cCatchSeconds(const N5cForecast& forecast);
 double N5cBudgetSeconds(const N5cForecast& forecast, int64_t atNs);
 std::vector<N5cOccupancyWindow> N5cRecoveryWindows(const N5cForecast& forecast);
 N5cScore ScoreN5cCandidate(const N5cCandidate& candidate, N5cVariant variant);
+/** Idle-aware pressure, no tunable coefficient. @param global Measured cumulative U.
+ * @param remainingNs Exact primary horizon, positive. @param idleNs Continuous idle, nonnegative.
+ * @return global * H/(H+I), in [0,global].
+ */
+double N5cRationalPressure(double global, int64_t remainingNs, int64_t idleNs);
 
 /** Per-task remote peak promises; actual objects are never counted a second time. */
 class N5cQuotaLedger

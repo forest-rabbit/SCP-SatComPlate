@@ -155,7 +155,7 @@ void Quotas()
     Check(ledger.Empty() && ledger.Accounted(10, actual) == 150, "release preserves recovery objects");
     ledger.Replace(1, 10, std::numeric_limits<uint64_t>::max());
     Reject([&] { ledger.Accounted(10, actual); });
-    for (const auto name : {"full", "noR", "noU", "noM", "recent-U"})
+    for (const auto name : {"full", "noR", "noU", "noM", "recent-U", "rational-U"})
         Check(std::string(N5cVariantName(ParseN5cVariant(name))) == name, "variant roundtrip");
     Reject([] { ParseN5cVariant("weighted"); });
 }
@@ -248,6 +248,9 @@ void RecoveryObservation()
     const auto recent = callbacks.history.Query(1, 40, 60, 60, 60);
     Check(recent.recoveryNs == 10 && recent.normalNs == 0 && recent.exposureNs == 20,
           "cancelled recovery did not close recent actual-service interval");
+    Check(callbacks.history.IdleTimeNs(1, 19) == 19 && callbacks.history.IdleTimeNs(1, 40) == 0 &&
+          callbacks.history.IdleTimeNs(1, 60) == 10,
+          "reservation/immunity/cancel changed actual continuous-idle semantics");
     service->DisconnectStateObserver(MakeCallback(&Callbacks::State, &callbacks));
     Simulator::Destroy();
 }
@@ -308,12 +311,74 @@ void RecentHistory()
     Check(ScoreN5cCandidate(oldBusy, N5cVariant::RECENT_U).historyUnavailable,
           "zero-length window needs explicit unavailable diagnostic");
 }
+void RationalHistory()
+{
+    using A = ComputeUsageHistory::Activity;
+    ComputeUsageHistory h;
+    h.Observe(1, 0, A::IDLE);
+    Check(h.IdleTimeNs(1, 15) == 15, "never busy should be idle from birth");
+    h.Observe(1, 10, A::NORMAL);
+    Check(h.IdleTimeNs(1, 9) == 9 && h.IdleTimeNs(1, 10) == 0, "idle read future activity");
+    h.Observe(1, 20, A::IDLE);
+    h.Observe(1, 30, A::IDLE); // Temporary unavailability / repeated notification is not busy.
+    Check(h.IdleTimeNs(1, 35) == 15, "nonservice notification reset idle");
+    h.Observe(1, 40, A::RECOVERY);
+    h.Observe(1, 50, A::IDLE);
+    h.Observe(1, 50, A::NORMAL); // Back-to-back service gives no idle gap.
+    h.Observe(1, 60, A::IDLE);
+    h.Observe(1, 70, A::NORMAL);
+    h.Observe(1, 70, A::IDLE); // Zero-duration start/cancel does not create actual busy time.
+    Check(h.IdleTimeNs(1, 49) == 0 && h.IdleTimeNs(1, 50) == 0 &&
+          h.IdleTimeNs(1, 65) == 5 && h.IdleTimeNs(1, 80) == 20,
+          "recovery/same-ns boundary corrupted idle clock");
+    Reject([&] { h.IdleTimeNs(2, 0); });
+    Reject([&] { h.IdleTimeNs(1, -1); });
+    Near(N5cRationalPressure(.6, 10, 0), .6, "I=0");
+    Near(N5cRationalPressure(.6, 10, 10), .3, "I=H");
+    Near(N5cRationalPressure(.6, 10, 90), .06, "idle decay");
+    Near(N5cRationalPressure(0, 10, 90), 0, "never busy pressure");
+    Near(N5cRationalPressure(.6, INT64_MAX, INT64_MAX), .3, "integer horizon sum overflow");
+    Reject([] { N5cRationalPressure(.6, 0, 0); });
+    Reject([] { N5cRationalPressure(.6, 1, -1); });
+    Reject([] { N5cRationalPressure(1.1, 1, 0); });
+    double previous = 1;
+    for (int64_t i = 0; i < 1000; ++i)
+    {
+        const double p = N5cRationalPressure(.6, 10, i);
+        Check(p > 0 && p <= .6 && p <= previous, "rational range/monotonicity/positive history");
+        previous = p;
+    }
+    auto stale = Candidate(10), fresh = Candidate(11);
+    stale.historyHorizonNs = fresh.historyHorizonNs = S;
+    stale.normalBusyNs = 8 * S; stale.continuousIdleNs = 9 * S;
+    fresh.normalBusyNs = 2 * S;
+    Check(N5cPlacementPolicy().SelectRemote({stale, fresh}).remoteNode == 11, "FULL redefined");
+    auto policy = N5cPlacementPolicy(N5cVariant::RATIONAL_U);
+    Check(policy.SelectRemote({stale, fresh}).remoteNode == 10, "rational ignored stale history");
+    auto score = ScoreN5cCandidate(stale, N5cVariant::RATIONAL_U);
+    Near(score.historicalUtilization, .8, "rational overwrote global utilization");
+    Near(score.rationalPressure, .08, "rational pressure");
+    stale.peers = {Forecast(2, 2)};
+    Near(ScoreN5cCandidate(stale, N5cVariant::RATIONAL_U).bottleneck, .5, "rational removed R");
+    stale.additionalQuotaBytes = 1001;
+    Check(!ScoreN5cCandidate(stale, N5cVariant::RATIONAL_U).feasible, "rational bypassed storage");
+    stale.rejection = "NODE_UNAVAILABLE";
+    Check(policy.SelectRemote({stale, fresh}).remoteNode == 11, "zero idle admitted unavailable node");
+    stale = Candidate(10); stale.historyHorizonNs = S; stale.exposureNs = stale.normalBusyNs = 0;
+    Check(ScoreN5cCandidate(stale, N5cVariant::RATIONAL_U).historyUnavailable,
+          "missing history needs explicit diagnostic");
+    fresh = stale; fresh.remoteNode = 11; stale.propagationNs = 2;
+    fresh.propagationNs = 1;
+    Check(policy.SelectRemote({stale, fresh}).remoteNode == 11, "propagation tie-break changed");
+    stale.propagationNs = 1;
+    Check(policy.SelectRemote({fresh, stale}).remoteNode == 10, "stable ID tie-break changed");
+}
 } // namespace
 int main()
 {
     try
     {
-        Formula(); Conflict(); Ranking(); Quotas(); ObservationAndGate(); RecoveryObservation(); RecentHistory();
+        Formula(); Conflict(); Ranking(); Quotas(); ObservationAndGate(); RecoveryObservation(); RecentHistory(); RationalHistory();
         std::cout << "N5C V4: " << checks << " invariant checks passed\n";
     }
     catch (const std::exception& e)

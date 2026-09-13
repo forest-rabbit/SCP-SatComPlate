@@ -51,6 +51,7 @@ N5cVariant ParseN5cVariant(const std::string& name)
     if (name == "noU") return N5cVariant::NO_U;
     if (name == "noM") return N5cVariant::NO_M;
     if (name == "recent-U") return N5cVariant::RECENT_U;
+    if (name == "rational-U") return N5cVariant::RATIONAL_U;
     throw std::invalid_argument("unknown N5C ablation");
 }
 const char* N5cVariantName(N5cVariant v)
@@ -62,8 +63,17 @@ const char* N5cVariantName(N5cVariant v)
     case N5cVariant::NO_U: return "noU";
     case N5cVariant::NO_M: return "noM";
     case N5cVariant::RECENT_U: return "recent-U";
+    case N5cVariant::RATIONAL_U: return "rational-U";
     }
     throw std::invalid_argument("invalid N5C variant");
+}
+
+double N5cRationalPressure(double global, int64_t remaining, int64_t idle)
+{
+    Require(std::isfinite(global) && global >= 0 && global <= 1 && remaining > 0 && idle >= 0,
+            "invalid Rational-U domain");
+    const double horizon = static_cast<double>(remaining);
+    return global * (horizon / (horizon + static_cast<double>(idle))); // No integer-sum overflow.
 }
 
 double N5cCatchSeconds(const N5cForecast& f)
@@ -136,6 +146,9 @@ N5cScore ScoreN5cCandidate(const N5cCandidate& c, N5cVariant variant)
     Require(recentBusy <= c.recentExposureNs, "N5C recent execution exceeds live exposure");
     out.recentUtilization = c.recentExposureNs ? static_cast<double>(recentBusy) / c.recentExposureNs : 0;
     if (variant == N5cVariant::RECENT_U) out.historyUnavailable = c.recentExposureNs == 0;
+    if (variant == N5cVariant::RATIONAL_U)
+        out.rationalPressure = N5cRationalPressure(out.historicalUtilization,
+                                                  c.historyHorizonNs, c.continuousIdleNs);
     out.storagePressure = static_cast<double>(Add(c.accountedBytes, c.additionalQuotaBytes)) /
                          c.capacityBytes;
     const auto own = N5cRecoveryWindows(c.demand);
@@ -171,7 +184,8 @@ N5cScore ScoreN5cCandidate(const N5cCandidate& c, N5cVariant variant)
     const std::vector<std::pair<const char*, double>> dimensions{
         {"RECOVERY_CONFLICT", variant == N5cVariant::NO_R ? -1 : out.recoveryConflict},
         {"COMPUTE_HISTORY", variant == N5cVariant::NO_U ? -1 :
-            (variant == N5cVariant::RECENT_U ? out.recentUtilization : out.historicalUtilization)},
+            (variant == N5cVariant::RECENT_U ? out.recentUtilization :
+             variant == N5cVariant::RATIONAL_U ? out.rationalPressure : out.historicalUtilization)},
         {"STORAGE", variant == N5cVariant::NO_M ? -1 : out.storagePressure}};
     out.bottleneck = -1;
     for (const auto& [name, value] : dimensions)

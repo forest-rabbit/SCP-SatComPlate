@@ -87,6 +87,11 @@ def spatial(root):
     require(len(recent) == len(recent_rows), "duplicate recent-U history key")
     expected = {(r["decision_id"], r["candidate_node"]) for r in decisions if r["variant"] == "recent-U"}
     require(set(recent) == expected, "missing or unexpected recent-U companion rows")
+    rational_rows = rows(root, "n5c-rational-u-history.csv", True)
+    rational = {(r["decision_id"], r["candidate_node"]):r for r in rational_rows}
+    expected_rat = {(r["decision_id"], r["candidate_node"]) for r in decisions if r["variant"] == "rational-U"}
+    require(len(rational) == len(rational_rows) and set(rational) == expected_rat,
+            "missing/duplicate/unexpected Rational-U companion rows")
     groups = defaultdict(list)
     for r in decisions:
         groups[r["decision_id"]].append(r)
@@ -119,6 +124,17 @@ def spatial(root):
                 near(U, recent_busy/recent_exposure if recent_exposure else 0, "recent candidate history")
                 require(r["history_unavailable"] == window["history_unavailable"] == str(int(not recent_exposure)),
                         "recent unavailable diagnostic mismatch")
+            if r["variant"] == "rational-U":
+                raw = rational[(r["decision_id"], r["candidate_node"])]
+                H, I = int(raw["horizon_ns"]), int(raw["continuous_idle_ns"])
+                require(raw["task_id"] == r["task_id"] and raw["time_ns"] == r["time_ns"] and
+                        H > 0 and 0 <= I <= int(r["time_ns"]), "Rational-U identity/time domain")
+                near(float(raw["cumulative_utilization"]), U, "Rational-U overwrote global history")
+                near(float(raw["freshness"]), H/(H+I), "Rational-U freshness")
+                near(float(raw["rational_pressure"]), U*H/(H+I), "Rational-U pressure")
+                require(raw["history_unavailable"] == r["history_unavailable"] == str(int(not exposure)),
+                        "Rational-U missing history diagnostic")
+                U = float(raw["rational_pressure"])
             near(M,(int(r["actual_plus_quota_bytes"])+int(r["additional_quota_bytes"]))/int(r["capacity_bytes"]),"candidate storage")
             demand, numerator = float(r["first_failure_demand_probability"]), float(r["weighted_conflict"])
             require(0 <= numerator <= demand <= 1, "unconditional first-failure mass invalid")
@@ -181,7 +197,7 @@ def recovery_composition(recoveries, transfers):
             "LocalDelivery has no physical flow. Failed outcomes can overlap any action category.")
 
 
-def analyze(root):
+def analyze(root, include_tasks=False):
     value = BASE["analyze"](root)  # Corrected successful useful-WU subtraction and failed-task waste.
     value["resource_concentration"] = resources(root)
     recoveries = value["recovery_rows"]
@@ -207,7 +223,7 @@ def analyze(root):
     value["frequency_rows_independently_checked"] = sum(RISK["decision_check"](
         r,tasks[r["task_id"]],value["execution"]["input_staging_policy"] == "deferred") for r in common)
     value["n5c"] = spatial(root) if value["execution"]["placement_mode"] == "n5c" else None
-    for key in ("task_rows","recovery_rows"):
+    for key in (("recovery_rows",) if include_tasks else ("task_rows", "recovery_rows")):
         value.pop(key, None)
     return value
 
@@ -219,7 +235,7 @@ def main():
     choice.add_argument("--fixtures",type=Path,help="Only audit maintained small runtime fixtures")
     args = parser.parse_args()
     if args.fixtures:
-        groups = ["online-n5c","online-n5c-deferred","online-n5c-recent-U"] + [f"n5c-boundary-{mode}-{case}"
+        groups = ["online-n5c","online-n5c-deferred","online-n5c-recent-U","online-n5c-rational-U"] + [f"n5c-boundary-{mode}-{case}"
                   for mode in ("eager","deferred") for case in ("normal","hit","race")]
         results = {name:spatial(args.fixtures/name) for name in groups}
         require(all(r["proposals"] > 0 for r in results.values()),"vacuous spatial fixture")

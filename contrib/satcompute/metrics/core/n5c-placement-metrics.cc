@@ -79,6 +79,28 @@ void N5cPlacementTracker::Write(const std::filesystem::path& directory) const
                     << ',' << (c.recentExposureNs == 0) << '\n';
         }
     }
+    if (m_spatialDiagnostics && m_variant == N5cVariant::RATIONAL_U)
+    {
+        std::ofstream rational(directory / "n5c-rational-u-history.csv");
+        rational.exceptions(std::ios::failbit | std::ios::badbit);
+        rational << std::setprecision(17);
+        rational << "decision_id,task_id,time_ns,candidate_node,horizon_ns,continuous_idle_ns,"
+                    "freshness,cumulative_utilization,rational_pressure,history_unavailable\n";
+        for (size_t index = 0; index < m_decisions.size(); ++index)
+        {
+            const auto& t = m_decisions[index];
+            for (const auto& c : t.candidates)
+            {
+                const double global = c.exposureNs ?
+                    static_cast<double>(c.normalBusyNs + c.recoveryBusyNs) / c.exposureNs : 0;
+                rational << index << ',' << t.taskId << ',' << t.timeNs << ',' << c.remoteNode << ','
+                    << c.historyHorizonNs << ',' << c.continuousIdleNs << ','
+                    << N5cRationalPressure(1, c.historyHorizonNs, c.continuousIdleNs) << ',' << global << ','
+                    << N5cRationalPressure(global, c.historyHorizonNs, c.continuousIdleNs) << ','
+                    << (c.exposureNs == 0) << '\n';
+            }
+        }
+    }
     std::ofstream nodes(directory / "placement-resource-summary.csv");
     nodes.exceptions(std::ios::failbit | std::ios::badbit);
     nodes << std::setprecision(20);

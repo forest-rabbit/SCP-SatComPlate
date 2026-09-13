@@ -532,10 +532,11 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         engine->BindTaskCoordinator(tasks);
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
             n5c ? std::unique_ptr<PlacementPolicy>(std::make_unique<N5cPlacementPolicy>(
-                mode == "n5c-recent-U" ? N5cVariant::RECENT_U : N5cVariant::FULL)) :
+                mode == "n5c-recent-U" ? N5cVariant::RECENT_U :
+                mode == "n5c-rational-U" ? N5cVariant::RATIONAL_U : N5cVariant::FULL)) :
             mode == "lrl-two" ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
                                : std::unique_ptr<PlacementPolicy>{}, RemoteBusyRecoveryPolicy::RELOCATE,
-            (mode == "n5c-deferred" || mode == "n5c-recent-U") ?
+            (mode == "n5c-deferred" || mode == "n5c-recent-U" || mode == "n5c-rational-U") ?
                 InputStagingPolicy::DEFERRED : InputStagingPolicy::EAGER);
         if (mode == "f3")
         {
@@ -1189,6 +1190,7 @@ int main(int argc, char** argv)
         Online(std::filesystem::path(output) / "online-n5c", "n5c");
         Online(std::filesystem::path(output) / "online-n5c-deferred", "n5c-deferred");
         Online(std::filesystem::path(output) / "online-n5c-recent-U", "n5c-recent-U");
+        Online(std::filesystem::path(output) / "online-n5c-rational-U", "n5c-rational-U");
         for (bool minimal : {false, true})
             for (bool lrl : {false, true})
                 PlacementAdmission(std::filesystem::path(output) / (std::string("placement-") +

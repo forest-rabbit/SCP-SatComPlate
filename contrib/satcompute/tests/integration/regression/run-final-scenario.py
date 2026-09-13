@@ -21,7 +21,7 @@ def arguments(output, fault_mode="generate", audit=False, shadow=False,
         raise ValueError("unsupported protection/placement mode")
     if placement_mode == "n5c" and protection_mode != "compfrr":
         raise ValueError("N5C requires CompFRR")
-    if n5c_variant not in ("full", "noR", "noU", "noM", "recent-U") or (placement_mode != "n5c" and n5c_variant != "full"):
+    if n5c_variant not in ("full", "noR", "noU", "noM", "recent-U", "rational-U") or (placement_mode != "n5c" and n5c_variant != "full"):
         raise ValueError("invalid N5C ablation")
     if placement_mode in ("lrl", "fa-lrl") and protection_mode == "off":
         raise ValueError("LRL requires an enabled protection scheme")
@@ -86,7 +86,7 @@ def main():
     parser.add_argument("--validation-trace", type=Path)
     parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"), default="off")
     parser.add_argument("--placement-mode", choices=("ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"), default="fa-ffp")
-    parser.add_argument("--n5c-variant", choices=("full", "noR", "noU", "noM", "recent-U"), default="full")
+    parser.add_argument("--n5c-variant", choices=("full", "noR", "noU", "noM", "recent-U", "rational-U"), default="full")
     parser.add_argument("--random-run", type=int, default=11, help="Explicit replicate; frozen default remains 11")
     parser.add_argument("--remote-busy-recovery-policy", choices=("relocate", "recompute"), default="relocate")
     parser.add_argument("--input-staging-policy", choices=("eager", "deferred"), default="eager")

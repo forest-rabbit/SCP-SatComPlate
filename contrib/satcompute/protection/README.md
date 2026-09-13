@@ -53,7 +53,7 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；N5C V4 在�
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
 | `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入；`n5c` 仅用于 CompFRR |
-| `n5cVariant` | `full` | `full/noR/noU/noM/recent-U`；只改变评分，不改变硬约束，要求 placement=n5c |
+| `n5cVariant` | `full` | `full/noR/noU/noM/recent-U/rational-U`；只改变评分，不改变硬约束，要求 placement=n5c |
 | `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr/checkbullet 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
 | `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
@@ -528,6 +528,17 @@ ON 更新替换自身旧 quota，不重复计占用，任务离开主计算后�
 `n5c-recent-u-history.csv` 记录每个候选的 H、起止、分子、分母和 `recent_utilization`。
 只有 `recent-U` 输出此表；旧变体的原 CSV 合同不变。近期 U 大量为零、与 noU 排名退化一致的
 可能性属于实验需要报告的结果，不预设近期方案一定更好。
+
+`rational-U` 是独立实验变体，使用 `U_global * H/(H+I)` 替换评分中的 U，
+H 仍为上述精确剩余时间，I 为节点自最近一次实际普通/恢复计算结束后的连续空闲时间。
+从未计算的节点从 t=0 累计空闲；当前实际忙则 I=0，但不会因此绕过现有空闲候选硬约束。
+预留等待不算忙，F1/F2 暂时不可用且没有真实计算时继续累计空闲；恢复免疫期间的实际计算仍算忙。
+H 必须正、I 非负；不新增衰减系数，不读取未来任务或未来故障。
+`n5c-rational-u-history.csv` 单独记录 H、I、freshness、累计 U 与 rational pressure；
+原候选表的 `historical_utilization` 和节点全程统计仍是实际累计利用率，不改含义。
+R/M、min-max、传播时延/稳定 ID tie-break、START/ON、Frequency 和 Recovery 均不变。
+当前 `recent-U` 已停止正式实验（保留代码和未完成输出）；Rational-U 只获准 run 11 一组验证，
+不代表已替换默认 FULL。结果见 [Rational-U 主场景审计](../../../docs/n5/reviews/N5C-rational-U-main-scenario.md)。
 
 `n5c-placement-decisions.csv` 只记录 START 后的空间提案，区分 reference/实际资源、候选及最终准入。
 原 `frequency-decisions.csv` 的 OFF 标量和评分仍属于 reference，local/remote 列为实际提案；ON 均为实际 pair。

@@ -151,6 +151,21 @@ equivalence before five Deferred recent-U runs (seed 1, runs 11-15), reusing ver
 cumulative/noU evidence. Keep #100/#101 open, no CI/merge/tag/default promotion or
 new scenario freeze. Record results and limitations; do not tune after outcomes.
 
+The accepted Rational-U next-step plan supersedes the five-run recent-U trial:
+terminate the five user-paused simulations, retain partial outputs as incomplete,
+and keep RECENT_U code/history for later review, not as a final candidate here.
+On this same branch / Draft #101, first persist a read-only run11 FULL snapshot,
+then add independent RATIONAL_U = global_U * H/(H+I), where H is the primary's
+exact remainingTimeNs and I is continuous idle since actual normal/recovery busy
+ended. No adjustable constants or future information. Preserve FULL/NO_U and
+defaults. Reuse completed full/noU formal equivalence gates; verify new small
+tests and old fixture equivalence. Run only one new Deferred/relocate Rational-U
+seed1/run11, 800 tasks/1300s. Report positive or negative results in
+`docs/n5/reviews/N5C-rational-U-main-scenario.md`, then stop for user review.
+No exponential, run12-15 expansion, CI, merge, tag or automatic default promotion.
+Near-zero thresholds are diagnostics only. Distinguish primary work at fault,
+uncheckpointed work and actual execution waste; never double-add these quantities.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.

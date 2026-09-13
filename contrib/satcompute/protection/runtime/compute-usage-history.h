@@ -24,6 +24,12 @@ class ComputeUsageHistory
      * @param activity Actual service state after this notification.
      */
     void Observe(uint32_t node, int64_t timeNs, Activity activity);
+    /** Continuous idle since actual service ended; currently busy returns zero.
+     * Never-busy nodes are idle from t=0. Reservations/unavailability are not service.
+     * @param node Stable satellite ID. @param asOfNs Causal observation time.
+     * @return Exact idle duration; no event after asOfNs is consulted.
+     */
+    int64_t IdleTimeNs(uint32_t node, int64_t asOfNs) const;
     /** Query [begin,end), using only events observed by asOf and observed live exposure.
      * Nodes exist from t=0; live exposure ends only at an already observed permanent F3.
      * @param node Stable satellite ID observed since t=0.

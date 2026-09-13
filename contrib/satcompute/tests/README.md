@@ -56,19 +56,25 @@ prepare 还重复执行既有 frequency runtime fixture，核验输出确定性�
 同快照反事实与完整 full/noU 轨迹差异分列；真实生成故障不强制相等。
 完成后只进入[共同审阅](../../../docs/n5/reviews/N5C-U-multirun-audit.md)，不自动实现 recent-U。
 
-共同审阅后已批准独立 recent-U 对照：先验证旧 FULL/noU 的两组完整运行等价，再增加
-seed 1 / run 11–15 的五组 Deferred recent-U，复用 Gate A 的十组 full/noU。最多八路并行，
-不覆盖历史、不改默认参数、不自动进入 CI/合并。H 为主任务剩余纯计算时间，无调参入口。
+后续 recent-U 实验已停止：小测试及 FULL/noU 两组完整等价门禁通过，五组 recent-U
+正式进程在暂停后结束，部分输出只读保留、不能当性能证据。见
+[历史状态](../../../docs/n5/reviews/N5C-recent-U-evaluation.md)。不要重新启动旧五组入口。
+
+当前只批准 Rational-U 的 B0 快照与 B1 一组主场景：seed 1 / run 11、Deferred/relocate、
+800 任务/1300 s。复用已完成的两组旧方案正式等价门禁，重新验证旧小场景（含 recent-U）
+输出等价；不改默认参数、不扩展 run 12–15、不自动进入 CI/合并。
 
 ```bash
-python contrib/satcompute/tests/integration/regression/run-n5c-recent-u.py --phase all --jobs 8
-python contrib/satcompute/tests/integration/regression/analyze-n5c-recent-u.py
+python contrib/satcompute/tests/integration/regression/analyze-n5c-rational-u.py --snapshot output/n5c-v4/formal/R7-n5c --output output/n5c-u-freshness-snapshot
+python contrib/satcompute/tests/integration/regression/run-n5c-rational-u.py --phase all
+python contrib/satcompute/tests/integration/regression/analyze-n5c-rational-u.py --compare output/n5c-rational-u
 ```
 
-正式运行要求同一干净 HEAD；`--resume` 只复用完整、同代码的组，不重启半成品。
-输出在 `output/n5c-recent-u/`；离线重建每个候选的实际服务窗口，核对精确 H，统计零 U 与
-同快照 noU 一致率，并分别报告完整轨迹的变化、共同故障的配对恢复时间及未追平样本。
-见 [recent-U 评估](../../../docs/n5/reviews/N5C-recent-U-evaluation.md)。
+入口拒绝覆盖已有证据；以上是复现顺序，不应对已有完成目录再次执行。
+正式运行要求同一干净 HEAD。`test_n5c_rational_u.py` 验证因果 H/I、边界、评分和元数据；
+离线核对每个候选的实际服务记录与 H/I，分别报告同快照反事实、完整轨迹及配对恢复。
+精确零、`abs(U)<1e-12`、`abs(U)<1e-9` 分别统计；后两项只是诊断，不能进入评分。
+结果写入 [Rational-U 审计](../../../docs/n5/reviews/N5C-rational-U-main-scenario.md) 后停止等待共同审阅。
 
 Pre-N5C placement 消融入口为 `integration/regression/run-pre-n5c-placement-matrix.py`：
 `--stage gates` 先运行 R5/R7-FA-FFP 并与最新 capacity-resume 原始文件比较；

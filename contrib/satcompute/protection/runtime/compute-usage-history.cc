@@ -38,6 +38,28 @@ ComputeUsageHistory::Prefix ComputeUsageHistory::At(uint32_t node, int64_t time)
     if (after == events.begin()) throw std::invalid_argument("query before compute observation");
     return Advance(*std::prev(after), time);
 }
+int64_t ComputeUsageHistory::IdleTimeNs(uint32_t node, int64_t time) const
+{
+    if (time < 0) throw std::invalid_argument("negative idle observation time");
+    const auto found = m_events.find(node);
+    if (found == m_events.end()) throw std::invalid_argument("unobserved compute node");
+    const auto& events = found->second;
+    auto after = std::upper_bound(events.begin(), events.end(), time,
+        [](int64_t t, const Prefix& p) { return t < p.timeNs; });
+    if (after == events.begin()) throw std::invalid_argument("query before compute observation");
+    auto current = std::prev(after);
+    if (current->activity != Activity::IDLE) return 0;
+    auto end = current->timeNs;
+    // Same-ns start/cancel notifications can leave adjacent IDLE prefixes without
+    // any positive-duration service. They must not reset continuous idle.
+    while (current != events.begin())
+    {
+        --current;
+        if (current->activity != Activity::IDLE && current->timeNs < end) return time - end;
+        end = current->timeNs;
+    }
+    return time;
+}
 ComputeUsageWindow ComputeUsageHistory::Query(uint32_t node, int64_t begin, int64_t end,
                                              int64_t asOf, uint64_t exposure) const
 {
