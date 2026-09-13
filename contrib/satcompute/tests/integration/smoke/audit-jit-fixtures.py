@@ -18,7 +18,21 @@ def verify(root):
     for directory in directories:
         API["audit"](directory)
         data[directory.name] = [API["rows"](directory, name) for name in FILES]
+    same_ns = copy.deepcopy(data["ready"])
+    initialized = next(e for e in same_ns[3] if e["event"] == "INIT_COST_COMMITTED")
+    initialized["time_ns"] = same_ns[0][0]["requested_ns"]
+    API["validate"](*same_ns)
+    data["same-ns-initialization"] = same_ns
+
+    def reverse_initialization_order(d):
+        i = next(i for i, e in enumerate(d[3]) if e["event"] == "INIT_COST_COMMITTED")
+        j = next(i for i, e in enumerate(d[3]) if e["event"] == "PREFETCH_INPUT_REQUESTED")
+        d[3][i], d[3][j] = d[3][j], d[3][i]
+
     corruptions = [
+        ("same-ns-initialization", reverse_initialization_order),
+        ("same-ns-initialization", lambda d: next(e for e in d[3] if e["event"] == "INIT_COST_COMMITTED").update(
+            time_ns=str(int(d[0][0]["requested_ns"])+1))),
         ("inflight", lambda d: d[0][0].update(prefetch_total_sent_bytes="1")),
         ("inflight", lambda d: d[0][0].update(prefetch_after_fault_sent_bytes="0")),
         ("inflight", lambda d: d[0][0].update(input_object_id="999999")),
@@ -39,7 +53,8 @@ def verify(root):
         except ValueError:
             continue
         raise AssertionError(f"corrupt JIT evidence accepted: {case}")
-    print(f"JIT audit: {len(directories)} fixtures passed; {len(corruptions)} corruptions rejected")
+    print(f"JIT audit: {len(directories)} fixtures and same-ns initialization passed; "
+          f"{len(corruptions)} corruptions rejected")
 
 
 if __name__ == "__main__":

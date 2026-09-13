@@ -42,13 +42,61 @@ def command(output, group):
             "--jit-start-benefit", str(int(benefit))]
 
 
+def audit_completed(output, audit_head):
+    """Read completed raw evidence; never rerun or relabel its execution identity."""
+    status = json.loads((output / "matrix-status.json").read_text())
+    require(set(status["groups"]) == set(GROUPS) and
+            all(s.get("returncode") == 0 for s in status["groups"].values()), "matrix execution incomplete")
+    head = status["commit"]
+    for name, (staging, busy, benefit) in GROUPS.items():
+        identity = json.loads((output / name / "execution.json").read_text())
+        outcome = json.loads((output / name / "execution-result.json").read_text())
+        require(identity["commit"] == head and not identity["worktree_dirty"] and outcome["returncode"] == 0 and
+                identity["simulation_duration_s"] == 1300 and identity["fault_mode"] == "generate" and
+                identity["protection_mode"] == "compfrr" and identity["placement_mode"] == "fa-lrl" and
+                identity["input_staging_policy"] == staging and identity["remote_busy_recovery_policy"] == busy and
+                (staging != "jit" or identity["jit_start_benefit"] == benefit), "matrix execution identity mismatch")
+    audit_paths = {name: output / name / "v7-jit-independent-audit.json" for name in tuple(GROUPS)[:2]}
+    equivalence_path, summary_path = output / "old-mode-equivalence.json", output / "matrix-audit.json"
+    require(not any(p.exists() for p in (*audit_paths.values(), equivalence_path, summary_path)),
+            "refusing to overwrite an existing matrix audit")
+    audit = runpy.run_path(str(HERE / "audit-jit-input.py"))["audit"]
+    audits = {name: audit(output/name) for name in audit_paths}
+    compare = runpy.run_path(str(HERE / "analyze-protection-accounting.py"))["compare"]
+    equivalence = {}
+    for name, old_name in REFERENCES.items():
+        old = ROOT / "output/pre-n5c-placement-final" / old_name
+        new = output / name
+        result = compare(old, new)
+        extra = {}
+        for file in ("protection-events.csv", "protection-transfers.csv", "protection-task-summary.csv",
+                     "protection-node-storage-summary.csv", "recovery-summary.csv", "recovery-events.csv",
+                     "frequency-decisions.csv", "frequency-pause-intervals.csv", "frequency-capacity-waits.csv"):
+            extra[file] = (old/file).read_bytes() == (new/file).read_bytes()
+        equivalence[name] = dict(business=result, protection=extra,
+            historical_execution=json.loads((old/"execution.json").read_text())["commit"], new_execution=head)
+    require(all(all(e["protection"].values()) for e in equivalence.values()),
+            "old-mode protection changed; inspect evidence before accepting comparisons")
+    require(clean_head() == audit_head, "audit HEAD/worktree changed")
+    for name, path in audit_paths.items():
+        path.write_text(json.dumps(dict(audits[name], execution_head=head, audit_head=audit_head), indent=2)+"\n")
+    equivalence_path.write_text(json.dumps(equivalence, indent=2)+"\n")
+    summary_path.write_text(json.dumps(dict(status="PASS", execution_head=head, audit_head=audit_head,
+        raw_evidence_modified=False, new_simulations_started=0), indent=2)+"\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--jobs", type=int, choices=range(1, 6), default=2)
+    parser.add_argument("--audit-only", action="store_true", help="Audit completed runs without starting simulations")
     args = parser.parse_args()
     head = clean_head()
     output = args.output_root.resolve()
+    if args.audit_only:
+        audit_completed(output, head)
+        print(output, flush=True)
+        return
     require(not output.exists(), "refusing to overwrite existing matrix")
     commands = {name: command(output / name, name) for name in GROUPS}
     output.mkdir(parents=True)
@@ -70,26 +118,7 @@ def main():
             except Exception as error:
                 statuses[name] = {"error": str(error)}
     (output / "matrix-status.json").write_text(json.dumps(dict(commit=head, groups=statuses), indent=2)+"\n")
-    require(all(s.get("returncode") == 0 for s in statuses.values()), f"matrix failed; evidence retained at {output}")
-    audit = runpy.run_path(str(HERE / "audit-jit-input.py"))["audit"]
-    for name in tuple(GROUPS)[:2]:
-        (output / name / "v7-jit-independent-audit.json").write_text(json.dumps(audit(output/name), indent=2)+"\n")
-    compare = runpy.run_path(str(HERE / "analyze-protection-accounting.py"))["compare"]
-    equivalence = {}
-    for name, old_name in REFERENCES.items():
-        old = ROOT / "output/pre-n5c-placement-final" / old_name
-        new = output / name
-        result = compare(old, new)
-        extra = {}
-        for file in ("protection-events.csv", "protection-transfers.csv", "protection-task-summary.csv",
-                     "protection-node-storage-summary.csv", "recovery-summary.csv", "recovery-events.csv",
-                     "frequency-decisions.csv", "frequency-pause-intervals.csv", "frequency-capacity-waits.csv"):
-            extra[file] = (old/file).read_bytes() == (new/file).read_bytes()
-        equivalence[name] = dict(business=result, protection=extra,
-            historical_execution=json.loads((old/"execution.json").read_text())["commit"], new_execution=head)
-    (output/"old-mode-equivalence.json").write_text(json.dumps(equivalence, indent=2)+"\n")
-    require(all(all(e["protection"].values()) for e in equivalence.values()),
-            "old-mode protection changed; inspect evidence before accepting comparisons")
+    audit_completed(output, head)
     print(output, flush=True)
 
 

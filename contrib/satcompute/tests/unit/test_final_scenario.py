@@ -278,5 +278,75 @@ class FinalRunnerTests(unittest.TestCase):
                 launch.assert_not_called()
 
 
+class JitMatrixAuditTests(unittest.TestCase):
+    def setUp(self):
+        self.api = runpy.run_path(str(MODULE / "tests/integration/regression/run-v7-jit-matrix.py"))
+
+    def test_audit_only_never_launches_or_builds_a_simulation(self):
+        main = self.api["main"]
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(main.__globals__,
+                clean_head=lambda: "audit-head"), patch.dict(main.__globals__, audit_completed=lambda p, h:
+                self.assertEqual((p, h), (Path(temporary), "audit-head"))), \
+                patch("subprocess.run") as launch, patch("sys.argv", ["matrix", "--audit-only",
+                "--output-root", temporary]), contextlib.redirect_stdout(io.StringIO()):
+            main()
+            launch.assert_not_called()
+
+    def test_incomplete_matrix_cannot_be_reaudited(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            status = root / "matrix-status.json"
+            for groups in ({}, {name: {"returncode": 1} for name in self.api["GROUPS"]}):
+                status.write_text(json.dumps(dict(commit="execution-head", groups=groups)))
+                with self.assertRaisesRegex(ValueError, "incomplete"):
+                    self.api["audit_completed"](root, "audit-head")
+                self.assertEqual(list(root.iterdir()), [status])
+
+    def test_reaudit_preserves_execution_identity_and_all_raw_evidence(self):
+        audit = self.api["audit_completed"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            matrix = root / "new"; matrix.mkdir()
+            groups = self.api["GROUPS"]
+            (matrix / "matrix-status.json").write_text(json.dumps(dict(commit="execution-head",
+                groups={name: {"returncode": 0} for name in groups})))
+            for name, (staging, busy, benefit) in groups.items():
+                directory = matrix / name; directory.mkdir()
+                (directory / "execution.json").write_text(json.dumps(dict(commit="execution-head",
+                    worktree_dirty=False, simulation_duration_s=1300, fault_mode="generate",
+                    protection_mode="compfrr", placement_mode="fa-lrl", input_staging_policy=staging,
+                    remote_busy_recovery_policy=busy, jit_start_benefit=benefit)))
+                (directory / "execution-result.json").write_text('{"returncode": 0}')
+                if name not in self.api["REFERENCES"]:
+                    continue
+                old = root / "output/pre-n5c-placement-final" / self.api["REFERENCES"][name]
+                old.mkdir(parents=True)
+                (old / "execution.json").write_text('{"commit": "historical-head"}')
+                for file in ("protection-events.csv", "protection-transfers.csv", "protection-task-summary.csv",
+                        "protection-node-storage-summary.csv", "recovery-summary.csv", "recovery-events.csv",
+                        "frequency-decisions.csv", "frequency-pause-intervals.csv", "frequency-capacity-waits.csv"):
+                    for directory in (old, matrix / name):
+                        (directory / file).write_text("unchanged raw evidence\n")
+            raw = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+            def source(path):
+                return {"audit": lambda p: dict(status="PASS"),
+                        "compare": lambda old, new: dict(files={"task-summary.csv": True})}
+
+            with patch.dict(audit.__globals__, ROOT=root, clean_head=lambda: "audit-head"), \
+                    patch("runpy.run_path", side_effect=source), patch("subprocess.run") as launch:
+                audit(matrix, "audit-head")
+                with self.assertRaisesRegex(ValueError, "overwrite"):
+                    audit(matrix, "audit-head")
+                launch.assert_not_called()
+            self.assertTrue(all(p.read_bytes() == content for p, content in raw.items()))
+            summary = json.loads((matrix / "matrix-audit.json").read_text())
+            self.assertEqual((summary["execution_head"], summary["audit_head"], summary["raw_evidence_modified"],
+                              summary["new_simulations_started"]), ("execution-head", "audit-head", False, 0))
+            proof = json.loads((matrix / "old-mode-equivalence.json").read_text())
+            self.assertTrue(all(e["new_execution"] == "execution-head" and
+                                e["historical_execution"] == "historical-head" for e in proof.values()))
+
+
 if __name__ == "__main__":
     unittest.main()

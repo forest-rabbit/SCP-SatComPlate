@@ -77,7 +77,13 @@ def validate(lifecycles, flows, recoveries, events, decisions, frequency, pools)
             require(len(reserved) == 1 and n(reserved[0], "bytes") == n(s, "input_bytes") and
                     n(reserved[0], "time_ns") <= n(s, "registered_ns"), "INPUT missing independent S reservation")
             initialized = [e for e in owned_events[task] if e["event"] == "INIT_COST_COMMITTED"]
-            require(len(initialized) == 1 and n(initialized[0], "time_ns") < n(s, "requested_ns"),
+            requested = [e for e in owned_events[task] if e["event"] == "PREFETCH_INPUT_REQUESTED" and
+                         e["storage_object_id"] == s["input_object_id"]]
+            # The physical-commit callback may request INPUT in the same nanosecond.
+            # Events are exported in append order, so require actual causal order too.
+            require(len(initialized) == len(requested) == 1 and
+                    n(initialized[0], "time_ns") <= n(s, "requested_ns") == n(requested[0], "time_ns") and
+                    owned_events[task].index(initialized[0]) < owned_events[task].index(requested[0]),
                     "JIT before physical state initialization")
         if s["used"] == "1":
             r = recovery.get(task)
