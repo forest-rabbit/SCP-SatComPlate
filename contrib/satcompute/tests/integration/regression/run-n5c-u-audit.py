@@ -17,6 +17,7 @@ require = MATRIX["require"]
 CHECKPOINT = "f5a479ae36c15e356cddd063235b33318856a86e"
 OLD_EXECUTION = "c7f1a91e12f57064646af4f52705724dc27cb990"
 RUNS = (11, 12, 13, 14, 15)
+MAX_JOBS = 8
 GROUPS = {"fa-ffp": ("fa-ffp", "full"), "full": ("n5c", "full"), "noU": ("n5c", "noU")}
 OLD_GROUPS = {"fa-ffp": "R7-fa-ffp", "full": "R7-n5c", "noU": "R7-n5c-noU"}
 
@@ -117,7 +118,7 @@ def prepare(root, reference):
     repeated = fixture_equivalence(root / "equivalence/first", root / "equivalence/second")
     require(MATRIX["identity"]() == head, "source changed during preparation")
     plan = dict(gate="A", commit=head, seed=1, runs=list(RUNS), groups=list(GROUPS),
-        reference_run11=sources, new_executions=12, jobs_limit=4, source_equivalence=runtime,
+        reference_run11=sources, new_executions=12, jobs_limit=MAX_JOBS, source_equivalence=runtime,
         deterministic_equivalence=repeated, automatic_gate_b=False,
         decision_rule="Report paired evidence; no T/5% threshold; joint review before Gate B.")
     (root / "execution-plan.json").write_text(json.dumps(plan, indent=2) + "\n")
@@ -131,7 +132,7 @@ def run_all(root, jobs, resume):
     head = MATRIX["identity"]()
     require(head == plan["commit"] and plan["runs"] == list(RUNS) and
             plan["groups"] == list(GROUPS), "execution plan changed")
-    require(1 <= jobs <= 4, "use at most four independent simulations")
+    require(1 <= jobs <= MAX_JOBS, "use at most eight independent simulations")
     runtime_equivalence(head)
     for group, path in plan["reference_run11"].items():
         verify_execution(Path(path), group, 11, OLD_EXECUTION)
@@ -167,7 +168,7 @@ def main():
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--phase", choices=("prepare", "run"), required=True)
     parser.add_argument("--reference", type=Path, default=ROOT / "output/n5c-v4/formal")
-    parser.add_argument("--jobs", type=int, default=4)
+    parser.add_argument("--jobs", type=int, default=MAX_JOBS)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     if args.phase == "prepare":

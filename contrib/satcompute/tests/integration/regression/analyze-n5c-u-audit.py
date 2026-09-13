@@ -168,7 +168,9 @@ def task_diff(full, nou, run):
     return output
 
 
-def paired_catch(first, second):
+def paired_catch(first, second, labels=("full", "noU")):
+    first_label, second_label = labels
+    require(first_label != second_label, "paired group labels must differ")
     def latency(values):
         # Signed paired differences have no meaningful HHI/concentration shares.
         values = list(values)
@@ -182,12 +184,14 @@ def paired_catch(first, second):
     a, b = index(first), index(second)
     common = a.keys() & b.keys()
     observed = [k for k in common if a[k]["actual_T_catch_ns"] and b[k]["actual_T_catch_ns"]]
-    return dict(common_faults=len(common), full_only_faults=len(a.keys()-b.keys()),
-        noU_only_faults=len(b.keys()-a.keys()), paired_catch_count=len(observed),
-        common_without_two_catches=len(common)-len(observed),
-        full=latency(int(a[k]["actual_T_catch_ns"])/NS for k in observed),
-        noU=latency(int(b[k]["actual_T_catch_ns"])/NS for k in observed),
-        delta_noU_minus_full_seconds=latency((int(b[k]["actual_T_catch_ns"])-int(a[k]["actual_T_catch_ns"]))/NS for k in observed))
+    return dict(common_faults=len(common), paired_catch_count=len(observed),
+        common_without_two_catches=len(common)-len(observed), **{
+        first_label+"_only_faults":len(a.keys()-b.keys()),
+        second_label+"_only_faults":len(b.keys()-a.keys()),
+        first_label:latency(int(a[k]["actual_T_catch_ns"])/NS for k in observed),
+        second_label:latency(int(b[k]["actual_T_catch_ns"])/NS for k in observed),
+        f"delta_{second_label}_minus_{first_label}_seconds":latency(
+            (int(b[k]["actual_T_catch_ns"])-int(a[k]["actual_T_catch_ns"]))/NS for k in observed)})
 
 
 def summary_row(result, run, group, source, selection=None):
@@ -272,6 +276,8 @@ def main():
             generated[group] = json.loads((directory / "fault-trace.json").read_text())
             print("AUDITED", run, group, flush=True)
         pair = paired_catch(rows(directories["full"],"recovery-summary.csv"), rows(directories["noU"],"recovery-summary.csv"))
+        pair["versus_fa_ffp"] = {g:paired_catch(rows(directories["fa-ffp"],"recovery-summary.csv"),
+            rows(directories[g],"recovery-summary.csv"), labels=("fa_ffp",g)) for g in ("full","noU")}
         current_diff = task_diff(selection["full"], selection["noU"], run)
         diffs.extend(current_diff)
         pair.update(selection_matching=dict(Counter(r["match"] for r in current_diff)),
@@ -280,6 +286,10 @@ def main():
         signature = lambda f: sorted((x["node_id"],x["fault_type"],x["start_time_ns"],x["duration_ns"],
             x["f1_occurred"],x["f2_occurred"]) for x in f["faults"] if x["fault_occurred"])
         pair["actual_fault_events_equal"] = {g:signature(generated[g]) == signature(generated["full"]) for g in RUN["GROUPS"]}
+        base_events = set(signature(generated["full"]))
+        pair["actual_fault_event_differences"] = {g:dict(
+            only_in_group=sorted(set(signature(generated[g]))-base_events),
+            only_in_full=sorted(base_events-set(signature(generated[g])))) for g in RUN["GROUPS"]}
         paired[run] = pair
         output = root / f"run-{run}"
         output.mkdir(exist_ok=True)

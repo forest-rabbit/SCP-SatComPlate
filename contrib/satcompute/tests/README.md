@@ -44,7 +44,7 @@ U 专项 Gate A 只增加 seed 1 / run 12–15 的 Deferred FA-FFP/full/noU（�
 
 ```bash
 python contrib/satcompute/tests/integration/regression/run-n5c-u-audit.py --root output/n5c-u-audit --phase prepare
-python contrib/satcompute/tests/integration/regression/run-n5c-u-audit.py --root output/n5c-u-audit --phase run --jobs 4
+python contrib/satcompute/tests/integration/regression/run-n5c-u-audit.py --root output/n5c-u-audit --phase run --jobs 8
 python contrib/satcompute/tests/integration/regression/analyze-n5c-u-audit.py --root output/n5c-u-audit
 ```
 

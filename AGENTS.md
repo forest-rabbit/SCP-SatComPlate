@@ -135,6 +135,12 @@ fault differences; identical fault models/streams need not produce identical
 realized faults under online generate. Await joint evidence review before any
 recent-U implementation. Keep tests in the existing tree and do not add CI.
 
+Gate A is complete: twelve new runs at clean `625fff908104f4ba14443ed47ee856ec49d40adf`,
+three reused runs, all audited. The user increased concurrency from four to eight
+without restarting simulations. Evidence in `docs/n5/reviews/N5C-U-multirun-audit.md`
+shows mixed full/noU outcomes; both complete 3993/4000. Keep V4 FULL and
+NO_MODEL_CHANGE pending joint review; do not repeat the matrix or start Gate B.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.

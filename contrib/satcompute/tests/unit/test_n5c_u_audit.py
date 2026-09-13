@@ -16,6 +16,7 @@ class UAuditTests(unittest.TestCase):
     def test_matrix_and_only_random_run_changes(self):
         self.assertEqual(RUN["RUNS"], (11,12,13,14,15))
         self.assertEqual(list(RUN["GROUPS"]), ["fa-ffp","full","noU"])
+        self.assertEqual(RUN["MAX_JOBS"],8)
         self.assertEqual(len(RUN["RUNS"][1:])*len(RUN["GROUPS"]), 12)
         for group in RUN["GROUPS"]:
             reference = RUN["flags"](RUN["arguments"](Path("unused"), group, 11))
@@ -87,6 +88,18 @@ class UAuditTests(unittest.TestCase):
         self.assertIsNone(AUDIT["snapshot_no_u"]([illegal]))
         self.assertEqual(old["historical_utilization"],"0.6")
 
+    def test_historically_busy_but_recently_idle_fixture(self):
+        history = AUDIT["History"]({1:[(0,30)]},{},{})
+        a,b = history.query(1,100),history.query(2,100)
+        prefix = history.query(1,80)
+        # Offline interval arithmetic only; do not implement a production recent-U score.
+        recent_a = (a["normal_busy_ns"]-prefix["normal_busy_ns"])/20
+        self.assertEqual(a["cumulative_U"],.3)
+        self.assertEqual(b["cumulative_U"],0)
+        self.assertEqual(recent_a,0)
+        self.assertEqual(a["idle_duration_ns"],70)
+        # No assertion that a hypothetical recent-U policy must choose node A.
+
     def test_remaining_time_is_not_deadline_slack(self):
         task=dict(compute_work_units="550722",compute_rate_work_units_per_second="100000",
                   compute_start_time_ns="100",compute_deadline_time_ns="9999999999999")
@@ -105,6 +118,9 @@ class UAuditTests(unittest.TestCase):
         self.assertEqual(result["noU_only_faults"],1)
         self.assertEqual(result["delta_noU_minus_full_seconds"]["mean"],-1)
         self.assertNotIn("hhi",result["delta_noU_minus_full_seconds"])
+        baseline=AUDIT["paired_catch"](a,b,labels=("fa_ffp","full"))
+        self.assertEqual(baseline["delta_full_minus_fa_ffp_seconds"]["mean"],-1)
+        self.assertEqual(baseline["fa_ffp_only_faults"],1)
         self.assertIsNone(AUDIT["paired_catch"]([],[])["full"]["mean"])
         with self.assertRaisesRegex(ValueError,"duplicate recovery"):
             AUDIT["paired_catch"]([a[0],a[0]],b)
