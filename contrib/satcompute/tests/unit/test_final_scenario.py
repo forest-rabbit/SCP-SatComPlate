@@ -192,6 +192,38 @@ class F3SelectionTests(unittest.TestCase):
 
 
 class FinalRunnerTests(unittest.TestCase):
+    def test_jit_groups_keep_the_frozen_scene_and_old_modes(self):
+        output = Path("output/controlled-test")
+        eager = RUN["arguments"](output, protection_mode="compfrr")
+        for benefit in (False, True):
+            jit = RUN["arguments"](output, protection_mode="compfrr", input_staging_policy="jit",
+                                   jit_start_benefit=benefit)
+            self.assertEqual(jit, eager + ["--inputStagingPolicy=jit", f"--jitStartBenefit={int(benefit)}"])
+        for mode in ("off", "fixed", "recompute", "one-plus-one", "checkbullet"):
+            with self.assertRaisesRegex(ValueError, "CompFRR"):
+                RUN["arguments"](output, protection_mode=mode, input_staging_policy="jit")
+        for staging in ("eager", "deferred"):
+            with self.assertRaisesRegex(ValueError, "ablation"):
+                RUN["arguments"](output, protection_mode="compfrr", input_staging_policy=staging, jit_start_benefit=False)
+        matrix = runpy.run_path(str(MODULE / "tests/integration/regression/run-v7-jit-matrix.py"))
+        self.assertEqual(len(matrix["GROUPS"]), 5)
+        for name in matrix["GROUPS"]:
+            command = matrix["command"](output, name)
+            self.assertIn("fa-lrl", command)
+            self.assertNotIn("--validation-trace", command)
+
+    def test_jit_network_partition_keeps_postfault_continuation(self):
+        analysis = runpy.run_path(str(MODULE / "tests/integration/regression/analyze-v7-cbsat-joint.py"))
+        network = dict(by_kind={k: dict(sent_bytes=0) for k in analysis["NORMAL"]+analysis["FAULT"]},
+                       extra_sent_bytes=120)
+        network["by_kind"].update(INIT_STATE=dict(sent_bytes=10), RECOVERY_INPUT=dict(sent_bytes=10),
+                                 PREFETCH_INPUT=dict(sent_bytes=100))
+        lifecycle = dict(prefetch_total_sent_bytes=100, prefetch_before_fault_sent_bytes=35,
+                         prefetch_after_fault_sent_bytes=65)
+        self.assertEqual(analysis["network_partition"](network, lifecycle), (45, 75))
+        with self.assertRaises(ValueError):
+            analysis["network_partition"](network, dict(lifecycle, prefetch_after_fault_sent_bytes=0))
+
     def test_deferred_is_explicit_compfrr_only(self):
         output = Path("output/controlled-test")
         eager = RUN["arguments"](output, protection_mode="compfrr")
