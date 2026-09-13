@@ -115,7 +115,7 @@ def relocation_check(task, protected, recovery, flows):
     r = recovery
     work, remote = number(task, "compute_work_units"), number(r, "remote_work_units")
     size = number(task, "input_bytes")
-    deferred = r.get("input_staging_policy") == "deferred"
+    deferred = r.get("input_staging_policy") in ("deferred", "jit")
     state = (llm_state_bytes(task, protected, remote) if task["task_profile"] == "llm" else
              (0 if deferred else size - size * remote // work) + number(protected, "variable_state_bytes") * remote // work)
     require(number(r, "checkpoint_state_bytes") == number(r, "checkpoint_relocation_bytes") == state,

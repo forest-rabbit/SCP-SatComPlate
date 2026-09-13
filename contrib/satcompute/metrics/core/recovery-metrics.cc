@@ -68,6 +68,9 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
         file << ",planned_input_wait_ns,planned_reserved_idle_eq_wu,w_waste_planned";
     if (Deferred())
         file << ",input_staging_policy,state_ready_time_ns,planned_fault_input_wait_ns";
+    if (m_manager.InputPolicy() == InputStagingPolicy::JIT)
+        file << ",input_state_at_fault,input_object_at_fault,input_transfer_at_fault,input_reused,"
+                "input_state_at_acceptance,reused_input_object_id,reused_input_transfer_id";
     file << '\n';
     file << std::setprecision(17);
     for (const auto& r : Summaries())
@@ -132,7 +135,12 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
                             static_cast<double>(r.plannedInputWaitNs) * r.recoveryRate / 1e9;
         }
         if (Deferred())
-            file << ",deferred," << Time(r.stateReadyNs) << ',' << Time(r.plannedInputWaitNs);
+            file << ',' << (m_manager.InputPolicy() == InputStagingPolicy::JIT ? "jit" : "deferred")
+                 << ',' << Time(r.stateReadyNs) << ',' << Time(r.plannedInputWaitNs);
+        if (m_manager.InputPolicy() == InputStagingPolicy::JIT)
+            file << ',' << InputStageName(s.input.stage) << ',' << s.input.objectId << ',' << s.input.transferId
+                 << ',' << r.inputReused << ',' << r.inputStateAtAcceptance << ',' << r.reusedInputObjectId
+                 << ',' << r.reusedInputTransferId;
         file << '\n';
     }
     std::ofstream events(directory / "recovery-events.csv");

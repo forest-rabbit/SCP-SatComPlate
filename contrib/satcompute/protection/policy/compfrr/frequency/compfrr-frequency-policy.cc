@@ -117,8 +117,15 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
     }
     Validate(in);
     const bool on = in.phase == ProtectionPhase::ON;
-    const bool deferred = in.inputPolicy == InputStagingPolicy::DEFERRED;
-    const double faultInput = deferred && in.replayAvailable ? in.inputBytes / in.inputBandwidth : 0;
+    const bool deferred = StateOnlyInitialization(in.inputPolicy);
+    const bool jit = in.inputPolicy == InputStagingPolicy::JIT;
+    const double fullInput = jit && in.inputTransferSeconds ? *in.inputTransferSeconds
+        : in.replayAvailable ? in.inputBytes / in.inputBandwidth : 0;
+    const double faultInput = jit && on && in.actualInputWaitSeconds
+        ? *in.actualInputWaitSeconds
+        : deferred && in.replayAvailable ? fullInput : 0;
+    if (!std::isfinite(faultInput) || faultInput < 0)
+        throw std::invalid_argument("invalid actual INPUT wait");
     const double cL = in.costs.localNs / 1e9;
     const double cR = in.costs.remoteNs / 1e9;
     const double interval = in.risk.intervalNs / 1e9;
@@ -141,7 +148,19 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
         return out;
     }
     if (!on)
+    {
         StartWindow(in, out);
+        if (jit && in.replayAvailable)
+        {
+            const auto finish = in.risk.epochNs + static_cast<int64_t>(std::ceil(in.remainingSeconds * 1e9L));
+            out.inputPlan = PlanJitInput(in.risk.epochNs, *out.initReadyTimeNs, finish,
+                fullInput, in.risk.futureSteps,
+                in.jitStartBenefit && in.jitPrefetchAdmissible);
+            // Equivalent Delta-J form: omit common deferred INPUT cost from both
+            // sides, then credit only the same fixed plan's risk-weighted saving.
+            if (out.jOff) *out.jOff += out.inputPlan->gainSeconds;
+        }
+    }
     if (in.nodeAvailable && in.pathAvailable && (!deferred || in.replayAvailable) &&
         out.deadlineSlackSeconds >= 0)
     {

@@ -197,6 +197,8 @@ def physical_network(root, tasks):
                ("INPUT", "RESULT", "INIT_BASE", "INIT_STATE", "L1", "REMOTE_BATCH", "RECOVERY_INPUT",
                 "RECOVERY_STATE", "RECOVERY_TAIL", "REPLICA_INPUT", "REPLICA_RESULT")}
     for f in flows.values():
+        if f["kind"] == "PREFETCH_INPUT" and "PREFETCH_INPUT" not in by_kind:
+            by_kind["PREFETCH_INPUT"] = dict(flows=0, declared_bytes=0, sent_bytes=0, received_bytes=0)
         total = by_kind[f["kind"]]
         total["flows"] += 1
         for key in ("declared_bytes", "sent_bytes", "received_bytes"):
@@ -214,7 +216,7 @@ def planned_wait(r):
     key = {"RECOMPUTE": "estimated_recompute_ns", "TAIL": "estimated_tail_ns",
            "MIGRATE_TAIL": "estimated_migrate_tail_ns", "MIGRATE_REDO": "estimated_migrate_redo_ns"}.get(r.get("chosen_path"))
     if r.get("chosen_path") == "REMOTE_REDO" and r.get("recovery_accept_time_ns"):
-        return number(r, "planned_fault_input_wait_ns") if r.get("input_staging_policy") == "deferred" else 0
+        return number(r, "planned_fault_input_wait_ns") if r.get("input_staging_policy") in ("deferred", "jit") else 0
     rate = number(r, "recovery_rate_wu_per_s")
     if key and r.get(key) and rate:
         work = number(r, "planned_catchup_redo_wu")

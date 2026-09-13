@@ -69,7 +69,13 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
            "pair_skip_storage,pair_skip_deadline,pair_hard_rejection_reason,capacity_retry_count,"
            "capacity_retry_success,capacity_wait_start_ns,capacity_wait_end_ns,capacity_wait_duration_ns,"
            "p_fail_after_init_ready,representative_progress_after_ready,init_ready_time_ns,"
-           "j_off_start_window,old_current_progress_loss\n";
+           "j_off_start_window,old_current_progress_loss";
+    const bool jit = m_manager.InputPolicy() == InputStagingPolicy::JIT;
+    if (jit)
+        out << ",input_staging_policy,input_state,input_object_id,input_transfer_id,actual_input_wait_s,"
+               "predicted_prefetch_start_ns,predicted_input_ready_ns,j_input_deferred,j_input_prefetch,"
+               "delta_j_input,jit_start_benefit_enabled";
+    out << '\n';
     auto number = [&](const auto& value) {
         if (value)
             out << *value;
@@ -149,6 +155,17 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
         number(in.phase == ProtectionPhase::OFF ? d.jOff : std::nullopt);
         if (in.phase == ProtectionPhase::OFF && d.legacyCurrentProgressLoss)
             out << *d.legacyCurrentProgressLoss;
+        if (jit)
+        {
+            out << ",jit," << InputStageName(r.inputStage) << ',' << r.inputObjectId << ',' << r.inputTransferId << ',';
+            number(in.actualInputWaitSeconds);
+            number(d.inputPlan ? d.inputPlan->startNs : std::nullopt);
+            number(d.inputPlan ? d.inputPlan->readyTimeNs : std::nullopt);
+            number(d.inputPlan ? std::optional(d.inputPlan->deferredLossSeconds) : std::nullopt);
+            number(d.inputPlan ? std::optional(d.inputPlan->prefetchLossSeconds) : std::nullopt);
+            number(d.inputPlan ? std::optional(d.inputPlan->gainSeconds) : std::nullopt);
+            out << m_jitStartBenefit;
+        }
         out << '\n';
     }
     std::ofstream pauses(directory / "frequency-pause-intervals.csv");
@@ -170,5 +187,6 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
     for (const auto& r : m_faults->GetF3ComputeRiskRecords())
         risks << r.timeNs << ',' << r.nodeId << ',' << r.taskId << ',' << r.pF1 << ',' << r.pF2
               << ',' << r.qCompute << ',' << r.pFinish << ",0,F3\n";
+    if (jit) WriteJitMetrics(directory);
 }
 } // namespace ns3::protection

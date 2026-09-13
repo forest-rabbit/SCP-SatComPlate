@@ -220,8 +220,10 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("placementMode", "ffp/lrl minimal, fa-ffp/fa-lrl feasibility-aware", config.placementMode);
     commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; REMOTE_BUSY only, ignored by off",
                          config.remoteBusyRecoveryPolicy);
-    commandLine.AddValue("inputStagingPolicy", "eager / deferred; deferred requires compfrr",
+    commandLine.AddValue("inputStagingPolicy", "eager / deferred / jit; state-only modes require compfrr",
                          config.inputStagingPolicy);
+    commandLine.AddValue("jitStartBenefit", "Include V7 INPUT gain in START; false for V6 START + JIT ablation only",
+                         config.jitStartBenefit);
     commandLine.AddValue("lrlRecoveryWeight", "Diagnostic active-recovery weight; G3 freezes 1", config.lrlRecoveryWeight);
     commandLine.AddValue("fixedProtectionDelta",
                          "Fixed progress interval (0.05 = 5%), per-mille precision",
@@ -381,9 +383,11 @@ ValidateConfig(const SatComputeConfig& config)
     RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"});
     RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"});
     RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
-    RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred"});
-    if (config.inputStagingPolicy == "deferred" && config.protectionMode != "compfrr")
-        FailConfig("inputStagingPolicy", "deferred requires compfrr protection");
+    RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred", "jit"});
+    if (config.inputStagingPolicy != "eager" && config.protectionMode != "compfrr")
+        FailConfig("inputStagingPolicy", "deferred/jit requires compfrr protection");
+    if (!config.jitStartBenefit && config.inputStagingPolicy != "jit")
+        FailConfig("jitStartBenefit", "false is an explicit JIT-only ablation");
     if (config.placementMode == "n5c")
         FailConfig("placementMode", "NOT_IMPLEMENTED: N5C placement is deferred");
     if ((config.placementMode == "lrl" || config.placementMode == "fa-lrl") && config.protectionMode == "off")
@@ -728,7 +732,9 @@ main(int argc, char* argv[])
                     config.backupStorageBytesPerNode, simulationDurationNs,
                     makePlacement(), busyPolicy,
                     config.inputStagingPolicy == "deferred" ? protection::InputStagingPolicy::DEFERRED
-                                                             : protection::InputStagingPolicy::EAGER);
+                    : config.inputStagingPolicy == "jit" ? protection::InputStagingPolicy::JIT
+                                                         : protection::InputStagingPolicy::EAGER,
+                    config.jitStartBenefit);
             }
             else if (config.protectionMode == "checkbullet")
             {

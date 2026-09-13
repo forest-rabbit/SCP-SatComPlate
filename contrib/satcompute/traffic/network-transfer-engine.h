@@ -75,6 +75,13 @@ class NetworkTransferEngine : public Object
         m_capacityReleaseObserver = std::move(observer);
     }
     uint64_t GetReceivedBytes(uint64_t transferId) const;
+    uint64_t GetSentBytes(uint64_t transferId) const;
+    /** Read-only receiver-remaining estimate on this flow's existing path/rate.
+     * Missing means inactive/invalid path, not permission to reserve a second flow.
+     * Includes packet overhead and path propagation, but cannot predict future queues,
+     * route changes or loss. Real readiness still requires receiver completion.
+     */
+    std::optional<int64_t> EstimateRemainingTransferTimeNs(uint64_t transferId) const;
     void StartTransferNow(uint64_t transferId,
                           Callback<void, uint64_t, int64_t> completionCallback = {});
     bool FinalizeTransferIfActive(uint64_t transferId,

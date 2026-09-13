@@ -18,12 +18,13 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
     int64_t stopNs,
     std::unique_ptr<PlacementPolicy> placement,
     RemoteBusyRecoveryPolicy busyPolicy,
-    InputStagingPolicy inputPolicy)
+    InputStagingPolicy inputPolicy, bool jitStartBenefit)
     : m_tasks(tasks),
       m_topology(topology),
       m_faults(faults),
       m_manager(tasks, topology, capacity, stopNs, inputPolicy),
-      m_placement(placement ? std::move(placement) : std::make_unique<FaFirstFeasiblePlacementPolicy>())
+      m_placement(placement ? std::move(placement) : std::make_unique<FaFirstFeasiblePlacementPolicy>()),
+      m_jitStartBenefit(jitStartBenefit)
 {
     if (!faults)
         throw std::invalid_argument("frequency protection requires online generate epochs");
@@ -99,6 +100,7 @@ void FrequencyProtectionController::OnTask(const TaskEventRecord& event)
         m_manager.OnTaskTerminal(event.taskId);
     if (terminal || recovery || complete)
     {
+        m_jitWaitingCapacity.erase(event.taskId);
         CloseCapacityWait(event.taskId, state, event.simulationTimeNs, "TASK_LEFT_PRIMARY_COMPUTE");
         ClosePause(event.taskId, state, event.simulationTimeNs);
         const auto phase = recovery ? ProtectionPhase::RECOVERING : ProtectionPhase::DONE;
@@ -122,7 +124,8 @@ void FrequencyProtectionController::CloseCapacityWait(uint64_t id, State& state,
 
 void FrequencyProtectionController::CapacityReleased()
 {
-    if (!m_finalized && (!m_waitingCapacity.empty() || !m_pausedCapacity.empty()) &&
+    if (!m_finalized && (!m_waitingCapacity.empty() || !m_pausedCapacity.empty() ||
+                         !m_jitWaitingCapacity.empty()) &&
         !m_capacityDrain.IsPending())
         m_capacityDrain = Simulator::ScheduleNow(&FrequencyProtectionController::DrainCapacityRetries, this);
 }
@@ -159,6 +162,13 @@ void FrequencyProtectionController::DrainCapacityRetries()
         Evaluate({task.definition.computeNodeId, id, q, *prediction}, "CAPACITY_RELEASE");
         AfterEpoch(now, {{task.definition.computeNodeId, id, false, false}});
     }
+    const auto jitWaiting = m_jitWaitingCapacity;
+    for (const auto id : jitWaiting)
+    {
+        if (m_jitCapacityEvaluated.contains(id) && m_jitCapacityEvaluated.at(id) == now) continue;
+        m_jitCapacityEvaluated[id] = now;
+        EvaluateJit(id, "CAPACITY_RELEASE");
+    }
 }
 
 void FrequencyProtectionController::ClosePause(uint64_t task, State& state, int64_t time)
@@ -179,7 +189,10 @@ void FrequencyProtectionController::Initialized(uint64_t id)
 {
     auto& state = m_states.at(id);
     if (state.gate.Phase() == ProtectionPhase::INITIALIZING)
+    {
         state.gate.InitializationCommitted();
+        EvaluateJit(id, "INITIALIZATION_COMMITTED");
+    }
 }
 
 std::vector<BackupCandidate> FrequencyProtectionController::Candidates(uint32_t primary) const
@@ -264,8 +277,18 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
         row.resourceReason = "PLACEMENT_UNAVAILABLE";
     else if (!local->IsIdle()) row.resourceReason = "LOCAL_BUSY";
     else if (!remote->IsIdle()) row.resourceReason = "REMOTE_BUSY";
-    const auto replay =
-        EstimatePath(paths, task.definition.sourceNodeId, pair.remoteNode, &row.replayReason);
+    const bool jit = input.inputPolicy == InputStagingPolicy::JIT;
+    const auto dependency = jit ? m_manager.ResolveInputDependency(row.taskId, pair.remoteNode)
+                                : InputDependency{};
+    row.inputStage = dependency.stage;
+    row.inputObjectId = dependency.objectId; row.inputTransferId = dependency.transferId;
+    // An already owned INPUT never previews a second source flow or double reserves S.
+    const auto replay = jit && dependency.reusable
+        ? dependency.waitNs ? std::optional(Path{std::numeric_limits<double>::max(), 0, true}) : std::nullopt
+        : EstimatePath(paths, task.definition.sourceNodeId, pair.remoteNode, &row.replayReason);
+    if (jit && dependency.reusable) row.replayReason = dependency.waitNs
+        ? dependency.stage == InputStage::READY ? "INPUT_READY_REUSED" : "INPUT_IN_FLIGHT_REUSED"
+        : "INPUT_EXISTING_PATH_UNAVAILABLE";
     std::string baseReason, localReason, tailReason;
     const auto base = EstimatePath(paths, task.definition.computeNodeId, pair.remoteNode, &baseReason);
     const auto l1 = EstimatePath(paths, task.definition.computeNodeId, pair.localNode, &localReason);
@@ -283,13 +306,24 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
     input.backupBandwidth = std::min(l1->bytesPerSecond, tail->bytesPerSecond);
     TaskStateAdapter layout(task.definition);
     const auto initial = layout.Floor(row.progressWork);
-    input.baseTransferSeconds = input.inputPolicy == InputStagingPolicy::DEFERRED
+    input.baseTransferSeconds = StateOnlyInitialization(input.inputPolicy)
         ? 0 : base->Seconds(task.definition.inputBytes);
     input.stateTransferSeconds =
         base->Seconds(initial ? layout.StateBytes(initial) + layout.HeaderBytes() : 0);
     input.storageDemand = MakeFrequencyStorageEstimator(task.definition,
                                                         row.progressWork,
                                                         m_manager.Inventory(row.taskId), input.inputPolicy);
+    if (jit)
+    {
+        input.jitStartBenefit = m_jitStartBenefit;
+        input.inputTransferSeconds = replay->local ? 0 : task.definition.inputBytes / replay->bytesPerSecond;
+        input.actualInputWaitSeconds = dependency.reusable ? *dependency.waitNs / 1e9
+            : replay->Seconds(task.definition.inputBytes);
+        const auto stateBytes = initial ? layout.StateBytes(initial) + layout.HeaderBytes() : 0;
+        input.jitPrefetchAdmissible = dependency.stage == InputStage::ABSENT &&
+            task.definition.inputBytes <= input.remoteFreeBytes &&
+            stateBytes <= input.remoteFreeBytes - task.definition.inputBytes;
+    }
     return true;
 }
 
@@ -303,7 +337,7 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
     row.pairStats = m_placement->BuildPairs(context, [&](auto source, auto destination) {
         return paths.Availability(source, destination);
     });
-    if (!minimal && m_manager.InputPolicy() == InputStagingPolicy::DEFERRED)
+    if (!minimal && StateOnlyInitialization(m_manager.InputPolicy()))
     {
         // INPUT is an operation-specific fourth path, not a new placement ranking.
         // Filter before selecting a pair so a blocked source path can retry on capacity
@@ -414,6 +448,8 @@ FrequencyProtectionController::Evaluate(const FaultEpochInput& epoch, const std:
     row.previous = state.gate.CurrentConfig();
     auto& in = row.input;
     in.phase = phase;
+    // Keep the established canonical endpoint in frequency; post-survival JIT
+    // separately queries its finish-exclusive window, without changing V6 START.
     in.risk = MakeFrequencyRisk(epoch.currentSampleProbability, epoch.prediction);
     in.primaryRate = Service(epoch.nodeId)->GetComputeRateWorkUnitsPerSecond();
     in.work = task.definition.computeWorkUnits;
@@ -558,6 +594,8 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
                 row.pair, {}, admitted ? "ACCEPTED" : "NOT_ADMITTED",
                 row.resourceReason.empty() ? row.reason : row.resourceReason});
         }
+        if (row.trigger == "FAULT_EPOCH" && !outcome.faultHit)
+            EvaluateJit(outcome.taskId, "FAULT_EPOCH_SURVIVED");
     }
 }
 

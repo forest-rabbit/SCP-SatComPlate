@@ -4,19 +4,13 @@
 #include "../../../../fault/model/compute-failure-predictor.h"
 #include "../../../common/protection-types.h"
 #include "../../../common/task-state-adapter.h"
+#include "jit-input-staging-policy.h"
 
 #include <functional>
 #include <string>
 
 namespace ns3::protection
 {
-/** One causal future sampler probability, not a sampled event or new decision variable. */
-struct FrequencyRiskStep
-{
-    int64_t targetTimeNs{}; ///< Absolute canonical fault-check time.
-    double combinedStepFailureProbability{}; ///< Conditional F1/F2 union.
-};
-
 /** Same-epoch causal probabilities. Contains no trace, sample outcome or future fault ID. */
 struct FrequencyRisk
 {
@@ -80,6 +74,10 @@ struct FrequencyInput
     uint64_t localFreeBytes{};               ///< Actual N5A pool free bytes at decision time.
     uint64_t remoteFreeBytes{};              ///< Actual N5A pool free bytes at decision time.
     FrequencyStorageEstimator storageDemand; ///< Required pure causal per-candidate estimator.
+    std::optional<double> actualInputWaitSeconds; ///< JIT ON actual READY/in-flight/full wait.
+    std::optional<double> inputTransferSeconds; ///< JIT serialization S/B; LocalDelivery exactly zero.
+    bool jitStartBenefit{true}; ///< False only for the explicit V6-START + JIT ablation.
+    bool jitPrefetchAdmissible{}; ///< Current independent S storage/path preview, not reservation.
 };
 
 /** One candidate's seconds-equivalent score, never a claim about actual runtime latency. */
@@ -118,6 +116,7 @@ struct FrequencyDecision
     std::optional<double> pFailAfterInitReady; ///< Unconditional first-fault mass after ready.
     std::optional<double> representativeProgressAfterReady; ///< Conditional weighted progress.
     std::optional<double> legacyCurrentProgressLoss; ///< Old OFF score, diagnostic only.
+    std::optional<JitInputPlan> inputPlan; ///< One estimated JIT plan per pair, never per (delta,n).
     std::optional<FrequencyCandidate> selected;
     uint64_t feasibleCount{};
     uint64_t deadlineRejected{};

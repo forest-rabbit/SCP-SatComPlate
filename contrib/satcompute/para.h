@@ -64,7 +64,8 @@ struct SatComputeConfig
     std::string protectionMode; ///< off / recompute / one-plus-one / fixed / compfrr；真实保护与恢复。
     std::string placementMode; ///< ffp/lrl minimal; fa-ffp/fa-lrl feasibility-aware, default fa-ffp.
     std::string remoteBusyRecoveryPolicy; ///< relocate / recompute；只切换 REMOTE_BUSY 分支。
-    std::string inputStagingPolicy; ///< eager / deferred；CompFRR 原始 INPUT 预置或故障后获取。
+    std::string inputStagingPolicy; ///< eager / deferred / jit；后两者仅用于 CompFRR。
+    bool jitStartBenefit; ///< JIT 的 START INPUT 收益；false 仅用于固定 V6 START 的消融实验。
     uint32_t lrlRecoveryWeight; ///< 当前恢复数量的整数权重，正式首轮固定 1，不扫描。
     uint64_t backupStorageBytesPerNode; ///< 每计算星额外备份存储容量，十进制字节。
     double fixedProtectionDelta; ///< 固定 checkpoint 进度间隔，0.05 表示 5%。

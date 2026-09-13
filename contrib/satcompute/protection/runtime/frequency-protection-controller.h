@@ -37,7 +37,20 @@ struct FrequencyDecisionRecord
     bool waitingBefore{}, waitingAfter{};
     uint64_t capacityRetryCount{};
     bool capacityRetrySuccess{};
+    InputStage inputStage{InputStage::ABSENT};
+    uint64_t inputObjectId{}, inputTransferId{};
     int64_t capacityWaitStartNs{-1}, capacityWaitEndNs{-1};
+};
+
+struct JitDecisionRecord
+{
+    uint64_t taskId{}, objectId{}, transferId{};
+    int64_t timeNs{}, nextEvaluationNs{};
+    std::string trigger, admissionReason;
+    InputStage stage{InputStage::ABSENT};
+    JitTimingDecision decision;
+    double inputSeconds{};
+    bool admitted{};
 };
 
 /** Online generate integration. Owns no fault model, RNG, state bytes or second network. */
@@ -52,7 +65,8 @@ class FrequencyProtectionController : public ProtectionPolicy
                                   int64_t stopNs,
                                   std::unique_ptr<PlacementPolicy> placement = nullptr,
                                   RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
-                                  InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER);
+                                  InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER,
+                                  bool jitStartBenefit = true);
     ~FrequencyProtectionController() override;
     /** Finish the same actual ledgers as fixed protection. */
     void Finalize();
@@ -76,6 +90,7 @@ class FrequencyProtectionController : public ProtectionPolicy
     {
         return m_decisions;
     }
+    const std::vector<JitDecisionRecord>& JitDecisions() const { return m_jitDecisions; }
 
     ///< Stable causal decision order.
     ProtectionAction OnTaskComputeStart(const ProtectionContext&) override
@@ -135,6 +150,8 @@ class FrequencyProtectionController : public ProtectionPolicy
     void AfterEpoch(int64_t timeNs, const std::vector<FaultEpochOutcome>& outcomes);
     ///< Sole post-fault decision application boundary.
     void Initialized(uint64_t taskId);                ///< Real physical initialization callback.
+    void EvaluateJit(uint64_t taskId, const std::string& trigger);
+    void WriteJitMetrics(const std::filesystem::path& directory) const;
     void ClosePause(uint64_t taskId, State& state, int64_t timeNs); ///< Close only observed time.
     const TaskRuntime& Task(uint64_t taskId) const;   ///< Stable logical task lookup.
     Ptr<ComputeService> Service(uint32_t node) const; ///< Actual compute profile owner.
@@ -161,9 +178,13 @@ class FrequencyProtectionController : public ProtectionPolicy
     std::vector<PauseInterval> m_pauses;               ///< Actual committed PAUSE intervals.
     std::set<uint64_t> m_waitingCapacity; ///< OFF waiting for first protection admission.
     std::set<uint64_t> m_pausedCapacity; ///< ON paused only for transient path capacity.
+    std::set<uint64_t> m_jitWaitingCapacity; ///< No established flow: legal capacity-release retry only.
+    std::map<uint64_t, int64_t> m_jitCapacityEvaluated;
+    std::vector<JitDecisionRecord> m_jitDecisions;
     std::vector<PauseInterval> m_capacityWaits; ///< Not a compute reservation or actual waste.
     EventId m_capacityDrain;
     bool m_finalized{};
+    bool m_jitStartBenefit;
 };
 } // namespace ns3::protection
 #endif

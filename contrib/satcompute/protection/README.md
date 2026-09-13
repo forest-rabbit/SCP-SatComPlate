@@ -54,7 +54,8 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
 | `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入 |
 | `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr/checkbullet 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
-| `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
+| `inputStagingPolicy` | `eager` | `eager` 保持旧预置；`deferred` 故障后获取；`jit` 按事件预取。后两者仅支持 compfrr 且 state-only 初始化 |
+| `jitStartBenefit` | `true` | 仅 `inputStagingPolicy=jit` 使用；false 是 V6 START + JIT ON 的单独消融，不改变节点/频率优化器 |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
 off 不创建保护池、流或 CSV，不做故障恢复；fixed 对每个首次主计算启动执行一次固定策略，
@@ -161,7 +162,48 @@ Deferred 的故障 INPUT 是 START/OFF 共同成本，已从两个相对评分�
 不是免除真实恢复传输或从 deadline 中删除 INPUT。
 ON 相对评分及 `(delta,n)` 搜索不变，但硬约束改为 `S/B_I+Rbar<=Rmax`，
 初始化估计只含 `cL+Tstate+cR`。原 source→remote INPUT 路径成为硬条件。
-频率解析评分不额外计传播时延；它是保守估计，不强迫实际 INPUT/state 串行执行。
+频率解析评分不额外计传播时延；它是解析近似，不是实际延迟的保证，也不强迫 INPUT/state 串行执行。
+
+### V7 Event-Aware JIT INPUT
+
+显式 `inputStagingPolicy=jit` 只用于 CompFRR，默认 eager 和旧 deferred 不变。
+初始化仍只含状态；INPUT 是额外独立对象，不并入 root/tail，也不提前占用计算服务。
+
+| 组件 | 职责 |
+|---|---|
+| `policy/compfrr/frequency/jit-input-staging-policy.*` | 纯 JIT 时机及同一节点对的 START 预取计划；没有 RNG、timer 或第二优化器 |
+| `runtime/frequency-input-staging.cc` | 实际初始化完成、完整 fault batch 后的存活事件、真实容量释放重试接线 |
+| `mechanism/checkpoint/checkpoint-input-staging.cc` | 独立 S 字节预留、原流/对象身份、跨故障交接、释放 |
+| `runtime/recovery-input-dependency.cc` | READY / IN_FLIGHT / ABSENT 的统一恢复与 F3 依赖判断 |
+| `../traffic/network-transfer-estimate.cc` | 按已存在流的路径、速率、收包量只读估计剩余时间；不重新选路/预留 |
+| `../metrics/core/input-staging-metrics.cc` | INPUT 完整生命周期、JIT 决策与实际字节分账 |
+
+在已经存活至当前检查点的条件下，重新聚合后续首次故障质量得到 `P_ON` 和代表性故障时间。
+只有 `P_ON>0` 且“代表性故障时间 ≤ 下一确定评估事件 + 完整 INPUT 传输时间”才申请预取。
+ON 时当前已结束的 sample、计算完成时刻及之后的 sample 不再计入；F3 不参与预测。
+START 保留原 canonical predictor 的窗口/endpoint 合同，避免改变 V6 对照组。
+不新增周期 timer。实际初始化完成后立即评估；同刻故障批次未完成则留给原 post-batch 入口。
+JIT 避免等待下一次评估造成进一步推迟，**不保证故障前传完**；在途复用也可缩短恢复等待。
+
+START 在预计 state-ready 时刻及后续原有检查点上，用同一规则生成一份固定 INPUT 计划。
+相对原 deferred START，只加入 `Delta J_I = P_ready*T_I - sum(w_k*T_remaining_at_k)` 的收益。
+无可行预取计划时收益为零、退化回 V6。该计划不随 `(delta,n)` 改变，不用于重新排名节点对。
+ON 的频率目标不变；deadline/path/storage 只看当下实际 INPUT，而不是把未来预计 READY 当成事实。
+
+- `ABSENT`：原 INPUT 仍需完整获取；未准入没有流，允许后续合法事件重试。
+- `IN_FLIGHT`：沿用同一 transfer ID、同一 S 对象和已接收字节；恢复等待原 receiver 完成。
+  已建立流若失败，本次生命周期结束，保留实际发送账目，不在每个 epoch 从头重传。
+- `READY`：同 holder 恢复不再依赖原 source 路径；仍要求恢复节点及状态本身有效。
+- 换 recovery node：旧 holder 的 INPUT 不能当成新节点 READY；第一版仍从原 source 获取完整 INPUT。
+- source=holder/recovery 使用既有 LocalDelivery：维护逻辑就绪和对象生命周期，但无 UDP、网络字节为零。
+
+在途时间按 receiver-remaining 字节、已有路径速率、包头及传播估计；未接收的在途数据会再次计序列化，
+在固定无丢包路径下偏保守，但不保证覆盖未来排队、丢包或拓扑变化。真实就绪只由 receiver 回调决定。
+`input-staging-lifecycles.csv` 的 total 包含故障前和故障后继续发送的全部字节；used/unused 使用同一范围，
+used 定义为最终在恢复计算开始时实际消费的这份 INPUT。仅预取成功或仅交接不算 used。
+LocalDelivery 的三者均为零，比例分母为零时留空/null。不得把 whole-lifecycle total 再与 after-fault 相加。
+`v7-jit-audit.json` 是运行时观测；独立核验入口为测试目录的 `audit-jit-input.py`。
+本轮正式执行与旧 CB 结果修订记录见 [联合审计](../../../docs/n5/reviews/Pre-N5C-v7-cbsat-joint-audit.md)。
 
 `MakeFrequencyRisk` 调用现有 `PredictComputeFailureBeforeFinish`，保留它的当前检查点、整数
 horizon 和 endpoint 语义；与故障侧提供的本轮联合 q 逐值核对。不用 next-1s 查询替代当前 q，

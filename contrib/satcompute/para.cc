@@ -126,6 +126,8 @@ GetDefaultSatComputeConfig()
     // --inputStagingPolicy：eager 保持原始 INPUT 常态预置；deferred 仅用于 CompFRR，
     // 常态只传递状态，故障后向实际恢复星获取一次完整 INPUT，不改变 WU、状态量和成本档位。
     config.inputStagingPolicy = "eager";
+    // jit：状态先初始化，完整 INPUT 按现有事件做 JIT 预取；不改变默认 eager。
+    config.jitStartBenefit = true; // false：仅隔离 V6 START + JIT ON 的实验，不是另一优化器。
 
     // --lrlRecoveryWeight：L = active backup assignments + weight * active recoveries。
     // G3 在看到 A/B/C 结果之前预先冻结为 1，不扫描、不按结果调整。
