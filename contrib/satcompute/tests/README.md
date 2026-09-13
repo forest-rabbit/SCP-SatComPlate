@@ -33,6 +33,15 @@ Pre-N5C placement 消融入口为 `integration/regression/run-pre-n5c-placement-
 这 32 组已验收冻结，见[最终报告](../../../docs/n5/reviews/Pre-N5C-placement-baselines-final.md)；
 收尾及日常测试不重复正式矩阵。
 
+V7/CB 联合结果见[联合审计](../../../docs/n5/reviews/Pre-N5C-v7-cbsat-joint-audit.md)。
+`integration/regression/run-v7-jit-matrix.py --output-root 新目录 --jobs 4` 运行两组 JIT 和
+R4/R5/R7 FA-LRL 三个对照；CB 八组仍使用其独立 runner，不接入日常测试或 CI。
+矩阵的 `--audit-only` 只重审完整原始结果，不启动仿真，分别记录执行/审计版本，拒绝覆盖已有审计。
+日常只读复核可用 `audit-jit-input.py --root 单组目录`；
+`analyze-v7-cbsat-joint.py --cb-root CB目录 --jit-root JIT目录 --output 新目录` 生成联合表。
+`integration/smoke/audit-jit-fixtures.py` 检查生命周期及故障同纳秒边界；合法的同纳秒初始化
+按原始事件顺序判定，不要求人为增加一纳秒，不放宽故障前 READY 的严格截止。
+
 N5A-G4 的冻结故障验收仍复用 `integration/regression/run-final-scenario.py`，
 只在明确授权后手动运行；原始 N4 输出不可覆盖。例：
 
