@@ -24,7 +24,7 @@ FrequencyStorageEstimator MakeFrequencyStorageEstimator(
     InputStagingPolicy inputPolicy)
 {
     return [layout = TaskStateAdapter(task),
-            input = inputPolicy == InputStagingPolicy::DEFERRED ? 0 : task.inputBytes,
+            input = StateOnlyInitialization(inputPolicy) ? 0 : task.inputBytes,
             inputPolicy,
             actual,
             inventory = std::move(inventory)](

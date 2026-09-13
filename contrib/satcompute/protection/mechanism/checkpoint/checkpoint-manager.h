@@ -6,12 +6,38 @@
 #include "../../runtime/protection-transfer-key.h"
 #include "../../storage/backup-storage-pool.h"
 #include "checkpoint-progress.h"
+#include "../../../traffic/local-delivery.h"
 #include <functional>
 #include <memory>
 #include <string>
 
 namespace ns3::protection
 {
+enum class InputStage { ABSENT, IN_FLIGHT, READY, RELEASED };
+const char* InputStageName(InputStage stage);
+
+/** One independent full-INPUT lifetime; released records retain actual historical bytes. */
+struct InputStagingSnapshot
+{
+    uint64_t taskId{}, bytes{}, objectId{}, transferId{};
+    uint32_t sourceNode{}, holderNode{};
+    InputStage stage{InputStage::ABSENT};
+    bool local{}, pendingAdmission{}, failed{}, heldForRecovery{}, adopted{}, used{};
+    int64_t requestedNs{-1}, registeredNs{-1}, readyNs{-1}, faultNs{-1}, releasedNs{-1};
+    uint64_t totalSentBytes{}, sentBeforeFaultBytes{};
+    std::string terminalReason;
+};
+
+/** Shared input dependency view for frequency, recovery preview and F3 handling. */
+struct InputDependency
+{
+    InputStage stage{InputStage::ABSENT};
+    uint32_t holderNode{};
+    uint64_t objectId{}, transferId{};
+    bool reusable{}, local{}, requiresSource{true};
+    std::optional<int64_t> waitNs;
+};
+
 /** Immutable fault-time state; identifiers refer to retained physical objects, not predictions. */
 struct RecoverySnapshot
 {
@@ -27,6 +53,7 @@ struct RecoverySnapshot
     std::vector<uint64_t> pendingLocalWorks, inFlightLocalTransfers,
         inFlightRemoteTransfers; ///< Exact pending boundaries and real in-flight identities.
     bool remoteMergePending{};   ///< Received but not fault-usable cR/commit operation.
+    InputStagingSnapshot input; ///< Strict fault-time INPUT evidence, separate from root/tail.
 };
 /** Exact transition evidence, separate from ordinary task/transfer statistics. */
 struct ProtectionEvent
@@ -102,6 +129,17 @@ class CheckpointManager : public ProtectionMechanism
     ~CheckpointManager() override;
     /** Single staging contract shared by storage admission and actual recovery. */
     InputStagingPolicy InputPolicy() const { return m_inputPolicy; }
+    /** JIT requests reserve only S bytes, never a compute slot. */
+    bool TryStartInputPrefetch(uint64_t taskId);
+    InputStagingSnapshot InputStaging(uint64_t taskId) const;
+    std::vector<InputStagingSnapshot> InputStagingHistory() const;
+    InputDependency ResolveInputDependency(uint64_t taskId, uint32_t target) const;
+    /** Retain the same object and flow; ready/failed callback belongs to this owner. */
+    bool AdoptInput(uint64_t taskId, uint32_t target, std::function<void(bool)> terminal);
+    void MarkInputUsed(uint64_t taskId);
+    void ReleaseInput(uint64_t taskId, const std::string& reason);
+    void InputSatelliteFault(uint64_t taskId, uint32_t node);
+    void HoldInputForRecovery(uint64_t taskId, int64_t at);
     /** True simultaneous used+reserved maximum, never the sum of per-node maxima. */
     uint64_t GlobalStoragePeakBytes() const { return m_globalStoragePeakBytes; }
     bool Supports(ActionKind kind) const override;
@@ -138,7 +176,7 @@ class CheckpointManager : public ProtectionMechanism
     /** Quiesce generation/flows while retaining only snapshot backing objects. */
     void QuiesceForRecovery(const RecoverySnapshot& snapshot);
     /** Explicit recovery ownership handoff/terminal cleanup; never evicts other tasks. */
-    void ReleaseRecoveryState(uint64_t taskId);
+    void ReleaseRecoveryState(uint64_t taskId, bool retainInput = false);
     /** Append a G3 event with its frozen progress and current pool accounting. */
     void RecordRecoveryEvent(const RecoverySnapshot& snapshot,
                              const std::string& event,
@@ -185,6 +223,18 @@ class CheckpointManager : public ProtectionMechanism
     }
 
   private:
+    struct InputState
+    {
+        InputStagingSnapshot snapshot;
+        EventId localEvent;
+        std::function<void(bool)> terminal;
+    };
+    bool InputLive(uint64_t taskId) const;
+    void InputTerminal(uint64_t transferId, int64_t at);
+    void InputReceived(uint64_t taskId, int64_t at);
+    void QueueOwnedTransfer(ProtectionTransferKey key, uint32_t source, uint32_t destination,
+                             uint64_t bytes, uint64_t work, uint64_t object,
+                             std::function<bool()> live, std::function<void(uint64_t)> registered);
     /** One immutable captured increment, including an explicit missing-receipt gap. */
     struct Record
     {
@@ -275,6 +325,7 @@ class CheckpointManager : public ProtectionMechanism
     uint64_t m_globalStoragePeakBytes{};  ///< Observed after every potentially increasing mutation.
     ProtectionTransferIds m_ids;          ///< Disjoint non-recycled flow ID allocator.
     std::map<uint64_t, std::unique_ptr<State>> m_states;            ///< Stable task ownership.
+    std::map<uint64_t, InputState> m_inputs; ///< Separate INPUT lifecycle; checkpoint Stop is not its owner after handoff.
     std::map<uint32_t, std::unique_ptr<BackupStoragePool>> m_pools; ///< Shared per-node capacity.
     std::map<int64_t, std::map<ProtectionTransferKey, Request>>
         m_requests;                           ///< Canonical request buckets.

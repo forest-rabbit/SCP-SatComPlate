@@ -117,6 +117,11 @@ RecoveryController::Later(State& state, int64_t delay, std::function<void()> cal
 bool
 RecoveryController::Fault(const TaskRuntime& task, const TaskFaultNodeChange& change)
 {
+    if (!task.attemptGeneration && task.state == TASK_RUNNING &&
+        task.definition.computeNodeId == change.nodeId)
+        m_manager.HoldInputForRecovery(task.definition.taskId, Now());
+    if (change.kind == TaskFaultKind::SATELLITE)
+        m_manager.InputSatelliteFault(task.definition.taskId, change.nodeId);
     if (task.attemptGeneration)
     {
         auto found = m_states.find(task.definition.taskId);
@@ -133,8 +138,7 @@ RecoveryController::Fault(const TaskRuntime& task, const TaskFaultNodeChange& ch
             m_manager.Pool(change.nodeId).ReleaseTask(task.definition.taskId);
         // F3 always affects the current recovery node and RESULT endpoint. Input/tail
         // sources remain dependencies only until their respective receiver completed.
-        const bool inputLost = (Deferred() || state.summary.path == "RECOMPUTE") &&
-                               state.summary.inputReceivedNs < 0 &&
+        const bool inputLost = InputRequiresSource(state) &&
                                task.definition.sourceNodeId == change.nodeId;
         const bool tailLost =
             (state.summary.path == "TAIL" || state.summary.path == "MIGRATE_TAIL") &&
@@ -291,9 +295,7 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
         r.checkpointFallbackReason = "OTHER";
     if (f.phase == "ON" && base && !base->reserved && Eligible(f.remoteNode, state))
     {
-        const auto input = Deferred() ? Estimate(state.task.definition.sourceNodeId, f.remoteNode,
-                                                 state.task.definition.inputBytes)
-                                      : std::optional<int64_t>{0};
+        const auto input = ResolveInput(state, f.remoteNode).waitNs;
         if (!input)
         {
             r.checkpointFallbackReason = "INPUT_PATH_UNAVAILABLE";
@@ -354,9 +356,7 @@ RecoveryController::TryRelocate(State& state)
     {
         if (candidate == f.remoteNode || !Eligible(candidate, state))
             continue;
-        const auto input = Deferred() ? Estimate(state.task.definition.sourceNodeId, candidate,
-                                                 state.task.definition.inputBytes)
-                                      : std::optional<int64_t>{0};
+        const auto input = ResolveInput(state, candidate).waitNs;
         if (!input)
         {
             r.relocationFailureReason = "INPUT_PATH_UNAVAILABLE";
@@ -456,7 +456,9 @@ RecoveryController::Execute(const ProtectionContext& context, const ProtectionAc
     for (const auto candidate : Candidates(state))
     {
         if (Eligible(candidate, state) &&
-            Reachable(state.task.definition.sourceNodeId, candidate) &&
+            (m_manager.InputPolicy() == InputStagingPolicy::JIT
+                 ? ResolveInput(state, candidate, true).waitNs.has_value()
+                 : Reachable(state.task.definition.sourceNodeId, candidate)) &&
             AcceptAndExecute(state, candidate))
             return;
     }
@@ -469,7 +471,8 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
 {
     auto& r = state.summary;
     const auto& f = r.snapshot;
-    if (Deferred() && !Estimate(state.task.definition.sourceNodeId, node, state.task.definition.inputBytes))
+    const auto input = ResolveInput(state, node, r.path == "RECOMPUTE");
+    if (Deferred() && !input.waitNs)
         return false;
     state.service = Service(node);
     if (!state.service->ReserveRecovery(state.task.definition.taskId, 1))
@@ -480,9 +483,7 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     r.acceptedNs = Now();
     if (m_loadObserver) m_loadObserver(state.task.definition.taskId, node, true);
     if (Deferred() || r.path == "RECOMPUTE")
-        if (const auto estimate = Estimate(state.task.definition.sourceNodeId,
-                                           node,
-                                           state.task.definition.inputBytes))
+        if (const auto estimate = input.waitNs)
         {
             r.plannedInputWaitNs = *estimate;
             r.estimatedRecomputeNs =
@@ -502,8 +503,7 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
             r.stateReadyNs = Now();
         // Independent flows are all requested now. Canonical registration and the
         // shared network decide actual admission/contention; no artificial serialization.
-        Deliver(state, ProtectionTransferKind::RECOVERY_INPUT,
-                state.task.definition.sourceNodeId, node, state.task.definition.inputBytes);
+        StartInput(state, input);
         if (!state.live)
             return true;
     }
@@ -563,12 +563,14 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     }
     else if (r.path == "RECOMPUTE")
     {
-        m_manager.ReleaseRecoveryState(state.task.definition.taskId);
+        m_manager.ReleaseRecoveryState(state.task.definition.taskId,
+                                        m_manager.InputPolicy() == InputStagingPolicy::JIT && r.inputReused);
         if (!Deferred()) Deliver(state,
                 ProtectionTransferKind::RECOVERY_INPUT,
                 state.task.definition.sourceNodeId,
                 node,
                 state.task.definition.inputBytes);
+        else if (r.inputReceivedNs >= 0) StartCompute(state);
     }
     else
         StartCompute(state);
@@ -787,7 +789,8 @@ RecoveryController::StartCompute(State& state)
     // Adopt valid state into active compute memory; it is no longer extra backup storage.
     if (state.summary.path.starts_with("MIGRATE_"))
         Log(state, "CHECKPOINT_RELOCATION_OWNERSHIP_SECURED", state.summary.relocationBytes);
-    m_manager.ReleaseRecoveryState(state.task.definition.taskId);
+    const bool jit = m_manager.InputPolicy() == InputStagingPolicy::JIT;
+    if (!jit) m_manager.ReleaseRecoveryState(state.task.definition.taskId);
     const auto work = state.layout.Work() - state.startWork;
     if (!work || !state.service->StartRecovery(state.task.definition.taskId,
                                                1,
@@ -797,6 +800,13 @@ RecoveryController::StartCompute(State& state)
                                                MakeCallback(&RecoveryController::Catchup, this),
                                                MakeCallback(&RecoveryController::Computed, this)))
         Fail(state, "RECOVERY_COMPUTE_SERVICE_REJECTED");
+    else if (jit)
+    {
+        // StartRecovery emits the real Started callback synchronously. Failed
+        // service admission must not classify an unconsumed INPUT as used.
+        m_manager.MarkInputUsed(state.task.definition.taskId);
+        m_manager.ReleaseRecoveryState(state.task.definition.taskId);
+    }
 }
 
 void

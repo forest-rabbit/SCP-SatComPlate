@@ -63,6 +63,8 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 | `n5b-policy-test.cc` | FFP 原规则穷举对照、LRL 合成诊断、频率纯求解与 shadow 锚点、当前概率/同轮提交/前向配置合同；不接入真实频率运行时 |
 | `protection-path-test.cc` | N5A-G2 真实 UDP 动态注册/乱序接收、ID、存储不足、非零初始化、取消与同纳秒计算结束 |
 | `frequency-runtime-test.cc` | N5B 实际故障 epoch、提案/提交、四类状态、动态频率、PAUSE/恢复、LRL 实时负载与重复运行一致性 |
+| `jit-input-staging-test.cc` | V7 纯时机、START 固定计划、零收益退化、采样窗口和无 RNG 副作用 |
+| `jit-runtime-test.cc` | 独立 INPUT、原流跨故障、READY 源失效、换目标、同星交付及两个小规模在线 epoch 接线 |
 | `recovery-runtime-test.cc` | G3 受控 FaultController→备份/网络/计算/任务闭环，LocalDelivery、服务锁、F1/F2 免疫、F3、deadline、同纳秒实体快照和旧回调 |
 | `recompute-baseline-test.cc` | 无常态保护、FFP 全量重传、从零执行、planned/actual 与 deadline/F3 截断 |
 | `one-plus-one-baseline-test.cc` | 一次性副本准入、真实并行、正常故障暴露、完整 batch 后接管、首个 RESULT 与 loser 账本 |

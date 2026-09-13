@@ -37,6 +37,12 @@ class CapacityReservationState
   public:
     uint64_t GetResidualRateBps(const CapacityAwarePathHop& hop) const;
     bool HasActivePath(uint64_t transferId) const;
+    /** Borrow the already reserved path without previewing or reserving a new flow. */
+    const CapacityAwarePath* FindActivePath(uint64_t transferId) const
+    {
+        const auto found = m_activePaths.find(transferId);
+        return found == m_activePaths.end() ? nullptr : &found->second;
+    }
     bool IsActivePathValid(uint64_t transferId,
                            uint32_t destinationSatelliteId,
                            const CapacityAwarePathView& pathView) const;

@@ -116,7 +116,7 @@ TaskStateAdapter::CommittedStateBytes(uint64_t work) const
 uint64_t
 TaskStateAdapter::CommittedStateBytes(uint64_t work, InputStagingPolicy policy) const
 {
-    return policy == InputStagingPolicy::DEFERRED ? StateBytes(work) : CommittedStateBytes(work);
+    return StateOnlyInitialization(policy) ? StateBytes(work) : CommittedStateBytes(work);
 }
 
 uint64_t

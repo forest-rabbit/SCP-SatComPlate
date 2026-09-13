@@ -16,7 +16,8 @@ enum class StorageKind
     LOCAL_RECORD,
     REMOTE_STATE,
     REMOTE_BATCH,
-    INIT_TEMP
+    INIT_TEMP,
+    INPUT_STAGING ///< Independent complete original INPUT, never checkpoint root/tail.
 };
 
 /** A pool-scoped, non-recycled object identity and its accounting state. */

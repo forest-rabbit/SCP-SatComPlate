@@ -74,7 +74,7 @@ CheckpointManager::CheckpointManager(Ptr<TaskCoordinator> tasks,
         m_pools.emplace(service->GetNodeId(), std::make_unique<BackupStoragePool>(capacity));
     }
     // Reject legacy/untyped or incompatible task budgets before the simulation starts.
-    if (m_inputPolicy == InputStagingPolicy::DEFERRED)
+    if (StateOnlyInitialization(m_inputPolicy))
         for (const auto& [node, pool] : m_pools)
             pool->SetPeakObserver([this] {
                 unsigned __int128 total = 0;
@@ -89,6 +89,7 @@ CheckpointManager::CheckpointManager(Ptr<TaskCoordinator> tasks,
 
 CheckpointManager::~CheckpointManager()
 {
+    for (auto& [id, input] : m_inputs) Simulator::Cancel(input.localEvent);
     for (auto& [id, state] : m_states)
         for (auto event : state->timers)
             Simulator::Cancel(event);
@@ -244,7 +245,7 @@ CheckpointManager::Execute(const ProtectionContext& context, const ProtectionAct
     const auto base = Reserve(state,
                               config.remoteNode,
                               StorageKind::REMOTE_STATE,
-                              m_inputPolicy == InputStagingPolicy::DEFERRED ? 0 : task->definition.inputBytes,
+                              StateOnlyInitialization(m_inputPolicy) ? 0 : task->definition.inputBytes,
                               state.initial);
     if (!base)
     {
@@ -254,7 +255,7 @@ CheckpointManager::Execute(const ProtectionContext& context, const ProtectionAct
     state.baseObject = *base;
     if (m_assignmentObserver)
         m_assignmentObserver(state.summary.taskId, config.remoteNode, true);
-    if (m_inputPolicy == InputStagingPolicy::DEFERRED)
+    if (StateOnlyInitialization(m_inputPolicy))
     {
         Require(m_pools.at(config.remoteNode)->CommitReservation(*base),
                 "logical state identity reservation missing");
@@ -748,6 +749,7 @@ CheckpointManager::Stop(State& state, const std::string& reason)
     state.active = false;
     state.summary.stopNs = Now();
     state.summary.stopReason = reason;
+    ReleaseInput(state.summary.taskId, reason);
     for (auto timer : state.timers)
         Simulator::Cancel(timer);
     state.progress.Stop();
@@ -827,6 +829,10 @@ CheckpointManager::Summaries() const
 bool
 CheckpointManager::IsQuiescent() const
 {
+    for (const auto& [id, input] : m_inputs)
+        if (input.localEvent.IsPending() || input.snapshot.pendingAdmission ||
+            input.snapshot.stage == InputStage::IN_FLIGHT || input.snapshot.stage == InputStage::READY)
+            return false;
     for (auto service : m_tasks->GetComputeServices())
         if (service->HasRecoveryReservation())
             return false;
@@ -857,6 +863,9 @@ CheckpointManager::FreezeRecoverySnapshot(uint64_t id, int64_t at)
     RecoverySnapshot result;
     result.taskId = id;
     result.faultNs = at;
+    result.input = InputStaging(id);
+    if (result.input.stage == InputStage::READY && result.input.readyNs >= at)
+        result.input.stage = InputStage::IN_FLIGHT;
     const auto task = std::find_if(m_tasks->GetTaskRuntimes().begin(),
                                    m_tasks->GetTaskRuntimes().end(),
                                    [id](const auto& t) { return t.definition.taskId == id; });
@@ -916,7 +925,8 @@ CheckpointManager::FreezeRecoverySnapshot(uint64_t id, int64_t at)
             result.pendingLocalWorks.push_back(work);
         }
     for (const auto& flow : m_flows)
-        if (flow.key.taskId == id && !m_network->IsTerminal(flow.transferId))
+        if (flow.key.taskId == id && flow.key.kind != ProtectionTransferKind::PREFETCH_INPUT &&
+            !m_network->IsTerminal(flow.transferId))
         {
             ++result.inFlightFlows;
             if (flow.key.kind == ProtectionTransferKind::L1)
@@ -937,6 +947,10 @@ CheckpointManager::QuiesceForRecovery(const RecoverySnapshot& snapshot)
     if (found == m_states.end())
         return;
     auto& state = *found->second;
+    const auto input = InputStaging(snapshot.taskId);
+    const bool keepInput = input.heldForRecovery &&
+        (input.stage == InputStage::IN_FLIGHT || input.stage == InputStage::READY);
+    if (!keepInput) ReleaseInput(snapshot.taskId, "QUIESCE_WITHOUT_INPUT_HANDOFF");
     state.active = false;
     state.summary.stopNs = Now();
     state.summary.stopReason = "QUIESCE_FOR_RECOVERY";
@@ -950,7 +964,8 @@ CheckpointManager::QuiesceForRecovery(const RecoverySnapshot& snapshot)
         });
     std::vector<uint64_t> transfers;
     for (const auto& flow : m_flows)
-        if (flow.key.taskId == snapshot.taskId && flow.key.attemptGeneration == 0)
+        if (flow.key.taskId == snapshot.taskId && flow.key.attemptGeneration == 0 &&
+            !(keepInput && flow.key.kind == ProtectionTransferKind::PREFETCH_INPUT))
             transfers.push_back(flow.transferId);
     m_network->FinalizeTransfersIfActive(transfers,
                                          TransferTerminalState::CANCELLED,
@@ -958,6 +973,7 @@ CheckpointManager::QuiesceForRecovery(const RecoverySnapshot& snapshot)
     for (auto& [node, pool] : m_pools)
     {
         std::set<uint64_t> keep;
+        if (keepInput && node == input.holderNode && input.objectId) keep.insert(input.objectId);
         if (node == snapshot.remoteNode && snapshot.remoteObject)
             keep.insert(snapshot.remoteObject);
         if (node == snapshot.localNode)
@@ -971,10 +987,14 @@ CheckpointManager::QuiesceForRecovery(const RecoverySnapshot& snapshot)
 }
 
 void
-CheckpointManager::ReleaseRecoveryState(uint64_t id)
+CheckpointManager::ReleaseRecoveryState(uint64_t id, bool retainInput)
 {
+    if (!retainInput) ReleaseInput(id, "RECOVERY_OWNERSHIP_RELEASED");
+    const auto input = InputStaging(id);
     for (auto& [node, pool] : m_pools)
-        pool->ReleaseTask(id);
+        if (retainInput && input.holderNode == node && input.objectId)
+            pool->ReleaseTaskExcept(id, {input.objectId});
+        else pool->ReleaseTask(id);
     const auto found = m_states.find(id);
     if (found != m_states.end() && m_assignmentObserver)
         m_assignmentObserver(id, found->second->config.remoteNode, false);
@@ -1020,6 +1040,17 @@ CheckpointManager::QueueRecovery(ProtectionTransferKey key,
 {
     Require(key.attemptGeneration == 1 && source != destination && bytes && live && registered,
             "recovery network request requires real cross-node bytes and attempt guards");
+    QueueOwnedTransfer(key, source, destination, bytes, work, object, std::move(live), std::move(registered));
+}
+
+void CheckpointManager::QueueOwnedTransfer(ProtectionTransferKey key,
+    uint32_t source, uint32_t destination, uint64_t bytes, uint64_t work, uint64_t object,
+    std::function<bool()> live, std::function<void(uint64_t)> registered)
+{
+    Require((key.attemptGeneration == 1 || (key.attemptGeneration == 0 &&
+             key.kind == ProtectionTransferKind::PREFETCH_INPUT)) &&
+             source != destination && bytes && live && registered,
+             "owned transfer requires a valid identity, cross-node payload and guard");
     const auto time = Now();
     Require(m_requests[time]
                 .emplace(key,

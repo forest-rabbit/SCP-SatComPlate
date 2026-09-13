@@ -37,6 +37,9 @@ struct RecoverySummary
         stateStartedNs{-1}, stateReceivedNs{-1};
     int64_t plannedInputWaitNs{-1}; ///< Decision-time INPUT estimate, never actual reservation wait.
     int64_t stateReadyNs{-1}; ///< Actual state/tail/merge dependency join, independent of INPUT.
+    bool inputReused{};
+    uint64_t reusedInputTransferId{}, reusedInputObjectId{};
+    std::string inputStateAtAcceptance;
 };
 
 /** One recovery event, including local logical deliveries which have no transfer ID. */
@@ -117,6 +120,9 @@ class RecoveryController : public ProtectionMechanism
     std::vector<uint32_t> Candidates(const State& state) const;
     bool Reachable(uint32_t source, uint32_t destination) const;
     std::optional<int64_t> Estimate(uint32_t source, uint32_t destination, uint64_t bytes) const;
+    InputDependency ResolveInput(const State& state, uint32_t target, bool fromZero = false) const;
+    bool InputRequiresSource(const State& state) const;
+    void StartInput(State& state, const InputDependency& input);
     void Deliver(State& state,
                  ProtectionTransferKind kind,
                  uint32_t source,
@@ -127,7 +133,7 @@ class RecoveryController : public ProtectionMechanism
     void Received(State& state, ProtectionTransferKind kind, uint64_t bytes, uint64_t transferId);
     void StartCompute(State& state);
     /** Immutable input contract from the checkpoint owner, not a second configuration. */
-    bool Deferred() const { return m_manager.InputPolicy() == InputStagingPolicy::DEFERRED; }
+    bool Deferred() const { return StateOnlyInitialization(m_manager.InputPolicy()); }
     void Started(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
     void Catchup(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
     void Computed(uint64_t id, uint64_t generation, uint32_t node, int64_t at);

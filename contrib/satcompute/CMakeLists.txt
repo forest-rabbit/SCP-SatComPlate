@@ -17,24 +17,29 @@ build_lib(
     protection/runtime/protection-runtime.cc
     protection/policy/fixed/fixed-protection-policy.cc
     protection/policy/compfrr/frequency/compfrr-frequency-policy.cc
+    protection/policy/compfrr/frequency/jit-input-staging-policy.cc
     protection/policy/compfrr/frequency/frequency-decision-gate.cc
     protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.cc
     protection/policy/feasible-placement-pairs.cc
     protection/policy/baseline/least-recovery-load/least-recovery-load-placement-policy.cc
     protection/mechanism/checkpoint/checkpoint-progress.cc
     protection/mechanism/checkpoint/checkpoint-manager.cc
+    protection/mechanism/checkpoint/checkpoint-input-staging.cc
     protection/runtime/fixed-protection-controller.cc
     protection/runtime/frequency-protection-controller.cc
+    protection/runtime/frequency-input-staging.cc
     protection/runtime/frequency-storage-estimator.cc
     protection/runtime/placement-load-ledger.cc
     metrics/core/placement-load-metrics.cc
     protection/runtime/recovery-controller.cc
+    protection/runtime/recovery-input-dependency.cc
     protection/runtime/recompute-controller.cc
     protection/runtime/one-plus-one-controller.cc
     protection/mechanism/replication/replica-manager.cc
     metrics/core/replica-metrics.cc
     metrics/core/recovery-metrics.cc
     metrics/core/frequency-metrics.cc
+    metrics/core/input-staging-metrics.cc
     metrics/core/protection-metrics.cc
     tools/validation/compfrr-shadow/compfrr-shadow-model.cc
     tools/validation/compfrr-shadow/compfrr-shadow-evaluator.cc
@@ -96,6 +101,7 @@ build_lib(
     traffic/network-transfer-application.cc
     traffic/network-transfer-config.cc
     traffic/network-transfer-engine.cc
+    traffic/network-transfer-estimate.cc
     traffic/network-transfer-receiver.cc
     traffic/network-transfer-records.cc
   HEADER_FILES
@@ -114,6 +120,7 @@ build_lib(
     protection/runtime/protection-runtime.h
     protection/policy/fixed/fixed-protection-policy.h
     protection/policy/compfrr/frequency/compfrr-frequency-policy.h
+    protection/policy/compfrr/frequency/jit-input-staging-policy.h
     protection/policy/compfrr/frequency/frequency-decision-gate.h
     protection/policy/placement-policy.h
     protection/policy/recovery-policy.h
@@ -285,6 +292,22 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-jit-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/jit-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-jit-input-staging-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/jit-input-staging-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-cb-sat-config-test
   EXECNAME_PREFIX satcompute_test_

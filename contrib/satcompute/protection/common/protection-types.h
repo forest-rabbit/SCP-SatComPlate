@@ -13,8 +13,15 @@ namespace ns3::protection
 enum class InputStagingPolicy
 {
     EAGER,    ///< Preserve normal-period full INPUT staging and legacy committed state.
-    DEFERRED  ///< Protect variable state only; fetch full INPUT after a fault.
+    DEFERRED, ///< Protect variable state only; fetch full INPUT after a fault.
+    JIT       ///< State-only initialization and independent event-aware INPUT prefetch.
 };
+
+/** Shared layout choice, not a replacement for the three staging lifecycles. */
+constexpr bool StateOnlyInitialization(InputStagingPolicy policy)
+{
+    return policy == InputStagingPolicy::DEFERRED || policy == InputStagingPolicy::JIT;
+}
 
 /** Mechanism-independent checkpoint, recovery or replica policy action. */
 enum class ActionKind
@@ -53,7 +60,8 @@ enum class ProtectionTransferKind
     RECOVERY_RESULT, ///< Business output; shares canonical IDs, never protection byte totals.
     RECOVERY_STATE,  ///< Complete committed checkpoint relocated to a new recovery node.
     REPLICA_INPUT,
-    REPLICA_RESULT
+    REPLICA_RESULT,
+    PREFETCH_INPUT ///< Independent full INPUT, retained across a fault when reusable.
 };
 
 /** Logical-task attempt role; replicas do not reuse primary identity. */

@@ -42,6 +42,8 @@ Kind(protection::ProtectionTransferKind kind)
         return "REPLICA_INPUT";
     case K::REPLICA_RESULT:
         return "REPLICA_RESULT";
+    case K::PREFETCH_INPUT:
+        return "PREFETCH_INPUT";
     case K::RECOVERY_RESULT:
         throw std::logic_error("business RESULT must not enter protection metrics");
     }
@@ -122,14 +124,17 @@ WriteProtectionMetrics(const protection::CheckpointManager& manager,
     for (const auto& [node, pool] : manager.Pools())
         failedTasks.insert(pool->FailedTasks().begin(), pool->FailedTasks().end());
     auto final = Open(directory, "protection-finalization.json");
-    if (manager.InputPolicy() == protection::InputStagingPolicy::DEFERRED)
+    if (protection::StateOnlyInitialization(manager.InputPolicy()))
     {
         auto staging = Open(directory, "input-staging-summary.json");
-        staging << nlohmann::json({{"input_staging_policy", "deferred"},
+        staging << nlohmann::json({{"input_staging_policy", manager.InputPolicy() == protection::InputStagingPolicy::JIT ? "jit" : "deferred"},
             {"global_simultaneous_backup_peak_bytes", manager.GlobalStoragePeakBytes()}}).dump(2) << '\n';
     }
     else
         std::filesystem::remove(directory / "input-staging-summary.json");
+    if (manager.InputPolicy() != protection::InputStagingPolicy::JIT)
+        for (const auto name : {"input-staging-lifecycles.csv", "jit-input-decisions.csv", "v7-jit-audit.json"})
+            std::filesystem::remove(directory / name);
     final << nlohmann::json({{"quiescent", manager.IsQuiescent()},
                              {"tasks_with_storage_failure", failedTasks}})
                  .dump(2)
@@ -141,6 +146,7 @@ RemoveProtectionMetrics(const std::filesystem::path& directory)
 {
     for (const auto name : {"protection-finalization.json",
                             "input-staging-summary.json",
+                            "input-staging-lifecycles.csv", "jit-input-decisions.csv", "v7-jit-audit.json",
                             "placement-node-summary.csv", "placement-selections.csv",
                             "placement-load-events.csv",
                             "frequency-pause-intervals.csv",
