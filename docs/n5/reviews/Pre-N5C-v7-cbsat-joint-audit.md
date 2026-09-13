@@ -4,6 +4,14 @@
 及已确认的 V7 Event-Aware JIT 模型实施。两条工作流分提交、测试和执行证据。
 本报告同时作为本轮进度记录，不另建中间合同。
 
+CB 分支交付更新：完整 INPUT 修正后的八组正式重跑已完成，目录
+`output/cb-sat-v2/20260913T070155626344Z-formal`，统一干净执行版本 `367f23f39`。
+八组均为 1300 s、退出码 0、独立审计通过；不完整 INPUT 的非法 q 恢复为 0。
+FFP/LRL/FA-FFP/FA-LRL 的 recompute 完成数为 795/797/795/798，relocate 均为 800。
+两条 X=0 仍是首次分配的 `NO_REMAINING_LOGS`，不是已有日志紧急压缩。
+以下保留本 CB 分支最初的 G0–G3 记录；V7 代码、G4–G15 及完整联合结果在
+stacked PR #99 的 `feature/pre-n5c-compfrr-v7-jit` 分支，不与 PR #98 混成一个代码变更。
+
 ## 身份与边界
 
 - 起点：`n5@2ccfa392e`；CB-Sat 分支及 PR #98 head 为 `5387bb4b9`，工作树干净。

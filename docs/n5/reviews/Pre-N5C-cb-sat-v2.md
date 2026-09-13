@@ -1,7 +1,12 @@
-# Pre-N5C：CB-Sat v2 工程验收
+# Pre-N5C：CB-Sat v2 初版工程验收（历史记录）
+
+2026-09-13 修订说明：下列数值保留修订前的真实运行身份，不作为完整 INPUT 修正后的结果。
+后续审计发现 FFP/FA-FFP 两种 busy 下各有一条 task325 恢复记录在 INPUT 未完整就绪时利用了 q，
+因此按合同修复并重跑全部八组。PR #98 已发布；修订说明、最新执行身份与比较集中见
+[联合审计](Pre-N5C-v7-cbsat-joint-audit.md)，不覆盖本页历史原表。
 
 2026-09-13，分支 `feature/pre-n5c-cb-sat`，从 `n5@2ccfa392e` 开始。
-G0–G7 本地实施与验收连续完成；尚未发布 PR、合并、打 tag 或运行 GitHub CI。
+以下为初版 G0–G7 本地实施与验收记录，当时尚未发布 PR、合并、打 tag 或运行 GitHub CI。
 这是完整 INPUT、单备份节点、逐份保存日志、无 tail 的卫星适配，不是原 CheckBullet
 训练系统的逐项复现，也不是 N5C 节点选择算法。
 
