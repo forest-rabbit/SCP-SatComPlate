@@ -4,6 +4,7 @@
 #include "../policy/compfrr/placement/n5c-placement-policy.h"
 #include "../mechanism/checkpoint/checkpoint-manager.h"
 #include "../../fault/runtime/fault-model-engine.h"
+#include "compute-usage-history.h"
 #include <filesystem>
 
 namespace ns3::protection
@@ -39,7 +40,7 @@ class N5cPlacementTracker
                         CheckpointManager& manager, int64_t stopNs, N5cVariant variant,
                         bool spatialDiagnostics = true);
     ~N5cPlacementTracker();
-    void FillResources(N5cCandidate& candidate) const;
+    void FillResources(N5cCandidate& candidate, int64_t remainingTimeNs) const;
     uint64_t FreeFor(uint32_t node, uint64_t replacingTask) const;
     uint64_t PeakFor(uint32_t node, uint64_t task, uint64_t additional) const;
     bool CanCommit(uint64_t task, uint32_t node, uint64_t peak) const;
@@ -58,6 +59,10 @@ class N5cPlacementTracker
     void Write(const std::filesystem::path& directory) const;
   private:
     void ObserveStorage(uint32_t node);
+    /** Passive service notification; never schedules or reserves compute. */
+    void ObserveCompute(uint32_t node, bool busy);
+    /** Check the event ledger against the preexisting cumulative service counters. */
+    void VerifyHistory(uint32_t node) const;
     Ptr<ComputeService> Service(uint32_t node) const;
     Ptr<TaskCoordinator> m_tasks;
     Ptr<FaultModelEngine> m_faults;
@@ -66,6 +71,8 @@ class N5cPlacementTracker
     N5cVariant m_variant;
     bool m_spatialDiagnostics; ///< False collects resource observations only, never spatial proposals.
     N5cQuotaLedger m_quotas;
+    ComputeUsageHistory m_computeHistory; ///< Actual normal/recovery service intervals only.
+    std::map<uint32_t, Ptr<ComputeService>> m_services; ///< Observer lifetime owners.
     std::map<uint32_t, N5cNodeObservation> m_nodes;
     std::map<uint64_t, uint32_t> m_assignments; ///< Match idempotent shared-runtime release callbacks.
     std::map<uint64_t, int64_t> m_ready;

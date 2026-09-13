@@ -3,6 +3,7 @@
 #include "ns3/backup-storage-pool.h"
 #include "ns3/frequency-decision-gate.h"
 #include "ns3/compute-service.h"
+#include "ns3/compute-usage-history.h"
 #include "ns3/node.h"
 #include "ns3/simulator.h"
 #include <cmath>
@@ -154,7 +155,7 @@ void Quotas()
     Check(ledger.Empty() && ledger.Accounted(10, actual) == 150, "release preserves recovery objects");
     ledger.Replace(1, 10, std::numeric_limits<uint64_t>::max());
     Reject([&] { ledger.Accounted(10, actual); });
-    for (const auto name : {"full", "noR", "noU", "noM"})
+    for (const auto name : {"full", "noR", "noU", "noM", "recent-U"})
         Check(std::string(N5cVariantName(ParseN5cVariant(name))) == name, "variant roundtrip");
     Reject([] { ParseN5cVariant("weighted"); });
 }
@@ -207,9 +208,20 @@ void RecoveryObservation()
     {
         void Task(uint64_t, uint32_t, int64_t) {}
         void Recovery(uint64_t, uint64_t, uint32_t, int64_t) {}
+        Ptr<ComputeService> service;
+        ComputeUsageHistory history;
+        void State(uint32_t node, bool busy)
+        {
+            using A = ComputeUsageHistory::Activity;
+            history.Observe(node, Simulator::Now().GetNanoSeconds(),
+                !busy ? A::IDLE : (service->HasRecoveryReservation() ? A::RECOVERY : A::NORMAL));
+        }
     } callbacks;
     auto node = CreateObject<Node>();
     auto service = CreateObject<ComputeService>();
+    callbacks.service = service;
+    callbacks.history.Observe(1, 0, ComputeUsageHistory::Activity::IDLE);
+    service->ConnectStateObserver(MakeCallback(&Callbacks::State, &callbacks));
     service->Configure(1, 1000000000, MakeCallback(&Callbacks::Task, &callbacks),
                        MakeCallback(&Callbacks::Task, &callbacks));
     node->AddApplication(service);
@@ -217,6 +229,8 @@ void RecoveryObservation()
     Simulator::Schedule(NanoSeconds(10), [&] { Check(service->ReserveRecovery(1,1), "reserve recovery"); });
     Simulator::Schedule(NanoSeconds(20), [&] {
         Check(service->GetRecoveryBusyTimeNs() == 0, "reserved idle is not actual CPU use");
+        Check(callbacks.history.Query(1, 10, 20, 20, 20).recoveryNs == 0,
+              "recent history counted a reservation as execution");
         const auto cb = MakeCallback(&Callbacks::Recovery, &callbacks);
         Check(service->StartRecovery(1,1,50,10,cb,cb,cb), "start recovery");
     });
@@ -224,19 +238,82 @@ void RecoveryObservation()
     Simulator::Schedule(NanoSeconds(50), [&] {
         Check(service->GetRecoveryBusyTimeNs() == 30 && service->GetBusyTimeNs() == 30,
               "live immune execution omitted or counted outside total busy prefix");
+        Check(callbacks.history.Query(1, 25, 50, 50, 50).recoveryNs == 25,
+              "recent window lost live immune recovery after temporary compute failure");
         Check(service->CancelRecovery(1,1), "cancel recovery");
     });
     Simulator::Stop(NanoSeconds(60)); Simulator::Run();
     Check(service->GetRecoveryBusyTimeNs() == 30 && service->GetBusyTimeNs() == 30,
           "interrupted recovery used planned rather than actual CPU duration");
+    const auto recent = callbacks.history.Query(1, 40, 60, 60, 60);
+    Check(recent.recoveryNs == 10 && recent.normalNs == 0 && recent.exposureNs == 20,
+          "cancelled recovery did not close recent actual-service interval");
+    service->DisconnectStateObserver(MakeCallback(&Callbacks::State, &callbacks));
     Simulator::Destroy();
+}
+void RecentHistory()
+{
+    using A = ComputeUsageHistory::Activity;
+    ComputeUsageHistory history;
+    history.Observe(10, 0, A::IDLE);
+    history.Observe(10, 10, A::NORMAL);
+    history.Observe(10, 30, A::IDLE);
+    history.Observe(10, 50, A::RECOVERY);
+    history.Observe(10, 70, A::IDLE);
+    history.Observe(10, 70, A::NORMAL);
+    history.Observe(10, 80, A::IDLE);
+    // Exhaustively compare prefix queries with an independent per-ns ground truth.
+    for (int64_t end = 0; end <= 100; ++end)
+        for (int64_t begin = 0; begin <= end; ++begin)
+        {
+            uint64_t normal = 0, recovery = 0;
+            for (auto t = begin; t < end; ++t)
+            {
+                normal += (t >= 10 && t < 30) || (t >= 70 && t < 80);
+                recovery += t >= 50 && t < 70;
+            }
+            const auto w = history.Query(10, begin, end, end, end);
+            Check(w.normalNs == normal && w.recoveryNs == recovery &&
+                  w.exposureNs == static_cast<uint64_t>(end - begin),
+                  "past-only prefix/window or same-ns boundary mismatch");
+        }
+    const auto dead = history.Query(10, 60, 100, 100, 80);
+    Check(dead.normalNs == 10 && dead.recoveryNs == 10 && dead.exposureNs == 20,
+          "F3 survival endpoint not clipped consistently");
+    Check(history.Query(10, 90, 100, 100, 80).exposureNs == 0, "post-F3 has no exposure");
+    Reject([&] { history.Query(10, 0, 101, 100, 100); });
+    Reject([&] { history.Query(10, -1, 10, 10, 10); });
+    Reject([&] { history.Query(11, 0, 10, 10, 10); });
+    Reject([&] { history.Query(10, 0, 80, 80, 20); });
+    history.Observe(10, 100, A::IDLE);
+    Reject([&] { history.Observe(10, 99, A::IDLE); });
+    auto oldBusy = Candidate(10), recentBusy = Candidate(11);
+    oldBusy.normalBusyNs = 8 * S;
+    oldBusy.recentExposureNs = recentBusy.recentExposureNs = S;
+    recentBusy.recentNormalBusyNs = S / 2;
+    Check(N5cPlacementPolicy().SelectRemote({oldBusy, recentBusy}).remoteNode == 11,
+          "FULL cumulative ranking changed");
+    Check(N5cPlacementPolicy(N5cVariant::RECENT_U).SelectRemote({oldBusy, recentBusy}).remoteNode == 10,
+          "recent-U did not distinguish old load from recent load");
+    auto score = ScoreN5cCandidate(oldBusy, N5cVariant::RECENT_U);
+    Near(score.historicalUtilization, .8, "recent-U overwrote cumulative diagnostic");
+    Near(score.recentUtilization, 0, "recent idle candidate has nonzero recent U");
+    oldBusy.peers = {Forecast(2, 2)};
+    Near(ScoreN5cCandidate(oldBusy, N5cVariant::RECENT_U).bottleneck, .5,
+         "recent-U removed the R dimension");
+    oldBusy.additionalQuotaBytes = 1001;
+    Check(!ScoreN5cCandidate(oldBusy, N5cVariant::RECENT_U).feasible,
+          "recent-U bypassed hard storage feasibility");
+    oldBusy = Candidate(10);
+    Check(ScoreN5cCandidate(oldBusy, N5cVariant::RECENT_U).historyUnavailable,
+          "zero-length window needs explicit unavailable diagnostic");
 }
 } // namespace
 int main()
 {
     try
     {
-        Formula(); Conflict(); Ranking(); Quotas(); ObservationAndGate(); RecoveryObservation();
+        Formula(); Conflict(); Ranking(); Quotas(); ObservationAndGate(); RecoveryObservation(); RecentHistory();
         std::cout << "N5C V4: " << checks << " invariant checks passed\n";
     }
     catch (const std::exception& e)

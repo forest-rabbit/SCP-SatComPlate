@@ -22,6 +22,15 @@ N5cPlacementTracker::N5cPlacementTracker(Ptr<TaskCoordinator> tasks, Ptr<FaultMo
     : m_tasks(tasks), m_faults(faults), m_manager(manager), m_stopNs(stop), m_variant(variant),
       m_spatialDiagnostics(spatialDiagnostics)
 {
+    if (Now() != 0) throw std::logic_error("N5C history must observe from simulation start");
+    for (auto service : m_tasks->GetComputeServices())
+    {
+        const auto node = service->GetNodeId();
+        if (!m_services.emplace(node, service).second || service->GetBusyTimeNs())
+            throw std::logic_error("N5C history requires unique unstarted services");
+        m_computeHistory.Observe(node, 0, ComputeUsageHistory::Activity::IDLE);
+        service->ConnectStateObserver(MakeCallback(&N5cPlacementTracker::ObserveCompute, this));
+    }
     for (const auto& [node, pool] : manager.Pools())
     {
         m_nodes.emplace(node, N5cNodeObservation{});
@@ -31,6 +40,8 @@ N5cPlacementTracker::N5cPlacementTracker(Ptr<TaskCoordinator> tasks, Ptr<FaultMo
 }
 N5cPlacementTracker::~N5cPlacementTracker()
 {
+    for (const auto& [node, service] : m_services)
+        service->DisconnectStateObserver(MakeCallback(&N5cPlacementTracker::ObserveCompute, this));
     for (const auto& [node, pool] : m_manager.Pools()) pool->SetChangeObserver({});
 }
 Ptr<ComputeService> N5cPlacementTracker::Service(uint32_t node) const
@@ -39,14 +50,39 @@ Ptr<ComputeService> N5cPlacementTracker::Service(uint32_t node) const
         if (service->GetNodeId() == node) return service;
     throw std::logic_error("N5C missing compute service");
 }
-void N5cPlacementTracker::FillResources(N5cCandidate& c) const
+void N5cPlacementTracker::ObserveCompute(uint32_t node, bool busy)
 {
+    using Activity = ComputeUsageHistory::Activity;
+    m_computeHistory.Observe(node, Now(), !busy ? Activity::IDLE :
+        (m_services.at(node)->HasRecoveryReservation() ? Activity::RECOVERY : Activity::NORMAL));
+}
+void N5cPlacementTracker::VerifyHistory(uint32_t node) const
+{
+    const auto service = Service(node);
+    const auto usage = m_computeHistory.Query(node, 0, Now(), Now(),
+                                             m_faults->ObservedSurvivalExposureNs(node));
+    if (usage.recoveryNs != service->GetRecoveryBusyTimeNs() ||
+        usage.normalNs + usage.recoveryNs != service->GetBusyTimeNs())
+        throw std::logic_error("N5C event history disagrees with actual service counters");
+}
+void N5cPlacementTracker::FillResources(N5cCandidate& c, int64_t remainingTimeNs) const
+{
+    if (remainingTimeNs < 0) throw std::logic_error("N5C negative remaining compute time");
     const auto service = Service(c.remoteNode);
     const auto busy = service->GetBusyTimeNs();
     c.recoveryBusyNs = service->GetRecoveryBusyTimeNs();
     if (c.recoveryBusyNs > busy) throw std::logic_error("N5C recovery exceeds total actual service");
     c.normalBusyNs = busy - c.recoveryBusyNs;
     c.exposureNs = m_faults->ObservedSurvivalExposureNs(c.remoteNode);
+    VerifyHistory(c.remoteNode);
+    c.historyHorizonNs = remainingTimeNs;
+    c.historyWindowEndNs = Now();
+    c.historyWindowBeginNs = std::max<int64_t>(0, Now() - remainingTimeNs);
+    const auto recent = m_computeHistory.Query(c.remoteNode, c.historyWindowBeginNs,
+                                               Now(), Now(), c.exposureNs);
+    c.recentNormalBusyNs = recent.normalNs;
+    c.recentRecoveryBusyNs = recent.recoveryNs;
+    c.recentExposureNs = recent.exposureNs;
     const auto& pool = *m_manager.Pools().at(c.remoteNode);
     c.capacityBytes = pool.Capacity();
     c.accountedBytes = m_quotas.Accounted(c.remoteNode, pool.OccupancyByTask());
@@ -145,6 +181,7 @@ void N5cPlacementTracker::Finalize()
     if (m_finalized) return;
     for (auto& [node, s] : m_nodes)
     {
+        VerifyHistory(node);
         ObserveStorage(node);
         s.assignmentNs += static_cast<unsigned __int128>(Now() - s.assignmentAtNs) * s.active;
         s.assignmentAtNs = Now();

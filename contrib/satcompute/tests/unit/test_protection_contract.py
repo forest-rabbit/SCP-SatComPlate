@@ -51,7 +51,7 @@ class ProtectionConfigTests(unittest.TestCase):
                 result = self.run_cli(options)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("n5c requires compfrr", result.stdout)
-        for variant in ("full", "noR", "noU", "noM"):
+        for variant in ("full", "noR", "noU", "noM", "recent-U"):
             result = self.run_cli(f"--protectionMode=compfrr --placementMode=n5c --n5cVariant={variant} --fixedProtectionDelta=0")
             self.assertIn("fixedProtectionDelta", result.stdout)
         result = self.run_cli("--placementMode=fa-ffp --n5cVariant=noM")

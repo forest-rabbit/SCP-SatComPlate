@@ -218,7 +218,7 @@ AddCommandLineOptions(CommandLine& commandLine,
                          "Backup-only storage capacity in decimal bytes",
                          config.backupStorageBytesPerNode);
     commandLine.AddValue("placementMode", "ffp/lrl minimal, fa-ffp/fa-lrl feasibility-aware, n5c CompFRR V4", config.placementMode);
-    commandLine.AddValue("n5cVariant", "N5C V4 scoring: full/noR/noU/noM; hard constraints unchanged", config.n5cVariant);
+    commandLine.AddValue("n5cVariant", "N5C scoring: full/noR/noU/noM/recent-U; hard constraints unchanged", config.n5cVariant);
     commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; REMOTE_BUSY only, ignored by off",
                          config.remoteBusyRecoveryPolicy);
     commandLine.AddValue("inputStagingPolicy", "eager / deferred; deferred requires compfrr",
@@ -385,7 +385,7 @@ ValidateConfig(const SatComputeConfig& config)
     RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred"});
     if (config.inputStagingPolicy == "deferred" && config.protectionMode != "compfrr")
         FailConfig("inputStagingPolicy", "deferred requires compfrr protection");
-    RequireChoice(config.n5cVariant, "n5cVariant", {"full", "noR", "noU", "noM"});
+    RequireChoice(config.n5cVariant, "n5cVariant", {"full", "noR", "noU", "noM", "recent-U"});
     if (config.placementMode == "n5c" && config.protectionMode != "compfrr")
         FailConfig("placementMode", "n5c requires compfrr protection");
     if (config.placementMode != "n5c" && config.n5cVariant != "full")

@@ -28,6 +28,7 @@ build_lib(
     protection/runtime/frequency-protection-controller.cc
     protection/runtime/frequency-n5c-adapter.cc
     protection/runtime/n5c-placement-tracker.cc
+    protection/runtime/compute-usage-history.cc
     metrics/core/n5c-placement-metrics.cc
     protection/runtime/frequency-storage-estimator.cc
     protection/runtime/placement-load-ledger.cc
@@ -132,6 +133,7 @@ build_lib(
     protection/runtime/fixed-protection-controller.h
     protection/runtime/frequency-protection-controller.h
     protection/runtime/n5c-placement-tracker.h
+    protection/runtime/compute-usage-history.h
     protection/runtime/frequency-storage-estimator.h
     protection/runtime/placement-load-ledger.h
     protection/runtime/recovery-controller.h

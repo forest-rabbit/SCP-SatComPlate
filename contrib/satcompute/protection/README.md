@@ -53,7 +53,7 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；N5C V4 在�
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
 | `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入；`n5c` 仅用于 CompFRR |
-| `n5cVariant` | `full` | `full/noR/noU/noM`；仅移除评分维度，不移除硬约束，消融要求 placement=n5c |
+| `n5cVariant` | `full` | `full/noR/noU/noM/recent-U`；只改变评分，不改变硬约束，要求 placement=n5c |
 | `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr/checkbullet 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
 | `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
@@ -488,12 +488,14 @@ G3 将 RemoteCommit 的物理融合/旧记录清理延后 1 ns，名义有效时
 
 启用 `--protectionMode=compfrr --placementMode=n5c`，支持 Eager/Deferred，默认参数不替换 FA-FFP。
 `--n5cVariant=full/noR/noU/noM` 仅控制评分维度；消融仍记录三项原值，保留全部硬约束。
+另有实验选项 `recent-U`，只把评分使用的 U 改为近期窗口，默认仍为 `full`。
 
 | 文件 | 职责 |
 |---|---|
 | `policy/compfrr/placement/n5c-placement-policy.h/.cc` | V4 恢复冲突、历史利用率、存储压力、确定性 min-max 排名和远端 peak quota 账本 |
 | `runtime/frequency-n5c-adapter.cc` | 当前状态/原生预测器到候选的只读适配，不重新求解 Frequency |
 | `runtime/n5c-placement-tracker.h/.cc` | quota 替换/释放、实际 READY、assignment 时间积分和真实 storage byte-time 观察 |
+| `runtime/compute-usage-history.h/.cc` | 通过原有计算状态通知记录实际普通/恢复服务区间；只读前缀查询，不改变调度 |
 | `../metrics/core/n5c-placement-metrics.cc` | 候选决策与节点资源诊断，绝不代替真实网络/计算账本 |
 
 START 先用 FA-FFP 公共节点/路径筛选后的首个 reference pair 求解一次启动及 `(δ,n)`；
@@ -517,6 +519,15 @@ quota 按节点逐任务累加 `max(实际 used+reserved, 当前远端 peak quot
 ON 更新替换自身旧 quota，不重复计占用，任务离开主计算后释放未来承诺，实际对象仍由原生命周期释放。
 历史利用率的分母从仿真起点到当前观测时刻，整星故障后截止于实际 F3；F1/F2 不扣除恢复免疫执行时间。
 无 exposure 或无预测需求分别记录 `history_unavailable` / `no_predicted_demand`，不靠截断掩盖错误。
+
+`recent-U` 的窗口是 `[max(0,t-H),t)`，H 为当前主任务精确剩余纯计算时间（整数 ns），
+不是 deadline 余量，所有 remote 使用同一个 H。分子是窗口内实际普通和恢复忙时，
+分母是同一窗口内存活观测时间；不计 reserved-idle，不扣除 F1/F2 暂时不可用时间，实际 F3 后截止。
+没有新增窗口参数、权重或未来任务预测。窗口为零时 U 暂记 0，并明确标记 history unavailable。
+原 `historical_utilization` 和节点全程统计仍表示累计 U；独立的
+`n5c-recent-u-history.csv` 记录每个候选的 H、起止、分子、分母和 `recent_utilization`。
+只有 `recent-U` 输出此表；旧变体的原 CSV 合同不变。近期 U 大量为零、与 noU 排名退化一致的
+可能性属于实验需要报告的结果，不预设近期方案一定更好。
 
 `n5c-placement-decisions.csv` 只记录 START 后的空间提案，区分 reference/实际资源、候选及最终准入。
 原 `frequency-decisions.csv` 的 OFF 标量和评分仍属于 reference，local/remote 列为实际提案；ON 均为实际 pair。

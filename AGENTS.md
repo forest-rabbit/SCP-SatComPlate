@@ -141,6 +141,16 @@ without restarting simulations. Evidence in `docs/n5/reviews/N5C-U-multirun-audi
 shows mixed full/noU outcomes; both complete 3993/4000. Keep V4 FULL and
 NO_MODEL_CHANGE pending joint review; do not repeat the matrix or start Gate B.
 
+The user's subsequent review explicitly authorizes a controlled recent-U experiment
+on this same child branch, superseding the Gate A stop, not its mixed findings.
+Add RECENT_U without redefining FULL/NO_U. Use a past-only window equal to the
+current primary's exact remaining pure compute time, no tunable window/weights.
+Use read-only event history; preserve scheduling, R/M, hard feasibility, Frequency,
+Recovery, RNG, routing, workload and defaults. Verify small tests and old-variant
+equivalence before five Deferred recent-U runs (seed 1, runs 11-15), reusing verified
+cumulative/noU evidence. Keep #100/#101 open, no CI/merge/tag/default promotion or
+new scenario freeze. Record results and limitations; do not tune after outcomes.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.

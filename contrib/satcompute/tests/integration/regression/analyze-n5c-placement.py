@@ -82,6 +82,11 @@ def resources(root):
 
 def spatial(root):
     decisions = rows(root, "n5c-placement-decisions.csv", True)
+    recent_rows = rows(root, "n5c-recent-u-history.csv", True)
+    recent = {(r["decision_id"], r["candidate_node"]):r for r in recent_rows}
+    require(len(recent) == len(recent_rows), "duplicate recent-U history key")
+    expected = {(r["decision_id"], r["candidate_node"]) for r in decisions if r["variant"] == "recent-U"}
+    require(set(recent) == expected, "missing or unexpected recent-U companion rows")
     groups = defaultdict(list)
     for r in decisions:
         groups[r["decision_id"]].append(r)
@@ -105,6 +110,15 @@ def spatial(root):
             exposure = int(r["exposure_ns"])
             require(0 <= busy <= exposure, "candidate exposure mismatch")
             near(U,busy/exposure if exposure else 0,"candidate history")
+            if r["variant"] == "recent-U":
+                window = recent[(r["decision_id"], r["candidate_node"])]
+                recent_busy = int(window["normal_busy_ns"]) + int(window["recovery_busy_ns"])
+                recent_exposure = int(window["exposure_ns"])
+                require(0 <= recent_busy <= recent_exposure, "recent history exposure mismatch")
+                U = float(window["recent_utilization"])
+                near(U, recent_busy/recent_exposure if recent_exposure else 0, "recent candidate history")
+                require(r["history_unavailable"] == window["history_unavailable"] == str(int(not recent_exposure)),
+                        "recent unavailable diagnostic mismatch")
             near(M,(int(r["actual_plus_quota_bytes"])+int(r["additional_quota_bytes"]))/int(r["capacity_bytes"]),"candidate storage")
             demand, numerator = float(r["first_failure_demand_probability"]), float(r["weighted_conflict"])
             require(0 <= numerator <= demand <= 1, "unconditional first-failure mass invalid")
@@ -205,7 +219,7 @@ def main():
     choice.add_argument("--fixtures",type=Path,help="Only audit maintained small runtime fixtures")
     args = parser.parse_args()
     if args.fixtures:
-        groups = ["online-n5c","online-n5c-deferred"] + [f"n5c-boundary-{mode}-{case}"
+        groups = ["online-n5c","online-n5c-deferred","online-n5c-recent-U"] + [f"n5c-boundary-{mode}-{case}"
                   for mode in ("eager","deferred") for case in ("normal","hit","race")]
         results = {name:spatial(args.fixtures/name) for name in groups}
         require(all(r["proposals"] > 0 for r in results.values()),"vacuous spatial fixture")

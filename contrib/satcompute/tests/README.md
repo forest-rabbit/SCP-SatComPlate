@@ -56,6 +56,20 @@ prepare 还重复执行既有 frequency runtime fixture，核验输出确定性�
 同快照反事实与完整 full/noU 轨迹差异分列；真实生成故障不强制相等。
 完成后只进入[共同审阅](../../../docs/n5/reviews/N5C-U-multirun-audit.md)，不自动实现 recent-U。
 
+共同审阅后已批准独立 recent-U 对照：先验证旧 FULL/noU 的两组完整运行等价，再增加
+seed 1 / run 11–15 的五组 Deferred recent-U，复用 Gate A 的十组 full/noU。最多八路并行，
+不覆盖历史、不改默认参数、不自动进入 CI/合并。H 为主任务剩余纯计算时间，无调参入口。
+
+```bash
+python contrib/satcompute/tests/integration/regression/run-n5c-recent-u.py --phase all --jobs 8
+python contrib/satcompute/tests/integration/regression/analyze-n5c-recent-u.py
+```
+
+正式运行要求同一干净 HEAD；`--resume` 只复用完整、同代码的组，不重启半成品。
+输出在 `output/n5c-recent-u/`；离线重建每个候选的实际服务窗口，核对精确 H，统计零 U 与
+同快照 noU 一致率，并分别报告完整轨迹的变化、共同故障的配对恢复时间及未追平样本。
+见 [recent-U 评估](../../../docs/n5/reviews/N5C-recent-U-evaluation.md)。
+
 Pre-N5C placement 消融入口为 `integration/regression/run-pre-n5c-placement-matrix.py`：
 `--stage gates` 先运行 R5/R7-FA-FFP 并与最新 capacity-resume 原始文件比较；
 `--stage remaining --jobs 8` 再运行其余 30 组，合计 32 组，每组 800 任务/1300 s，需显式授权。

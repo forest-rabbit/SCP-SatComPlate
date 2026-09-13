@@ -88,6 +88,9 @@ void FrequencyProtectionController::SelectN5cRemote(
     trace.reference = *row.pair;
     trace.referenceInput = row.input;
     trace.config = row.proposal.selected->config;
+    const auto primary = Service(task.definition.computeNodeId)->GetRunningTaskSnapshot();
+    if (!primary || primary->taskId != row.taskId || primary->remainingTimeNs < 0)
+        throw std::logic_error("N5C missing current primary remaining compute time");
     for (const auto& pair : pairs)
     {
         if (pair.localNode != trace.reference.localNode) continue;
@@ -96,7 +99,7 @@ void FrequencyProtectionController::SelectN5cRemote(
         actual.resourceReason.clear();
         N5cCandidate candidate;
         candidate.remoteNode = pair.remoteNode;
-        m_n5c->FillResources(candidate);
+        m_n5c->FillResources(candidate, primary->remainingTimeNs);
         if (!BuildResources(actual, task, state, paths))
             candidate.rejection = actual.resourceReason;
         else if (!actual.input.nodeAvailable)

@@ -10,6 +10,8 @@ from unittest.mock import patch
 HERE = Path(__file__).resolve().parents[1] / "integration/regression"
 RUN = runpy.run_path(str(HERE / "run-n5c-u-audit.py"))
 AUDIT = runpy.run_path(str(HERE / "analyze-n5c-u-audit.py"))
+RECENT = runpy.run_path(str(HERE / "run-n5c-recent-u.py"))
+WINDOW = runpy.run_path(str(HERE / "analyze-n5c-recent-u.py"))["window"]
 
 
 class UAuditTests(unittest.TestCase):
@@ -155,6 +157,44 @@ class UAuditTests(unittest.TestCase):
         with patch.dict(RUN["runtime_equivalence"].__globals__,git=lambda *a:"contrib/satcompute/para.cc"):
             with self.assertRaisesRegex(ValueError,"production"):
                 RUN["runtime_equivalence"]("candidate")
+
+    def test_recent_trial_changes_only_u_and_keeps_five_predefined_runs(self):
+        for run in RECENT["RUNS"]:
+            original = RUN["flags"](RUN["arguments"](Path("unused"), "full", run))
+            recent = RUN["flags"](RECENT["arguments"](Path("unused"), "recent-U", run))
+            self.assertEqual(recent.pop("n5cVariant"), "recent-U")
+            original.pop("n5cVariant")
+            self.assertEqual(original, recent)
+        with self.assertRaises(ValueError):
+            RECENT["arguments"](Path("unused"), "recent-U", 16)
+
+    def test_recent_window_exact_clipping_actual_recovery_and_f3(self):
+        history = AUDIT["History"]({1:[(10,30),(70,80)]}, {1:[(50,70)]}, {1:80})
+        recent = WINDOW(history, 1, 100, 40)
+        self.assertEqual((recent["normal_busy_ns"], recent["recovery_busy_ns"], recent["exposure_ns"]), (10,10,20))
+        self.assertEqual(recent["recent_utilization"], 1)
+        self.assertEqual(WINDOW(history, 1, 25, 100)["normal_busy_ns"], 15)
+        self.assertEqual(WINDOW(history, 1, 100, 10)["exposure_ns"], 0)
+        self.assertEqual(WINDOW(history, 1, 100, 0)["history_unavailable"], 1)
+        self.assertEqual(WINDOW(history, 2, 100, 10)["recent_utilization"], 0)
+        self.assertEqual(WINDOW(history, 2, 100, 10)["history_unavailable"], 0)
+        with self.assertRaises(ValueError):
+            WINDOW(history, 1, 100, -1)
+
+    def test_recent_equivalence_rejects_legacy_changes_and_unexpected_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a,b=Path(tmp)/"a",Path(tmp)/"b"
+            a.mkdir(); b.mkdir()
+            for root in (a,b):
+                (root/"values.csv").write_text("count\n1\n")
+            self.assertEqual(RECENT["equivalent"](a,b)["status"], "PASS")
+            (b/"new.csv").write_text("count\n1\n")
+            with self.assertRaisesRegex(ValueError,"file set"):
+                RECENT["equivalent"](a,b)
+            (b/"new.csv").unlink()
+            (b/"values.csv").write_text("count\n2\n")
+            with self.assertRaisesRegex(ValueError,"legacy CSV"):
+                RECENT["equivalent"](a,b)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@
 namespace ns3::protection
 {
 /** Only the ranking dimensions change in ablations; all hard constraints remain. */
-enum class N5cVariant { FULL, NO_R, NO_U, NO_M };
+enum class N5cVariant { FULL, NO_R, NO_U, NO_M, RECENT_U };
 N5cVariant ParseN5cVariant(const std::string& name);
 const char* N5cVariantName(N5cVariant variant);
 
@@ -38,6 +38,8 @@ struct N5cCandidate
     N5cForecast demand;
     std::vector<N5cForecast> peers;
     uint64_t normalBusyNs{}, recoveryBusyNs{}, exposureNs{};
+    int64_t historyHorizonNs{}, historyWindowBeginNs{}, historyWindowEndNs{}; ///< Exact primary horizon.
+    uint64_t recentNormalBusyNs{}, recentRecoveryBusyNs{}, recentExposureNs{}; ///< Past-only window.
     uint64_t capacityBytes{}, accountedBytes{}, additionalQuotaBytes{};
     int64_t propagationNs{};
     std::string rejection; ///< Node/path/local-storage checks performed by causal adapter.
@@ -49,6 +51,7 @@ struct N5cScore
     uint32_t remoteNode{};
     bool feasible{}, historyUnavailable{}, noPredictedDemand{};
     double recoveryConflict{}, historicalUtilization{}, storagePressure{}, bottleneck{};
+    double recentUtilization{}; ///< Used only by RECENT_U; cumulative U keeps its original meaning.
     double demandProbability{}, weightedConflict{}, catchSeconds{}, budgetSeconds{};
     int64_t propagationNs{};
     uint64_t peerCount{}, windowCount{};
