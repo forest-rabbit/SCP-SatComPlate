@@ -415,6 +415,20 @@ A1 remains UNKNOWN; a future binary rule also needs a reviewed benefit target.
 Stop for review: no production score/threshold, future checkpoint predictor, new
 simulation, CI, automatic commit/push/merge or unrelated work is authorized.
 
+The accepted Critical-path v4 offline audit is complete on this same branch.
+Read the appended Average-State Critical-Path section of the existing review and
+`output/audits/compfrr-input-criticalpath-g-run11/`. Preserve V6's total mean, but
+only tail+merge dependency time masks INPUT; serial redo cancels in the difference.
+Use committed cadence and actual-pair resources. Tasks 363/410 have UNKNOWN early
+mass, not zero gain; three-score comparisons explicitly use common 403/402 network
+candidates, with full 405/404 references retained. All 57 known LLM scores are zero,
+including 5 observed NEEDED tasks: mean masking is not proof of no INPUT value.
+G_cp has no stable advantage over G_net/P_F; do not tune formulas to obtain one.
+35 new tests and all 339 maintained Python tests pass (one existing skip), native
+target builds, v2/v3 features and production source remain unchanged. Stop for review;
+no production score/threshold, checkpoint projector, new simulation, CI or automatic
+commit/push/merge. No final performance claim or profile-specific SEND/DEFER rule.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

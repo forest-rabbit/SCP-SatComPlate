@@ -462,3 +462,112 @@ run11只用于development/calibration；独立正式评价及CheckBullet矩阵�
 原始日志、Stage B verified、v2及canonical目录在分析前后大小/mtime一致；生产源与执行版本相同。
 按分阶段实施先验证旧曲线，再验证native时间，最后整合证据；不重复正式性能仿真。
 现已停止等待人工审阅，**不选择production score/threshold、不实现Selective、不运行CI或自动提交/推送/合并**。
+
+## Average-State Critical-Path-Aware INPUT Value Audit
+
+按 v4 及人工确认修正完成；仍只读同一 Stage B development run11，不启动仿真、不修改生产代码。
+产物：`output/audits/compfrr-input-criticalpath-g-run11/`，10个CSV及summary.json；
+包含409条因果特征、2,038条跨星future steps、完整score cuts/可达Pareto、固定等待landmarks、profile构成、
+逐等待目标比较、参考点及UNKNOWN审计。不是最终性能结果。
+
+### 已确认的公式与覆盖边界
+
+原任务书将含重算的总平均恢复量放进max，会错误地让INPUT尚未就绪时的重算遮蔽INPUT等待。
+实施口径优先于原文第2/8节及相应测试：Frequency原式完全不改，分析中拆成：
+
+```text
+A = Kvar*(n-1)*delta/(2*B_backup) + cR*(n-1)/n
+C = W*delta/(2*recovery_rate)
+R_state_bar = A + C                 # 保留原总平均量，不把它误称为依赖就绪时间
+R_D = max(INPUT_D, A) + C
+R_S = max(INPUT_S, A) + C
+DeltaR = max(INPUT_D, A) - max(INPUT_S, A)
+G_cp = sum(w_k * DeltaR_k)           # 秒；不除以P_F，不引入资源成本或阈值
+```
+
+`delta=delta_permille/1000`、B_backup使用Byte/s、cR由ns转秒；追赶计算C在差值中抵消。
+例如INPUT5ms、依赖1ms、重算100ms，完整预置的条件收益是4ms，不是0。
+只复用committed `(delta,n)` 与actual post-batch资源；393/409个actual pair与Frequency reference pair不同，
+故不直接复用参考节点的`average_recovery_s`。INPUT时间仍调用原生TransferTimeNs，传播时延未进入Frequency。
+未来故障质量完整继承canonical预测，提前量截断为非负，未重新求Frequency或预测ON更新。
+
+初始化预计完成时间使用actual pair的现有Deferred解析量`cL + state_transfer + cR`。
+这不是实际receipt；其前及同ns的贡献标为UNKNOWN，之后也仅是稳态平均近似，不保证真实checkpoint可用。
+任务363/410各有一项正质量落在该边界前，质量分别为0.0018986170/0.0119075280；保留其对后续生存乘积的影响，
+不丢弃、不归一化、不把总G_cp填零。输出已知部分及当前INPUT路径假设下的范围，不据此排序或替代未知分数。
+
+完整系统仍为409/72 NEEDED；跨星405/72，F1/F2跨星404/71，4个LocalDelivery单列且网络字节为零。
+未知的两项均为LLM、NO_FAULT、合计INPUT1248 Byte。**三方共同完整群体为403/72与402/71**，
+全部保留其他负样本，包含100%的原观察关键等待。完整405/404的P_F/G_net曲线和NONE/ALL/ORACLE仍另列；
+完整群体的G_cp sweep明确UNAVAILABLE，不伪称覆盖完整。两种population_scope不能混读，Precision/选择数可能不同。
+唯一F3 task120仍为NEEDED、观察等待645.504897ms，只在ALL视图出现，不计入F1/F2预测错误。
+
+### Q1/Q6：没有稳定的新增Pareto优势
+
+下表基于共同完整群体，每格为 **计划GB / 实际达到的观察等待覆盖率**；整组ties不拆分，允许超过目标。
+这些是计划预置字节与已观察等待覆盖，不是实测额外流量或实测恢复提速。
+
+| 视图 / 目标 | P_F | G_net | G_cp |
+| --- | ---: | ---: | ---: |
+| ALL / 80% | 33.151 / 80.54% | 30.237 / 80.23% | 30.763 / 80.23% |
+| ALL / 90% | 43.354 / 90.24% | 39.694 / 91.54% | 40.364 / 91.54% |
+| ALL / 95% | 47.911 / 95.27% | 52.898 / 95.07% | 53.439 / 95.07% |
+| ALL / 99% | 70.172 / 100% | 57.026 / 99.49% | 56.894 / 99.49% |
+| ALL / 100% | 70.172 / 100% | 84.697 / 100% | 106.721 / 100% |
+| F1/F2 / 80% | 28.071 / 80.43% | 28.745 / 81.37% | 29.041 / 81.37% |
+| F1/F2 / 90% | 38.580 / 90.82% | 38.002 / 91.35% | 38.022 / 91.35% |
+| F1/F2 / 95% | 47.054 / 97.01% | 43.079 / 95.37% | 43.271 / 95.37% |
+| F1/F2 / 99% | 51.299 / 99.73% | 53.890 / 99.47% | 54.484 / 99.47% |
+| F1/F2 / 100% | 54.518 / 100% | 83.897 / 100% | 105.921 / 100% |
+
+G_cp对P_F有局部节省，但也有反向代价；在F1/F2的100%目标处增加94.29%，对G_net增加26.25%。
+相较G_net，80–99%大多相近或略差，只有ALL99%小幅节省0.23%；不存在普遍优势。
+枚举两条曲线全部正可达等待目标，G_cp对P_F：ALL为35点更省/100点更多，F1/F2为32/101；
+对G_net：ALL为33更省/23相同/33更多，F1/F2为32/23/33。目标相互相关，计数不是胜率或显著性。
+Gate G1不支持晋升；G2也不能称为完全重合。按G3检查偏差后停止，不修改公式追结果。
+
+### Q2–Q5：均值遮蔽包含错误归零，不能预设profile效果
+
+全跨星的同一已知群体中，G_net/G_cp中位数如下；三类图像346项的分数都为正，
+并没有自然出现“部分图像被完全遮蔽”。正分数不是SEND决定。
+
+| profile | 完整分数 / 原候选 | G_net中位数ms | G_cp中位数ms | 零分数 / 其中NEEDED |
+| --- | ---: | ---: | ---: | ---: |
+| compression | 117 / 117 | 14.4773 | 11.9190 | 0 / 0 |
+| dense-image | 98 / 98 | 18.7947 | 15.2271 | 0 / 0 |
+| sparse-inference | 131 / 131 | 5.51193 | 5.49530 | 0 / 0 |
+| llm | 57 / 59 | 0.225583 | 0 | 57 / 5 |
+
+LLM确实降权，但不能据此判定模型更好：其中5个NEEDED均被归零，共有14.955112ms真实INPUT关键等待，
+占ALL/F1F2等待的0.08314%/0.08624%。为了捕获它们，零cut必须整组纳入全部剩余LLM；在降序排名中，
+此前所有正分数图像也必须已入选，所以100%目标退化为ALL_STAGE。
+高P_F与零G_cp可以同时存在（如task722的P_F=1），但只是该近似下的现象，不是“肯定不值得”的证据。
+
+以下仅为回溯解释，未进入任何因果特征或分数。时间均为ms，真实依赖计时起点是recovery acceptance：
+
+| task | START时INPUT估计 / A均值 | 实际INPUT就绪 / state就绪 | 实际关键等待 | 实际恢复路径 |
+| --- | ---: | ---: | ---: | --- |
+| 46 | 6.0003 / 16.8215 | 6.0017 / 5.3023 | 0.699404 | TAIL |
+| 187 | 5.0004 / 21.1093 | 21.1974 / 18.1952 | 3.002250 | TAIL |
+| 211 | 6.0006 / 17.5685 | 6.0036 / 0 | 6.003577 | REMOTE_REDO |
+| 441 | 4.0006 / 24.2400 | 4.0025 / 0 | 4.002469 | REMOTE_REDO |
+| 620 | 7.0005 / 13.8757 | 7.0037 / 5.7563 | 1.247412 | TAIL |
+
+211/441故障时local/remote工作相同、tail为零，state已可用；平均tail+merge却遮蔽了整个INPUT。
+另外三项实际state也早于INPUT完成。187还显示START当前路径估计不能代表未来真实传输完成时间。
+这说明`max(INPUT,E[A])`不能代替真实阶段依赖；START固定cadence也不能保证未来receipt/更新轨迹。
+上述事实不能单独分离均值、ON更新和网络变化各自造成的贡献，本轮没有反填未来状态或强行归因。
+
+### Q7、验证与停止
+
+此平均近似不足以冻结在线SEND/DEFER规则；也不据此断言必须开发完整future checkpoint simulator。
+若继续，应先审阅需要何种最小的合法state/依赖信息；本轮不增加projector、优化器、profile规则或阈值。
+
+35项新增合成测试通过；维护Python全套339项通过（1项既有外部切片skip），包含native时间边界测试、
+纯模型与CLI拒绝合同，不运行新场景。native probe及其依赖构建完成，examples/tests保持OFF。
+独立用50位Decimal和原始q_F1/q_F2生存乘积验证403个完整分数、2个UNKNOWN和4个LocalDelivery，
+最大绝对误差1.11e-16秒；并独立核对全部3,915个cut的群体、整组选择、字节及观察等待。
+重新生成的v2/v3因果特征逐字段一致，原始/verified/v2/v3/canonical证据大小及mtime未改变；
+Frequency、INPUT适配器、恢复join及native estimator源与Stage B执行版一致，没有C++改动。
+依分步实施先验证公式/因果边界，再完成曲线和真实证据，最后完成独立检查。
+**STOP FOR USER REVIEW：不选择production分数/阈值、不启动新仿真或CI、不自动提交/推送/合并。**

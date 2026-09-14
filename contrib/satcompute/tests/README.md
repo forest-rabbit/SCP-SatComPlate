@@ -126,6 +126,23 @@ python contrib/satcompute/tests/integration/regression/analyze-input-latency-res
 `test_input_latency_resource_audit.py` 包含 native estimator 与离线合成合同；未构建该 target 时原生子组明确 skip，
 正式完成本专项验证必须先构建并通过该子组。最终证据目录为 `output/audits/compfrr-input-latency-resource-run11/`。
 
+Critical-path v4（含人工确认的执行顺序修正）复用同一个 native probe，不运行新仿真：
+
+```bash
+python contrib/satcompute/tests/integration/regression/analyze-input-criticalpath.py \
+  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
+  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
+  --coinitialization-dir output/audits/compfrr-input-coinitialization-value-run11 \
+  --latency-resource-dir output/audits/compfrr-input-latency-resource-run11 \
+  --output-dir output/audits/compfrr-input-criticalpath-local
+```
+
+输出目录必须不存在。`support/protection/input_criticalpath_audit.py` 将原平均恢复量拆为
+并行依赖与串行追赶计算，只有前者参与 INPUT masking；初始化前/同刻概率贡献保持 UNKNOWN。
+完整群体的 P_F/G_net 参考与三分数共同完整群体分开标记，不能静默删除未知负样本。
+`unit/test_input_criticalpath_audit.py` 覆盖公式、因果信息、概率质量、UNKNOWN、分母与整组 ties。
+最终证据为 `output/audits/compfrr-input-criticalpath-g-run11/`，结论仍追加到同一份审计报告。
+
 ## 历史专项与目录索引
 
 以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，
