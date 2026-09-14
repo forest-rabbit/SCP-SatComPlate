@@ -35,14 +35,19 @@ class ProtectionArchitectureTests(unittest.TestCase):
                 child = (path.parent / include).resolve()
                 if child.is_file() and PROTECTION in child.parents:
                     dependencies(child, seen)
-        for relative in ("runtime/recovery-controller.h", "runtime/placement-resource-tracker.h",
-                         "runtime/transfer-only-recovery-ledger.h", "policy/fixed/fixed-controller.h",
-                         "mechanism/relocation/checkpoint-relocation-executor.h"):
-            dependencies(PROTECTION / relative, set())
+        roots = [*(PROTECTION / "common").glob("*.h"), *(PROTECTION / "common").glob("*.cc")]
+        for stem in ("runtime/recovery-controller", "runtime/placement-resource-tracker",
+                     "runtime/transfer-only-recovery-ledger", "policy/fixed/fixed-controller",
+                     "mechanism/relocation/checkpoint-relocation-executor"):
+            roots.extend(PROTECTION / (stem + suffix) for suffix in (".h", ".cc"))
+        for path in roots:
+            dependencies(path, set())
 
     def test_cb_runtime_and_replica_do_not_acquire_compfrr_checkpoint_semantics(self):
         for path in [*(PROTECTION / "baseline/checkbullet").glob("*.h"),
-                     PROTECTION / "mechanism/replication/replica-manager.h"]:
+                     *(PROTECTION / "baseline/checkbullet").glob("*.cc"),
+                     PROTECTION / "mechanism/replication/replica-manager.h",
+                     PROTECTION / "mechanism/replication/replica-manager.cc"]:
             includes = re.findall(r'^#include "([^"]+)"', path.read_text(), re.M)
             self.assertFalse(any("compfrr" in p or "checkpoint-manager.h" in p for p in includes))
 

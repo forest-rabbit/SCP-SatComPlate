@@ -23,12 +23,37 @@
 | 5 baselines | Recompute/1+1 使用 TransferOnlyRecoveryLedger，无 checkpoint executor；scheme 明确授予 recovery 能力；Fixed/Recompute/1+1 adapters 归各 policy；CB C++ 独立 baseline/checkbullet，MTBF/工具/导出头原路径兼容；历史 source guard 同时保护新位置 | build、Python 191（skip 1）、C++ 合同 PASS；small equivalence 1965 文件（1707 CSV）完全一致；CB 主版/relocate、1+1 同 ns fault batch、Recompute 从零与零容量账本均保持 |
 | 6 tests | 七个长期 helper（accounting/frequency/baseline/placement/risk-start/INPUT/scenario）抽到 tests/support/protection；六组 unit 和 CB 场景调用者迁移；旧入口全部转发，独立 oracle 不调用 production solver；正式场景 CLI 也撤出 recent-U，历史 argv 描述保留 | build no-op、Python 195（skip 1）、C++ 合同 PASS；新增 include 边界、旧入口单实现、recent-U 不创建输出测试；small equivalence 1965 文件（1707 CSV）完全一致 |
 | 7 canonical docs | 模块 README 压缩至 65 行；六个专题分别拥有 architecture/F/P/recovery/baselines/reproducibility；CB 新源码与原 profile/工具路径分开；旧报告保留历史语境；里程碑仅补已合入的 #102 事实 | 12 份文档/85 个本地链接无缺失；build no-op、Python 195（skip 1）、C++ 合同 PASS；small equivalence 1965 文件（1707 CSV）完全一致 |
-| 8 历史归档 | 待执行：依赖扫描后决定，不按阶段名删除 | compatibility/coverage 清单 |
+| 8 历史归档 | 依赖扫描完成；见下表。recent-U 原位历史归档；旧头/七个转发入口/三处 source marker 保留；不删除证据、不放宽旧 source guard；include 边界测试扩至 common 与执行 .cc | build no-op、Python 195（skip 1）、C++ 合同 PASS；small equivalence 1965 文件（1707 CSV）完全一致；正式矩阵不运行 |
 
 ## 小型等价证据
+
+步骤 1–7 的提交依次为 `fdc144ba6`、`19f470c01`、`76d0083fc`、`55ffca53a`、
+`b8ecd2c8a`、`a32470433`、`4248f5f67`；均在对应 gate 通过后单独提交。
 
 `tests/integration/regression/run-protection-equivalence.py` 只运行已有 C++ fixture 和 4-task/16-node/15s CLI 场景。覆盖 Frequency、recovery（含 failure/path/deadline/maintenance）、Recompute、1+1、CB、自有 F Eager/Deferred 与 P Cumulative/Idle-Aware。
 
 基线目录 `output/n5r-equivalence/corrected-baseline/`，各步使用新的输出目录，禁止覆盖。全部 CSV 的 schema/顺序/值逐字节相等；JSON 仅规范化输出位置及 wall_clock_ns/wall_clock_s，保留所有语义字段。实际 faults、WU、bytes、storage 和路径差异均失败。日志与退出状态另行检查，不使用 SHA-256。
 
 这里的 gate 不宣称刷新或替代历史正式性能矩阵；N6/N7 再做正式实验。
+
+## 依赖扫描与原位归档决定
+
+以 `rg` 扫描 `contrib/satcompute/{protection,tests}`、CMake、satcompute.cc、文档及 CI 入口，
+区分直接 include/runpy、脚本命令、字面 source guard 与纯历史引用。第 6 步先抽出七个长期 helper、
+迁移维护 unit/CB 场景调用者；仍有依赖的兼容入口不按名字删除。
+
+| 对象 | 可核对的实际依赖 | 本轮决定 |
+| --- | --- | --- |
+| RECENT_U enum/score/历史 CSV | `unit/n5c-placement-test.cc`、`frequency-runtime-test.cc` 及 `support/protection/placement_audit.py` | 保留历史实现与 fixture；production CLI 已拒绝；不是正式 compute-pressure enum 的成员 |
+| `run-n5c-recent-u.py` | `run-n5c-rational-u.py` 复用 identity/equivalence；`test_n5c_u_audit.py` 验证历史命令 | 标记 archived-in-place；保留原 guard，不重新启动旧五组 |
+| `analyze-n5c-recent-u.py` | `test_n5c_u_audit.py` 使用独立 window reconstruction | 保留只读历史审计；部分输出不能作为完成证据 |
+| 三处未编译 `.cc` source marker | recent/rational、recovery、maintenance 历史 source-scope；Recompute guard 另覆盖实际新实现 | 保留路径，明确不是第二套代码；不靠空 marker 认证当前实现等价 |
+| 旧 controller/P/CB 导出头 | CMake header export、satcompute.cc、C++ fixture 的 `ns3/*.h` include | 保留 forwarding/type alias；canonical `.cc` 已唯一编译 |
+| 七个旧 Python 入口 | `run-cpp-tests.sh`、frequency/recovery smoke、CB `audit-cb-sat-run.py` 和历史矩阵仍调用 | 只转发到 `tests/support/protection/`，不复制算法；unit 验证单实现 |
+| CB profile/provenance/tools | config 编译路径、MTBF 身份核验、smoke/历史工具链 | 原路径保留，C++ owner 已分离；MTBF 不变，不重新标定 |
+| 只读审计六份产物与历史正式输出 | 原 PR、实验身份、旧分析链 | 保留原文/原输出；旧 manifest 为审计时快照，不追改为当前路径 |
+| JIT/V7、CB 依赖分支、main/legacy | #99 仍依赖原 CB base；不在 corrected chain | 原样保留，不合入、不删除 |
+
+没有发现可在不破坏上述依赖/证据的前提下直接物理删除的本轮候选；因此不做批量删除。
+历史 runner 的 frozen source guard 不因重构放宽；现行等价性由独立 corrected-tree small gate 证明。
+N5R 分支须待后续人工审阅/合并后才可清理；本轮不合入 n5/main、不打 tag。

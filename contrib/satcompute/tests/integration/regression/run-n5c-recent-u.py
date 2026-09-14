@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Controlled recent-U trial: two legacy equivalence gates, then five new Deferred runs."""
+"""Historical recent-U trial, archived in place; do not launch on production N5R.
+
+Rational-U tooling and maintained tests still import identity/equivalence helpers.
+Keep its frozen source guard and old execution metadata; production rejects recent-U.
+See docs/n5/reviews/N5R-implementation.md for the dependency/retention audit.
+"""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
