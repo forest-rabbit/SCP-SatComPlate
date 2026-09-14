@@ -2,6 +2,7 @@
 #include "../support/config-factory.h"
 #include "../support/fault-injection.h"
 #include "ns3/checkpoint-manager.h"
+#include "ns3/checkpoint-recovery-estimate.h"
 #include "ns3/command-line.h"
 #include "ns3/fixed-protection-policy.h"
 #include "ns3/ipv4-address-generator.h"
@@ -579,6 +580,32 @@ main(int argc, char** argv)
     cli.Parse(argc, argv);
     try
     {
+        // Pure arithmetic fixtures cover inclusive gates, absent paths and parallel joins.
+        auto estimate = EvaluateCheckpointRecovery(10, 0, 20, 5, 30, 10, 60, 100);
+        Check(estimate.redoFits && estimate.tailFits && *estimate.redoNs == 40 &&
+              *estimate.tailNs == 35, "direct inclusive feasibility/join differs");
+        estimate = EvaluateCheckpointRecovery(10, 0, 20, 5, 31, 10, 60, 100);
+        Check(!estimate.redoFits && estimate.tailFits, "tail-only feasible path rejected");
+        estimate = EvaluateCheckpointRecovery(10, 0, 40, 5, 30, 10, 60, 100);
+        Check(estimate.redoFits && !estimate.tailFits, "redo-only feasible path rejected");
+        estimate = EvaluateCheckpointRecovery(10, 0, {}, 5, 41, 10, 60, 100);
+        Check(!estimate.redoFits && !estimate.tailFits && !estimate.tailNs,
+              "absent path or full-completion deadline treated as feasible");
+        estimate = EvaluateCheckpointRecovery({}, 0, 0, 0, 0, 0, 0, 100);
+        Check(!estimate.redoFits && !estimate.tailFits, "missing INPUT became free INPUT");
+        estimate = EvaluateCheckpointRecovery(20, 40, 10, 5, 10, 0, 0, 50);
+        Check(*estimate.redoNs == 50 && *estimate.tailNs == 45,
+              "migration incorrectly serialized parallel INPUT/state/tail");
+        estimate = EvaluateCheckpointRecovery(0, 0, 0, 0, 0, 0, 101, 100);
+        Check(estimate.budgetNs == -1 && !estimate.redoFits && !estimate.tailFits,
+              "negative remaining catch-up budget underflowed");
+        estimate = EvaluateCheckpointRecovery(std::numeric_limits<int64_t>::max(), 0, {}, 0,
+                                              1, 0, 0, 100);
+        Check(!estimate.redoNs && !estimate.redoFits, "overflow admitted a recovery");
+        Check(!AllowsCheckpointRelocation(RemoteBusyRecoveryPolicy::RECOMPUTE,
+                                          "DIRECT_DEADLINE_INFEASIBLE") &&
+              AllowsCheckpointRelocation(RemoteBusyRecoveryPolicy::RELOCATE,
+                                         "DIRECT_DEADLINE_INFEASIBLE"), "deadline policy gate differs");
         Local();
         Reservation(false);
         Reservation(true);
@@ -618,10 +645,17 @@ main(int argc, char** argv)
               "never-started recovery accounting differs");
         Run({"redo-faster", {Fault(1, 3, 180000000)}, "REMOTE_REDO", true, true, 0, 0, 10000000},
             output);
-        Run({"local-f3-redo",
+        const auto onlyRedo = Run({"local-f3-redo",
              {Fault(1, 2, 170000000, true), Fault(2, 3, 180000000)},
              "REMOTE_REDO"},
             output);
+        Check(onlyRedo.directRedoFits == true && onlyRedo.directTailFits == false &&
+              !onlyRedo.relocationAttempted, "redo-only direct unnecessarily relocated");
+        Options onlyTail{"tail-only-fits", {Fault(1, 3, 180000000)}, "TAIL"};
+        onlyTail.deadlineFactor = 1.04;
+        const auto feasibleTail = Run(onlyTail, output);
+        Check(feasibleTail.directRedoFits == false && feasibleTail.directTailFits == true &&
+              !feasibleTail.relocationAttempted, "tail-only direct unnecessarily relocated");
         Run({"remote-f3-recompute",
              {Fault(1, 0, 170000000, true), Fault(2, 3, 180000000)},
              "RECOMPUTE",
@@ -774,6 +808,36 @@ main(int argc, char** argv)
         Check(zero.snapshot.phase == "ON" && zero.snapshot.remoteObject && zero.snapshot.remoteBytes == 0 &&
                   zero.inputMode == "LOCAL" && zero.snapshot.remoteWork == 0,
               "committed zero state treated as missing or local INPUT used UDP");
+        Check(zero.directRedoFits == true && !zero.relocationAttempted,
+              "feasible direct redo unnecessarily relocated");
+        Check(tail.directTailFits == true && !tail.relocationAttempted,
+              "feasible direct tail unnecessarily relocated");
+        for (auto inputPolicy : {InputStagingPolicy::EAGER, InputStagingPolicy::DEFERRED})
+        {
+            Options idle{"idle-deadline-" + std::to_string(static_cast<int>(inputPolicy)),
+                         {Fault(1, 3, 500000000)}, "MIGRATE"};
+            idle.recoveryRate = 1000;
+            idle.inputPolicy = inputPolicy;
+            const auto migrated = Run(idle, output);
+            Check(!migrated.remoteBusyAtFault && migrated.remoteEligibleAtFault &&
+                  migrated.directRedoFits == false && migrated.directTailFits == false &&
+                  migrated.directFallbackReason == "DIRECT_DEADLINE_INFEASIBLE" &&
+                  migrated.relocationTrigger == "DIRECT_DEADLINE_INFEASIBLE",
+                  "healthy idle deadline-infeasible remote did not use legal migration");
+            idle.name += "-no-target";
+            idle.blockTargets = true;
+            idle.expectedPath = "RECOMPUTE";
+            idle.success = false;
+            const auto blocked = Run(idle, output);
+            Check(blocked.relocationAttempted && blocked.directFallbackReason ==
+                  "DIRECT_DEADLINE_INFEASIBLE", "failed migration skipped existing fallback");
+            idle.name += "-recompute-policy";
+            idle.blockTargets = false;
+            idle.busyPolicy = RemoteBusyRecoveryPolicy::RECOMPUTE;
+            const auto noMove = Run(idle, output);
+            Check(!noMove.relocationAttempted && noMove.checkpointFallbackReason ==
+                  "DIRECT_DEADLINE_INFEASIBLE", "recompute policy automatically relocated");
+        }
         deferred.name = "deferred-tail-input-first";
         deferred.faults = {Fault(1, 3, 180000000)};
         deferred.expectedPath = "TAIL";
@@ -791,6 +855,14 @@ main(int argc, char** argv)
         deferred.success = true;
         deferred.faults.back() = Fault(2, deferred.source, joined.inputReceivedNs + 1, true);
         Run(deferred, output);
+        Options noInput{"deferred-input-path-fallback",
+                        {Fault(1, 7, 170000000, true), Fault(2, 3, 180000000)},
+                        "RECOMPUTE", false, true, 7, 0};
+        noInput.inputPolicy = InputStagingPolicy::DEFERRED;
+        const auto inputBlocked = Run(noInput, output);
+        Check(inputBlocked.directFallbackReason == "INPUT_PATH_UNAVAILABLE" &&
+              inputBlocked.relocationAttempted && inputBlocked.relocationTrigger == "INPUT_PATH_UNAVAILABLE",
+              "unavailable direct INPUT skipped readable-checkpoint migration search");
         for (auto profile : {TaskProfile::LLM, TaskProfile::DENSE_IMAGE,
                              TaskProfile::SPARSE_INFERENCE, TaskProfile::COMPRESSION})
         {

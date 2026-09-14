@@ -16,7 +16,7 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；N5C V4 在�
 | `runtime/protection-runtime.h/.cc` | Policy/Mechanism 窄接口、动作分发、故障接管机会和清理通知 |
 | `policy/fixed/fixed-protection-policy.h/.cc` | 首次主计算启动时的一次固定保护、注入 PlacementPolicy、失败时重算后备动作 |
 | `policy/placement-policy.h`、`policy/feasible-placement-pairs.cc` | 单节点/双节点共用的候选筛选与排名接口 |
-| `policy/recovery-policy.h` | 仅切换 REMOTE_BUSY 的 recompute / relocate 选择 |
+| `policy/recovery-policy.h` | 切换 REMOTE_BUSY / DIRECT_DEADLINE_INFEASIBLE 的 recompute / relocate 选择 |
 | `runtime/decision-path-snapshot.h` | 同次同步决策内缓存完整路径估计，跨事件不保留 |
 | `policy/baseline/first-feasible-placement/`、`least-recovery-load/` | 最小筛选 FFP/LRL；分别按稳定 ID、当前活动负载排序 |
 | `policy/baseline/fa-first-feasible-placement/`、`fa-least-recovery-load/` | FA-FFP/FA-LRL：保留最新历史实现的可行性筛选，复用相同排序 |
@@ -54,7 +54,7 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；N5C V4 在�
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
 | `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入；`n5c` 仅用于 CompFRR |
 | `n5cVariant` | `full` | `full/noR/noU/noM/recent-U/rational-U`；只改变评分，不改变硬约束，要求 placement=n5c |
-| `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr/checkbullet 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
+| `remoteBusyRecoveryPolicy` | `relocate` | fixed/compfrr 的 REMOTE_BUSY、DIRECT_DEADLINE_INFEASIBLE 分支：迁移 checkpoint 或从零重算；CB 保持既有忙时合同；off/recompute/one-plus-one 不使用此开关 |
 | `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
@@ -430,13 +430,27 @@ actual 执行口径，不把 raw recovery 表中的旧机制诊断列直接当�
 
 ### 远端忙与迁移
 
+fixed/compfrr 保持 **remote-first**：原 remote 空闲不代表能按时完成。
+direct 与 migration 共用无副作用的 `runtime/checkpoint-recovery-estimate.h`：
+在原 compute deadline 前同时容纳“依赖就绪等待 + 追平补算 + 追平后的剩余计算”，
+边界相等可行。INPUT/state/tail 仍按真实并行依赖估计，RESULT 不纳入 compute deadline。
+只要原 remote 有任一可行 TAIL/REDO 就不迁移；二者都可行选较短 catch，平局选 REDO。
+二者都不可行记 `DIRECT_DEADLINE_INFEASIBLE`：relocate 搜索迁移，recompute 保留重算兜底。
+原 INPUT 路径不可准入记 `INPUT_PATH_UNAVAILABLE`，检查点仍可读时允许搜索其他目标。
+不使用未来队列/故障信息，也不在已接受的恢复失败后重新创建 attempt。
+`estimated_remote_redo_ns` / `estimated_tail_ns` 保留 direct 估计，新增
+`direct_post_catchup_ns`、`direct_deadline_budget_ns`、`direct_redo_fits`、`direct_tail_fits`
+与持久的 `direct_fallback_reason`；未评估为空，负 budget 不是缺失值。
+成功迁移仍会清空当前 fallback 错误，但 `checkpoint_relocation_trigger` 和
+`direct_fallback_reason` 保留起因，区分忙时迁移和空闲但无法按时完成。
+
 remote 优先使用原固定备份节点。已有有效 committed state、原 remote 忙或计算不可用但
 整星/存储仍可读时，先按稳定 ID 寻找非主星、健康空闲、结果可达且存储/路径/deadline 可行的迁移目标。
 `MIGRATE_REDO` 实际传输对应 INPUT 策略的 `CommittedStateBytes(rf, policy)` 后从 rf 重做；`MIGRATE_TAIL` 同时注册
 state 和真实 L1 记录之和（含 H）的 tail 传输，两者收齐后等一次 cR，再从 lf 开始计算。
 目标先预留 state/tail 存储，旧 checkpoint 保留到目标状态有效并接管，或 logical task 终态清理。
 默认 relocate 下可行 checkpoint 优先于零起点重算，即使后者估计略快；全部 checkpoint 选项不可行才 RECOMPUTE。
-若配置 recompute，**只有** `checkpointFallbackReason=REMOTE_BUSY` 跳过迁移，
+若配置 recompute，`REMOTE_BUSY` 或 `DIRECT_DEADLINE_INFEASIBLE` 跳过迁移，
 直接走原始 INPUT 的零起点重算；REMOTE_UNAVAILABLE/PATH_UNAVAILABLE 等分支维持原行为，
 REMOTE_F3 不可读的状态仍不能迁移。两种操作共享基础候选生成，但迁移额外检查 committed state
 的传输、存储和 deadline，重算使用原 source INPUT；当前重算准入后的 INPUT 可真实等待网络容量。

@@ -137,6 +137,7 @@ build_lib(
     protection/runtime/frequency-storage-estimator.h
     protection/runtime/placement-load-ledger.h
     protection/runtime/recovery-controller.h
+    protection/runtime/checkpoint-recovery-estimate.h
     protection/runtime/recompute-controller.h
     protection/runtime/one-plus-one-controller.h
     protection/mechanism/replication/replica-manager.h

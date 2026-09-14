@@ -196,6 +196,27 @@ merge, promote, or start exponential/recent-U without a new user decision.
 
 ## Project Overview
 
+### Recovery deadline correction (2026-09-14, active)
+
+The user accepted `CompFRR_Relocate_Deadline_Feasibility_Audit_Taskbook.md` and
+four review corrections. Work on `fix/recovery-deadline-feasibility` from clean
+`c1a8704cd`; preserve the two open N5C PRs and all old outputs. Remote-first now
+requires full compute-deadline feasibility, using one pure estimator for direct
+and migration paths. Busy policy also controls DIRECT_DEADLINE_INFEASIBLE;
+INPUT_PATH_UNAVAILABLE may search readable-checkpoint migration rather than
+early-returning to recompute. No U/Frequency/RNG/routing/INPUT/deadline/scene changes.
+Historical candidate evidence may be UNKNOWN, never false proof of no candidate.
+Rerun any formal execution whose recovery behavior changes, even when both paths
+ultimately fail; keep unaffected results with equivalence evidence. Audit CB
+augmented relocate separately; no automatic main-CB modification. Keep one recovery
+attempt, stable-ID migration search and LocalDelivery. No CI/merge/tag/default
+promotion or unrelated architecture work. Record concise results beside N5 reviews.
+
+The subsequent user scope reduction authorizes only three corrected run11 formal
+executions: FULL, noU, Rational-U, on the same clean commit. Do not run run12-15,
+FA-FFP, noR/noM or CB. Preserve the complete read-only historical audit; out-of-scope
+affected historical runs remain uncorrected, not newly certified results.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

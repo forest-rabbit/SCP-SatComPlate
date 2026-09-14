@@ -5,6 +5,14 @@ ns-3 上游 examples、全局 tests 或根目录 `test.py`。
 
 ## 目录
 
+恢复 deadline 专项：`unit/recovery-runtime-test.cc` 覆盖 direct/迁移的完整完成预算，
+含 Eager/Deferred、空闲但超时、无可行目标、开关与 LocalDelivery。
+历史审计 `integration/regression/audit-direct-recovery-deadline.py` 不运行仿真；
+`run-recovery-deadline-reruns.py --phase all --jobs 3` 仅手动运行 run11 FULL/noU/Rational-U，
+拒绝覆盖旧目录，要求干净提交，不进入 CI。完成后使用
+`analyze-recovery-deadline-reruns.py` 核对实际账本与三方配对。
+审计范围不等于补跑范围，详见[专项报告](../../../docs/n5/reviews/Recovery-direct-deadline-feasibility.md)。
+
 ```text
 tests/
 ├── unit/                    Python 与 C++ 聚焦测试

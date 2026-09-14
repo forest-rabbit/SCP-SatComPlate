@@ -219,7 +219,7 @@ AddCommandLineOptions(CommandLine& commandLine,
                          config.backupStorageBytesPerNode);
     commandLine.AddValue("placementMode", "ffp/lrl minimal, fa-ffp/fa-lrl feasibility-aware, n5c CompFRR V4", config.placementMode);
     commandLine.AddValue("n5cVariant", "N5C scoring: full/noR/noU/noM/recent-U/rational-U; hard constraints unchanged", config.n5cVariant);
-    commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; REMOTE_BUSY only, ignored by off",
+    commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; busy or direct deadline infeasible (CB: busy only)",
                          config.remoteBusyRecoveryPolicy);
     commandLine.AddValue("inputStagingPolicy", "eager / deferred; deferred requires compfrr",
                          config.inputStagingPolicy);

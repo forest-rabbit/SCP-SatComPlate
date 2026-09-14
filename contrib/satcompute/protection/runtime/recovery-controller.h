@@ -37,6 +37,9 @@ struct RecoverySummary
         stateStartedNs{-1}, stateReceivedNs{-1};
     int64_t plannedInputWaitNs{-1}; ///< Decision-time INPUT estimate, never actual reservation wait.
     int64_t stateReadyNs{-1}; ///< Actual state/tail/merge dependency join, independent of INPUT.
+    std::optional<int64_t> directPostNs, directBudgetNs; ///< Read-only direct feasibility evidence.
+    std::optional<bool> directRedoFits, directTailFits; ///< Empty when direct was not evaluated.
+    std::string directFallbackReason; ///< Persistent cause, even after a successful fallback.
 };
 
 /** One recovery event, including local logical deliveries which have no transfer ID. */
@@ -146,7 +149,7 @@ class RecoveryController : public ProtectionMechanism
     Ptr<NetworkTransferEngine> m_network; ///< Existing real UDP engine.
     int64_t m_stopNs;                     ///< Absolute simulation endpoint.
     ProtectionRuntime m_faultRuntime;     ///< Established mechanism first, then policy fallback.
-    RemoteBusyRecoveryPolicy m_busyPolicy; ///< Changes REMOTE_BUSY only, not fault availability.
+    RemoteBusyRecoveryPolicy m_busyPolicy; ///< Busy/direct-deadline choice, not fault availability.
     PlacementPolicy* m_recomputePlacement; ///< Non-null only for full Recompute: strict operation feasibility.
     const PlacementLoadLedger* m_placementLoads{}; ///< Native R0 active loads; no checkpoint ranking change.
     std::map<uint64_t, std::unique_ptr<State>> m_states; ///< Sole recovery per task.

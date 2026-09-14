@@ -122,7 +122,7 @@ GetDefaultSatComputeConfig()
     config.placementMode = "fa-ffp";
     // N5C V4：full 使用三项压力；noR/noU/noM 仅删除一项评分，仍保留全部硬约束。
     config.n5cVariant = "full";
-    // --remoteBusyRecoveryPolicy：仅 remote 计算忙但检查点可读时生效。
+    // --remoteBusyRecoveryPolicy：remote 忙或 direct 无法按时完成时生效；CB 保持原忙时合同。
     // relocate 迁移状态后继续；recompute 放弃检查点，从原始 INPUT 重算；off 忽略本参数。
     config.remoteBusyRecoveryPolicy = "relocate";
     // --inputStagingPolicy：eager 保持原始 INPUT 常态预置；deferred 仅用于 CompFRR，
