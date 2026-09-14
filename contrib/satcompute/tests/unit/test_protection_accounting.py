@@ -4,7 +4,7 @@ import runpy
 import unittest
 
 MODULE = Path(__file__).resolve().parents[2]
-API = runpy.run_path(str(MODULE / "tests/integration/regression/analyze-protection-accounting.py"))
+API = runpy.run_path(str(MODULE / "tests/support/protection/accounting.py"))
 
 
 class RecoveryAccountingTests(unittest.TestCase):

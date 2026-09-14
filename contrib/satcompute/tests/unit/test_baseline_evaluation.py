@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 ANALYSIS = runpy.run_path(str(Path(__file__).resolve().parents[1] /
-    "integration/regression/analyze-baseline-evaluation.py"))
+    "support/protection/baseline_audit.py"))
 
 
 def table(root, name, records):

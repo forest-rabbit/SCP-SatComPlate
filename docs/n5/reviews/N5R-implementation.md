@@ -21,7 +21,7 @@
 | 3 P | CompFrrPlacementPolicy 与两种正式 pressure；中性 forecast 不携带 solver/storage callback；PlacementResourceTracker、PeakQuotaLedger 与 P decision journal/export 分离；旧类型/CLI/CSV 保持兼容；recent-U 仅历史 API | build、Python 191（skip 1）、C++ 合同 PASS；P 8574 断言；recent-U 正式 CLI 拒绝测试 PASS；small equivalence 1965 文件（1707 CSV）完全一致 |
 | 4 recovery/relocation | RecoveryController 依赖中性 CheckpointRecoveryPort，metrics 只依赖 EvidenceView；原主任务快照/事件构造共用；relocation 预留和发送是可选公共机制，tail 必须由调用者明确提供 | build、Python 191（skip 1）、C++ 合同 PASS；新增 7 项 reservation/owner cleanup/发送顺序合同；small equivalence 1965 文件（1707 CSV）完全一致，含 direct/deadline/INPUT path/parallel/LocalDelivery/same-ns |
 | 5 baselines | Recompute/1+1 使用 TransferOnlyRecoveryLedger，无 checkpoint executor；scheme 明确授予 recovery 能力；Fixed/Recompute/1+1 adapters 归各 policy；CB C++ 独立 baseline/checkbullet，MTBF/工具/导出头原路径兼容；历史 source guard 同时保护新位置 | build、Python 191（skip 1）、C++ 合同 PASS；small equivalence 1965 文件（1707 CSV）完全一致；CB 主版/relocate、1+1 同 ns fault batch、Recompute 从零与零容量账本均保持 |
-| 6 tests | 待执行：helper→调用者→兼容入口 | 单元与历史入口 import/fixture gate |
+| 6 tests | 七个长期 helper（accounting/frequency/baseline/placement/risk-start/INPUT/scenario）抽到 tests/support/protection；六组 unit 和 CB 场景调用者迁移；旧入口全部转发，独立 oracle 不调用 production solver；正式场景 CLI 也撤出 recent-U，历史 argv 描述保留 | build no-op、Python 195（skip 1）、C++ 合同 PASS；新增 include 边界、旧入口单实现、recent-U 不创建输出测试；small equivalence 1965 文件（1707 CSV）完全一致 |
 | 7 canonical docs | 待执行：唯一内容归属，不覆盖历史证据 | 链接/目录/CLI 合同 |
 | 8 历史归档 | 待执行：依赖扫描后决定，不按阶段名删除 | compatibility/coverage 清单 |
 

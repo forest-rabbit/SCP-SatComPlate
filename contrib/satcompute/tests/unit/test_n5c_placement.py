@@ -8,8 +8,8 @@ import unittest
 
 HERE=Path(__file__).resolve().parents[1]/"integration/regression"
 RUN=runpy.run_path(str(HERE/"run-n5c-placement.py"))
-AUDIT=runpy.run_path(str(HERE/"analyze-n5c-placement.py"))
-FINAL=runpy.run_path(str(HERE/"run-final-scenario.py"))
+AUDIT=runpy.run_path(str(HERE.parents[1]/"support/protection/placement_audit.py"))
+FINAL=runpy.run_path(str(HERE.parents[1]/"support/protection/scenario.py"))
 
 
 class N5cTests(unittest.TestCase):

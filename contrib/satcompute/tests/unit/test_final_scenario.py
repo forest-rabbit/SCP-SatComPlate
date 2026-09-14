@@ -19,7 +19,7 @@ ROOT = MODULE.parents[1]
 GENERATION = MODULE / "tools/generation"
 sys.path.insert(0, str(GENERATION))
 GEN = runpy.run_path(str(GENERATION / "generate-task-workload.py"))
-RUN = runpy.run_path(str(MODULE / "tests/integration/regression/run-final-scenario.py"))
+RUN = runpy.run_path(str(MODULE / "tests/support/protection/scenario.py"))
 F3_CHECK = runpy.run_path(str(MODULE / "tests/integration/regression/run-f3-protection-check.py"))
 SCENE = MODULE / "input/experiments/leo-66"
 
