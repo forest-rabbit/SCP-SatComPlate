@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "recovery-controller.h"
 #include "checkpoint-recovery-estimate.h"
-#include "../policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
+#include "../mechanism/relocation/checkpoint-relocation-executor.h"
+#include "../policy/placement/fa-first-feasible/fa-first-feasible-placement-policy.h"
 
 #include "ns3/simulator.h"
 
@@ -58,14 +59,15 @@ RecoveryController::State::State(const TaskRuntime& runtime,
 
 RecoveryController::RecoveryController(Ptr<TaskCoordinator> tasks,
                                        SatelliteRuntimeView& topology,
-                                       CheckpointManager& manager,
+                                       CheckpointRecoveryPort& manager,
                                        int64_t stopNs,
                                        ProtectionPolicy& policy,
                                        RemoteBusyRecoveryPolicy busyPolicy,
-                                       PlacementPolicy* recomputePlacement)
+                                       PlacementPolicy* recomputePlacement,
+                                       CheckpointRecoveryCapabilities capabilities)
     : m_tasks(tasks), m_topology(topology), m_manager(manager),
       m_network(tasks->GetTransferEngine()), m_stopNs(stopNs), m_faultRuntime(policy, {this}),
-      m_busyPolicy(busyPolicy), m_recomputePlacement(recomputePlacement)
+      m_busyPolicy(busyPolicy), m_capabilities(capabilities), m_recomputePlacement(recomputePlacement)
 {
     m_manager.EnableRecoveryRetention();
     m_tasks->SetRecoveryHandler(
@@ -290,13 +292,13 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
         r.checkpointFallbackReason = "PATH_UNAVAILABLE";
     else
         r.checkpointFallbackReason = "OTHER";
-    if (f.phase == "ON" && base && !base->reserved && Eligible(f.remoteNode, state))
+    if (m_capabilities.checkpoint && f.phase == "ON" && base && !base->reserved && Eligible(f.remoteNode, state))
     {
         const auto input = Deferred() ? Estimate(state.task.definition.sourceNodeId, f.remoteNode,
                                                  state.task.definition.inputBytes)
                                       : std::optional<int64_t>{0};
         const auto rate = Service(f.remoteNode)->GetComputeRateWorkUnitsPerSecond();
-        auto transfer = f.localWork > f.remoteWork && f.tailBytes &&
+        auto transfer = m_capabilities.localTail && f.localWork > f.remoteWork && f.tailBytes &&
                                 m_manager.Pool(f.remoteNode).Free() >= f.tailBytes
                             ? Estimate(f.localNode, f.remoteNode, f.tailBytes)
                             : std::nullopt;
@@ -326,7 +328,8 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
             r.checkpointFallbackReason = input ? "DIRECT_DEADLINE_INFEASIBLE" : "INPUT_PATH_UNAVAILABLE";
         r.directFallbackReason = r.checkpointFallbackReason;
     }
-    if (f.phase == "ON" && base && !base->reserved && m_tasks->IsSatelliteAvailable(f.remoteNode) &&
+    if (m_capabilities.checkpoint && m_capabilities.relocation &&
+        f.phase == "ON" && base && !base->reserved && m_tasks->IsSatelliteAvailable(f.remoteNode) &&
         AllowsCheckpointRelocation(m_busyPolicy, r.checkpointFallbackReason))
         return TryRelocate(state);
     return false;
@@ -387,7 +390,7 @@ RecoveryController::TryRelocate(State& state)
         }
         const auto rate = Service(candidate)->GetComputeRateWorkUnitsPerSecond();
         std::optional<int64_t> tailTransfer;
-        if (f.localWork > f.remoteWork && f.tailBytes && pool->Free() - bytes >= f.tailBytes)
+        if (m_capabilities.localTail && f.localWork > f.remoteWork && f.tailBytes && pool->Free() - bytes >= f.tailBytes)
         {
             tailTransfer = Estimate(f.localNode, candidate, f.tailBytes);
         }
@@ -485,7 +488,9 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     r.recoveryNode = node;
     r.acceptedNs = Now();
     if (m_loadObserver) m_loadObserver(state.task.definition.taskId, node, true);
-    if (Deferred() || r.path == "RECOMPUTE")
+    const auto inputRequirement = InputContract(m_manager.InputPolicy()).DescribeRecoveryInput(
+        state.task.definition.sourceNodeId, node, state.task.definition.inputBytes, r.path == "RECOMPUTE");
+    if (inputRequirement.required)
         if (const auto estimate = Estimate(state.task.definition.sourceNodeId,
                                            node,
                                            state.task.definition.inputBytes))
@@ -515,44 +520,24 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     }
     if (r.path.starts_with("MIGRATE_"))
     {
-        auto& pool = m_manager.Pool(node);
-        const auto object = pool.TryReserve(state.task.definition.taskId,
-                                            StorageKind::REMOTE_STATE,
-                                            r.checkpointStateBytes);
-        if (!object)
+        const auto tail = r.path == "MIGRATE_TAIL" ? std::optional<uint64_t>(f.tailBytes) : std::nullopt;
+        const auto reservation = ReserveRelocationDestination(m_manager.Pool(node),
+            state.task.definition.taskId, r.checkpointStateBytes, tail,
+            state.relocatedObject, state.tailObject);
+        if (reservation != RelocationReservationResult::READY)
         {
-            Fail(state, "RECOVERY_STATE_CAPACITY_UNAVAILABLE");
+            Fail(state, reservation == RelocationReservationResult::STATE_UNAVAILABLE
+                            ? "RECOVERY_STATE_CAPACITY_UNAVAILABLE" : "RECOVERY_TAIL_CAPACITY_UNAVAILABLE");
             return true;
-        }
-        state.relocatedObject = *object;
-        if (r.path == "MIGRATE_TAIL")
-        {
-            const auto tail = pool.TryReserve(state.task.definition.taskId,
-                                              StorageKind::REMOTE_BATCH,
-                                              f.tailBytes);
-            if (!tail)
-            {
-                Fail(state, "RECOVERY_TAIL_CAPACITY_UNAVAILABLE");
-                return true;
-            }
-            state.tailObject = *tail;
         }
         r.relocationFailureReason.clear();
         r.relocationBytes = r.checkpointStateBytes;
         Log(state, "CHECKPOINT_RELOCATION_STARTED", r.relocationBytes);
-        Deliver(state,
-                ProtectionTransferKind::RECOVERY_STATE,
-                f.remoteNode,
-                node,
-                r.relocationBytes,
-                state.relocatedObject);
-        if (state.live && r.path == "MIGRATE_TAIL")
-            Deliver(state,
-                    ProtectionTransferKind::RECOVERY_TAIL,
-                    f.localNode,
-                    node,
-                    f.tailBytes,
-                    state.tailObject);
+        DispatchCheckpointRelocation(f.remoteNode, f.localNode, node, r.relocationBytes, tail,
+            state.relocatedObject, state.tailObject,
+            [this, &state](auto kind, auto source, auto destination, auto bytes, auto object) {
+                Deliver(state, kind, source, destination, bytes, object);
+            }, [&state] { return state.live; });
     }
     else if (r.path == "TAIL")
     {

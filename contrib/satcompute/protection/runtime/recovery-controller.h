@@ -2,7 +2,9 @@
 #ifndef SATCOMPUTE_RECOVERY_CONTROLLER_H
 #define SATCOMPUTE_RECOVERY_CONTROLLER_H
 #include "../../traffic/local-delivery.h"
-#include "../mechanism/checkpoint/checkpoint-manager.h"
+#include "checkpoint-recovery-port.h"
+#include "protection-runtime.h"
+#include "../common/task-state-adapter.h"
 #include "../policy/recovery-policy.h"
 #include "../policy/placement-policy.h"
 #include "placement-load-ledger.h"
@@ -58,11 +60,12 @@ class RecoveryController : public ProtectionMechanism
     /** Bind optional fixed-mode recovery; no global node immunity is introduced. */
     RecoveryController(Ptr<TaskCoordinator> tasks,
                        SatelliteRuntimeView& topology,
-                       CheckpointManager& manager,
+                       CheckpointRecoveryPort& manager,
                        int64_t stopNs,
                        ProtectionPolicy& policy,
                        RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
-                       PlacementPolicy* recomputePlacement = nullptr);
+                       PlacementPolicy* recomputePlacement = nullptr,
+                       CheckpointRecoveryCapabilities capabilities = {});
     ~RecoveryController();
     bool Supports(ActionKind kind) const override;
     void Execute(const ProtectionContext& context, const ProtectionAction& action) override;
@@ -130,7 +133,7 @@ class RecoveryController : public ProtectionMechanism
     void Received(State& state, ProtectionTransferKind kind, uint64_t bytes, uint64_t transferId);
     void StartCompute(State& state);
     /** Immutable input contract from the checkpoint owner, not a second configuration. */
-    bool Deferred() const { return m_manager.InputPolicy() == InputStagingPolicy::DEFERRED; }
+    bool Deferred() const { return InputContract(m_manager.InputPolicy()).RequiresRecoveryInput(); }
     void Started(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
     void Catchup(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
     void Computed(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
@@ -145,11 +148,12 @@ class RecoveryController : public ProtectionMechanism
     Ptr<ComputeService> Service(uint32_t node) const;
     Ptr<TaskCoordinator> m_tasks;         ///< Existing coordinator.
     SatelliteRuntimeView& m_topology;     ///< Current routes only.
-    CheckpointManager& m_manager;         ///< Shared checkpoint ledgers and ID allocator.
+    CheckpointRecoveryPort& m_manager;         ///< Shared checkpoint ledgers and ID allocator.
     Ptr<NetworkTransferEngine> m_network; ///< Existing real UDP engine.
     int64_t m_stopNs;                     ///< Absolute simulation endpoint.
     ProtectionRuntime m_faultRuntime;     ///< Established mechanism first, then policy fallback.
     RemoteBusyRecoveryPolicy m_busyPolicy; ///< Busy/direct-deadline choice, not fault availability.
+    CheckpointRecoveryCapabilities m_capabilities; ///< Granted by scheme, not inferred from placement.
     PlacementPolicy* m_recomputePlacement; ///< Non-null only for full Recompute: strict operation feasibility.
     const PlacementLoadLedger* m_placementLoads{}; ///< Native R0 active loads; no checkpoint ranking change.
     std::map<uint64_t, std::unique_ptr<State>> m_states; ///< Sole recovery per task.

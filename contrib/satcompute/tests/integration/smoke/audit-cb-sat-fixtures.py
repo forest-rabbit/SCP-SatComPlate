@@ -9,7 +9,7 @@ import shutil
 import sys
 import tempfile
 
-TOOLS = Path(__file__).resolve().parents[3]/"protection/policy/baseline/checkbullet/tools"
+TOOLS = Path(__file__).resolve().parents[3]/"protection/baseline/checkbullet/tools"
 sys.path.insert(0,str(TOOLS))
 AUDIT = runpy.run_path(str(TOOLS/"audit-cb-sat-run.py"))["audit"]
 

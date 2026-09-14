@@ -161,6 +161,16 @@ void Quotas()
     for (const auto name : {"full", "noR", "noU", "noM", "recent-U", "rational-U"})
         Check(std::string(N5cVariantName(ParseN5cVariant(name))) == name, "variant roundtrip");
     Reject([] { ParseN5cVariant("weighted"); });
+    Check(CompFrrPlacementPolicy(ComputePressurePolicy::CUMULATIVE).Variant() == N5cVariant::FULL,
+          "formal CUMULATIVE must preserve full compatibility entry");
+    Check(CompFrrPlacementPolicy(ComputePressurePolicy::IDLE_AWARE).Variant() == N5cVariant::RATIONAL_U,
+          "formal IDLE_AWARE must preserve rational-U compatibility entry");
+    Check(CompFrrPlacementPolicy(ComputePressurePolicy::CUMULATIVE).SelectRemote({Candidate()}).remoteNode ==
+              N5cPlacementPolicy().SelectRemote({Candidate()}).remoteNode,
+          "formal naming changed placement decisions");
+    Check(CumulativeComputePressure(2, 10) == 0.2 && CumulativeComputePressure(0, 0) == 0 &&
+              IdleAwareComputePressure(0.8, 100, 300) == 0.2,
+          "formal pressure extraction changed exact arithmetic");
 }
 void ObservationAndGate()
 {

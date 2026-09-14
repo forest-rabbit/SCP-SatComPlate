@@ -63,7 +63,7 @@ struct SatComputeConfig
     // protection
     std::string protectionMode; ///< off / recompute / one-plus-one / fixed / compfrr；真实保护与恢复。
     std::string placementMode; ///< ffp/lrl minimal; fa-ffp/fa-lrl feasibility-aware, default fa-ffp.
-    std::string n5cVariant; ///< full/noR/noU/noM/recent-U/rational-U; scoring only, never hard feasibility.
+    std::string n5cVariant; ///< full=CUMULATIVE / rational-U=IDLE_AWARE; noR/noU/noM ablations only.
     std::string remoteBusyRecoveryPolicy; ///< relocate / recompute; busy or direct deadline infeasible.
     std::string inputStagingPolicy; ///< eager / deferred；CompFRR 原始 INPUT 预置或故障后获取。
     uint32_t lrlRecoveryWeight; ///< 当前恢复数量的整数权重，正式首轮固定 1，不扫描。

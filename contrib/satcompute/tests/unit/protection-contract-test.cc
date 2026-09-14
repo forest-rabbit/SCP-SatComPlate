@@ -4,6 +4,9 @@
 #include "ns3/command-line.h"
 #include "ns3/compfrr-shadow-model.h" // Test-only oracle, never a production dependency.
 #include "ns3/fixed-protection-policy.h"
+#include "ns3/input-cost-adapter.h"
+#include "ns3/checkpoint-relocation-executor.h"
+#include "ns3/transfer-only-recovery-ledger.h"
 #include "ns3/para.h"
 #include "ns3/simulator.h"
 #include <algorithm>
@@ -13,9 +16,15 @@
 #include <nlohmann/json.hpp>
 #include <source_location>
 #include <stdexcept>
+#include <type_traits>
 
 using namespace ns3;
 using namespace ns3::protection;
+
+static_assert(!std::is_base_of_v<ProtectionMechanism, TransferOnlyRecoveryLedger>,
+              "Recompute/replica transport must not acquire checkpoint execution capability");
+static_assert(std::is_base_of_v<ProtectionEvidenceView, TransferOnlyRecoveryLedger>,
+              "baseline evidence keeps the shared external schema");
 
 namespace
 {
@@ -161,6 +170,31 @@ StateChecks()
         const auto task = Task(profile);
         LayoutCheck(task);
         TaskStateAdapter a(task);
+        for (auto policy : {InputStagingPolicy::EAGER, InputStagingPolicy::DEFERRED})
+        {
+            const bool deferred = policy == InputStagingPolicy::DEFERRED;
+            const InputContract input(policy);
+            const auto init = input.DescribeInitialization(task.inputBytes);
+            Check(init.baseBytes == (deferred ? 0 : task.inputBytes) && init.logicalBaseReady == deferred,
+                  "neutral INPUT initialization changed logical BASE identity");
+            for (bool recompute : {false, true})
+                for (uint32_t destination : {1, 2})
+                {
+                    const auto recovery = input.DescribeRecoveryInput(1, destination, task.inputBytes, recompute);
+                    Check(recovery.required == (deferred || recompute) &&
+                              recovery.bytes == (recovery.required ? task.inputBytes : 0) &&
+                              recovery.local == (recovery.required && destination == 1),
+                          "neutral INPUT recovery/local delivery dependency");
+                }
+            const InputCostAdapter costs(policy);
+            Check(costs.InitializationSeconds(100000000, 200000000, 3, 2) ==
+                      (deferred ? 2.1 : 3) + 0.2,
+                  "INPUT ready cost differs from frozen max(base,cL+state)+cR contract");
+            Check(costs.FaultInputSeconds(true, 100, 10) == (deferred ? 10 : 0) &&
+                      costs.FaultInputSeconds(false, 100, 0) == 0 &&
+                      costs.StartInputLoss(0.25, 100, 10) == (deferred ? 0 : 2.5),
+                  "deferred hard INPUT cost / eager START loss changed");
+        }
         for (auto work : {uint64_t{0}, a.Floor(a.Work() / 2), a.Work()})
         {
             Check(a.CommittedStateBytes(work, InputStagingPolicy::EAGER) == a.CommittedStateBytes(work),
@@ -425,6 +459,36 @@ main(int argc, char** argv)
     try
     {
         StorageChecks();
+        {
+            BackupStoragePool pool(100);
+            uint64_t stateObject = 0, tailObject = 0;
+            Check(ReserveRelocationDestination(pool, 42, 101, {}, stateObject, tailObject) ==
+                      RelocationReservationResult::STATE_UNAVAILABLE && !stateObject,
+                  "failed relocation state reservation must not create an identity");
+            Check(ReserveRelocationDestination(pool, 42, 80, 21, stateObject, tailObject) ==
+                      RelocationReservationResult::TAIL_UNAVAILABLE && stateObject && !tailObject && pool.Reserved() == 80,
+                  "failed relocation tail must retain state identity for owner cleanup");
+            pool.ReleaseTask(42);
+            Check(ReserveRelocationDestination(pool, 42, 80, 20, stateObject, tailObject) ==
+                      RelocationReservationResult::READY && pool.Reserved() == 100,
+                  "relocation must preserve state then tail reservation order");
+            std::vector<ProtectionTransferKind> sent;
+            bool live = true;
+            RelocationSend send = [&](auto kind, auto, auto, auto, auto) { sent.push_back(kind); };
+            DispatchCheckpointRelocation(1, 2, 3, 80, 20, stateObject, tailObject, send, [&] { return live; });
+            Check(sent == std::vector<ProtectionTransferKind>{ProtectionTransferKind::RECOVERY_STATE,
+                                                             ProtectionTransferKind::RECOVERY_TAIL},
+                  "relocation flow order changed");
+            sent.clear();
+            DispatchCheckpointRelocation(1, 2, 3, 80, {}, stateObject, 0, send, [&] { return live; });
+            Check(sent.size() == 1, "no-tail mechanism must not inherit tail capability");
+            sent.clear();
+            DispatchCheckpointRelocation(1, 2, 3, 80, 20, stateObject, tailObject,
+                [&](auto kind, auto, auto, auto, auto) { sent.push_back(kind); live = false; }, [&] { return live; });
+            Check(sent.size() == 1, "synchronous state-flow failure must suppress the dependent tail request");
+            pool.ReleaseTask(42);
+            Check(pool.Used() == 0 && pool.Reserved() == 0, "owner relocation cleanup leaked objects");
+        }
         const auto sizes = StateChecks();
         CheckpointChecks();
         RecoveryChecks();

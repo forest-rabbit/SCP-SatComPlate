@@ -3,7 +3,58 @@
 本目录只维护 SatCompute 自有测试。配置、脚本和 GitHub Actions 都不会启用或运行
 ns-3 上游 examples、全局 tests 或根目录 `test.py`。
 
-## 目录
+## 当前 N5R：小型语义等价门禁
+
+重构不重复正式 800 任务 / 1300 s 矩阵，也不重新标定故障或 MTBF。从仓库根目录运行：
+
+```bash
+source .venv/bin/activate
+./ns3 build -j 8
+contrib/satcompute/tests/unit/run-cpp-tests.sh
+python -m unittest discover -s contrib/satcompute/tests/unit -p 'test_*.py'
+python contrib/satcompute/tests/integration/regression/run-protection-equivalence.py \
+  --output-root output/n5r-equivalence/local-check \
+  --reference output/n5r-equivalence/corrected-baseline --jobs 3 \
+  --allow-cb-profile-relocation
+```
+
+比较命令要求本地已有 corrected baseline；使用新的 output-root，旧输出不覆盖。
+若基线缺失，应取得同一 corrected tree 的独立 fixture 输出，不能从重构后代码自建基线声称等价。
+11 个组合包含已有 C++ fixture 与 4-task/16-node/15s CLI，核对全部 CSV/JSON；
+CSV 逐字节相同，JSON 仅规范化输出目录与 wall-clock 字段。
+
+最终目录收口另显式批准 CB 冻结 profile 的迁移：上述开关先逐字节核对迁移前 profile，
+仅允许两个 CB CLI 组合的 `cb-sat-parameters.json.profile_path` 从指定旧 owner 变为新 owner，
+并列出这两个元数据差异；不豁免 MTBF/其他字段，不改原始输出或 golden。关闭开关仍保持原严格比较。
+
+长期复用的审计/scenario helper 位于 `support/protection/`，维护测试直接调用；
+旧 `analyze-*.py` / `run-final-scenario.py` 入口继续转发，外部参数/CSV 不变。
+`recent-U` 已从平台及正式场景 CLI 撤出；历史 API/fixture/分析保留，不是第三种 production U。
+阶段证据及提交见 [N5R 记录](../../../docs/n5/reviews/N5R-implementation.md)。
+
+### 历史 V7 离线诊断
+
+只读已有 run11，不启动仿真、不启用 JIT、不写回原始输出，正常运行/CI 不自动调用。
+需要同批历史 V7 与 Deferred 数据（执行提交 `367f23f39`），不能换成 corrected N5R：
+
+```bash
+python contrib/satcompute/tests/integration/regression/analyze-v7-offline.py \
+  --v7 output/v7-cbsat-adjustment/20260913-jit-formal/CompFRR-JIT-V7 \
+  --deferred output/v7-cbsat-adjustment/20260913-jit-formal/reference-R7-deferred-relocate \
+  --output-dir output/audits/n5r-v7-run11-offline-local
+```
+
+使用不存在的新 output-dir。入口转发至 `support/protection/jit_offline_audit.py`，
+复用 INPUT/baseline 的 CSV、分布与物理流账本；输出生命周期、全部故障任务、字节守恒、
+故障状态、严格配对五份 CSV 和完整 JSON。缺失依赖时间保留 null，不能伪造为零；
+缺失原始证据或身份/账本矛盾则失败。模型预测的代表故障时刻可带小数，以原文本保留；
+实际事件时间仍为整数 ns。判据与结论见 [V7 离线报告](../../../docs/n5/reviews/N5R-V7-offline-audit.md)。
+
+## 历史专项与目录索引
+
+以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，
+不是当前执行计划；#100/#101 及修复链已由 #102 整合。旧 runner 的冻结 source guard 保留，
+不要为在 N5R 重跑历史矩阵而放宽；当前只执行上面 small gate 和维护中的 unit/smoke。
 
 恢复 deadline 专项：`unit/recovery-runtime-test.cc` 覆盖 direct/迁移的完整完成预算，
 含 Eager/Deferred、空闲但超时、无可行目标、开关与 LocalDelivery。

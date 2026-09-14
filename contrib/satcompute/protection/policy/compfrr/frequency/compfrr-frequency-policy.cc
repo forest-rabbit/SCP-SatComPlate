@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "compfrr-frequency-policy.h"
+#include "../input/input-cost-adapter.h"
 
 #include <algorithm>
 #include <cmath>
@@ -76,8 +77,8 @@ void StartWindow(const FrequencyInput& in, FrequencyDecision& out)
         out.representativeProgressAfterReady = static_cast<double>(weighted / ready);
     if (in.replayAvailable)
         out.jOff = static_cast<double>(weighted) * in.work / in.recoveryRate +
-            (in.inputPolicy == InputStagingPolicy::EAGER
-                 ? static_cast<double>(ready) * in.inputBytes / in.inputBandwidth : 0);
+            InputCostAdapter(in.inputPolicy).StartInputLoss(static_cast<double>(ready),
+                                                           in.inputBytes, in.inputBandwidth);
     else if (ready == 0)
         out.jOff = 0;
     else
@@ -117,15 +118,16 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
     }
     Validate(in);
     const bool on = in.phase == ProtectionPhase::ON;
-    const bool deferred = in.inputPolicy == InputStagingPolicy::DEFERRED;
-    const double faultInput = deferred && in.replayAvailable ? in.inputBytes / in.inputBandwidth : 0;
+    const InputCostAdapter inputCosts(in.inputPolicy);
+    const bool deferred = inputCosts.RecoveryPathRequired();
+    const double faultInput = inputCosts.FaultInputSeconds(in.replayAvailable, in.inputBytes, in.inputBandwidth);
     const double cL = in.costs.localNs / 1e9;
     const double cR = in.costs.remoteNs / 1e9;
     const double interval = in.risk.intervalNs / 1e9;
     out.deadlineSlackSeconds =
         (in.deadlineNs - in.risk.epochNs) / 1e9 - in.work * (1 - in.progress) / in.recoveryRate;
-    out.initializationSeconds = (deferred ? cL + in.stateTransferSeconds
-                                         : std::max(in.baseTransferSeconds, cL + in.stateTransferSeconds)) + cR;
+    out.initializationSeconds = inputCosts.InitializationSeconds(in.costs.localNs, in.costs.remoteNs,
+                                                                 in.baseTransferSeconds, in.stateTransferSeconds);
     if (in.replayAvailable)
         out.jOff = in.risk.pFailBeforeFinish *
                    (in.inputBytes / in.inputBandwidth + in.progress * in.work / in.recoveryRate);

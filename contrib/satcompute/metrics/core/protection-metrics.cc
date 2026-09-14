@@ -50,7 +50,7 @@ Kind(protection::ProtectionTransferKind kind)
 } // namespace
 
 void
-WriteProtectionMetrics(const protection::CheckpointManager& manager,
+WriteProtectionMetrics(const protection::ProtectionEvidenceView& manager,
                        const NetworkTransferEngine& network,
                        const std::filesystem::path& directory)
 {

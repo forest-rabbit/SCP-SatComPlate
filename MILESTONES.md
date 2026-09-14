@@ -28,7 +28,7 @@ N0–N2 是 ns-3.33 版本的原始里程碑，相关 PR 位于旧 SatCompute �
 | N5B：CompFRR 动态频率 | 已完成，集成到 `n5` | PR #96 | 2026-09-11 |
 | N5B 后续 / Pre-N5C：基线与可行性消融 | 已验收冻结 | PR #97 / 执行 `b51cc9d63` | 2026-09-12 |
 | Pre-N5C：CB-Sat 基线收口 | 已完成，集成到 `n5`，JIT 留作历史 | PR #98 / `17c4414dc` | 2026-09-13 |
-| N5C：V4 备份节点选择 | 实施及七组验证完成，待人工审阅 | 执行 `c7f1a91e1` | 2026-09-13 |
+| N5C：备份节点选择与 corrected chain | 已集成到 `n5`，含 recovery/maintenance 修复 | PR #102 / `d26f7af90` | 2026-09-14 |
 
 N2 的最终发布链固定为 `feature/n2-integration` 合入旧仓库 `main`，并以
 annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移动 N0、N1
@@ -57,6 +57,11 @@ LRL/FA-LRL是N5C的强baseline，须公平比较、不预设结果；当时N5C�
 N5C Eager/Deferred 分别完成 800/799，备份热点和 total eq-WU 下降，但 Deferred 非全面占优，
 noU 在该场景完成 800。完整对照、消融与局限仅记录在
 [N5C 验收](docs/n5/reviews/N5B-closeout-N5C-kickoff.md)，不据此改写模型或预设算法排名。
+
+2026-09-14：[PR #102](https://github.com/forest-rabbit/SCP-SatComPlate/pull/102) 将 N5C/U、
+deadline/INPUT-path recovery 与 checkpoint-maintenance 修复整链合入 `n5`。
+修复后 FULL/noU/Idle-Aware 五轮各完成 4000/4000，详细证据保留在
+[维护语义报告](docs/n5/reviews/Checkpoint-maintenance-semantics-audit.md)；不是 N5R 的新性能实验，`main` 未变。
 
 ## N0：初始网络平台
 

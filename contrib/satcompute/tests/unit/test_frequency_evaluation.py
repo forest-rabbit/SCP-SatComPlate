@@ -6,8 +6,8 @@ from copy import deepcopy
 
 ROOT = Path(__file__).resolve().parents[4]
 REGRESSION = ROOT / "contrib/satcompute/tests/integration/regression"
-EVAL = runpy.run_path(str(REGRESSION / "analyze-frequency-evaluation.py"))
-RUN = runpy.run_path(str(REGRESSION / "run-final-scenario.py"))
+EVAL = runpy.run_path(str(REGRESSION.parents[1] / "support/protection/frequency_audit.py"))
+RUN = runpy.run_path(str(REGRESSION.parents[1] / "support/protection/scenario.py"))
 
 
 class FrequencyEvaluationTests(unittest.TestCase):

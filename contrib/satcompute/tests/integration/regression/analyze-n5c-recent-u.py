@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Independent recent-U window reconstruction and three-way paired evaluation; no tuning."""
+"""Historical recent-U evidence reader, archived in place; no production policy.
+
+Maintained tests still use the independent window reconstruction. Partial historical
+outputs are not completed performance evidence; keep the existing validation gates.
+"""
 import argparse
 from collections import Counter, defaultdict
 import json

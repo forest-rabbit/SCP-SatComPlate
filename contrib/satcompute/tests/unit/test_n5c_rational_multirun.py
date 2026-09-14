@@ -53,6 +53,8 @@ class RationalMultirunTests(unittest.TestCase):
             RUN["source_scope"]("candidate")
         protected = calls[1][calls[1].index("--")+1:]
         self.assertIn("contrib/satcompute/protection/runtime/recovery-controller.cc", protected)
+        self.assertIn("contrib/satcompute/protection/baseline/recompute/recompute-runtime.cc", protected)
+        self.assertIn("contrib/satcompute/protection/runtime/transfer-only-recovery-ledger.cc", protected)
         self.assertTrue(all((RUN["ROOT"] / p).exists() for p in protected))
 
     def test_three_way_uses_one_common_observed_population(self):

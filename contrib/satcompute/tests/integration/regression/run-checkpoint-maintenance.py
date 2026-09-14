@@ -30,7 +30,7 @@ def identity():
         'protection/runtime/frequency-n5c-adapter.cc',
         'protection/policy/compfrr/frequency/compfrr-frequency-policy.cc',
         'protection/policy/compfrr/placement/n5c-placement-policy.cc',
-        'protection/policy/baseline/checkbullet')]
+        'protection/policy/baseline/checkbullet', 'protection/baseline/checkbullet')]
     if git('diff', '--name-only', BASE, 'HEAD', '--', *frozen):
         raise ValueError('frozen algorithms/recovery/input/fault/routing changed')
     return git('rev-parse', 'HEAD')

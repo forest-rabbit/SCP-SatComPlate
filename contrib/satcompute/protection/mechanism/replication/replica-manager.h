@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef SATCOMPUTE_REPLICA_MANAGER_H
 #define SATCOMPUTE_REPLICA_MANAGER_H
-#include "../checkpoint/checkpoint-manager.h"
-#include "../../policy/baseline/one-plus-one/one-plus-one-policy.h"
+#include "../../runtime/transfer-only-recovery-ledger.h"
+#include "../../baseline/one-plus-one/one-plus-one-policy.h"
 #include "../../../traffic/local-delivery.h"
 #include "../../runtime/placement-load-ledger.h"
 #include <array>
@@ -58,7 +58,7 @@ class ReplicaManager
     void Finalize();
     std::vector<ReplicaSummary> Summaries() const;
     const std::vector<ReplicaEvent>& Events() const { return m_events; }
-    const CheckpointManager& Ledger() const { return m_ledger; }
+    const TransferOnlyRecoveryLedger& Ledger() const { return m_ledger; }
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
     const PlacementPolicy& Placement() const { return m_policy.Placement(); }
     /** Per-attempt, per-task and physical transfer evidence. */
@@ -97,7 +97,7 @@ class ReplicaManager
     SatelliteRuntimeView& m_topology;
     Ptr<NetworkTransferEngine> m_network;
     OnePlusOnePolicy& m_policy;
-    CheckpointManager m_ledger; ///< Only shared canonical flow registration; zero objects/capacity.
+    TransferOnlyRecoveryLedger m_ledger; ///< Transport/evidence only; cannot execute checkpoints.
     PlacementLoadLedger m_loads; ///< Accepted replica assignments and post-batch takeover ownership.
     std::map<uint64_t, std::unique_ptr<State>> m_states;
     struct Flow { uint64_t taskId{}, generation{}; bool input{}; };

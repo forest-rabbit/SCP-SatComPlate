@@ -4,8 +4,8 @@ from pathlib import Path
 import runpy
 import unittest
 
-API = runpy.run_path(str(Path(__file__).resolve().parents[1] / "integration/regression/analyze-input-deferred.py"))
-START = runpy.run_path(str(Path(__file__).resolve().parents[1] / "integration/regression/analyze-riskweighted-start.py"))
+API = runpy.run_path(str(Path(__file__).resolve().parents[1] / "support/protection/input_staging_audit.py"))
+START = runpy.run_path(str(Path(__file__).resolve().parents[1] / "support/protection/risk_start_audit.py"))
 
 
 class DeferredAuditTests(unittest.TestCase):

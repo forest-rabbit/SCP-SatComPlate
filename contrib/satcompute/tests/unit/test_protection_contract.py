@@ -51,11 +51,17 @@ class ProtectionConfigTests(unittest.TestCase):
                 result = self.run_cli(options)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("n5c requires compfrr", result.stdout)
-        for variant in ("full", "noR", "noU", "noM", "recent-U", "rational-U"):
+        for variant in ("full", "noR", "noU", "noM", "rational-U"):
             result = self.run_cli(f"--protectionMode=compfrr --placementMode=n5c --n5cVariant={variant} --fixedProtectionDelta=0")
             self.assertIn("fixedProtectionDelta", result.stdout)
         result = self.run_cli("--placementMode=fa-ffp --n5cVariant=noM")
         self.assertIn("ablations require placementMode=n5c", result.stdout)
+
+    def test_recent_u_is_historical_only_not_a_production_policy(self):
+        result = self.run_cli("--protectionMode=compfrr --placementMode=n5c --n5cVariant=recent-U --fixedProtectionDelta=0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("recent-U is historical-only", result.stdout)
+        self.assertNotIn("ERROR: fixedProtectionDelta", result.stdout)
 
     def test_full_baselines_guard_and_four_placements(self):
         for mode in ("recompute", "one-plus-one"):

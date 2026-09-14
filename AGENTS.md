@@ -272,6 +272,69 @@ for user review; no further runs, parameter changes, push/PR/CI/merge/tag author
 Prior U outputs are historical, replaced for current comparisons by the 15 new runs;
 other affected baselines have not been revalidated and must not be mixed with them.
 
+### Active N5R contract (2026-09-14)
+
+The user approved the architecture audit and the staged N5R implementation.
+PR #102 integrates the complete corrected chain into n5 at `d26f7af90`; N5R uses
+one branch `refactor/protection-architecture-consolidation` from that corrected
+base, never the older n5. This supersedes the earlier N5C/maintenance stop only
+for the approved consolidation. Preserve #100/#101 and experiment history;
+clean superseded branches only after inclusion and PR dependency checks.
+Keep JIT/V7, main, legacy and formal outputs unchanged.
+
+Follow `docs/n5/reviews/N5R-implementation.md` and the approved architecture audit:
+common substrate, F/INPUT B, P, optional recovery/relocation, baselines, reusable
+test helpers, canonical docs, then dependency-checked historical archival.
+Each executable increment must build and pass unit/contract/small deterministic
+semantic-equivalence gates before committing and continuing. Any unapproved
+semantic difference stops that increment for a separate audit, not a refactor fix.
+Preserve one Frequency solver, START/ON placement contracts, RNG, routing, schema,
+actual/planned WU/bytes/storage, deadlines and the current maintenance lifecycle.
+No new formal 1300s matrix, N6/N7 experiment, Multi-tree, U tuning or INPUT timing.
+
+User clarification: production compute-pressure policies are only CUMULATIVE and
+IDLE_AWARE. noU remains an ablation, not a third pressure policy. Remove recent-U
+from the production CLI with an explicit deprecation test; preserve its historical
+evidence and dependent implementation until dependency audit permits archival.
+All other legacy CLI/CSV/fixture/analysis interfaces remain compatible. CI keeps
+the existing manual phase cadence, not per commit. Do not merge N5R or main, or
+tag a release, without the user's subsequent final review.
+
+N5R final closeout amendment: the user approved the final architecture taskbook.
+Keep this branch / Draft #103. Complete baseline/checkbullet (including its frozen
+profile/tools), baseline/recompute and baseline/one-plus-one as unique owners;
+shared baseline placements move to policy/placement. Multi-tree gets a README
+placeholder ONLY. Preserve public ns3 header names, evidence, model parameters,
+source guards and all execution semantics. Pass the existing small N5R gates
+before the second stage: read-only offline diagnosis of historical V7 run11 and
+its same-batch Deferred anchor. Reuse audit helpers; never bring production JIT
+into this branch or run a new formal matrix. Byte classification precedence is
+used, no-fault, wrong-target, then failed/cancelled, with independent reason flags.
+Non-critical INPUT does not imply no prefetch benefit; sent fraction is not READY.
+Unknown evidence stays unknown. Paired contrasts are not exact counterfactuals.
+Record both stages in docs/n5/reviews/N5R-implementation.md and stop for review
+after the offline report; no V8, optimizer, budget, threshold or new timer.
+
+### INPUT worthiness Phase 1 (user-approved)
+
+The user accepted `CompFRR_Input_Worthiness_Clarifications_v2.md` and explicitly
+approved merging #103 into n5, then creating `feature/compfrr-input-worthiness`
+from that merged baseline. Finish the N5R status record first; preserve all
+corrected-chain evidence. Delete the merged N5R branch only after verifying
+ancestry and no dependent PRs. Keep main, legacy and production JIT/#99 untouched.
+Phase 1 is offline only: separate historical V6START (primary) and Full-V7
+(discovery) cohorts, audit per-feature causal reconstruction, four exclusive
+task labels, distributions, exploratory separability and joint old-JIT eligibility.
+Use the existing predictor/window and parallel recovery estimator, fixed pairs,
+cadence and deadline. Historical labels are not runtime features. UNKNOWN stays
+unknown; do not renormalize known probability mass or infer zero from missing data.
+Report worthiness, timing eligibility, real admission and receiver READY separately.
+Catch reduction is not net benefit; deadline rescue is separate from finite catch
+difference. No production, timing, Frequency/Placement/Recovery/RNG/routing/scene
+changes, new simulation/calibration, optimizer, budget, arbitrary threshold or
+extra CI. Keep analysis/test helpers in the existing tests tree and stop after
+Markdown plus CSV/JSON evidence for user review. Do not implement Phase 2.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System
