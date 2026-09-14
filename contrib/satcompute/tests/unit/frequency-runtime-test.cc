@@ -82,6 +82,7 @@ struct FrequencyRuntimeTestAccess
 namespace
 {
 uint64_t checks{};
+bool inputStartAudit{}; ///< Test CLI only; production default remains off.
 constexpr int64_t END = 4000000000LL;
 
 void Check(bool value, const char* message)
@@ -741,7 +742,7 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
             mode == "lrl-two" ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
                                : std::unique_ptr<PlacementPolicy>{}, RemoteBusyRecoveryPolicy::RELOCATE,
             (mode == "n5c-deferred" || mode == "n5c-recent-U" || mode == "n5c-rational-U") ?
-                InputStagingPolicy::DEFERRED : InputStagingPolicy::EAGER);
+                InputStagingPolicy::DEFERRED : InputStagingPolicy::EAGER, false, inputStartAudit);
         if (mode == "f3")
         {
             Simulator::Schedule(NanoSeconds(50000000), [&] {
@@ -885,6 +886,31 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
               [](const auto& r) { return r.recoveryNode.has_value(); })), "actual recovery count mismatch");
         controller.WriteDecisions(output);
         controller.PlacementLoads().WriteMetrics(output);
+        controller.WriteInputStartAudit(output);
+        if (inputStartAudit)
+        {
+            std::set<uint64_t> seen;
+            for (const auto& snapshot : controller.InputStartRecords())
+            {
+                Check(seen.insert(snapshot.task.taskId).second, "START audit duplicate task");
+                Check(snapshot.prediction && snapshot.finishExclusive && snapshot.remainingNs > 0,
+                      "START audit lost canonical query");
+                if (snapshot.trigger == "FAULT_EPOCH")
+                    Check(snapshot.firstSampleNs > snapshot.timeNs, "START audit repeats survived epoch");
+                for (const auto& step : snapshot.prediction->steps)
+                    Check(step.targetTimeNs >= snapshot.firstSampleNs &&
+                          step.targetTimeNs < snapshot.timeNs + snapshot.remainingNs,
+                          "START audit prediction includes completion or predates first check");
+                const auto row = std::find_if(controller.Decisions().begin(), controller.Decisions().end(),
+                    [&](const auto& d) { return d.taskId == snapshot.task.taskId && d.input.risk.epochNs == snapshot.timeNs; });
+                Check(row != controller.Decisions().end() && row->committed &&
+                      row->pair == std::optional(snapshot.pair), "START audit did not retain actual pair");
+                Check(snapshot.inputPath.local == (snapshot.task.sourceNodeId == snapshot.pair.remoteNode),
+                      "START audit LocalDelivery mismatch");
+                if (n5c) Check(snapshot.actualValidation.has_value(), "N5C actual revalidation inputs missing");
+            }
+            Check(seen.size() == controller.Manager().Summaries().size(), "START audit admitted population mismatch");
+        }
         WriteProtectionMetrics(controller.Manager(), *tasks->GetTransferEngine(), output);
         controller.Recovery()->WriteMetrics(output);
         Check(controller.Manager().IsQuiescent(), "online generate leaked resources");
@@ -1383,6 +1409,7 @@ int main(int argc, char** argv)
     std::string output = "/tmp/satcompute-frequency-runtime";
     CommandLine command(__FILE__);
     command.AddValue("outputDir", "Controlled evidence directory", output);
+    command.AddValue("inputStartAudit", "Opt-in passive START capture for no-op fixtures", inputStartAudit);
     command.Parse(argc, argv);
     try
     {

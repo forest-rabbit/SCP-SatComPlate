@@ -168,3 +168,19 @@ NONE 的零选中 Precision/BytePrecision 未定义，输出 null，不伪设为
 Stage A 验证：build no-op；234 项 Python tests（1 个既有外部切片 skip），
 其中 21 项 selective/PF 合成测试通过。旧 409/71/12/326 统计未变，未启动仿真。
 下一步仅实施默认关闭的被动记录并验证 no-op，再运行一次最新底座 development/calibration run11。
+
+## Deferred passive START trace（Stage B）
+
+记录器按 `committed → post-batch revalidation → actual pair fixed → snapshot → START_CHECKPOINT → admitted`
+顺序执行，仅成功准入的任务输出一次。新 `input-start-snapshots.json` 默认关闭；不复用 reference pair
+冒充 actual pair。实际 post-batch storage/rate 与 Frequency 提案 inputs/estimates 分开存储；
+未来概率直接调用现有 QueryTaskPrediction/canonical predictor，显式输出完整 F1/F2/union 序列、
+first-sample 及 finish-exclusive 合同，没有新增 checkpoint forecaster 或 recovery surrogate。
+
+实施 gate：build、243 项 Python tests（1 个既有 skip）、维护 C++ contracts、16 组 placement smoke 通过。
+与 corrected N5R 小基线比较 1,965 文件（1,707 CSV）一致；logging on/off 同样全量一致，
+仅增加 16 个审计 JSON。fixture 的 18 个成功 START 已逐个检查轨迹和实际 pair。
+原 fault/probability、Frequency、placement、checkpoint/recovery、bytes/WU/storage、routing 和时序均未变。
+
+下一项是唯一一次当前 clean 代码、canonical corrected run11 非记录参数的 800-task/1300s 采样；
+purpose 显式为 DEVELOPMENT_CALIBRATION，绝不作为 final performance。执行结果将在本节续记。

@@ -9,6 +9,7 @@
 #include "../../runtime/placement-load-ledger.h"
 #include "../../runtime/decision-path-snapshot.h"
 #include "placement/compfrr-placement-tracker.h"
+#include "input/input-start-audit.h"
 
 #include <filesystem>
 #include <set>
@@ -42,6 +43,7 @@ struct FrequencyDecisionRecord
     int64_t capacityWaitStartNs{-1}, capacityWaitEndNs{-1};
     std::optional<size_t> n5cTrace; ///< START-only spatial proposal; no solver call per remote.
     std::optional<uint64_t> n5cPeak; ///< Total replacement quota, captured before physical admission.
+    std::optional<InputStartValidatedResources> inputAuditValidation; ///< Opt-in copy only, never decision input.
 };
 
 /** Online generate integration. Owns no fault model, RNG, state bytes or second network. */
@@ -57,12 +59,16 @@ class CompFrrController : public ProtectionPolicy
                                   std::unique_ptr<PlacementPolicy> placement = nullptr,
                                   RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
                                   InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER,
-                                  bool observePlacementResources = false);
+                                  bool observePlacementResources = false,
+                                  bool inputStartAudit = false);
     ~CompFrrController() override;
     /** Finish the same actual ledgers as fixed protection. */
     void Finalize();
     /** Write only decision/prediction audit, not actual metrics. */
     void WriteDecisions(const std::filesystem::path& directory) const;
+    /** Opt-in development output only; no existing metrics/schema are changed. */
+    void WriteInputStartAudit(const std::filesystem::path& directory) const;
+    const std::vector<InputStartAuditRecord>& InputStartRecords() const { return m_inputStartRecords; }
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
     const PlacementPolicy& Placement() const { return *m_placement; }
     const CompFrrPlacementTracker* N5c() const { return m_n5c; }
@@ -160,6 +166,8 @@ class CompFrrController : public ProtectionPolicy
     std::vector<CompFrrForecast> N5cPeers(uint32_t remote, uint64_t excluded,
                                     const std::string& trigger, DecisionPathSnapshot& paths);
     bool RevalidateN5c(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
+    InputStartAuditRecord CaptureInputStart(const FrequencyDecisionRecord& row, int64_t timeNs) const;
+    ///< Read-only snapshots immediately before mechanism execution, not initialization completion.
     ///< Adapt actual placement, legal inventory, pools, rates and paths.
     Ptr<TaskCoordinator> m_tasks;                     ///< Business lifecycle owner.
     SatelliteRuntimeView& m_topology;                 ///< Shared network view.
@@ -179,6 +187,9 @@ class CompFrrController : public ProtectionPolicy
     std::vector<PauseInterval> m_capacityWaits; ///< Not a compute reservation or actual waste.
     EventId m_capacityDrain;
     bool m_finalized{};
+    bool m_inputStartAudit{}; ///< Default off; no selector, timers, reservations or flows.
+    uint64_t m_inputStartRejected{}; ///< Captured but not physically admitted; excluded from candidates.
+    std::vector<InputStartAuditRecord> m_inputStartRecords;
 };
 } // namespace ns3::protection
 #endif

@@ -69,6 +69,8 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-manager.cc
     protection/policy/fixed/fixed-controller.cc
     protection/policy/compfrr/compfrr-controller.cc
+    protection/policy/compfrr/input/input-start-audit.cc
+    metrics/core/input-start-audit.cc
     protection/policy/compfrr/compfrr-placement-adapter.cc
     protection/runtime/placement-resource-tracker.cc
     metrics/core/placement-resource-metrics.cc
@@ -192,6 +194,7 @@ build_lib(
     protection/policy/fixed/fixed-controller.h
     protection/runtime/frequency-protection-controller.h
     protection/policy/compfrr/compfrr-controller.h
+    protection/policy/compfrr/input/input-start-audit.h
     protection/policy/compfrr/storage-estimator.h
     protection/runtime/n5c-placement-tracker.h
     protection/runtime/compute-usage-history.h

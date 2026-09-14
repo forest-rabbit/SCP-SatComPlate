@@ -145,6 +145,9 @@ GetDefaultSatComputeConfig()
     // --compfrr-shadow：显式开启 G4 旁路评估，不影响任务、路由与故障抽样。
     config.compfrrShadow = false;
 
+    // --inputStartAudit：开发采集开关；只读 START 快照，不创建预置 INPUT 或改变决策。
+    config.inputStartAudit = false;
+
     // --compfrr-shadow-output：旁路 CSV 目录；空时使用 outputDir/shadow。
     config.compfrrShadowOutput = "";
 

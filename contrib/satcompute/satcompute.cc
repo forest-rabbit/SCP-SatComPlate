@@ -232,6 +232,8 @@ AddCommandLineOptions(CommandLine& commandLine,
                          config.fixedProtectionBatchN);
     commandLine.AddValue("compfrr-shadow", "Opt-in G4 analytical decision observer (no real backup)",
                          config.compfrrShadow);
+    commandLine.AddValue("inputStartAudit", "Opt-in passive pre-initialization START snapshots (no INPUT staging)",
+                         config.inputStartAudit);
     commandLine.AddValue("compfrr-shadow-output", "Shadow CSV directory; default outputDir/shadow",
                          config.compfrrShadowOutput);
     commandLine.AddValue("faultEnableF1",
@@ -401,6 +403,8 @@ ValidateConfig(const SatComputeConfig& config)
     }
     if (config.protectionMode == "compfrr" && config.faultMode != "generate")
         FailConfig("protectionMode", "compfrr requires online faultMode=generate");
+    if (config.inputStartAudit && config.protectionMode != "compfrr")
+        FailConfig("inputStartAudit", "requires compfrr protection and online generate");
     if (!std::isfinite(config.fixedProtectionDelta) || config.fixedProtectionDelta <= 0 ||
         config.fixedProtectionDelta > 1 ||
         std::abs(config.fixedProtectionDelta * 1000 -
@@ -739,7 +743,7 @@ main(int argc, char* argv[])
                     makePlacement(), busyPolicy,
                     config.inputStagingPolicy == "deferred" ? protection::InputStagingPolicy::DEFERRED
                                                              : protection::InputStagingPolicy::EAGER,
-                    true); // Read-only placement resource metrics for comparable baseline/N5C accounting.
+                    true, config.inputStartAudit); // Read-only placement metrics and opt-in START audit.
             }
             else if (config.protectionMode == "checkbullet")
             {
@@ -816,6 +820,7 @@ main(int argc, char* argv[])
                 WriteProtectionMetrics(frequency->Manager(), *transferEngine, outputDirectory);
                 frequency->Recovery()->WriteMetrics(outputDirectory);
                 frequency->WriteDecisions(outputDirectory);
+                frequency->WriteInputStartAudit(outputDirectory);
                 frequency->PlacementLoads().WriteMetrics(outputDirectory);
                 frequency->Placement().WriteSelections(outputDirectory);
             }

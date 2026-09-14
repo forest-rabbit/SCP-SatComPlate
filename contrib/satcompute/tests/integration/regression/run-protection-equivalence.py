@@ -30,11 +30,16 @@ def normalized_json(value, directory):
     return value
 
 
-def compare(reference, candidate, *, allow_cb_profile_relocation=False):
+def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_input_start_audit=False):
     def files(directory):
         return {p.relative_to(directory) for p in directory.rglob('*')
                 if p.suffix in ('.csv', '.json')}
     expected, actual = files(reference), files(candidate)
+    audit_files = {p for p in actual - expected if p.name == 'input-start-snapshots.json'}
+    if allow_input_start_audit:
+        if not audit_files:
+            raise AssertionError('logging-on gate has no additional audit evidence')
+        actual -= audit_files
     if not expected or expected != actual:
         raise AssertionError(f'output set differs: missing={expected-actual}, extra={actual-expected}')
     relocations = []
@@ -64,6 +69,8 @@ def compare(reference, candidate, *, allow_cb_profile_relocation=False):
         if not equal:
             raise AssertionError(f'SEMANTIC_DIFFERENCE: {path}; stop and audit, do not refresh golden')
     result = {'status': 'PASS', 'files': len(expected), 'csv': sum(p.suffix == '.csv' for p in expected)}
+    if allow_input_start_audit:
+        result['additional_passive_audit_files'] = len(audit_files)
     if allow_cb_profile_relocation:
         result['authorized_cb_profile_path_relocations'] = relocations
     return result
@@ -78,7 +85,7 @@ def execute(output, arguments):
     print(f'PASS {output.name}', flush=True)
 
 
-def collect(root, jobs):
+def collect(root, jobs, *, input_start_audit=False):
     if root.exists():
         raise ValueError(f'output already exists; preserve evidence: {root}')
     root.mkdir(parents=True)
@@ -110,6 +117,10 @@ def collect(root, jobs):
             f'--inputStagingPolicy={staging}', '--remoteBusyRecoveryPolicy=relocate',
             '--routingMode=global-capacity-aware-hrw', '--islBandwidthBps=10000000000',
             '--delayMode=fixed', '--fixedDelay=0.001', f'--outputDir={output}']))
+    if input_start_audit:
+        for output, arguments in commands:
+            if output.name == 'frequency' or output.name.startswith(('f-', 'p-')):
+                arguments.append('--inputStartAudit=1')
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         list(pool.map(lambda item: execute(*item), commands))
 
@@ -120,6 +131,8 @@ def main():
     parser.add_argument('--reference', type=Path)
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--compare-only', action='store_true')
+    parser.add_argument('--input-start-audit', action='store_true',
+                        help='Enable passive START snapshots; compare all other semantic output')
     parser.add_argument('--allow-cb-profile-relocation', action='store_true',
                         help='Audit only the exact N5R CB profile owner move; verify frozen profile bytes')
     args = parser.parse_args()
@@ -133,9 +146,10 @@ def main():
         if old_profile != (ROOT / CB_PROFILE_NEW).read_bytes():
             raise AssertionError('frozen CB profile changed; owner relocation exception rejected')
     if not args.compare_only:
-        collect(output, args.jobs)
+        collect(output, args.jobs, input_start_audit=args.input_start_audit)
     result = compare(args.reference.resolve(), output,
-                     allow_cb_profile_relocation=args.allow_cb_profile_relocation) if args.reference else {
+                     allow_cb_profile_relocation=args.allow_cb_profile_relocation,
+                     allow_input_start_audit=args.input_start_audit) if args.reference else {
         'status': 'BASELINE_CAPTURED', 'root': str(output)}
     print(json.dumps(result, sort_keys=True))
 

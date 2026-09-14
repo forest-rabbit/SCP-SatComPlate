@@ -72,6 +72,26 @@ output-dir 必须不存在。入口复用 `support/protection/selective_input_of
 此模式拆分 A0/A1：P_F 与标签完整即可输出所有唯一 cut 的两视图 sweep 和 NONE/ALL/ORACLE，
 不被 advanced benefit 缺失阻断；成功退出 0，绝不挑选或写入 production threshold。
 
+Stage B 的 `--inputStartAudit=1` 默认关闭，只在成功 START 前冻结快照、执行后确认准入；
+不采 RNG、不建 flow、不占存储、不加事件。`frequency-runtime-test.cc` 检查实际 pair、准入唯一性
+与 finish-exclusive 网格；`test_input_start_trace_audit.py` 检查轨迹/P_F、缺失量、同星和 no-op 对照。
+`run-protection-equivalence.py --input-start-audit` 可采集 logging-on 小场景并与 off 目录对比，
+只允许新增 `input-start-snapshots.json`，其他所有 CSV/JSON 都必须语义一致。
+
+经人工批准且全部小场景 gate 通过后，`run-input-start-calibration.py --gate-root <off/on父目录>
+--output-dir <新目录>` 从最新代码复用 corrected run11 的所有非记录 CLI；要求 clean commit。
+这是 **800任务/1300秒 development/calibration trace**，不进入常规测试或 CI，也不是 final performance。
+完成后仅离线分析：
+
+```bash
+python contrib/satcompute/tests/integration/regression/analyze-input-start-trace.py \
+  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
+  --output-dir output/audits/compfrr-input-run11-instrumented
+```
+
+新 trace 使用自身 Deferred outcome 标签，不借旧 JIT 结果；A1 不完整仍保持 UNKNOWN。
+不选择 production threshold；若将来用此 run11 设计规则，正式评价应独立使用 runs12–15。
+
 ## 历史专项与目录索引
 
 以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，

@@ -71,6 +71,7 @@ struct SatComputeConfig
     double fixedProtectionDelta; ///< 固定 checkpoint 进度间隔，0.05 表示 5%。
     uint32_t fixedProtectionBatchN; ///< 每个 remote batch 包含的 L1 record 数。
     bool compfrrShadow; ///< G4 只读旁路决策评估，不创建真实备份。
+    bool inputStartAudit; ///< 默认关闭；只记录真实 START 初始化前的因果快照，不发送 INPUT。
     std::string compfrrShadowOutput; ///< 空时写入 outputDir/shadow。
 
     // output

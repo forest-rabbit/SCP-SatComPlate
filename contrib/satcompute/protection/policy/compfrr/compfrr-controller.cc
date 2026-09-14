@@ -19,12 +19,14 @@ CompFrrController::CompFrrController(Ptr<TaskCoordinator> tasks,
     std::unique_ptr<PlacementPolicy> placement,
     RemoteBusyRecoveryPolicy busyPolicy,
     InputStagingPolicy inputPolicy,
-    bool observePlacementResources)
+    bool observePlacementResources,
+    bool inputStartAudit)
     : m_tasks(tasks),
       m_topology(topology),
       m_faults(faults),
       m_manager(tasks, topology, capacity, stopNs, inputPolicy),
-      m_placement(placement ? std::move(placement) : std::make_unique<FaFirstFeasiblePlacementPolicy>())
+      m_placement(placement ? std::move(placement) : std::make_unique<FaFirstFeasiblePlacementPolicy>()),
+      m_inputStartAudit(inputStartAudit)
 {
     if (!faults)
         throw std::invalid_argument("frequency protection requires online generate epochs");
@@ -595,12 +597,21 @@ void CompFrrController::AfterEpoch(int64_t time,
                 context.attempt = {row.taskId, 0};
                 context.primaryNode = task.definition.computeNodeId;
                 context.nowNs = time;
+                // Freeze before initialization can allocate, transfer or change inventory.
+                const auto inputAudit = m_inputStartAudit
+                    ? std::optional(CaptureInputStart(row, time)) : std::nullopt;
                 m_manager.Execute(context,
                                   {ActionKind::START_CHECKPOINT,
                                    CheckpointConfiguration{config->deltaPermille,
                                                            config->batchN,
                                                            state.pair->localNode,
                                                            state.pair->remoteNode}});
+                if (inputAudit)
+                {
+                    const auto inventory = m_manager.Inventory(row.taskId);
+                    if (inventory && inventory->active) m_inputStartRecords.push_back(*inputAudit);
+                    else ++m_inputStartRejected;
+                }
             }
             else if (row.proposal.action == FrequencyAction::UPDATE)
             {

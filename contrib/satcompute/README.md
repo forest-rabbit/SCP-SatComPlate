@@ -110,6 +110,10 @@ CompFRR 另支持 `placementMode=n5c`：一次参考 Frequency 求解后，按 V
 G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评估，默认关闭。
 不创建真实备份或修改任务结果，详见 [G4验证工具](tools/validation/compfrr-shadow/README.md)。
 
+`--inputStartAudit=1` 是 CompFRR 专用的默认关闭开发记录开关：输出成功 START 的
+初始化前实际节点对、资源及 canonical predictor 序列到 `input-start-snapshots.json`。
+它不执行 Selective INPUT、不发送 INPUT、不影响决策；采集与对照方法见 [测试说明](tests/README.md#selective-input-初始化离线审计)。
+
 人工设置的时长和间隔统一以秒传入，平台在组件边界转换为 ns-3 `Time` 或有符号
 整数纳秒。星座 CSV 只描述轨道结构，算力、任务和 Fault Trace 位于独立数据文件，
 故障内部参数位于 `fault-para.cc`；它们与 `para.cc` 不重复。
