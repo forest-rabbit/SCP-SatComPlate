@@ -50,6 +50,23 @@ python contrib/satcompute/tests/integration/regression/analyze-v7-offline.py \
 缺失原始证据或身份/账本矛盾则失败。模型预测的代表故障时刻可带小数，以原文本保留；
 实际事件时间仍为整数 ns。判据与结论见 [V7 离线报告](../../../docs/n5/reviews/N5R-V7-offline-audit.md)。
 
+### Selective INPUT 初始化离线审计
+
+只分析已有三组历史 START，不启用 production pre-staging/JIT，不运行正式仿真或 CI：
+
+```bash
+python contrib/satcompute/tests/integration/regression/analyze-selective-input-staging.py \
+  --history-root output/v7-cbsat-adjustment/20260913-jit-formal \
+  --output-dir output/audits/compfrr-selective-input-local
+```
+
+output-dir 必须不存在。入口复用 `support/protection/selective_input_offline_audit.py`，
+先核验 identity、committed/physical/admitted START，再输出逐字段重建覆盖率与独立 outcome 标签。
+**退出码 2** 表示已完成有效审计，但证据不足，按合同停止；不是仿真失败。
+这时收益/sweep/reference 不生成，缺失量保留空值，summary 写明 SKIPPED；身份/账本矛盾则报错退出。
+主组 V6START 与 Full-V7 分开，后续真实故障/检查点不能成为特征。
+完整范围、覆盖率与下一步需补的证据见 [审计报告](../../../docs/n5/reviews/CompFRR-selective-input-staging-offline-audit.md)。
+
 ## 历史专项与目录索引
 
 以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，

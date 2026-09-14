@@ -1,0 +1,130 @@
+# Selective INPUT 初始化预置：离线审计
+
+2026-09-14。状态：`STOP_RECONSTRUCTION_INSUFFICIENT`，停在任务书第 21 节覆盖率门禁。
+
+结论：能够识别完整 START population、恢复总风险并建立实际 INPUT 等待标签，
+但历史日志不足以完成所有候选的逐故障点收益重建。本轮不能判断 selector 的 Precision/Recall，
+也不能据此判定“运行时模型没有足够信息”，更不能直接回到动态 JIT。
+
+## 范围与身份
+
+工作分支 `feature/compfrr-input-worthiness` 从 `n5@aa7a49a1c`（#103）创建，
+离线工具提交 `b02ec3d6f`。本轮遵循 Selective INPUT taskbook 及已接受的四项审阅补充，
+替代旧的滚动 ON Worthiness 计划：只审计成功 START、初始化之前的一次决策，
+Deferred checkpoint layout + 独立完整 INPUT，端点是 source → designated remote。
+既有 Eager layout、START/Frequency/placement/recovery、参数和 RNG 均未修改。
+
+原始目录：`output/v7-cbsat-adjustment/20260913-jit-formal/`。
+三组共同的执行提交为 `367f23f393c45205cf87fbee003bfb668f453d5e`，不是 corrected N5R 仿真。
+均为 seed 1 / run 11、800 任务、1300 s、FA-LRL、relocate、online generate；
+执行成功、工作区干净、概率审计关闭。核验了 CLI 非策略参数、任务静态定义/原始 deadline budget，
+并逐行确认三组实际 `fault-events.csv` 相同。
+
+| 守恒项 | V6START：主组 | Full-V7：独立辅助组 |
+| --- | ---: | ---: |
+| 全部任务 | 800 | 800 |
+| committed + physical START + ACCEPTED 三方确认 | 409 | 413 |
+| TASK_RUNNING / FAULT_EPOCH 触发 | 389 / 20 | 390 / 23 |
+| START 后主任务故障 | 83 | 83 |
+| NEEDED：Deferred INPUT 确在关键等待路径 | 71 | 71 |
+| FAULT_NONCRITICAL：故障但 INPUT 无额外等待 | 12 | 12 |
+| NO_FAULT | 326 | 330 |
+| UNKNOWN 标签 | 0 | 0 |
+| 历史确有 prefetch 生命周期 | 343 | 347 |
+| 历史 INPUT 被恢复实际使用 | 16 | 16 |
+| START source 与 remote 同星 | 8 | 8 |
+
+没有把旧 JIT 已发送的子集当作 population，也没有用 Full-V7 后续记录补 V6START 特征。
+83 个主任务故障为 82 个 F1、1 个 F3；F3 保留为 outcome tag，不注入 F1/F2 预测质量。
+标签要求主任务故障、原 deadline、实际 recovery target/path 严格匹配，并有 accepted recovery
+及真实依赖时间；关键等待为 `max(0, INPUT dependency ready - state ready)`。
+71 个 NEEDED 的 Deferred 实际 INPUT 关键等待总和为 **18,186.406988 ms**，不是可节省时间。
+历史配对 catch 为 15 改善、67 相同、1 变差，属于描述性历史对照，不是新方案效果。
+
+身份核验不等于整条轨迹相等：V6START 的任务 232 local 为 8（anchor 为 10），
+任务 322 remote 为 1（anchor 为 3），二者均 NO_FAULT。
+任务 298/694 的派发时间及绝对 deadline 有差异，但不在两组 START population 中；
+原 deadline budget 相同，83 个故障配对的绝对 deadline 均一致。
+Full-V7 有 15 个 START 对照差异项，包括 anchor 中不存在的新增候选，单独记录，不池化。
+
+## 因果重建覆盖率
+
+| 字段 | V6START 已知 / 总数 | Full-V7 已知 / 总数 |
+| --- | ---: | ---: |
+| 唯一 START、固定 local/remote、初始 cadence、任务量与原 deadline | 409 / 409 | 413 / 413 |
+| 精确剩余计算时间、下一合法抽样点、`P_F` | 409 / 409 | 413 / 413 |
+| `q_next` 与完整后续联合首次故障质量序列 | 16 / 409 | 17 / 413 |
+| START 时 INPUT serialization estimate | 390 / 409 | 391 / 413 |
+| 固定 cadence 的初始化有效性及 state/tail 预测输入 | 0 / 409 | 0 / 413 |
+| `P_Iimpact`、`G_I`、`P_Iddl` | 8 / 409 | 8 / 413 |
+
+最后一行的 8 个已知值仅是 LocalDelivery 恒等情况：两种 INPUT 等待均为零，
+INPUT-only gain / deadline rescue 为零；没有将任何跨星缺失值补零。
+LocalDelivery 的计划网络字节为零，网络 byte density 不适用，在 CSV 中留空并写明原因。
+
+### 可以证明的部分
+
+- 非 epoch 查询沿用 `QueryTaskPrediction()` 的 pending/next canonical grid 和 finish-exclusive 窗口，
+  不新增抽样。主组 389 个 TASK_RUNNING 均不在整数秒边界；合成测试另覆盖 pending 同刻检查。
+- FAULT_EPOCH 的 20 个 START 已存活当前检查，必须剔除该点。
+  本批原完成时间均不落在检查网格上，因此总质量可由
+  `P_future = (P_logged - q_survived) / (1 - q_survived)` 恢复。
+  这是条件生存后的绝对故障概率，不是归一化为“未来必故障”；完成点恰好落网格的合成例明确返回 UNKNOWN。
+- 剩余窗口只有一个检查点时，`q_next = P_F`，该点首次故障质量也等于 `P_F`。
+  主组有 16 个这样的候选；不能据此拆出 F1/F2 各自概率或推导多点序列。
+- 固定历史 controller 的 TASK_RUNNING / CAPACITY_RELEASE 是同步 Evaluate → AfterEpoch，
+  source → remote 的提案速率可用于该次提交前的 serialization 估计；并非 receiver-ready 或实际准入保证。
+  FAULT_EPOCH 中间可以发生批量故障和其他任务准入，不能把提案带宽直接升格为 post-batch 快照。
+  主组 20 个 epoch 候选中 1 个 LocalDelivery 可直接确定零等待，余下 19 个留 UNKNOWN。
+
+### 不能替代缺失信息的部分
+
+历史概率审计关闭，CSV 只有当前概率和累计概率等摘要，未保存完整 predictor steps 或 START 的完整
+F1/F2 model state。多点累计值不能唯一确定每点的 `q_k` / `w_k`。历史 task/recovery events
+可提供部分过去状态线索，但尚无经验证的 prefix-state 重放器，不能宣称已完整重建。
+
+START 不是 checkpoint-ready。任务书要求在同一个固定 cadence 下比较未来各检查点的两种 INPUT 等待，
+还需要合法的初始化完成估计、local/remote progress、state/tail 字节与对应时间。
+初始 cadence、单个 `t_init_s`、`predicted_recovery_s` 摘要不足以给出这些轨迹；
+后续真实 checkpoint/ON UPDATE/实际 recovery target 不能替代它们。
+
+当前 [并行恢复 estimator](../../../contrib/satcompute/protection/runtime/checkpoint-recovery-estimate.h)
+只对调用者给出的时间做并行 join、完整 compute-deadline feasibility 运算，不预测未来 checkpoint。
+因此本轮没有另写串行近似或预测器 surrogate，也没有把初始化之前的质量丢掉后重新归一化。
+后续若证据齐备仍须复用这个 estimator：有限 catch 差与 deadline-rescue mass 分账，
+REMOTE_REDO/TAIL 严格沿用当前选择及同值优先 REDO 的规则。
+
+源码依据：历史执行的 `protection/runtime/frequency-protection-controller.cc` 中
+OnTask、BuildResources、AfterEpoch；当前对应 [CompFRR controller](../../../contrib/satcompute/protection/policy/compfrr/compfrr-controller.cc)。
+抽样窗口见 [FaultModelEngine](../../../contrib/satcompute/fault/runtime/fault-model-engine.cc)，
+风险轨迹见 [canonical predictor](../../../contrib/satcompute/fault/model/compute-failure-predictor.cc)。
+历史至 N5R 的 fault diff 只有只读 exposure 查询扩展，预测模型与抽样合同未改变。
+
+## 产物、验证与停止点
+
+最终证据：`output/audits/compfrr-selective-input-init-run11-verified/`（ignored，不写回原始目录）。
+
+- `source-identity.json`、`summary.json`。
+- `candidate-start-snapshots.csv` / `candidate-labels.csv` / `candidate-features.csv`：各 822 行，cohort 显式分开。
+- `feature-reconstruction-audit.csv`：19,728 行，逐候选逐字段的值、来源、状态与缺失原因。
+- `score-sweeps.csv` / `reference-points.csv` **未生成**，summary 显式记为 `SKIPPED_RECONSTRUCTION_GATE`。
+  不用空曲线冒充分析成功，也不借唯一已知的 `P_F` 绕过联合收益覆盖率门禁。
+
+初次扫描目录 `output/audits/compfrr-selective-input-init-run11/` 保留为中间产物；
+它尚未识别单点窗口的可重建性，以上 `-verified` 为最终证据。
+119 个原始文件的大小及修改时间在最终审计前后完全一致；这只是只读检查，不是 SHA/安全性机制。
+
+验证通过：目标模块 build；230 项维护 Python tests（1 项缺少外部位置切片的既有 skip，含 17 项新增合成测试）；
+完整维护 C++ test runner。后者包含 canonical predictor、并行恢复/deadline/缺失路径等既有合同测试。
+新增合成测试覆盖 source 分组、唯一/真实准入 START、窗口条件化、单点重建、禁止未来 outcome 入特征、
+互斥标签、LocalDelivery、UNKNOWN、覆盖率停止与输出不可覆盖；未实现的 score/收益计算不宣称已验收。
+未改变 production/fixture/外部 schema，未启动新正式仿真、GitHub CI、PR 合并或 runtime Phase 2。
+
+若获下一轮授权，最小补证方向是**被动记录** START 提交前的完整 canonical predictor steps/状态、
+post-batch 的 source→actual remote 只读路径快照，以及固定初始 cadence 的因果初始化/state/tail 估计输入。
+先验证记录与估计合同不改变原运行语义，再决定如何采集新证据；本轮不实施记录器、不运行新矩阵，
+不新增优化器、阈值或动态 reevaluation。
+
+未来即使通过覆盖率：计划预置字节不等于实际流量；未覆盖 anchor 关键等待的计划字节不称为实际浪费；
+captured critical wait 不称为实际节省时延；ALL_STAGE 不等于 Eager，ORACLE_NEEDED 只是标签参考，
+不是可实现恢复性能上界。所有网络字节指标均排除 LocalDelivery。

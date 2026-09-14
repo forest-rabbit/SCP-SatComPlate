@@ -357,6 +357,13 @@ captured anchor wait is not actual saved time. LocalDelivery is excluded from
 all network-byte sums/densities. Keep production, formal runs, CI, PR #99/JIT,
 main and legacy unchanged. No runtime Phase 2 or automatic integration merge.
 
+This offline audit is complete at its coverage STOP: 409 V6START candidates,
+71 NEEDED / 12 FAULT_NONCRITICAL / 326 NO_FAULT / 0 UNKNOWN labels. P_F is known
+for all 409, but multi-check trajectories and causal checkpoint forecasts are
+incomplete; do not proceed to sweeps or runtime. Read
+`docs/n5/reviews/CompFRR-selective-input-staging-offline-audit.md` before continuing.
+The lack of historical evidence does not prove lack of runtime information.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System
