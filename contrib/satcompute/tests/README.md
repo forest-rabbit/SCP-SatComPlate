@@ -108,6 +108,24 @@ python contrib/satcompute/tests/integration/regression/analyze-input-coinitializ
 `unit/test_input_coinitialization_audit.py` 覆盖因果时刻、概率质量、同分/同群体、UNKNOWN与无阈值合同。
 最终证据为 `output/audits/compfrr-input-coinitialization-value-run11/`；结论追加到原审计报告。
 
+Latency-first v3 继续使用同一批离线证据。下列新 target **不运行仿真**，只把路径快照传给现有
+`AdmissiblePathEstimate::TransferTimeNs()`；没有 Python 网络模型替代实现。在项目 uv 环境、已有定向配置下：
+
+```bash
+cmake -S . -B cmake-cache
+cmake --build cmake-cache --target satcompute_test_satcompute-input-timing-audit -j 4
+python contrib/satcompute/tests/integration/regression/analyze-input-latency-resource.py \
+  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
+  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
+  --coinitialization-dir output/audits/compfrr-input-coinitialization-value-run11 \
+  --output-dir output/audits/compfrr-input-latency-resource-local
+```
+
+输出目录必须不存在；`--engine-probe` 可显式指定这个纯函数入口。完整 cut、实际可达 Pareto 点、
+80/90/95/99/100%等待覆盖及分层统计不会选择 production threshold；ORACLE/M>0仅为独立参考。
+`test_input_latency_resource_audit.py` 包含 native estimator 与离线合成合同；未构建该 target 时原生子组明确 skip，
+正式完成本专项验证必须先构建并通过该子组。最终证据目录为 `output/audits/compfrr-input-latency-resource-run11/`。
+
 ## 历史专项与目录索引
 
 以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，

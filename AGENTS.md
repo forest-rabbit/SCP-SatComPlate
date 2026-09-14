@@ -404,6 +404,17 @@ not a causal feature without a known schedule. A1 exact recovery values remain U
 No production code/new simulation changed. Stop for review: no score/threshold choice,
 production Selective INPUT, new runs, CI, push/merge or unrelated implementation.
 
+The accepted Latency-first v3 offline continuation is complete; see the next section
+of that same review and `output/audits/compfrr-input-latency-resource-run11/`.
+Compare attainable same-wait cuts, not task-recall cuts. Separate G_ser vs P_F from
+G_net vs G_ser. The test-only native bridge calls TransferTimeNs without Simulator;
+production behavior and all 13 v2 audit artifacts remain unchanged. Propagation fixes
+small-INPUT time scale but yields only localized ranking gains on this development run.
+Eager/Selective/Deferred/CB performance orders are hypotheses, not required winners.
+A1 remains UNKNOWN; a future binary rule also needs a reviewed benefit target.
+Stop for review: no production score/threshold, future checkpoint predictor, new
+simulation, CI, automatic commit/push/merge or unrelated work is authorized.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

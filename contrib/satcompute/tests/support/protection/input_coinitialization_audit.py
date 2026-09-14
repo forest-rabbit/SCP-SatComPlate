@@ -308,13 +308,10 @@ def source_contract(repo, execution_commit):
         contract='Synchronous Execute creates INITIALIZING state at Now(); active inventory and ACCEPTED confirm admission, START log alone does not. Nonzero INIT_STATE is generated after cL, then transferred/merged; zero initial state has no UDP.')
 
 
-def write_audit(root, verified, output):
-    """Rejoin existing evidence, write only a fresh audit directory, never launch a simulation."""
+def collect_audit(root, verified):
+    """Reusable read-only source/admission/causal-feature join; no output or simulation."""
     execution = json.loads((root/'execution.json').read_text())
     canonical = Path(execution['canonical_reference'])
-    protected = [root, verified, canonical]
-    API['HISTORY']['output_guard'](output, protected)
-    before = API['evidence_metadata'](protected)
     identity = TRACE['execution_identity'](execution, json.loads((root/'execution-result.json').read_text()),
         json.loads((root/'run-summary.json').read_text()), json.loads((canonical/'execution.json').read_text()))
     require(identity == json.loads((verified/'source-identity.json').read_text()), 'verified Stage B source differs')
@@ -337,6 +334,19 @@ def write_audit(root, verified, output):
             int(admissions[tid]['time_ns']), int(summaries[tid]['start_time_ns']), synchronous_contract=True)
         times.append(dict(cohort=COHORT, task_id=tid, **t))
         features.append(timing_feature(r, t))
+    return dict(identity=identity, contract=contract, trace=trace, snapshots=document['candidates'],
+                times=times, features=features)
+
+
+def write_audit(root, verified, output):
+    """Rejoin existing evidence, write only a fresh audit directory, never launch a simulation."""
+    execution = json.loads((root/'execution.json').read_text())
+    canonical = Path(execution['canonical_reference'])
+    protected = [root, verified, canonical]
+    API['HISTORY']['output_guard'](output, protected)
+    before = API['evidence_metadata'](protected)
+    data = collect_audit(root, verified)
+    identity, contract, trace, times, features = (data[k] for k in ('identity','contract','trace','times','features'))
     population = join_labels(features, trace['labels'])
     tables, summary = analyze_population(population, trace['reduced']['summary'])
     tables['initializing-time-audit'] = times

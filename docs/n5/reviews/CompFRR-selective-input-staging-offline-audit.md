@@ -363,3 +363,102 @@ A1 仍 INCOMPLETE；本轮只是 current-rate INPUT serialization potential，�
 初次数值中间产物保留在 `compfrr-input-coinitialization-value-run11-initial-numerics/`，不作为最终证据。
 按分阶段实施方式先通过因果/公式测试，再完成真实数据审计与全套测试；现已停止等待人工审阅。
 **不挑 production threshold/score、不跑独立runs或CI、不自动推送/合并。**
+
+## Latency-first / Resource-efficient INPUT Audit
+
+按 v3 及四项人工确认修正完成，仅使用既有 Stage B development run11；没有新增仿真、生产 INPUT 决策，
+也没有修改 Frequency/Placement/Recovery。最终目录为 `output/audits/compfrr-input-latency-resource-run11/`，
+10个CSV及summary.json，包含完整曲线、固定等待覆盖、profile构成、native时间估计和逐目标比较。
+仍是ALL跨星405/72、F1/F2跨星404/71；4个LocalDelivery单列。唯一F3 task120单列，不算F1/F2预测错误。
+
+### 评价与因果合同
+
+横轴是 **planned staged application bytes**，纵轴是 **captured observed INPUT-critical wait**；
+不是actual extra traffic，也不是actual saved catch。所有唯一score cut保持整组ties，保留NONE/ALL/ORACLE参考；
+只标记实际可达点的Pareto支配关系，不做凸包插值，不利用标签自由挑选任务。两分数比较还枚举其全部可达
+正等待目标，避免只挑一个有利landmark；此类目标点计数不是独立统计样本，不计算显著性或宣称泛化。
+ORACLE不进入因果分数的Pareto竞争；M>0降级为equal-cost理论参考，旧v2字段和结果不追改。
+
+端到端估计直接调用执行版本对应的 `AdmissiblePathEstimate::TransferTimeNs()`：
+`ceil(INPUT bytes × 8e9 / rate_bps) + propagation_ns`。新增test-only C++ TSV入口只构造estimate DTO，
+不查询live path、不创建flow、不运行Simulator、不消耗故障随机数。405个跨星使用实际pair的快照路径；
+4个LocalDelivery返回的1ns仅为因果边界，network时间/normalized score为N/A，网络字节仍为零。
+仍使用decision-known INITIALIZING时间和canonical首次故障质量；发送提前量截断到非负，零提前量质量不丢弃。
+INPUT不进入ON-ready逻辑屏障；非零INIT_STATE仍先cL、再传输、再cR，零state不创建UDP。
+
+`U_net_pot/G_I_net_pot`只描述当前路径下的INPUT依赖时间潜力，不含未来争用、路径变化、合法state/tail及恢复目标。
+传播时延仅进入新增离线INPUT估计，未进入Frequency。更准确的INPUT完成时间估计不等于更准确的恢复收益。
+
+### Q1：相同等待目标下，旧分数谁更省
+
+没有全区间胜者。此前43.923GB/91.43%（P_F）对39.357GB/91.54%（G_ser）的比较复核成立，
+计划字节减少10.395%；排除F3后的对应比较减少9.220%。但这是特定观察等待目标，不是普遍节省比例。
+新定义的“90%等待覆盖”也不是旧的“90% NEEDED任务Recall”，两类landmark不能混用。
+
+下表每格为 **计划GB / 实际达到的观察等待覆盖率**；因为整组cut不能拆分，允许超过目标。
+所有选择数、任务Recall、Precision、BytePrecision和profile构成均另列CSV，不能将漏掉更多短等待任务隐藏。
+
+| 视图 / 等待目标 | P_F | G_ser（旧G_I_pot） | G_net（新增G_I_net_pot） |
+| --- | ---: | ---: | ---: |
+| ALL / 80% | 33.151 / 80.54% | 30.237 / 80.23% | 30.237 / 80.23% |
+| ALL / 90% | 43.354 / 90.24% | 39.357 / 91.54% | 39.694 / 91.54% |
+| ALL / 95% | 47.911 / 95.27% | 52.801 / 95.07% | 52.898 / 95.07% |
+| ALL / 99% | 70.172 / 100% | 56.909 / 99.49% | 57.026 / 99.49% |
+| ALL / 100% | 70.172 / 100% | 106.721 / 100% | 84.697 / 100% |
+| F1/F2 / 80% | 28.071 / 80.43% | 28.745 / 81.37% | 28.745 / 81.37% |
+| F1/F2 / 90% | 38.580 / 90.82% | 38.002 / 91.35% | 38.002 / 91.35% |
+| F1/F2 / 95% | 47.054 / 97.01% | 44.284 / 95.37% | 43.079 / 95.37% |
+| F1/F2 / 99% | 51.299 / 99.73% | 53.890 / 99.47% | 53.890 / 99.47% |
+| F1/F2 / 100% | 54.518 / 100% | 105.921 / 100% | 83.897 / 100% |
+
+例如ALL的90%等待点，P_F选163任务/64 NEEDED，G_ser选110/58，G_net选113/58；
+F1/F2的95%等待点分别为177/66、130/59、126/59。以较少任务捕获大部分等待，并不表示任务覆盖率一样。
+U_ser解释量也保留完整曲线：ALL的95%点为47.395GB，F1/F2的95%点为46.819GB，仍未普遍优于其他分数。
+
+### Q2/Q3：传播时延有新增信息，但不是全面优势
+
+| 跨星profile | T_ser中位数 | T_net中位数 | G_ser中位数 | G_net中位数 |
+| --- | ---: | ---: | ---: | ---: |
+| compression | 241.326ms | 246.388ms | 14.066ms | 14.477ms |
+| dense-image | 226.474ms | 230.450ms | 18.275ms | 18.795ms |
+| sparse-inference | 238.611ms | 244.729ms | 5.388ms | 5.512ms |
+| llm | 0.5096μs | 4.000656ms | 0.0205μs | 0.225583ms |
+
+LLM的T_net范围为1.000364–8.000552ms，G_net最大7.166615ms；59个中56个U_net≈P_F，
+3个存在正质量的partial-ready风险点。小INPUT确实不等于零网络完成时间；这并不能证明它位于实际恢复关键路径。
+
+Gate分开评价：G_ser对P_F衡量已有绝对时间信息，G_net对G_ser才衡量新增传播信息。
+在两曲线全部可达等待目标上，G_net对G_ser：ALL为23点更省/43点相同/18点更多，F1/F2为23/43/17。
+改善集中在某些区间，尤其100%覆盖尾部；此处计划字节比G_ser少20.64%/20.79%，
+但仍比P_F多20.70%/53.89%。80%–99%固定landmarks大多接近，ALL还有小幅恶化，F1/F2的95%点有改善。
+不能把G_ser已经具有的收益归因于propagation；也不能因为LLM时间修正明显，就宣称整体Pareto占优。
+
+G_net对P_F并不持续更省：ALL的139个可达目标中32点更省、107点更多，F1/F2的137点中27点更省、110点更多。
+这些计数取决于曲线的离散目标分布，只是可复核描述，不是“胜率”或统计概率。
+**本run11不支持将G_net提升为最终score；同时也不能称三条曲线完全重合。**
+
+### Q4–Q7：下一阶段仍需审阅，不自动实现
+
+Q4：INPUT更早就绪但恢复没有更早的缺口仍在；state/tail/merge可能遮蔽INPUT，A1仍INCOMPLETE。
+Q5：可以建议暂停当前run11上的INPUT timing继续细化，但理由是新增收益局部且不稳定，
+不是已经证明该信息在所有场景都无用，也不是曲线完全重合。
+Q6：若继续研究，优先审计能否因果获得合法checkpoint和其他恢复依赖的就绪信息，
+而不是继续增加风险/时间分数。`max(INPUT,R_other)`的差值只有在恢复目标、合法状态、路径和补算量等条件
+固定时才是依赖屏障的条件价值；本轮不创建future state/tail predictor、不反填真实未来状态。
+Q7：**仍不足以冻结在线SEND/DEFER模型。**除上述因果量外，还需另行明确“相近恢复收益”的可操作目标；
+本轮不选覆盖阈值、不加人工多资源权重，也不把planned staging量当成actual额外字节。
+
+Eager/Selective/Deferred和CheckBullet的性能关系只保留为研究目标，不预设必然顺序或必须胜出。
+未来实验需公平报告completion/deadline失败和可比catch样本，不能以失败样本消失造成表面时延优势。
+run11只用于development/calibration；独立正式评价及CheckBullet矩阵需后续单独批准。
+
+### 验证与停止
+
+新29项测试全部通过，维护Python全套304项（1项既有skip）；其中4项直接验证native estimator的
+整数取整、propagation、LocalDelivery、不可达/零速率/溢出边界。新增纯函数target及依赖构建成功，
+全局ns-3 examples/tests保持OFF，没有执行Simulator或新运行场景。
+复用抽取后的旧v2审计在临时目录重建，13个输出文件逐字节一致；没有覆盖旧证据。
+独立公式核对405个native网络时间和G_net，最大时间潜力误差1.11e-16秒，4个同星N/A合同通过。
+原始日志、Stage B verified、v2及canonical目录在分析前后大小/mtime一致；生产源与执行版本相同。
+按分阶段实施先验证旧曲线，再验证native时间，最后整合证据；不重复正式性能仿真。
+现已停止等待人工审阅，**不选择production score/threshold、不实现Selective、不运行CI或自动提交/推送/合并**。

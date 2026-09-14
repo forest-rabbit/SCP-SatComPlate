@@ -322,6 +322,16 @@ build_exec(
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
 )
 
+# Offline bridge to the existing pure INPUT transfer estimator. No simulation.
+build_exec(
+  EXECNAME satcompute-input-timing-audit
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/support/protection/input-transfer-estimate.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 # Pure-model calibration tool. It does not run the network simulator or create
 # an ns-3 example target.
 build_exec(
