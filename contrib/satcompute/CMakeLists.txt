@@ -21,7 +21,10 @@ build_lib(
     protection/policy/fixed/fixed-protection-policy.cc
     protection/policy/compfrr/frequency/compfrr-frequency-policy.cc
     protection/policy/compfrr/frequency/frequency-decision-gate.cc
-    protection/policy/compfrr/placement/n5c-placement-policy.cc
+    protection/policy/compfrr/placement/compfrr-placement-policy.cc
+    protection/policy/compfrr/placement/compute-pressure/compute-pressure.cc
+    protection/policy/compfrr/placement/compfrr-placement-tracker.cc
+    protection/storage/peak-quota-ledger.cc
     protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.cc
     protection/policy/feasible-placement-pairs.cc
     protection/policy/baseline/least-recovery-load/least-recovery-load-placement-policy.cc
@@ -30,7 +33,8 @@ build_lib(
     protection/runtime/fixed-protection-controller.cc
     protection/policy/compfrr/compfrr-controller.cc
     protection/policy/compfrr/compfrr-placement-adapter.cc
-    protection/runtime/n5c-placement-tracker.cc
+    protection/runtime/placement-resource-tracker.cc
+    metrics/core/placement-resource-metrics.cc
     protection/runtime/compute-usage-history.cc
     metrics/core/n5c-placement-metrics.cc
     protection/policy/compfrr/storage-estimator.cc
@@ -126,6 +130,13 @@ build_lib(
     protection/policy/compfrr/frequency/compfrr-frequency-policy.h
     protection/policy/compfrr/frequency/frequency-decision-gate.h
     protection/policy/compfrr/placement/n5c-placement-policy.h
+    protection/policy/compfrr/placement/compfrr-placement-policy.h
+    protection/policy/compfrr/placement/compute-pressure/compute-pressure.h
+    protection/policy/compfrr/placement/compfrr-placement-tracker.h
+    protection/common/protection-forecast.h
+    protection/common/placement-resources.h
+    protection/storage/peak-quota-ledger.h
+    protection/runtime/placement-resource-tracker.h
     protection/policy/placement-policy.h
     protection/policy/recovery-policy.h
     protection/runtime/decision-path-snapshot.h

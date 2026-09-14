@@ -4,28 +4,16 @@
 #include "../../../../fault/model/compute-failure-predictor.h"
 #include "../../../common/protection-types.h"
 #include "../../../common/task-state-adapter.h"
+#include "../../../common/protection-forecast.h"
 
 #include <functional>
 #include <string>
 
 namespace ns3::protection
 {
-/** One causal future sampler probability, not a sampled event or new decision variable. */
-struct FrequencyRiskStep
-{
-    int64_t targetTimeNs{}; ///< Absolute canonical fault-check time.
-    double combinedStepFailureProbability{}; ///< Conditional F1/F2 union.
-};
-
-/** Same-epoch causal probabilities. Contains no trace, sample outcome or future fault ID. */
-struct FrequencyRisk
-{
-    int64_t epochNs{};          ///< Current fault-check time, not a task-relative timer.
-    int64_t intervalNs{};       ///< Current sample's reference interval and ON cost window.
-    double qCurrentSample{};    ///< Union of the unchanged independent F1/F2 samples.
-    double pFailBeforeFinish{}; ///< Canonical predictor, including the current check.
-    std::vector<FrequencyRiskStep> futureSteps; ///< Read-only canonical trajectory for START.
-};
+/** Compatibility names for the shared causal forecast, not another predictor. */
+using FrequencyRiskStep = ProtectionRiskStep;
+using FrequencyRisk = ProtectionRisk;
 
 /** Call the existing production predictor and reject a mismatched sampler probability.
  * The adapter supplies the exact q already computed by the current fault epoch.
@@ -34,13 +22,7 @@ struct FrequencyRisk
 FrequencyRisk MakeFrequencyRisk(double currentSamplerQ,
                                 const ComputeFailurePredictionInput& predictionInput);
 
-/** Immutable frequency only; placement is supplied separately by PlacementPolicy. */
-struct FrequencyConfiguration
-{
-    uint32_t deltaPermille{}; ///< 10..100, step one (0.1 percentage point).
-    uint32_t batchN{};        ///< 1..100, n*deltaPermille<=1000.
-    bool operator==(const FrequencyConfiguration&) const = default;
-};
+using FrequencyConfiguration = CheckpointCadence;
 
 /** Additional allocation peaks, compared with free bytes, not total pool capacity.
  * The causal adapter must include legal state/H, init, pending and merge allocations,

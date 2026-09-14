@@ -11,6 +11,13 @@ namespace ns3::protection
 {
 namespace
 {
+/** Copy only causal scalars/trajectory into P. No solver, storage closure or per-remote solve. */
+PlacementForecastInput PlacementInput(const FrequencyInput& in)
+{
+    return {in.inputPolicy, in.risk, in.inputBytes, in.work, in.variableBytes, in.progress,
+            in.primaryRate, in.recoveryRate, in.inputBandwidth, in.backupBandwidth,
+            in.deadlineNs, in.costs};
+}
 /** Same initialization contract as Frequency, evaluated on actual candidate resources. */
 int64_t ReadyAfter(const FrequencyInput& in)
 {
@@ -23,10 +30,10 @@ int64_t ReadyAfter(const FrequencyInput& in)
 }
 } // namespace
 
-std::vector<N5cForecast> CompFrrController::N5cPeers(
+std::vector<CompFrrForecast> CompFrrController::N5cPeers(
     uint32_t remote, uint64_t excluded, const std::string& trigger, DecisionPathSnapshot& paths)
 {
-    std::vector<N5cForecast> peers;
+    std::vector<CompFrrForecast> peers;
     for (auto& [id, state] : m_states)
     {
         if (id == excluded || !state.pair || state.pair->remoteNode != remote) continue;
@@ -67,7 +74,7 @@ std::vector<N5cForecast> CompFrrController::N5cPeers(
         // conservative current full-init estimate, explicitly distinct from actual readiness.
         const auto ready = m_n5c->ReadyAfter(id).value_or(ReadyAfter(in));
         in.storageDemand = {};
-        peers.push_back({id, task.definition.computeNodeId, std::move(in),
+        peers.push_back({id, task.definition.computeNodeId, PlacementInput(in),
                         {inventory->config.deltaPermille, inventory->config.batchN}, ready,
                         m_tasks->IsSatelliteAvailable(state.pair->localNode) &&
                         m_tasks->IsComputeAvailable(state.pair->localNode),
@@ -80,13 +87,13 @@ void CompFrrController::SelectN5cRemote(
     FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
     DecisionPathSnapshot& paths, const std::vector<PlacementDecision>& pairs)
 {
-    const auto& policy = dynamic_cast<const N5cPlacementPolicy&>(*m_placement);
-    N5cDecisionTrace trace;
+    const auto& policy = dynamic_cast<const CompFrrPlacementPolicy&>(*m_placement);
+    CompFrrDecisionTrace trace;
     trace.taskId = row.taskId;
     trace.timeNs = row.input.risk.epochNs;
     trace.trigger = row.trigger;
     trace.reference = *row.pair;
-    trace.referenceInput = row.input;
+    trace.referenceInput = PlacementInput(row.input);
     trace.config = row.proposal.selected->config;
     const auto primary = Service(task.definition.computeNodeId)->GetRunningTaskSnapshot();
     if (!primary || primary->taskId != row.taskId || primary->remainingTimeNs < 0)
@@ -97,7 +104,7 @@ void CompFrrController::SelectN5cRemote(
         auto actual = row;
         actual.pair = pair;
         actual.resourceReason.clear();
-        N5cCandidate candidate;
+        CompFrrCandidate candidate;
         candidate.remoteNode = pair.remoteNode;
         m_n5c->FillResources(candidate, primary->remainingTimeNs);
         if (!BuildResources(actual, task, state, paths))
@@ -111,7 +118,7 @@ void CompFrrController::SelectN5cRemote(
                 candidate.rejection = "LOCAL_STORAGE_INFEASIBLE";
             else candidate.additionalQuotaBytes = storage->remoteAdditionalBytes;
         }
-        candidate.demand = {row.taskId, task.definition.computeNodeId, actual.input, trace.config,
+        candidate.demand = {row.taskId, task.definition.computeNodeId, PlacementInput(actual.input), trace.config,
                             0, actual.input.pathAvailable,
                             task.definition.sourceNodeId == pair.remoteNode};
         if (candidate.rejection.empty())
@@ -170,10 +177,10 @@ bool CompFrrController::RevalidateN5c(FrequencyDecisionRecord& row,
         row.resourceReason = "N5C_POST_BATCH_QUOTA";
         return false;
     }
-    N5cForecast forecast{row.taskId, task.definition.computeNodeId, actual.input,
+    CompFrrForecast forecast{row.taskId, task.definition.computeNodeId, PlacementInput(actual.input),
                         row.proposal.selected->config, 0, true,
                         task.definition.sourceNodeId == row.pair->remoteNode};
-    if (N5cCatchSeconds(forecast) > N5cBudgetSeconds(forecast, row.input.risk.epochNs) ||
+    if (CompFrrCatchSeconds(forecast) > CompFrrBudgetSeconds(forecast, row.input.risk.epochNs) ||
         (row.proposal.action == FrequencyAction::START &&
          (ReadyAfter(actual.input) - row.input.risk.epochNs) / 1e9 >= actual.input.remainingSeconds))
     {

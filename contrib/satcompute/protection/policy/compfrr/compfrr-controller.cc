@@ -28,9 +28,9 @@ CompFrrController::CompFrrController(Ptr<TaskCoordinator> tasks,
 {
     if (!faults)
         throw std::invalid_argument("frequency protection requires online generate epochs");
-    const auto spatial = dynamic_cast<const N5cPlacementPolicy*>(m_placement.get());
+    const auto spatial = dynamic_cast<const CompFrrPlacementPolicy*>(m_placement.get());
     if (spatial || observePlacementResources)
-        m_placementObservation = std::make_unique<N5cPlacementTracker>(tasks, faults, m_manager, stopNs,
+        m_placementObservation = std::make_unique<CompFrrPlacementTracker>(tasks, faults, m_manager, stopNs,
             spatial ? spatial->Variant() : N5cVariant::FULL, spatial != nullptr);
     if (spatial) m_n5c = m_placementObservation.get();
     if (m_n5c) m_manager.SetMaintenanceFree([this](auto node, auto task) {

@@ -8,7 +8,7 @@
 #include "../../runtime/recovery-controller.h"
 #include "../../runtime/placement-load-ledger.h"
 #include "../../runtime/decision-path-snapshot.h"
-#include "../../runtime/n5c-placement-tracker.h"
+#include "placement/compfrr-placement-tracker.h"
 
 #include <filesystem>
 #include <set>
@@ -65,7 +65,7 @@ class CompFrrController : public ProtectionPolicy
     void WriteDecisions(const std::filesystem::path& directory) const;
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
     const PlacementPolicy& Placement() const { return *m_placement; }
-    const N5cPlacementTracker* N5c() const { return m_n5c; }
+    const CompFrrPlacementTracker* N5c() const { return m_n5c; }
     ///< Live ownership used by LRL and the same diagnostic output for FFP.
 
     const CheckpointManager& Manager() const
@@ -157,7 +157,7 @@ class CompFrrController : public ProtectionPolicy
                           DecisionPathSnapshot& paths);
     void SelectN5cRemote(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
                          DecisionPathSnapshot& paths, const std::vector<PlacementDecision>& pairs);
-    std::vector<N5cForecast> N5cPeers(uint32_t remote, uint64_t excluded,
+    std::vector<CompFrrForecast> N5cPeers(uint32_t remote, uint64_t excluded,
                                     const std::string& trigger, DecisionPathSnapshot& paths);
     bool RevalidateN5c(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
     ///< Adapt actual placement, legal inventory, pools, rates and paths.
@@ -167,8 +167,8 @@ class CompFrrController : public ProtectionPolicy
     PlacementLoadLedger m_loads;                      ///< Live remote assignment/recovery counts.
     CheckpointManager m_manager;                      ///< Sole actual checkpoint mechanism.
     std::unique_ptr<PlacementPolicy> m_placement;      ///< FFP baseline or explicitly injected LRL.
-    std::unique_ptr<N5cPlacementTracker> m_placementObservation; ///< Read-only resource metrics, also usable by FA-FFP.
-    N5cPlacementTracker* m_n5c{}; ///< Alias enabled only for N5C; legacy policies never use quota promises.
+    std::unique_ptr<CompFrrPlacementTracker> m_placementObservation; ///< Read-only resource metrics, also usable by FA-FFP.
+    CompFrrPlacementTracker* m_n5c{}; ///< Alias enabled only for N5C; legacy policies never use quota promises.
     CompFrrFrequencyPolicy m_policy;                  ///< Pure production solver.
     std::unique_ptr<RecoveryController> m_recovery;   ///< Reused N5A recovery.
     std::map<uint64_t, State> m_states;               ///< Per-primary frequency lifecycle.
