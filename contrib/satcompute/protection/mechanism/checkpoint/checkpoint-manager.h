@@ -3,7 +3,7 @@
 #define SATCOMPUTE_CHECKPOINT_MANAGER_H
 #include "../../../task/task-coordinator.h"
 #include "../../runtime/protection-runtime.h"
-#include "../../runtime/protection-transfer-key.h"
+#include "../../runtime/protection-transfer-dispatcher.h"
 #include "../../storage/backup-storage-pool.h"
 #include "checkpoint-progress.h"
 #include <functional>
@@ -40,15 +40,6 @@ struct ProtectionEvent
         remoteReserved{};   ///< Whole-pool snapshots.
     uint32_t storageNode{}; ///< Object owner pool; meaningful when storageObject is nonzero.
     uint64_t storageObject{}, transferId{}; ///< Exact object/flow IDs; zero when not applicable.
-};
-
-/** One registered real flow; storage ownership exists before this record is created. */
-struct ProtectionFlow
-{
-    ProtectionTransferKey key;                               ///< Stable logical request identity.
-    uint64_t transferId{}, bytes{}, work{}, storageObject{}; ///< Real flow and reserved payload.
-    uint32_t storageNode{};                                  ///< Destination pool identity.
-    int64_t requestedNs{}; ///< Creation time before canonical registration.
 };
 
 /** Per-attempt checkpoint evidence, independent of task success or recovery claims. */
@@ -178,7 +169,7 @@ class CheckpointManager : public ProtectionMechanism
     /** @return All registered real flows, including failed/cancelled history. */
     const std::vector<ProtectionFlow>& Flows() const
     {
-        return m_flows;
+        return m_transfers.Flows();
     }
 
     /** @return Stable task-ID ordered summaries. */
@@ -232,16 +223,7 @@ class CheckpointManager : public ProtectionMechanism
         std::optional<std::pair<int64_t, bool>> physicalCommit; ///< Nominal time and init flag.
     };
 
-    /** Reserved positive-byte request awaiting canonical next-ns registration. */
-    struct Request
-    {
-        ProtectionTransferKey key;          ///< Stable request key.
-        uint32_t source{}, destination{};   ///< Actual satellite endpoints.
-        uint64_t bytes{}, work{}, object{}; ///< Reserved immutable payload.
-        int64_t requestedNs{};              ///< Original creation ns, not event UID.
-        std::function<bool()> live; ///< Recovery attempt guard; empty for primary protection.
-        std::function<void(uint64_t)> registered; ///< Install terminal observer before start.
-    };
+    using Request = ProtectionTransferRequest; ///< Neutral transfer request; storage stays here.
 
     /** Check owning primary service; inclusive compute end takes precedence over callbacks. */
     bool Live(State& state);
@@ -269,7 +251,7 @@ class CheckpointManager : public ProtectionMechanism
                uint64_t bytes,
                uint64_t work,
                uint64_t object);
-    void Flush(int64_t requestedNs); ///< Register/start sorted requests, rechecking live state.
+    void RegisterCheckpoint(const Request& request); ///< Mechanism-specific admission after canonical dispatch.
     void TransferTerminal(uint64_t id, int64_t at); ///< Real finalizer callback, not sender finish.
     void InitializationReceived(State& state);      ///< Join both init paths and schedule cR.
     void ScheduleCapture(State& state);             ///< Select the next legal application boundary.
@@ -288,16 +270,12 @@ class CheckpointManager : public ProtectionMechanism
     int64_t m_stopNs;                     ///< Absolute simulation endpoint.
     InputStagingPolicy m_inputPolicy;     ///< Immutable per-run INPUT staging contract.
     uint64_t m_globalStoragePeakBytes{};  ///< Observed after every potentially increasing mutation.
-    ProtectionTransferIds m_ids;          ///< Disjoint non-recycled flow ID allocator.
+    ProtectionTransferDispatcher m_transfers; ///< One neutral canonical queue/ID/evidence owner.
     std::map<uint64_t, std::unique_ptr<State>> m_states;            ///< Stable task ownership.
     std::map<uint32_t, std::unique_ptr<BackupStoragePool>> m_pools; ///< Shared per-node capacity.
-    std::map<int64_t, std::map<ProtectionTransferKey, Request>>
-        m_requests;                           ///< Canonical request buckets.
-    std::map<int64_t, EventId> m_flushEvents; ///< One registration event per request timestamp.
     std::map<ProtectionTransferKey, Request> m_heldRequests; ///< Reserved, never registered requests.
     std::map<uint64_t, size_t> m_flowIndexes; ///< Terminal callback lookup.
     std::vector<ProtectionEvent> m_events;    ///< Append-only causal evidence.
-    std::vector<ProtectionFlow> m_flows;      ///< Append-only real flow metadata.
     bool m_recoveryRetention{};               ///< Explicit G3 fault-enabled phase ordering.
     std::function<void(uint64_t)> m_initialized; ///< Optional physical init notification.
     std::function<void(uint64_t, uint32_t, bool)> m_assignmentObserver; ///< Read-only load ledger.

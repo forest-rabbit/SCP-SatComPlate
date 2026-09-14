@@ -272,6 +272,34 @@ for user review; no further runs, parameter changes, push/PR/CI/merge/tag author
 Prior U outputs are historical, replaced for current comparisons by the 15 new runs;
 other affected baselines have not been revalidated and must not be mixed with them.
 
+### Active N5R contract (2026-09-14)
+
+The user approved the architecture audit and the staged N5R implementation.
+PR #102 integrates the complete corrected chain into n5 at `d26f7af90`; N5R uses
+one branch `refactor/protection-architecture-consolidation` from that corrected
+base, never the older n5. This supersedes the earlier N5C/maintenance stop only
+for the approved consolidation. Preserve #100/#101 and experiment history;
+clean superseded branches only after inclusion and PR dependency checks.
+Keep JIT/V7, main, legacy and formal outputs unchanged.
+
+Follow `docs/n5/reviews/N5R-implementation.md` and the approved architecture audit:
+common substrate, F/INPUT B, P, optional recovery/relocation, baselines, reusable
+test helpers, canonical docs, then dependency-checked historical archival.
+Each executable increment must build and pass unit/contract/small deterministic
+semantic-equivalence gates before committing and continuing. Any unapproved
+semantic difference stops that increment for a separate audit, not a refactor fix.
+Preserve one Frequency solver, START/ON placement contracts, RNG, routing, schema,
+actual/planned WU/bytes/storage, deadlines and the current maintenance lifecycle.
+No new formal 1300s matrix, N6/N7 experiment, Multi-tree, U tuning or INPUT timing.
+
+User clarification: production compute-pressure policies are only CUMULATIVE and
+IDLE_AWARE. noU remains an ablation, not a third pressure policy. Remove recent-U
+from the production CLI with an explicit deprecation test; preserve its historical
+evidence and dependent implementation until dependency audit permits archival.
+All other legacy CLI/CSV/fixture/analysis interfaces remain compatible. CI keeps
+the existing manual phase cadence, not per commit. Do not merge N5R or main, or
+tag a release, without the user's subsequent final review.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

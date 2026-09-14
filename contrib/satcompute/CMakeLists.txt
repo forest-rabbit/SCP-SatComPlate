@@ -15,6 +15,7 @@ build_lib(
     protection/policy/baseline/checkbullet/cb-sat-metrics.cc
     protection/storage/backup-storage-pool.cc
     protection/runtime/protection-runtime.cc
+    protection/runtime/protection-transfer-dispatcher.cc
     protection/policy/fixed/fixed-protection-policy.cc
     protection/policy/compfrr/frequency/compfrr-frequency-policy.cc
     protection/policy/compfrr/frequency/frequency-decision-gate.cc
@@ -144,6 +145,7 @@ build_lib(
     protection/policy/baseline/one-plus-one/one-plus-one-policy.h
     protection/policy/baseline/recompute/recompute-policy.h
     protection/runtime/protection-transfer-key.h
+    protection/runtime/protection-transfer-dispatcher.h
     metrics/core/protection-metrics.h
     tools/validation/compfrr-shadow/compfrr-shadow-model.h
     tools/validation/compfrr-shadow/compfrr-shadow-task-state.h

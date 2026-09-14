@@ -22,16 +22,6 @@ Require(bool condition, const char* text)
         throw std::logic_error(text);
 }
 
-uint64_t
-MaximumId(Ptr<TaskCoordinator> tasks)
-{
-    if (!tasks)
-        throw std::invalid_argument("checkpoint requires tasks");
-    uint64_t maximum = 0;
-    for (const auto& plan : tasks->GetTransferEngine()->GetPlans())
-        maximum = std::max(maximum, plan.transferId);
-    return maximum;
-}
 } // namespace
 
 CheckpointManager::State::State(const TaskRuntime& runtime,
@@ -64,7 +54,8 @@ CheckpointManager::CheckpointManager(Ptr<TaskCoordinator> tasks,
                                      int64_t stopNs,
                                      InputStagingPolicy inputPolicy)
     : m_tasks(tasks), m_network(tasks ? tasks->GetTransferEngine() : nullptr), m_stopNs(stopNs),
-      m_inputPolicy(inputPolicy), m_ids(MaximumId(tasks))
+      m_inputPolicy(inputPolicy),
+      m_transfers(tasks, [this](const Request& request) { RegisterCheckpoint(request); })
 {
     if (stopNs <= 0)
         throw std::invalid_argument("invalid checkpoint duration");
@@ -92,8 +83,6 @@ CheckpointManager::~CheckpointManager()
     for (auto& [id, state] : m_states)
         for (auto event : state->timers)
             Simulator::Cancel(event);
-    for (auto& [time, event] : m_flushEvents)
-        Simulator::Cancel(event);
 }
 
 bool
@@ -324,130 +313,86 @@ CheckpointManager::Queue(State& state,
             "flow requires exact prior reservation");
     const auto time = Now();
     ProtectionTransferKey key{state.summary.taskId, 0, kind, sequence};
-    Require(m_requests[time]
-                .emplace(key, Request{key, source, destination, bytes, work, object, time})
-                .second,
-            "duplicate protection transfer request key");
-    if (!m_flushEvents.contains(time))
-        m_flushEvents.emplace(
-            time, Simulator::Schedule(NanoSeconds(1), &CheckpointManager::Flush, this, time));
+    m_transfers.Queue(time, Request{key, source, destination, bytes, work, object, time},
+                      "duplicate protection transfer request key");
 }
 
 void
-CheckpointManager::Flush(int64_t time)
+CheckpointManager::RegisterCheckpoint(const Request& request)
 {
-    auto requests = m_requests.extract(time);
-    m_flushEvents.erase(time);
-    if (requests.empty())
+    const auto& key = request.key;
+    auto& state = *m_states.at(key.taskId);
+    if (!Live(state))
         return;
-    // All causal creations at time have run. Sorted key order is invariant to their UIDs.
-    for (const auto& [key, request] : requests.mapped())
+    const bool maintenance = key.kind == ProtectionTransferKind::L1 ||
+                             key.kind == ProtectionTransferKind::REMOTE_BATCH;
+    if (maintenance && !PathAvailable(request.source, request.destination))
     {
-        if (request.live)
-        {
-            if (!request.live())
-                continue;
-            const auto id = m_ids.Next();
-            NetworkTransfer plan;
-            plan.transferId = id;
-            plan.sourceSatelliteId = request.source;
-            plan.destinationSatelliteId = request.destination;
-            plan.sizeBytes = request.bytes;
-            try
-            {
-                m_network->RegisterRuntimePlan(plan,
-                                               key.kind == ProtectionTransferKind::RECOVERY_RESULT);
-            }
-            catch (const NetworkTransferConfigError&)
-            {
-                request.registered(0); // Explicit rejected registration, not a synthetic flow.
-                continue;
-            }
-            if (key.kind != ProtectionTransferKind::RECOVERY_RESULT)
-                m_flows.push_back({key,
-                                   id,
-                                   request.bytes,
-                                   request.work,
-                                   request.object,
-                                   request.destination,
-                                   time});
-            request.registered(id);
-            m_network->StartTransferNow(id);
-            continue;
-        }
-        auto& state = *m_states.at(key.taskId);
-        if (!Live(state))
-            continue;
-        const bool maintenance = key.kind == ProtectionTransferKind::L1 ||
-                                 key.kind == ProtectionTransferKind::REMOTE_BATCH;
-        if (maintenance && !PathAvailable(request.source, request.destination))
-        {
-            Require(m_heldRequests.emplace(key, request).second, "duplicate held maintenance request");
-            Block(state, key.kind == ProtectionTransferKind::L1, "PATH");
-            continue; // Keep the exact reserved object. No transfer ID or sent bytes yet.
-        }
-        uint64_t id;
-        try
-        {
-            id = m_ids.Next();
-            NetworkTransfer plan;
-            plan.transferId = id;
-            plan.sourceSatelliteId = request.source;
-            plan.destinationSatelliteId = request.destination;
-            plan.sizeBytes = request.bytes;
-            m_network->RegisterRuntimePlan(plan);
-        }
-        catch (const NetworkTransferConfigError&)
-        {
-            Log(state,
-                "TRANSFER_REGISTRATION_FAILED",
-                request.work,
-                request.bytes,
-                request.destination,
-                request.object);
-            if (maintenance)
-            {
-                // A malformed/exhausted registration is terminal, not temporary path pressure.
-                m_pools.at(request.destination)->ReleaseReservation(request.object);
-                if (key.kind == ProtectionTransferKind::L1) state.localTransferFailed = true;
-                else { state.remoteTransferFailed = true; state.batchInFlight = false; state.batchObject = 0; }
-                Block(state, key.kind == ProtectionTransferKind::L1, "REGISTRATION_FAILED");
-            }
-            else Stop(state, "TRANSFER_REGISTRATION_FAILED");
-            continue;
-        }
-        m_flowIndexes.emplace(id, m_flows.size());
+        Require(m_heldRequests.emplace(key, request).second, "duplicate held maintenance request");
+        Block(state, key.kind == ProtectionTransferKind::L1, "PATH");
+        return; // Keep the exact reserved object. No transfer ID or sent bytes yet.
+    }
+    uint64_t id;
+    try
+    {
+        id = m_transfers.NextId();
+        NetworkTransfer plan;
+        plan.transferId = id;
+        plan.sourceSatelliteId = request.source;
+        plan.destinationSatelliteId = request.destination;
+        plan.sizeBytes = request.bytes;
+        m_network->RegisterRuntimePlan(plan);
+    }
+    catch (const NetworkTransferConfigError&)
+    {
+        Log(state,
+            "TRANSFER_REGISTRATION_FAILED",
+            request.work,
+            request.bytes,
+            request.destination,
+            request.object);
         if (maintenance)
         {
-            auto& reason = key.kind == ProtectionTransferKind::L1 ? state.captureBlockReason : state.remoteBlockReason;
-            if (reason == "PATH") Block(state, key.kind == ProtectionTransferKind::L1, "");
+            // A malformed/exhausted registration is terminal, not temporary path pressure.
+            m_pools.at(request.destination)->ReleaseReservation(request.object);
+            if (key.kind == ProtectionTransferKind::L1) state.localTransferFailed = true;
+            else { state.remoteTransferFailed = true; state.batchInFlight = false; state.batchObject = 0; }
+            Block(state, key.kind == ProtectionTransferKind::L1, "REGISTRATION_FAILED");
         }
-        m_flows.push_back(
-            {key, id, request.bytes, request.work, request.object, request.destination, request.requestedNs});
-        m_network->SetTerminalObserver(id,
-                                       MakeCallback(&CheckpointManager::TransferTerminal, this));
-        Log(state,
-            "TRANSFER_REGISTERED",
-            request.work,
-            request.bytes,
-            request.destination,
-            request.object,
-            id);
-        m_network->StartTransferNow(id);
-        Log(state,
-            "TRANSFER_STARTED",
-            request.work,
-            request.bytes,
-            request.destination,
-            request.object,
-            id);
+        else Stop(state, "TRANSFER_REGISTRATION_FAILED");
+        return;
     }
+    m_flowIndexes.emplace(id, m_transfers.Flows().size());
+    if (maintenance)
+    {
+        auto& reason = key.kind == ProtectionTransferKind::L1 ? state.captureBlockReason : state.remoteBlockReason;
+        if (reason == "PATH") Block(state, key.kind == ProtectionTransferKind::L1, "");
+    }
+    m_transfers.Record(
+        {key, id, request.bytes, request.work, request.object, request.destination, request.requestedNs});
+    m_network->SetTerminalObserver(id,
+                                   MakeCallback(&CheckpointManager::TransferTerminal, this));
+    Log(state,
+        "TRANSFER_REGISTERED",
+        request.work,
+        request.bytes,
+        request.destination,
+        request.object,
+        id);
+    m_network->StartTransferNow(id);
+    Log(state,
+        "TRANSFER_STARTED",
+        request.work,
+        request.bytes,
+        request.destination,
+        request.object,
+        id);
 }
 
 void
 CheckpointManager::TransferTerminal(uint64_t id, int64_t at)
 {
-    const auto flow = m_flows.at(m_flowIndexes.at(id));
+    const auto flow = m_transfers.Flows().at(m_flowIndexes.at(id));
     auto& state = *m_states.at(flow.key.taskId);
     auto& pool = *m_pools.at(flow.storageNode);
     if (!m_network->IsCompleted(id) || !Live(state))
@@ -591,9 +536,7 @@ CheckpointManager::RetryBlockedMaintenance()
         const auto& request = it->second;
         if (!PathAvailable(request.source, request.destination)) { ++it; continue; }
         const auto now = Now();
-        Require(m_requests[now].emplace(it->first, request).second, "duplicate retry request");
-        if (!m_flushEvents.contains(now))
-            m_flushEvents.emplace(now, Simulator::Schedule(NanoSeconds(1), &CheckpointManager::Flush, this, now));
+        m_transfers.Queue(now, request, "duplicate retry request");
         it = m_heldRequests.erase(it);
     }
     for (auto& [id, state] : m_states)
@@ -879,13 +822,10 @@ CheckpointManager::Stop(State& state, const std::string& reason)
     for (auto timer : state.timers)
         Simulator::Cancel(timer);
     state.progress.Stop();
-    for (auto& [time, requests] : m_requests)
-        std::erase_if(requests, [&](const auto& request) {
-            return request.first.taskId == state.summary.taskId;
-        });
+    m_transfers.Discard(state.summary.taskId);
     std::erase_if(m_heldRequests, [&](const auto& r) { return r.first.taskId == state.summary.taskId; });
     std::vector<uint64_t> transfers;
-    for (const auto& flow : m_flows)
+    for (const auto& flow : m_transfers.Flows())
         if (flow.key.taskId == state.summary.taskId && flow.key.attemptGeneration == 0)
             transfers.push_back(flow.transferId);
     m_network->FinalizeTransfersIfActive(
@@ -931,10 +871,7 @@ CheckpointManager::Finalize()
         ReleaseRecoveryState(id);
         state->physicalCommit.reset();
     }
-    for (auto& [time, event] : m_flushEvents)
-        Simulator::Cancel(event);
-    m_flushEvents.clear();
-    m_requests.clear();
+    m_transfers.Finalize();
     m_heldRequests.clear();
 }
 
@@ -965,9 +902,7 @@ CheckpointManager::IsQuiescent() const
         if (m_network->IsRuntimeTransfer(row.transferId) && row.transferState != "COMPLETED" &&
             row.transferState != "FAILED" && row.transferState != "CANCELLED")
             return false;
-    for (const auto& [time, requests] : m_requests)
-        if (!requests.empty())
-            return false;
+    if (!m_transfers.Empty()) return false;
     for (const auto& [id, state] : m_states)
     {
         if (state->active || state->physicalCommit)
@@ -1046,7 +981,7 @@ CheckpointManager::FreezeRecoverySnapshot(uint64_t id, int64_t at)
             ++result.pendingRecords;
             result.pendingLocalWorks.push_back(work);
         }
-    for (const auto& flow : m_flows)
+    for (const auto& flow : m_transfers.Flows())
         if (flow.key.taskId == id && !m_network->IsTerminal(flow.transferId))
         {
             ++result.inFlightFlows;
@@ -1075,13 +1010,10 @@ CheckpointManager::QuiesceForRecovery(const RecoverySnapshot& snapshot)
         Simulator::Cancel(timer);
     state.physicalCommit.reset();
     state.progress.Stop();
-    for (auto& [time, requests] : m_requests)
-        std::erase_if(requests, [&](const auto& item) {
-            return item.first.taskId == snapshot.taskId && item.first.attemptGeneration == 0;
-        });
+    m_transfers.Discard(snapshot.taskId, true);
     std::erase_if(m_heldRequests, [&](const auto& r) { return r.first.taskId == snapshot.taskId; });
     std::vector<uint64_t> transfers;
-    for (const auto& flow : m_flows)
+    for (const auto& flow : m_transfers.Flows())
         if (flow.key.taskId == snapshot.taskId && flow.key.attemptGeneration == 0)
             transfers.push_back(flow.transferId);
     m_network->FinalizeTransfersIfActive(transfers,
@@ -1153,21 +1085,9 @@ CheckpointManager::QueueRecovery(ProtectionTransferKey key,
     Require(key.attemptGeneration == 1 && source != destination && bytes && live && registered,
             "recovery network request requires real cross-node bytes and attempt guards");
     const auto time = Now();
-    Require(m_requests[time]
-                .emplace(key,
-                         Request{key,
-                                 source,
-                                 destination,
-                                 bytes,
-                                 work,
-                                 object,
-                                 time,
-                                 std::move(live),
-                                 std::move(registered)})
-                .second,
-            "duplicate recovery request");
-    if (!m_flushEvents.contains(time))
-        m_flushEvents.emplace(
-            time, Simulator::Schedule(NanoSeconds(1), &CheckpointManager::Flush, this, time));
+    m_transfers.Queue(time,
+        Request{key, source, destination, bytes, work, object, time,
+                std::move(live), std::move(registered)},
+        "duplicate recovery request");
 }
 } // namespace ns3::protection
