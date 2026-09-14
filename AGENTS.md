@@ -173,6 +173,20 @@ formal gates and 425-file old fixture equivalence passed. Read
 tail-dominated, not broad superiority; keep default FULL. Stop for user review;
 do not launch run12-15/exponential, resume recent-U, merge #100/#101 or run CI.
 
+The 2026-09-14 user review authorizes ONLY four additional Rational-U runs 12-15
+on this same branch, reusing Rational-U run11 and all ten FULL/noU runs 11-15.
+Freeze all production code/formulas/parameters at the run11 execution, and retain
+identical workload, fault configuration/streams, recovery contract and routing.
+Online realized faults may differ causally; report differences, never force replay.
+Audit five-run three-way completion, busy, recovery actions, paired catch, actual
+WU/eq-WU waste, network and assignment/storage concentration. Predefine leave-one-out
+by the largest beneficial and largest absolute task contribution separately for
+catch and total waste, per run and pooled; one identity is (run,task), not an ID
+removed from all runs. This is statistical exclusion, not a new simulated scene.
+Only test/audit tooling and concise review/handoff documentation may change.
+Keep #100/#101 open and #101 Draft; no CI, merge, exponential, parameter tuning or
+automatic replacement of cumulative-U. Stop after reporting the five-run evidence.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.

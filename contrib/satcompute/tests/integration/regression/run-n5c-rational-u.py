@@ -15,22 +15,23 @@ require = MATRIX["require"]
 BASE_HEAD = "a19b722694948bda395cf95b96cd27609daf6c91"
 
 
-def arguments(directory):
+def arguments(directory, random_run=11):
+    require(type(random_run) is int and 11 <= random_run <= 15, "unapproved Rational-U run")
     return FINAL["arguments"](directory, protection_mode="compfrr", placement_mode="n5c",
         input_staging_policy="deferred", remote_busy_recovery_policy="relocate",
-        n5c_variant="rational-U", random_run=11)
+        n5c_variant="rational-U", random_run=random_run)
 
 
-def verify(directory, head):
+def verify(directory, head, random_run=11):
     directory = directory.resolve()
     value = json.loads((directory / "execution.json").read_text())
     require(value["commit"] == head and not value["worktree_dirty"], "execution identity mismatch")
-    require((value["seed"], value["run"], value["simulation_duration_s"]) == (1, 11, 1300), "wrong run/horizon")
+    require((value["seed"], value["run"], value["simulation_duration_s"]) == (1, random_run, 1300), "wrong run/horizon")
     require(value["fault_mode"] == "generate" and value["protection_mode"] == "compfrr" and
             value["placement_mode"] == "n5c" and value["n5c_variant"] == "rational-U" and
             value["input_staging_policy"] == "deferred" and value["remote_busy_recovery_policy"] == "relocate" and
             not value["audit"] and not value["shadow"], "execution controls mismatch")
-    require(OLD["flags"](shlex.split(value["command"][-1])) == OLD["flags"](arguments(directory)),
+    require(OLD["flags"](shlex.split(value["command"][-1])) == OLD["flags"](arguments(directory, random_run)),
             "frozen command mismatch")
     require(json.loads((directory / "execution-result.json").read_text())["returncode"] == 0, "incomplete run")
     return value
