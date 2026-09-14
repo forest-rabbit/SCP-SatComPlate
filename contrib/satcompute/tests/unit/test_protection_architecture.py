@@ -20,6 +20,7 @@ ENTRIES = {
     "analyze-riskweighted-start.py": "risk_start_audit.py",
     "analyze-input-deferred.py": "input_staging_audit.py",
     "analyze-v7-offline.py": "jit_offline_audit.py",
+    "analyze-selective-input-staging.py": "selective_input_offline_audit.py",
     "run-final-scenario.py": "scenario.py",
 }
 

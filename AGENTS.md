@@ -315,7 +315,7 @@ Unknown evidence stays unknown. Paired contrasts are not exact counterfactuals.
 Record both stages in docs/n5/reviews/N5R-implementation.md and stop for review
 after the offline report; no V8, optimizer, budget, threshold or new timer.
 
-### INPUT worthiness Phase 1 (user-approved)
+### INPUT worthiness Phase 1 (superseded plan, retained context)
 
 The user accepted `CompFRR_Input_Worthiness_Clarifications_v2.md` and explicitly
 approved merging #103 into n5, then creating `feature/compfrr-input-worthiness`
@@ -334,6 +334,28 @@ difference. No production, timing, Frequency/Placement/Recovery/RNG/routing/scen
 changes, new simulation/calibration, optimizer, budget, arbitrary threshold or
 extra CI. Keep analysis/test helpers in the existing tests tree and stop after
 Markdown plus CSV/JSON evidence for user review. Do not implement Phase 2.
+
+### Active selective INPUT initialization audit (2026-09-14)
+
+The user approved `CompFRR_Selective_INPUT_PreStaging_Offline_Audit_Taskbook.md`
+and the reviewed causal/metric clarifications. N5R is merged through #103 at
+`aa7a49a1c`; use one `feature/compfrr-input-worthiness` branch from that n5.
+This supersedes rolling ON worthiness/JIT timing in the preceding plan: audit
+one decision per successful START, immediately before initialization, with the
+actual fixed pair, Deferred checkpoint layout and optional independent full
+INPUT from sourceNodeId to designated remote. Do not enable Eager layout.
+First verify historical identity and committed/physical/admitted STARTs, then
+per-field causal reconstruction coverage. V6START is primary; Full-V7 is a
+separate auxiliary cohort and cannot fill primary features. Exclude a survived
+FAULT_EPOCH sample, but preserve pending-grid semantics for non-epoch triggers.
+START is not checkpoint-ready. No actual future fault/checkpoint/path/target
+may supply a feature. Insufficient reconstruction coverage requires a report
+and STOP before score sweeps, not synthetic zeroes or an invented forecast.
+Labels and matched contrasts are offline evidence, not exact counterfactuals.
+Planned staging bytes without anchor critical wait are not actual wasted bytes;
+captured anchor wait is not actual saved time. LocalDelivery is excluded from
+all network-byte sums/densities. Keep production, formal runs, CI, PR #99/JIT,
+main and legacy unchanged. No runtime Phase 2 or automatic integration merge.
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
