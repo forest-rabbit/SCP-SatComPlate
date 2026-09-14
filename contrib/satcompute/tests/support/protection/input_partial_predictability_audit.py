@@ -261,12 +261,11 @@ def assemble(population, recoveries):
     return tables,summary
 
 
-def write_audit(root, verified, criticalpath, output, probe):
-    """Revalidate the existing trace and causal v4 features; no changes to old artifacts."""
+def load_validated_population(root, verified, criticalpath, probe):
+    """Shared read-only provenance/feature reconstruction for subsequent bound audits."""
     prior=json.loads((criticalpath/'summary.json').read_text())
     canonical=Path(json.loads((root/'execution.json').read_text())['canonical_reference'])
     protected=[root,verified,criticalpath,canonical]+[Path(prior['sources'][k]) for k in ('coinit','latency')]
-    API['HISTORY']['output_guard'](output,protected)
     before=API['evidence_metadata'](protected)
     data=COINIT['collect_audit'](root,verified)
     require(data['identity']==prior['source_identity'] and prior['raw_evidence_read_only'],'v4 provenance mismatch')
@@ -290,6 +289,14 @@ def write_audit(root, verified, criticalpath, output, probe):
         f['_steps']=COINIT['TRACE']['feature_snapshot'](r)['future_first_failure_trajectory']
         require(math.isclose(math.fsum(s['first_failure_mass'] for s in f['_steps']),f['P_F'],abs_tol=1e-12),
                 'first-failure mass changed')
+    require(before==API['evidence_metadata'](protected),'historical evidence changed during reconstruction')
+    return population,data,prior,protected,before
+
+
+def write_audit(root, verified, criticalpath, output, probe):
+    """Revalidate the existing trace and causal v4 features; no changes to old artifacts."""
+    population,data,prior,protected,before=load_validated_population(root,verified,criticalpath,probe)
+    API['HISTORY']['output_guard'](output,protected)
     network=[r for r in population if r['network_bytes']>0]
     tables,summary=assemble(network,API['rows'](root,'recovery-summary.csv'))
     summary.update(source_identity=data['identity'],prior_runtime_equivalence=prior['prior_runtime_equivalence'],

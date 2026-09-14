@@ -157,6 +157,20 @@ python contrib/satcompute/tests/integration/regression/analyze-input-partial-pre
 边际范围、假设区间全扫描及真实故障处的屏障判断翻转；区间不是已校准的置信区间，翻转不是完整策略动作错误。
 `test_input_partial_predictability_audit.py` 验证覆盖分母、严格边界、上下界、同分组及回溯/因果隔离。
 
+严格 causal upper-bound 与“不确定则DEFER”审计（同一原生probe，新增纯checkpoint合同见证，不运行仿真）：
+
+```bash
+python contrib/satcompute/tests/integration/regression/analyze-input-causal-bound.py \
+  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
+  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
+  --criticalpath-dir output/audits/compfrr-input-criticalpath-g-run11 \
+  --output-dir output/audits/compfrr-input-causal-bound-local
+```
+
+目录必须不存在。`input_causal_bound_audit.py` 分开输出源码证明义务、未证明公式诊断和严格候选规则，
+UNKNOWN不补零或经验界；符号集合成员字节不等于计划发送字节。测试为`test_input_causal_bound_audit.py`。
+最终证据在`output/audits/compfrr-input-gi-sign-admission-run11/`，结论追加同一审计报告。
+
 ## 历史专项与目录索引
 
 以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，

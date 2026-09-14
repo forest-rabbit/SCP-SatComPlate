@@ -1,13 +1,18 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "ns3/network-transfer-engine.h"
+#include "checkpoint-bound-witness.h"
 
 #include <cstdint>
 #include <iostream>
+#include <string_view>
 
 /** Offline TSV bridge to the existing pure estimator. No simulator or live path query. */
 int
-main()
+main(int argc, char** argv)
 {
+    if (argc == 2 && std::string_view(argv[1]) == "--checkpoint-bound-witness")
+        return CheckpointBoundWitness();
+    if (argc != 1) return 2;
     uint64_t id, bytes, rate;
     int64_t propagation;
     int admissible, local;

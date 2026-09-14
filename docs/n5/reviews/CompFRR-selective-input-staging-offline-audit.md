@@ -683,3 +683,87 @@ F1/F2共79项；第一列比较固定START快照T_I，第二列固定实际观�
 独立核对全部1608个区间点的分组、质量、观察等待及uncertain最大值；核对80个实际屏障与翻转，
 直接从原q_F1/q_F2连乘确认质量总量87.11099135。v4因果特征逐字段一致，生产源和历史证据未改变。
 按增量方式先验证统计与判别函数，再完成全扫描与独立核对。**STOP FOR USER REVIEW；未提交推送、未运行CI。**
+
+## Gi-only：causal upper bound 与“不确定则 DEFER”
+
+按 v5 后续人工收窄合同完成：只审计机制能否给出严格的未来 non-INPUT barrier 上界，
+以及 `G_L>0` 的离线后果；不做 residual calibration、epsilon/阈值筛选、score 优化或新仿真。
+最终目录为 `output/audits/compfrr-input-gi-sign-admission-run11/`（10个CSV及summary）。
+`-initial-columns` 保留本轮中间输出；最终版把符号集合的成员字节与规则计划发送字节分开，避免误读。
+
+### 上界审计：候选公式不成立
+
+审计候选为 `ceil_ns(Kvar*(n-1)*delta/B_backup + cR)`；不是把原平均值直接当上界。
+结论 **CAUSAL_A_BOUND=NOT_AVAILABLE**：当前 START 快照没有足以保证所有相关未来分支的有限就绪上界。
+这是现有合同下的证据缺口，不是声称任何附加假设下都不可能建模。主要缺失项如下：
+
+| 检查点 | 当前实现事实 | 为什么候选式不保证上界 |
+| --- | --- | --- |
+| 最大 local–remote gap | 收齐第 n 条才组批，remote 在真实接收并等 cR 后推进；期间 local 可继续接收 | `(n-1)*delta` 不是最大差距；n=1 也存在未提交尾部 |
+| remote batch in-flight | 同时仅一个 batch，但不阻止新 local capture；旧 batch target 不变 | 一个在途批次加后续记录可超过一个批次的差距 |
+| PATH/STORAGE/TRANSFER_FAILED | remote 阻塞独立于 local；无按 batchN 限制的积压条数 | 不能用正常无阻塞的周期当成最大积压 |
+| ON 更新/恢复维护 | 新 delta/n 只改未来目标，旧记录与已创建批次保留；重试不补历史快照 | START 配置不界定整个未来窗口；缩小 n 不会压缩已有差距 |
+| 初始化与同 ns 故障 | START 尚未 RemoteCommit；故障只使用严格早于该 ns 的提交 | 预计 init-ready 不是有效状态保证，同刻融合不能提前使用 |
+| 真实字节 | 合法 tile/token 向上对齐，增量包含每条 H | `Kvar*理想进度差` 不是含头实际 tail 字节上界 |
+| 网络就绪 | 当前路径/速率只读估计，不预留未来容量；真实传输含传播、注册、接收生命周期 | 即使字节有上界，也不能直接除以 START 带宽证明未来完成时间 |
+| recovery 分支 | 未来可能选择 REDO/TAIL/迁移，迁移还需要 remote state | 固定 local→remote 的 tail 时间不涵盖所有 non-INPUT 依赖 |
+
+源码逐项位置见 `a-causal-bound-audit.csv`，基于
+[CheckpointManager](../../../contrib/satcompute/protection/mechanism/checkpoint/checkpoint-manager.cc)、
+[CheckpointProgress](../../../contrib/satcompute/protection/mechanism/checkpoint/checkpoint-progress.cc)、
+[TaskStateAdapter](../../../contrib/satcompute/protection/common/task-state-adapter.cc)、
+[网络估计](../../../contrib/satcompute/traffic/network-transfer-engine.cc)和
+[RecoveryController](../../../contrib/satcompute/protection/runtime/recovery-controller.cc)。
+各源码均与 Stage B 执行版本一致。全任务状态、合法记录数/池容量可以限制字节量，却不提供未来路径的
+服务下限、准入成功或持续可用保证。deadline/仿真终点也不能把“到时仍未就绪/已失败”改称有限 barrier。
+只针对成功恢复得到的条件界，不能反向用于尚未知道成功与否的 START admission。
+
+纯 C++ callback-contract 验证复用真实 CheckpointProgress/TaskStateAdapter，不启动 Simulator：
+n=2、delta=10%、W=4000 时，第2条 local receipt 后 gap=800 WU，已超过候选400 WU；
+merge pending 时再接收1条，gap=1200；同 ns commit 对故障仍无效。另验证remote receipt持续缺失、
+n=1、应用边界和H，共7个反例/合同见证。它们不是新工作负载仿真，也不充当未来轨迹预测器。
+
+### 两种结果必须分开
+
+所有未证明的 future branch 都保留原首次故障质量，使用贡献范围
+`[0, w_k*(T_D-T_S)]`，不填 A=0、不丢弃或归一化。当前全部跨星候选的严格 `G_L=0`、`G_U>0`，
+因此均是 **SIGN_UNCERTAIN → DEFER**，而不是证明真实G为零。期望量保留分数ns，不取整出隐藏阈值。
+这里的G上界仍只是在当前INPUT路径/共同恢复依赖假设下的范围，不是实际干预收益保证。
+
+| ALL跨星视图 | 发送候选 | 计划GB / ALL_STAGE比例 | NEEDED覆盖 | 观察等待覆盖 |
+| --- | ---: | ---: | ---: | ---: |
+| 严格 causal `G_L>0`，其余 DEFER | 0/405 | 0 / 0% | 0/72 | 0% |
+| **未证明**候选公式，假装它是上界（仅诊断） | 346/405 | 106.720665 / 99.999967% | 67/72 | 99.91686% |
+| 原平均模型 `G_hat>0` 参考 | 346/405 | 106.720665 / 99.999967% | 67/72 | 99.91686% |
+| ALL_STAGE参考 | 405/405 | 106.720700 / 100% | 72/72 | 100% |
+
+F1/F2视图：严格规则0/404，未覆盖71个NEEDED、17,342.264037ms，最大单任务805.579897ms；
+ALL未覆盖72个NEEDED、17,987.768934ms，最大值相同。唯一F3 task120仍单列，不能计为预测错误。
+未证明公式在F1/F2视图选345个、105.920665GB、66/71 NEEDED、99.913765%观察等待。
+这两种正集合与旧point-positive完全相同：并未自动得到新的流量—收益折中。
+
+| Profile（ALL跨星） | 候选数 | 严格SEND | 未证明公式positive | 后者计划字节 |
+| --- | ---: | ---: | ---: | ---: |
+| compression | 117 | 0 | 117 | 38,846,175,464 |
+| dense-image | 98 | 0 | 98 | 28,263,492,144 |
+| sparse-inference | 131 | 0 | 131 | 39,610,997,590 |
+| llm | 59 | 0 | 0 | 0 |
+
+保留2个early UNKNOWN，不借预计初始化完成宣称实际有效。4个LocalDelivery另列，保持逻辑就绪/生命周期、
+网络字节为0，不因本分析创建UDP或排除合法节点。表中planned bytes不是实测净增流量，观察等待不是实测提速。
+
+### 真实观测的反证与验收
+
+79个F1/F2同恢复目标的观测中，**33/79（41.77%）的实际A超过候选上界**；ALL为33/80。
+例如task30：实际138.670668ms、候选107.054576ms；493：133.050066/114.649351ms；
+513：108.664771/83.978538ms。观测只用于事后反证，不注入特征或校准上界；其余未来时刻仍未知。
+实际故障点的证据不等于完整期望G真值，33次也不是全候选预测错误率；本轮不使用残差修补公式。
+
+结论 **NOT READY**：候选上界未被机制保证，数值上仍接近全部预置；严格保留不确定性则退化成全部Deferred。
+当前两端都没有实现期望的中间方案。未据此修改机制、扩大预测器或自动放松规则，继续停在人工审阅点。
+
+按增量流程先审计源码并跑原生反例，再新增离线纯函数/统计，最后独立核验。
+28项新增tests与全部398项维护Python tests通过（1项既有外部切片skip），native目标构建通过；
+独立从旧CSV核对405项特征、2038个future steps、346个诊断positive与79项观测/33次越界。
+抽取共用只读loader后，旧partial audit的全部7个产物重建逐字节一致；v4特征逐字段相同，
+生产源码及历史证据未变。未运行新仿真/CI、未提交推送、未实现production或选择阈值。

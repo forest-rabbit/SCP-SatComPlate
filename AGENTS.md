@@ -439,6 +439,18 @@ Report barrier-side flips separately from actual policy actions (not yet defined
 31 new tests and 370 maintained Python tests pass (one existing skip). No production,
 new simulation, CI, chosen threshold, optimizer or automatic commit/push/merge.
 
+The subsequent causal-upper / unknown-means-DEFER audit is complete; see the next
+section and `output/audits/compfrr-input-gi-sign-admission-run11/`. The proposed
+Kvar*(n-1)*delta/B+cR is NOT a general upper bound: in-flight/blocked batches,
+mutable cadence, strict prefixes, headers/alignment and future paths invalidate it.
+Strict future A bounds remain unavailable: all 405/404 network candidates are
+SIGN_UNCERTAIN and the candidate rule sends zero, not proof of zero true gain.
+The unproven formula still selects 346/345 and virtually all INPUT bytes; 33/79
+same-target F1/F2 observations exceed it. Do not substitute residuals or tune rules.
+28 new tests, 398 maintained Python tests (one existing skip), pure native witnesses
+and prior partial-artifact equivalence pass. Stop for review; no production, new
+simulation, CI, automatic commit/push/merge or further model expansion.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System
