@@ -172,7 +172,7 @@ def strict_equivalence(reference, candidate):
                 passed=all(checks.values()))
 
 
-def physical_network(root, tasks):
+def physical_network(root, tasks, extra_kinds=()):
     """Union by real transfer ID; losing primary RESULT is not in checkpoint flow CSV."""
     flows = {}
     input_ids = {t["input_transfer_id"] for t in tasks}
@@ -195,7 +195,7 @@ def physical_network(root, tasks):
             r["sent_bytes"], r["received_bytes"], r["declared_bytes"], r["business_result"] == "1", r["state"])
     by_kind = {k: dict(flows=0, declared_bytes=0, sent_bytes=0, received_bytes=0) for k in
                ("INPUT", "RESULT", "INIT_BASE", "INIT_STATE", "L1", "REMOTE_BATCH", "RECOVERY_INPUT",
-                "RECOVERY_STATE", "RECOVERY_TAIL", "REPLICA_INPUT", "REPLICA_RESULT")}
+                "RECOVERY_STATE", "RECOVERY_TAIL", "REPLICA_INPUT", "REPLICA_RESULT", *extra_kinds)}
     for f in flows.values():
         total = by_kind[f["kind"]]
         total["flows"] += 1

@@ -9,8 +9,8 @@
 
 | 阶段 | 目标及门禁 | 状态 |
 | --- | --- | --- |
-| A 目录最终收口 | 完整 baseline 统一到外层；公共 placement 单独归位；CB 参数/工具唯一 owner；Multi-tree 仅 README；build/unit/contract/依赖与唯一性/小型等价/16 placement/CB 8+repeat | build、C++、Python/owner/include 检查、16 placement 通过；小型等价见下方路径审计；CB 8+repeat 在干净提交后执行 |
-| B V7 离线诊断 | A 全通过后，复用已有 run11 与同批 Deferred；逐 lifecycle、守恒与故障表、严格配对及报告；缺失值不伪造；不运行仿真 | 待执行 |
+| A 目录最终收口 | 完整 baseline 统一到外层；公共 placement 单独归位；CB 参数/工具唯一 owner；Multi-tree 仅 README；build/unit/contract/依赖与唯一性/小型等价/16 placement/CB 8+repeat | `b4c8dccea`：build、C++、Python 199（skip 1）、owner/include、16 placement 通过；1965 文件仅下述两项路径元数据变化；CB 8+repeat 通过，189 CSV 与调整前一致 |
+| B V7 离线诊断 | A 全通过后，复用已有 run11 与同批 Deferred；逐 lifecycle、守恒与故障表、严格配对及报告；缺失值不伪造；不运行仿真 | 分析 PASS：347 生命周期、83 故障任务、83 严格配对；字节及 receiver/compute join 守恒。build no-op、Python 213（skip 1）、C++ 合同通过，1965 文件小型比较仍仅两项获准路径元数据。详见 [V7 离线报告](N5R-V7-offline-audit.md) |
 
 字节分类优先级：实际使用 → 无需恢复的故障未发生 → 目标不一致 → 其余失败/取消。
 失败等原因另保留独立标签；未建立流的请求不伪造字节。
@@ -25,6 +25,13 @@ A 的单独差异审计：原严格 gate 拒绝两个 CB CLI 的 `cb-sat-paramet
 对照目录为 `output/n5r-equivalence/final-owner-closeout/`，reference 为目录调整前的 `stage8-archive/`。
 ns-3 跳过已有 generated include 的行为会留下旧路径；项目 CMake 只刷新 14 个已知旧 stub，
 未改上游代码。旧 policy/baseline 的余下 5 个 Python cache 已移至 `/tmp/n5r-obsolete-baseline.vZRtmB/`。
+CB 末轮目录为 `output/cb-sat-v2/20260914T082210185370Z-smoke/`（4 tasks/15s；非正式矩阵）。
+
+B 仅新增离线 helper/薄入口和 14 个合成 unit；既有 physical-network helper 增加默认空的
+`extra_kinds` 参数以认识历史 PREFETCH_INPUT，原调用/schema 不变，没有第二份流量账本。
+产物在 `output/audits/n5r-v7-run11-offline/`，最终 helper 重算与完整 JSON 相同。
+报告明确：94.66% prefetch bytes 对应最终未故障任务；同批严格配对平均 catch 改善 12.77%，
+总额外应用流量增加 79.40%；不是当前 N5R 性能认证。停止等待审阅，不合并/CI/tag 或继续模型修改。
 
 下方八阶段记录为此次最终目录审阅之前的过程快照，其中路径保留决定由本节最终收口更新。
 
