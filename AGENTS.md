@@ -315,6 +315,26 @@ Unknown evidence stays unknown. Paired contrasts are not exact counterfactuals.
 Record both stages in docs/n5/reviews/N5R-implementation.md and stop for review
 after the offline report; no V8, optimizer, budget, threshold or new timer.
 
+### INPUT worthiness Phase 1 (user-approved)
+
+The user accepted `CompFRR_Input_Worthiness_Clarifications_v2.md` and explicitly
+approved merging #103 into n5, then creating `feature/compfrr-input-worthiness`
+from that merged baseline. Finish the N5R status record first; preserve all
+corrected-chain evidence. Delete the merged N5R branch only after verifying
+ancestry and no dependent PRs. Keep main, legacy and production JIT/#99 untouched.
+Phase 1 is offline only: separate historical V6START (primary) and Full-V7
+(discovery) cohorts, audit per-feature causal reconstruction, four exclusive
+task labels, distributions, exploratory separability and joint old-JIT eligibility.
+Use the existing predictor/window and parallel recovery estimator, fixed pairs,
+cadence and deadline. Historical labels are not runtime features. UNKNOWN stays
+unknown; do not renormalize known probability mass or infer zero from missing data.
+Report worthiness, timing eligibility, real admission and receiver READY separately.
+Catch reduction is not net benefit; deadline rescue is separate from finite catch
+difference. No production, timing, Frequency/Placement/Recovery/RNG/routing/scene
+changes, new simulation/calibration, optimizer, budget, arbitrary threshold or
+extra CI. Keep analysis/test helpers in the existing tests tree and stop after
+Markdown plus CSV/JSON evidence for user review. Do not implement Phase 2.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

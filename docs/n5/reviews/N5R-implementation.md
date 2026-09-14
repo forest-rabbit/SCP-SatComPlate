@@ -2,6 +2,15 @@
 
 执行依据：[已批准只读审计](Protection-architecture-consolidation-audit.md)。此页仅记录分步提交、边界与 gate，不重写历史结果。
 
+## N5R CLOSED / USER REVIEW APPROVED
+
+用户审阅 `CompFRR_Input_Worthiness_Clarifications_v2.md` 后批准收口并合并 #103 到 `n5`。
+目录收口、1965 文件小型等价门禁及历史 V7 离线诊断均已完成，下方保留原分阶段证据。
+此次仅登记批准，不改变任何生产代码、参数或已有实验。合并后从最新 `n5` 创建
+`feature/compfrr-input-worthiness`，独立完成 Phase 1 纯离线分析；不再向 N5R 添加 INPUT 算法。
+main、JIT 历史分支、原始输出保持不变，不增加 CI/正式仿真或 tag。
+下文“等待审阅/不合并”是此前 gate 的历史状态，由本节用户批准更新。
+
 ## 最终审阅补充：目录收口与历史 V7 离线诊断
 
 用户批准 `N5R_Final_Architecture_Closeout_and_V7_JIT_Offline_Audit.md` 及四项统计补充。
