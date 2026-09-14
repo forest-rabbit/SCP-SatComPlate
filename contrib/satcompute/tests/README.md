@@ -94,6 +94,20 @@ python contrib/satcompute/tests/integration/regression/analyze-input-start-trace
 开发源、非记录参数或原运行语义不符时停止。最终证据为 `output/audits/compfrr-input-run11-instrumented-verified/`。
 不选择 production threshold；若将来用此 run11 设计规则，正式评价应独立使用 runs12–15。
 
+Co-initialization v2 的 profile/INPUT 潜力扩展同样只读，不会启动仿真：
+
+```bash
+python contrib/satcompute/tests/integration/regression/analyze-input-coinitialization.py \
+  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
+  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
+  --output-dir output/audits/compfrr-input-coinitialization-local
+```
+
+输出目录必须不存在。`support/protection/input_coinitialization_audit.py` 检查真实初始化时间来源，
+再计算固定速率 U/G/M 潜力、分层及完整排名；4个 LocalDelivery 单列，M完整排名与M>0固定screen分开。
+`unit/test_input_coinitialization_audit.py` 覆盖因果时刻、概率质量、同分/同群体、UNKNOWN与无阈值合同。
+最终证据为 `output/audits/compfrr-input-coinitialization-value-run11/`；结论追加到原审计报告。
+
 ## 历史专项与目录索引
 
 以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，

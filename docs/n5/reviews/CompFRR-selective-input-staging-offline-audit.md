@@ -231,3 +231,135 @@ A0 完整；A1 仍不完整。虽然现在风险轨迹、当前路径、初始�
 最终维护 Python tests 为 244 项（1 个既有 skip），包含 10 项新 trace 合成测试；
 两个阶段均已完成并停止。**不实现 production Selective INPUT、不挑 threshold、不启动正式矩阵/CI**。
 未来若基于本组设计规则，正式性能验证必须另用独立 runs（例如12–15），先等待人工审阅。
+
+## Profile and INITIALIZING-based Local INPUT Value Audit
+
+按人工确认的 Co-initialization v2 及三项修正完成**纯离线扩展**。复用上述 Stage B 的原始运行及
+`-verified` 证据，不新增仿真、不改生产代码，不混入 Stage A 的 FA-LRL cohort。
+最终产物为 `output/audits/compfrr-input-coinitialization-value-run11/`：12 个 CSV 和 `summary.json`，
+包括时间来源、profile 分解/分位数/旧 P_F landmarks、逐任务 timing、固定 screen、完整四分数排名、
+排名构成和静态物理尺度。原始证据的文件大小/修改时间在分析前后不变；没有新增 SHA-256。
+
+### 时间与模型边界
+
+逐个关联 snapshot、physical START、ACCEPTED placement 和 protection task summary，
+并检查执行版本 `e8a90d466` 的 controller/manager 源码：**409/409 同 ns、同 actual pair**。
+START 日志在初始 reservation 前产生，单独不能证明准入；必须再有 active inventory/ACCEPTED。
+因此当前 run 的 `t_init_start` 可由同步合同因果确定，但仍与 decision snapshot 分别命名。
+一般情况下若实际初始化更晚、且时间在决策时未知，保留 retrospective 时间，timing feature 为 UNKNOWN；
+若有明确的 decision-known schedule，使用它计算提前量。故障早于或等于初始化时，提前量为零，
+其首次故障质量仍保留，不能删去或重新归一化。
+
+这里的 co-initialization 是假想完整 INPUT 可从准入时开始，不等待 cL；**不是两条 UDP 同时启动**。
+20 个非零初始 state 仍先经过 cL，再传 INIT_STATE，最后 cR merge；389 个初始 state 为零，不创建
+INIT_STATE UDP，但保留既有生成/合并生命周期。INPUT 不增加逻辑 ON-ready barrier，不能据此保证
+它不会因争用带宽而延迟实际初始化。本轮没有创建 INPUT flow 或模拟争用。
+
+四个指标只使用 actual pair 的当前 post-batch rate 和 canonical future first-failure weights：
+`T_I = INPUT bytes / 当前 bytes/s`，每个风险时刻的发送提前量为 `max(0, t_k - t_init_start)`；
+`U_pot` 是按首次故障质量加权的可提前发送比例，`G_I_pot = T_I × U_pot`，
+`M_pot = U_pot - (1-P_F)`。full/partial/zero-lead 三类质量之和为 P_F。
+不计 propagation，不重新预测 checkpoint/state/tail，不使用最终故障/恢复目标生成特征。
+这不是实际 catch reduction，也不是实际恢复收益的严格上界；exact U/G_I/P_Iimpact/P_Iddl 仍 UNKNOWN。
+
+### Profile 与物理尺度
+
+系统级仍为 ALL 409/72、F1/F2 408/71。四分数比较统一用跨星 ALL 405/72、F1/F2 404/71；
+4 个 LocalDelivery（3 NO_FAULT、1 NONCRITICAL）单列，网络字节为零、normalized U/M 为 N/A。
+NO_NEED 包含 NO_FAULT 与 FAULT_NONCRITICAL；它表示 anchor 不依赖该 INPUT 等待，不等于实际浪费字节。
+
+| Profile | 候选 / 跨星 | NEEDED / NONCRITICAL / NO_FAULT | NEEDED 比例 | P_F 中位数：NEEDED / NO_NEED | 计划 INPUT GB / NO_NEED GB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| compression | 118 / 117 | 31 / 0 / 87 | 26.27% | 0.6019 / 0.0351 | 38.846 / 26.391 |
+| dense-image | 99 / 98 | 13 / 0 / 86 | 13.13% | 0.6524 / 0.0742 | 28.263 / 24.341 |
+| sparse-inference | 133 / 131 | 23 / 1 / 109 | 17.29% | 0.8559 / 0.0156 | 39.611 / 32.198 |
+| llm | 59 / 59 | 5 / 10 / 44 | 8.47% | 0.6216 / 0.0355 | 35,113 Byte / 32,162 Byte |
+
+**Q1：P_F 不只是区分 profile。**各类内部 NEEDED 的中位风险都高于 NO_NEED。
+沿用 Stage B 全局 ≥90% Recall cut，不做 per-profile 调参，四类分别选中 52/44/47/22 个任务，
+覆盖 26/31、11/13、23/23、5/5 个 NEEDED；说明各类内部仍有筛选信息。
+profile 的基准发生率也不同，单批描述性统计不足以量化“主要”由哪一因素贡献；LLM 仅 5 个正样本尤其有限。
+完整 min/P10/P25/P50/P75/P90/max、样本数和小样本提示见 CSV。
+
+| Profile（跨星） | INPUT serialization 中位数 | Kvar / INPUT 中位数 | 全状态 serialization 参考中位数 | 第一个风险点前已发送完 / U≈P_F |
+| --- | ---: | ---: | ---: | ---: |
+| compression | 241.326 ms | 0.542481 | 130.915 ms | 89 / 90（共117） |
+| dense-image | 226.474 ms | 1.000008 | 226.476 ms | 74 / 76（共98） |
+| sparse-inference | 238.611 ms | 0.001869 | 0.446 ms | 98 / 103（共131） |
+| llm | 0.5096 μs | 380,154.629 | 196.162 ms | 59 / 59 |
+
+所有跨星当前 INPUT/backup rate 均为 1.25 GB/s；propagation 为 1–10 ms，只作为描述列，未加入主公式。
+cR、initial state/INPUT 和 future-check lead 分布已输出。全状态参考不是未来真实 tail；
+LLM 的小请求与其较大的 KV 状态不矛盾。
+
+**Q2/Q3：U_pot 增加了有限的提前量信息。**320/405 在第一个 future check 前已完成假想 serialization，
+328/405 的 U_pot≈P_F（绝对差≤1e-12，仅用于诊断，不是排名阈值）；两者差别来自部分早期采样的风险质量为零。
+剩余 77 个的差值可见，最大 P_F-U_pot=0.227888，但对下表主要 Recall landmarks 的排名影响很小。
+完整 sweep 不做 epsilon 分箱、不按 task ID 拆同分；零 timing loss 时利用等价式 U=P_F 保持数学同分。
+
+**Q6：LLM 的归一化潜力并不低，绝对 serialization 潜力很低。**59 个请求为 325–845 Byte，
+T_I=0.260–0.676 μs，最早 future-check lead 为 563.377 μs。
+因此全部 U=P_F；G_I_pot 中位数仅 0.0205 μs、最大 0.5038 μs。
+实际 LLM INPUT critical wait 仍可能是毫秒级，因为实际传输包含 propagation 等本轮未建模因素，不能混为一谈。
+
+### 四分数公平比较与固定 screen
+
+以下 ALL 比较分母均为 **405 network / 72 NEEDED**；GB 使用十进制。
+所有字节是计划完整预置量，等待比例是捕获的实际 anchor INPUT-critical-wait，**均不是实际干预后的节省**。
+
+| 首个 Recall landmark | 分数 | 选中 / NEEDED | Precision | 计划 GB / NO_NEED GB | BytePrecision | 捕获等待 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| ≥80% | P_F / U_pot / M_pot | 119 / 58 | 48.74% | 33.151 / 14.211 | 57.13% | 80.54% |
+| ≥80% | G_I_pot | 110 / 58 | 52.73% | 39.357 / 17.732 | 54.94% | 91.54% |
+| ≥90% | P_F / M_pot | 165 / 65 | 39.39% | 43.923 / 22.354 | 49.11% | 91.43% |
+| ≥90% | U_pot | 164 / 65 | 39.63% | 43.621 / 22.052 | 49.45% | 91.43% |
+| ≥90% | G_I_pot | 175 / 65 | 37.14% | 56.909 / 33.330 | 41.43% | 99.49% |
+| 100% | P_F / U_pot / M_pot | 272 / 72 | 26.47% | 70.172 / 46.382 | 33.90% | 100% |
+| 100% | G_I_pot | 367 / 72 | 19.62% | 106.721 / 82.930 | 22.29% | 100% |
+| reference | ALL_STAGE | 405 / 72 | 17.78% | 106.721 / 82.930 | 22.29% | 100% |
+| reference | ORACLE_NEEDED | 72 / 72 | 100% | 23.790 / 0 | 100% | 100% |
+| reference | NONE_STAGE | 0 / 0 | N/A | 0 / 0 | N/A | 0% |
+
+**Q4：G_I_pot 的重排明显包含 INPUT 绝对尺度。**当前带宽完全相同，G 本身就是 U 乘以 INPUT/B。
+在 ≥90% 任务 Recall 处，相比 P_F，G 把 compression/dense/sparse 的选择数从 52/44/47 提至 61/60/54，
+LLM 从 22 降至 0。它捕获更多大 INPUT 的观察等待，但计划流量增加 **29.56%**、BytePrecision 下降；
+不是无需成本的时序预测提升。≥80% 点也有同类取舍（计划流量增加18.72%）。U 的 ≥90% 点只减少1个任务、
+302.311 MB，不能据此宣称广泛优势。未选择 final score。
+
+F1/F2-only 分母为404/71，保留全部 no-fault 负样本，≥90% 点如下；完整80%/100%及构成见产物：
+
+| 分数 | 选中 / NEEDED | 计划 GB / NO_NEED GB | 捕获等待 |
+| --- | ---: | ---: | ---: |
+| P_F / U_pot / M_pot | 163 / 64 | 43.354 / 22.052 | 93.60% |
+| G_I_pot | 165 / 64 | 53.890 / 31.111 | 99.47% |
+
+F1/F2 的 ALL_STAGE / ORACLE 分别为105.921 /22.990 GB；NONE为零。
+唯一 F3 task120 仍为 NEEDED、P_F=0.018517819600187、关键等待645.504897ms。
+它是 out-of-model hazard，不计为 F1/F2 selector 预测错误。跨星和系统级100% P_F选择数不同，
+仅因为本节排除了4个 LocalDelivery，不是改写前节的275/206系统级 landmarks。
+
+**Q5/Q7/Q8：固定 theoretical break-even 并没有让图像几乎全入选，而且覆盖偏低。**
+M>0 的 POSSIBLE 为68/405，其中45个NEEDED，计划19.996 GB、NO_NEED 3.788 GB；Precision66.18%、
+BytePrecision81.06%、捕获等待69.27%。各类 POSSIBLE 是compression24/117、dense10/98、sparse21/131、LLM13/59；
+三类图像合计仅55/346（15.90%）。其余都是“在本固定等价字节 screen 下”的 REJECT，不代表真实恢复一定不值得预置。
+
+因为 U≤P_F，M>0 必须 P_F>0.5；本批两个集合恰好相同。
+337个P_F≤0.5的跨星候选包含27个NEEDED，所以 ALL 的上限及实际 Recall 均为 **45/72=62.50%**；
+排除F3后为 **45/71=63.38%**，捕获等待71.85%。固定 screen 的80%/90%/100%目标均 UNREACHABLE，
+不能自动放松判据。**完整 M 排名则扫描全部负 cut，能达到100% Recall**；它与 M>0 筛选不是一回事。
+因此该固定 screen 不能满足本批高覆盖目标，不宜未经审阅直接作为 production rule；也不反向推出某个新阈值。
+
+### 验证与停止
+
+**Q9：仍不足以构造 exact recovery-value model。**没有未来合法 checkpoint receipt/state/tail 的因果轨迹，
+A1 仍 INCOMPLETE；本轮只是 current-rate INPUT serialization potential，不是第二套 recovery surrogate。
+后续是否需要更丰富的量，应另行讨论，不自动加入优化器或 production Selective INPUT。
+
+新增31项合成测试，维护 Python 全套275项通过（1项既有外部切片skip）；目标构建 no-op。
+重新关联原始日志验证了既有 P_F/labels/source identity，得到3,224个唯一cut点、30个landmarks/reference、
+12,896条profile构成记录；独立用原始 q_F1/q_F2 连乘再直接加权核对405个跨星分数，
+最大 U 数值误差1.11e-16，4个 LocalDelivery 的 N/A 合同通过。
+此前28 CSV/7 JSON runtime-equivalence证据沿用；本轮不修改 C++、不重复运行仿真。
+初次数值中间产物保留在 `compfrr-input-coinitialization-value-run11-initial-numerics/`，不作为最终证据。
+按分阶段实施方式先通过因果/公式测试，再完成真实数据审计与全套测试；现已停止等待人工审阅。
+**不挑 production threshold/score、不跑独立runs或CI、不自动推送/合并。**

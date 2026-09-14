@@ -393,6 +393,17 @@ remain unknown. All unique P_F cuts are descriptive only. Stop for manual review
 do not choose a threshold, implement Selective INPUT, launch independent/formal runs,
 push/merge or run CI without a fresh user instruction. Production logging stays off.
 
+The accepted Co-initialization v2 offline extension is complete on this same branch.
+Read the appended Profile/INITIALIZING section of the existing selective-input review;
+evidence is `output/audits/compfrr-input-coinitialization-value-run11/`. All 409 admitted
+initializations share the snapshot ns, verified against executed source and three ledgers.
+Four-score sweeps use network 405/404; LocalDelivery normalized U/M is N/A. Full negative
+M cuts reach full recall; fixed M>0 covers only 45/72 (45/71 without F3). Preserve this
+distinction, zero-lead fault mass and decision-known timing; actual delayed admission is
+not a causal feature without a known schedule. A1 exact recovery values remain UNKNOWN.
+No production code/new simulation changed. Stop for review: no score/threshold choice,
+production Selective INPUT, new runs, CI, push/merge or unrelated implementation.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System
