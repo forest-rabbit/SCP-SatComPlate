@@ -6,6 +6,7 @@
 #include "ns3/fixed-protection-policy.h"
 #include "ns3/input-cost-adapter.h"
 #include "ns3/checkpoint-relocation-executor.h"
+#include "ns3/transfer-only-recovery-ledger.h"
 #include "ns3/para.h"
 #include "ns3/simulator.h"
 #include <algorithm>
@@ -15,9 +16,15 @@
 #include <nlohmann/json.hpp>
 #include <source_location>
 #include <stdexcept>
+#include <type_traits>
 
 using namespace ns3;
 using namespace ns3::protection;
+
+static_assert(!std::is_base_of_v<ProtectionMechanism, TransferOnlyRecoveryLedger>,
+              "Recompute/replica transport must not acquire checkpoint execution capability");
+static_assert(std::is_base_of_v<ProtectionEvidenceView, TransferOnlyRecoveryLedger>,
+              "baseline evidence keeps the shared external schema");
 
 namespace
 {

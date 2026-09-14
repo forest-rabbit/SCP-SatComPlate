@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "cb-sat-policy.h"
-#include "../../../../task/compute-service.h"
+#include "../../../task/compute-service.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>

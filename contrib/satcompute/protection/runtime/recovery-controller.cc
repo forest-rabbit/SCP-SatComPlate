@@ -63,10 +63,11 @@ RecoveryController::RecoveryController(Ptr<TaskCoordinator> tasks,
                                        int64_t stopNs,
                                        ProtectionPolicy& policy,
                                        RemoteBusyRecoveryPolicy busyPolicy,
-                                       PlacementPolicy* recomputePlacement)
+                                       PlacementPolicy* recomputePlacement,
+                                       CheckpointRecoveryCapabilities capabilities)
     : m_tasks(tasks), m_topology(topology), m_manager(manager),
       m_network(tasks->GetTransferEngine()), m_stopNs(stopNs), m_faultRuntime(policy, {this}),
-      m_busyPolicy(busyPolicy), m_recomputePlacement(recomputePlacement)
+      m_busyPolicy(busyPolicy), m_capabilities(capabilities), m_recomputePlacement(recomputePlacement)
 {
     m_manager.EnableRecoveryRetention();
     m_tasks->SetRecoveryHandler(
@@ -291,13 +292,13 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
         r.checkpointFallbackReason = "PATH_UNAVAILABLE";
     else
         r.checkpointFallbackReason = "OTHER";
-    if (f.phase == "ON" && base && !base->reserved && Eligible(f.remoteNode, state))
+    if (m_capabilities.checkpoint && f.phase == "ON" && base && !base->reserved && Eligible(f.remoteNode, state))
     {
         const auto input = Deferred() ? Estimate(state.task.definition.sourceNodeId, f.remoteNode,
                                                  state.task.definition.inputBytes)
                                       : std::optional<int64_t>{0};
         const auto rate = Service(f.remoteNode)->GetComputeRateWorkUnitsPerSecond();
-        auto transfer = f.localWork > f.remoteWork && f.tailBytes &&
+        auto transfer = m_capabilities.localTail && f.localWork > f.remoteWork && f.tailBytes &&
                                 m_manager.Pool(f.remoteNode).Free() >= f.tailBytes
                             ? Estimate(f.localNode, f.remoteNode, f.tailBytes)
                             : std::nullopt;
@@ -327,7 +328,8 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
             r.checkpointFallbackReason = input ? "DIRECT_DEADLINE_INFEASIBLE" : "INPUT_PATH_UNAVAILABLE";
         r.directFallbackReason = r.checkpointFallbackReason;
     }
-    if (f.phase == "ON" && base && !base->reserved && m_tasks->IsSatelliteAvailable(f.remoteNode) &&
+    if (m_capabilities.checkpoint && m_capabilities.relocation &&
+        f.phase == "ON" && base && !base->reserved && m_tasks->IsSatelliteAvailable(f.remoteNode) &&
         AllowsCheckpointRelocation(m_busyPolicy, r.checkpointFallbackReason))
         return TryRelocate(state);
     return false;
@@ -388,7 +390,7 @@ RecoveryController::TryRelocate(State& state)
         }
         const auto rate = Service(candidate)->GetComputeRateWorkUnitsPerSecond();
         std::optional<int64_t> tailTransfer;
-        if (f.localWork > f.remoteWork && f.tailBytes && pool->Free() - bytes >= f.tailBytes)
+        if (m_capabilities.localTail && f.localWork > f.remoteWork && f.tailBytes && pool->Free() - bytes >= f.tailBytes)
         {
             tailTransfer = Estimate(f.localNode, candidate, f.tailBytes);
         }

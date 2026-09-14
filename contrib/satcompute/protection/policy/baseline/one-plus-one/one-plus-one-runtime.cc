@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "one-plus-one-controller.h"
+#include "one-plus-one-runtime.h"
 #include <stdexcept>
 
 namespace ns3::protection

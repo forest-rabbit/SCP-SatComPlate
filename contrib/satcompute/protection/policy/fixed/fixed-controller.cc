@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "fixed-protection-controller.h"
-#include "decision-path-snapshot.h"
+#include "fixed-controller.h"
+#include "../../runtime/decision-path-snapshot.h"
 #include "ns3/simulator.h"
 #include <stdexcept>
 
@@ -26,7 +26,8 @@ FixedProtectionController::FixedProtectionController(Ptr<TaskCoordinator> tasks,
     m_tasks->GetTransferEngine()->SetCapacityReleaseObserver([this] { RetryMaintenance(); });
     if (enableRecovery)
     {
-        m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, m_policy, busyPolicy);
+        m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, m_policy,
+                                                         busyPolicy, nullptr, CheckpointRecoveryCapabilities{true, true, true});
         m_recovery->SetLoadObserver([this](auto task, auto node, bool active) {
             m_loads.Recovery(task, node, active, Simulator::Now().GetNanoSeconds());
         });

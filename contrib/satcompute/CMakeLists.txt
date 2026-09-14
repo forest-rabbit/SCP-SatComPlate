@@ -6,17 +6,18 @@ build_lib(
     protection/common/protection-types.cc
     protection/common/input-contract.cc
     protection/runtime/checkpoint-recovery-port.cc
+    protection/runtime/transfer-only-recovery-ledger.cc
     protection/mechanism/relocation/checkpoint-relocation-executor.cc
     protection/policy/compfrr/input/input-cost-adapter.cc
     traffic/local-delivery.cc
     protection/common/task-state-adapter.cc
-    protection/policy/baseline/checkbullet/cb-sat-policy.cc
-    protection/policy/baseline/checkbullet/cb-sat-state.cc
-    protection/policy/baseline/checkbullet/cb-sat-manager.cc
-    protection/policy/baseline/checkbullet/cb-sat-recovery.cc
-    protection/policy/baseline/checkbullet/cb-sat-config.cc
-    protection/policy/baseline/checkbullet/cb-sat-controller.cc
-    protection/policy/baseline/checkbullet/cb-sat-metrics.cc
+    protection/baseline/checkbullet/cb-sat-policy.cc
+    protection/baseline/checkbullet/cb-sat-state.cc
+    protection/baseline/checkbullet/cb-sat-manager.cc
+    protection/baseline/checkbullet/cb-sat-recovery.cc
+    protection/baseline/checkbullet/cb-sat-config.cc
+    protection/baseline/checkbullet/cb-sat-controller.cc
+    protection/baseline/checkbullet/cb-sat-metrics.cc
     protection/storage/backup-storage-pool.cc
     protection/runtime/protection-runtime.cc
     protection/runtime/protection-transfer-dispatcher.cc
@@ -32,7 +33,7 @@ build_lib(
     protection/policy/baseline/least-recovery-load/least-recovery-load-placement-policy.cc
     protection/mechanism/checkpoint/checkpoint-progress.cc
     protection/mechanism/checkpoint/checkpoint-manager.cc
-    protection/runtime/fixed-protection-controller.cc
+    protection/policy/fixed/fixed-controller.cc
     protection/policy/compfrr/compfrr-controller.cc
     protection/policy/compfrr/compfrr-placement-adapter.cc
     protection/runtime/placement-resource-tracker.cc
@@ -43,8 +44,8 @@ build_lib(
     protection/runtime/placement-load-ledger.cc
     metrics/core/placement-load-metrics.cc
     protection/runtime/recovery-controller.cc
-    protection/runtime/recompute-controller.cc
-    protection/runtime/one-plus-one-controller.cc
+    protection/policy/baseline/recompute/recompute-runtime.cc
+    protection/policy/baseline/one-plus-one/one-plus-one-runtime.cc
     protection/mechanism/replication/replica-manager.cc
     metrics/core/replica-metrics.cc
     metrics/core/recovery-metrics.cc
@@ -120,6 +121,7 @@ build_lib(
     protection/common/checkpoint-evidence.h
     protection/runtime/protection-evidence-view.h
     protection/runtime/checkpoint-recovery-port.h
+    protection/runtime/transfer-only-recovery-ledger.h
     protection/mechanism/relocation/checkpoint-relocation-executor.h
     protection/policy/compfrr/input/input-cost-adapter.h
     traffic/local-delivery.h
@@ -153,6 +155,7 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-progress.h
     protection/mechanism/checkpoint/checkpoint-manager.h
     protection/runtime/fixed-protection-controller.h
+    protection/policy/fixed/fixed-controller.h
     protection/runtime/frequency-protection-controller.h
     protection/policy/compfrr/compfrr-controller.h
     protection/policy/compfrr/storage-estimator.h
@@ -163,7 +166,9 @@ build_lib(
     protection/runtime/recovery-controller.h
     protection/runtime/checkpoint-recovery-estimate.h
     protection/runtime/recompute-controller.h
+    protection/policy/baseline/recompute/recompute-runtime.h
     protection/runtime/one-plus-one-controller.h
+    protection/policy/baseline/one-plus-one/one-plus-one-runtime.h
     protection/mechanism/replication/replica-manager.h
     protection/policy/baseline/one-plus-one/one-plus-one-policy.h
     protection/policy/baseline/recompute/recompute-policy.h
@@ -264,7 +269,7 @@ target_include_directories(
   PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third-party>
 )
 set_source_files_properties(
-  protection/policy/baseline/checkbullet/cb-sat-config.cc
+  protection/baseline/checkbullet/cb-sat-config.cc
   PROPERTIES COMPILE_DEFINITIONS
     "SATCOMPUTE_CB_MTBF_PROFILE=\"${CMAKE_CURRENT_SOURCE_DIR}/protection/policy/baseline/checkbullet/calibration/frozen-mtbf-profile.json\""
 )

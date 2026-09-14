@@ -5,6 +5,14 @@
 
 namespace ns3::protection
 {
+/** Scheme-owned optional capabilities; busy policy does not grant a missing mechanism. */
+struct CheckpointRecoveryCapabilities
+{
+    bool checkpoint{true};
+    bool localTail{true};
+    bool relocation{true};
+};
+
 /** Switch busy and direct-deadline fallback; other unavailability branches are shared. */
 enum class RemoteBusyRecoveryPolicy
 {

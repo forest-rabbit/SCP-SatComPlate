@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "cb-sat-recovery.h"
-#include "../fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
+#include "../../policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
 #include "ns3/simulator.h"
 #include <algorithm>
 #include <stdexcept>

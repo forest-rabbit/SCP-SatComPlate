@@ -47,7 +47,8 @@ CompFrrController::CompFrrController(Ptr<TaskCoordinator> tasks,
         [this](const auto& epoch) { BeforeEpoch(epoch); },
         [this](auto time, const auto& outcomes) { AfterEpoch(time, outcomes); });
     tasks->GetTransferEngine()->SetCapacityReleaseObserver([this] { CapacityReleased(); });
-    m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, *this, busyPolicy);
+    m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, *this,
+                                                     busyPolicy, nullptr, CheckpointRecoveryCapabilities{true, true, true});
     m_recovery->SetLoadObserver([this](auto task, auto node, bool active) {
         m_loads.Recovery(task, node, active, Simulator::Now().GetNanoSeconds());
     });

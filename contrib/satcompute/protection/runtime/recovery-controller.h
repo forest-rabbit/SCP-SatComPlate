@@ -64,7 +64,8 @@ class RecoveryController : public ProtectionMechanism
                        int64_t stopNs,
                        ProtectionPolicy& policy,
                        RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
-                       PlacementPolicy* recomputePlacement = nullptr);
+                       PlacementPolicy* recomputePlacement = nullptr,
+                       CheckpointRecoveryCapabilities capabilities = {});
     ~RecoveryController();
     bool Supports(ActionKind kind) const override;
     void Execute(const ProtectionContext& context, const ProtectionAction& action) override;
@@ -152,6 +153,7 @@ class RecoveryController : public ProtectionMechanism
     int64_t m_stopNs;                     ///< Absolute simulation endpoint.
     ProtectionRuntime m_faultRuntime;     ///< Established mechanism first, then policy fallback.
     RemoteBusyRecoveryPolicy m_busyPolicy; ///< Busy/direct-deadline choice, not fault availability.
+    CheckpointRecoveryCapabilities m_capabilities; ///< Granted by scheme, not inferred from placement.
     PlacementPolicy* m_recomputePlacement; ///< Non-null only for full Recompute: strict operation feasibility.
     const PlacementLoadLedger* m_placementLoads{}; ///< Native R0 active loads; no checkpoint ranking change.
     std::map<uint64_t, std::unique_ptr<State>> m_states; ///< Sole recovery per task.

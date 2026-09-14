@@ -27,6 +27,10 @@ def source_scope(head):
             "contrib/satcompute/protection/runtime/recovery-controller.h",
             "contrib/satcompute/protection/runtime/recompute-controller.cc",
             "contrib/satcompute/protection/runtime/recompute-controller.h",
+            "contrib/satcompute/protection/policy/baseline/recompute/recompute-runtime.cc",
+            "contrib/satcompute/protection/policy/baseline/recompute/recompute-runtime.h",
+            "contrib/satcompute/protection/runtime/transfer-only-recovery-ledger.cc",
+            "contrib/satcompute/protection/runtime/checkpoint-recovery-port.cc",
             "contrib/satcompute/protection/policy/recovery-policy.h",
             "contrib/satcompute/protection/policy/compfrr/frequency"),
             "baseline scene/fault/routing/frequency changed")

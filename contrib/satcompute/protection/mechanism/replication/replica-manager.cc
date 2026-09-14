@@ -34,7 +34,7 @@ const char* ReplicaStageName(ReplicaStage stage)
 ReplicaManager::ReplicaManager(Ptr<TaskCoordinator> tasks, SatelliteRuntimeView& topology,
     int64_t stopNs, OnePlusOnePolicy& policy)
     : m_tasks(tasks), m_topology(topology), m_network(tasks->GetTransferEngine()),
-      m_policy(policy), m_ledger(tasks, topology, 0, stopNs)
+      m_policy(policy), m_ledger(tasks, topology, stopNs)
 {
     for (auto service : tasks->GetComputeServices()) m_loads.RegisterNode(service->GetNodeId());
     m_tasks->SetParallelAttemptHooks({
