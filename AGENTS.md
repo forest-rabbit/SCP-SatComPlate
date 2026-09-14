@@ -382,6 +382,17 @@ path, not reference-pair resources; no second checkpoint predictor. Analyze the
 new trace and stop for review. No production Selective INPUT, threshold, formal
 matrix, automatic merge, or new CI. Extend the existing review, not many documents.
 
+Stage A/B are complete. Stage A retains 409/71 historical FA-LRL V6START candidates/NEEDED;
+the new N5C FULL Deferred development run11 at clean `e8a90d466` completes 800/800 over
+1300s, with 409/72 and all 409 canonical trajectories (2056 steps). The latter's 28 CSVs
+and 7 runtime JSONs match corrected canonical execution `c7889de89`; no logger semantics
+changed. Do not pool the different placement/maintenance cohorts or rewrite old labels.
+Read the Stage B section in the existing selective-input review and the final evidence
+`output/audits/compfrr-input-run11-instrumented-verified/`. A0 passes, A1 advanced gains
+remain unknown. All unique P_F cuts are descriptive only. Stop for manual review;
+do not choose a threshold, implement Selective INPUT, launch independent/formal runs,
+push/merge or run CI without a fresh user instruction. Production logging stays off.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

@@ -86,10 +86,12 @@ Stage B 的 `--inputStartAudit=1` 默认关闭，只在成功 START 前冻结快
 ```bash
 python contrib/satcompute/tests/integration/regression/analyze-input-start-trace.py \
   --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
-  --output-dir output/audits/compfrr-input-run11-instrumented
+  --output-dir output/audits/compfrr-input-run11-instrumented-local
 ```
 
 新 trace 使用自身 Deferred outcome 标签，不借旧 JIT 结果；A1 不完整仍保持 UNKNOWN。
+审计复用现有 Frequency/placement/资源账本 helper，并检查与 corrected canonical 的全部 CSV/runtime JSON；
+开发源、非记录参数或原运行语义不符时停止。最终证据为 `output/audits/compfrr-input-run11-instrumented-verified/`。
 不选择 production threshold；若将来用此 run11 设计规则，正式评价应独立使用 runs12–15。
 
 ## 历史专项与目录索引

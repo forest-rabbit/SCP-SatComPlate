@@ -1,6 +1,4 @@
 """Synthetic passive trace contracts; no formal outputs or future outcomes required."""
-from copy import deepcopy
-import json
 from pathlib import Path
 import runpy
 import tempfile
@@ -28,6 +26,24 @@ def snapshot():
 
 
 class PassiveInputTraceTests(unittest.TestCase):
+    def test_execution_identity_rejects_parameters_and_incomplete_sources(self):
+        command = ['satcompute --simulationDuration=1300 --randomRun=11 --inputStagingPolicy=deferred']
+        canonical = dict(commit=API['CANONICAL_COMMIT'], command=command)
+        execution = dict(commit='current-clean-code', canonical_reference_commit=canonical['commit'],
+            purpose='DEVELOPMENT_CALIBRATION', final_performance_result=False, input_start_audit=True,
+            selective_input_enabled=False, worktree_dirty=False, command=[command[0]+' --inputStartAudit=1'])
+        result, run = dict(returncode=0), dict(simulation_duration_ns=1300*10**9, task_count=800)
+        self.assertEqual(API['execution_identity'](execution, result, run, canonical)['status'], 'PASS')
+        for field, value in (('worktree_dirty', True), ('final_performance_result', True),
+                             ('selective_input_enabled', True), ('canonical_reference_commit', 'wrong'),
+                             ('command', [execution['command'][0].replace('--randomRun=11', '--randomRun=12')])):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                API['execution_identity'](dict(execution, **{field:value}), result, run, canonical)
+        with self.assertRaises(ValueError):
+            API['execution_identity'](execution, dict(returncode=1), run, canonical)
+        with self.assertRaises(ValueError):
+            API['execution_identity'](execution, result, dict(run, task_count=799), canonical)
+
     def test_full_union_trajectory_without_advanced_surrogate(self):
         f = API['feature_snapshot'](snapshot())
         self.assertAlmostEqual(f['P_F'], .4816)

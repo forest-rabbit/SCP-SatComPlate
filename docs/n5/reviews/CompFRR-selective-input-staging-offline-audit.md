@@ -182,5 +182,52 @@ first-sample 及 finish-exclusive 合同，没有新增 checkpoint forecaster �
 仅增加 16 个审计 JSON。fixture 的 18 个成功 START 已逐个检查轨迹和实际 pair。
 原 fault/probability、Frequency、placement、checkpoint/recovery、bytes/WU/storage、routing 和时序均未变。
 
-下一项是唯一一次当前 clean 代码、canonical corrected run11 非记录参数的 800-task/1300s 采样；
-purpose 显式为 DEVELOPMENT_CALIBRATION，绝不作为 final performance。执行结果将在本节续记。
+唯一一次完整采样已完成：clean execution `e8a90d46657d31e7c8cee8f51d06f421cc06f67c`，
+目录 `output/compfrr-input-worthiness/20260914-run11-instrumented/`，1300s、退出 0、耗时 954.433s。
+CompFRR / N5C FULL / Deferred / relocate / seed1-run11；复用 `checkpoint-maintenance-fixed/run-11/full`
+的全部非记录参数，三个版本化场景输入逐字节一致。purpose 为 DEVELOPMENT_CALIBRATION，
+**不是 final performance**。运行中只补充离线审计和合成测试，未改生产代码或重建正在执行的库。
+
+最终审计：`output/audits/compfrr-input-run11-instrumented-verified/`；此前不带 `-verified` 的审计目录
+保留为中间产物，最终版额外检查全部 runtime JSON 与输出文件集合。产物包括 source-identity、
+summary、runtime-equivalence、runtime-accounting、candidate-features/labels、完整 PF sweep/reference。
+28 个原始 CSV 与 corrected canonical 逐字节一致，7 个 runtime JSON 一致（仅忽略 wall-clock）；
+execution 元数据及新增审计文件单列，不混入语义比较。现有 helper 独立检查了 4,130 条 Frequency 决策、
+placement/quota、实际 WU/bytes/storage 与恢复账本；800/800 完成、83/83 恢复成功，
+TAIL/REMOTE_REDO/MIGRATE_TAIL 为 73/8/2，无 Recompute。没有因 instrumentation 改变故障实现或时序。
+
+409 个成功 START（389 TASK_RUNNING、20 FAULT_EPOCH），无重复或未准入候选；
+全部有 actual post-batch validation、完整 canonical 轨迹，共 2,056 个未来采样点。
+393 个 actual pair 不同于 Frequency reference pair；405 个跨星当前路径可准入、4 个 LocalDelivery。
+20 个 epoch START 的 initial state 非零；快照仍为初始化前，不等同于 checkpoint-ready。
+本组所有 first sample 均为 NEXT_CANONICAL，finishExclusive=true；pending-current 分支由合成测试验证。
+
+新组为 **409 / 72 NEEDED / 11 FAULT_NONCRITICAL / 326 NO_FAULT / 0 UNKNOWN**；
+F1/F2 视图为 **408 / 71 NEEDED**，保留全部 no-fault 负样本。
+F3 仍仅 task120、P_F=0.018517819600187、INPUT critical wait=645.504897ms，单列为 out-of-model hazard。
+注意：Stage A 的旧组采用 **FA-LRL**，Stage B 采用 **N5C FULL + corrected maintenance**，
+不是同一 placement/机制版本，不能把 71→72 单独归因于某一修复，更不是本轮记录器导致的变化。
+相对旧 Deferred anchor，30/85/192 从 NEEDED 变为 NONCRITICAL，46/187/402/727 反向变化；
+旧组原有 409/71 统计不改写，两组不合并为独立样本或公平算法对照。
+
+新组再次完整 sweep 405+404 个唯一 cut，6 个 reference；以下仍只是固定 Recall landmarks，**不选阈值**：
+
+| 视图 / 诊断点 | 选中 / NEEDED | Precision | Recall | 计划网络 GB | 计划 NO_NEED GB | BytePrecision | 捕获实际等待 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ALL / ALL_STAGE | 409 / 72 | 17.60% | 100% | 106.721 | 82.930 | 22.29% | 100% |
+| ALL / 首个 ≥90% Recall | 165 / 65 | 39.39% | 90.28% | 43.923 | 22.354 | 49.11% | 91.43% |
+| F1/F2 / ALL_STAGE | 408 / 71 | 17.40% | 100% | 105.921 | 82.930 | 21.71% | 100% |
+| F1/F2 / 首个 ≥90% Recall | 163 / 64 | 39.26% | 90.14% | 43.354 | 22.052 | 49.14% | 93.60% |
+
+ALL 的该诊断点较 ALL_STAGE 少 244 个任务，**计划**网络字节减少 58.84%；捕获的是观察到的等待，
+不是实际节省时延。全组观察等待 17.987768934s，F1/F2 组 17.342264037s；
+ORACLE_NEEDED 计划网络量为 23.790/22.990GB。没有真正发送任何 Selective INPUT 来验证这些潜在收益。
+
+A0 完整；A1 仍不完整。虽然现在风险轨迹、当前路径、初始化和资源估计 inputs 齐全，
+它们仍不直接给出每个未来风险时刻的合法 checkpoint receipt/state/tail。`G_I / P_Iimpact / P_Iddl`
+跨星值保持 UNKNOWN，advanced ranking skipped；LocalDelivery 的零 INPUT-only 网络收益单独保留。
+没有为了填值另造 checkpoint predictor 或 recovery surrogate。
+
+最终维护 Python tests 为 244 项（1 个既有 skip），包含 10 项新 trace 合成测试；
+两个阶段均已完成并停止。**不实现 production Selective INPUT、不挑 threshold、不启动正式矩阵/CI**。
+未来若基于本组设计规则，正式性能验证必须另用独立 runs（例如12–15），先等待人工审阅。

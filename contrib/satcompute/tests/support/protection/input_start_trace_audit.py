@@ -8,6 +8,26 @@ import runpy
 API = runpy.run_path(str(Path(__file__).with_name('selective_input_offline_audit.py')))
 require, rows, unique = (API[k] for k in ('require', 'rows', 'unique'))
 COHORT = 'DEFERRED_N5R_RUN11_DEVELOPMENT'
+CANONICAL_COMMIT = 'c7889de89cf02363a2694a18fa2d5fa59a1b18e4'
+
+
+def execution_identity(execution, result, run, canonical):
+    """Complete source/parameter gate, independently of any P_F or outcome score."""
+    require(execution.get('purpose') == 'DEVELOPMENT_CALIBRATION' and
+            execution.get('final_performance_result') is False and execution.get('input_start_audit') is True and
+            execution.get('selective_input_enabled') is False and execution.get('worktree_dirty') is False,
+            'not a clean passive development execution')
+    require(execution.get('canonical_reference_commit') == canonical['commit'] == CANONICAL_COMMIT and
+            bool(execution.get('commit')), 'incorrect canonical source identity')
+    require(result['returncode'] == 0 and run['simulation_duration_ns'] == 1300*10**9 and
+            run['task_count'] == 800, 'incomplete run11 execution')
+    before, after = API['command_controls'](canonical), API['command_controls'](execution)
+    allowed = {'--outputDir', '--faultTrace', '--inputStartAudit'}
+    require(after.get('--inputStartAudit') == '1' and
+            {k: v for k, v in before.items() if k not in allowed} ==
+            {k: v for k, v in after.items() if k not in allowed}, 'nonlogging controls changed')
+    return dict(status='PASS', execution_commit=execution['commit'], canonical_commit=canonical['commit'],
+                nonlogging_controls_identical=True, task_count=800, simulation_duration_s=1300)
 
 
 def feature_snapshot(record):
@@ -131,9 +151,34 @@ def audit_trace(root):
 
 def write_audit(root, output):
     API['HISTORY']['output_guard'](output, [root])
-    before = API['evidence_metadata']([root])
+    execution = json.loads((root / 'execution.json').read_text())
+    canonical = Path(execution['canonical_reference'])
+    API['HISTORY']['output_guard'](output, [root, canonical])
+    before = API['evidence_metadata']([root, canonical])
+    identity = execution_identity(execution, json.loads((root / 'execution-result.json').read_text()),
+        json.loads((root / 'run-summary.json').read_text()), json.loads((canonical / 'execution.json').read_text()))
     result = audit_trace(root)
-    require(before == API['evidence_metadata']([root]), 'raw evidence modified')
+    # Reuse maintained ledger/placement audits, not another waste/routing model.
+    placement = runpy.run_path(str(Path(__file__).with_name('placement_audit.py')))
+    runtime = placement['analyze'](root)
+    equivalence = placement['BASE']['strict_equivalence'](canonical, root)
+    require(equivalence['passed'], 'current trace differs from corrected canonical semantics; stop for audit')
+    require({p.name for p in canonical.glob('*.csv')} == {p.name for p in root.glob('*.csv')},
+            'CSV output schema set changed')
+    metadata = {'execution.json', 'execution-result.json'}
+    semantic_json = {p.name for p in canonical.glob('*.json')} - metadata
+    require(semantic_json == {p.name for p in root.glob('*.json')} - metadata - {'input-start-snapshots.json'},
+            'unexpected additional/missing runtime JSON')
+    for name in semantic_json - equivalence['checks'].keys():
+        equivalent = json.loads((canonical / name).read_text()) == json.loads((root / name).read_text())
+        require(equivalent, 'runtime JSON changed: '+name)
+        equivalence['checks'][name] = True
+        equivalence['json_equivalent_count'] += 1
+    result['summary']['runtime_equivalence'] = dict(passed=True,
+        csv_byte_identical_count=equivalence['csv_byte_identical_count'],
+        json_equivalent_count=equivalence['json_equivalent_count'])
+    result['summary']['independent_runtime_accounting'] = 'PASS'
+    require(before == API['evidence_metadata']([root, canonical]), 'raw evidence modified')
     output.mkdir(parents=True, exist_ok=False)
     for name, data in (('candidate-features', result['features']), ('candidate-labels', result['labels']),
                        ('pf-score-sweeps', result['reduced']['sweeps']), ('pf-reference-points', result['reduced']['references'])):
@@ -141,6 +186,8 @@ def write_audit(root, output):
         records = [{k: json.dumps(v, separators=(',', ':')) if isinstance(v, (list, dict)) else v
                     for k, v in r.items()} for r in data]
         API['HISTORY']['write_csv'](output / (name+'.csv'), records)
-    for name, data in (('summary', result['summary']), ('pf-summary', result['reduced']['summary'])):
+    for name, data in (('summary', result['summary']), ('pf-summary', result['reduced']['summary']),
+                       ('source-identity', identity), ('runtime-equivalence', equivalence),
+                       ('runtime-accounting', runtime)):
         (output / (name+'.json')).write_text(json.dumps(data, indent=2, allow_nan=False)+'\n')
     return result['summary']
