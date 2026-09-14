@@ -17,7 +17,7 @@ class FrequencyDecisionGate
     void Propose(const FrequencyDecision& decision, bool capacityRetry = false);
     /** Consume exactly one same-epoch proposal after fault execution/liveness resolution. */
     bool Resolve(int64_t epochNs, bool currentFaultHit, bool primaryStillRunning,
-                 bool fixedConfigStillFeasible = true);
+                 bool fixedConfigStillFeasible = true, bool resourceHold = false);
     ///< Post-batch resource rejection cancels OFF admission or pauses ON without replacing its config.
     /** External physical initialization commit, never caused by a policy proposal. */
     void InitializationCommitted();
@@ -47,6 +47,7 @@ class FrequencyDecisionGate
     {
         return m_paused;
     }
+    bool ResourceHeld() const { return m_resourceHeld; } ///< Config rejected; old cadence retained.
 
   private:
     ProtectionPhase m_phase{ProtectionPhase::OFF};   ///< Effective state only.
@@ -55,6 +56,7 @@ class FrequencyDecisionGate
     int64_t m_lastEpoch{-1};                         ///< Reject duplicate or stale decisions.
     int64_t m_lastCapacityEpoch{-1}; ///< One fresh OFF/paused-ON resource decision per timestamp.
     bool m_paused{}; ///< Suppresses both new targets and new batches, never deletes state.
+    bool m_resourceHeld{}; ///< Resource rejection is not a new policy pause.
 };
 } // namespace ns3::protection
 #endif

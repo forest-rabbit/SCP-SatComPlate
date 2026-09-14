@@ -178,7 +178,10 @@ horizon 和 endpoint 语义；与故障侧提供的本轮联合 q 逐值核对�
 检查点提议 START 遇到同轮故障仍视为 OFF；新 delta/n 不能改变当前故障前状态。
 `FrequencyDecisionGate` 只维护单任务策略状态，真实初始化、记录、批次和故障仍由 N5A 执行。
 新 delta 从实际完成/上次触发边界向前取合法 target；新 n 只消费尚未组批的记录，已建批次不可变。
-ON 无可行候选时保留状态、暂停新 target 和新 batch，已有操作继续；不允许 ON→OFF。
+ON 无可行新配置时保留状态和最后 committed 配置，不允许 ON→OFF。
+真正的策略 PAUSE（例如 deadline 不可行）暂停新 target/batch；路径、存储等暂时资源拒绝是
+`RESOURCE_HOLD`，不连带停止另一层可执行的维护，也不能解除此前真正的策略 PAUSE。
+两种情况下，已创建的 generation、传输、merge 均按原生命周期继续。
 
 N5B-G2/G3 正式接入和算法比较采用在线 **generate**。固定输入和配对 seed/run 不保证不同策略
 得到同一故障序列：恢复计算改变负载与温度是 F1 闭环的一部分。N5A 的 validation-replay
@@ -201,7 +204,9 @@ G3R 在 primary `TASK_RUNNING` 时立即评估 OFF→START，不等待下一个�
 F3 实际时刻的 F1/F2 因果快照另写 `f3-compute-risk-snapshots.csv`，不额外抽样。
 
 各 placement 的 OFF 候选不预留资源，START 存活后固定节点对；ON 不换节点。
-节点当下不健康、不空闲或所需路径不可用时暂停新操作。
+START 仍要求 local/remote 健康且 ComputeService 空闲；recovery compute 准入也不变。
+ON maintenance 不要求 local/remote ComputeService idle/available：F1/F2 的计算不可用不等于存储失效。
+local capture 和 remote batch 分别检查整星存活、对应路径、实际存储及既有配额；F3 对象失效不变。
 路径复用 NetworkTransferEngine 的只读准入查询：capacity-aware 搜索完整 ECMP 路径并使用
 当前真实 reservation；不由 Frequency 独自选第一条路径。恢复速率读 remote 的 ComputeService。
 primary→remote、primary→local、local→remote 是 START 的硬路径条件。
@@ -229,11 +234,14 @@ INIT/恢复/终态不重试；ON 不做 OFF 重试。`frequency-capacity-waits.c
 
 ON 因 `NO_ADMISSIBLE_PATH` 暂停时也登记容量释放通知：保持原节点对，在释放事件完成后
 读取当前进度、风险、库存和真实剩余容量，重新求解原 ON 公式；不忽略自身流的预约，不新增故障抽样。
-仍被容量阻塞则继续等待，其他原因（节点忙、存储、deadline 等）不因容量释放而持续重试。
+仍被容量阻塞则继续等待；其他原因不因容量释放额外重跑 Frequency。
+独立维护操作可在真实容量释放、存储 cleanup 或完整 fault epoch 后重试，使用已提交配置，不新增求解或故障抽样。
 可行时提交 UPDATE，记录 `RESUME_AFTER_CAPACITY_RELEASE`，只恢复未来 target/batch，不补造历史检查点。
 同纳秒故障批次处理完毕后已进入恢复或终态的任务不重试；重复通知合并，每任务每纳秒最多重试一次。
 `capacity_retry_success` 表示 OFF 的 START 或 ON 的 UPDATE 成功，按 `phase_before` 区分；ON 暂停时长
-仍只记在 `frequency-pause-intervals.csv`，不作为额外计算占用。非抽样重试的评分使用 `q_comp_snapshot`。
+记录在 `frequency-pause-intervals.csv`，`resource_hold=1` 区分配置资源阻塞与真正策略 PAUSE，
+不作为额外计算占用。`frequency-decisions.csv` 的 `maintenance_resource_hold` 标明实际提交的资源保留。
+非抽样重试的评分使用 `q_comp_snapshot`。
 
 库存快照包含 r/l、已捕获记录及 H、是否分配/接收、当前 remote state 和不可变 batch。
 估计器只输出与 **free bytes** 比较的新增峰值：
@@ -247,6 +255,19 @@ ON 因 `NO_ADMISSIBLE_PATH` 暂停时也登记容量释放通知：保持原节�
 真实预留、拒绝、发送和清理由 N5A 账本执行；预测通过不等于资源已预留。
 新 delta 只替换未触发目标；delta 不变时不推迟已有目标。新 n 只作用于尚未组批记录。
 PAUSE 只停新目标/新 batch，不取消已有生成、传输或融合；UPDATE 可恢复。
+
+维护事件 `CAPTURE_BLOCKED_PATH/STORAGE`、`REMOTE_BATCH_BLOCKED_PATH/STORAGE` 及对应 `RESUMED`
+独立记录两条流水线的资源阻塞；`FREQUENCY_RESOURCE_HOLD` 不等于 `FREQUENCY_PAUSED`。
+local record 在捕获前预留完整增量（含 H），成功后才推进 immutable sequence 并计 cL。
+拒绝时不前移 triggered；恢复时从真实当前进度选择未来合法边界，不补造过去快照。
+已生成待注册的记录保留原对象及序列，路径恢复后只注册一次。已注册的真实终结失败保留实际已发送字节，
+相应流水线标记 `TRANSFER_FAILED`，不在 UPDATE/epoch 自动重发；L1 缺失不能被后续接收跳过，
+remote 流失败不禁止继续 local capture。真正的策略 PAUSE 不取消已创建请求，F3/任务终止则依原合同清理。
+N5C quota 更新仍替换旧峰值，结束释放；每次维护同时遵守实际容量、其他任务承诺和本任务 remote 峰值，
+不将 actual 和 quota 重复相加。现有 INPUT + remote state + local tail 并行恢复链路完全保持。
+
+旧结果只有维护轨迹与资源账本均等价才可复用；没有后续故障不能证明未受影响。
+本轮审计与验证见 [维护语义审计](../../../docs/n5/reviews/Checkpoint-maintenance-semantics-audit.md)。
 
 `frequency-decisions.csv` 分开记录当前/提议/实际提交的 delta/n、q/P_finish、FFP/空闲字节/速率、
 J、Rbar、Rmax、初始化估计、额外存储峰值、实际故障和提交结果。不适用字段留空；
@@ -286,7 +307,7 @@ local-first 和一跳集合仍会影响分布，不保证每节点均匀。
 用户最终确认覆盖补充任务书原来的 `cL = cost only` 提案：
 
 ```text
-合法边界 -> 捕获不可变状态 -> 等 cL -> 开始真实 L1 传输
+合法边界 -> 路径/存储准入并预留 -> 捕获不可变状态 -> 等 cL -> 开始真实 L1 传输
          -> local receiver 收齐连续记录 -> 推进 l
 
 remote receiver 收齐 batch -> 等 cR -> RemoteCommit

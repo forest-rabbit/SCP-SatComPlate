@@ -70,7 +70,7 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
            "pair_skip_storage,pair_skip_deadline,pair_hard_rejection_reason,capacity_retry_count,"
            "capacity_retry_success,capacity_wait_start_ns,capacity_wait_end_ns,capacity_wait_duration_ns,"
            "p_fail_after_init_ready,representative_progress_after_ready,init_ready_time_ns,"
-           "j_off_start_window,old_current_progress_loss\n";
+           "j_off_start_window,old_current_progress_loss,maintenance_resource_hold\n";
     auto number = [&](const auto& value) {
         if (value)
             out << *value;
@@ -150,13 +150,14 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
         number(in.phase == ProtectionPhase::OFF ? d.jOff : std::nullopt);
         if (in.phase == ProtectionPhase::OFF && d.legacyCurrentProgressLoss)
             out << *d.legacyCurrentProgressLoss;
-        out << '\n';
+        out << ',' << (r.committed && r.resourceHold) << '\n';
     }
     std::ofstream pauses(directory / "frequency-pause-intervals.csv");
     pauses.exceptions(std::ios::badbit | std::ios::failbit);
-    pauses << "task_id,start_time_ns,end_time_ns,duration_ns,reason\n";
+    pauses << "task_id,start_time_ns,end_time_ns,duration_ns,reason,resource_hold\n";
     for (const auto& p : m_pauses)
-        pauses << p.taskId << ',' << p.startNs << ',' << p.endNs << ',' << p.endNs-p.startNs << ',' << p.reason << '\n';
+        pauses << p.taskId << ',' << p.startNs << ',' << p.endNs << ',' << p.endNs-p.startNs << ',' << p.reason
+               << ',' << p.resourceHold << '\n';
     std::ofstream waits(directory / "frequency-capacity-waits.csv");
     waits.exceptions(std::ios::badbit | std::ios::failbit);
     waits << "task_id,start_time_ns,end_time_ns,duration_ns,reason\n";

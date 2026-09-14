@@ -23,6 +23,7 @@ FixedProtectionController::FixedProtectionController(Ptr<TaskCoordinator> tasks,
         m_loads.Assignment(task, node, active, Simulator::Now().GetNanoSeconds());
     });
     m_tasks->ConnectTaskObserver(MakeCallback(&FixedProtectionController::OnTask, this));
+    m_tasks->GetTransferEngine()->SetCapacityReleaseObserver([this] { RetryMaintenance(); });
     if (enableRecovery)
     {
         m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, m_policy, busyPolicy);
@@ -34,7 +35,16 @@ FixedProtectionController::FixedProtectionController(Ptr<TaskCoordinator> tasks,
 
 FixedProtectionController::~FixedProtectionController()
 {
+    m_tasks->GetTransferEngine()->SetCapacityReleaseObserver({});
+    Simulator::Cancel(m_maintenanceRetry);
     m_tasks->DisconnectTaskObserver(MakeCallback(&FixedProtectionController::OnTask, this));
+}
+
+void
+FixedProtectionController::RetryMaintenance()
+{
+    if (!m_finalized && !m_maintenanceRetry.IsPending())
+        m_maintenanceRetry = Simulator::ScheduleNow([this] { m_manager.RetryBlockedMaintenance(); });
 }
 
 void
@@ -85,11 +95,15 @@ FixedProtectionController::OnTask(const TaskEventRecord& event)
         m_runtime.OnTaskComputeComplete({event.taskId, 0});
     if (IsTerminalTaskState(event.toState))
         m_runtime.OnTaskTerminal(event.taskId);
+    RetryMaintenance();
 }
 
 void
 FixedProtectionController::Finalize()
 {
+    m_finalized = true;
+    m_tasks->GetTransferEngine()->SetCapacityReleaseObserver({});
+    Simulator::Cancel(m_maintenanceRetry);
     if (m_recovery)
         m_recovery->Finalize();
     m_tasks->FinalizeSimulation();

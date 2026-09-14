@@ -42,6 +42,8 @@ class N5cPlacementTracker
     ~N5cPlacementTracker();
     void FillResources(N5cCandidate& candidate, int64_t remainingTimeNs) const;
     uint64_t FreeFor(uint32_t node, uint64_t replacingTask) const;
+    /** Physical growth allowed by other owners' promises and this owner's committed peak. */
+    uint64_t MaintenanceFree(uint32_t node, uint64_t task) const;
     uint64_t PeakFor(uint32_t node, uint64_t task, uint64_t additional) const;
     bool CanCommit(uint64_t task, uint32_t node, uint64_t peak) const;
     void CommitQuota(uint64_t task, uint32_t node, uint64_t peak);

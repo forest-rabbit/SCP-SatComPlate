@@ -144,6 +144,8 @@ void Quotas()
     N5cQuotaLedger ledger;
     std::map<uint64_t, uint64_t> actual{{1, 100}, {2, 50}};
     ledger.Replace(1, 10, 200);
+    Check(ledger.Peak(1, 10) == 200 && !ledger.Peak(1, 11) && !ledger.Peak(2, 10),
+          "maintenance quota lookup changed owner/node scope");
     Check(ledger.Accounted(10, actual) == 250, "actual and its quota are not added twice");
     ledger.Replace(1, 10, 150);
     Check(ledger.Accounted(10, actual) == 200, "ON replaces old quota");
@@ -152,6 +154,7 @@ void Quotas()
     Check(ledger.Accounted(10, actual) == 150, "smaller promise cannot erase actual occupancy");
     Reject([&] { ledger.Replace(1, 11, 40); });
     ledger.Release(1); ledger.Release(1);
+    Check(!ledger.Peak(1, 10), "released maintenance quota remains visible");
     Check(ledger.Empty() && ledger.Accounted(10, actual) == 150, "release preserves recovery objects");
     ledger.Replace(1, 10, std::numeric_limits<uint64_t>::max());
     Reject([&] { ledger.Accounted(10, actual); });

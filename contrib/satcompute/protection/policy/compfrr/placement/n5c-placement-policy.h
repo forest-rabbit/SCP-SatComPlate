@@ -90,6 +90,13 @@ class N5cQuotaLedger
     uint64_t Accounted(uint32_t node, const std::map<uint64_t, uint64_t>& actual,
                        std::optional<uint64_t> replacing = {}) const;
     bool Empty() const { return m_quotas.empty(); }
+    /** Existing committed promise for this owner/node, without changing accounting. */
+    std::optional<uint64_t> Peak(uint64_t task, uint32_t node) const
+    {
+        const auto it = m_quotas.find(task);
+        return it != m_quotas.end() && it->second.first == node
+            ? std::optional(it->second.second) : std::nullopt;
+    }
   private:
     std::map<uint64_t, std::pair<uint32_t, uint64_t>> m_quotas; ///< Task -> fixed remote/peak.
 };

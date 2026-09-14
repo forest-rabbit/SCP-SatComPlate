@@ -243,6 +243,24 @@ stable overall replacement advantage. Run15 task53 now migrates 41->0 and comple
 for noU/Rational-U. Keep FULL default; recommend stopping this U refinement pending
 user review. No further runs, model changes, push/merge/CI/tag or architecture cleanup.
 
+### Checkpoint maintenance correction (2026-09-14, active)
+
+The user accepted the checkpoint maintenance taskbook and five amendments. Work on
+`fix/checkpoint-maintenance-semantics` from `08236b8af`. This supersedes the previous
+stop only for maintenance audit, minimal repair and affected U validation. Remove
+ComputeService idle as an ON-maintenance prerequisite only; retain START and recovery
+availability/idle admission. Separate genuine policy PAUSE from local-capture and
+remote-batch resource blocks, retaining the last committed cadence/quota during
+temporary resource rejection. Preserve bounded storage, actual failed-flow bytes,
+continuous records, already-created generation/transfer/merge, strict pre-fault state
+and F3 invalidation. Never invent historical captures or skip a missing receipt.
+Keep existing parallel INPUT/state/tail recovery, Frequency mathematics, placement,
+U/defaults, faults/RNG, routing, scene and deadlines unchanged. Historical KEEP requires
+maintenance-trajectory AND resource-ledger equivalence, not merely no fault after pause;
+missing historical fields are UNKNOWN. Audit first and determine affected formal U runs;
+do not expand other baselines or auto-push/PR/CI/merge/tag. Keep PR #100/#101 open and
+all prior outputs intact. Use one concise review document rather than duplicate reports.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

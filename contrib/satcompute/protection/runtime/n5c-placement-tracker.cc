@@ -94,6 +94,17 @@ uint64_t N5cPlacementTracker::FreeFor(uint32_t node, uint64_t replacing) const
     const auto account = m_quotas.Accounted(node, pool.OccupancyByTask(), replacing);
     return account < pool.Capacity() ? pool.Capacity() - account : 0;
 }
+uint64_t N5cPlacementTracker::MaintenanceFree(uint32_t node, uint64_t task) const
+{
+    auto free = FreeFor(node, task);
+    if (const auto peak = m_quotas.Peak(task, node))
+    {
+        const auto actual = m_manager.Pools().at(node)->OccupancyByTask();
+        const auto own = actual.contains(task) ? actual.at(task) : 0;
+        free = std::min(free, *peak > own ? *peak - own : 0);
+    }
+    return free;
+}
 uint64_t N5cPlacementTracker::PeakFor(uint32_t node, uint64_t task, uint64_t additional) const
 {
     const auto actual = m_manager.Pools().at(node)->OccupancyByTask();

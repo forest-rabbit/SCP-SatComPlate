@@ -59,7 +59,7 @@ FrequencyStorageEstimator MakeFrequencyStorageEstimator(
                     append(record.bytes);
             }
         auto next =
-            on && !inventory->paused && inventory->config.deltaPermille == config.deltaPermille
+            on && !inventory->paused && inventory->nextTarget && inventory->config.deltaPermille == config.deltaPermille
                 ? inventory->nextTarget
                 : layout.Next(actual, triggered, config.deltaPermille);
         uint64_t futureHeaders = 0;

@@ -123,6 +123,8 @@ def active_weight(configurations, start, stop, pauses):
 def frequency(root, task_profiles, protected, recoveries):
     decisions = rows(root, "frequency-decisions.csv", True)
     intervals = rows(root, "frequency-pause-intervals.csv", True)
+    resource_holds = [r for r in intervals if r.get('resource_hold') == '1']
+    intervals = [r for r in intervals if r.get('resource_hold') != '1']
     capacity_waits = rows(root, "frequency-capacity-waits.csv", True)
     verify_pair_retries(decisions, capacity_waits)
     for r in capacity_waits:
@@ -174,7 +176,10 @@ def frequency(root, task_profiles, protected, recoveries):
             "unpaused_on_duration_ns": weight,
             "time_weighted_delta": delta / weight if weight else None,
             "time_weighted_n": batch / weight if weight else None,
-            "pause_decision_count": sum(r["proposed_action"] == "PAUSE" for r in committed),
+            "pause_decision_count": sum(r["proposed_action"] == "PAUSE" and
+                r.get("maintenance_resource_hold") != "1" for r in committed),
+            "resource_hold_decision_count": sum(r.get("maintenance_resource_hold") == "1" for r in committed),
+            "resource_hold_duration_ns": sum(int(r['duration_ns']) for r in resource_holds if r['task_id'] in ids),
             "pause_count": pause_episodes, "pause_duration_ns": sum(int(r["duration_ns"]) for r in ps),
             "pause_reason_intervals": dict(Counter(r["reason"] for r in ps)),
             "pause_reason_duration_ns": {reason: sum(int(r["duration_ns"]) for r in ps if r["reason"] == reason)

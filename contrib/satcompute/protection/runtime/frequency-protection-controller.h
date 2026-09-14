@@ -29,6 +29,7 @@ struct FrequencyDecisionRecord
     std::string reason;                      ///< Resolution, distinct from solver reason.
     std::string resourceReason; ///< Diagnostic hard-resource cause; never changes solver scoring.
     std::string replayReason;   ///< Soft OFF INPUT admission status.
+    bool resourceHold{}; ///< ON config rejection, not blanket checkpoint maintenance PAUSE.
     PlacementNodeLoad localLoad, remoteLoad; ///< Causal load snapshots before ranking/admission.
     std::string trigger{"FAULT_EPOCH"};      ///< TASK_RUNNING is a policy event, never a draw.
     double pF1{}, pF2{};     ///< Current model snapshot, not an observed failure label.
@@ -114,6 +115,7 @@ class FrequencyProtectionController : public ProtectionPolicy
         std::optional<ProtectionPhase> stopped; ///< Deferred gate stop until proposal resolves.
         std::optional<int64_t> pauseStart; ///< Beginning of the current reason-specific interval.
         std::string pauseReason; ///< Current effective pause cause.
+        bool pauseResourceHold{}; ///< Configuration rejection, with maintenance independently gated.
         int64_t lastDecisionNs{-1}; ///< Avoid duplicate policy evaluation at a coincident check.
         int64_t lastCapacityDecisionNs{-1}; ///< At most one capacity retry per task/timestamp.
         std::optional<int64_t> capacityWaitStart;
@@ -122,6 +124,7 @@ class FrequencyProtectionController : public ProtectionPolicy
     struct PauseInterval
     {
         uint64_t taskId{}; int64_t startNs{}, endNs{}; std::string reason;
+        bool resourceHold{};
     }; ///< Nonoverlapping intervals ending on resume, reason change, stop or finalization.
 
     struct Path
