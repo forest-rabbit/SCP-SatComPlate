@@ -48,6 +48,9 @@ class FixedProtectionController
 
   private:
     void OnTask(const TaskEventRecord& event); ///< Observe, never mutate ordinary task state.
+    void RetryMaintenance(); ///< Event-driven retry, without any fixed-policy change.
+    EventId m_maintenanceRetry;
+    bool m_finalized{};
     Ptr<TaskCoordinator> m_tasks;              ///< Retained coordinator, outlives event binding.
     SatelliteRuntimeView& m_topology;          ///< Existing real network view.
     PlacementLoadLedger m_loads;               ///< Shared ownership snapshot for FFP/LRL.

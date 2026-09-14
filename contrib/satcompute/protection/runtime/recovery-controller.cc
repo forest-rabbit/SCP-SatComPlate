@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "recovery-controller.h"
+#include "checkpoint-recovery-estimate.h"
 #include "../policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
 
 #include "ns3/simulator.h"
@@ -294,27 +295,36 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
         const auto input = Deferred() ? Estimate(state.task.definition.sourceNodeId, f.remoteNode,
                                                  state.task.definition.inputBytes)
                                       : std::optional<int64_t>{0};
-        if (!input)
-        {
-            r.checkpointFallbackReason = "INPUT_PATH_UNAVAILABLE";
-            return false;
-        }
         const auto rate = Service(f.remoteNode)->GetComputeRateWorkUnitsPerSecond();
-        r.estimatedRedoNs = *input + Duration(f.actualWork - f.remoteWork, rate);
         auto transfer = f.localWork > f.remoteWork && f.tailBytes &&
                                 m_manager.Pool(f.remoteNode).Free() >= f.tailBytes
                             ? Estimate(f.localNode, f.remoteNode, f.tailBytes)
                             : std::nullopt;
-        if (transfer)
-            r.estimatedTailNs =
-                std::max(*input, *transfer + f.remoteCostNs) + Duration(f.actualWork - f.localWork, rate);
-        const auto choice = ChooseRecoveryPath(
-            transfer ? std::optional{r.estimatedTailNs} : std::nullopt, r.estimatedRedoNs);
-        r.path = choice == RecoveryPath::TAIL ? "TAIL" : "REMOTE_REDO";
-        state.startWork = choice == RecoveryPath::TAIL ? f.localWork : f.remoteWork;
-        const bool accepted = AcceptAndExecute(state, f.remoteNode);
-        if (accepted) r.checkpointFallbackReason.clear();
-        return accepted;
+        const auto estimate = EvaluateCheckpointRecovery(input, 0, transfer, f.remoteCostNs,
+            Duration(f.actualWork - f.remoteWork, rate), Duration(f.actualWork - f.localWork, rate),
+            Duration(state.layout.Work() - f.actualWork, rate), f.deadlineNs - Now());
+        r.estimatedRedoNs = estimate.redoNs.value_or(-1);
+        r.estimatedTailNs = estimate.tailNs.value_or(-1);
+        r.directPostNs = estimate.postNs;
+        r.directBudgetNs = estimate.budgetNs;
+        r.directRedoFits = estimate.redoFits;
+        r.directTailFits = estimate.tailFits;
+        if (estimate.redoFits || estimate.tailFits)
+        {
+            // Remote first. Equal estimates retain the existing REDO tie-break.
+            const bool tail = estimate.tailFits &&
+                              (!estimate.redoFits || *estimate.tailNs < *estimate.redoNs);
+            r.path = tail ? "TAIL" : "REMOTE_REDO";
+            state.startWork = tail ? f.localWork : f.remoteWork;
+            if (AcceptAndExecute(state, f.remoteNode))
+            {
+                r.checkpointFallbackReason.clear();
+                return true;
+            }
+        }
+        else
+            r.checkpointFallbackReason = input ? "DIRECT_DEADLINE_INFEASIBLE" : "INPUT_PATH_UNAVAILABLE";
+        r.directFallbackReason = r.checkpointFallbackReason;
     }
     if (f.phase == "ON" && base && !base->reserved && m_tasks->IsSatelliteAvailable(f.remoteNode) &&
         AllowsCheckpointRelocation(m_busyPolicy, r.checkpointFallbackReason))
@@ -376,27 +386,23 @@ RecoveryController::TryRelocate(State& state)
             continue;
         }
         const auto rate = Service(candidate)->GetComputeRateWorkUnitsPerSecond();
-        const auto remaining = Duration(state.layout.Work() - f.actualWork, rate);
-        const auto redo = std::max(*input, *transfer) + Duration(f.actualWork - f.remoteWork, rate);
-        std::optional<int64_t> tail;
+        std::optional<int64_t> tailTransfer;
         if (f.localWork > f.remoteWork && f.tailBytes && pool->Free() - bytes >= f.tailBytes)
         {
-            const auto tailTransfer = Estimate(f.localNode, candidate, f.tailBytes);
-            if (tailTransfer)
-                tail = std::max(*input, std::max(*transfer, *tailTransfer) + f.remoteCostNs) +
-                       Duration(f.actualWork - f.localWork, rate);
+            tailTransfer = Estimate(f.localNode, candidate, f.tailBytes);
         }
-        const auto budget = f.deadlineNs - Now() - remaining;
-        const bool redoFits = redo <= budget;
-        const bool tailFits = tail && *tail <= budget;
-        if (!redoFits && !tailFits)
+        const auto estimate = EvaluateCheckpointRecovery(input, transfer, tailTransfer, f.remoteCostNs,
+            Duration(f.actualWork - f.remoteWork, rate), Duration(f.actualWork - f.localWork, rate),
+            Duration(state.layout.Work() - f.actualWork, rate), f.deadlineNs - Now());
+        if (!estimate.redoFits && !estimate.tailFits)
         {
             r.relocationFailureReason = "CHECKPOINT_DEADLINE_INFEASIBLE";
             continue;
         }
-        const bool useTail = tailFits && (!redoFits || *tail < redo);
-        r.estimatedMigrateRedoNs = redo;
-        r.estimatedMigrateTailNs = tail.value_or(-1);
+        const bool useTail = estimate.tailFits &&
+                            (!estimate.redoFits || *estimate.tailNs < *estimate.redoNs);
+        r.estimatedMigrateRedoNs = estimate.redoNs.value_or(-1);
+        r.estimatedMigrateTailNs = estimate.tailNs.value_or(-1);
         if (const auto input = Estimate(state.task.definition.sourceNodeId,
                                         candidate,
                                         state.task.definition.inputBytes))

@@ -259,8 +259,9 @@ Lifecycle(const std::string& stopAt,
                   "unreserved second batch sent packets");
         }
         if (stopAt == "FAIL_L1")
-            Check(summary.localWork == 0 && summary.localCommits > 0,
-                  "failed first L1 gap was skipped by later real receipts");
+            Check(summary.localWork == 0 && std::any_of(manager.Events().begin(), manager.Events().end(),
+                      [](const auto& e) { return e.event == "CAPTURE_BLOCKED_TRANSFER_FAILED"; }),
+                  "failed first L1 must retain the missing prefix and stop new captures");
         for (const auto& flow : manager.Flows())
             Check(tasks->GetTransferEngine()->IsTerminal(flow.transferId), "live transfer leaked");
         const auto network = tasks->GetTransferEngine()->CollectCapacityAwareSummary();

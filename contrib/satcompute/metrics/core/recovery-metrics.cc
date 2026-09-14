@@ -68,6 +68,8 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
         file << ",planned_input_wait_ns,planned_reserved_idle_eq_wu,w_waste_planned";
     if (Deferred())
         file << ",input_staging_policy,state_ready_time_ns,planned_fault_input_wait_ns";
+    file << ",direct_post_catchup_ns,direct_deadline_budget_ns,direct_redo_fits,direct_tail_fits,"
+            "direct_fallback_reason";
     file << '\n';
     file << std::setprecision(17);
     for (const auto& r : Summaries())
@@ -133,6 +135,11 @@ RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
         }
         if (Deferred())
             file << ",deferred," << Time(r.stateReadyNs) << ',' << Time(r.plannedInputWaitNs);
+        file << ',' << (r.directPostNs ? std::to_string(*r.directPostNs) : "")
+             << ',' << (r.directBudgetNs ? std::to_string(*r.directBudgetNs) : "")
+             << ',' << (r.directRedoFits ? std::to_string(*r.directRedoFits) : "")
+             << ',' << (r.directTailFits ? std::to_string(*r.directTailFits) : "")
+             << ',' << r.directFallbackReason;
         file << '\n';
     }
     std::ofstream events(directory / "recovery-events.csv");

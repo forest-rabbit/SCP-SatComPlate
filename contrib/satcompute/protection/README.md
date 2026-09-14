@@ -4,7 +4,7 @@ N5A 回答“怎样执行保护”，N5B 才决定启动/频率，N5C 才优化�
 当前接入单次故障恢复闭环和 **G4 planned/actual 资源账本**：真实备份路径、故障快照、
 恢复服务预留、直接/迁移 checkpoint recovery、RECOMPUTE 和 winning RESULT。cL/cR 不占用主 ComputeService。
 FIXED 正式场景仅为执行验收，不代表 CompFRR 算法效果。N5A 已合入 n5；
-N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比固定/动态频率与 LRL 诊断，N5C 未实现。
+N5B 已将独立频率策略接入在线故障与真实 checkpoint；N5C V4 在其后选择 designated remote。
 
 ## 文件与职责
 
@@ -16,7 +16,7 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 | `runtime/protection-runtime.h/.cc` | Policy/Mechanism 窄接口、动作分发、故障接管机会和清理通知 |
 | `policy/fixed/fixed-protection-policy.h/.cc` | 首次主计算启动时的一次固定保护、注入 PlacementPolicy、失败时重算后备动作 |
 | `policy/placement-policy.h`、`policy/feasible-placement-pairs.cc` | 单节点/双节点共用的候选筛选与排名接口 |
-| `policy/recovery-policy.h` | 仅切换 REMOTE_BUSY 的 recompute / relocate 选择 |
+| `policy/recovery-policy.h` | 切换 REMOTE_BUSY / DIRECT_DEADLINE_INFEASIBLE 的 recompute / relocate 选择 |
 | `runtime/decision-path-snapshot.h` | 同次同步决策内缓存完整路径估计，跨事件不保留 |
 | `policy/baseline/first-feasible-placement/`、`least-recovery-load/` | 最小筛选 FFP/LRL；分别按稳定 ID、当前活动负载排序 |
 | `policy/baseline/fa-first-feasible-placement/`、`fa-least-recovery-load/` | FA-FFP/FA-LRL：保留最新历史实现的可行性筛选，复用相同排序 |
@@ -52,8 +52,9 @@ N5B 已将独立频率策略接入在线故障与真实 checkpoint；G3 对比�
 | `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
 | `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
 | `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
-| `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入 |
-| `remoteBusyRecoveryPolicy` | `relocate` | 仅 fixed/compfrr/checkbullet 的 REMOTE_BUSY 分支：迁移 checkpoint 或从零重算；off/recompute/one-plus-one 不使用此开关 |
+| `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入；`n5c` 仅用于 CompFRR |
+| `n5cVariant` | `full` | `full/noR/noU/noM/recent-U/rational-U`；只改变评分，不改变硬约束，要求 placement=n5c |
+| `remoteBusyRecoveryPolicy` | `relocate` | fixed/compfrr 的 REMOTE_BUSY、DIRECT_DEADLINE_INFEASIBLE 分支：迁移 checkpoint 或从零重算；CB 保持既有忙时合同；off/recompute/one-plus-one 不使用此开关 |
 | `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
@@ -83,7 +84,7 @@ Routing 是所有方案共用的基础设施，不属于其中任何算法开关
 `recompute-controller.*` 接线、`policy/baseline/recompute/recompute-policy.h` 只决定故障后重算。
 `recovery-summary.csv` 对此模式增加 planned INPUT 等待及 planned 浪费列，实际值仍取真实执行。
 该严格筛选仅适用于完整 baseline，不改变 checkpoint 方案既有的 RECOMPUTE 后备行为。
-完整 recompute 与 one-plus-one 均支持四种 placement；`placementMode=n5c` 仍明确报 `NOT_IMPLEMENTED`。
+完整 recompute 与 one-plus-one 均支持四种 baseline placement；`placementMode=n5c` 仅允许 CompFRR。
 
 ### Pre-N5C 可行性筛选消融
 
@@ -177,7 +178,10 @@ horizon 和 endpoint 语义；与故障侧提供的本轮联合 q 逐值核对�
 检查点提议 START 遇到同轮故障仍视为 OFF；新 delta/n 不能改变当前故障前状态。
 `FrequencyDecisionGate` 只维护单任务策略状态，真实初始化、记录、批次和故障仍由 N5A 执行。
 新 delta 从实际完成/上次触发边界向前取合法 target；新 n 只消费尚未组批的记录，已建批次不可变。
-ON 无可行候选时保留状态、暂停新 target 和新 batch，已有操作继续；不允许 ON→OFF。
+ON 无可行新配置时保留状态和最后 committed 配置，不允许 ON→OFF。
+真正的策略 PAUSE（例如 deadline 不可行）暂停新 target/batch；路径、存储等暂时资源拒绝是
+`RESOURCE_HOLD`，不连带停止另一层可执行的维护，也不能解除此前真正的策略 PAUSE。
+两种情况下，已创建的 generation、传输、merge 均按原生命周期继续。
 
 N5B-G2/G3 正式接入和算法比较采用在线 **generate**。固定输入和配对 seed/run 不保证不同策略
 得到同一故障序列：恢复计算改变负载与温度是 F1 闭环的一部分。N5A 的 validation-replay
@@ -200,7 +204,9 @@ G3R 在 primary `TASK_RUNNING` 时立即评估 OFF→START，不等待下一个�
 F3 实际时刻的 F1/F2 因果快照另写 `f3-compute-risk-snapshots.csv`，不额外抽样。
 
 各 placement 的 OFF 候选不预留资源，START 存活后固定节点对；ON 不换节点。
-节点当下不健康、不空闲或所需路径不可用时暂停新操作。
+START 仍要求 local/remote 健康且 ComputeService 空闲；recovery compute 准入也不变。
+ON maintenance 不要求 local/remote ComputeService idle/available：F1/F2 的计算不可用不等于存储失效。
+local capture 和 remote batch 分别检查整星存活、对应路径、实际存储及既有配额；F3 对象失效不变。
 路径复用 NetworkTransferEngine 的只读准入查询：capacity-aware 搜索完整 ECMP 路径并使用
 当前真实 reservation；不由 Frequency 独自选第一条路径。恢复速率读 remote 的 ComputeService。
 primary→remote、primary→local、local→remote 是 START 的硬路径条件。
@@ -228,11 +234,14 @@ INIT/恢复/终态不重试；ON 不做 OFF 重试。`frequency-capacity-waits.c
 
 ON 因 `NO_ADMISSIBLE_PATH` 暂停时也登记容量释放通知：保持原节点对，在释放事件完成后
 读取当前进度、风险、库存和真实剩余容量，重新求解原 ON 公式；不忽略自身流的预约，不新增故障抽样。
-仍被容量阻塞则继续等待，其他原因（节点忙、存储、deadline 等）不因容量释放而持续重试。
+仍被容量阻塞则继续等待；其他原因不因容量释放额外重跑 Frequency。
+独立维护操作可在真实容量释放、存储 cleanup 或完整 fault epoch 后重试，使用已提交配置，不新增求解或故障抽样。
 可行时提交 UPDATE，记录 `RESUME_AFTER_CAPACITY_RELEASE`，只恢复未来 target/batch，不补造历史检查点。
 同纳秒故障批次处理完毕后已进入恢复或终态的任务不重试；重复通知合并，每任务每纳秒最多重试一次。
 `capacity_retry_success` 表示 OFF 的 START 或 ON 的 UPDATE 成功，按 `phase_before` 区分；ON 暂停时长
-仍只记在 `frequency-pause-intervals.csv`，不作为额外计算占用。非抽样重试的评分使用 `q_comp_snapshot`。
+记录在 `frequency-pause-intervals.csv`，`resource_hold=1` 区分配置资源阻塞与真正策略 PAUSE，
+不作为额外计算占用。`frequency-decisions.csv` 的 `maintenance_resource_hold` 标明实际提交的资源保留。
+非抽样重试的评分使用 `q_comp_snapshot`。
 
 库存快照包含 r/l、已捕获记录及 H、是否分配/接收、当前 remote state 和不可变 batch。
 估计器只输出与 **free bytes** 比较的新增峰值：
@@ -246,6 +255,19 @@ ON 因 `NO_ADMISSIBLE_PATH` 暂停时也登记容量释放通知：保持原节�
 真实预留、拒绝、发送和清理由 N5A 账本执行；预测通过不等于资源已预留。
 新 delta 只替换未触发目标；delta 不变时不推迟已有目标。新 n 只作用于尚未组批记录。
 PAUSE 只停新目标/新 batch，不取消已有生成、传输或融合；UPDATE 可恢复。
+
+维护事件 `CAPTURE_BLOCKED_PATH/STORAGE`、`REMOTE_BATCH_BLOCKED_PATH/STORAGE` 及对应 `RESUMED`
+独立记录两条流水线的资源阻塞；`FREQUENCY_RESOURCE_HOLD` 不等于 `FREQUENCY_PAUSED`。
+local record 在捕获前预留完整增量（含 H），成功后才推进 immutable sequence 并计 cL。
+拒绝时不前移 triggered；恢复时从真实当前进度选择未来合法边界，不补造过去快照。
+已生成待注册的记录保留原对象及序列，路径恢复后只注册一次。已注册的真实终结失败保留实际已发送字节，
+相应流水线标记 `TRANSFER_FAILED`，不在 UPDATE/epoch 自动重发；L1 缺失不能被后续接收跳过，
+remote 流失败不禁止继续 local capture。真正的策略 PAUSE 不取消已创建请求，F3/任务终止则依原合同清理。
+N5C quota 更新仍替换旧峰值，结束释放；每次维护同时遵守实际容量、其他任务承诺和本任务 remote 峰值，
+不将 actual 和 quota 重复相加。现有 INPUT + remote state + local tail 并行恢复链路完全保持。
+
+旧结果只有维护轨迹与资源账本均等价才可复用；没有后续故障不能证明未受影响。
+本轮审计与验证见 [维护语义审计](../../../docs/n5/reviews/Checkpoint-maintenance-semantics-audit.md)。
 
 `frequency-decisions.csv` 分开记录当前/提议/实际提交的 delta/n、q/P_finish、FFP/空闲字节/速率、
 J、Rbar、Rmax、初始化估计、额外存储峰值、实际故障和提交结果。不适用字段留空；
@@ -285,7 +307,7 @@ local-first 和一跳集合仍会影响分布，不保证每节点均匀。
 用户最终确认覆盖补充任务书原来的 `cL = cost only` 提案：
 
 ```text
-合法边界 -> 捕获不可变状态 -> 等 cL -> 开始真实 L1 传输
+合法边界 -> 路径/存储准入并预留 -> 捕获不可变状态 -> 等 cL -> 开始真实 L1 传输
          -> local receiver 收齐连续记录 -> 推进 l
 
 remote receiver 收齐 batch -> 等 cR -> RemoteCommit
@@ -429,13 +451,27 @@ actual 执行口径，不把 raw recovery 表中的旧机制诊断列直接当�
 
 ### 远端忙与迁移
 
+fixed/compfrr 保持 **remote-first**：原 remote 空闲不代表能按时完成。
+direct 与 migration 共用无副作用的 `runtime/checkpoint-recovery-estimate.h`：
+在原 compute deadline 前同时容纳“依赖就绪等待 + 追平补算 + 追平后的剩余计算”，
+边界相等可行。INPUT/state/tail 仍按真实并行依赖估计，RESULT 不纳入 compute deadline。
+只要原 remote 有任一可行 TAIL/REDO 就不迁移；二者都可行选较短 catch，平局选 REDO。
+二者都不可行记 `DIRECT_DEADLINE_INFEASIBLE`：relocate 搜索迁移，recompute 保留重算兜底。
+原 INPUT 路径不可准入记 `INPUT_PATH_UNAVAILABLE`，检查点仍可读时允许搜索其他目标。
+不使用未来队列/故障信息，也不在已接受的恢复失败后重新创建 attempt。
+`estimated_remote_redo_ns` / `estimated_tail_ns` 保留 direct 估计，新增
+`direct_post_catchup_ns`、`direct_deadline_budget_ns`、`direct_redo_fits`、`direct_tail_fits`
+与持久的 `direct_fallback_reason`；未评估为空，负 budget 不是缺失值。
+成功迁移仍会清空当前 fallback 错误，但 `checkpoint_relocation_trigger` 和
+`direct_fallback_reason` 保留起因，区分忙时迁移和空闲但无法按时完成。
+
 remote 优先使用原固定备份节点。已有有效 committed state、原 remote 忙或计算不可用但
 整星/存储仍可读时，先按稳定 ID 寻找非主星、健康空闲、结果可达且存储/路径/deadline 可行的迁移目标。
 `MIGRATE_REDO` 实际传输对应 INPUT 策略的 `CommittedStateBytes(rf, policy)` 后从 rf 重做；`MIGRATE_TAIL` 同时注册
 state 和真实 L1 记录之和（含 H）的 tail 传输，两者收齐后等一次 cR，再从 lf 开始计算。
 目标先预留 state/tail 存储，旧 checkpoint 保留到目标状态有效并接管，或 logical task 终态清理。
 默认 relocate 下可行 checkpoint 优先于零起点重算，即使后者估计略快；全部 checkpoint 选项不可行才 RECOMPUTE。
-若配置 recompute，**只有** `checkpointFallbackReason=REMOTE_BUSY` 跳过迁移，
+若配置 recompute，`REMOTE_BUSY` 或 `DIRECT_DEADLINE_INFEASIBLE` 跳过迁移，
 直接走原始 INPUT 的零起点重算；REMOTE_UNAVAILABLE/PATH_UNAVAILABLE 等分支维持原行为，
 REMOTE_F3 不可读的状态仍不能迁移。两种操作共享基础候选生成，但迁移额外检查 committed state
 的传输、存储和 deadline，重算使用原 source INPUT；当前重算准入后的 INPUT 可真实等待网络容量。
@@ -482,6 +518,73 @@ G3 将 RemoteCommit 的物理融合/旧记录清理延后 1 ns，名义有效时
 正常完成/保护放弃走 Stop 全清理；QuiesceForRecovery 不清空有效备份。
 受控测试反转同纳秒 fault/commit UID，检查相同实体对象、有效进度和最终结果时间；
 另检查同 ns deadline 完成与 stale primary 回调。
+
+## N5C V4：固定配置后的备份节点选择
+
+启用 `--protectionMode=compfrr --placementMode=n5c`，支持 Eager/Deferred，默认参数不替换 FA-FFP。
+`--n5cVariant=full/noR/noU/noM` 仅控制评分维度；消融仍记录三项原值，保留全部硬约束。
+另有实验选项 `recent-U`，只把评分使用的 U 改为近期窗口，默认仍为 `full`。
+
+| 文件 | 职责 |
+|---|---|
+| `policy/compfrr/placement/n5c-placement-policy.h/.cc` | V4 恢复冲突、历史利用率、存储压力、确定性 min-max 排名和远端 peak quota 账本 |
+| `runtime/frequency-n5c-adapter.cc` | 当前状态/原生预测器到候选的只读适配，不重新求解 Frequency |
+| `runtime/n5c-placement-tracker.h/.cc` | quota 替换/释放、实际 READY、assignment 时间积分和真实 storage byte-time 观察 |
+| `runtime/compute-usage-history.h/.cc` | 通过原有计算状态通知记录实际普通/恢复服务区间；只读前缀查询，不改变调度 |
+| `../metrics/core/n5c-placement-metrics.cc` | 候选决策与节点资源诊断，绝不代替真实网络/计算账本 |
+
+START 先用 FA-FFP 公共节点/路径筛选后的首个 reference pair 求解一次启动及 `(δ,n)`；
+不对各 remote 重跑 Frequency，也不在 reference 不可行时另做联合搜索。保留 reference local，
+然后用实际 remote 的算力、带宽、存储验证固定配置，按 V4 排名。未越过完整同纳秒故障批次
+之前不占用资源；提交前再次检查同一 pair/config，不可行则拒绝 START 或暂停 ON。
+ON 始终使用 committed 实际 pair 的资源更新配置，不重新 placement。
+
+三个归一化量：`R = 加权冲突质量 / 本任务可恢复首次故障质量`，
+`U = (普通实际忙时 + 恢复实际忙时) / 存活观测时间`，`M = 提交后的实际与配额不重复占用 / 容量`。
+选择 `max(R,U,M)` 最小者；并列依次比较主星到 remote 的传播时延、稳定卫星 ID。
+R 是当前活跃任务的竞争风险代理，不是已校准的真实 busy 概率；不读取未来到达任务或故障结果。
+
+每个未来抽样点的首次故障质量为此前存活概率乘该点 `q_comp`。Ready 之前的概率仍扣减存活，
+不重新归一化；恢复占用窗口左闭右开。Eager 的 Ready 包含预置 INPUT，Deferred 只要求状态就绪及
+故障时完整 INPUT 路径/deadline 可行，同星 INPUT 的估计网络等待精确为零。
+已初始化任务使用实际 READY 时间；初始化中的任务使用当前完整初始化的保守估计，不能冒称真实就绪。
+V4 的串加时间只作候选估计，实际恢复仍按既有 INPUT/state 并发屏障执行。
+
+quota 按节点逐任务累加 `max(实际 used+reserved, 当前远端 peak quota)`，其余物理对象按实际计入；
+ON 更新替换自身旧 quota，不重复计占用，任务离开主计算后释放未来承诺，实际对象仍由原生命周期释放。
+历史利用率的分母从仿真起点到当前观测时刻，整星故障后截止于实际 F3；F1/F2 不扣除恢复免疫执行时间。
+无 exposure 或无预测需求分别记录 `history_unavailable` / `no_predicted_demand`，不靠截断掩盖错误。
+
+`recent-U` 的窗口是 `[max(0,t-H),t)`，H 为当前主任务精确剩余纯计算时间（整数 ns），
+不是 deadline 余量，所有 remote 使用同一个 H。分子是窗口内实际普通和恢复忙时，
+分母是同一窗口内存活观测时间；不计 reserved-idle，不扣除 F1/F2 暂时不可用时间，实际 F3 后截止。
+没有新增窗口参数、权重或未来任务预测。窗口为零时 U 暂记 0，并明确标记 history unavailable。
+原 `historical_utilization` 和节点全程统计仍表示累计 U；独立的
+`n5c-recent-u-history.csv` 记录每个候选的 H、起止、分子、分母和 `recent_utilization`。
+只有 `recent-U` 输出此表；旧变体的原 CSV 合同不变。近期 U 大量为零、与 noU 排名退化一致的
+可能性属于实验需要报告的结果，不预设近期方案一定更好。
+
+`rational-U` 是独立实验变体，使用 `U_global * H/(H+I)` 替换评分中的 U，
+H 仍为上述精确剩余时间，I 为节点自最近一次实际普通/恢复计算结束后的连续空闲时间。
+从未计算的节点从 t=0 累计空闲；当前实际忙则 I=0，但不会因此绕过现有空闲候选硬约束。
+预留等待不算忙，F1/F2 暂时不可用且没有真实计算时继续累计空闲；恢复免疫期间的实际计算仍算忙。
+H 必须正、I 非负；不新增衰减系数，不读取未来任务或未来故障。
+`n5c-rational-u-history.csv` 单独记录 H、I、freshness、累计 U 与 rational pressure；
+原候选表的 `historical_utilization` 和节点全程统计仍是实际累计利用率，不改含义。
+R/M、min-max、传播时延/稳定 ID tie-break、START/ON、Frequency 和 Recovery 均不变。
+当前 `recent-U` 已停止正式实验（保留代码和未完成输出）；Rational-U 只获准 run 11 一组验证，
+不代表已替换默认 FULL。结果见 [Rational-U 主场景审计](../../../docs/n5/reviews/N5C-rational-U-main-scenario.md)。
+
+`n5c-placement-decisions.csv` 只记录 START 后的空间提案，区分 reference/实际资源、候选及最终准入。
+原 `frequency-decisions.csv` 的 OFF 标量和评分仍属于 reference，local/remote 列为实际提案；ON 均为实际 pair。
+`placement-resource-summary.csv` 对平台 CompFRR 各 placement 输出相同的只读计数/积分/峰值；
+FA-FFP 等不会因此启用 N5C quota。原场景、故障随机流、Routing、恢复策略和工作量标度不变。
+正式运行与审计入口见 [测试说明](../tests/README.md)，结果见
+[N5C 验收记录](../../../docs/n5/reviews/N5B-closeout-N5C-kickoff.md)。
+离线汇总的 direct/relocate/recompute 比例以恢复尝试数为分母，failed 是可与这些动作重叠的结果；
+未追平不记零延迟。`relocated_state_logical_bytes` 仅为迁移检查点逻辑大小；
+`migration_sent_bytes_by_kind` / `migration_total_sent_bytes` 才是 MIGRATE 操作实际发送的
+INPUT/state/tail（含部分发送、取消，按真实流去重），同星交付不凭空增加网络字节。
 
 ## 资源账本与 Pre-N5C 冻结口径
 

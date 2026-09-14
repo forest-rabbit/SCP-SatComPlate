@@ -8,7 +8,7 @@ namespace ns3::protection
 void FrequencyDecisionGate::Propose(const FrequencyDecision& decision, bool capacityRetry)
 {
     const bool off = m_phase == ProtectionPhase::OFF;
-    const bool retryable = off || (m_phase == ProtectionPhase::ON && m_paused);
+    const bool retryable = off || (m_phase == ProtectionPhase::ON && (m_paused || m_resourceHeld));
     const bool sameTimeRetry = capacityRetry && retryable && decision.epochNs == m_lastEpoch &&
                                decision.epochNs > m_lastCapacityEpoch;
     if (m_proposal || (decision.epochNs <= m_lastEpoch && !sameTimeRetry) ||
@@ -33,7 +33,8 @@ void FrequencyDecisionGate::Propose(const FrequencyDecision& decision, bool capa
     m_lastEpoch = decision.epochNs;
 }
 
-bool FrequencyDecisionGate::Resolve(int64_t epochNs, bool currentFaultHit, bool primaryStillRunning)
+bool FrequencyDecisionGate::Resolve(int64_t epochNs, bool currentFaultHit, bool primaryStillRunning,
+                                    bool fixedConfigStillFeasible, bool resourceHold)
 {
     if (!m_proposal || m_proposal->epochNs != epochNs)
         throw std::invalid_argument("frequency resolution must match the pending fault epoch");
@@ -41,6 +42,19 @@ bool FrequencyDecisionGate::Resolve(int64_t epochNs, bool currentFaultHit, bool 
     m_proposal.reset();
     if (currentFaultHit || !primaryStillRunning || decision.action == FrequencyAction::NONE)
         return false;
+    if (resourceHold && m_phase == ProtectionPhase::ON &&
+        (!fixedConfigStillFeasible || decision.action == FrequencyAction::PAUSE))
+    {
+        m_resourceHeld = true;
+        return true; // Preserve current config and any earlier genuine policy pause.
+    }
+    m_resourceHeld = false;
+    if (!fixedConfigStillFeasible)
+    {
+        if (m_phase == ProtectionPhase::OFF) return false;
+        m_paused = true;
+        return true;
+    }
     if (decision.action == FrequencyAction::PAUSE)
     {
         m_paused = true;
@@ -66,6 +80,7 @@ void FrequencyDecisionGate::Stop(ProtectionPhase phase)
         (m_phase == ProtectionPhase::DONE && phase != ProtectionPhase::DONE))
         throw std::invalid_argument("frequency cannot revert terminal state or turn OFF");
     m_phase = phase;
+    m_resourceHeld = false;
     m_proposal.reset();
     m_paused = true;
 }

@@ -18,6 +18,7 @@ build_lib(
     protection/policy/fixed/fixed-protection-policy.cc
     protection/policy/compfrr/frequency/compfrr-frequency-policy.cc
     protection/policy/compfrr/frequency/frequency-decision-gate.cc
+    protection/policy/compfrr/placement/n5c-placement-policy.cc
     protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.cc
     protection/policy/feasible-placement-pairs.cc
     protection/policy/baseline/least-recovery-load/least-recovery-load-placement-policy.cc
@@ -25,6 +26,10 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-manager.cc
     protection/runtime/fixed-protection-controller.cc
     protection/runtime/frequency-protection-controller.cc
+    protection/runtime/frequency-n5c-adapter.cc
+    protection/runtime/n5c-placement-tracker.cc
+    protection/runtime/compute-usage-history.cc
+    metrics/core/n5c-placement-metrics.cc
     protection/runtime/frequency-storage-estimator.cc
     protection/runtime/placement-load-ledger.cc
     metrics/core/placement-load-metrics.cc
@@ -115,6 +120,7 @@ build_lib(
     protection/policy/fixed/fixed-protection-policy.h
     protection/policy/compfrr/frequency/compfrr-frequency-policy.h
     protection/policy/compfrr/frequency/frequency-decision-gate.h
+    protection/policy/compfrr/placement/n5c-placement-policy.h
     protection/policy/placement-policy.h
     protection/policy/recovery-policy.h
     protection/runtime/decision-path-snapshot.h
@@ -126,9 +132,12 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-manager.h
     protection/runtime/fixed-protection-controller.h
     protection/runtime/frequency-protection-controller.h
+    protection/runtime/n5c-placement-tracker.h
+    protection/runtime/compute-usage-history.h
     protection/runtime/frequency-storage-estimator.h
     protection/runtime/placement-load-ledger.h
     protection/runtime/recovery-controller.h
+    protection/runtime/checkpoint-recovery-estimate.h
     protection/runtime/recompute-controller.h
     protection/runtime/one-plus-one-controller.h
     protection/mechanism/replication/replica-manager.h
@@ -285,6 +294,14 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-n5c-placement-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/n5c-placement-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-cb-sat-config-test
   EXECNAME_PREFIX satcompute_test_

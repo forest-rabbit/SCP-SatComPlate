@@ -110,7 +110,167 @@ not a production prediction input. Production policy must not depend on the
 shadow validator; test-only comparisons are allowed. Reuse the canonical fault
 predictor, current sampling probabilities, state adapter and production cost tiers.
 
+### Active N5C contract (2026-09-13)
+
+The user authorized merging PR #98 into `n5` and continuing N5C on
+`feature/n5c-backup-placement-v4`. This supersedes the earlier pre-N5C stop above.
+PR #98 is merged at `17c4414dcd61a34a2068a84fefb8ccda7e6b7079`; keep PR #99/JIT
+out of this branch and preserve its dependent CB branch. Use the accepted V4 and
+eight clarified interfaces recorded in `protection/README.md` and
+`docs/n5/reviews/N5B-closeout-N5C-kickoff.md`. N5C ranks only the actual remote after
+one read-only FA-FFP reference Frequency solve, retains that local, and never
+reranks ON. Do not change the frozen scene, fault RNG, frequency equations,
+checkpoint/recovery mechanics, or routing. Run the two strict FA-FFP equivalence
+gates, two N5C Eager/Deferred main runs, then three Deferred scoring ablations;
+do not repeat the old 32-run matrix or mix JIT into comparisons. No extra GitHub
+CI, main merge, release tag or N5C integration merge without final user review.
+
+The subsequent user-approved U audit runs on child `feature/n5c-u-refinement`
+from PR #100 head `f5a479ae36c15e356cddd063235b33318856a86e`; keep #100 open.
+Gate A only: seed 1, runs 11-15, Deferred FA-FFP/full/noU; reuse verified run 11,
+add twelve executions without overwriting V4 evidence. No model/runtime changes,
+T threshold, 5% tolerance or automatic Gate B decision. Report paired and whole
+cohorts, same-snapshot noU counterfactuals, causal history diagnostics and actual
+fault differences; identical fault models/streams need not produce identical
+realized faults under online generate. Await joint evidence review before any
+recent-U implementation. Keep tests in the existing tree and do not add CI.
+
+Gate A is complete: twelve new runs at clean `625fff908104f4ba14443ed47ee856ec49d40adf`,
+three reused runs, all audited. The user increased concurrency from four to eight
+without restarting simulations. Evidence in `docs/n5/reviews/N5C-U-multirun-audit.md`
+shows mixed full/noU outcomes; both complete 3993/4000. Keep V4 FULL and
+NO_MODEL_CHANGE pending joint review; do not repeat the matrix or start Gate B.
+
+The user's subsequent review explicitly authorizes a controlled recent-U experiment
+on this same child branch, superseding the Gate A stop, not its mixed findings.
+Add RECENT_U without redefining FULL/NO_U. Use a past-only window equal to the
+current primary's exact remaining pure compute time, no tunable window/weights.
+Use read-only event history; preserve scheduling, R/M, hard feasibility, Frequency,
+Recovery, RNG, routing, workload and defaults. Verify small tests and old-variant
+equivalence before five Deferred recent-U runs (seed 1, runs 11-15), reusing verified
+cumulative/noU evidence. Keep #100/#101 open, no CI/merge/tag/default promotion or
+new scenario freeze. Record results and limitations; do not tune after outcomes.
+
+The accepted Rational-U next-step plan supersedes the five-run recent-U trial:
+terminate the five user-paused simulations, retain partial outputs as incomplete,
+and keep RECENT_U code/history for later review, not as a final candidate here.
+On this same branch / Draft #101, first persist a read-only run11 FULL snapshot,
+then add independent RATIONAL_U = global_U * H/(H+I), where H is the primary's
+exact remainingTimeNs and I is continuous idle since actual normal/recovery busy
+ended. No adjustable constants or future information. Preserve FULL/NO_U and
+defaults. Reuse completed full/noU formal equivalence gates; verify new small
+tests and old fixture equivalence. Run only one new Deferred/relocate Rational-U
+seed1/run11, 800 tasks/1300s. Report positive or negative results in
+`docs/n5/reviews/N5C-rational-U-main-scenario.md`, then stop for user review.
+No exponential, run12-15 expansion, CI, merge, tag or automatic default promotion.
+Near-zero thresholds are diagnostics only. Distinguish primary work at fault,
+uncheckpointed work and actual execution waste; never double-add these quantities.
+
+Rational-U B0/B1 is now complete: one clean run11 at `99be7b760d04e8ba557ecde83e0c3fb156982950`,
+800/800 completed, 83 successful recoveries, all audits passed. Both reused legacy
+formal gates and 425-file old fixture equivalence passed. Read
+`docs/n5/reviews/N5C-rational-U-main-scenario.md` before continuing: gains are
+tail-dominated, not broad superiority; keep default FULL. Stop for user review;
+do not launch run12-15/exponential, resume recent-U, merge #100/#101 or run CI.
+
+The 2026-09-14 user review authorizes ONLY four additional Rational-U runs 12-15
+on this same branch, reusing Rational-U run11 and all ten FULL/noU runs 11-15.
+Freeze all production code/formulas/parameters at the run11 execution, and retain
+identical workload, fault configuration/streams, recovery contract and routing.
+Online realized faults may differ causally; report differences, never force replay.
+Audit five-run three-way completion, busy, recovery actions, paired catch, actual
+WU/eq-WU waste, network and assignment/storage concentration. Predefine leave-one-out
+by the largest beneficial and largest absolute task contribution separately for
+catch and total waste, per run and pooled; one identity is (run,task), not an ID
+removed from all runs. This is statistical exclusion, not a new simulated scene.
+Only test/audit tooling and concise review/handoff documentation may change.
+Keep #100/#101 open and #101 Draft; no CI, merge, exponential, parameter tuning or
+automatic replacement of cumulative-U. Stop after reporting the five-run evidence.
+
+The four additional runs are complete at clean `b7eb7331c7ea3b6fb7f7724cd151e35bcc5dc521`;
+all fifteen outputs passed the read-only audit. Read `docs/n5/reviews/N5C-rational-U-multirun.md`:
+all groups complete 3993/4000, but Rational-U busy is 8/409 versus 5/409 for both baselines,
+and paired catch/total eq-waste are worse. Tail exclusion remains outcome-sensitive.
+Keep default FULL and both PRs open (#101 Draft); do not run more simulations, tune,
+merge, promote, or start exponential/recent-U without a new user decision.
+
 ## Project Overview
+
+### Recovery deadline correction (2026-09-14, active)
+
+The user accepted `CompFRR_Relocate_Deadline_Feasibility_Audit_Taskbook.md` and
+four review corrections. Work on `fix/recovery-deadline-feasibility` from clean
+`c1a8704cd`; preserve the two open N5C PRs and all old outputs. Remote-first now
+requires full compute-deadline feasibility, using one pure estimator for direct
+and migration paths. Busy policy also controls DIRECT_DEADLINE_INFEASIBLE;
+INPUT_PATH_UNAVAILABLE may search readable-checkpoint migration rather than
+early-returning to recompute. No U/Frequency/RNG/routing/INPUT/deadline/scene changes.
+Historical candidate evidence may be UNKNOWN, never false proof of no candidate.
+Rerun any formal execution whose recovery behavior changes, even when both paths
+ultimately fail; keep unaffected results with equivalence evidence. Audit CB
+augmented relocate separately; no automatic main-CB modification. Keep one recovery
+attempt, stable-ID migration search and LocalDelivery. No CI/merge/tag/default
+promotion or unrelated architecture work. Record concise results beside N5 reviews.
+
+The subsequent user scope reduction authorizes only three corrected run11 formal
+executions: FULL, noU, Rational-U, on the same clean commit. Do not run run12-15,
+FA-FFP, noR/noM or CB. Preserve the complete read-only historical audit; out-of-scope
+affected historical runs remain uncorrected, not newly certified results.
+
+The three corrected run11 executions are complete at clean `bc721ed42`, all 800/800.
+Read `docs/n5/reviews/Recovery-direct-deadline-feasibility.md`: task140 migrates 15->0
+and meets the unchanged deadline; noU/Rational-U retain every historical CSV field.
+Default FULL remains unchanged. Do not expand the matrix, merge/push/CI/tag or promote
+another U without a fresh user decision; unrerun historical multi-run evidence remains historical.
+
+The latest user authorizes completing ONLY the U five-run comparison: eight new
+1300s executions (FULL 12/14; noU and Rational-U 12/14/15), reusing the three
+corrected run11 results and four audited unaffected historical runs. INPUT_PATH_UNAVAILABLE
+early-return impact counts as well as direct deadline infeasibility; run15 task53
+must not be classified unaffected for noU/Rational-U. Freeze production at bc721ed42;
+only test/audit tooling and concise handoff/review docs may change. Use online generate,
+retain old evidence, audit all fifteen outputs, three-way common valid catch and
+symmetric largest-positive/largest-negative single-(run,task) exclusions. Do not run
+other baselines/ablations, change U/defaults, push/merge/CI/tag or start another phase.
+Stop after reporting the corrected five-run evidence for user review.
+
+The eight new U runs are complete at clean `a5b00962c`, all full 1300s and return 0.
+All fifteen outputs passed audits (including both corrected fallback branches).
+Read the five-run section of `docs/n5/reviews/Recovery-direct-deadline-feasibility.md`:
+FULL/noU/Rational-U complete 3996/3998/3997 of 4000; common catch is 338.266/341.329/353.387 ms,
+busy 5/5/9 of 409. Rational-U's 0.527% total eq-waste gain is tail-sensitive, not a
+stable overall replacement advantage. Run15 task53 now migrates 41->0 and completes
+for noU/Rational-U. Keep FULL default; recommend stopping this U refinement pending
+user review. No further runs, model changes, push/merge/CI/tag or architecture cleanup.
+
+### Checkpoint maintenance correction (2026-09-14, active)
+
+The user accepted the checkpoint maintenance taskbook and five amendments. Work on
+`fix/checkpoint-maintenance-semantics` from `08236b8af`. This supersedes the previous
+stop only for maintenance audit, minimal repair and affected U validation. Remove
+ComputeService idle as an ON-maintenance prerequisite only; retain START and recovery
+availability/idle admission. Separate genuine policy PAUSE from local-capture and
+remote-batch resource blocks, retaining the last committed cadence/quota during
+temporary resource rejection. Preserve bounded storage, actual failed-flow bytes,
+continuous records, already-created generation/transfer/merge, strict pre-fault state
+and F3 invalidation. Never invent historical captures or skip a missing receipt.
+Keep existing parallel INPUT/state/tail recovery, Frequency mathematics, placement,
+U/defaults, faults/RNG, routing, scene and deadlines unchanged. Historical KEEP requires
+maintenance-trajectory AND resource-ledger equivalence, not merely no fault after pause;
+missing historical fields are UNKNOWN. Audit first and determine affected formal U runs;
+do not expand other baselines or auto-push/PR/CI/merge/tag. Keep PR #100/#101 open and
+all prior outputs intact. Use one concise review document rather than duplicate reports.
+
+Maintenance closeout (2026-09-14): implementation and all 15 full 1300s U runs PASS
+at clean execution commit `c7889de89`; outputs `output/checkpoint-maintenance-fixed/`,
+report `docs/n5/reviews/Checkpoint-maintenance-semantics-audit.md`. FULL/noU/Rational-U
+each complete 4000/4000 tasks with 409 valid recoveries and zero Recompute. Mean catch
+is 322.003/324.356/323.636 ms; total equivalent waste is 15.337524/15.433674/15.403837
+million eq-WU. Targeted build, maintained C++/smoke/Python tests and independent
+accounting/Frequency/N5C/Rational history audits pass. FULL remains default. Stop
+for user review; no further runs, parameter changes, push/PR/CI/merge/tag authorized.
+Prior U outputs are historical, replaced for current comparisons by the 15 new runs;
+other affected baselines have not been revalidated and must not be mixed with them.
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 

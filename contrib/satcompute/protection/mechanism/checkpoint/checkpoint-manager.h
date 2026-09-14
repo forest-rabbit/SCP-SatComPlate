@@ -73,6 +73,7 @@ struct CheckpointInventory
     CheckpointSnapshot progress; ///< Current received/committed prefixes.
     uint64_t actual{}, triggered{}, baseBytes{}, batchBytes{}, batchWork{}; ///< Exact ledger values.
     bool active{}, initialized{}, paused{}, batchInFlight{}; ///< Actual mechanism state.
+    std::string captureBlockReason, remoteBlockReason; ///< Independent operation resource gates.
     int64_t stopNs{-1}; ///< Actual quiescence/stop, for ending diagnostic intervals exactly.
     std::optional<uint64_t> nextTarget; ///< Already scheduled, not yet captured boundary.
     struct Record
@@ -116,6 +117,13 @@ class CheckpointManager : public ProtectionMechanism
     bool UpdateFutureConfiguration(uint64_t taskId, uint32_t deltaPermille, uint32_t batchN);
     /** Retain all state/operations but suppress new targets and batch formation. */
     bool PauseFutureProtection(uint64_t taskId);
+    /** Retry resource-blocked operations at a real epoch/capacity/cleanup event, never a new solve. */
+    void RetryBlockedMaintenance();
+    /** Resume the last committed cadence after resource rejection, not after a policy PAUSE. */
+    bool RetainFutureConfiguration(uint64_t taskId);
+    /** Optional existing quota ledger; physical pool checks still apply. */
+    void SetMaintenanceFree(std::function<uint64_t(uint32_t, uint64_t)> free)
+    { m_maintenanceFree = std::move(free); }
     /** Physical snapshot; missing means no initialization has ever been attempted. */
     std::optional<CheckpointInventory> Inventory(uint64_t taskId) const;
     /** Notify only after the real initialization objects have been merged. */
@@ -185,6 +193,7 @@ class CheckpointManager : public ProtectionMechanism
     }
 
   private:
+    friend struct CheckpointMaintenanceTestAccess; ///< Focused test-only resource seam.
     /** One immutable captured increment, including an explicit missing-receipt gap. */
     struct Record
     {
@@ -212,8 +221,10 @@ class CheckpointManager : public ProtectionMechanism
         uint64_t batchWork{}; ///< Immutable in-flight batch target.
         int64_t baseReceivedNs{-1},
             stateReceivedNs{-1}; ///< Initialization path completion evidence.
-        bool active{true}, batchInFlight{}, batchBlocked{}; ///< Terminal and no-retry guards.
+        bool active{true}, batchInFlight{}; ///< Terminal and immutable batch ownership.
         bool futurePaused{}, initialized{}; ///< New-operation gate and physical init commit.
+        std::string captureBlockReason, remoteBlockReason; ///< Independent resource gates.
+        bool localTransferFailed{}, remoteTransferFailed{}; ///< No automatic replay of terminal flows.
         EventId captureEvent; ///< Only the unsatisfied future target is replaceable.
         std::optional<uint64_t> nextTarget; ///< Not yet captured work.
         std::map<uint64_t, Record> records; ///< Captured records ordered by completed WU.
@@ -264,6 +275,10 @@ class CheckpointManager : public ProtectionMechanism
     void ScheduleCapture(State& state);             ///< Select the next legal application boundary.
     void Capture(State& state, uint64_t work);      ///< Freeze bytes and schedule cL completion.
     void TryBatch(State& state); ///< Reserve/send exactly n contiguous received records.
+    bool PathAvailable(uint32_t source, uint32_t destination) const; ///< Actual read-only admission.
+    uint64_t MaintenanceFree(State& state, uint32_t node) const; ///< Actual plus existing quota.
+    void Block(State& state, bool local, const std::string& reason); ///< Transition-only evidence.
+    void Retry(State& state); ///< Retry uncreated operations without historical capture.
     void Commit(State& state, bool initialization); ///< Atomic storage/progress commit and cleanup.
     void FinishPhysicalCommit(State& state, bool initialization); ///< Deferred same-ns retention.
     void Stop(State& state,
@@ -279,12 +294,15 @@ class CheckpointManager : public ProtectionMechanism
     std::map<int64_t, std::map<ProtectionTransferKey, Request>>
         m_requests;                           ///< Canonical request buckets.
     std::map<int64_t, EventId> m_flushEvents; ///< One registration event per request timestamp.
+    std::map<ProtectionTransferKey, Request> m_heldRequests; ///< Reserved, never registered requests.
     std::map<uint64_t, size_t> m_flowIndexes; ///< Terminal callback lookup.
     std::vector<ProtectionEvent> m_events;    ///< Append-only causal evidence.
     std::vector<ProtectionFlow> m_flows;      ///< Append-only real flow metadata.
     bool m_recoveryRetention{};               ///< Explicit G3 fault-enabled phase ordering.
     std::function<void(uint64_t)> m_initialized; ///< Optional physical init notification.
     std::function<void(uint64_t, uint32_t, bool)> m_assignmentObserver; ///< Read-only load ledger.
+    std::function<uint64_t(uint32_t, uint64_t)> m_maintenanceFree; ///< Existing quota projection.
+    std::function<bool(uint32_t, uint32_t)> m_testPathAvailable; ///< Test-only fault/admission seam.
 };
 } // namespace ns3::protection
 #endif

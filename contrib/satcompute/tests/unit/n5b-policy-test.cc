@@ -788,9 +788,19 @@ void GateChecks()
     Reject([&] { gate.Propose(update, true); });
     ++update.epochNs;
     Reject([&] { gate.Propose(update, true); }); // Unpaused ON has no release interest.
+    auto held = update;
+    held.action = FrequencyAction::PAUSE;
+    held.selected.reset();
+    const auto heldConfig = gate.CurrentConfig();
+    gate.Propose(held);
+    gate.Resolve(held.epochNs, false, true, true, true);
+    Check(gate.ResourceHeld() && !gate.Paused() && gate.CurrentConfig() == heldConfig &&
+          gate.NewBatchRecordCount(8) == 8, "resource hold incorrectly pauses committed maintenance");
+    ++update.epochNs;
     pause.epochNs = update.epochNs;
     gate.Propose(pause);
     gate.Resolve(pause.epochNs, false, true);
+    Check(!gate.ResourceHeld() && gate.Paused(), "genuine policy pause must replace resource hold");
     gate.Propose(update, true);
     Check(!gate.Resolve(update.epochNs, true, false) && gate.Paused(),
           "same-ns fault must veto ON capacity resume");

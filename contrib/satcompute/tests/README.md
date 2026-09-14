@@ -5,6 +5,19 @@ ns-3 上游 examples、全局 tests 或根目录 `test.py`。
 
 ## 目录
 
+恢复 deadline 专项：`unit/recovery-runtime-test.cc` 覆盖 direct/迁移的完整完成预算，
+含 Eager/Deferred、空闲但超时、无可行目标、开关与 LocalDelivery。
+历史审计 `integration/regression/audit-direct-recovery-deadline.py` 不运行仿真；
+`run-recovery-deadline-reruns.py --phase all --jobs 3` 仅手动运行 run11 FULL/noU/Rational-U，
+拒绝覆盖旧目录，要求干净提交，不进入 CI。完成后使用
+`analyze-recovery-deadline-reruns.py` 核对实际账本与三方配对。
+审计范围不等于补跑范围，详见[专项报告](../../../docs/n5/reviews/Recovery-direct-deadline-feasibility.md)。
+
+后续五轮 U 补齐使用 `run-recovery-u-revalidation.py --phase all --jobs 8`，
+只新增 FULL run12/14、noU 与 Rational-U run12/14/15，复用其余 7 组；
+包含 INPUT 路径早退影响。`analyze-recovery-u-revalidation.py` 审计 15 组及正/负单任务长尾排除。
+二者均位于 `integration/regression/`，通过项目 `.venv` 的 Python 手动运行，不进入 CI，拒绝覆盖原始输出。
+
 ```text
 tests/
 ├── unit/                    Python 与 C++ 聚焦测试
@@ -20,6 +33,77 @@ tests/
 
 日常单元、smoke 和回归输出写入临时目录并在退出时清理。手动正式场景的原始指标
 保存在 gitignore 排除的本地 `output/`，完整正式场景运行不接入 `run-all.sh` 或 GitHub CI。
+
+N5C V4 使用 `integration/regression/run-n5c-placement.py`，保持冻结的 800 任务 / 1300 s / seed 1 / run 11。
+激活项目 uv 环境并完成构建、保持干净提交后，依次运行：
+
+```bash
+python contrib/satcompute/tests/integration/regression/run-n5c-placement.py --root output/n5c-v4/formal --phase gate
+python contrib/satcompute/tests/integration/regression/run-n5c-placement.py --root output/n5c-v4/formal --phase main
+python contrib/satcompute/tests/integration/regression/analyze-n5c-placement.py --root output/n5c-v4/formal
+python contrib/satcompute/tests/integration/regression/run-n5c-placement.py --root output/n5c-v4/formal --phase ablation
+python contrib/satcompute/tests/integration/regression/analyze-n5c-placement.py --root output/n5c-v4/formal
+```
+
+gate 只重跑 R5/R7 FA-FFP，与旧输出逐 CSV/JSON 核验；主实验只新增 Eager/Deferred 两组，
+消融为 Deferred 的 noR/noU/noM，复用 full。拒绝覆盖输出或混用运行 commit。
+新增 `satcompute-n5c-placement-test` 和既有 frequency runtime 中的 N5C 边界 fixture；
+离线审计核查 min-max、固定配置、存活 exposure、assignment 积分和实际资源守恒。
+`comparison.json/csv` 中 WU 与 eq-WU 分开、路径比例分母为 recovery_attempted，busy 分母为故障时具有 designated backup 的任务。
+这是单一固定场景的描述性比较，不预设 N5C 优于 FA-FFP/FA-LRL。
+
+U 专项 Gate A 只增加 seed 1 / run 12–15 的 Deferred FA-FFP/full/noU（十二组），
+复用通过身份、命令和源代码等价核验的 run 11 三组。干净提交、构建后运行：
+
+```bash
+python contrib/satcompute/tests/integration/regression/run-n5c-u-audit.py --root output/n5c-u-audit --phase prepare
+python contrib/satcompute/tests/integration/regression/run-n5c-u-audit.py --root output/n5c-u-audit --phase run --jobs 8
+python contrib/satcompute/tests/integration/regression/analyze-n5c-u-audit.py --root output/n5c-u-audit
+```
+
+prepare 还重复执行既有 frequency runtime fixture，核验输出确定性（不是新增正式仿真）。
+运行阶段禁止改变 HEAD/工作区；`--resume` 只复用已成功且身份完全相符的组，不覆盖部分输出。
+离线输出 `summary.csv`、`full-vs-noU-task-diff.csv`、`u-decision-audit.csv`、
+`paired-comparison.json` 和各 run 的 `task140-u-diagnostic.json`。
+`test_n5c_u_audit.py` 检查冻结矩阵、历史截断、反事实 tie-break、缺失样本与元数据拒绝。
+同快照反事实与完整 full/noU 轨迹差异分列；真实生成故障不强制相等。
+完成后只进入[共同审阅](../../../docs/n5/reviews/N5C-U-multirun-audit.md)，不自动实现 recent-U。
+
+后续 recent-U 实验已停止：小测试及 FULL/noU 两组完整等价门禁通过，五组 recent-U
+正式进程在暂停后结束，部分输出只读保留、不能当性能证据。见
+[历史状态](../../../docs/n5/reviews/N5C-recent-U-evaluation.md)。不要重新启动旧五组入口。
+
+Rational-U 的 B0 快照与 B1 一组主场景已完成：seed 1 / run 11、Deferred/relocate、
+800 任务/1300 s。复用已完成的两组旧方案正式等价门禁，重新验证旧小场景（含 recent-U）
+输出等价；不改默认参数、不扩展 run 12–15、不自动进入 CI/合并。
+
+```bash
+python contrib/satcompute/tests/integration/regression/analyze-n5c-rational-u.py --snapshot output/n5c-v4/formal/R7-n5c --output output/n5c-u-freshness-snapshot
+python contrib/satcompute/tests/integration/regression/run-n5c-rational-u.py --phase all
+python contrib/satcompute/tests/integration/regression/analyze-n5c-rational-u.py --compare output/n5c-rational-u
+```
+
+入口拒绝覆盖已有证据；以上是复现顺序，不应对已有完成目录再次执行。
+正式运行要求同一干净 HEAD。`test_n5c_rational_u.py` 验证因果 H/I、边界、评分和元数据；
+离线核对每个候选的实际服务记录与 H/I，分别报告同快照反事实、完整轨迹及配对恢复。
+精确零、`abs(U)<1e-12`、`abs(U)<1e-9` 分别统计；后两项只是诊断，不能进入评分。
+结果写入 [Rational-U 审计](../../../docs/n5/reviews/N5C-rational-U-main-scenario.md) 后停止等待共同审阅。
+
+2026-09-14 追加授权仅补跑 Rational-U run 12–15，复用 run 11 及十组 FULL/noU，
+生产代码/参数保持 run 11 原样。五轮三方审计完成后停止，保持 #100/#101 未合并。
+
+```bash
+python contrib/satcompute/tests/integration/regression/run-n5c-rational-multirun.py --phase all --jobs 4
+python contrib/satcompute/tests/integration/regression/analyze-n5c-rational-multirun.py
+```
+
+输出默认位于 `output/n5c-rational-multirun/`，拒绝覆盖；新增执行期间保持同一干净 HEAD。
+`summary.csv`/`aggregate.json` 是分轮/汇总，`paired-comparison.json` 是同故障配对；
+`leave-one-out.json` 按每轮和五轮合并分别去除恢复时间/总浪费的最大收益贡献及最大绝对贡献。
+排除单位是同一个 `(run,task)`，两侧对称排除、不重跑；HHI/链路指标保留完整轨迹口径。
+`test_n5c_rational_multirun.py` 检查执行边界、输入冻结、流去重、配对及长尾排除。
+四组补跑和十五组审计已完成，见[五轮三方报告](../../../docs/n5/reviews/N5C-rational-U-multirun.md)；
+三组均完成 3993/4000，证据不支持替换 FULL，停止等待审阅，勿重复启动。
 
 Pre-N5C placement 消融入口为 `integration/regression/run-pre-n5c-placement-matrix.py`：
 `--stage gates` 先运行 R5/R7-FA-FFP 并与最新 capacity-resume 原始文件比较；

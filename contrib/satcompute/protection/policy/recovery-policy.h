@@ -5,7 +5,7 @@
 
 namespace ns3::protection
 {
-/** Only the readable-checkpoint REMOTE_BUSY branch is an experimental choice. */
+/** Switch busy and direct-deadline fallback; other unavailability branches are shared. */
 enum class RemoteBusyRecoveryPolicy
 {
     RECOMPUTE,
@@ -16,7 +16,8 @@ enum class RemoteBusyRecoveryPolicy
 inline bool AllowsCheckpointRelocation(RemoteBusyRecoveryPolicy policy,
                                        std::string_view fallbackReason)
 {
-    return fallbackReason != "REMOTE_BUSY" || policy == RemoteBusyRecoveryPolicy::RELOCATE;
+    return (fallbackReason != "REMOTE_BUSY" && fallbackReason != "DIRECT_DEADLINE_INFEASIBLE") ||
+           policy == RemoteBusyRecoveryPolicy::RELOCATE;
 }
 } // namespace ns3::protection
 #endif

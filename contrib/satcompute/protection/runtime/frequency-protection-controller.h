@@ -8,6 +8,7 @@
 #include "recovery-controller.h"
 #include "placement-load-ledger.h"
 #include "decision-path-snapshot.h"
+#include "n5c-placement-tracker.h"
 
 #include <filesystem>
 #include <set>
@@ -28,6 +29,7 @@ struct FrequencyDecisionRecord
     std::string reason;                      ///< Resolution, distinct from solver reason.
     std::string resourceReason; ///< Diagnostic hard-resource cause; never changes solver scoring.
     std::string replayReason;   ///< Soft OFF INPUT admission status.
+    bool resourceHold{}; ///< ON config rejection, not blanket checkpoint maintenance PAUSE.
     PlacementNodeLoad localLoad, remoteLoad; ///< Causal load snapshots before ranking/admission.
     std::string trigger{"FAULT_EPOCH"};      ///< TASK_RUNNING is a policy event, never a draw.
     double pF1{}, pF2{};     ///< Current model snapshot, not an observed failure label.
@@ -38,6 +40,8 @@ struct FrequencyDecisionRecord
     uint64_t capacityRetryCount{};
     bool capacityRetrySuccess{};
     int64_t capacityWaitStartNs{-1}, capacityWaitEndNs{-1};
+    std::optional<size_t> n5cTrace; ///< START-only spatial proposal; no solver call per remote.
+    std::optional<uint64_t> n5cPeak; ///< Total replacement quota, captured before physical admission.
 };
 
 /** Online generate integration. Owns no fault model, RNG, state bytes or second network. */
@@ -52,7 +56,8 @@ class FrequencyProtectionController : public ProtectionPolicy
                                   int64_t stopNs,
                                   std::unique_ptr<PlacementPolicy> placement = nullptr,
                                   RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
-                                  InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER);
+                                  InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER,
+                                  bool observePlacementResources = false);
     ~FrequencyProtectionController() override;
     /** Finish the same actual ledgers as fixed protection. */
     void Finalize();
@@ -60,6 +65,7 @@ class FrequencyProtectionController : public ProtectionPolicy
     void WriteDecisions(const std::filesystem::path& directory) const;
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
     const PlacementPolicy& Placement() const { return *m_placement; }
+    const N5cPlacementTracker* N5c() const { return m_n5c; }
     ///< Live ownership used by LRL and the same diagnostic output for FFP.
 
     const CheckpointManager& Manager() const
@@ -109,6 +115,7 @@ class FrequencyProtectionController : public ProtectionPolicy
         std::optional<ProtectionPhase> stopped; ///< Deferred gate stop until proposal resolves.
         std::optional<int64_t> pauseStart; ///< Beginning of the current reason-specific interval.
         std::string pauseReason; ///< Current effective pause cause.
+        bool pauseResourceHold{}; ///< Configuration rejection, with maintenance independently gated.
         int64_t lastDecisionNs{-1}; ///< Avoid duplicate policy evaluation at a coincident check.
         int64_t lastCapacityDecisionNs{-1}; ///< At most one capacity retry per task/timestamp.
         std::optional<int64_t> capacityWaitStart;
@@ -117,6 +124,7 @@ class FrequencyProtectionController : public ProtectionPolicy
     struct PauseInterval
     {
         uint64_t taskId{}; int64_t startNs{}, endNs{}; std::string reason;
+        bool resourceHold{};
     }; ///< Nonoverlapping intervals ending on resume, reason change, stop or finalization.
 
     struct Path
@@ -147,6 +155,11 @@ class FrequencyProtectionController : public ProtectionPolicy
                         DecisionPathSnapshot& paths);
     void EvaluateOffPairs(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
                           DecisionPathSnapshot& paths);
+    void SelectN5cRemote(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
+                         DecisionPathSnapshot& paths, const std::vector<PlacementDecision>& pairs);
+    std::vector<N5cForecast> N5cPeers(uint32_t remote, uint64_t excluded,
+                                    const std::string& trigger, DecisionPathSnapshot& paths);
+    bool RevalidateN5c(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
     ///< Adapt actual placement, legal inventory, pools, rates and paths.
     Ptr<TaskCoordinator> m_tasks;                     ///< Business lifecycle owner.
     SatelliteRuntimeView& m_topology;                 ///< Shared network view.
@@ -154,6 +167,8 @@ class FrequencyProtectionController : public ProtectionPolicy
     PlacementLoadLedger m_loads;                      ///< Live remote assignment/recovery counts.
     CheckpointManager m_manager;                      ///< Sole actual checkpoint mechanism.
     std::unique_ptr<PlacementPolicy> m_placement;      ///< FFP baseline or explicitly injected LRL.
+    std::unique_ptr<N5cPlacementTracker> m_placementObservation; ///< Read-only resource metrics, also usable by FA-FFP.
+    N5cPlacementTracker* m_n5c{}; ///< Alias enabled only for N5C; legacy policies never use quota promises.
     CompFrrFrequencyPolicy m_policy;                  ///< Pure production solver.
     std::unique_ptr<RecoveryController> m_recovery;   ///< Reused N5A recovery.
     std::map<uint64_t, State> m_states;               ///< Per-primary frequency lifecycle.

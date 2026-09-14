@@ -355,6 +355,15 @@ ComputeService::GetBusyTimeNs() const
                                : 0);
 }
 
+uint64_t
+ComputeService::GetRecoveryBusyTimeNs() const
+{
+    uint64_t total = 0;
+    for (const auto& [key, saved] : m_recoveryAccounting)
+        total += static_cast<uint64_t>(GetRecoveryAccounting(key.first, key.second).serviceNs);
+    return total;
+}
+
 uint32_t
 ComputeService::GetMaxQueueLength() const
 {

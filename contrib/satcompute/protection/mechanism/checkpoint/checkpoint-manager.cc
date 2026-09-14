@@ -378,6 +378,14 @@ CheckpointManager::Flush(int64_t time)
         auto& state = *m_states.at(key.taskId);
         if (!Live(state))
             continue;
+        const bool maintenance = key.kind == ProtectionTransferKind::L1 ||
+                                 key.kind == ProtectionTransferKind::REMOTE_BATCH;
+        if (maintenance && !PathAvailable(request.source, request.destination))
+        {
+            Require(m_heldRequests.emplace(key, request).second, "duplicate held maintenance request");
+            Block(state, key.kind == ProtectionTransferKind::L1, "PATH");
+            continue; // Keep the exact reserved object. No transfer ID or sent bytes yet.
+        }
         uint64_t id;
         try
         {
@@ -389,7 +397,7 @@ CheckpointManager::Flush(int64_t time)
             plan.sizeBytes = request.bytes;
             m_network->RegisterRuntimePlan(plan);
         }
-        catch (const std::runtime_error&)
+        catch (const NetworkTransferConfigError&)
         {
             Log(state,
                 "TRANSFER_REGISTRATION_FAILED",
@@ -397,12 +405,25 @@ CheckpointManager::Flush(int64_t time)
                 request.bytes,
                 request.destination,
                 request.object);
-            Stop(state, "TRANSFER_REGISTRATION_FAILED");
+            if (maintenance)
+            {
+                // A malformed/exhausted registration is terminal, not temporary path pressure.
+                m_pools.at(request.destination)->ReleaseReservation(request.object);
+                if (key.kind == ProtectionTransferKind::L1) state.localTransferFailed = true;
+                else { state.remoteTransferFailed = true; state.batchInFlight = false; state.batchObject = 0; }
+                Block(state, key.kind == ProtectionTransferKind::L1, "REGISTRATION_FAILED");
+            }
+            else Stop(state, "TRANSFER_REGISTRATION_FAILED");
             continue;
         }
         m_flowIndexes.emplace(id, m_flows.size());
+        if (maintenance)
+        {
+            auto& reason = key.kind == ProtectionTransferKind::L1 ? state.captureBlockReason : state.remoteBlockReason;
+            if (reason == "PATH") Block(state, key.kind == ProtectionTransferKind::L1, "");
+        }
         m_flows.push_back(
-            {key, id, request.bytes, request.work, request.object, request.destination, time});
+            {key, id, request.bytes, request.work, request.object, request.destination, request.requestedNs});
         m_network->SetTerminalObserver(id,
                                        MakeCallback(&CheckpointManager::TransferTerminal, this));
         Log(state,
@@ -445,9 +466,15 @@ CheckpointManager::TransferTerminal(uint64_t id, int64_t at)
             {
                 state.batchObject = 0;
                 state.batchInFlight = false;
-                state.batchBlocked = true;
+                state.remoteTransferFailed = true;
+                Block(state, false, "TRANSFER_FAILED");
             }
-            // An unreceived L1 remains an explicit gap; later receipts cannot skip it.
+            else if (flow.key.kind == ProtectionTransferKind::L1)
+            {
+                // Retain the explicit missing sequence, but do not create more unreachable progress.
+                state.localTransferFailed = true;
+                Block(state, true, "TRANSFER_FAILED");
+            }
             else if (flow.key.kind != ProtectionTransferKind::L1)
                 Stop(state, "INITIALIZATION_TRANSFER_FAILED");
         }
@@ -506,10 +533,89 @@ CheckpointManager::InitializationReceived(State& state)
 }
 
 void
+CheckpointManager::Block(State& state, bool local, const std::string& reason)
+{
+    auto& current = local ? state.captureBlockReason : state.remoteBlockReason;
+    if (current == reason) return;
+    current = reason;
+    if (local && !reason.empty())
+    {
+        Simulator::Cancel(state.captureEvent);
+        state.nextTarget.reset();
+    }
+    Log(state, std::string(local ? "CAPTURE_" : "REMOTE_BATCH_") +
+               (reason.empty() ? "RESUMED" : "BLOCKED_" + reason));
+}
+
+bool
+CheckpointManager::PathAvailable(uint32_t source, uint32_t destination) const
+{
+    if (!m_tasks->IsSatelliteAvailable(source) || !m_tasks->IsSatelliteAvailable(destination))
+        return false;
+    if (m_testPathAvailable && !m_testPathAvailable(source, destination)) return false;
+    return m_network->EstimateAdmissiblePath(source, destination).admissible;
+}
+
+uint64_t
+CheckpointManager::MaintenanceFree(State& state, uint32_t node) const
+{
+    const auto physical = m_pools.at(node)->Free();
+    return m_maintenanceFree ? std::min(physical, m_maintenanceFree(node, state.summary.taskId)) : physical;
+}
+
+void
+CheckpointManager::Retry(State& state)
+{
+    if (!Live(state) || !state.initialized || state.futurePaused) return;
+    if (!state.localTransferFailed && !state.captureBlockReason.empty() &&
+        PathAvailable(state.summary.primaryNode, state.config.localNode))
+    {
+        const auto next = state.layout.Next(Actual(state), state.triggered, state.config.deltaPermille);
+        if (!next || *next >= state.layout.Work() ||
+            state.layout.RecordBytes(state.triggered, *next) <= MaintenanceFree(state, state.config.localNode))
+            Block(state, true, "");
+        else Block(state, true, "STORAGE");
+    }
+    if (!state.nextTarget && state.captureBlockReason.empty()) ScheduleCapture(state);
+    TryBatch(state);
+}
+
+void
+CheckpointManager::RetryBlockedMaintenance()
+{
+    // Created requests may finish even during policy PAUSE. Never replay a real flow.
+    for (auto it = m_heldRequests.begin(); it != m_heldRequests.end();)
+    {
+        auto& state = *m_states.at(it->first.taskId);
+        if (!state.active) { it = m_heldRequests.erase(it); continue; }
+        const auto& request = it->second;
+        if (!PathAvailable(request.source, request.destination)) { ++it; continue; }
+        const auto now = Now();
+        Require(m_requests[now].emplace(it->first, request).second, "duplicate retry request");
+        if (!m_flushEvents.contains(now))
+            m_flushEvents.emplace(now, Simulator::Schedule(NanoSeconds(1), &CheckpointManager::Flush, this, now));
+        it = m_heldRequests.erase(it);
+    }
+    for (auto& [id, state] : m_states)
+        if (state->active && state->initialized) Retry(*state);
+}
+
+bool
+CheckpointManager::RetainFutureConfiguration(uint64_t id)
+{
+    const auto found = m_states.find(id);
+    if (found == m_states.end() || !Live(*found->second) || !found->second->initialized) return false;
+    Log(*found->second, "FREQUENCY_RESOURCE_HOLD");
+    // Do not undo an earlier genuine policy pause without an accepted UPDATE.
+    Retry(*found->second);
+    return true;
+}
+
+void
 CheckpointManager::ScheduleCapture(State& state)
 {
     state.nextTarget.reset();
-    if (state.futurePaused)
+    if (state.futurePaused || !state.captureBlockReason.empty() || state.localTransferFailed)
         return;
     auto next = state.layout.Next(Actual(state), state.triggered, state.config.deltaPermille);
     if (!next || *next >= state.layout.Work())
@@ -527,19 +633,29 @@ CheckpointManager::ScheduleCapture(State& state)
 void
 CheckpointManager::Capture(State& state, uint64_t work)
 {
+    if (state.futurePaused || state.localTransferFailed) return;
+    if (!PathAvailable(state.summary.primaryNode, state.config.localNode))
+    {
+        Block(state, true, "PATH");
+        return;
+    }
     const auto bytes = state.layout.RecordBytes(state.triggered, work);
+    if (bytes > MaintenanceFree(state, state.config.localNode))
+    {
+        Block(state, true, "STORAGE");
+        return;
+    }
+    // Own the bounded storage before advancing the immutable capture cursor or paying cL.
+    const auto object = Reserve(state, state.config.localNode, StorageKind::LOCAL_RECORD, bytes, work);
+    Require(object.has_value(), "maintenance storage changed within capture");
     const auto generated = state.progress.Capture(work, Actual(state), Now());
-    state.records.emplace(work, Record{state.triggered, work, bytes});
+    Require(state.records.emplace(work, Record{state.triggered, work, bytes, *object}).second,
+            "duplicate local capture boundary");
     state.triggered = work;
     Log(state, "L1_CAPTURED", work, bytes);
     Later(state, generated, [this, &state, work, bytes] {
         ++state.summary.generated;
         Log(state, "L1_GENERATED", work, bytes);
-        const auto object =
-            Reserve(state, state.config.localNode, StorageKind::LOCAL_RECORD, bytes, work);
-        if (!object)
-            return;
-        state.records.at(work).object = *object;
         Queue(state,
               ProtectionTransferKind::L1,
               work,
@@ -547,7 +663,7 @@ CheckpointManager::Capture(State& state, uint64_t work)
               state.config.localNode,
               bytes,
               work,
-              *object);
+              state.records.at(work).object);
     });
     ScheduleCapture(state);
 }
@@ -555,7 +671,7 @@ CheckpointManager::Capture(State& state, uint64_t work)
 void
 CheckpointManager::TryBatch(State& state)
 {
-    if (state.futurePaused || state.batchInFlight || state.batchBlocked)
+    if (state.futurePaused || state.batchInFlight || state.remoteTransferFailed)
         return;
     const auto snapshot = state.progress.Current();
     uint64_t bytes = 0, work = 0;
@@ -574,13 +690,24 @@ CheckpointManager::TryBatch(State& state)
     }
     if (count != state.config.batchN)
         return;
+    if (!PathAvailable(state.config.localNode, state.config.remoteNode))
+    {
+        Block(state, false, "PATH");
+        return;
+    }
+    if (bytes > MaintenanceFree(state, state.config.remoteNode))
+    {
+        Block(state, false, "STORAGE");
+        return;
+    }
     const auto object =
         Reserve(state, state.config.remoteNode, StorageKind::REMOTE_BATCH, bytes, work);
     if (!object)
     {
-        state.batchBlocked = true;
+        Block(state, false, "STORAGE");
         return;
     }
+    Block(state, false, "");
     state.batchObject = *object;
     state.batchWork = work;
     state.batchInFlight = true;
@@ -668,7 +795,7 @@ CheckpointManager::FinishPhysicalCommit(State& state, bool initialization)
                 state.config.localNode,
                 record.object);
         }
-        TryBatch(state);
+        RetryBlockedMaintenance(); // Real storage cleanup can release another task's blocked stage.
     }
 }
 
@@ -684,14 +811,13 @@ CheckpointManager::UpdateFutureConfiguration(uint64_t id, uint32_t delta, uint32
     state.config.deltaPermille = delta;
     state.config.batchN = n;
     state.futurePaused = false;
-    state.batchBlocked = false;
     if (reschedule)
     {
         Simulator::Cancel(state.captureEvent);
         ScheduleCapture(state);
     }
     Log(state, "FREQUENCY_UPDATED");
-    TryBatch(state);
+    Retry(state);
     return true;
 }
 
@@ -731,6 +857,8 @@ CheckpointManager::Inventory(uint64_t id) const
     result.stopNs = state.summary.stopNs;
     result.initialized = state.initialized;
     result.paused = state.futurePaused;
+    result.captureBlockReason = state.captureBlockReason;
+    result.remoteBlockReason = state.remoteBlockReason;
     result.batchInFlight = state.batchInFlight;
     result.nextTarget = state.nextTarget;
     for (const auto& [work, record] : state.records)
@@ -755,6 +883,7 @@ CheckpointManager::Stop(State& state, const std::string& reason)
         std::erase_if(requests, [&](const auto& request) {
             return request.first.taskId == state.summary.taskId;
         });
+    std::erase_if(m_heldRequests, [&](const auto& r) { return r.first.taskId == state.summary.taskId; });
     std::vector<uint64_t> transfers;
     for (const auto& flow : m_flows)
         if (flow.key.taskId == state.summary.taskId && flow.key.attemptGeneration == 0)
@@ -806,6 +935,7 @@ CheckpointManager::Finalize()
         Simulator::Cancel(event);
     m_flushEvents.clear();
     m_requests.clear();
+    m_heldRequests.clear();
 }
 
 std::vector<ProtectionTaskSummary>
@@ -827,6 +957,7 @@ CheckpointManager::Summaries() const
 bool
 CheckpointManager::IsQuiescent() const
 {
+    if (!m_heldRequests.empty()) return false;
     for (auto service : m_tasks->GetComputeServices())
         if (service->HasRecoveryReservation())
             return false;
@@ -948,6 +1079,7 @@ CheckpointManager::QuiesceForRecovery(const RecoverySnapshot& snapshot)
         std::erase_if(requests, [&](const auto& item) {
             return item.first.taskId == snapshot.taskId && item.first.attemptGeneration == 0;
         });
+    std::erase_if(m_heldRequests, [&](const auto& r) { return r.first.taskId == snapshot.taskId; });
     std::vector<uint64_t> transfers;
     for (const auto& flow : m_flows)
         if (flow.key.taskId == snapshot.taskId && flow.key.attemptGeneration == 0)
