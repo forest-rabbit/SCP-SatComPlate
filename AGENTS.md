@@ -234,6 +234,15 @@ symmetric largest-positive/largest-negative single-(run,task) exclusions. Do not
 other baselines/ablations, change U/defaults, push/merge/CI/tag or start another phase.
 Stop after reporting the corrected five-run evidence for user review.
 
+The eight new U runs are complete at clean `a5b00962c`, all full 1300s and return 0.
+All fifteen outputs passed audits (including both corrected fallback branches).
+Read the five-run section of `docs/n5/reviews/Recovery-direct-deadline-feasibility.md`:
+FULL/noU/Rational-U complete 3996/3998/3997 of 4000; common catch is 338.266/341.329/353.387 ms,
+busy 5/5/9 of 409. Rational-U's 0.527% total eq-waste gain is tail-sensitive, not a
+stable overall replacement advantage. Run15 task53 now migrates 41->0 and completes
+for noU/Rational-U. Keep FULL default; recommend stopping this U refinement pending
+user review. No further runs, model changes, push/merge/CI/tag or architecture cleanup.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System
