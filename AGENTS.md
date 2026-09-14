@@ -223,6 +223,17 @@ and meets the unchanged deadline; noU/Rational-U retain every historical CSV fie
 Default FULL remains unchanged. Do not expand the matrix, merge/push/CI/tag or promote
 another U without a fresh user decision; unrerun historical multi-run evidence remains historical.
 
+The latest user authorizes completing ONLY the U five-run comparison: eight new
+1300s executions (FULL 12/14; noU and Rational-U 12/14/15), reusing the three
+corrected run11 results and four audited unaffected historical runs. INPUT_PATH_UNAVAILABLE
+early-return impact counts as well as direct deadline infeasibility; run15 task53
+must not be classified unaffected for noU/Rational-U. Freeze production at bc721ed42;
+only test/audit tooling and concise handoff/review docs may change. Use online generate,
+retain old evidence, audit all fifteen outputs, three-way common valid catch and
+symmetric largest-positive/largest-negative single-(run,task) exclusions. Do not run
+other baselines/ablations, change U/defaults, push/merge/CI/tag or start another phase.
+Stop after reporting the corrected five-run evidence for user review.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

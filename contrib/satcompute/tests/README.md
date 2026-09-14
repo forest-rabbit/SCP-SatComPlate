@@ -13,6 +13,11 @@ ns-3 上游 examples、全局 tests 或根目录 `test.py`。
 `analyze-recovery-deadline-reruns.py` 核对实际账本与三方配对。
 审计范围不等于补跑范围，详见[专项报告](../../../docs/n5/reviews/Recovery-direct-deadline-feasibility.md)。
 
+后续五轮 U 补齐使用 `run-recovery-u-revalidation.py --phase all --jobs 8`，
+只新增 FULL run12/14、noU 与 Rational-U run12/14/15，复用其余 7 组；
+包含 INPUT 路径早退影响。`analyze-recovery-u-revalidation.py` 审计 15 组及正/负单任务长尾排除。
+二者均位于 `integration/regression/`，通过项目 `.venv` 的 Python 手动运行，不进入 CI，拒绝覆盖原始输出。
+
 ```text
 tests/
 ├── unit/                    Python 与 C++ 聚焦测试
