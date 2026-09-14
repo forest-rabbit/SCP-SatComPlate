@@ -15,6 +15,12 @@ rows, require = MULTI['rows'], MULTI['require']
 WRITE = runpy.run_path(str(HERE/'audit-checkpoint-maintenance.py'))['write_csv']
 
 
+def audit_only_changes(paths):
+    """Allow later evidence/docs commits, never reinterpret outputs with changed production."""
+    return all(p == 'AGENTS.md' or p.startswith(('docs/', 'contrib/satcompute/tests/'))
+               or Path(p).name == 'README.md' for p in paths)
+
+
 def maintenance(directory):
     events = rows(directory, 'protection-events.csv')
     captures, cursor, by_task = {}, {}, defaultdict(list)
@@ -93,7 +99,9 @@ def prefix(before, after):
 
 def audit(root):
     plan = json.loads((root/'execution-plan.json').read_text())
-    require(RUN['identity']() == plan['commit'] and plan['entries'] == RUN['entries'](root), 'formal scope changed')
+    current = RUN['identity']()
+    require(audit_only_changes(RUN['git']('diff', '--name-only', plan['commit'], current).splitlines())
+            and plan['entries'] == RUN['entries'](root), 'formal production/scope changed')
     results, accounts, recoveries, faults = ({str(r): {} for r in range(11, 16)} for _ in range(4))
     table, block_rows, gap_rows, histories, impact = [], [], [], {}, {}
     signature = None
@@ -125,7 +133,7 @@ def audit(root):
         results[run][group] = value
     pooled_a = {g: {k: v for a in accounts.values() for k, v in a[g].items()} for g in GROUPS}
     pooled_r = {g: [r for a in recoveries.values() for r in a[g]] for g in GROUPS}
-    comparison, exclusions, aggregate = {}, {}, {}
+    comparison, exclusions, aggregate, before_after = {}, {}, {}, {}
     for g in GROUPS:
         selected = [r for r in table if r['group'] == g]
         aggregate[g] = dict(MULTI['cohort'](pooled_a[g], pooled_r[g]),
@@ -133,6 +141,13 @@ def audit(root):
             assignment_hhi_mean=sum(r['assignment_hhi'] for r in selected)/5,
             storage_hhi_mean=sum(r['storage_hhi'] for r in selected)/5,
             mean_link_utilization_percent=sum(r['mean_link_utilization_percent'] for r in selected)/5)
+        old_recovery = [dict(r, task_id=f"{entry['run']}:{r['task_id']}") for entry in plan['entries']
+                        if entry['group'] == g for r in rows(ROOT/entry['source'], 'recovery-summary.csv')]
+        before_after[g] = dict(paired_catch=MULTI['OLD']['paired_catch'](old_recovery, pooled_r[g], ('before', 'after')))
+        for label, data in [('before', old_recovery), ('after', pooled_r[g])]:
+            before_after[g][label+'_on_gap_wu'] = {
+                k: V4['distribution'](int(r['actual_work_units'])-int(r[k]) for r in data if r['phase_at_fault']=='ON')
+                for k in ('local_work_units', 'remote_work_units')}
     for scope in [str(r) for r in range(11, 16)]+['pooled']:
         a, r = (pooled_a, pooled_r) if scope == 'pooled' else (accounts[scope], recoveries[scope])
         caught = COMMON['common_caught'](r)
@@ -143,7 +158,7 @@ def audit(root):
             comparison[scope][name] = COMMON['contrast'](a, r, pair, caught)
             exclusions[scope][name] = COMMON['exclusions'](a, r, pair, caught)
     for name, value in [('audit-results', results), ('aggregate', aggregate), ('paired-comparison', comparison),
-                        ('leave-one-out', exclusions), ('maintenance-impact', impact)]:
+                        ('leave-one-out', exclusions), ('maintenance-impact', impact), ('before-after', before_after)]:
         (root/(name+'.json')).write_text(json.dumps(value, indent=2)+'\n')
     WRITE(root/'summary.csv', [{k: v for k, v in r.items() if not isinstance(v, dict)} for r in table])
     WRITE(root/'maintenance-blocks.csv', block_rows)

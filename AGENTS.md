@@ -261,6 +261,17 @@ missing historical fields are UNKNOWN. Audit first and determine affected formal
 do not expand other baselines or auto-push/PR/CI/merge/tag. Keep PR #100/#101 open and
 all prior outputs intact. Use one concise review document rather than duplicate reports.
 
+Maintenance closeout (2026-09-14): implementation and all 15 full 1300s U runs PASS
+at clean execution commit `c7889de89`; outputs `output/checkpoint-maintenance-fixed/`,
+report `docs/n5/reviews/Checkpoint-maintenance-semantics-audit.md`. FULL/noU/Rational-U
+each complete 4000/4000 tasks with 409 valid recoveries and zero Recompute. Mean catch
+is 322.003/324.356/323.636 ms; total equivalent waste is 15.337524/15.433674/15.403837
+million eq-WU. Targeted build, maintained C++/smoke/Python tests and independent
+accounting/Frequency/N5C/Rational history audits pass. FULL remains default. Stop
+for user review; no further runs, parameter changes, push/PR/CI/merge/tag authorized.
+Prior U outputs are historical, replaced for current comparisons by the 15 new runs;
+other affected baselines have not been revalidated and must not be mixed with them.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

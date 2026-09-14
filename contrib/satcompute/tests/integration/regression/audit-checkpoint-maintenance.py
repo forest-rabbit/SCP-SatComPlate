@@ -45,6 +45,8 @@ def inspect(directory, label):
             reason=r['resource_reason'] or r['proposal_reason'],
             local_node=r['local_node'], remote_node=r['remote_node'],
             actual_work=r['progress_work'],
+            checkpoint_snapshot_basis='last_observed_event_not_exact_decision_UID',
+            checkpoint_snapshot_time_ns=state.get('time_ns', 'UNKNOWN'),
             local_work=state.get('local_work_units', 'UNKNOWN'),
             remote_work=state.get('remote_work_units', 'UNKNOWN'),
             # No exact pending target or per-edge/idle snapshots in historical decision rows.

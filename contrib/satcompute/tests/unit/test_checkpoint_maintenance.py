@@ -7,6 +7,8 @@ AUDIT = runpy.run_path(str(Path(__file__).resolve().parents[1] /
                           'integration/regression/audit-checkpoint-maintenance.py'))
 RUN = runpy.run_path(str(Path(__file__).resolve().parents[1] /
                         'integration/regression/run-checkpoint-maintenance.py'))
+CHECK = runpy.run_path(str(Path(__file__).resolve().parents[1] /
+                          'integration/regression/analyze-checkpoint-maintenance.py'))
 
 
 class MaintenanceAuditTest(unittest.TestCase):
@@ -25,6 +27,13 @@ class MaintenanceAuditTest(unittest.TestCase):
                          ['satcompute', '--randomRun=11'])
         self.assertNotEqual(RUN['normalized']('satcompute --randomRun=11'),
                             RUN['normalized']('satcompute --randomRun=12'))
+
+    def test_later_audit_commits_do_not_change_formal_production(self):
+        self.assertTrue(CHECK['audit_only_changes'](['AGENTS.md', 'docs/n5/reviews/evidence.md',
+            'contrib/satcompute/tests/unit/test_checkpoint_maintenance.py', 'contrib/satcompute/protection/README.md']))
+        for path in ('contrib/satcompute/protection/mechanism/checkpoint/checkpoint-manager.cc',
+                     'contrib/satcompute/input/experiments/leo-66/workload/task-trace.json', 'CMakeLists.txt'):
+            self.assertFalse(CHECK['audit_only_changes']([path]))
 
 
 if __name__ == '__main__':
