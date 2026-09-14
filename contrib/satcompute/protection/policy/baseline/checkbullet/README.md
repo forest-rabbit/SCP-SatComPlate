@@ -1,8 +1,12 @@
 # CB-Sat v2
 
+N5R 后，C++ 源码由 [canonical 目录](../../../baseline/checkbullet/README.md)维护；
+本目录保留参数来源、冻结 profile、工具与历史证据，六个旧头文件只转发。
+下文同名 C++ 文件均指 canonical 实现；不因整理重新标定或重跑正式矩阵。
+
 CheckBullet 的卫星平台适配基线：一个备份节点，保存完整 INPUT、一个状态根和连续增量日志。
 不继承 Fixed/CompFRR 的双层部署或跨节点 tail 获取能力。当前实施进度见
-[preflight.md](preflight.md)。MTBF=41.47642679900744 s；旧八组结果保留在
+[preflight.md](preflight.md)（历史阶段记录）。MTBF=41.47642679900744 s；旧八组结果保留在
 [历史验收报告](../../../../../../docs/n5/reviews/Pre-N5C-cb-sat-v2.md)。2026-09-13 审计发现
 部分初始化恢复未要求完整 INPUT；修正后的证据与本轮 quota 复核见
 [收口审计](../../../../../../docs/n5/reviews/N5B-closeout-N5C-kickoff.md)。

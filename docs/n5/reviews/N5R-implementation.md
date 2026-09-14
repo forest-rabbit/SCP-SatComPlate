@@ -22,7 +22,7 @@
 | 4 recovery/relocation | RecoveryController 依赖中性 CheckpointRecoveryPort，metrics 只依赖 EvidenceView；原主任务快照/事件构造共用；relocation 预留和发送是可选公共机制，tail 必须由调用者明确提供 | build、Python 191（skip 1）、C++ 合同 PASS；新增 7 项 reservation/owner cleanup/发送顺序合同；small equivalence 1965 文件（1707 CSV）完全一致，含 direct/deadline/INPUT path/parallel/LocalDelivery/same-ns |
 | 5 baselines | Recompute/1+1 使用 TransferOnlyRecoveryLedger，无 checkpoint executor；scheme 明确授予 recovery 能力；Fixed/Recompute/1+1 adapters 归各 policy；CB C++ 独立 baseline/checkbullet，MTBF/工具/导出头原路径兼容；历史 source guard 同时保护新位置 | build、Python 191（skip 1）、C++ 合同 PASS；small equivalence 1965 文件（1707 CSV）完全一致；CB 主版/relocate、1+1 同 ns fault batch、Recompute 从零与零容量账本均保持 |
 | 6 tests | 七个长期 helper（accounting/frequency/baseline/placement/risk-start/INPUT/scenario）抽到 tests/support/protection；六组 unit 和 CB 场景调用者迁移；旧入口全部转发，独立 oracle 不调用 production solver；正式场景 CLI 也撤出 recent-U，历史 argv 描述保留 | build no-op、Python 195（skip 1）、C++ 合同 PASS；新增 include 边界、旧入口单实现、recent-U 不创建输出测试；small equivalence 1965 文件（1707 CSV）完全一致 |
-| 7 canonical docs | 待执行：唯一内容归属，不覆盖历史证据 | 链接/目录/CLI 合同 |
+| 7 canonical docs | 模块 README 压缩至 65 行；六个专题分别拥有 architecture/F/P/recovery/baselines/reproducibility；CB 新源码与原 profile/工具路径分开；旧报告保留历史语境；里程碑仅补已合入的 #102 事实 | 12 份文档/85 个本地链接无缺失；build no-op、Python 195（skip 1）、C++ 合同 PASS；small equivalence 1965 文件（1707 CSV）完全一致 |
 | 8 历史归档 | 待执行：依赖扫描后决定，不按阶段名删除 | compatibility/coverage 清单 |
 
 ## 小型等价证据
