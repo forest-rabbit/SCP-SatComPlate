@@ -37,10 +37,11 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 | `mechanism/relocation/checkpoint-relocation-executor.*` | 获准迁移的预留与发送；不自行选择算法 |
 | `mechanism/replication/replica-manager.*` | 真实双 attempt、同批故障后的接管与 RESULT 裁决 |
 | `policy/{placement-policy,recovery-policy}.h` | 候选角色与 scheme 授权能力 |
-| `policy/fixed/*`、`policy/baseline/*` | 固定频率与公共 baseline placement / Recompute / 1+1 |
+| `policy/fixed/*`、`policy/placement/*` | 固定频率与共享 FFP/LRL/FA placement |
 | `policy/compfrr/{compfrr-controller,compfrr-placement-adapter,storage-estimator}.*` | F 接线、P 只读适配、新增存储峰值估计 |
 | `policy/compfrr/{frequency,input,placement}/` | F solver、INPUT 成本描述、P 排名及 compute-pressure |
-| `baseline/checkbullet/*` | [独立 CB-Sat 实现](baseline/checkbullet/README.md) |
+| `baseline/{checkbullet,recompute,one-plus-one}/*` | 完整对比方案；[CB-Sat](baseline/checkbullet/README.md) 的参数和工具也在此 |
+| `baseline/multitree/README.md` | 未来方案占位，当前未实现，无运行入口 |
 | `../traffic/local-delivery.*` | 同星逻辑交付，不创建 UDP、不计网络字节 |
 
 旧导出头和历史 CLI/分析入口仅兼容转发；不允许公共 Fixed/Checkpoint/Recovery 反向依赖 Frequency。

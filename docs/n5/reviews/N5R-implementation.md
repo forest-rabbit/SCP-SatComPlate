@@ -2,6 +2,32 @@
 
 执行依据：[已批准只读审计](Protection-architecture-consolidation-audit.md)。此页仅记录分步提交、边界与 gate，不重写历史结果。
 
+## 最终审阅补充：目录收口与历史 V7 离线诊断
+
+用户批准 `N5R_Final_Architecture_Closeout_and_V7_JIT_Offline_Audit.md` 及四项统计补充。
+当前起点 `fcdfe2db8` / Draft #103，沿用本分支，不改模型/参数/随机流/INPUT timing。
+
+| 阶段 | 目标及门禁 | 状态 |
+| --- | --- | --- |
+| A 目录最终收口 | 完整 baseline 统一到外层；公共 placement 单独归位；CB 参数/工具唯一 owner；Multi-tree 仅 README；build/unit/contract/依赖与唯一性/小型等价/16 placement/CB 8+repeat | build、C++、Python/owner/include 检查、16 placement 通过；小型等价见下方路径审计；CB 8+repeat 在干净提交后执行 |
+| B V7 离线诊断 | A 全通过后，复用已有 run11 与同批 Deferred；逐 lifecycle、守恒与故障表、严格配对及报告；缺失值不伪造；不运行仿真 | 待执行 |
+
+字节分类优先级：实际使用 → 无需恢复的故障未发生 → 目标不一致 → 其余失败/取消。
+失败等原因另保留独立标签；未建立流的请求不伪造字节。
+非关键路径只表示实际恢复时未额外等待 INPUT，不等于预取无收益；已发比例不代表接收 READY。
+旧 V7 结果仍属于其执行提交，不冒充 corrected N5R 的性能结果。原文保留在项目外任务书。
+
+A 的单独差异审计：原严格 gate 拒绝两个 CB CLI 的 `cb-sat-parameters.json.profile_path`，
+这是任务书明确要求迁移 frozen profile 后的真实文件位置变化。1965 文件全量核对未发现其他差异，
+1707 份 CSV 全部逐字节相同；profile 和 provenance 均与 `fcdfe2db8` 逐字节相同。
+未刷新 golden、未修改任何运行输出。新增默认关闭的精确路径迁移开关，只有指定两个 JSON 的
+指定 old→new profile_path 允许改变，MTBF/其他字段仍严格拒绝；损坏和越界例外测试通过。
+对照目录为 `output/n5r-equivalence/final-owner-closeout/`，reference 为目录调整前的 `stage8-archive/`。
+ns-3 跳过已有 generated include 的行为会留下旧路径；项目 CMake 只刷新 14 个已知旧 stub，
+未改上游代码。旧 policy/baseline 的余下 5 个 Python cache 已移至 `/tmp/n5r-obsolete-baseline.vZRtmB/`。
+
+下方八阶段记录为此次最终目录审阅之前的过程快照，其中路径保留决定由本节最终收口更新。
+
 ## 冻结范围
 
 - 唯一基线：PR #102 的 merge commit `d26f7af907731c9a219d973add0f18e0b87f8778`，tree 与 corrected head `17c629a1d` 完全一致。包含 #100/#101、deadline/INPUT-path recovery、checkpoint-maintenance 修复。

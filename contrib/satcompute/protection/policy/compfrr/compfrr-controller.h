@@ -2,7 +2,7 @@
 #ifndef SATCOMPUTE_COMPFRR_CONTROLLER_H
 #define SATCOMPUTE_COMPFRR_CONTROLLER_H
 #include "../../../fault/runtime/fault-model-engine.h"
-#include "../baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
+#include "../placement/fa-first-feasible/fa-first-feasible-placement-policy.h"
 #include "frequency/frequency-decision-gate.h"
 #include "storage-estimator.h"
 #include "../../runtime/recovery-controller.h"

@@ -23,7 +23,7 @@ Routing 是所有方案共用的基础设施，不属于其中任何算法开关
 `PlacementPolicy::SelectBackupNode`，默认 FA-FFP 选非主、健康、空闲且可达结果端的节点，
 还需原始 INPUT 当前可准入且 INPUT 估计加完整计算可能满足原 compute deadline。
 复用 RecoveryController 和零容量共享账本，不创建 checkpoint 对象，不产生 cL/cR、L1 或 REMOTE_BATCH。
-`policy/baseline/recompute/recompute-runtime.*` 接线、`policy/baseline/recompute/recompute-policy.h` 只决定故障后重算。
+`baseline/recompute/recompute-runtime.*` 接线、`baseline/recompute/recompute-policy.h` 只决定故障后重算。
 `recovery-summary.csv` 对此模式增加 planned INPUT 等待及 planned 浪费列，实际值仍取真实执行。
 该严格筛选仅适用于完整 baseline，不改变 checkpoint 方案既有的 RECOMPUTE 后备行为。
 完整 recompute 与 one-plus-one 均支持四种 baseline placement；`placementMode=n5c` 仅允许 CompFRR。
@@ -52,8 +52,8 @@ R0/R1 的 local/remote、checkpoint 存储指标为不适用；不能据零池�
 
 ## 1+1：一次申请、真实双 attempt
 
-`policy/baseline/one-plus-one/one-plus-one-runtime.*` 在首次 TASK_RUNNING 接线，
-`policy/baseline/one-plus-one/one-plus-one-policy.h` 向公共 PlacementPolicy 申请一次副本，
+`baseline/one-plus-one/one-plus-one-runtime.*` 在首次 TASK_RUNNING 接线，
+`baseline/one-plus-one/one-plus-one-policy.h` 向公共 PlacementPolicy 申请一次副本，
 `mechanism/replication/replica-manager.*` 执行真实 INPUT、完整 WU 和 RESULT。
 默认 FA-FFP 预筛可达性、INPUT 准入及原 deadline；minimal 先选健康空闲节点，再对该节点核对相同准入。
 未准入不重试，副本失败不创建第三副本，不追加隐藏的 Recompute。主任务不等待副本。

@@ -2,7 +2,7 @@
 #include "recovery-controller.h"
 #include "checkpoint-recovery-estimate.h"
 #include "../mechanism/relocation/checkpoint-relocation-executor.h"
-#include "../policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
+#include "../policy/placement/fa-first-feasible/fa-first-feasible-placement-policy.h"
 
 #include "ns3/simulator.h"
 

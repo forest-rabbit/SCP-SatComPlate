@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef SATCOMPUTE_RECOMPUTE_CONTROLLER_H
 #define SATCOMPUTE_RECOMPUTE_CONTROLLER_H
-#include "../../../runtime/recovery-controller.h"
-#include "../../../runtime/transfer-only-recovery-ledger.h"
+#include "../../runtime/recovery-controller.h"
+#include "../../runtime/transfer-only-recovery-ledger.h"
 #include "recompute-policy.h"
-#include "../../placement-policy.h"
+#include "../../policy/placement-policy.h"
 
 namespace ns3::protection
 {

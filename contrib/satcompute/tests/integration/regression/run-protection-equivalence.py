@@ -13,6 +13,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[5]
 SMOKE = Path(__file__).resolve().parents[1] / 'smoke'
 CPP = ('frequency', 'recovery', 'recompute', 'one-plus-one', 'cb-sat-recovery')
+CB_PROFILE_OLD = 'contrib/satcompute/protection/policy/baseline/checkbullet/calibration/frozen-mtbf-profile.json'
+CB_PROFILE_NEW = 'contrib/satcompute/protection/baseline/checkbullet/calibration/frozen-mtbf-profile.json'
+CB_PROFILE_REFERENCE = 'fcdfe2db8ed96ee403d9fa99e717e63855208d05'
 
 
 def normalized_json(value, directory):
@@ -27,13 +30,14 @@ def normalized_json(value, directory):
     return value
 
 
-def compare(reference, candidate):
+def compare(reference, candidate, *, allow_cb_profile_relocation=False):
     def files(directory):
         return {p.relative_to(directory) for p in directory.rglob('*')
                 if p.suffix in ('.csv', '.json')}
     expected, actual = files(reference), files(candidate)
     if not expected or expected != actual:
         raise AssertionError(f'output set differs: missing={expected-actual}, extra={actual-expected}')
+    relocations = []
     for path in sorted(expected):
         left, right = reference / path, candidate / path
         if path.suffix == '.csv':
@@ -45,11 +49,24 @@ def compare(reference, candidate):
                     raise AssertionError(f'malformed CSV: {source}')
             equal = left.read_bytes() == right.read_bytes()
         else:
-            equal = normalized_json(json.loads(left.read_text()), reference) == normalized_json(
-                json.loads(right.read_text()), candidate)
+            before = normalized_json(json.loads(left.read_text()), reference)
+            after = normalized_json(json.loads(right.read_text()), candidate)
+            equal = before == after
+            if (not equal and allow_cb_profile_relocation and path in {
+                    Path('cb-recompute/cb-sat-parameters.json'),
+                    Path('cb-relocate/cb-sat-parameters.json')}):
+                # Authorized owner move only: never ignore arbitrary paths or parameters.
+                equal = (before.get('profile_path') == str(ROOT / CB_PROFILE_OLD) and
+                         after.get('profile_path') == str(ROOT / CB_PROFILE_NEW) and
+                         dict(before, profile_path=after['profile_path']) == after)
+                if equal:
+                    relocations.append(str(path))
         if not equal:
             raise AssertionError(f'SEMANTIC_DIFFERENCE: {path}; stop and audit, do not refresh golden')
-    return {'status': 'PASS', 'files': len(expected), 'csv': sum(p.suffix == '.csv' for p in expected)}
+    result = {'status': 'PASS', 'files': len(expected), 'csv': sum(p.suffix == '.csv' for p in expected)}
+    if allow_cb_profile_relocation:
+        result['authorized_cb_profile_path_relocations'] = relocations
+    return result
 
 
 def execute(output, arguments):
@@ -103,15 +120,22 @@ def main():
     parser.add_argument('--reference', type=Path)
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--compare-only', action='store_true')
+    parser.add_argument('--allow-cb-profile-relocation', action='store_true',
+                        help='Audit only the exact N5R CB profile owner move; verify frozen profile bytes')
     args = parser.parse_args()
     if not 1 <= args.jobs <= 8:
         parser.error('--jobs must be in [1,8]')
     if args.compare_only and not args.reference:
         parser.error('--compare-only requires --reference')
     output = args.output_root.resolve()
+    if args.allow_cb_profile_relocation:
+        old_profile = subprocess.check_output(['git', 'show', f'{CB_PROFILE_REFERENCE}:{CB_PROFILE_OLD}'], cwd=ROOT)
+        if old_profile != (ROOT / CB_PROFILE_NEW).read_bytes():
+            raise AssertionError('frozen CB profile changed; owner relocation exception rejected')
     if not args.compare_only:
         collect(output, args.jobs)
-    result = compare(args.reference.resolve(), output) if args.reference else {
+    result = compare(args.reference.resolve(), output,
+                     allow_cb_profile_relocation=args.allow_cb_profile_relocation) if args.reference else {
         'status': 'BASELINE_CAPTURED', 'root': str(output)}
     print(json.dumps(result, sort_keys=True))
 

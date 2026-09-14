@@ -24,6 +24,32 @@ ENTRIES = {
 
 
 class ProtectionArchitectureTests(unittest.TestCase):
+    def test_baseline_and_shared_placement_have_one_canonical_owner(self):
+        self.assertFalse((PROTECTION / "policy/baseline").exists())
+        for name in ("checkbullet", "recompute", "one-plus-one"):
+            self.assertTrue(list((PROTECTION / "baseline" / name).glob("*.cc")))
+        for name in ("first-feasible", "least-recovery-load", "fa-first-feasible", "fa-least-recovery-load"):
+            self.assertTrue(list((PROTECTION / "policy/placement" / name).glob("*.h")))
+        multitree = PROTECTION / "baseline/multitree"
+        self.assertEqual([p.name for p in multitree.iterdir()], ["README.md"])
+
+    def test_cmake_sources_and_public_headers_are_unique(self):
+        cmake = (MODULE / "CMakeLists.txt").read_text().split("  LIBRARIES_TO_LINK", 1)[0]
+        sources, headers = cmake.split("  HEADER_FILES")
+        paths = re.findall(r"^    (protection/[^\s]+)", sources, re.M)
+        self.assertEqual(len(paths), len(set(paths)))
+        self.assertTrue(all((MODULE / p).is_file() for p in paths))
+        self.assertFalse(any("policy/baseline" in p or "multitree" in p for p in paths))
+        public = re.findall(r"^    (protection/[^\s]+)", headers, re.M)
+        self.assertEqual(len(public), len({Path(p).name for p in public}))
+        self.assertTrue(all((MODULE / p).is_file() for p in public))
+        for part in ("policy", "state", "manager", "recovery", "config", "controller"):
+            self.assertIn(f"protection/baseline/checkbullet/cb-sat-{part}.h", public)
+            exported = MODULE.parents[1] / "build/include/ns3" / f"cb-sat-{part}.h"
+            self.assertEqual(exported.read_text(),
+                f'#include "{PROTECTION / "baseline/checkbullet" / f"cb-sat-{part}.h"}"\n')
+        self.assertTrue((PROTECTION / "baseline/checkbullet/calibration/frozen-mtbf-profile.json").is_file())
+
     def test_common_recovery_observer_and_fixed_do_not_include_frequency_or_p(self):
         def dependencies(path, seen):
             path = path.resolve()

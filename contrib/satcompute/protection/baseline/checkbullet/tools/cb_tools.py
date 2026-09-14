@@ -12,7 +12,7 @@ import threading
 import time
 
 BASE = Path(__file__).resolve().parents[1]
-ROOT = BASE.parents[5]
+ROOT = BASE.parents[4]
 REGRESSION = ROOT / "contrib/satcompute/tests/integration/regression"
 SCENE_HELPER = runpy.run_path(str(ROOT / "contrib/satcompute/tests/support/protection/scenario.py"))
 SCENE = ROOT / SCENE_HELPER["SCENE"]

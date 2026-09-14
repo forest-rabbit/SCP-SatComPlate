@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef SATCOMPUTE_ONE_PLUS_ONE_POLICY_H
 #define SATCOMPUTE_ONE_PLUS_ONE_POLICY_H
-#include "../../../runtime/protection-runtime.h"
-#include "../../placement-policy.h"
+#include "../../runtime/protection-runtime.h"
+#include "../../policy/placement-policy.h"
 #include <set>
 
 namespace ns3::protection

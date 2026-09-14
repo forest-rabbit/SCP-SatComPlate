@@ -2,7 +2,7 @@
 #ifndef SATCOMPUTE_REPLICA_MANAGER_H
 #define SATCOMPUTE_REPLICA_MANAGER_H
 #include "../../runtime/transfer-only-recovery-ledger.h"
-#include "../../policy/baseline/one-plus-one/one-plus-one-policy.h"
+#include "../../baseline/one-plus-one/one-plus-one-policy.h"
 #include "../../../traffic/local-delivery.h"
 #include "../../runtime/placement-load-ledger.h"
 #include <array>

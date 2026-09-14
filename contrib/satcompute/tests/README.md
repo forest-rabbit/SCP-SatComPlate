@@ -14,13 +14,18 @@ contrib/satcompute/tests/unit/run-cpp-tests.sh
 python -m unittest discover -s contrib/satcompute/tests/unit -p 'test_*.py'
 python contrib/satcompute/tests/integration/regression/run-protection-equivalence.py \
   --output-root output/n5r-equivalence/local-check \
-  --reference output/n5r-equivalence/corrected-baseline --jobs 3
+  --reference output/n5r-equivalence/corrected-baseline --jobs 3 \
+  --allow-cb-profile-relocation
 ```
 
 比较命令要求本地已有 corrected baseline；使用新的 output-root，旧输出不覆盖。
 若基线缺失，应取得同一 corrected tree 的独立 fixture 输出，不能从重构后代码自建基线声称等价。
 11 个组合包含已有 C++ fixture 与 4-task/16-node/15s CLI，核对全部 CSV/JSON；
 CSV 逐字节相同，JSON 仅规范化输出目录与 wall-clock 字段。
+
+最终目录收口另显式批准 CB 冻结 profile 的迁移：上述开关先逐字节核对迁移前 profile，
+仅允许两个 CB CLI 组合的 `cb-sat-parameters.json.profile_path` 从指定旧 owner 变为新 owner，
+并列出这两个元数据差异；不豁免 MTBF/其他字段，不改原始输出或 golden。关闭开关仍保持原严格比较。
 
 长期复用的七个审计/scenario helper 位于 `support/protection/`，维护测试直接调用；
 旧 `analyze-*.py` / `run-final-scenario.py` 入口继续转发，外部参数/CSV 不变。

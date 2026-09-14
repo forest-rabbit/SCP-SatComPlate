@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef SATCOMPUTE_FA_FIRST_FEASIBLE_PLACEMENT_POLICY_H
 #define SATCOMPUTE_FA_FIRST_FEASIBLE_PLACEMENT_POLICY_H
-#include "../first-feasible-placement/first-feasible-placement-policy.h"
+#include "../first-feasible/first-feasible-placement-policy.h"
 
 namespace ns3::protection
 {

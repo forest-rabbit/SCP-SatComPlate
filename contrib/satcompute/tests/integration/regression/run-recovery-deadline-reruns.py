@@ -38,7 +38,8 @@ def frozen_scope():
              'contrib/satcompute/protection/runtime/frequency-protection-controller.cc',
              'contrib/satcompute/protection/runtime/frequency-n5c-adapter.cc',
              'contrib/satcompute/protection/runtime/n5c-placement-tracker.cc',
-             'contrib/satcompute/protection/policy/baseline/checkbullet']
+             'contrib/satcompute/protection/policy/baseline/checkbullet',
+             'contrib/satcompute/protection/baseline/checkbullet']
     if git('diff', '--name-only', 'c1a8704cd', 'HEAD', '--', *paths):
         raise ValueError('frozen model/input/runtime scope changed')
     for path in ('contrib/satcompute/para.cc', 'contrib/satcompute/para.h'):

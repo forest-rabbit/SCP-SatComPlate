@@ -103,6 +103,10 @@ N5R 不跑新的正式 800 任务 / 1300 s 矩阵。基线来自 PR #102 correct
 比较全部 CSV/JSON 文件集合。CSV 包括 schema、顺序、数值，逐字节一致；
 JSON 只规范化输出位置与 wall-clock 耗时。fault/WU/bytes/storage/path 等语义字段不豁免。
 
+最终 owner 收口中，CB 的实际 profile 文件位置随授权迁移而变化，两个 CB CLI 参数 JSON
+诚实输出新 `profile_path`。`--allow-cb-profile-relocation` 单列这一精确元数据映射，先验证冻结
+profile 逐字节不变；其他参数及全部 CSV 仍严格比较。不开启时，原 gate 会拒绝这两个路径差异。
+
 实际对照目录、阶段 gate 与提交见 [N5R 执行记录](../n5/reviews/N5R-implementation.md)；
 详细命令见 [tests](../../contrib/satcompute/tests/README.md)。
 不覆盖旧输出，不刷新 golden 以消除差异，不用 SHA-256 代替语义验证。

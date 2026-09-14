@@ -2,5 +2,5 @@
 #ifndef SATCOMPUTE_COMPAT_RECOMPUTE_CONTROLLER_H
 #define SATCOMPUTE_COMPAT_RECOMPUTE_CONTROLLER_H
 // Stable exported include; runtime ownership is now explicit in the canonical directory.
-#include "../policy/baseline/recompute/recompute-runtime.h"
+#include "../baseline/recompute/recompute-runtime.h"
 #endif

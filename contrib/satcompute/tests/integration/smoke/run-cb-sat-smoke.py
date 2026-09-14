@@ -20,6 +20,6 @@ def arguments(output, placement, busy):
 if __name__ == "__main__":
     import runpy
     import sys
-    tools = ROOT / "contrib/satcompute/protection/policy/baseline/checkbullet/tools"
+    tools = ROOT / "contrib/satcompute/protection/baseline/checkbullet/tools"
     sys.path.insert(0,str(tools))
     runpy.run_path(str(tools/"run-cb-sat-matrix.py"),run_name="__main__")

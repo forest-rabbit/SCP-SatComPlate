@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 MODULE = Path(__file__).resolve().parents[2]
-TOOLS = MODULE / "protection/policy/baseline/checkbullet/tools"
+TOOLS = MODULE / "protection/baseline/checkbullet/tools"
 sys.path.insert(0, str(TOOLS))
 CAL = runpy.run_path(str(TOOLS / "calibrate-cb-sat-mtbf.py"))
 MATRIX = runpy.run_path(str(TOOLS / "analyze-cb-sat-matrix.py"))

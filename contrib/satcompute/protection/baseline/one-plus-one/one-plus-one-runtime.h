@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef SATCOMPUTE_ONE_PLUS_ONE_CONTROLLER_H
 #define SATCOMPUTE_ONE_PLUS_ONE_CONTROLLER_H
-#include "../../../mechanism/replication/replica-manager.h"
+#include "../../mechanism/replication/replica-manager.h"
 
 namespace ns3::protection
 {

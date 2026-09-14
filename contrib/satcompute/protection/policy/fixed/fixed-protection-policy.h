@@ -2,7 +2,7 @@
 #ifndef SATCOMPUTE_FIXED_PROTECTION_POLICY_H
 #define SATCOMPUTE_FIXED_PROTECTION_POLICY_H
 #include "../../runtime/protection-runtime.h"
-#include "../baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
+#include "../placement/fa-first-feasible/fa-first-feasible-placement-policy.h"
 #include <set>
 #include <memory>
 

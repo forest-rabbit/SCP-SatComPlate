@@ -1,4 +1,4 @@
-"""A refactor gate must reject semantic, schema and missing-evidence differences."""
+"""Narrow owner-path metadata exception; all execution fields remain strict."""
 import json
 from pathlib import Path
 import runpy
@@ -48,6 +48,36 @@ class ProtectionEquivalenceTest(unittest.TestCase):
     def test_collect_never_overwrites_existing_evidence(self):
         with self.assertRaisesRegex(ValueError, 'preserve evidence'):
             API['collect'](self.left, 1)
+
+
+
+class CbProfileRelocationTest(unittest.TestCase):
+    def check(self, after, allow=True, filename='cb-recompute/cb-sat-parameters.json'):
+        with tempfile.TemporaryDirectory() as temp:
+            before_root, after_root = (Path(temp) / name for name in ('before', 'after'))
+            before = dict(profile_path=str(API['ROOT'] / API['CB_PROFILE_OLD']), mtbf_seconds=41.47642679900744)
+            for root, value in ((before_root, before), (after_root, after)):
+                path = root / filename
+                path.parent.mkdir(parents=True)
+                path.write_text(json.dumps(value))
+            return API['compare'](before_root, after_root, allow_cb_profile_relocation=allow)
+
+    def value(self):
+        return dict(profile_path=str(API['ROOT'] / API['CB_PROFILE_NEW']), mtbf_seconds=41.47642679900744)
+
+    def test_owner_metadata_move_is_explicit_and_reported(self):
+        with self.assertRaises(AssertionError):
+            self.check(self.value(), allow=False)
+        self.assertEqual(self.check(self.value())['authorized_cb_profile_path_relocations'],
+                         ['cb-recompute/cb-sat-parameters.json'])
+
+    def test_no_other_field_or_file_is_exempt(self):
+        for value in (dict(self.value(), mtbf_seconds=42), dict(self.value(), profile_path='/tmp/other'),
+                      dict(self.value(), new_field=1)):
+            with self.assertRaises(AssertionError):
+                self.check(value)
+        with self.assertRaises(AssertionError):
+            self.check(self.value(), filename='f-eager/other.json')
 
 
 if __name__ == '__main__':

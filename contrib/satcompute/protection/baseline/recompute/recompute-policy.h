@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef SATCOMPUTE_RECOMPUTE_POLICY_H
 #define SATCOMPUTE_RECOMPUTE_POLICY_H
-#include "../../../runtime/protection-runtime.h"
+#include "../../runtime/protection-runtime.h"
 
 namespace ns3::protection
 {

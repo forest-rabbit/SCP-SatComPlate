@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef SATCOMPUTE_COMPFRR_PLACEMENT_POLICY_H
 #define SATCOMPUTE_COMPFRR_PLACEMENT_POLICY_H
-#include "../../baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
+#include "../../placement/fa-first-feasible/fa-first-feasible-placement-policy.h"
 #include "../../../common/protection-forecast.h"
 #include "../../../common/placement-resources.h"
 #include "compute-pressure/compute-pressure.h"

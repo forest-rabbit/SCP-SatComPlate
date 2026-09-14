@@ -1,3 +1,37 @@
+# ns-3 does not refresh an existing generated public-header stub on a source move.
+# Update only exact stubs for these moved SatCompute headers; no upstream changes.
+foreach(_scp_header_move IN ITEMS
+    "policy/baseline/checkbullet/cb-sat-policy.h|baseline/checkbullet/cb-sat-policy.h"
+    "policy/baseline/checkbullet/cb-sat-state.h|baseline/checkbullet/cb-sat-state.h"
+    "policy/baseline/checkbullet/cb-sat-manager.h|baseline/checkbullet/cb-sat-manager.h"
+    "policy/baseline/checkbullet/cb-sat-recovery.h|baseline/checkbullet/cb-sat-recovery.h"
+    "policy/baseline/checkbullet/cb-sat-config.h|baseline/checkbullet/cb-sat-config.h"
+    "policy/baseline/checkbullet/cb-sat-controller.h|baseline/checkbullet/cb-sat-controller.h"
+    "policy/baseline/recompute/recompute-policy.h|baseline/recompute/recompute-policy.h"
+    "policy/baseline/recompute/recompute-runtime.h|baseline/recompute/recompute-runtime.h"
+    "policy/baseline/one-plus-one/one-plus-one-policy.h|baseline/one-plus-one/one-plus-one-policy.h"
+    "policy/baseline/one-plus-one/one-plus-one-runtime.h|baseline/one-plus-one/one-plus-one-runtime.h"
+    "policy/baseline/first-feasible-placement/first-feasible-placement-policy.h|policy/placement/first-feasible/first-feasible-placement-policy.h"
+    "policy/baseline/least-recovery-load/least-recovery-load-placement-policy.h|policy/placement/least-recovery-load/least-recovery-load-placement-policy.h"
+    "policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h|policy/placement/fa-first-feasible/fa-first-feasible-placement-policy.h"
+    "policy/baseline/fa-least-recovery-load/fa-least-recovery-load-placement-policy.h|policy/placement/fa-least-recovery-load/fa-least-recovery-load-placement-policy.h"
+)
+  string(REPLACE "|" ";" _scp_header_paths "${_scp_header_move}")
+  list(GET _scp_header_paths 0 _scp_old_header)
+  list(GET _scp_header_paths 1 _scp_new_header)
+  get_filename_component(_scp_header_name "${_scp_new_header}" NAME)
+  set(_scp_header_stub "${CMAKE_HEADER_OUTPUT_DIRECTORY}/${_scp_header_name}")
+  if(EXISTS "${_scp_header_stub}")
+    file(READ "${_scp_header_stub}" _scp_header_contents)
+    set(_scp_old_include "#include \"${CMAKE_CURRENT_SOURCE_DIR}/protection/${_scp_old_header}\"\n")
+    if(_scp_header_contents STREQUAL _scp_old_include)
+      file(WRITE "${_scp_header_stub}"
+        "#include \"${CMAKE_CURRENT_SOURCE_DIR}/protection/${_scp_new_header}\"\n")
+    endif()
+  endif()
+endforeach()
+
+
 build_lib(
   LIBNAME satcompute
   SOURCE_FILES
@@ -28,9 +62,9 @@ build_lib(
     protection/policy/compfrr/placement/compute-pressure/compute-pressure.cc
     protection/policy/compfrr/placement/compfrr-placement-tracker.cc
     protection/storage/peak-quota-ledger.cc
-    protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.cc
+    protection/policy/placement/first-feasible/first-feasible-placement-policy.cc
     protection/policy/feasible-placement-pairs.cc
-    protection/policy/baseline/least-recovery-load/least-recovery-load-placement-policy.cc
+    protection/policy/placement/least-recovery-load/least-recovery-load-placement-policy.cc
     protection/mechanism/checkpoint/checkpoint-progress.cc
     protection/mechanism/checkpoint/checkpoint-manager.cc
     protection/policy/fixed/fixed-controller.cc
@@ -44,8 +78,8 @@ build_lib(
     protection/runtime/placement-load-ledger.cc
     metrics/core/placement-load-metrics.cc
     protection/runtime/recovery-controller.cc
-    protection/policy/baseline/recompute/recompute-runtime.cc
-    protection/policy/baseline/one-plus-one/one-plus-one-runtime.cc
+    protection/baseline/recompute/recompute-runtime.cc
+    protection/baseline/one-plus-one/one-plus-one-runtime.cc
     protection/mechanism/replication/replica-manager.cc
     metrics/core/replica-metrics.cc
     metrics/core/recovery-metrics.cc
@@ -126,12 +160,12 @@ build_lib(
     protection/policy/compfrr/input/input-cost-adapter.h
     traffic/local-delivery.h
     protection/common/task-state-adapter.h
-    protection/policy/baseline/checkbullet/cb-sat-policy.h
-    protection/policy/baseline/checkbullet/cb-sat-state.h
-    protection/policy/baseline/checkbullet/cb-sat-manager.h
-    protection/policy/baseline/checkbullet/cb-sat-recovery.h
-    protection/policy/baseline/checkbullet/cb-sat-config.h
-    protection/policy/baseline/checkbullet/cb-sat-controller.h
+    protection/baseline/checkbullet/cb-sat-policy.h
+    protection/baseline/checkbullet/cb-sat-state.h
+    protection/baseline/checkbullet/cb-sat-manager.h
+    protection/baseline/checkbullet/cb-sat-recovery.h
+    protection/baseline/checkbullet/cb-sat-config.h
+    protection/baseline/checkbullet/cb-sat-controller.h
     protection/storage/backup-storage-pool.h
     protection/runtime/protection-runtime.h
     protection/policy/fixed/fixed-protection-policy.h
@@ -148,10 +182,10 @@ build_lib(
     protection/policy/placement-policy.h
     protection/policy/recovery-policy.h
     protection/runtime/decision-path-snapshot.h
-    protection/policy/baseline/first-feasible-placement/first-feasible-placement-policy.h
-    protection/policy/baseline/least-recovery-load/least-recovery-load-placement-policy.h
-    protection/policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h
-    protection/policy/baseline/fa-least-recovery-load/fa-least-recovery-load-placement-policy.h
+    protection/policy/placement/first-feasible/first-feasible-placement-policy.h
+    protection/policy/placement/least-recovery-load/least-recovery-load-placement-policy.h
+    protection/policy/placement/fa-first-feasible/fa-first-feasible-placement-policy.h
+    protection/policy/placement/fa-least-recovery-load/fa-least-recovery-load-placement-policy.h
     protection/mechanism/checkpoint/checkpoint-progress.h
     protection/mechanism/checkpoint/checkpoint-manager.h
     protection/runtime/fixed-protection-controller.h
@@ -166,12 +200,12 @@ build_lib(
     protection/runtime/recovery-controller.h
     protection/runtime/checkpoint-recovery-estimate.h
     protection/runtime/recompute-controller.h
-    protection/policy/baseline/recompute/recompute-runtime.h
+    protection/baseline/recompute/recompute-runtime.h
     protection/runtime/one-plus-one-controller.h
-    protection/policy/baseline/one-plus-one/one-plus-one-runtime.h
+    protection/baseline/one-plus-one/one-plus-one-runtime.h
     protection/mechanism/replication/replica-manager.h
-    protection/policy/baseline/one-plus-one/one-plus-one-policy.h
-    protection/policy/baseline/recompute/recompute-policy.h
+    protection/baseline/one-plus-one/one-plus-one-policy.h
+    protection/baseline/recompute/recompute-policy.h
     protection/runtime/protection-transfer-key.h
     protection/runtime/protection-transfer-dispatcher.h
     metrics/core/protection-metrics.h
@@ -271,7 +305,7 @@ target_include_directories(
 set_source_files_properties(
   protection/baseline/checkbullet/cb-sat-config.cc
   PROPERTIES COMPILE_DEFINITIONS
-    "SATCOMPUTE_CB_MTBF_PROFILE=\"${CMAKE_CURRENT_SOURCE_DIR}/protection/policy/baseline/checkbullet/calibration/frozen-mtbf-profile.json\""
+    "SATCOMPUTE_CB_MTBF_PROFILE=\"${CMAKE_CURRENT_SOURCE_DIR}/protection/baseline/checkbullet/calibration/frozen-mtbf-profile.json\""
 )
 
 # The platform entry point is a project executable, not an ns-3 example.  It is

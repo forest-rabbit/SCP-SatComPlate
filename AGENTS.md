@@ -300,6 +300,21 @@ All other legacy CLI/CSV/fixture/analysis interfaces remain compatible. CI keeps
 the existing manual phase cadence, not per commit. Do not merge N5R or main, or
 tag a release, without the user's subsequent final review.
 
+N5R final closeout amendment: the user approved the final architecture taskbook.
+Keep this branch / Draft #103. Complete baseline/checkbullet (including its frozen
+profile/tools), baseline/recompute and baseline/one-plus-one as unique owners;
+shared baseline placements move to policy/placement. Multi-tree gets a README
+placeholder ONLY. Preserve public ns3 header names, evidence, model parameters,
+source guards and all execution semantics. Pass the existing small N5R gates
+before the second stage: read-only offline diagnosis of historical V7 run11 and
+its same-batch Deferred anchor. Reuse audit helpers; never bring production JIT
+into this branch or run a new formal matrix. Byte classification precedence is
+used, no-fault, wrong-target, then failed/cancelled, with independent reason flags.
+Non-critical INPUT does not imply no prefetch benefit; sent fraction is not READY.
+Unknown evidence stays unknown. Paired contrasts are not exact counterfactuals.
+Record both stages in docs/n5/reviews/N5R-implementation.md and stop for review
+after the offline report; no V8, optimizer, budget, threshold or new timer.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

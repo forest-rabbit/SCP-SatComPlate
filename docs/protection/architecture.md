@@ -29,8 +29,12 @@ protection/
 │   │   ├── frequency/            唯一 START / (delta,n) solver
 │   │   ├── input/                INPUT 成本适配（方案 B）
 │   │   └── placement/            CompFRR-P / 两种 compute-pressure
-│   └── baseline/                 FFP/LRL/FA、Recompute、1+1
-└── baseline/checkbullet/          独立 CB-Sat 策略、运行时、恢复与指标
+│   └── placement/                共享 FFP/LRL/FA 候选与排序策略
+└── baseline/                     完整独立对比方案
+    ├── checkbullet/              CB-Sat 代码、参数、标定来源与工具
+    ├── recompute/                无常态保护的从零重算
+    ├── one-plus-one/             一次副本申请与双 attempt
+    └── multitree/                仅未实现说明，无 CLI/源码/结果
 ```
 
 - **CompFRR-F / INPUT B**：Frequency Core 与 Input Staging 平行；两种 INPUT 策略只共用一套 solver。
@@ -65,6 +69,8 @@ START、ON maintenance、recovery compute 各自的 availability/idle 合同见 
 production U 仅 CUMULATIVE / IDLE_AWARE，noR/noU/noM 是消融，recent-U 正式 CLI 已拒绝；
 历史 API/fixtures/分析证据按真实依赖保留，见[复现与归档](reproducibility.md)。
 
-CB 的参数 profile、来源与工具路径仍在 `policy/baseline/checkbullet/`，C++ canonical owner 为
-`baseline/checkbullet/`；不借移动文件重新标定 MTBF。生产代码不依赖 shadow validator，
-单元测试可以单向引用其旧布局 oracle；不增加完整插件框架或 Multi-tree。
+CB 的 C++、参数 profile、来源与工具统一由 `baseline/checkbullet/` 拥有，旧整套目录撤销。
+公开 `ns3/cb-sat-*.h` 名字通过 CMake 的 canonical header 导出保持兼容；不另造一套转发头目录。
+冻结 profile 与 provenance 逐字节保留，不重新标定 MTBF。
+生产代码不依赖 shadow validator，单元测试可以单向引用其旧布局 oracle；
+不增加完整插件框架，Multi-tree 只有说明占位，未实现。
