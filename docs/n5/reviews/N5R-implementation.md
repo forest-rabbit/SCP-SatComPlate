@@ -28,7 +28,7 @@
 ## 小型等价证据
 
 步骤 1–7 的提交依次为 `fdc144ba6`、`19f470c01`、`76d0083fc`、`55ffca53a`、
-`b8ecd2c8a`、`a32470433`、`4248f5f67`；均在对应 gate 通过后单独提交。
+`b8ecd2c8a`、`a32470433`、`4248f5f67`，步骤 8 为 `939acfb6f`；均在对应 gate 通过后单独提交。
 
 `tests/integration/regression/run-protection-equivalence.py` 只运行已有 C++ fixture 和 4-task/16-node/15s CLI 场景。覆盖 Frequency、recovery（含 failure/path/deadline/maintenance）、Recompute、1+1、CB、自有 F Eager/Deferred 与 P Cumulative/Idle-Aware。
 
@@ -57,3 +57,16 @@
 没有发现可在不破坏上述依赖/证据的前提下直接物理删除的本轮候选；因此不做批量删除。
 历史 runner 的 frozen source guard 不因重构放宽；现行等价性由独立 corrected-tree small gate 证明。
 N5R 分支须待后续人工审阅/合并后才可清理；本轮不合入 n5/main、不打 tag。
+
+## 最终本地收口
+
+八步均已完成，最终执行提交为 `939acfb6f`；此后仅补本段证据，不更改可执行代码。
+
+- build、维护 C++ 合同、Python 195 项（1 项因未提供 `SATCOMPUTE_POSITION_SLICES` 外部切片跳过）通过。
+- 第 1–8 步各自相对同一 corrected baseline：1965 文件 / 1707 CSV 全量等价；最终目录 `output/n5r-equivalence/stage8-archive/`。
+- smoke 总入口通过，含保护、恢复、Frequency、baseline 及 16 个 placement 小组合。
+- CB 八个 4-task/15s 组合及 repeat 全部通过，目录 `output/cb-sat-v2/20260914T074052541358Z-smoke/`；
+  repeat 核对 26 个 CSV/JSON 文件。八组加 repeat 的 189 份 CSV 与步骤 0 的 corrected-chain CB smoke 逐字节一致。
+- `para.cc`、正式 input、fault、routing、上游 `src/` 及 CI/uv 配置相对 corrected n5 无差异。
+- N5R 等待后续人工审阅与批准合并；未重复正式 1300s 矩阵、未触发 GitHub CI、未动 main/发布 tag。
+  阶段 CI 仍按项目规则留在 N5 集成到 main 的最终门禁，不逐重构提交触发。
