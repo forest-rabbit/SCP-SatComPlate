@@ -4,6 +4,8 @@ build_lib(
     para.cc
     common/time-conversion.cc
     protection/common/protection-types.cc
+    protection/common/input-contract.cc
+    protection/policy/compfrr/input/input-cost-adapter.cc
     traffic/local-delivery.cc
     protection/common/task-state-adapter.cc
     protection/policy/baseline/checkbullet/cb-sat-policy.cc
@@ -26,12 +28,12 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-progress.cc
     protection/mechanism/checkpoint/checkpoint-manager.cc
     protection/runtime/fixed-protection-controller.cc
-    protection/runtime/frequency-protection-controller.cc
-    protection/runtime/frequency-n5c-adapter.cc
+    protection/policy/compfrr/compfrr-controller.cc
+    protection/policy/compfrr/compfrr-placement-adapter.cc
     protection/runtime/n5c-placement-tracker.cc
     protection/runtime/compute-usage-history.cc
     metrics/core/n5c-placement-metrics.cc
-    protection/runtime/frequency-storage-estimator.cc
+    protection/policy/compfrr/storage-estimator.cc
     protection/runtime/placement-load-ledger.cc
     metrics/core/placement-load-metrics.cc
     protection/runtime/recovery-controller.cc
@@ -108,6 +110,8 @@ build_lib(
     para.h
     common/time-conversion.h
     protection/common/protection-types.h
+    protection/common/input-contract.h
+    protection/policy/compfrr/input/input-cost-adapter.h
     traffic/local-delivery.h
     protection/common/task-state-adapter.h
     protection/policy/baseline/checkbullet/cb-sat-policy.h
@@ -133,6 +137,8 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-manager.h
     protection/runtime/fixed-protection-controller.h
     protection/runtime/frequency-protection-controller.h
+    protection/policy/compfrr/compfrr-controller.h
+    protection/policy/compfrr/storage-estimator.h
     protection/runtime/n5c-placement-tracker.h
     protection/runtime/compute-usage-history.h
     protection/runtime/frequency-storage-estimator.h

@@ -485,7 +485,9 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     r.recoveryNode = node;
     r.acceptedNs = Now();
     if (m_loadObserver) m_loadObserver(state.task.definition.taskId, node, true);
-    if (Deferred() || r.path == "RECOMPUTE")
+    const auto inputRequirement = InputContract(m_manager.InputPolicy()).DescribeRecoveryInput(
+        state.task.definition.sourceNodeId, node, state.task.definition.inputBytes, r.path == "RECOMPUTE");
+    if (inputRequirement.required)
         if (const auto estimate = Estimate(state.task.definition.sourceNodeId,
                                            node,
                                            state.task.definition.inputBytes))

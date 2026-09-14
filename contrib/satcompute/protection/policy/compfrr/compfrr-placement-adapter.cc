@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "frequency-protection-controller.h"
+#include "compfrr-controller.h"
+#include "input/input-cost-adapter.h"
 #include "ns3/simulator.h"
 #include <algorithm>
 #include <cmath>
@@ -13,9 +14,8 @@ namespace
 /** Same initialization contract as Frequency, evaluated on actual candidate resources. */
 int64_t ReadyAfter(const FrequencyInput& in)
 {
-    const auto local = in.costs.localNs / 1e9 + in.stateTransferSeconds;
-    const auto delay = (in.inputPolicy == InputStagingPolicy::DEFERRED
-        ? local : std::max(in.baseTransferSeconds, local)) + in.costs.remoteNs / 1e9;
+    const auto delay = InputCostAdapter(in.inputPolicy).InitializationSeconds(
+        in.costs.localNs, in.costs.remoteNs, in.baseTransferSeconds, in.stateTransferSeconds);
     const long double ns = std::ceil(static_cast<long double>(delay) * 1e9L);
     if (!std::isfinite(ns) || ns < 0 || ns > std::numeric_limits<int64_t>::max() - in.risk.epochNs)
         throw std::logic_error("N5C ready estimate overflow");
@@ -23,7 +23,7 @@ int64_t ReadyAfter(const FrequencyInput& in)
 }
 } // namespace
 
-std::vector<N5cForecast> FrequencyProtectionController::N5cPeers(
+std::vector<N5cForecast> CompFrrController::N5cPeers(
     uint32_t remote, uint64_t excluded, const std::string& trigger, DecisionPathSnapshot& paths)
 {
     std::vector<N5cForecast> peers;
@@ -76,7 +76,7 @@ std::vector<N5cForecast> FrequencyProtectionController::N5cPeers(
     return peers;
 }
 
-void FrequencyProtectionController::SelectN5cRemote(
+void CompFrrController::SelectN5cRemote(
     FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
     DecisionPathSnapshot& paths, const std::vector<PlacementDecision>& pairs)
 {
@@ -143,7 +143,7 @@ void FrequencyProtectionController::SelectN5cRemote(
     row.n5cTrace = m_n5c->Record(std::move(trace));
 }
 
-bool FrequencyProtectionController::RevalidateN5c(FrequencyDecisionRecord& row,
+bool CompFrrController::RevalidateN5c(FrequencyDecisionRecord& row,
                                                   const TaskRuntime& task, State& state)
 {
     // Same-ns peers may commit or fail after this proposal. Recheck only the fixed pair

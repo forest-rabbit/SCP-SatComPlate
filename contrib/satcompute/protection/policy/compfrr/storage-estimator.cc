@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "frequency-storage-estimator.h"
+#include "storage-estimator.h"
 
 #include <algorithm>
 #include <limits>
@@ -24,7 +24,7 @@ FrequencyStorageEstimator MakeFrequencyStorageEstimator(
     InputStagingPolicy inputPolicy)
 {
     return [layout = TaskStateAdapter(task),
-            input = inputPolicy == InputStagingPolicy::DEFERRED ? 0 : task.inputBytes,
+            input = InputContract(inputPolicy).DescribeInitialization(task.inputBytes).baseBytes,
             inputPolicy,
             actual,
             inventory = std::move(inventory)](

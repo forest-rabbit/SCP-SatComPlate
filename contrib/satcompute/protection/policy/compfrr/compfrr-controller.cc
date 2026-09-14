@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#include "frequency-protection-controller.h"
+#include "compfrr-controller.h"
 
 #include "ns3/simulator.h"
 
@@ -11,7 +11,7 @@
 namespace ns3::protection
 {
 
-FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator> tasks,
+CompFrrController::CompFrrController(Ptr<TaskCoordinator> tasks,
                                                              SatelliteRuntimeView& topology,
                                                              Ptr<FaultModelEngine> faults,
                                                              uint64_t capacity,
@@ -41,7 +41,7 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
         m_loads.Assignment(task, node, active, Simulator::Now().GetNanoSeconds());
         if (m_placementObservation) m_placementObservation->Assignment(task, node, active);
     });
-    tasks->ConnectTaskObserver(MakeCallback(&FrequencyProtectionController::OnTask, this));
+    tasks->ConnectTaskObserver(MakeCallback(&CompFrrController::OnTask, this));
     m_manager.SetInitializationObserver([this](uint64_t id) { Initialized(id); });
     faults->SetEpochObservers(
         [this](const auto& epoch) { BeforeEpoch(epoch); },
@@ -53,7 +53,7 @@ FrequencyProtectionController::FrequencyProtectionController(Ptr<TaskCoordinator
     });
 }
 
-FrequencyProtectionController::~FrequencyProtectionController()
+CompFrrController::~CompFrrController()
 {
     m_manager.SetMaintenanceFree({});
     m_manager.SetAssignmentObserver({});
@@ -61,10 +61,10 @@ FrequencyProtectionController::~FrequencyProtectionController()
     m_tasks->GetTransferEngine()->SetCapacityReleaseObserver({});
     if (m_capacityDrain.IsPending()) Simulator::Cancel(m_capacityDrain);
     m_faults->SetEpochObservers({}, {});
-    m_tasks->DisconnectTaskObserver(MakeCallback(&FrequencyProtectionController::OnTask, this));
+    m_tasks->DisconnectTaskObserver(MakeCallback(&CompFrrController::OnTask, this));
 }
 
-const TaskRuntime& FrequencyProtectionController::Task(uint64_t id) const
+const TaskRuntime& CompFrrController::Task(uint64_t id) const
 {
     for (const auto& task : m_tasks->GetTaskRuntimes())
         if (task.definition.taskId == id)
@@ -72,7 +72,7 @@ const TaskRuntime& FrequencyProtectionController::Task(uint64_t id) const
     throw std::logic_error("frequency task missing");
 }
 
-Ptr<ComputeService> FrequencyProtectionController::Service(uint32_t node) const
+Ptr<ComputeService> CompFrrController::Service(uint32_t node) const
 {
     for (auto service : m_tasks->GetComputeServices())
         if (service->GetNodeId() == node)
@@ -80,7 +80,7 @@ Ptr<ComputeService> FrequencyProtectionController::Service(uint32_t node) const
     return nullptr;
 }
 
-void FrequencyProtectionController::OnTask(const TaskEventRecord& event)
+void CompFrrController::OnTask(const TaskEventRecord& event)
 {
     if (event.toState == TASK_RUNNING)
     {
@@ -123,7 +123,7 @@ void FrequencyProtectionController::OnTask(const TaskEventRecord& event)
     }
 }
 
-void FrequencyProtectionController::CloseCapacityWait(uint64_t id, State& state, int64_t time,
+void CompFrrController::CloseCapacityWait(uint64_t id, State& state, int64_t time,
                                                       const std::string& reason)
 {
     if (state.capacityWaitStart)
@@ -134,13 +134,13 @@ void FrequencyProtectionController::CloseCapacityWait(uint64_t id, State& state,
     m_waitingCapacity.erase(id);
 }
 
-void FrequencyProtectionController::CapacityReleased()
+void CompFrrController::CapacityReleased()
 {
     if (!m_finalized && !m_capacityDrain.IsPending())
-        m_capacityDrain = Simulator::ScheduleNow(&FrequencyProtectionController::DrainCapacityRetries, this);
+        m_capacityDrain = Simulator::ScheduleNow(&CompFrrController::DrainCapacityRetries, this);
 }
 
-void FrequencyProtectionController::DrainCapacityRetries()
+void CompFrrController::DrainCapacityRetries()
 {
     if (m_finalized) return;
     // Stable IDs, fresh snapshots, no old proposal and no synthetic fault sample.
@@ -176,7 +176,7 @@ void FrequencyProtectionController::DrainCapacityRetries()
     m_manager.RetryBlockedMaintenance();
 }
 
-void FrequencyProtectionController::ClosePause(uint64_t task, State& state, int64_t time)
+void CompFrrController::ClosePause(uint64_t task, State& state, int64_t time)
 {
     m_pausedCapacity.erase(task);
     if (state.pauseStart)
@@ -190,7 +190,7 @@ void FrequencyProtectionController::ClosePause(uint64_t task, State& state, int6
     }
 }
 
-void FrequencyProtectionController::Initialized(uint64_t id)
+void CompFrrController::Initialized(uint64_t id)
 {
     if (m_n5c) m_n5c->Initialized(id);
     auto& state = m_states.at(id);
@@ -198,7 +198,7 @@ void FrequencyProtectionController::Initialized(uint64_t id)
         state.gate.InitializationCommitted();
 }
 
-std::vector<BackupCandidate> FrequencyProtectionController::Candidates(uint32_t primary) const
+std::vector<BackupCandidate> CompFrrController::Candidates(uint32_t primary) const
 {
     std::vector<BackupCandidate> result;
     for (auto service : m_tasks->GetComputeServices())
@@ -223,13 +223,13 @@ std::vector<BackupCandidate> FrequencyProtectionController::Candidates(uint32_t 
     return result;
 }
 
-double FrequencyProtectionController::Path::Seconds(uint64_t bytes) const
+double CompFrrController::Path::Seconds(uint64_t bytes) const
 {
     return local || !bytes ? 0 : bytes / bytesPerSecond + propagationSeconds;
 }
 
-std::optional<FrequencyProtectionController::Path>
-FrequencyProtectionController::EstimatePath(DecisionPathSnapshot& paths, uint32_t source,
+std::optional<CompFrrController::Path>
+CompFrrController::EstimatePath(DecisionPathSnapshot& paths, uint32_t source,
                                             uint32_t destination,
                                             std::string* reason) const
 {
@@ -250,7 +250,7 @@ FrequencyProtectionController::EstimatePath(DecisionPathSnapshot& paths, uint32_
                 estimate.local};
 }
 
-bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
+bool CompFrrController::BuildResources(FrequencyDecisionRecord& row,
                                                    const TaskRuntime& task,
                                                    State& state, DecisionPathSnapshot& paths)
 {
@@ -317,7 +317,7 @@ bool FrequencyProtectionController::BuildResources(FrequencyDecisionRecord& row,
     return true;
 }
 
-void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& row,
+void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
                                                       const TaskRuntime& task, State& state,
                                                       DecisionPathSnapshot& paths)
 {
@@ -408,13 +408,13 @@ void FrequencyProtectionController::EvaluateOffPairs(FrequencyDecisionRecord& ro
     }
 }
 
-void FrequencyProtectionController::BeforeEpoch(const FaultEpochInput& epoch)
+void CompFrrController::BeforeEpoch(const FaultEpochInput& epoch)
 {
     Evaluate(epoch, "FAULT_EPOCH");
 }
 
 void
-FrequencyProtectionController::Evaluate(const FaultEpochInput& epoch, const std::string& trigger)
+CompFrrController::Evaluate(const FaultEpochInput& epoch, const std::string& trigger)
 {
     const auto found = m_states.find(epoch.taskId);
     if (found == m_states.end())
@@ -509,7 +509,7 @@ FrequencyProtectionController::Evaluate(const FaultEpochInput& epoch, const std:
     m_decisions.push_back(std::move(row));
 }
 
-void FrequencyProtectionController::AfterEpoch(int64_t time,
+void CompFrrController::AfterEpoch(int64_t time,
                                                const std::vector<FaultEpochOutcome>& outcomes)
 {
     for (const auto& outcome : outcomes)
@@ -642,7 +642,7 @@ void FrequencyProtectionController::AfterEpoch(int64_t time,
     m_manager.RetryBlockedMaintenance();
 }
 
-ProtectionAction FrequencyProtectionController::OnComputeFault(const ProtectionContext& context)
+ProtectionAction CompFrrController::OnComputeFault(const ProtectionContext& context)
 {
     if (!context.attempt.taskId || context.attempt.generation ||
         context.phase == ProtectionPhase::DONE || context.phase == ProtectionPhase::RECOVERING)
@@ -650,7 +650,7 @@ ProtectionAction FrequencyProtectionController::OnComputeFault(const ProtectionC
     return {ActionKind::RECOMPUTE, std::nullopt};
 }
 
-void FrequencyProtectionController::Finalize()
+void CompFrrController::Finalize()
 {
     m_finalized = true;
     m_tasks->GetTransferEngine()->SetCapacityReleaseObserver({});

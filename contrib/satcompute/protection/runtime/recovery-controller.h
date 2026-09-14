@@ -130,7 +130,7 @@ class RecoveryController : public ProtectionMechanism
     void Received(State& state, ProtectionTransferKind kind, uint64_t bytes, uint64_t transferId);
     void StartCompute(State& state);
     /** Immutable input contract from the checkpoint owner, not a second configuration. */
-    bool Deferred() const { return m_manager.InputPolicy() == InputStagingPolicy::DEFERRED; }
+    bool Deferred() const { return InputContract(m_manager.InputPolicy()).RequiresRecoveryInput(); }
     void Started(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
     void Catchup(uint64_t id, uint64_t generation, uint32_t node, int64_t at);
     void Computed(uint64_t id, uint64_t generation, uint32_t node, int64_t at);

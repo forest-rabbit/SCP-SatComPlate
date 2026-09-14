@@ -16,8 +16,8 @@
 | 步骤 | 状态 / 依赖边界 | 验证 |
 | --- | --- | --- |
 | corrected-chain 整合 | #102 已 merge 入 n5；完整祖先和 tree 一致；#100 自动 merged，#101 superseded closed；4 个旧本地/3 个远端分支已清理，历史在 n5 可恢复 | build PASS；Python 185（skip 1）PASS；C++ 合同入口 PASS；smoke 总入口及 CB 8 个小组合+repeat PASS |
-| 1 公共底座 | 中性 ProtectionTransferDispatcher owns 单一 canonical queue / ID / flow ledger；checkpoint owner 保留 storage/hold/生命周期和原回调；兼容 Flows/QueueRecovery | build PASS；Python 190（skip 1）PASS；C++ 合同入口 PASS；small equivalence 1965 文件（1707 CSV）完全一致 |
-| 2 F/INPUT B | 待执行：一套 solver、中性 INPUT contract | Eager/Deferred、Fixed 和 F/P 小型 gate |
+| 1 公共底座 | `fdc144ba6`：中性 dispatcher owns 单一 canonical queue / ID / flow ledger；checkpoint 保留 storage/hold/生命周期和原回调；兼容 Flows/QueueRecovery | build、Python 190（skip 1）、C++ 合同、16 组 placement smoke PASS；small equivalence 1965 文件（1707 CSV）完全一致 |
+| 2 F/INPUT B | 中性 InputContract 描述初始化/布局/恢复 INPUT（含 LocalDelivery）；F/input 只提供成本描述、一套 solver；事件适配器与 storage estimator 归入 F；旧头/type alias 兼容 | build、Python 190（skip 1）、C++ 合同 PASS（新增 56 项 INPUT contract 断言）；small equivalence 1965 文件（1707 CSV）完全一致；公共 checkpoint/recovery/Fixed 无 Frequency include |
 | 3 P | 待执行：正式 pressure 命名、observer/quota/export、recent-U 入口撤出 | 两种 policy + ablation；legacy CLI/CSV 兼容，recent-U 拒绝单列 |
 | 4 recovery/relocation | 待执行：optional executor，scheme 授权 | direct/deadline/INPUT path/parallel/LocalDelivery/same-ns |
 | 5 baselines | 待执行：CB 独立纵向包、无隐藏能力继承 | CB/1+1/Recompute/Fixed 合同 |

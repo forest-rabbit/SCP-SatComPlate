@@ -230,10 +230,11 @@ CheckpointManager::Execute(const ProtectionContext& context, const ProtectionAct
     Log(state, "START", state.initial);
     if (!Live(state))
         return;
+    const auto input = InputContract(m_inputPolicy).DescribeInitialization(task->definition.inputBytes);
     const auto base = Reserve(state,
                               config.remoteNode,
                               StorageKind::REMOTE_STATE,
-                              m_inputPolicy == InputStagingPolicy::DEFERRED ? 0 : task->definition.inputBytes,
+                              input.baseBytes,
                               state.initial);
     if (!base)
     {
@@ -243,7 +244,7 @@ CheckpointManager::Execute(const ProtectionContext& context, const ProtectionAct
     state.baseObject = *base;
     if (m_assignmentObserver)
         m_assignmentObserver(state.summary.taskId, config.remoteNode, true);
-    if (m_inputPolicy == InputStagingPolicy::DEFERRED)
+    if (input.logicalBaseReady)
     {
         Require(m_pools.at(config.remoteNode)->CommitReservation(*base),
                 "logical state identity reservation missing");
