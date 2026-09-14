@@ -429,6 +429,16 @@ target builds, v2/v3 features and production source remain unchanged. Stop for r
 no production score/threshold, checkpoint projector, new simulation, CI or automatic
 commit/push/merge. No final performance claim or profile-specific SEND/DEFER rule.
 
+The user-approved partial-predictability follow-up is complete; read the next
+section of the same review and `output/audits/compfrr-input-partial-predictability-run11/`.
+Task coverage is not wait coverage or verified reliability. Scan hypothetical
+absolute A-error envelopes, never treat them as calibrated bounds. Keep full
+405/404 network denominators, no-fault negatives and early UNKNOWN tasks. Only
+80/79 same-target realized faults have observed A; other future A values stay unknown.
+Report barrier-side flips separately from actual policy actions (not yet defined).
+31 new tests and 370 maintained Python tests pass (one existing skip). No production,
+new simulation, CI, chosen threshold, optimizer or automatic commit/push/merge.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

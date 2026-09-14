@@ -143,6 +143,20 @@ python contrib/satcompute/tests/integration/regression/analyze-input-criticalpat
 `unit/test_input_criticalpath_audit.py` 覆盖公式、因果信息、概率质量、UNKNOWN、分母与整组 ties。
 最终证据为 `output/audits/compfrr-input-criticalpath-g-run11/`，结论仍追加到同一份审计报告。
 
+Partial predictability 同样只读既有run11，不实现可靠性模型或生产阈值：
+
+```bash
+python contrib/satcompute/tests/integration/regression/analyze-input-partial-predictability.py \
+  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
+  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
+  --criticalpath-dir output/audits/compfrr-input-criticalpath-g-run11 \
+  --output-dir output/audits/compfrr-input-partial-local
+```
+
+输出目录必须不存在；复用上述native probe。`input_partial_predictability_audit.py` 输出task覆盖的
+边际范围、假设区间全扫描及真实故障处的屏障判断翻转；区间不是已校准的置信区间，翻转不是完整策略动作错误。
+`test_input_partial_predictability_audit.py` 验证覆盖分母、严格边界、上下界、同分组及回溯/因果隔离。
+
 ## 历史专项与目录索引
 
 以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，
