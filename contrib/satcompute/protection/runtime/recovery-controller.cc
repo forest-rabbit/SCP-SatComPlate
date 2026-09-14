@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "recovery-controller.h"
 #include "checkpoint-recovery-estimate.h"
+#include "../mechanism/relocation/checkpoint-relocation-executor.h"
 #include "../policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h"
 
 #include "ns3/simulator.h"
@@ -58,7 +59,7 @@ RecoveryController::State::State(const TaskRuntime& runtime,
 
 RecoveryController::RecoveryController(Ptr<TaskCoordinator> tasks,
                                        SatelliteRuntimeView& topology,
-                                       CheckpointManager& manager,
+                                       CheckpointRecoveryPort& manager,
                                        int64_t stopNs,
                                        ProtectionPolicy& policy,
                                        RemoteBusyRecoveryPolicy busyPolicy,
@@ -517,44 +518,24 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     }
     if (r.path.starts_with("MIGRATE_"))
     {
-        auto& pool = m_manager.Pool(node);
-        const auto object = pool.TryReserve(state.task.definition.taskId,
-                                            StorageKind::REMOTE_STATE,
-                                            r.checkpointStateBytes);
-        if (!object)
+        const auto tail = r.path == "MIGRATE_TAIL" ? std::optional<uint64_t>(f.tailBytes) : std::nullopt;
+        const auto reservation = ReserveRelocationDestination(m_manager.Pool(node),
+            state.task.definition.taskId, r.checkpointStateBytes, tail,
+            state.relocatedObject, state.tailObject);
+        if (reservation != RelocationReservationResult::READY)
         {
-            Fail(state, "RECOVERY_STATE_CAPACITY_UNAVAILABLE");
+            Fail(state, reservation == RelocationReservationResult::STATE_UNAVAILABLE
+                            ? "RECOVERY_STATE_CAPACITY_UNAVAILABLE" : "RECOVERY_TAIL_CAPACITY_UNAVAILABLE");
             return true;
-        }
-        state.relocatedObject = *object;
-        if (r.path == "MIGRATE_TAIL")
-        {
-            const auto tail = pool.TryReserve(state.task.definition.taskId,
-                                              StorageKind::REMOTE_BATCH,
-                                              f.tailBytes);
-            if (!tail)
-            {
-                Fail(state, "RECOVERY_TAIL_CAPACITY_UNAVAILABLE");
-                return true;
-            }
-            state.tailObject = *tail;
         }
         r.relocationFailureReason.clear();
         r.relocationBytes = r.checkpointStateBytes;
         Log(state, "CHECKPOINT_RELOCATION_STARTED", r.relocationBytes);
-        Deliver(state,
-                ProtectionTransferKind::RECOVERY_STATE,
-                f.remoteNode,
-                node,
-                r.relocationBytes,
-                state.relocatedObject);
-        if (state.live && r.path == "MIGRATE_TAIL")
-            Deliver(state,
-                    ProtectionTransferKind::RECOVERY_TAIL,
-                    f.localNode,
-                    node,
-                    f.tailBytes,
-                    state.tailObject);
+        DispatchCheckpointRelocation(f.remoteNode, f.localNode, node, r.relocationBytes, tail,
+            state.relocatedObject, state.tailObject,
+            [this, &state](auto kind, auto source, auto destination, auto bytes, auto object) {
+                Deliver(state, kind, source, destination, bytes, object);
+            }, [&state] { return state.live; });
     }
     else if (r.path == "TAIL")
     {

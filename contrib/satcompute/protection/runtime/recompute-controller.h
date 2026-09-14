@@ -2,6 +2,7 @@
 #ifndef SATCOMPUTE_RECOMPUTE_CONTROLLER_H
 #define SATCOMPUTE_RECOMPUTE_CONTROLLER_H
 #include "recovery-controller.h"
+#include "../mechanism/checkpoint/checkpoint-manager.h" // Removed by transfer-only baseline increment.
 #include "../policy/baseline/recompute/recompute-policy.h"
 #include "../policy/placement-policy.h"
 

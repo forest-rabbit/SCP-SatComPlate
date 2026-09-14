@@ -19,7 +19,7 @@
 | 1 公共底座 | `fdc144ba6`：中性 dispatcher owns 单一 canonical queue / ID / flow ledger；checkpoint 保留 storage/hold/生命周期和原回调；兼容 Flows/QueueRecovery | build、Python 190（skip 1）、C++ 合同、16 组 placement smoke PASS；small equivalence 1965 文件（1707 CSV）完全一致 |
 | 2 F/INPUT B | 中性 InputContract 描述初始化/布局/恢复 INPUT（含 LocalDelivery）；F/input 只提供成本描述、一套 solver；事件适配器与 storage estimator 归入 F；旧头/type alias 兼容 | build、Python 190（skip 1）、C++ 合同 PASS（新增 56 项 INPUT contract 断言）；small equivalence 1965 文件（1707 CSV）完全一致；公共 checkpoint/recovery/Fixed 无 Frequency include |
 | 3 P | CompFrrPlacementPolicy 与两种正式 pressure；中性 forecast 不携带 solver/storage callback；PlacementResourceTracker、PeakQuotaLedger 与 P decision journal/export 分离；旧类型/CLI/CSV 保持兼容；recent-U 仅历史 API | build、Python 191（skip 1）、C++ 合同 PASS；P 8574 断言；recent-U 正式 CLI 拒绝测试 PASS；small equivalence 1965 文件（1707 CSV）完全一致 |
-| 4 recovery/relocation | 待执行：optional executor，scheme 授权 | direct/deadline/INPUT path/parallel/LocalDelivery/same-ns |
+| 4 recovery/relocation | RecoveryController 依赖中性 CheckpointRecoveryPort，metrics 只依赖 EvidenceView；原主任务快照/事件构造共用；relocation 预留和发送是可选公共机制，tail 必须由调用者明确提供 | build、Python 191（skip 1）、C++ 合同 PASS；新增 7 项 reservation/owner cleanup/发送顺序合同；small equivalence 1965 文件（1707 CSV）完全一致，含 direct/deadline/INPUT path/parallel/LocalDelivery/same-ns |
 | 5 baselines | 待执行：CB 独立纵向包、无隐藏能力继承 | CB/1+1/Recompute/Fixed 合同 |
 | 6 tests | 待执行：helper→调用者→兼容入口 | 单元与历史入口 import/fixture gate |
 | 7 canonical docs | 待执行：唯一内容归属，不覆盖历史证据 | 链接/目录/CLI 合同 |

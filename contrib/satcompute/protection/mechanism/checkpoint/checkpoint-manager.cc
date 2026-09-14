@@ -921,21 +921,7 @@ CheckpointManager::IsQuiescent() const
 RecoverySnapshot
 CheckpointManager::FreezeRecoverySnapshot(uint64_t id, int64_t at)
 {
-    RecoverySnapshot result;
-    result.taskId = id;
-    result.faultNs = at;
-    const auto task = std::find_if(m_tasks->GetTaskRuntimes().begin(),
-                                   m_tasks->GetTaskRuntimes().end(),
-                                   [id](const auto& t) { return t.definition.taskId == id; });
-    Require(task != m_tasks->GetTaskRuntimes().end() && task->state == TASK_RUNNING && at == Now(),
-            "snapshot requires the live primary at fault time");
-    result.deadlineNs = task->computeDeadlineTimeNs;
-    for (auto service : m_tasks->GetComputeServices())
-        if (service->GetNodeId() == task->definition.computeNodeId)
-            result.actualWork = static_cast<uint64_t>(std::min<unsigned __int128>(
-                task->definition.computeWorkUnits,
-                static_cast<unsigned __int128>(at - task->computeStartTimeNs) *
-                    service->GetComputeRateWorkUnitsPerSecond() / 1000000000));
+    auto result = FreezePrimaryRecoverySnapshot(m_tasks, id, at);
     auto found = m_states.find(id);
     if (found == m_states.end() ||
         (!found->second->active && found->second->summary.stopReason != "QUIESCE_FOR_RECOVERY"))
@@ -1051,26 +1037,7 @@ CheckpointManager::RecordRecoveryEvent(const RecoverySnapshot& s,
                                        uint64_t bytes,
                                        uint64_t transferId)
 {
-    ProtectionEvent row;
-    row.taskId = s.taskId;
-    row.generation = 1;
-    row.timeNs = Now();
-    row.event = event;
-    row.localNode = s.localNode;
-    row.remoteNode = s.remoteNode;
-    row.bytes = bytes;
-    row.localWork = s.localWork;
-    row.remoteWork = s.remoteWork;
-    row.actualWork = s.actualWork;
-    row.transferId = transferId;
-    if (s.phase != "OFF")
-    {
-        row.localUsed = Pool(s.localNode).Used();
-        row.localReserved = Pool(s.localNode).Reserved();
-        row.remoteUsed = Pool(s.remoteNode).Used();
-        row.remoteReserved = Pool(s.remoteNode).Reserved();
-    }
-    m_events.push_back(std::move(row));
+    m_events.push_back(MakeRecoveryEvidence(s, event, bytes, transferId, Now(), m_pools));
 }
 
 void
@@ -1083,12 +1050,7 @@ CheckpointManager::QueueRecovery(ProtectionTransferKey key,
                                  std::function<bool()> live,
                                  std::function<void(uint64_t)> registered)
 {
-    Require(key.attemptGeneration == 1 && source != destination && bytes && live && registered,
-            "recovery network request requires real cross-node bytes and attempt guards");
-    const auto time = Now();
-    m_transfers.Queue(time,
-        Request{key, source, destination, bytes, work, object, time,
-                std::move(live), std::move(registered)},
-        "duplicate recovery request");
+    CheckpointRecoveryPort::QueueRecovery(key, source, destination, bytes, work, object,
+                                          std::move(live), std::move(registered));
 }
 } // namespace ns3::protection

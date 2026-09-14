@@ -5,6 +5,7 @@
 #include "ns3/compfrr-shadow-model.h" // Test-only oracle, never a production dependency.
 #include "ns3/fixed-protection-policy.h"
 #include "ns3/input-cost-adapter.h"
+#include "ns3/checkpoint-relocation-executor.h"
 #include "ns3/para.h"
 #include "ns3/simulator.h"
 #include <algorithm>
@@ -451,6 +452,36 @@ main(int argc, char** argv)
     try
     {
         StorageChecks();
+        {
+            BackupStoragePool pool(100);
+            uint64_t stateObject = 0, tailObject = 0;
+            Check(ReserveRelocationDestination(pool, 42, 101, {}, stateObject, tailObject) ==
+                      RelocationReservationResult::STATE_UNAVAILABLE && !stateObject,
+                  "failed relocation state reservation must not create an identity");
+            Check(ReserveRelocationDestination(pool, 42, 80, 21, stateObject, tailObject) ==
+                      RelocationReservationResult::TAIL_UNAVAILABLE && stateObject && !tailObject && pool.Reserved() == 80,
+                  "failed relocation tail must retain state identity for owner cleanup");
+            pool.ReleaseTask(42);
+            Check(ReserveRelocationDestination(pool, 42, 80, 20, stateObject, tailObject) ==
+                      RelocationReservationResult::READY && pool.Reserved() == 100,
+                  "relocation must preserve state then tail reservation order");
+            std::vector<ProtectionTransferKind> sent;
+            bool live = true;
+            RelocationSend send = [&](auto kind, auto, auto, auto, auto) { sent.push_back(kind); };
+            DispatchCheckpointRelocation(1, 2, 3, 80, 20, stateObject, tailObject, send, [&] { return live; });
+            Check(sent == std::vector<ProtectionTransferKind>{ProtectionTransferKind::RECOVERY_STATE,
+                                                             ProtectionTransferKind::RECOVERY_TAIL},
+                  "relocation flow order changed");
+            sent.clear();
+            DispatchCheckpointRelocation(1, 2, 3, 80, {}, stateObject, 0, send, [&] { return live; });
+            Check(sent.size() == 1, "no-tail mechanism must not inherit tail capability");
+            sent.clear();
+            DispatchCheckpointRelocation(1, 2, 3, 80, 20, stateObject, tailObject,
+                [&](auto kind, auto, auto, auto, auto) { sent.push_back(kind); live = false; }, [&] { return live; });
+            Check(sent.size() == 1, "synchronous state-flow failure must suppress the dependent tail request");
+            pool.ReleaseTask(42);
+            Check(pool.Used() == 0 && pool.Reserved() == 0, "owner relocation cleanup leaked objects");
+        }
         const auto sizes = StateChecks();
         CheckpointChecks();
         RecoveryChecks();

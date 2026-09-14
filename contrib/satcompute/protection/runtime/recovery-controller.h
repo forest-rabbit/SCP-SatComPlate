@@ -2,7 +2,9 @@
 #ifndef SATCOMPUTE_RECOVERY_CONTROLLER_H
 #define SATCOMPUTE_RECOVERY_CONTROLLER_H
 #include "../../traffic/local-delivery.h"
-#include "../mechanism/checkpoint/checkpoint-manager.h"
+#include "checkpoint-recovery-port.h"
+#include "protection-runtime.h"
+#include "../common/task-state-adapter.h"
 #include "../policy/recovery-policy.h"
 #include "../policy/placement-policy.h"
 #include "placement-load-ledger.h"
@@ -58,7 +60,7 @@ class RecoveryController : public ProtectionMechanism
     /** Bind optional fixed-mode recovery; no global node immunity is introduced. */
     RecoveryController(Ptr<TaskCoordinator> tasks,
                        SatelliteRuntimeView& topology,
-                       CheckpointManager& manager,
+                       CheckpointRecoveryPort& manager,
                        int64_t stopNs,
                        ProtectionPolicy& policy,
                        RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
@@ -145,7 +147,7 @@ class RecoveryController : public ProtectionMechanism
     Ptr<ComputeService> Service(uint32_t node) const;
     Ptr<TaskCoordinator> m_tasks;         ///< Existing coordinator.
     SatelliteRuntimeView& m_topology;     ///< Current routes only.
-    CheckpointManager& m_manager;         ///< Shared checkpoint ledgers and ID allocator.
+    CheckpointRecoveryPort& m_manager;         ///< Shared checkpoint ledgers and ID allocator.
     Ptr<NetworkTransferEngine> m_network; ///< Existing real UDP engine.
     int64_t m_stopNs;                     ///< Absolute simulation endpoint.
     ProtectionRuntime m_faultRuntime;     ///< Established mechanism first, then policy fallback.

@@ -5,6 +5,8 @@ build_lib(
     common/time-conversion.cc
     protection/common/protection-types.cc
     protection/common/input-contract.cc
+    protection/runtime/checkpoint-recovery-port.cc
+    protection/mechanism/relocation/checkpoint-relocation-executor.cc
     protection/policy/compfrr/input/input-cost-adapter.cc
     traffic/local-delivery.cc
     protection/common/task-state-adapter.cc
@@ -115,6 +117,10 @@ build_lib(
     common/time-conversion.h
     protection/common/protection-types.h
     protection/common/input-contract.h
+    protection/common/checkpoint-evidence.h
+    protection/runtime/protection-evidence-view.h
+    protection/runtime/checkpoint-recovery-port.h
+    protection/mechanism/relocation/checkpoint-relocation-executor.h
     protection/policy/compfrr/input/input-cost-adapter.h
     traffic/local-delivery.h
     protection/common/task-state-adapter.h
