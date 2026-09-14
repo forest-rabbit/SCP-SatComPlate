@@ -60,6 +60,17 @@ def instance_key(identity):
     return int(run), int(task)
 
 
+def three_way_catch(recoveries):
+    indexed = {g: recovery_index(recoveries[g]) for g in GROUPS}
+    common = set.intersection(*(set(v) for v in indexed.values()))
+    observed = sorted(k for k in common if all(indexed[g][k]["actual_T_catch_ns"] for g in GROUPS))
+    return dict(common_faults=len(common), paired_catch_count=len(observed),
+        common_without_three_catches=len(common)-len(observed),
+        groups={g: {k: v for k, v in V4["distribution"](
+            int(indexed[g][key]["actual_T_catch_ns"])/10**9 for key in observed).items()
+            if k in ("count", "mean", "p50", "p95", "max")} for g in GROUPS})
+
+
 def largest(contributions, selector):
     require(selector in ("largest_benefit", "largest_absolute"), "unknown tail selector")
     eligible = {k: v for k, v in contributions.items() if
@@ -177,6 +188,7 @@ def audit(root):
         a = pooled_a if scope == "pooled" else accounts[scope]
         r = pooled_r if scope == "pooled" else recoveries[scope]
         comparisons[scope], exclusions[scope] = {}, {}
+        comparisons[scope]["three_way_common_catch"] = three_way_catch(r)
         for labels in PAIRS:
             reference, candidate = labels
             name = reference + "__" + candidate

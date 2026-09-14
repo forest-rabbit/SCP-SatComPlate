@@ -187,6 +187,13 @@ Only test/audit tooling and concise review/handoff documentation may change.
 Keep #100/#101 open and #101 Draft; no CI, merge, exponential, parameter tuning or
 automatic replacement of cumulative-U. Stop after reporting the five-run evidence.
 
+The four additional runs are complete at clean `b7eb7331c7ea3b6fb7f7724cd151e35bcc5dc521`;
+all fifteen outputs passed the read-only audit. Read `docs/n5/reviews/N5C-rational-U-multirun.md`:
+all groups complete 3993/4000, but Rational-U busy is 8/409 versus 5/409 for both baselines,
+and paired catch/total eq-waste are worse. Tail exclusion remains outcome-sensitive.
+Keep default FULL and both PRs open (#101 Draft); do not run more simulations, tune,
+merge, promote, or start exponential/recent-U without a new user decision.
+
 ## Project Overview
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.

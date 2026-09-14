@@ -89,6 +89,8 @@ python contrib/satcompute/tests/integration/regression/analyze-n5c-rational-mult
 `leave-one-out.json` 按每轮和五轮合并分别去除恢复时间/总浪费的最大收益贡献及最大绝对贡献。
 排除单位是同一个 `(run,task)`，两侧对称排除、不重跑；HHI/链路指标保留完整轨迹口径。
 `test_n5c_rational_multirun.py` 检查执行边界、输入冻结、流去重、配对及长尾排除。
+四组补跑和十五组审计已完成，见[五轮三方报告](../../../docs/n5/reviews/N5C-rational-U-multirun.md)；
+三组均完成 3993/4000，证据不支持替换 FULL，停止等待审阅，勿重复启动。
 
 Pre-N5C placement 消融入口为 `integration/regression/run-pre-n5c-placement-matrix.py`：
 `--stage gates` 先运行 R5/R7-FA-FFP 并与最新 capacity-resume 原始文件比较；

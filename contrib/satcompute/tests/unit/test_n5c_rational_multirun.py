@@ -44,6 +44,26 @@ class RationalMultirunTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             AUDIT["task_network"]([f, dict(f, sent_bytes="11")])
 
+    def test_guard_names_actual_recovery_sources(self):
+        calls = []
+        def unchanged(*args):
+            calls.append(args)
+            return ""
+        with patch.dict(RUN["OLD"], git=unchanged):
+            RUN["source_scope"]("candidate")
+        protected = calls[1][calls[1].index("--")+1:]
+        self.assertIn("contrib/satcompute/protection/runtime/recovery-controller.cc", protected)
+        self.assertTrue(all((RUN["ROOT"] / p).exists() for p in protected))
+
+    def test_three_way_uses_one_common_observed_population(self):
+        def r(task, catch):
+            return dict(task_id=task, fault_time_ns="1", fault_type="compute", actual_T_catch_ns=catch)
+        values = {g: [r("11:1", "1000000000"), r("11:2", "0")] for g in AUDIT["GROUPS"]}
+        values["rational-U"][0]["actual_T_catch_ns"] = ""
+        result = AUDIT["three_way_catch"](values)
+        self.assertEqual((result["common_faults"], result["paired_catch_count"]), (2, 1))
+        self.assertEqual([v["mean"] for v in result["groups"].values()], [0, 0, 0])
+
     def test_numeric_ties_and_harm_not_hidden(self):
         values = {"12:1": 4, "11:10": 4, "11:2": 4, "11:3": -9}
         self.assertEqual(AUDIT["largest"](values, "largest_benefit"), "11:2")

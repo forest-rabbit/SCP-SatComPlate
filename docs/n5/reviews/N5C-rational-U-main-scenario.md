@@ -1,5 +1,7 @@
 # N5C Rational-U：run 11 主场景验证
 
+后续已按用户批准补齐 [run11–15 五轮三方审计](N5C-rational-U-multirun.md)；以下保留原 run11 阶段结论。
+
 本轮沿用 `feature/n5c-u-refinement` / Draft PR #101，PR #100 保留未合并。
 不改变 FULL/noU 默认、R/M、硬约束、Frequency、Recovery、INPUT、故障随机流、路由和正式场景。
 只新增独立 `rational-U` 与一组 Deferred/relocate、seed 1/run 11、800 任务/1300 s 验证。

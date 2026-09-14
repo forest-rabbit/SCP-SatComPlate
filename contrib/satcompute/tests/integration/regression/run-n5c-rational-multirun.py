@@ -23,7 +23,12 @@ def source_scope(head):
     for baseline in (OLD["OLD_EXECUTION"], GATE_A_HEAD):
         require(not OLD["git"]("diff", "--name-only", baseline, head, "--", "contrib/satcompute/input",
             "contrib/satcompute/para.cc", "contrib/satcompute/fault", "contrib/satcompute/routing",
-            "contrib/satcompute/protection/runtime/recovery", "contrib/satcompute/protection/policy/compfrr/frequency"),
+            "contrib/satcompute/protection/runtime/recovery-controller.cc",
+            "contrib/satcompute/protection/runtime/recovery-controller.h",
+            "contrib/satcompute/protection/runtime/recompute-controller.cc",
+            "contrib/satcompute/protection/runtime/recompute-controller.h",
+            "contrib/satcompute/protection/policy/recovery-policy.h",
+            "contrib/satcompute/protection/policy/compfrr/frequency"),
             "baseline scene/fault/routing/frequency changed")
     return dict(base=RATIONAL_HEAD, production_and_inputs_identical=True, changed_only_docs_tests=changed)
 
