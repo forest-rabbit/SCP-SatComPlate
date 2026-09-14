@@ -364,6 +364,24 @@ incomplete; do not proceed to sweeps or runtime. Read
 `docs/n5/reviews/CompFRR-selective-input-staging-offline-audit.md` before continuing.
 The lack of historical evidence does not prove lack of runtime information.
 
+User-approved continuation: follow the PF Audit / Instrumented Run11 taskbook
+and the accepted three amendments on this same branch. Stage A separates A0
+(source/labels/P_F complete) from A1 (advanced recovery benefits); sweep every
+unique P_F cut without picking a production threshold, retaining all-fault and
+F1/F2-explainable views (exclude only F3 task120, not no-fault negatives).
+Historical FAULT_EPOCH PredictionInput is finish-inclusive; QueryTaskPrediction
+for TASK_RUNNING/CAPACITY_RELEASE and new logging is finish-exclusive. Preserve
+both real source semantics. After A, add default-off passive logging immediately
+before START_CHECKPOINT after committed/revalidated actual pair selection; freeze
+the snapshot there, confirm actual admission afterwards. No RNG/flow/reservation/
+event or algorithm effects. Pass build, maintained unit/contracts, small on/off
+equivalence and 16 placement smoke before ONE 800-task/1300s development run11.
+Use current N5R code with the nonlogging argv of checkpoint-maintenance-fixed/
+run-11/full. Log complete canonical predictor steps and actual source-to-remote
+path, not reference-pair resources; no second checkpoint predictor. Analyze the
+new trace and stop for review. No production Selective INPUT, threshold, formal
+matrix, automatic merge, or new CI. Extend the existing review, not many documents.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

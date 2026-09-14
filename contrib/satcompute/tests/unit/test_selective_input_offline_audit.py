@@ -98,6 +98,15 @@ class SelectiveInputAuditTests(unittest.TestCase):
                 API["post_commit_window"](NS + 1, 4 * NS, 3 * NS, trigger)
         self.assertEqual(API["future_mass"](.3, None, False, 4 * NS)[0], .3)
 
+    def test_explicit_query_exclusive_and_historical_epoch_inclusive_differ(self):
+        # Same endpoint, but two real source contracts, not a rewritten predictor.
+        self.assertAlmostEqual(API["future_mass"](.6, .2, True, 4 * NS,
+                                                  finish_exclusive=True)[0], .5)
+        self.assertIsNone(API["future_mass"](.6, .2, True, 4 * NS,
+                                            finish_exclusive=False)[0])
+        self.assertEqual(API["future_mass"](.6, .2, False, 4 * NS,
+                                            finish_exclusive=True)[0], .6)
+
     def test_unknown_and_epoch_finish_endpoint_are_not_zero(self):
         for total, current, excluded, finish in ((None, .2, True, 4 * NS + 1),
                                                 (.6, None, True, 4 * NS + 1),
@@ -220,6 +229,61 @@ class SelectiveInputAuditTests(unittest.TestCase):
             self.assertEqual(json.loads((output / "summary.json").read_text()), result["summary"])
             with self.assertRaises(FileExistsError):
                 API["write_outputs"](output, result)
+
+
+class ReducedPfTests(unittest.TestCase):
+    def population(self):
+        features, labels = [], []
+        for tid, score, label, source, size, wait in (
+            ("1", .8, "NEEDED", "F1", 100, 20),
+            ("2", .8, "NO_FAULT", None, 200, None),
+            ("3", .1, "NEEDED", "F3", 300, 30),
+            ("4", .2, "FAULT_NONCRITICAL", "F2", 0, 0)):
+            features.append(dict(cohort="V6START", task_id=tid, P_F=score, profile="dense-image",
+                                 input_bytes=size or 50, remaining_compute_s=2, planned_network_input_bytes=size))
+            labels.append(dict(cohort="V6START", task_id=tid, label=label,
+                               historical_fault_source=source, input_critical_wait_ns=wait))
+        return features, labels
+
+    def test_unique_cuts_preserve_ties_and_f3_view_keeps_negatives(self):
+        result = API["reduced_pf_analysis"](*self.population(), "V6START")
+        points = [r for r in result["sweeps"] if r["view"] == "ALL_FAULT"]
+        self.assertEqual([r["pf_cut"] for r in points], [.8, .2, .1])
+        self.assertEqual(points[0]["selected_task_count"], 2)
+        self.assertEqual(points[0]["precision"], .5)
+        self.assertEqual(points[0]["recall"], .5)
+        self.assertEqual(points[0]["byte_precision"], 1/3)
+        self.assertEqual(points[0]["captured_wait_recall"], .4)
+        refs = {(r["view"], r["operating_point"]): r for r in result["references"]}
+        all_predictable = refs["F1_F2_PREDICTABLE", "ALL_STAGE"]
+        self.assertEqual(all_predictable["candidate_count"], 3)
+        self.assertEqual(all_predictable["selected_no_need"], 2)
+        self.assertEqual(all_predictable["total_actual_critical_wait_ns"], 20)
+        self.assertEqual(all_predictable["planned_staged_network_bytes"], 300)
+        self.assertEqual(all_predictable["selected_local_delivery_count"], 1)
+        self.assertIsNone(refs["ALL_FAULT", "NONE_STAGE"]["precision"])
+        self.assertEqual(refs["ALL_FAULT", "ORACLE_NEEDED"]["byte_precision"], 1)
+        self.assertIsNone(result["summary"]["selected_production_threshold"])
+
+    def test_a0_rejects_unknown_but_not_missing_advanced_benefit(self):
+        features, labels = self.population()
+        API["reduced_pf_analysis"](features, labels, "V6START")
+        for changed in (dict(features[0], P_F=None), dict(features[0], P_F=float("nan"))):
+            with self.assertRaisesRegex(ValueError, "A0"):
+                API["reduced_pf_analysis"]([changed]+features[1:], labels, "V6START")
+        labels[0]["label"] = "UNKNOWN"
+        with self.assertRaisesRegex(ValueError, "A0"):
+            API["reduced_pf_analysis"](features, labels, "V6START")
+
+    def test_score_not_affected_by_outcome_and_no_raw_mutation(self):
+        features, labels = self.population()
+        before = deepcopy((features, labels))
+        result = API["reduced_pf_analysis"](features, labels, "V6START")
+        self.assertEqual((features, labels), before)
+        labels[1].update(label="NEEDED", historical_fault_source="F1", input_critical_wait_ns=10)
+        other = API["reduced_pf_analysis"](features, labels, "V6START")
+        self.assertEqual([(r["view"],r["pf_cut"],r["selected_task_count"]) for r in result["sweeps"]],
+                         [(r["view"],r["pf_cut"],r["selected_task_count"]) for r in other["sweeps"]])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 # Selective INPUT 初始化预置：离线审计
 
-2026-09-14。状态：`STOP_RECONSTRUCTION_INSUFFICIENT`，停在任务书第 21 节覆盖率门禁。
+2026-09-14。以下首轮记录保留；后续获准拆分 A0/A1，Stage A 结果见文末。
+首轮状态：`STOP_RECONSTRUCTION_INSUFFICIENT`，停在原任务书第 21 节覆盖率门禁。
 
 结论：能够识别完整 START population、恢复总风险并建立实际 INPUT 等待标签，
 但历史日志不足以完成所有候选的逐故障点收益重建。本轮不能判断 selector 的 Precision/Recall，
@@ -128,3 +129,42 @@ post-batch 的 source→actual remote 只读路径快照，以及固定初始 ca
 未来即使通过覆盖率：计划预置字节不等于实际流量；未覆盖 anchor 关键等待的计划字节不称为实际浪费；
 captured critical wait 不称为实际节省时延；ALL_STAGE 不等于 Eager，ORACLE_NEEDED 只是标签参考，
 不是可实现恢复性能上界。所有网络字节指标均排除 LocalDelivery。
+
+## Reduced Worthiness Audit: P_F-only separability（Stage A）
+
+用户批准 PF / instrumented run11 任务书及三项修正后，A0 与 A1 分开。
+A0（source、成功 START、标签、P_F、任务静态量和 NEEDED 的实际等待）全部通过；
+A1 的复杂 `G_I / P_Iimpact / P_Iddl` 仍不完整，仅跳过 advanced ranking。
+历史 FAULT_EPOCH 使用 finish-inclusive PredictionInput，另两种 trigger 使用 finish-exclusive QueryTaskPrediction；
+分析器显式区分来源并补齐 aligned-finish 两种合成测试，没有修改 production predictor。
+
+产物：`output/audits/compfrr-selective-input-init-run11-reduced/`。
+完整 sweep 覆盖 ALL_FAULT 405 个唯一 cut、F1_F2_PREDICTABLE 404 个唯一 cut，共 809 行；
+并输出 6 个 NONE/ALL/ORACLE reference。分值相同的任务同时选入，不按 task ID 拆分平分。
+下面只是预先固定 Recall landmarks 的描述性展示，所有 cut 都在 CSV，不推荐任何 production threshold。
+
+| 视图 / 诊断点 | 选中 / NEEDED | Precision | Recall | 计划网络 GB | 计划 NO_NEED GB | BytePrecision | 捕获实际等待 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ALL / ALL_STAGE | 409 / 71 | 17.36% | 100% | 106.685 | 83.135 | 22.07% | 100% |
+| ALL / 首个 ≥80% Recall | 120 / 57 | 47.50% | 80.28% | 33.176 | 14.211 | 57.16% | 81.27% |
+| ALL / 首个 ≥90% Recall | 178 / 64 | 35.96% | 90.14% | 46.628 | 24.964 | 46.46% | 92.35% |
+| ALL / 首个 100% Recall | 275 / 71 | 25.82% | 100% | 70.147 | 46.597 | 33.57% | 100% |
+| F1/F2 / ALL_STAGE | 408 / 70 | 17.16% | 100% | 105.885 | 83.135 | 21.49% | 100% |
+| F1/F2 / 首个 80% Recall | 119 / 56 | 47.06% | 80% | 32.763 | 14.211 | 56.63% | 82.37% |
+| F1/F2 / 首个 90% Recall | 165 / 63 | 38.18% | 90% | 43.269 | 22.088 | 48.95% | 93.62% |
+| F1/F2 / 首个 100% Recall | 208 / 70 | 33.65% | 100% | 54.442 | 31.693 | 41.79% | 100% |
+
+ALL 视图的 90% Recall 点较 ALL_STAGE 少选择 231 个任务、计划网络字节减少约 56.29%，
+且捕获约 92.35% 的历史 INPUT 等待。说明 **P_F 在这批 START population 中有描述性筛选价值**，
+值得保留为下一阶段核心输入；不是经过独立 runs 验证的泛化结论，也不是实际节省流量/恢复时间。
+
+唯一 F3 为 task120：NEEDED、P_F=0.018517819600187、实际关键等待 645.504897 ms。
+ALL 分母为 409 candidates / 71 NEEDED / 18.186406988 s；
+F1/F2 视图只排除该 out-of-model hazard，保留全部 326 个 NO_FAULT 和 12 个 FAULT_NONCRITICAL，
+分母为 408 / 70 / 17.540902091 s。F3 不计为 F1/F2 predictor 错误；它尤其影响 ALL 的全 Recall 尾部，
+但不改变本批 P_F 有筛选价值的描述性结论。ORACLE 的计划网络量分别为 23.550 / 22.750 GB；
+NONE 的零选中 Precision/BytePrecision 未定义，输出 null，不伪设为零或一。
+
+Stage A 验证：build no-op；234 项 Python tests（1 个既有外部切片 skip），
+其中 21 项 selective/PF 合成测试通过。旧 409/71/12/326 统计未变，未启动仿真。
+下一步仅实施默认关闭的被动记录并验证 no-op，再运行一次最新底座 development/calibration run11。

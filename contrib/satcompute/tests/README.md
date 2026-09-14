@@ -67,6 +67,11 @@ output-dir 必须不存在。入口复用 `support/protection/selective_input_of
 主组 V6START 与 Full-V7 分开，后续真实故障/检查点不能成为特征。
 完整范围、覆盖率与下一步需补的证据见 [审计报告](../../../docs/n5/reviews/CompFRR-selective-input-staging-offline-audit.md)。
 
+已批准的 Stage A 在同一命令追加 `--pf-only`，并使用新目录
+`output/audits/compfrr-selective-input-init-run11-reduced-local`。
+此模式拆分 A0/A1：P_F 与标签完整即可输出所有唯一 cut 的两视图 sweep 和 NONE/ALL/ORACLE，
+不被 advanced benefit 缺失阻断；成功退出 0，绝不挑选或写入 production threshold。
+
 ## 历史专项与目录索引
 
 以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，

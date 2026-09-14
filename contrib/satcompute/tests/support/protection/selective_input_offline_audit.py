@@ -131,13 +131,16 @@ def post_commit_window(now, finish, first, trigger, interval=NS):
     return first, False
 
 
-def future_mass(total, current, excluded, finish, interval=NS):
+def future_mass(total, current, excluded, finish, interval=NS, *, finish_exclusive=None):
+    # Legacy epoch PredictionInput is inclusive; explicit canonical query is not.
+    if finish_exclusive is None:
+        finish_exclusive = not excluded
     if total is None:
         return None, "Missing scalar prediction"
     require(math.isfinite(total) and 0 <= total <= 1, "invalid probability")
     if not excluded:
         return total, "QueryTaskPrediction already uses the pending/next grid and finish-exclusive window"
-    if finish % interval == 0:
+    if not finish_exclusive and finish % interval == 0:
         return None, "Epoch prediction includes the finish endpoint; its probability was not logged separately"
     if current is None:
         return None, "Missing current sample probability"
@@ -164,7 +167,9 @@ def feature_snapshot(role, task, decision):
     snapshot = dict(cohort=role, task_id=task["task_id"], start_time_ns=start,
                     frequency_csv_line=decision["csv_line"], **{k: v for k, v in task.items() if k != "task_id"},
                     **{k: v for k, v in row.items() if k != "task_id"})
-    snapshot.update(delivery_mode="LOCAL" if local else "NETWORK", checkpoint_ready_at_decision=False)
+    snapshot.update(delivery_mode="LOCAL" if local else "NETWORK", checkpoint_ready_at_decision=False,
+                    logged_prediction_finish_exclusive=not excluded,
+                    prediction_source="PredictionInput" if excluded else "QueryTaskPrediction")
     for name in ("input_bandwidth_bytes_per_s", "backup_bandwidth_bytes_per_s", "t_init_s"):
         snapshot["proposal_" + name] = snapshot.pop(name)
     features = dict(cohort=role, task_id=task["task_id"])
@@ -190,7 +195,8 @@ def feature_snapshot(role, task, decision):
           "Exclude survived epoch; preserve pending sample on non-epoch triggers")
     def number(key):
         return float(row[key]) if row[key] != "" else None
-    mass, reason = future_mass(number("p_fail_before_finish"), number("q_comp_snapshot"), excluded, begin + duration)
+    mass, reason = future_mass(number("p_fail_before_finish"), number("q_comp_snapshot"), excluded,
+                               begin + duration, finish_exclusive=not excluded)
     field("P_F", mass, "UNKNOWN" if mass is None else "CAUSALLY_RECONSTRUCTIBLE", logged, reason)
     count = max(0, (begin + duration - 1 - first) // NS + 1)
     field("future_sample_count", count, "CAUSALLY_RECONSTRUCTIBLE", "canonical grid + original service finish",
@@ -271,9 +277,74 @@ def coverage_gate(audit):
     required = ("P_F", "future_first_failure_trajectory", "input_serialization_s",
                 "checkpoint_state_tail_forecast", "P_Iimpact", "G_I_s", "P_Iddl")
     missing = [name for name in required if not coverage[name] or coverage[name]["UNKNOWN"]]
-    return dict(status="STOP_RECONSTRUCTION_INSUFFICIENT" if missing else "COVERAGE_COMPLETE_REVIEW_REQUIRED",
+    return dict(scope="A1_ADVANCED_BENEFIT", status="STOP_RECONSTRUCTION_INSUFFICIENT" if missing else "COVERAGE_COMPLETE_REVIEW_REQUIRED",
                 coverage=dict(coverage), missing_required_features=missing,
                 score_sweep="SKIPPED_RECONSTRUCTION_GATE", reference_points="SKIPPED_RECONSTRUCTION_GATE")
+
+
+def pf_operating_point(population, selected, view, name, cut=None):
+    """Descriptive selection quality, never actual saved time or actual network traffic."""
+    needed = [r for r in population if r["label"] == "NEEDED"]
+    hits = [r for r in selected if r["label"] == "NEEDED"]
+    amount = sum(r["network_bytes"] for r in selected)
+    hit_bytes = sum(r["network_bytes"] for r in hits)
+    wait = sum(r["critical_wait_ns"] for r in needed)
+    captured = sum(r["critical_wait_ns"] for r in hits)
+    return dict(view=view, operating_point=name, pf_cut=cut, candidate_count=len(population),
+                needed_count=len(needed), selected_task_count=len(selected), selected_needed=len(hits),
+                selected_no_need=len(selected)-len(hits),
+                selected_local_delivery_count=sum(r["network_bytes"] == 0 for r in selected),
+                precision=len(hits)/len(selected) if selected else None,
+                recall=len(hits)/len(needed) if needed else None,
+                planned_staged_network_bytes=amount, planned_no_need_network_bytes=amount-hit_bytes,
+                byte_precision=hit_bytes/amount if amount else None,
+                captured_actual_critical_wait_ns=captured, total_actual_critical_wait_ns=wait,
+                captured_wait_recall=captured/wait if wait else None)
+
+
+def reduced_pf_analysis(features, labels, cohort):
+    """A0 is independent of A1; only outcome labels are used for evaluation, not the score."""
+    f = unique([r for r in features if r["cohort"] == cohort], "task_id")
+    labels = unique([r for r in labels if r["cohort"] == cohort], "task_id")
+    require(f and f.keys() == labels.keys(), "A0: candidate identity mismatch")
+    population = []
+    for tid, feature in f.items():
+        label = labels[tid]
+        require(label["label"] in ("NEEDED", "FAULT_NONCRITICAL", "NO_FAULT"), "A0: incomplete label")
+        pf = feature["P_F"]
+        require(pf is not None and math.isfinite(pf) and 0 <= pf <= 1, "A0: incomplete P_F")
+        require(feature["profile"] and feature["remaining_compute_s"] > 0 and feature["input_bytes"] > 0,
+                "A0: incomplete task inputs")
+        require(feature["planned_network_input_bytes"] in (0, feature["input_bytes"]), "A0: network payload mismatch")
+        source = label["historical_fault_source"]
+        require(source is None if label["label"] == "NO_FAULT" else source in ("F1", "F2", "F3"),
+                "A0: missing fault source")
+        wait = label["input_critical_wait_ns"]
+        require(label["label"] == "NO_FAULT" or (wait is not None and
+                (wait > 0 if label["label"] == "NEEDED" else wait == 0)), "A0: incomplete critical wait")
+        population.append(dict(task_id=tid, P_F=pf, label=label["label"], fault_source=source,
+                               network_bytes=feature["planned_network_input_bytes"],
+                               critical_wait_ns=wait if wait is not None else 0))
+    sweeps, references, views = [], [], {}
+    for view, members in (("ALL_FAULT", population),
+                          ("F1_F2_PREDICTABLE", [r for r in population if r["fault_source"] != "F3"])):
+        points = []
+        for cut in sorted({r["P_F"] for r in members}, reverse=True):
+            selected = [r for r in members if r["P_F"] >= cut]
+            points.append(pf_operating_point(members, selected, view, "UNIQUE_PF_CUT", cut))
+        sweeps.extend(points)
+        refs = [pf_operating_point(members, chosen, view, name) for name, chosen in (
+            ("NONE_STAGE", []), ("ALL_STAGE", members),
+            ("ORACLE_NEEDED", [r for r in members if r["label"] == "NEEDED"]))]
+        references.extend(refs)
+        views[view] = dict(candidate_count=len(members), unique_cuts=len(points), references=refs,
+            # Fixed descriptive recall landmarks, not a recommended theta or tuned policy.
+            recall_landmarks=[dict(target_recall=level, point=next((r for r in points if
+                r["recall"] is not None and r["recall"] >= level), None)) for level in (.5, .8, .9, 1.0)])
+    return dict(sweeps=sweeps, references=references, summary=dict(status="PF_REDUCED_AUDIT_PASS", A0="PASS",
+        cohort=cohort, views=views, f3_out_of_model=[r for r in population if r["fault_source"] == "F3"],
+        selected_production_threshold=None, advanced_ranking="SKIPPED_A1_INCOMPLETE",
+        interpretation="Planned payload and captured observed waiting only; not actual traffic or saved recovery time."))
 
 
 def analyze(roots):
@@ -356,6 +427,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--history-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--pf-only", action="store_true", help="Approved reduced A0 sweep; A1 remains separate")
     args = parser.parse_args()
     roots = {role: (args.history_root / name).resolve() for role, name in ROLES.items()}
     output = args.output_dir.resolve()
@@ -365,8 +437,21 @@ def main():
     require(before == evidence_metadata(roots.values()), "raw evidence changed during analysis")
     result["summary"]["raw_evidence_metadata_unchanged"] = True
     result["summary"]["raw_evidence_file_count"] = len(before)
+    reduced = reduced_pf_analysis(result["features"], result["labels"], "V6START") if args.pf_only else None
+    if reduced:
+        result["summary"].update(status="PF_REDUCED_AUDIT_PASS", A0="PASS",
+                                 A1="INCOMPLETE", advanced_ranking="SKIPPED_A1_INCOMPLETE")
+        result["summary"]["reason"] = "P_F-only analysis authorized independently of advanced reconstruction"
+        result["summary"]["skipped"] = ["advanced benefit ranking", "runtime Phase 2"]
     write_outputs(output, result)
-    print(json.dumps(result["summary"], indent=2, allow_nan=False))
+    if reduced:
+        HISTORY["write_csv"](output / "pf-score-sweeps.csv", reduced["sweeps"])
+        HISTORY["write_csv"](output / "pf-reference-points.csv", reduced["references"])
+        with (output / "pf-summary.json").open("x") as stream:
+            json.dump(reduced["summary"], stream, indent=2, allow_nan=False)
+        print(json.dumps(reduced["summary"], indent=2, allow_nan=False))
+    else:
+        print(json.dumps(result["summary"], indent=2, allow_nan=False))
     # A valid negative coverage audit is distinct from a source/contract exception.
     return 2 if result["summary"]["status"] == "STOP_RECONSTRUCTION_INSUFFICIENT" else 0
 
