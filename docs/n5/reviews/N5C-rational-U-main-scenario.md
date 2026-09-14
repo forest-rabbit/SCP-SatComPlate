@@ -1,5 +1,8 @@
 # N5C Rational-U：run 11 主场景验证
 
+本文保留旧恢复合同下的历史结果；修正 direct deadline 准入后的三组 run11 见
+[恢复语义专项报告](Recovery-direct-deadline-feasibility.md)，不再沿用本文的 FULL 799/800 作为当前结果。
+
 后续已按用户批准补齐 [run11–15 五轮三方审计](N5C-rational-U-multirun.md)；以下保留原 run11 阶段结论。
 
 本轮沿用 `feature/n5c-u-refinement` / Draft PR #101，PR #100 保留未合并。

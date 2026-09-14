@@ -4,6 +4,7 @@ import argparse
 from collections import Counter
 import csv
 import json
+import itertools
 from pathlib import Path
 import runpy
 
@@ -20,6 +21,8 @@ def measure(directory, corrected=False):
     recovery = OLD['rows'](directory / 'recovery-summary.csv')
     tasks = {r['task_id']:r for r in OLD['rows'](directory / 'task-summary.csv')}
     historical_infeasible = 0
+    if corrected and {int(t['compute_rate_work_units_per_second']) for t in tasks.values()} != {100000}:
+        raise ValueError('this audit requires the frozen uniform formal compute profile')
     if not corrected:
         for r in recovery:
             if r['chosen_path'] in ('TAIL','REMOTE_REDO'):
@@ -27,6 +30,22 @@ def measure(directory, corrected=False):
                 historical_infeasible += not e['redo_fits'] and not e['tail_fits']
     if corrected:
         for row in recovery:
+            if row['direct_post_catchup_ns']:
+                # The frozen formal profile uses the same 100,000 WU/s on all nodes.
+                # Rebuild from fault-time WU/deadline, never from actual completion time.
+                post = OLD['duration'](int(tasks[row['task_id']]['compute_work_units']) -
+                                       int(row['actual_work_units']), 100000)
+                budget = int(row['original_deadline_ns']) - int(row['fault_time_ns']) - 1 - post
+                if post != int(row['direct_post_catchup_ns']) or budget != int(row['direct_deadline_budget_ns']):
+                    raise ValueError('direct post/budget differs from causal WU/deadline')
+                for estimate, flag in [('estimated_remote_redo_ns','direct_redo_fits'),
+                                       ('estimated_tail_ns','direct_tail_fits')]:
+                    fits = bool(row[estimate]) and int(row[estimate]) <= budget
+                    if row[flag] != str(int(fits)):
+                        raise ValueError('direct feasibility flag differs from recorded decision estimate')
+            if row['direct_redo_fits'] == '1' or row['direct_tail_fits'] == '1':
+                if row['chosen_path'] not in ('TAIL','REMOTE_REDO'):
+                    raise ValueError('feasible remote was not preferred')
             if row['chosen_path'] in ('TAIL', 'REMOTE_REDO'):
                 if row['direct_redo_fits'] != '1' and row['direct_tail_fits'] != '1':
                     raise ValueError('deadline-infeasible direct accepted')
@@ -69,6 +88,27 @@ def key(row, run):
     return (run, row['task_id'], row['fault_time_ns'], row['fault_type'])
 
 
+def projected_equivalence(before, after):
+    """Every historical CSV field, streaming rows; only added diagnostics are excluded."""
+    counts = {}
+    for path in sorted(before.glob('*.csv')):
+        count = 0
+        with path.open() as left_file, (after/path.name).open() as right_file:
+            left, right = csv.DictReader(left_file), csv.DictReader(right_file)
+            if not set(left.fieldnames) <= set(right.fieldnames):
+                raise ValueError('historical columns missing')
+            for a,b in itertools.zip_longest(left,right):
+                count += 1
+                if a is None or b is None or a != {k:b[k] for k in left.fieldnames}:
+                    raise ValueError(f'non-affected execution changed: {path.name}:{count}')
+        counts[path.name] = count
+    for name in ('fault-trace.json','protection-finalization.json','capacity-aware-summary.json'):
+        if json.loads((before/name).read_text()) != json.loads((after/name).read_text()):
+            raise ValueError(f'non-affected JSON changed: {name}')
+    return dict(status='PASS', csv_files=len(counts), rows_by_file=counts,
+                fault_finalization_capacity_identical=True)
+
+
 def prefix(before, after, affected_ids):
     records = OLD['rows'](before / 'recovery-summary.csv')
     cutoff = min((int(r['fault_time_ns']) for r in records if int(r['task_id']) in affected_ids),
@@ -106,6 +146,8 @@ def main():
             if result['execution']['commit'] != plan['commit'] or result['execution']['worktree_dirty']:
                 raise ValueError('wrong corrected execution identity')
             proof = prefix(old, new, set(entry['deadline_tasks'] + entry['input_path_tasks']))
+            if not entry['deadline_tasks'] and not entry['input_path_tasks']:
+                proof['full_old_field_equivalence'] = projected_equivalence(old,new)
         else:
             proof = dict(reused=True, basis='No new branch activated in complete historical execution; '
                          'same direct/migration arithmetic and unchanged existing small fixtures.')
@@ -145,6 +187,9 @@ def main():
                 before_completed=prev['completed'], after_completed=task['completed'],
                 before_waste_eq_wu=prev['w_waste_actual'], after_waste_eq_wu=task['w_waste_actual']))
         meta=result['execution']
+        if meta.get('n5c_variant') == 'rational-U':
+            rational = runpy.run_path(str(HERE/'analyze-n5c-rational-u.py'))
+            comparison[source]['independent_rational_history'] = rational['audit_actual'](new)
         if meta['placement_mode']=='n5c' and meta['input_staging_policy']=='deferred' and meta['n5c_variant'] in ('full','noU','rational-U'):
             groups.setdefault(meta['n5c_variant'],[]).append((run,after,new_map))
     three_way = {}

@@ -1,5 +1,8 @@
 # N5C Rational-U：五轮三方审计
 
+这是旧恢复合同下的五轮证据。后续仅补跑了[修正后的三组 run11](Recovery-direct-deadline-feasibility.md)；
+其余受影响 run 未补跑，因此本页不是新恢复合同下的五轮结论。
+
 结论：**本次证据不支持用 Rational-U 替换累计 U（FULL）**。三组均完成 3993/4000，
 Rational-U 的 busy、配对恢复时延、总等效浪费均未优于 FULL；正向结果主要是 storage 分散性。
 保留默认 FULL、PR #100 未合并及 #101 Draft；本轮停止，不测指数式、不调参、不运行 CI/合并。

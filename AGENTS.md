@@ -217,6 +217,12 @@ executions: FULL, noU, Rational-U, on the same clean commit. Do not run run12-15
 FA-FFP, noR/noM or CB. Preserve the complete read-only historical audit; out-of-scope
 affected historical runs remain uncorrected, not newly certified results.
 
+The three corrected run11 executions are complete at clean `bc721ed42`, all 800/800.
+Read `docs/n5/reviews/Recovery-direct-deadline-feasibility.md`: task140 migrates 15->0
+and meets the unchanged deadline; noU/Rational-U retain every historical CSV field.
+Default FULL remains unchanged. Do not expand the matrix, merge/push/CI/tag or promote
+another U without a fresh user decision; unrerun historical multi-run evidence remains historical.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

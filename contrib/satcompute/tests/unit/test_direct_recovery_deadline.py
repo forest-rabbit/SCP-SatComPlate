@@ -48,6 +48,24 @@ class DirectDeadlineAuditTest(unittest.TestCase):
                          normalize('satcompute --randomRun=11 --outputDir=c --faultTrace=d'))
         self.assertNotEqual(normalize('satcompute --randomRun=11'),
                             normalize('satcompute --randomRun=12'))
+        self.assertEqual(set(run['SOURCES'].values()), {'full','noU','rational-U'})
+
+    def test_equivalence_checks_old_fields_but_allows_diagnostics(self):
+        import runpy
+        import tempfile
+        audit = runpy.run_path(str(SCRIPT.with_name('analyze-recovery-deadline-reruns.py')))
+        with tempfile.TemporaryDirectory() as folder:
+            old, new = Path(folder)/'old', Path(folder)/'new'
+            old.mkdir(); new.mkdir()
+            (old/'rows.csv').write_text('task_id,value\n1,2\n')
+            (new/'rows.csv').write_text('task_id,value,direct_redo_fits\n1,2,1\n')
+            for name in ('fault-trace.json','protection-finalization.json','capacity-aware-summary.json'):
+                (old/name).write_text('{}')
+                (new/name).write_text('{}')
+            self.assertEqual(audit['projected_equivalence'](old,new)['csv_files'],1)
+            (new/'rows.csv').write_text('task_id,value,direct_redo_fits\n1,3,1\n')
+            with self.assertRaises(ValueError):
+                audit['projected_equivalence'](old,new)
 
 
 if __name__ == '__main__':
