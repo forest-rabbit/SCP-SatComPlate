@@ -41,20 +41,24 @@ def same_primary_fault(a, b):
     return a['fault_signature'] == b['fault_signature']
 
 
-def audit(root):
+def audit(root, *, allow_development=False):
     root = Path(root)
     identity = json.loads((root/'execution.json').read_text())
     outcome = json.loads((root/'execution-result.json').read_text())
     run = json.loads((root/'run-summary.json').read_text())
     scheme = identity['protection_mode']
-    require(outcome['returncode'] == 0 and outcome['status'] == 'FINISHED' and
-            not identity['worktree_dirty'], 'incomplete/dirty execution')
+    require(outcome['returncode'] == 0 and outcome['status'] == 'FINISHED', 'incomplete execution')
+    if identity['worktree_dirty']:
+        require(allow_development and identity['stage'] == 'candidate-coverage-development' and
+                identity.get('development_only') is True and
+                (root/'source-diff.patch').is_file() and (root/'source-diff.patch').stat().st_size > 0,
+                'dirty execution is not an explicitly recorded development audit')
     require(run['simulation_duration_ns'] == round(identity['simulation_duration_s']*NS), 'incomplete horizon')
     ts = rows(root, 'task-summary.csv'); tasks = {r['task_id']: r for r in ts}
     require(len(tasks) == len(ts) and all(t['final_state'] in ('COMPLETED', 'FAILED') for t in ts), 'invalid terminals')
     terminals = Counter(e['task_id'] for e in rows(root, 'task-events.csv') if e['to_state'] in ('COMPLETED', 'FAILED'))
     require(terminals == Counter({k: 1 for k in tasks}), 'logical terminal duplication')
-    if identity['stage'] in ('multitree-comparison-run11', 'multitree-comparison'):
+    if identity['stage'] in ('multitree-comparison-run11', 'multitree-comparison', 'candidate-coverage-development'):
         require((len(ts), run['total_input_bytes'], run['total_output_bytes'], run['total_compute_work_units'],
                  run['compute_node_count'], run['simulation_duration_ns']) ==
                 (800, 194119753287, 100166291859, 352513119, 66, 1300*NS), 'canonical scene changed')

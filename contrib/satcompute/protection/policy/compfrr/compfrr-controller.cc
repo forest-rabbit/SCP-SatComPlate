@@ -361,6 +361,18 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
     auto pairs = std::move(row.pairStats.pairs);
     row.pairPathFeasible = pairs.size();
     m_placement->RankPairs(pairs, context);
+    if (m_n5c)
+    {
+        auto& coverage = row.candidateCoverage.emplace();
+        coverage.allInfeasible = pairs.empty();
+        if (!pairs.empty())
+        {
+            coverage.reference = pairs.front();
+            coverage.candidates = std::count_if(pairs.begin(), pairs.end(), [&](const auto& pair) {
+                return pair.localNode == coverage.reference->localNode;
+            });
+        }
+    }
     if (pairs.empty())
     {
         row.resourceReason = row.pairStats.reason;
@@ -372,20 +384,40 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
     // Feasibility before ranking, then first frequency-hard-feasible pair. Never shop by J.
     if (m_n5c)
     {
-        // A read-only FA-FFP reference, one Frequency solve, then a fixed-local spatial choice.
-        row.pair = pairs.front();
-        if (!BuildResources(row, task, state, paths))
-            throw std::logic_error("N5C reference preview changed within one decision");
-        ++row.pairHardChecked;
-        row.proposal = m_policy.Evaluate(row.input);
-        if (row.proposal.reason == "STORAGE_INFEASIBLE") ++row.pairSkipStorage;
-        else if (row.proposal.reason == "DEADLINE_INFEASIBLE" || row.proposal.reason == "INITIALIZATION_TOO_LATE")
-            ++row.pairSkipDeadline;
-        else ++row.pairHardFeasible;
-        if (row.proposal.action == FrequencyAction::START)
+        // Retain the original reference local. Retry only hard-rejected remotes in
+        // the existing order; stop at the first feasible anchor, never shop by J.
+        auto& coverage = *row.candidateCoverage;
+        for (const auto& pair : pairs)
         {
-            SelectN5cRemote(row, task, state, paths, pairs);
+            if (pair.localNode != coverage.reference->localNode) continue;
+            row.pair = pair;
+            row.resourceReason.clear();
+            if (!BuildResources(row, task, state, paths))
+                throw std::logic_error("N5C anchor preview changed within one decision");
+            ++row.pairHardChecked;
+            ++coverage.checked;
+            row.proposal = m_policy.Evaluate(row.input);
+            const auto& reason = row.proposal.reason;
+            const bool hardRejected = reason == "STORAGE_INFEASIBLE" ||
+                reason == "DEADLINE_INFEASIBLE" || reason == "INITIALIZATION_TOO_LATE";
+            if (coverage.checked == 1 && hardRejected) coverage.referenceRejectReason = reason;
+            if (reason == "STORAGE_INFEASIBLE") ++row.pairSkipStorage;
+            else if (hardRejected) ++row.pairSkipDeadline;
+            if (hardRejected) continue;
+            ++row.pairHardFeasible;
+            coverage.anchorIndex = coverage.checked;
+            coverage.anchorRemote = pair.remoteNode;
+            // Feasible but not beneficial remains OFF. Only START invokes the
+            // unchanged P ranking, using this anchor's frozen Frequency config.
+            if (row.proposal.action == FrequencyAction::START)
+            {
+                SelectN5cRemote(row, task, state, paths, pairs);
+                if (row.proposal.action == FrequencyAction::START)
+                    coverage.finalRemote = row.pair->remoteNode;
+            }
+            return;
         }
+        coverage.allInfeasible = true;
         return;
     }
     for (const auto& pair : pairs)

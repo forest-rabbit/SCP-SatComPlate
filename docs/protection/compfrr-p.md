@@ -25,9 +25,11 @@ noU 不是第三种 U policy；`recent-U` 已从正式 CLI 移除，历史 API/�
 | `runtime/compute-usage-history.h/.cc` | 通过原有计算状态通知记录实际普通/恢复服务区间；只读前缀查询，不改变调度 |
 | `metrics/core/{n5c-placement,placement-resource}-metrics.cc`（satcompute 目录下） | P 决策与中性资源分别写出；保留原外部 schema |
 
-START 先用 FA-FFP 公共节点/路径筛选后的首个 reference pair 求解一次启动及 `(δ,n)`；
-不对各 remote 重跑 Frequency，也不在 reference 不可行时另做联合搜索。保留 reference local，
-然后用实际 remote 的算力、带宽、存储验证固定配置，按 V4 排名。未越过完整同纳秒故障批次
+START 保留 FA-FFP 公共节点/路径筛选后的首个 reference pair 的 local。先检查该 remote；
+仅当现有 Frequency 返回 deadline、storage 或 initialization-too-late 硬拒绝时，按原确定性顺序
+检查同一 local 的后续 remote，直到首个硬可行 anchor。硬可行但收益不足时不继续挑选其他 remote。
+冻结 anchor 的启动及 `(δ,n)` 结果，然后用实际 remote 的算力、带宽、存储验证固定配置，按 V4 排名。
+排名阶段仍不重跑 Frequency，不搜索其他 local，不改目标函数或搜索空间。未越过完整同纳秒故障批次
 之前不占用资源；提交前再次检查同一 pair/config，不可行则拒绝 START 或暂停 ON。
 ON 始终使用 committed 实际 pair 的资源更新配置，不重新 placement。
 
@@ -59,7 +61,11 @@ R/M、min-max、传播时延/稳定 ID tie-break、START/ON、Frequency 和 Reco
 旧五轮审计与 corrected maintenance 结果见[复现与证据边界](reproducibility.md)。
 
 `n5c-placement-decisions.csv` 只记录 START 后的空间提案，区分 reference/实际资源、候选及最终准入。
-原 `frequency-decisions.csv` 的 OFF 标量和评分仍属于 reference，local/remote 列为实际提案；ON 均为实际 pair。
+原 `frequency-decisions.csv` 的 OFF 标量和评分属于可行 anchor（无 fallback 时即原 reference），
+local/remote 列为实际提案；ON 均为实际 pair，原列保持不变。
+新增 `compfrr-candidate-coverage.csv` 仅记录 P 的 OFF 搜索，区分原 reference、首个可行 anchor、
+最终 P remote 和真实提交。anchor index 从 1 起算；fallback depth 为多检查的 remote 数，即 checked−1。
+汇总分开报告 hard-feasible、START、fault-hit 和全体不可行，不能把 anchor 存在等同于已建立保护。
 `placement-resource-summary.csv` 对平台 CompFRR 各 placement 输出相同的只读计数/积分/峰值；
 FA-FFP 等不会因此启用 N5C quota。原场景、故障随机流、Routing、恢复策略和工作量标度不变。
 正式运行与审计入口见 [测试说明](../../contrib/satcompute/tests/README.md)，结果见

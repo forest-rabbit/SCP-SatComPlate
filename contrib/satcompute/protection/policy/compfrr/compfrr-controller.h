@@ -18,6 +18,17 @@
 
 namespace ns3::protection
 {
+/** Read-only OFF candidate search evidence; indices are one-based within the fixed local. */
+struct CompFrrCandidateCoverage
+{
+    std::optional<PlacementDecision> reference; ///< Original first node/path-feasible pair.
+    std::string referenceRejectReason; ///< Empty when the first pair is hard-feasible.
+    uint64_t candidates{}, checked{}; ///< Fixed-local eligible remote count and evaluated prefix.
+    std::optional<uint64_t> anchorIndex; ///< First hard-feasible position, not a START guarantee.
+    std::optional<uint32_t> anchorRemote, finalRemote; ///< Frequency anchor versus P selection.
+    bool allInfeasible{}; ///< No hard-feasible remote in the fixed-local set (or empty set).
+};
+
 /** Proposal and observed resolution; never included in actual cost accounting. */
 struct FrequencyDecisionRecord
 {
@@ -45,6 +56,7 @@ struct FrequencyDecisionRecord
     int64_t capacityWaitStartNs{-1}, capacityWaitEndNs{-1};
     std::optional<size_t> n5cTrace; ///< START-only spatial proposal; no solver call per remote.
     std::optional<uint64_t> n5cPeak; ///< Total replacement quota, captured before physical admission.
+    std::optional<CompFrrCandidateCoverage> candidateCoverage; ///< P OFF only; no new policy state.
 };
 
 /** Online generate integration. Owns no fault model, RNG, state bytes or second network. */

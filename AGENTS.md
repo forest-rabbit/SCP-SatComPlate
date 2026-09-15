@@ -1,5 +1,70 @@
 # AGENTS.md
 
+### Active Stage 2A candidate coverage (2026-09-15)
+
+Stage 1 passed human review. The user authorized only fixed-local CompFRR-P
+candidate coverage repair, on fix/compfrr-p-candidate-coverage created by detach
+at ebd8a4748893d538c85f0602ab207b74971c93ac then switch -c. Preconditions passed:
+same HEAD/execution, no dirty production/scene files; retained dirty documentation,
+audit tooling/tests and Stage 1 results without stashing or overwriting.
+Keep the original reference local; retry ordered remotes only on existing Frequency
+hard rejection, stop at first hard-feasible anchor (even if nonbeneficial), freeze
+its config, then use unchanged P ranking/post-batch gate. No new local, score, SER,
+Frequency formula/search-space, fault, INPUT timing/source, recovery or baseline changes.
+Add a separate coverage CSV; existing schemas stay unchanged. Build/unit/focused
+gates precede exactly one 1Gbps seed1/run11 800-task/1300s P development execution.
+Record the uncommitted patch honestly as development-only; no automatic commit,
+push, CI or matrix. Output output/compfrr/candidate-coverage-stage2a/ is separate
+from all old evidence. Stop after mechanism comparison for human review; do not
+continue to START/Selective or 10/100Gbps runs. Older stops below are history.
+
+Stage 2A is COMPLETE, pending human review; do not continue automatically.
+Build, 260 Python tests (one skip), Frequency runtime 12,187 checks and focused
+baseline gates PASS. All 582 preexisting runtime fixture files are byte-identical.
+The single development run finished all 1300s in 1139.33 wall seconds; same argv
+except output paths, recorded tracked-source patch unchanged throughout execution.
+Completion 730→785/800; START 69→367 (298 admitted via fallback). Reference hard
+rejection followed by a feasible alternate: 1590 events/656 tasks. Total fallback
+2235 events/735 tasks, extra-check depth P50/P90/max 38/58/62; all-infeasible
+647 events, including two empty node/path-feasible sets. No P ranking redefinition.
+FT payload 46.459→88.210 GB, total waste 48.939→9.391 million eq-WU; catch mean
+2410.76→524.64 ms with observed sample counts 34→72 (missing is not zero).
+Same-fault, both-observed 33-task paired mean 2372.65→794.58 ms. Physical fault
+event sequence unchanged, but task 8 versus 302 occupies the primary at 105s;
+56 formerly failed tasks now complete and task 302 newly fails. Remaining 15:
+11 exhaustive fixed-local deadline rejects, task 334 same-batch START veto,
+259/548 protected but direct+relocated recovery deadline-infeasible, and task120
+F3 before RUNNING. No follow-on INPUT/Selective/local-search fix is authorized.
+Canonical receipt: docs/n5/reviews/CompFRR-1G-candidate-coverage-stage2a.md;
+comparison and preservation inventory stay in the separate Stage 2A output.
+The subsequent user instruction authorizes committing and pushing this branch,
+including the retained Multi-tree summary and Stage 1 audit as separate evidence
+commits. Preserve original execution metadata (development-only, pre-commit patch),
+and do not upload ignored raw outputs. No CI/PR/merge or further matrix is authorized.
+STOP for review after publication; this is not approval to start Stage 2B.
+
+### Active 1Gbps offline audit (2026-09-15)
+
+The user approved Stage 1 only of
+CompFRR_1Gbps_Candidate_Feasibility_and_Selective_Audit_v2_for_Codex.md.
+This supersedes the completed Multi-tree stop only for offline analysis.
+Stage 1 is complete on feature/multitree-published-ft: canonical report
+docs/n5/reviews/CompFRR-1G-candidate-feasibility-and-selective-audit.md;
+six output files at output/compfrr/1g-candidate-feasibility-audit/.
+3444 hard-reject events / 734 unique tasks; 3442 check one reference while
+other node/path-feasible pairs remain, two have an empty admitted-path set.
+Skipped pair identities/resources are not logged: alternative hard feasibility
+is UNKNOWN, not false. Independent FA execution cannot prove P snapshot feasibility.
+On the original 69 OFF-fault failures, initial unchanged-reference SER bounds
+give 14 SEND / 27 DEFER / 28 selector-unknown, not 14 proven rescues.
+Full counterfactual classifications are 27 conditional DEFER / 42 UNKNOWN.
+Actual IN_FLIGHT and successful recovery cannot be invented from S/B.
+27 focused offline/pure-function checks pass; raw 83-file evidence unchanged.
+No production, defaults, workload, frequency, SER, RNG, routing or recovery change;
+no new simulation, CI, commit or push in this stage. Preserve earlier dirty
+Multi-tree summary/report work. STOP for review; no automatic Stage 2, per-remote
+Frequency solving, candidate-contract change or new instrumentation execution.
+
 ### Active Multi-tree implementation (2026-09-15)
 
 The user approved MultiTree_Published_FT_Rule_Mapping_and_Baseline_Kickoff plus
@@ -52,7 +117,21 @@ while runs are active. B/C are complete at clean 363c2092f, each full matrix PAS
 output/multitree/stage-c/run-B-run12/ and run-C-run13/. Both CompFRR profiles are
 2400/2400 across A/B/C; 1+1 is 2399/2400 (run13 task12 loses primary8 and replica1
 to the same 971s F1 batch, correctly NO_SURVIVING_ATTEMPT). No algorithm changes.
-Continue only the authorized run11 bandwidth contrasts, then review; no push/PR/CI/merge.
+The latest user cancelled unfinished 100Gbps simulations, then asked to wait for
+1Gbps CB-SAT and write the overall results. That execution has now finished.
+Stage C is complete with 29 finished/audited simulations: 18 at 10Gbps, six at
+1Gbps, five at 100Gbps. The sole cancelled 100Gbps CB-SAT stopped around 946s;
+retain cancellation.json, matrix status and raw partial evidence, never restart it
+or count it as a completed result. No simulation processes remain active.
+Final read-only audit: output/multitree/comparison-final/; canonical report and
+29-row CSV: docs/n5/reviews/Multi-tree-published-FT-comparison.*.
+Both CompFRR profiles finish 2400/2400 at 10Gbps, but at 1Gbps P finishes 730 and
+FA-FFP 787: P's single reference Frequency check can reject before actual remote
+ranking, whereas FA-FFP searches hard-feasible pairs, often source=remote. This is
+a frozen-contract limitation for separate review, not authorization to fix/tune it.
+Final audit tooling passes nine focused and 242 Python tests (one skip); C++,
+input, calibration, RNG, algorithms and defaults remain unchanged since Run A.
+STOP for user review. No new simulations, source fixes, CI, push, PR or merge.
 
 ### Current handoff: protection config hierarchy closed (2026-09-15)
 

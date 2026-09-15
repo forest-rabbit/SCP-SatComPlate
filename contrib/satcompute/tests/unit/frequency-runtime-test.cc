@@ -61,6 +61,15 @@ struct FrequencyRuntimeTestAccess
     {
         return !c.m_pausedCapacity.empty() || !c.m_waitingCapacity.empty();
     }
+    static bool OtherLocalFeasible(FrequencyProtectionController& c, FrequencyDecisionRecord row)
+    {
+        row.pair = PlacementDecision{4, 0};
+        DecisionPathSnapshot paths([&](auto a, auto b) {
+            return c.m_tasks->GetTransferEngine()->EstimateAdmissiblePath(a, b);
+        });
+        return c.BuildResources(row, c.Task(row.taskId), c.m_states.at(row.taskId), paths) &&
+               c.m_policy.Evaluate(row.input).action == FrequencyAction::START;
+    }
     static bool BlockedInput(FrequencyProtectionController& c, TaskRuntime task)
     {
         task.definition.sourceNodeId = 5;
@@ -1003,6 +1012,94 @@ void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging
     Reset();
 }
 
+/** Real pools, paths and solver: only the fixed-local hard-rejected remote prefix retries. */
+void CandidateCoverage(const std::filesystem::path& output, const std::string& mode)
+{
+    RngSeedManager::SetSeed(1); RngSeedManager::SetRun(11);
+    {
+        const bool deadline = mode == "deadline" || mode == "all-deadline" || mode == "fallback-hit";
+        auto cfg = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        cfg.parameters.fixedDelaySeconds = .001;
+        cfg.parameters.islBandwidthBps = deadline ? 1000000000ULL : 10000000000ULL;
+        OnlineTopologyController topology(cfg.parameters, cfg.constellation);
+        topology.Initialize();
+        auto tasks = CreateObject<TaskCoordinator>();
+        auto definition = Definition(deadline ? TaskProfile::DENSE_IMAGE : TaskProfile::LLM);
+        definition.sourceNodeId = mode == "all-deadline" ? 1 : 4;
+        tasks->Initialize(ComputeProfile{{{0,100000},{2,100000},{3,100000},{4,100000}}},
+            TaskTrace{{definition}}, topology, "size-aware", 1024, cfg.parameters.islMtuBytes,
+            cfg.parameters.receiverRcvBufBytes, false, END, 1.3);
+        const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+        auto executor = CreateObject<FaultController>();
+        executor->ConfigureGeneration(ids, END); executor->BindTopology(topology);
+        executor->BindTaskCoordinator(tasks);
+        auto engine = CreateObject<FaultModelEngine>();
+        auto fp = GetDefaultFaultParameters();
+        fp.checkIntervalSeconds = 10; fp.f2.enabled = fp.f3.enabled = false;
+        engine->Configure(fp, ids, {0,2,3,4}, END, executor, true);
+        engine->BindTaskCoordinator(tasks);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            std::make_unique<N5cPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE,
+            deadline ? InputPolicy::SELECTIVE : InputPolicy::EAGER);
+        auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
+        std::vector<std::pair<uint32_t,uint64_t>> held;
+        auto block = [&](uint32_t node) {
+            auto id = manager.Pool(node).TryReserve(999, StorageKind::INIT_TEMP, manager.Pool(node).Free());
+            Check(id.has_value(), "coverage storage blocker missing"); held.emplace_back(node,*id);
+        };
+        if (mode == "storage" || mode == "all-storage") block(0);
+        if (mode == "all-storage") block(4);
+        if (mode == "fixed-local") block(2);
+        Driver driver{controller, tasks, executor, F1SelfStateFaultModel(GetDefaultFaultParameters().f1), mode};
+        driver.betweenProposalAndResolution = [&](const auto& row) {
+            Check(row.candidateCoverage.has_value(), "P OFF candidate audit absent");
+            const auto& c = *row.candidateCoverage;
+            Check(c.reference && c.reference->localNode == 2 && c.reference->remoteNode == 0 &&
+                  c.candidates == 2 && c.checked == row.pairHardChecked && manager.Summaries().empty(),
+                  "fixed local/order or read-only search violated");
+            if (mode == "all-deadline" || mode == "all-storage" || mode == "fixed-local")
+            {
+                Check(c.allInfeasible && c.checked == 2 && !c.anchorIndex && !row.n5cTrace &&
+                      row.proposal.action == FrequencyAction::NONE, "infeasible fixed-local set entered ranking");
+                if (mode == "fixed-local")
+                    Check(FrequencyRuntimeTestAccess::OtherLocalFeasible(controller, row),
+                          "test must have a feasible other-local pair that production cannot search");
+                return;
+            }
+            const bool fallback = mode == "storage" || deadline;
+            Check(!c.allInfeasible && c.anchorIndex == (fallback ? 2 : 1) &&
+                  c.checked == (fallback ? 2 : 1) && c.anchorRemote == (fallback ? 4 : 0),
+                  "wrong first feasible anchor or search after hard-feasible candidate");
+            Check(c.referenceRejectReason == (deadline ? "DEADLINE_INFEASIBLE" :
+                  fallback ? "STORAGE_INFEASIBLE" : ""), "reference hard reason lost");
+            if (mode == "no-benefit")
+            {
+                Check(row.proposal.action == FrequencyAction::NONE && !row.n5cTrace && !c.finalRemote,
+                      "nonbeneficial reference triggered fallback or ranking");
+                return;
+            }
+            Check(row.n5cTrace && c.finalRemote == row.pair->remoteNode && row.pair->localNode == 2,
+                  "anchor failed to enter unchanged fixed-local P ranking");
+            const auto& trace = controller.N5c()->Decision(*row.n5cTrace);
+            Check(trace.reference.remoteNode == *c.anchorRemote && trace.config == row.proposal.selected->config,
+                  "ranking changed anchor configuration");
+        };
+        Simulator::Schedule(NanoSeconds(600000000), [&] {
+            driver.Epoch(mode == "no-benefit" ? 0 : .4, mode == "fallback-hit");
+            const auto& row = controller.Decisions().back();
+            const bool shouldStart = mode == "first" || mode == "deadline" || mode == "storage";
+            Check(row.committed == shouldStart, "coverage START admission/fault-batch contract changed");
+            if (mode == "fallback-hit")
+                Check(manager.Summaries().empty(), "fallback created checkpoint after same-batch fault");
+        });
+        Simulator::Stop(NanoSeconds(800000000)); Simulator::Run();
+        for (const auto& [node,id] : held) manager.Pool(node).ReleaseReservation(id);
+        controller.Finalize(); engine->Finalize(); controller.WriteDecisions(output);
+        Check(controller.N5c()->QuotasEmpty() && manager.IsQuiescent(), "candidate search leaked resources");
+    }
+    Reset();
+}
+
 /** Real capacity reservations, sub-epoch releases and fresh online predictions. */
 struct RetryDriver
 {
@@ -1434,6 +1531,9 @@ int main(int argc, char** argv)
                true);
         if (onlyInputAdmission) { std::cout << "input admission online: PASS (" << checks << " checks)\n"; return 0; }
         Storage();
+        for (const auto& mode : {"first", "deadline", "storage", "all-deadline", "all-storage",
+                                 "fixed-local", "no-benefit", "fallback-hit"})
+            CandidateCoverage(std::filesystem::path(output) / (std::string("candidate-coverage-") + mode), mode);
         for (auto staging : {InputStagingPolicy::EAGER, InputStagingPolicy::DEFERRED})
             for (const auto& mode : {"normal", "hit", "race"})
                 N5cBoundary(std::filesystem::path(output) / (std::string("n5c-boundary-") +
