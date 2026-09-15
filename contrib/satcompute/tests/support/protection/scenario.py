@@ -15,7 +15,7 @@ SCENE = "contrib/satcompute/input/experiments/leo-66"
 # Neither this CLI nor the current production binary can execute that archived variant.
 def arguments(output, fault_mode="generate", audit=False, shadow=False,
               validation_trace=None, protection_mode="off", placement_mode="fa-ffp", lrl_weight=1,
-              remote_busy_recovery_policy="relocate", input_staging_policy="eager", n5c_variant="full",
+              remote_busy_recovery_policy="relocate", input_policy="eager", n5c_variant="full",
               random_run=11):
     if type(random_run) is not int or not 1 <= random_run < 2**63:
         raise ValueError("random run must be a positive integer below 2^63")
@@ -29,8 +29,8 @@ def arguments(output, fault_mode="generate", audit=False, shadow=False,
         raise ValueError("LRL requires an enabled protection scheme")
     if remote_busy_recovery_policy not in ("recompute", "relocate"):
         raise ValueError("unsupported remote-busy recovery policy")
-    if input_staging_policy not in ("eager", "deferred") or (input_staging_policy == "deferred" and protection_mode != "compfrr"):
-        raise ValueError("deferred INPUT requires CompFRR")
+    if input_policy not in ("eager", "deferred", "selective") or (input_policy != "eager" and protection_mode != "compfrr"):
+        raise ValueError("deferred/selective INPUT requires CompFRR")
     if lrl_weight != 1:
         raise ValueError("G3 freezes LRL lambda=1; no weight sweep")
     if protection_mode == "compfrr" and fault_mode != "generate":
@@ -74,8 +74,8 @@ def arguments(output, fault_mode="generate", audit=False, shadow=False,
                    "--fixedProtectionDelta=0.05", "--fixedProtectionBatchN=4",
                    f"--placementMode={placement_mode}", f"--lrlRecoveryWeight={lrl_weight}",
                    f"--remoteBusyRecoveryPolicy={remote_busy_recovery_policy}"]
-    if input_staging_policy == "deferred":
-        result += ["--inputStagingPolicy=deferred"]
+    if input_policy != "eager":
+        result += [f"--inputPolicy={input_policy}"]
     if placement_mode == "n5c":
         result += [f"--n5cVariant={n5c_variant}"]
     return result
@@ -91,7 +91,7 @@ def main():
     parser.add_argument("--n5c-variant", choices=("full", "noR", "noU", "noM", "rational-U"), default="full")
     parser.add_argument("--random-run", type=int, default=11, help="Explicit replicate; frozen default remains 11")
     parser.add_argument("--remote-busy-recovery-policy", choices=("relocate", "recompute"), default="relocate")
-    parser.add_argument("--input-staging-policy", choices=("eager", "deferred"), default="eager")
+    parser.add_argument("--input-policy", choices=("eager", "deferred", "selective"), default="eager")
     parser.add_argument("--audit", action="store_true")
     parser.add_argument("--shadow", action="store_true", help="Read-only G4 validation, not real backup")
     args = parser.parse_args()
@@ -101,7 +101,7 @@ def main():
                    shlex.join(arguments(output, args.fault_mode, args.audit, args.shadow,
                                         args.validation_trace, args.protection_mode, args.placement_mode,
                                         remote_busy_recovery_policy=args.remote_busy_recovery_policy,
-                                        input_staging_policy=args.input_staging_policy, n5c_variant=args.n5c_variant,
+                                        input_policy=args.input_policy, n5c_variant=args.n5c_variant,
                                         random_run=args.random_run))]
         if output.exists():
             raise ValueError("refusing to overwrite an existing output directory")
@@ -113,7 +113,9 @@ def main():
                 "protection_mode": args.protection_mode,
                 "placement_mode": args.placement_mode, "lrl_recovery_weight": 1,
                 "remote_busy_recovery_policy": args.remote_busy_recovery_policy,
-                "input_staging_policy": args.input_staging_policy,
+                "input_policy": args.input_policy,
+                # Historical metadata key describes layout only, not a second public switch.
+                "input_staging_policy": "eager" if args.input_policy == "eager" else "deferred",
                 "task_trace": f"{SCENE}/workload/task-trace.json", "f3_manifest": f"{SCENE}/fault/f3-manifest.json",
                 "audit": args.audit, "shadow": args.shadow, "simulation_duration_s": 1300,
                 "fixed_delay_seconds": 0.001,

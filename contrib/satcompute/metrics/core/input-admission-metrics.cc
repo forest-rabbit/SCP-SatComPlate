@@ -15,7 +15,8 @@ void CompFrrController::WriteInputAdmissionAudit(const std::filesystem::path& di
     out << std::setprecision(21)
         << "task_id,profile,policy,start_time_ns,trigger,source,local,remote,input_bytes,P_F,first_sample_ns,finish_exclusive,T_ser_ns,T_net_ns,G_ser_ns,G_net_ns,cost_ns,decision,reason\n";
     for (const auto& [a, d] : m_inputAdmissions)
-        out << a.task.taskId << ',' << TaskProfileToString(a.task.taskProfile) << ',' << ToString(m_inputAdmission) << ','
+        // Preserve the algorithm identifier and CSV schema; public inputPolicy is selective.
+        out << a.task.taskId << ',' << TaskProfileToString(a.task.taskProfile) << ",ser-break-even,"
             << a.timeNs << ',' << a.trigger << ',' << a.task.sourceNodeId << ',' << a.pair.localNode << ','
             << a.pair.remoteNode << ',' << a.task.inputBytes << ','
             << (a.prediction ? Json(a.prediction->predictedFailureProbability).dump() : "") << ','

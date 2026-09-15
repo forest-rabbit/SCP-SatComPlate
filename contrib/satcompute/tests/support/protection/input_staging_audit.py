@@ -155,7 +155,7 @@ def fairness(runs):
                 "comparison policy identity mismatch")
         require(e["fault_mode"] == "generate" and not e["audit"] and not e["shadow"] and not e["worktree_dirty"], "nonformal identity")
         require((e["seed"], e["run"], e["simulation_duration_s"], run["execution_result"]["returncode"]) == (1, 11, 1300, 0), "incomplete formal run")
-        ignored = {"--outputDir", "--faultTrace", "--inputStagingPolicy", "--remoteBusyRecoveryPolicy"}
+        ignored = {"--outputDir", "--faultTrace", "--inputStagingPolicy", "--inputPolicy", "--remoteBusyRecoveryPolicy"}
         controls.append({k: v for k, v in (arg.split("=", 1) for arg in shlex.split(e["command"][-1])[1:]) if k not in ignored})
     require(all(c == controls[0] for c in controls), "nonpolicy frozen controls differ")
     require(runs["R6"]["execution"]["commit"] == runs["R7"]["execution"]["commit"], "R6/R7 execution code differs")

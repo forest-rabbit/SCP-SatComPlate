@@ -7,26 +7,9 @@
 
 namespace ns3::protection
 {
-InputAdmissionPolicy ParseInputAdmissionPolicy(const std::string& name)
-{
-    if (name == "none") return InputAdmissionPolicy::NONE;
-    if (name == "ser-break-even") return InputAdmissionPolicy::SER_SYMMETRIC_BREAK_EVEN;
-    throw std::invalid_argument("unknown INPUT admission policy");
-}
-const char* ToString(InputAdmissionPolicy policy)
-{
-    switch (policy)
-    {
-    case InputAdmissionPolicy::NONE: return "none";
-    case InputAdmissionPolicy::SER_SYMMETRIC_BREAK_EVEN: return "ser-break-even";
-    }
-    throw std::invalid_argument("invalid INPUT admission policy");
-}
-
-InputAdmissionDecision EvaluateInputAdmission(InputAdmissionPolicy policy, const InputAdmissionInput& in)
+InputAdmissionDecision EvaluateSelectiveInputAdmission(const InputAdmissionInput& in)
 {
     InputAdmissionDecision out;
-    if (policy == InputAdmissionPolicy::NONE) { out.reason = "DISABLED"; return out; }
     if (in.startNs < 0 || in.remainingNs < 0 ||
         in.remainingNs > std::numeric_limits<int64_t>::max() - in.startNs)
         throw std::invalid_argument("invalid INPUT prediction horizon");

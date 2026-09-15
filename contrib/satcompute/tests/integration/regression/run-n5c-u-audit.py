@@ -38,7 +38,7 @@ def command(output, group, run):
     placement, variant = GROUPS[group]
     return [sys.executable, str(HERE / "run-final-scenario.py"), "--output-dir", str(output),
         "--protection-mode", "compfrr", "--placement-mode", placement,
-        "--input-staging-policy", "deferred", "--remote-busy-recovery-policy", "relocate",
+        "--input-policy", "deferred", "--remote-busy-recovery-policy", "relocate",
         "--n5c-variant", variant, "--random-run", str(run)]
 
 

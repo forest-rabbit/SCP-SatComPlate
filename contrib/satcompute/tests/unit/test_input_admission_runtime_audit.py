@@ -10,32 +10,9 @@ from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[4]
 API=runpy.run_path(str(Path(__file__).parents[1]/'support/protection/input_admission_runtime_audit.py'))
-RUNNER=runpy.run_path(str(Path(__file__).parents[1]/'integration/regression/run-input-admission-development.py'))
 
 
 class RuntimeAuditTests(unittest.TestCase):
-    def test_final_runner_uses_only_ds_and_actual_clean_tested_source(self):
-        self.assertEqual(RUNNER['GROUPS'],{'D':('deferred','none'),'S':('deferred','ser-break-even')})
-        def git(command,**kwargs):
-            return {('status','--porcelain'):'',('rev-parse','HEAD'):'actual-commit',
-                    ('rev-parse','HEAD^{tree}'):'tested-tree',
-                    ('branch','--show-current'):'current-branch'}[tuple(command[1:])]
-        with patch.object(subprocess,'check_output',side_effect=git), \
-             patch.object(subprocess,'run',return_value=subprocess.CompletedProcess([],0)):
-            actual=RUNNER['execution_identity'](dict(all_passed=True,tested_tree='tested-tree'))
-            self.assertEqual(actual['commit'],'actual-commit')
-            self.assertEqual(actual['branch'],'current-branch')
-            self.assertFalse(actual['worktree_dirty'])
-            with self.assertRaisesRegex(ValueError,'source tree'):
-                RUNNER['execution_identity'](dict(all_passed=True,tested_tree='old-tree'))
-        with patch.object(subprocess,'check_output',return_value=' M source.cc'):
-            with self.assertRaisesRegex(ValueError,'clean'):
-                RUNNER['execution_identity'](dict(all_passed=True))
-        with patch.object(subprocess,'check_output',return_value=''), \
-             patch.object(subprocess,'run',return_value=subprocess.CompletedProcess([],1)):
-            with self.assertRaisesRegex(ValueError,'ancestor'):
-                RUNNER['execution_identity'](dict(all_passed=True))
-
     def test_available_comparison_pairs_only(self):
         self.assertEqual(API['paired_comparison']({},{}),{})
         self.assertEqual(API['paired_comparison']({},dict(D={})),{})
@@ -44,7 +21,11 @@ class RuntimeAuditTests(unittest.TestCase):
         result=subprocess.run([str(ROOT/'build/contrib/satcompute/ns3.48-satcompute-default'),'--help'],
                               cwd=ROOT,text=True,capture_output=True,timeout=10)
         self.assertEqual(result.returncode,0)
-        self.assertIn('ser-break-even',result.stdout)
+        self.assertIn('inputPolicy',result.stdout)
+        self.assertIn('eager / deferred / selective',result.stdout)
+        self.assertNotIn('inputStagingPolicy',result.stdout)
+        self.assertNotIn('inputAdmissionPolicy',result.stdout)
+        self.assertNotIn('inputStartAudit',result.stdout)
         self.assertNotIn('net-ready-break-even',result.stdout+result.stderr)
 
     def test_legacy_eager_missing_barrier_is_not_zero_wait(self):
@@ -65,7 +46,10 @@ class RuntimeAuditTests(unittest.TestCase):
         summary=dict(tasks=[record],B_prefetch_total=100,B_prefetch_used=100,B_prefetch_unused=0,
             used_bytes_at_end=0,reserved_bytes_at_end=0)
         datasets={
-            'input-admission-decisions.csv':[dict(task_id='1',decision='SEND',remote='4',start_time_ns='10',profile='llm')],
+            'input-admission-decisions.csv':[dict(task_id='1',decision='SEND',local='2',remote='4',start_time_ns='10',profile='llm')],
+            'protection-events.csv':[dict(task_id='1',event='START',local_node='2',remote_node='4',time_ns='10')],
+            'frequency-decisions.csv':[dict(task_id='1',proposed_action='START',decision_committed='1',
+                local_node='2',remote_node='4',fault_epoch_time_ns='10')],
             'transfer-summary.csv':[],
             'protection-transfers.csv':[dict(task_id='1',kind='PREFETCH_INPUT',transfer_id='9',sent_bytes='100',
                 bytes='100',source_node='0',destination_node='4')],
@@ -78,8 +62,6 @@ class RuntimeAuditTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             (root/'input-prefetch-summary.json').write_text(json.dumps(summary))
-            (root/'input-start-snapshots.json').write_text(json.dumps(dict(candidates=[
-                dict(task_id=1,remote_node=4,start_time_ns=10,admitted=True)])))
             with patch.dict(API['audit_prefetch'].__globals__,rows=lambda _,name,*args:datasets[name]):
                 return API['audit_prefetch'](root)
 
@@ -117,13 +99,26 @@ class RuntimeAuditTests(unittest.TestCase):
 
     def test_illegal_cli_combinations_rejected_before_running(self):
         binary=ROOT/'build/contrib/satcompute/ns3.48-satcompute-default'
-        for mode,staging,admission in (('fixed','eager','ser-break-even'),('compfrr','eager','net-ready-break-even'),
-            ('compfrr','deferred','net-ready-break-even'),
-            ('recompute','deferred','ser-break-even'),('compfrr','deferred','invalid')):
-            result=subprocess.run([str(binary),f'--protectionMode={mode}',f'--inputStagingPolicy={staging}',
-                f'--inputAdmissionPolicy={admission}'],cwd=ROOT,text=True,capture_output=True,timeout=10)
+        for mode,policy in (('fixed','selective'),('compfrr','jit'),('compfrr','net-ready-break-even'),
+                            ('recompute','deferred'),('compfrr','invalid')):
+            result=subprocess.run([str(binary),f'--protectionMode={mode}',f'--inputPolicy={policy}'],
+                                  cwd=ROOT,text=True,capture_output=True,timeout=10)
             self.assertNotEqual(result.returncode,0)
-            self.assertIn('inputAdmissionPolicy',result.stdout+result.stderr)
+            self.assertIn('inputPolicy',result.stdout+result.stderr)
+
+    def test_retired_public_switches_rejected(self):
+        binary=ROOT/'build/contrib/satcompute/ns3.48-satcompute-default'
+        for argument in ('--inputStagingPolicy=eager','--inputAdmissionPolicy=none','--inputStartAudit=0'):
+            result=subprocess.run([str(binary),argument],cwd=ROOT,text=True,capture_output=True,timeout=10)
+            self.assertNotEqual(result.returncode,0)
+
+    def test_committed_and_physical_start_must_match(self):
+        for name in ('protection-events.csv','frequency-decisions.csv'):
+            summary,data=self.fixture()
+            data[name][0]['remote_node']='5'
+            with self.subTest(name=name),self.assertRaises(ValueError): self.audit(summary,data)
+            data[name]=[]
+            with self.assertRaises(ValueError): self.audit(summary,data)
 
 
 if __name__=='__main__': unittest.main()

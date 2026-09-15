@@ -70,7 +70,7 @@ def prepare(root):
         name = SOURCES[item['directory']]
         output = root / 'formal' / name
         args = FINAL['arguments'](output, protection_mode=meta['protection_mode'],
-            placement_mode=meta['placement_mode'], input_staging_policy=meta['input_staging_policy'],
+            placement_mode=meta['placement_mode'], input_policy=meta['input_staging_policy'],
             remote_busy_recovery_policy=meta['remote_busy_recovery_policy'],
             n5c_variant=meta.get('n5c_variant', 'full'), random_run=meta['run'])
         if normalized(meta['command'][-1]) != normalized(shlex.join(args)):
@@ -108,7 +108,7 @@ def execute(root, jobs):
         print('START', entry['source'], flush=True)
         command = [sys.executable, str(HERE / 'run-final-scenario.py'), '--output-dir', str(output),
             '--protection-mode', meta['protection_mode'], '--placement-mode', meta['placement_mode'],
-            '--input-staging-policy', meta['input_staging_policy'], '--remote-busy-recovery-policy',
+            '--input-policy', meta['input_staging_policy'], '--remote-busy-recovery-policy',
             meta['remote_busy_recovery_policy'], '--n5c-variant', meta.get('n5c_variant', 'full'),
             '--random-run', str(meta['run'])]
         subprocess.run(command, cwd=ROOT, check=True)

@@ -127,7 +127,7 @@ def execute(root, items, head, jobs, resume):
         print("START", run_number, variant, flush=True)
         subprocess.run([sys.executable, str(HERE / "run-final-scenario.py"),
             "--output-dir", str(directory), "--protection-mode", "compfrr", "--placement-mode", "n5c",
-            "--input-staging-policy", "deferred", "--remote-busy-recovery-policy", "relocate",
+            "--input-policy", "deferred", "--remote-busy-recovery-policy", "relocate",
             "--n5c-variant", variant, "--random-run", str(run_number)], cwd=ROOT, check=True)
         require(MATRIX["identity"]() == head, "source changed during run")
         verify(directory, variant, run_number, head)

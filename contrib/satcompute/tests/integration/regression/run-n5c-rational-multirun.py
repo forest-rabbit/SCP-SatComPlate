@@ -99,7 +99,7 @@ def execute(root, jobs, resume=False):
             return
         print("START", run, flush=True)
         subprocess.run([sys.executable, str(HERE / "run-final-scenario.py"), "--output-dir", str(directory),
-            "--protection-mode", "compfrr", "--placement-mode", "n5c", "--input-staging-policy", "deferred",
+            "--protection-mode", "compfrr", "--placement-mode", "n5c", "--input-policy", "deferred",
             "--remote-busy-recovery-policy", "relocate", "--n5c-variant", "rational-U", "--random-run", str(run)],
             cwd=ROOT, check=True)
         require(MATRIX["identity"]() == plan["commit"], "source changed during run")

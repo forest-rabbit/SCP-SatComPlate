@@ -29,7 +29,7 @@ def command(output, group):
     staging,placement,variant = GROUPS[group]
     return [sys.executable,str(HERE/"run-final-scenario.py"),"--output-dir",str(output/group),
             "--protection-mode","compfrr","--placement-mode",placement,
-            "--input-staging-policy",staging,"--remote-busy-recovery-policy","relocate",
+            "--input-policy",staging,"--remote-busy-recovery-policy","relocate",
             "--n5c-variant",variant]
 
 

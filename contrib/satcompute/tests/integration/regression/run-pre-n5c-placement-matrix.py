@@ -43,7 +43,7 @@ def command(output, group):
     require(mode in MODES, "unknown placement")
     return [sys.executable, str(HERE / "run-final-scenario.py"), "--output-dir", str(output / group),
             "--protection-mode", scheme, "--placement-mode", mode,
-            "--input-staging-policy", staging, "--remote-busy-recovery-policy", busy]
+            "--input-policy", staging, "--remote-busy-recovery-policy", busy]
 
 
 def normalize(value, directory):

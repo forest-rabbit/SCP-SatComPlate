@@ -7,9 +7,6 @@
 namespace ns3::protection
 {
 /** Optional INPUT screening, independent of checkpoint EAGER/DEFERRED layout. */
-enum class InputAdmissionPolicy { NONE, SER_SYMMETRIC_BREAK_EVEN };
-InputAdmissionPolicy ParseInputAdmissionPolicy(const std::string& name);
-const char* ToString(InputAdmissionPolicy policy);
 
 /** Immutable actual-pair pre-initialization causal inputs; no observed outcomes. */
 struct InputAdmissionInput
@@ -31,7 +28,6 @@ struct InputAdmissionDecision
 };
 
 /** Pure binary rule. No timer, RNG, allocation, path query, or frequency solve. */
-InputAdmissionDecision EvaluateInputAdmission(InputAdmissionPolicy policy,
-                                               const InputAdmissionInput& input);
+InputAdmissionDecision EvaluateSelectiveInputAdmission(const InputAdmissionInput& input);
 } // namespace ns3::protection
 #endif

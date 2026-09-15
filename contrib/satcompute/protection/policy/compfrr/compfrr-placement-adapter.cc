@@ -188,11 +188,6 @@ bool CompFrrController::RevalidateN5c(FrequencyDecisionRecord& row,
         return false;
     }
     row.n5cPeak = peak;
-    if ((m_inputStartAudit || m_optionalInput) && row.proposal.action == FrequencyAction::START)
-    {
-        actual.input.storageDemand = {};
-        row.inputAuditValidation = InputStartValidatedResources{actual.input, *storage};
-    }
     return true;
 }
 } // namespace ns3::protection

@@ -18,22 +18,16 @@ CompFrrController::CompFrrController(Ptr<TaskCoordinator> tasks,
     int64_t stopNs,
     std::unique_ptr<PlacementPolicy> placement,
     RemoteBusyRecoveryPolicy busyPolicy,
-    InputStagingPolicy inputPolicy,
-    bool observePlacementResources,
-    bool inputStartAudit,
-    InputAdmissionPolicy inputAdmission)
+    InputPolicy inputPolicy,
+    bool observePlacementResources)
     : m_tasks(tasks),
       m_topology(topology),
       m_faults(faults),
-      m_manager(tasks, topology, capacity, stopNs, inputPolicy),
-      m_placement(placement ? std::move(placement) : std::make_unique<FaFirstFeasiblePlacementPolicy>()),
-      m_inputAdmission(inputAdmission),
-      m_inputStartAudit(inputStartAudit)
+      m_manager(tasks, topology, capacity, stopNs, InputLayoutFor(inputPolicy)),
+      m_placement(placement ? std::move(placement) : std::make_unique<FaFirstFeasiblePlacementPolicy>())
 {
     if (!faults)
         throw std::invalid_argument("frequency protection requires online generate epochs");
-    if (inputAdmission != InputAdmissionPolicy::NONE && inputPolicy != InputStagingPolicy::DEFERRED)
-        throw std::invalid_argument("optional INPUT admission requires Deferred checkpoint layout");
     const auto spatial = dynamic_cast<const CompFrrPlacementPolicy*>(m_placement.get());
     if (spatial || observePlacementResources)
         m_placementObservation = std::make_unique<CompFrrPlacementTracker>(tasks, faults, m_manager, stopNs,
@@ -55,7 +49,7 @@ CompFrrController::CompFrrController(Ptr<TaskCoordinator> tasks,
     tasks->GetTransferEngine()->SetCapacityReleaseObserver([this] { CapacityReleased(); });
     m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, *this,
                                                      busyPolicy, nullptr, CheckpointRecoveryCapabilities{true, true, true});
-    if (inputAdmission != InputAdmissionPolicy::NONE)
+    if (inputPolicy == InputPolicy::SELECTIVE)
     {
         m_optionalInput = std::make_unique<InputStagingManager>(tasks, m_manager, stopNs,
             [this](uint32_t node) { return m_n5c ? m_n5c->FreeFor(node, 0) : m_manager.Pool(node).Free(); });
@@ -587,7 +581,7 @@ void CompFrrController::AfterEpoch(int64_t time,
             row.capacityWaitEndNs = time;
         if (row.committed)
         {
-            std::optional<InputStartAuditRecord> admittedInput;
+            std::optional<SelectiveInputSnapshot> admittedInput;
             if (row.proposal.action == FrequencyAction::PAUSE)
             {
                 const auto reason = row.resourceReason.empty() ? row.proposal.reason : row.resourceReason;
@@ -611,23 +605,21 @@ void CompFrrController::AfterEpoch(int64_t time,
                 context.primaryNode = task.definition.computeNodeId;
                 context.nowNs = time;
                 // Freeze before initialization can allocate, transfer or change inventory.
-                const auto inputAudit = (m_inputStartAudit || m_optionalInput)
-                    ? std::optional(CaptureInputStart(row, time)) : std::nullopt;
+                const auto snapshot = m_optionalInput
+                    ? std::optional(CaptureSelectiveInput(row, time)) : std::nullopt;
                 m_manager.Execute(context,
                                   {ActionKind::START_CHECKPOINT,
                                    CheckpointConfiguration{config->deltaPermille,
                                                            config->batchN,
                                                            state.pair->localNode,
                                                            state.pair->remoteNode}});
-                if (inputAudit)
+                if (snapshot)
                 {
                     const auto inventory = m_manager.Inventory(row.taskId);
                     if (inventory && inventory->active)
                     {
-                        m_inputStartRecords.push_back(*inputAudit);
-                        admittedInput = inputAudit;
+                        admittedInput = snapshot;
                     }
-                    else ++m_inputStartRejected;
                 }
             }
             else if (row.proposal.action == FrequencyAction::UPDATE)
@@ -649,7 +641,7 @@ void CompFrrController::AfterEpoch(int64_t time,
             if (admittedInput && m_optionalInput)
             {
                 const auto& a = *admittedInput;
-                const auto decision = EvaluateInputAdmission(m_inputAdmission,
+                const auto decision = EvaluateSelectiveInputAdmission(
                     {a.timeNs, a.remainingNs, a.firstSampleNs, a.finishExclusive,
                      a.task.inputBytes, a.inputPath, a.prediction});
                 m_inputAdmissions.emplace_back(a, decision);

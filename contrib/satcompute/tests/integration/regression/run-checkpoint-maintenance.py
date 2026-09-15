@@ -79,7 +79,7 @@ def execute(root, jobs):
         dest = ROOT / row['directory']
         print('START', row['run'], row['group'], flush=True)
         subprocess.run([sys.executable, str(HERE/'run-final-scenario.py'), '--output-dir', str(dest),
-            '--protection-mode', 'compfrr', '--placement-mode', 'n5c', '--input-staging-policy', 'deferred',
+            '--protection-mode', 'compfrr', '--placement-mode', 'n5c', '--input-policy', 'deferred',
             '--remote-busy-recovery-policy', 'relocate', '--n5c-variant', row['group'],
             '--random-run', str(row['run'])], cwd=ROOT, check=True)
         meta = json.loads((dest/'execution.json').read_text())

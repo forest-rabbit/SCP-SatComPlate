@@ -31,5 +31,13 @@ G0 已重新核验：7 个远端分支与任务书一致，唯一 open PR 为 #9
 G1a：已提取 tracked causal fixture（409 行），6 项纯 SER 测试通过；405 个网络候选
 逐任务完全匹配（68 SEND），4 个 LocalDelivery。测试不再因 ignored output 缺失而跳过。
 旧三模式小场景输出已保留在 `output/input-repo-closeout/before-mapping/`。
+G1b：完整构建通过；17 项 INPUT Python tests、12 项场景测试（1 项既有切片缺失跳过）、
+22 个 INPUT lifecycle 场景（374 checks）通过。Eager/Deferred/Selective 对应旧组合的
+33/34/37 份小场景输出完全一致；SELECTIVE 只删除开发大快照。
+完整 corrected-chain 小型门禁：1,984 份 CSV/JSON（1,723 CSV）相同，唯一授权删除为
+旧 SER fixture 的 `input-start-snapshots.json`；生产 CSV schema 与值均不变。
+因果 snapshot 现位于 `policy/compfrr/input/selective-input-snapshot.*`，只含生产实际使用量。
+维护账本 validator 已脱离大快照与旧 runner，改用真实 checkpoint START 和 committed
+Frequency actual pair/time 交叉验证；物理准入与概率窗口继续由 C++ 接线测试检查。
 执行中。最终 PR、CI、删除 manifest 与 gate 结果在对应步骤完成后补充。
 NEXT PLANNED WORK：Multi-tree baseline integration（需要单独批准）。

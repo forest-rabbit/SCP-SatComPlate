@@ -195,11 +195,13 @@ class FinalRunnerTests(unittest.TestCase):
     def test_deferred_is_explicit_compfrr_only(self):
         output = Path("output/controlled-test")
         eager = RUN["arguments"](output, protection_mode="compfrr")
-        deferred = RUN["arguments"](output, protection_mode="compfrr", input_staging_policy="deferred")
-        self.assertEqual(deferred, eager + ["--inputStagingPolicy=deferred"])
+        deferred = RUN["arguments"](output, protection_mode="compfrr", input_policy="deferred")
+        self.assertEqual(deferred, eager + ["--inputPolicy=deferred"])
+        self.assertEqual(RUN["arguments"](output, protection_mode="compfrr", input_policy="selective"),
+                         eager + ["--inputPolicy=selective"])
         for mode in ("off", "recompute", "one-plus-one", "fixed"):
             with self.assertRaisesRegex(ValueError, "CompFRR"):
-                RUN["arguments"](output, protection_mode=mode, input_staging_policy="deferred")
+                RUN["arguments"](output, protection_mode=mode, input_policy="deferred")
 
     def test_complete_baselines_use_frozen_scene_and_four_placements(self):
         for mode in ("recompute", "one-plus-one"):

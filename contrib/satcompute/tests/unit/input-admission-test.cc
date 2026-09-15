@@ -27,7 +27,7 @@ int main()
             in.path.admissible = path.at("admissible"); in.path.local = path.at("local_delivery");
             if (!path.at("admitted_rate_bps").is_null()) in.path.path.admittedRateBps = path.at("admitted_rate_bps");
             if (!path.at("propagation_ns").is_null()) in.path.propagationNs = path.at("propagation_ns");
-            const auto s = EvaluateInputAdmission(InputAdmissionPolicy::SER_SYMMETRIC_BREAK_EVEN, in);
+            const auto s = EvaluateSelectiveInputAdmission(in);
             results.push_back({{"task_id", r.at("task_id")}, {"ser", s.send},
                 {"serialization_ns", s.serializationNs}, {"network_ns", s.networkReadyNs},
                 {"serial_gain_ns", s.serialGainNs}, {"network_gain_ns", s.networkGainNs}, {"cost_ns", s.costNs}});

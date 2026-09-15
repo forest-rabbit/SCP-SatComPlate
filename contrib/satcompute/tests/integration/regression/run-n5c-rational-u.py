@@ -127,7 +127,7 @@ def main():
         directory = root / "run-11/rational-U"
         require(not directory.exists(), "single new formal run only; no overwrite or automatic retry")
         subprocess.run([sys.executable, str(HERE / "run-final-scenario.py"), "--output-dir", str(directory),
-            "--protection-mode", "compfrr", "--placement-mode", "n5c", "--input-staging-policy", "deferred",
+            "--protection-mode", "compfrr", "--placement-mode", "n5c", "--input-policy", "deferred",
             "--remote-busy-recovery-policy", "relocate", "--n5c-variant", "rational-U", "--random-run", "11"],
             cwd=ROOT, check=True)
         require(MATRIX["identity"]() == plan["commit"], "source changed during run")

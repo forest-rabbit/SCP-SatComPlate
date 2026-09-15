@@ -111,7 +111,7 @@ def execute(root, jobs):
             raise ValueError('existing output; no overwrite or incomplete-run reuse')
         print('START', entry['run'], entry['group'], flush=True)
         subprocess.run([sys.executable, str(HERE / 'run-final-scenario.py'), '--output-dir', str(output),
-            '--protection-mode', 'compfrr', '--placement-mode', 'n5c', '--input-staging-policy', 'deferred',
+            '--protection-mode', 'compfrr', '--placement-mode', 'n5c', '--input-policy', 'deferred',
             '--remote-busy-recovery-policy', 'relocate', '--n5c-variant', entry['group'],
             '--random-run', str(entry['run'])], cwd=ROOT, check=True)
         verify(output, entry['run'], entry['group'], plan['commit'])

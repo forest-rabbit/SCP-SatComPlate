@@ -125,12 +125,10 @@ GetDefaultSatComputeConfig()
     // --remoteBusyRecoveryPolicy：remote 忙或 direct 无法按时完成时生效；CB 保持原忙时合同。
     // relocate 迁移状态后继续；recompute 放弃检查点，从原始 INPUT 重算；off 忽略本参数。
     config.remoteBusyRecoveryPolicy = "relocate";
-    // --inputStagingPolicy：eager 保持原始 INPUT 常态预置；deferred 仅用于 CompFRR，
-    // 常态只传递状态，故障后向实际恢复星获取一次完整 INPUT，不改变 WU、状态量和成本档位。
-    config.inputStagingPolicy = "eager";
-    // 可选 INPUT 预置默认关闭；两个 break-even 规则只允许用于 CompFRR + deferred。
-    // 不改变 checkpoint 初始化布局、Frequency 或节点选择；失败退回 Deferred。
-    config.inputAdmissionPolicy = "none";
+    // --inputPolicy：eager 常态预置完整 INPUT；deferred 常态只传状态、故障后获取 INPUT；
+    // selective 在 Deferred 布局上按 SER break-even 决定是否提前发送 INPUT。
+    // deferred/selective 仅用于 CompFRR；不改变 Frequency、节点选择或实际恢复依赖。
+    config.inputPolicy = "eager";
 
     // --lrlRecoveryWeight：L = active backup assignments + weight * active recoveries。
     // G3 在看到 A/B/C 结果之前预先冻结为 1，不扫描、不按结果调整。
@@ -147,9 +145,6 @@ GetDefaultSatComputeConfig()
 
     // --compfrr-shadow：显式开启 G4 旁路评估，不影响任务、路由与故障抽样。
     config.compfrrShadow = false;
-
-    // --inputStartAudit：开发采集开关；只读 START 快照，不创建预置 INPUT 或改变决策。
-    config.inputStartAudit = false;
 
     // --compfrr-shadow-output：旁路 CSV 目录；空时使用 outputDir/shadow。
     config.compfrrShadowOutput = "";

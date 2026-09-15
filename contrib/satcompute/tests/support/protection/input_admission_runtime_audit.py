@@ -29,7 +29,21 @@ def audit_prefetch(root):
     decisions = rows(root,'input-admission-decisions.csv')
     decision = {r['task_id']:r for r in decisions}
     require(len(decision)==len(decisions), 'duplicate START selector decision')
-    snapshots = {str(r['task_id']):r for r in json.loads((root/'input-start-snapshots.json').read_text())['candidates']}
+    # Maintained runtime evidence, not the retired large calibration JSON.
+    starts = [r for r in rows(root,'protection-events.csv') if r['event']=='START']
+    start = {r['task_id']:r for r in starts}
+    require(len(start)==len(starts), 'duplicate physical checkpoint START')
+    committed = [r for r in rows(root,'frequency-decisions.csv')
+                 if r['proposed_action']=='START' and r['decision_committed']=='1']
+    actual = {r['task_id']:r for r in committed}
+    require(len(actual)==len(committed), 'duplicate committed START')
+    for key,d in decision.items():
+        require(key in start and key in actual, 'selector without physical/committed START')
+        s,f=start[key],actual[key]
+        require(int(d['remote'])==int(s['remote_node'])==int(f['remote_node']) and
+                int(d['local'])==int(s['local_node'])==int(f['local_node']) and
+                int(d['start_time_ns'])==int(s['time_ns'])==int(f['fault_epoch_time_ns']),
+                'selector did not use committed actual pair/time')
     requests = {str(r['task_id']):r for r in summary['tasks']}
     require(len(requests)==len(summary['tasks']), 'duplicate proactive lifetime')
     require(set(requests)=={k for k,r in decision.items() if r['decision']=='SEND'}, 'SEND/request population mismatch')
@@ -39,9 +53,8 @@ def audit_prefetch(root):
     events = rows(root,'input-prefetch-events.csv')
     categories = Counter(); total=used=normal=post=0
     for key,r in requests.items():
-        d = decision[key]; s = snapshots[key]
-        require(r['target']==int(d['remote'])==s['remote_node'] and
-                r['requested_ns']==int(d['start_time_ns'])==s['start_time_ns'] and s['admitted'],
+        d = decision[key]
+        require(r['target']==int(d['remote']) and r['requested_ns']==int(d['start_time_ns']),
                 'INPUT is not causally tied to the admitted actual pair')
         sent = r['sent_bytes']; total+=sent; used+=r['used_bytes']
         normal+=r['normal_sent_bytes']; post+=r['post_fault_sent_bytes']
@@ -151,8 +164,7 @@ def paired_comparison(roots, results):
     """Same realized primary fault identity only; not an exact counterfactual claim."""
     answer={}
     columns=('protection_sent_bytes','all_network_sent_bytes','total_waste_eq_wu')
-    for old,new in (('D','S'),('D','N'),('E','S'),('E','N'),('S','N')):
-        # Retain historical four-group analysis; final closure executes only D/S.
+    for old,new in (('D','S'),('E','S')):
         if old not in results or new not in results: continue
         a,b=results[old],results[new]
         change={k:dict(before=a[k],after=b[k],delta=b[k]-a[k],
