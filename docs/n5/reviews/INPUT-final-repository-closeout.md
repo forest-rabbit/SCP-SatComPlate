@@ -111,3 +111,13 @@ Regression 含既有 N4B 100-task 验收，不是新的正式 800-task/1300s INP
 证据：`output/input-repo-closeout/{final-build,final-python,final-cpp,final-smoke,final-regression}.log`，
 三模式输出、G1 equivalence、lifecycle 输出和依赖扫描也在该目录。
 最终默认、SER 严格比较、概率随机流、场景、Frequency/Placement/Recovery 语义未改。
+
+## PR 与整合收据
+
+最终 INPUT PR：[#104](https://github.com/forest-rabbit/SCP-SatComPlate/pull/104)，
+`feature/compfrr-input-admission-runtime → n5`。使用 merge commit，不 squash。
+分阶段提交：`d07bd889d` fixture、`d0ad381e5` 参数/DTO、`b71920159` 工具清理、
+`6a5f15f6e` canonical 文档；后续提交仅补充本收据。
+
+阶段 CI 使用手动 `phase_gate.yml`，phase=`input-final-repository-closeout`，只触发一次。
+CI/merge/分支关闭结果在完成后追加；main 与 legacy/ns-3.33 不参与整合。
