@@ -1,30 +1,30 @@
 # AGENTS.md
 
-### Current handoff: protection config hierarchy review (2026-09-15)
+### Current handoff: protection config hierarchy closed (2026-09-15)
 
-Follow-up authorization after `5cf0ac56e`: formal platform defaults are now
+PR #105 merged into n5 as `2d601d268` after the single successful phase CI
+`34940108716` on `14d667676` (build/Python/C++/smoke/regression, 7m43s).
+Merge tree equals the tested head. The local and remote feature branch were
+deleted after ancestry verification; all three implementation commits remain in n5.
+This receipt is documentation-only; do not trigger another CI for it.
+
+The separately approved default-profile commit `44d1b6a53` sets formal defaults to
 CompFRR adaptive + CompFRR-P + Selective + Relocate, CUMULATIVE and no ablation.
 OFF remains an explicit diagnostic/history capability, not a formal comparison scheme.
-This is a separate default-profile change, not part of the pure-refactor equivalence claim.
-Keep baseline private defaults, historical command identities and all algorithms intact.
+This default change is not part of `5cf0ac56e`'s pure-refactor equivalence claim.
 Historical/test launch adapters freeze omitted old defaults; current formal runner
-serializes the complete selected profile. The final audit now authorizes the two
-closeout checks, separate default-profile commit, push/PR, one phase CI, merge to n5
-and verified feature-branch deletion. Preserve the already pushed pure-refactor
-commit. Do not run a formal matrix or begin Multi-tree; stop after closeout.
+serializes the complete profile. Baseline private defaults and capabilities stay frozen.
 
-The approved revised proposal is implemented on `refactor/protection-config-hierarchy`,
-based on corrected `n5@fd45c5144`. Scope is configuration owners/names/wiring only.
 Defaults remain typed `xx = xx;` in `protection/protection-para.cc`, separate from
 CLI/validation in `protection-config.cc`. Ordinary INPUT is now
 `compfrrInputPolicy=eager|deferred|selective`; old names are explicitly mapped in
-test launch/evidence helpers, not accepted as production aliases. Preserve scheme
-capabilities and old/new experiment identities, especially historical CB omitted
-busy=relocate versus the approved canonical CB busy=recompute.
-See `docs/n5/reviews/Protection-config-hierarchy.md` for mapping and small gates.
-The final audit supersedes the former review-only stop for closeout and n5 integration.
-No formal 1300s matrix, algorithm change, Multi-tree, INPUT timing change or
-U optimization is authorized by this increment.
+test launch/evidence helpers, not production aliases. Preserve historical CB
+omitted busy=relocate versus canonical CB busy=recompute. All audited recent-U
+run11-15 argv use equals form; archival identity stays read-only/non-executable.
+See `docs/n5/reviews/Protection-config-hierarchy.md` for mapping, gates and receipts.
+STOP after closeout. Multi-tree is next planned work, not implemented or authorized
+yet. Do not run formal 1300s matrices, change algorithms/INPUT/U, create a new branch
+or modify main/legacy without the next accepted task. Older stage plans below are history.
 
 ### Previous handoff: INPUT repository closed (2026-09-15)
 

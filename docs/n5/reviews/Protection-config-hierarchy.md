@@ -206,3 +206,11 @@ CI 不新增 ns-3 examples/tests 或正式 800-task/1300s 性能矩阵。
 维护中的 Python 233 项（232 通过、1 项原 native-slices skip），完整 C++ unit 通过，
 `git diff --check` 通过。两个收尾项均关闭：`PROTECTION_CONFIG_HIERARCHY_FINAL_APPROVED`。
 该结论不替代随后一次阶段 CI 的集成门禁，也不宣称重新验证了正式性能矩阵。
+
+最终回执：[PR #105](https://github.com/forest-rabbit/SCP-SatComPlate/pull/105)
+于 2026-09-15 合入 `n5`，merge `2d601d268`；
+[唯一阶段 CI 34940108716](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/34940108716)
+在 `14d667676` 上全部通过（7m43s，含既有 regression）。合并树与该测试提交逐文件一致。
+确认 ancestry 后已删除本地/远端 `refactor/protection-config-hierarchy`，全部实现提交仍保留在 n5。
+本回执与 AGENTS 交接更新仅为文档，不再触发 CI；main/legacy、历史证据、正式矩阵均未修改。
+至此配置分层收尾完成；Multi-tree 仅具备配置接入边界，具体算法/资源能力仍需下一阶段合同。
