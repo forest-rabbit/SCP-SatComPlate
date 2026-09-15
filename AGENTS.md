@@ -1,5 +1,23 @@
 # AGENTS.md
 
+### Active Multi-tree implementation (2026-09-15)
+
+The user approved MultiTree_Published_FT_Rule_Mapping_and_Baseline_Kickoff plus
+the original-PDF review amendments. Work on feature/multitree-published-ft from
+n5@8171fce48. Preserve Fig.14's FT tree only (not full MTGP), exact strict thresholds,
+fixed TS/IDDL tied ranks, causal ordinary-queue CL, current-check F1/F2 FR (no F3).
+Document feature/timing/admission adaptations, not exact original-system reproduction.
+Calibration uses exact runtime deadline ns; unseen values interpolate frozen knots.
+No hash-integrity mechanism, no tuning/retraining/routing or queue changes.
+The user explicitly waived the routine Stage A human stop: after its checks pass,
+continue shared RS/RP runtime and small gates, then six full 1300s seed1/run11
+800-task online-generate comparisons: Recompute, 1+1, CB-SAT, Multi-tree all FA-FFP
+(busy=Recompute where applicable), and CompFRR Selective+Relocate with either
+CompFRR-P CUMULATIVE/no ablation or FA-FFP. Preserve scheme capabilities: 1+1 has
+no hidden RS fallback; Multi-tree selects RS or RP by the frozen tree.
+Stop for actual mapping/mechanism blockers, otherwise after six-run review evidence.
+Do not auto-push/merge/CI or change main/legacy. Earlier stop notes below are history.
+
 ### Current handoff: protection config hierarchy closed (2026-09-15)
 
 PR #105 merged into n5 as `2d601d268` after the single successful phase CI

@@ -376,6 +376,16 @@ ComputeService::GetQueueSize() const
     return static_cast<uint32_t>(m_queue.size());
 }
 
+std::vector<uint64_t>
+ComputeService::GetQueuedTaskIds() const
+{
+    std::vector<uint64_t> ids;
+    ids.reserve(m_queue.size());
+    for (const auto& item : m_queue)
+        ids.push_back(item.taskId);
+    return ids;
+}
+
 bool
 ComputeService::IsComputeAvailable() const
 {

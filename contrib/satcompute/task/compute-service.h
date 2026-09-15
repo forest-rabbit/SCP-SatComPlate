@@ -15,6 +15,7 @@
 #include <optional>
 #include <set>
 #include <utility>
+#include <vector>
 
 namespace ns3
 {
@@ -77,6 +78,8 @@ class ComputeService : public Application
     uint64_t GetRecoveryBusyTimeNs() const;
     uint32_t GetMaxQueueLength() const;
     uint32_t GetQueueSize() const;
+    /** Copy ordinary queued IDs in dispatch order; excludes running/reserved attempts. */
+    std::vector<uint64_t> GetQueuedTaskIds() const;
     bool IsComputeAvailable() const;
     bool HasRunningTask() const;
     uint64_t GetRunningTaskId() const;

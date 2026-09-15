@@ -33,6 +33,9 @@
 #include "ns3/task-trace.h"
 #include "ns3/time-conversion.h"
 #include "ns3/topology-slice-exporter.h"
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+#include "tests/support/protection/multitree-preflight.h"
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -425,6 +428,8 @@ main(int argc, char* argv[])
     protection::ProtectionCliState protectionCli;
 #ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
     constexpr bool protectionTestInterface = true;
+    bool testMultitreeMapping = false;
+    command.AddValue("testMultitreeMapping", "Passive Multi-tree mapping preflight only", testMultitreeMapping);
 #else
     constexpr bool protectionTestInterface = false;
 #endif
@@ -633,6 +638,16 @@ main(int argc, char* argv[])
             {
                 faultModelEngine->BindTaskCoordinator(taskCoordinator);
             }
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+            std::unique_ptr<MultiTreePreflight> multitreePreflight;
+            if (testMultitreeMapping)
+            {
+                if (config.protection.scheme != protection::ProtectionScheme::OFF ||
+                    config.faultMode != "generate")
+                    FailConfig("testMultitreeMapping", "requires off + generate");
+                multitreePreflight = std::make_unique<MultiTreePreflight>(taskCoordinator, faultModelEngine);
+            }
+#endif
 
             std::unique_ptr<compfrr::ShadowEvaluator> shadow;
             std::unique_ptr<protection::FixedProtectionController> protection;
@@ -731,6 +746,9 @@ main(int argc, char* argv[])
             const auto wallStart = std::chrono::steady_clock::now();
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+            if (multitreePreflight) multitreePreflight->Write(outputDirectory);
+#endif
             if (shadow) shadow->Finalize();
             if (checkbullet)
             {

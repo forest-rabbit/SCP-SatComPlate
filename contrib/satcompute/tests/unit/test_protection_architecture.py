@@ -31,7 +31,10 @@ class ProtectionArchitectureTests(unittest.TestCase):
         for name in ("first-feasible", "least-recovery-load", "fa-first-feasible", "fa-least-recovery-load"):
             self.assertTrue(list((PROTECTION / "policy/placement" / name).glob("*.h")))
         multitree = PROTECTION / "baseline/multitree"
-        self.assertEqual([p.name for p in multitree.iterdir()], ["README.md"])
+        for stem in ("multitree-feature-adapter", "multitree-published-rule", "multitree-decision-log"):
+            self.assertTrue((multitree / (stem + ".cc")).is_file())
+            self.assertTrue((multitree / (stem + ".h")).is_file())
+        self.assertTrue((multitree / "calibration/published-ft-scale.json").is_file())
 
     def test_cmake_sources_and_public_headers_are_unique(self):
         cmake = (MODULE / "CMakeLists.txt").read_text().split("  LIBRARIES_TO_LINK", 1)[0]
@@ -39,7 +42,9 @@ class ProtectionArchitectureTests(unittest.TestCase):
         paths = re.findall(r"^    (protection/[^\s]+)", sources, re.M)
         self.assertEqual(len(paths), len(set(paths)))
         self.assertTrue(all((MODULE / p).is_file() for p in paths))
-        self.assertFalse(any("policy/baseline" in p or "multitree" in p for p in paths))
+        self.assertFalse(any("policy/baseline" in p for p in paths))
+        self.assertTrue(all(p.startswith("protection/baseline/multitree/")
+                            for p in paths if "multitree" in p))
         public = re.findall(r"^    (protection/[^\s]+)", headers, re.M)
         self.assertEqual(len(public), len({Path(p).name for p in public}))
         self.assertTrue(all((MODULE / p).is_file() for p in public))

@@ -38,6 +38,9 @@ build_lib(
     para.cc
     protection/protection-para.cc
     protection/protection-config.cc
+    protection/baseline/multitree/multitree-feature-adapter.cc
+    protection/baseline/multitree/multitree-published-rule.cc
+    protection/baseline/multitree/multitree-decision-log.cc
     common/time-conversion.cc
     protection/common/protection-types.cc
     protection/common/input-contract.cc
@@ -157,6 +160,9 @@ build_lib(
     para.h
     protection/protection-para.h
     protection/protection-config.h
+    protection/baseline/multitree/multitree-feature-adapter.h
+    protection/baseline/multitree/multitree-published-rule.h
+    protection/baseline/multitree/multitree-decision-log.h
     common/time-conversion.h
     protection/common/protection-types.h
     protection/common/input-contract.h
@@ -315,6 +321,27 @@ set_source_files_properties(
   protection/baseline/checkbullet/cb-sat-config.cc
   PROPERTIES COMPILE_DEFINITIONS
     "SATCOMPUTE_CB_MTBF_PROFILE=\"${CMAKE_CURRENT_SOURCE_DIR}/protection/baseline/checkbullet/calibration/frozen-mtbf-profile.json\""
+)
+
+# Fixed baseline calibration and project-owned mapping tools.
+set_source_files_properties(
+  protection/baseline/multitree/multitree-feature-adapter.cc
+  PROPERTIES COMPILE_DEFINITIONS
+    "SATCOMPUTE_MULTITREE_SCALE=\"${CMAKE_CURRENT_SOURCE_DIR}/protection/baseline/multitree/calibration/published-ft-scale.json\""
+)
+build_exec(
+  EXECNAME satcompute-multitree-calibration
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/multitree-calibration.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+build_exec(
+  EXECNAME satcompute-multitree-mapping-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/multitree-mapping-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )
 
 # The platform entry point is a project executable, not an ns-3 example.  It is
