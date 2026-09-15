@@ -1,14 +1,50 @@
 """Pure comparison identity and actual replica catch reconstruction."""
 from pathlib import Path
+import copy
 import runpy
+import shlex
 import unittest
 
 TESTS = Path(__file__).resolve().parents[1]
 RUNNER = runpy.run_path(str(TESTS/'integration/regression/run-multitree-comparison.py'))
 AUDIT = runpy.run_path(str(TESTS/'support/protection/multitree_comparison_audit.py'))
+ROUNDS = runpy.run_path(str(TESTS/'integration/regression/summarize-multitree-rounds.py'))
 
 
 class MultiTreeComparisonTests(unittest.TestCase):
+    def test_bandwidth_contrasts_only_change_link_capacity(self):
+        for group in RUNNER['GROUPS']:
+            original = RUNNER['arguments'](Path('/tmp/same-output'), group)
+            for bandwidth in (1000000000, 10000000000, 100000000000):
+                actual = RUNNER['arguments'](Path('/tmp/same-output'), group, isl_bandwidth_bps=bandwidth)
+                expected = [f'--islBandwidthBps={bandwidth}' if x == '--islBandwidthBps=10000000000' else x
+                            for x in original]
+                self.assertEqual(actual, expected)
+                self.assertIn('--randomSeed=1', actual)
+                self.assertIn('--randomRun=11', actual)
+                self.assertIn('--ecmpHashSeed=1', actual)
+        for bandwidth, run in ((0, 11), (2000000000, 11), (1000000000, 12), (100000000000, 13)):
+            with self.assertRaises(ValueError):
+                RUNNER['arguments'](Path('/tmp/same-output'), 'multitree',
+                                    random_run=run, isl_bandwidth_bps=bandwidth)
+
+    def test_round_report_rejects_mixed_seed_bandwidth_and_algorithm(self):
+        reports = {}
+        for label, run in zip('ABC', (11, 12, 13)):
+            reports[label] = dict(groups={group: dict(execution=dict(seed=1, run=run, command=[shlex.join(
+                RUNNER['arguments'](Path('/tmp')/label/group, group, random_run=run))]))
+                for group in RUNNER['GROUPS']})
+        ROUNDS['verify_round_identity'](reports)
+        for before, after in (('--randomSeed=1', '--randomSeed=2'),
+                              ('--ecmpHashSeed=1', '--ecmpHashSeed=2'),
+                              ('--islBandwidthBps=10000000000', '--islBandwidthBps=1000000000'),
+                              ('--compfrrInputPolicy=selective', '--compfrrInputPolicy=eager')):
+            bad = copy.deepcopy(reports)
+            execution = bad['B']['groups']['compfrr-p']['execution']
+            execution['command'][-1] = execution['command'][-1].replace(before, after)
+            with self.assertRaises((ValueError, RuntimeError, AssertionError)):
+                ROUNDS['verify_round_identity'](bad)
+
     def test_rounds_only_change_random_run_not_seeds_or_algorithm(self):
         for group in RUNNER['GROUPS']:
             original = RUNNER['arguments'](Path('/tmp/same-output'), group)

@@ -95,6 +95,11 @@ F1/F2 当前状态；不能把 unavailable prediction 补零。RS/RP 在首次 R
 六组比较使用 `tests/integration/regression/run-multitree-comparison.py`，传入新
 `--output-root`；`--random-run=11|12|13` 选择 A/B/C，默认 11；`--smoke` 为 15s
 小门禁，默认完整 1300s，`--audit-only` 不启动仿真。
+带宽对照使用 `--isl-bandwidth-bps=1000000000` 或 `100000000000`，仅允许
+`--random-run=11`；其余参数与 10 Gbps Run A 一致，不修改平台默认值。
+三轮汇总使用同目录的 `summarize-multitree-rounds.py --run-a ... --run-b ...
+--run-c ... --output-root ...`，只读审计原始记录，不启动仿真；不会将不同带宽混成
+三轮随机重复，也不会把未追平样本补零。
 须保持干净执行提交，不覆盖已有输出。`comparison.json` 保留每项实际 WU/服务时间、
 payload 与 catch 的来源；RP catch 根据实际连续副本服务追平 W_f 推导，不能把
 接管时间直接当 catch 或将未追平记为 0。结果同时列完成数、流量、执行浪费、

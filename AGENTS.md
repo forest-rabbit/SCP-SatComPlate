@@ -19,7 +19,11 @@ User clarification extends this to three six-scheme rounds: Run A randomRun=11,
 Run B randomRun=12, Run C randomRun=13. Keep randomSeed=1 and ecmpHashSeed=1;
 only randomRun changes, NOT the seed. Freeze algorithms, tree, calibration and all
 other runtime inputs. Stop for actual mapping/mechanism blockers, otherwise after
-the three-round review evidence.
+the three-round review evidence. A subsequent user extension authorizes twelve
+additional executions AFTER the 10Gbps rounds: six schemes each at 1Gbps and
+100Gbps, both randomRun=11/seed1/ecmpHashSeed1. Only islBandwidthBps changes in
+these contrasts; reuse 10Gbps Run A. Thus 30 complete simulations total, not 54.
+Keep production para.cc defaults unchanged. Stop after all five cases and audits.
 Do not auto-push/merge/CI or change main/legacy. Earlier stop notes below are history.
 
 Stage A is committed as b7e248350: 200 mapping checks, deterministic 800-task
@@ -44,7 +48,11 @@ Run A is complete at clean 1fd8348bd, all six audits PASS. Preserve the original
 execution records at output/multitree/stage-c/run11-1fd8348bd/ without renaming or
 rewriting them. Add B/C with the identical simulation content, only randomRun=12/13.
 Runner/auditor changes may record this identity, but do not edit execution source
-while runs are active. Stop after A/B/C comparison for review, without push/PR/CI/merge.
+while runs are active. B/C are complete at clean 363c2092f, each full matrix PASS:
+output/multitree/stage-c/run-B-run12/ and run-C-run13/. Both CompFRR profiles are
+2400/2400 across A/B/C; 1+1 is 2399/2400 (run13 task12 loses primary8 and replica1
+to the same 971s F1 batch, correctly NO_SURVIVING_ATTEMPT). No algorithm changes.
+Continue only the authorized run11 bandwidth contrasts, then review; no push/PR/CI/merge.
 
 ### Current handoff: protection config hierarchy closed (2026-09-15)
 

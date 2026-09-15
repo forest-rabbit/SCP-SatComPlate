@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Frozen six-scheme comparison; only the requested randomRun varies across rounds."""
+"""Frozen six-scheme comparison: run11-13 at 10Gbps, or run11 at 1/100Gbps."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
@@ -24,10 +24,15 @@ GROUPS = {
 }
 
 
-def arguments(output, group, small=False, random_run=11):
+def arguments(output, group, small=False, random_run=11, isl_bandwidth_bps=10000000000):
     if random_run not in (11, 12, 13):
         raise ValueError('authorized comparison runs are 11, 12, and 13')
+    if isl_bandwidth_bps not in (1000000000, 10000000000, 100000000000):
+        raise ValueError('authorized link bandwidths are 1, 10, and 100 Gbps')
+    if isl_bandwidth_bps != 10000000000 and random_run != 11:
+        raise ValueError('bandwidth contrasts use randomRun=11 only')
     argv = SCENE['canonical_experiment_arguments'](SCENE['arguments'](output, random_run=random_run))
+    argv = [f'--islBandwidthBps={isl_bandwidth_bps}' if x.startswith('--islBandwidthBps=') else x for x in argv]
     argv = [x for x in argv if not x.startswith('--protectionScheme=')]
     scheme = GROUPS[group][1]
     argv += [f'--protectionScheme={scheme}']
@@ -70,6 +75,7 @@ def execute_scoped(directory, argv, head, identity):
     record = dict(identity, command=command, commit=head, worktree_dirty=False,
         started_utc=CONTROL['utc'](), status='RUNNING', seed=int(flags['randomSeed']),
         run=int(flags['randomRun']), simulation_duration_s=float(flags['simulationDuration']),
+        isl_bandwidth_bps=int(flags['islBandwidthBps']),
         fault_mode=flags['faultMode'])
     CONTROL['write_json'](directory/'execution.json', record)
     start = time.monotonic()
@@ -91,12 +97,15 @@ def main():
     parser.add_argument('--jobs', type=int, choices=range(1, 7), default=6)
     parser.add_argument('--random-run', type=int, choices=(11, 12, 13), default=11,
                         help='Run A/B/C use 11/12/13; randomSeed and ecmpHashSeed stay 1')
+    parser.add_argument('--isl-bandwidth-bps', type=int,
+                        choices=(1000000000, 10000000000, 100000000000), default=10000000000,
+                        help='1/100 Gbps contrasts require run11; production defaults stay unchanged')
     parser.add_argument('--smoke', action='store_true', help='15s four-profile wiring gate, not formal evidence')
     parser.add_argument('--audit-only', action='store_true')
     parser.add_argument('--describe', action='store_true', help='Read-only command/profile preview')
     args = parser.parse_args()
     root = args.output_root.resolve()
-    commands = {g: arguments(root / g, g, args.smoke, args.random_run) for g in GROUPS}
+    commands = {g: arguments(root / g, g, args.smoke, args.random_run, args.isl_bandwidth_bps) for g in GROUPS}
     if args.describe:
         print(json.dumps(commands, indent=2)); return
     if args.audit_only:
