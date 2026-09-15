@@ -1,18 +1,19 @@
 # AGENTS.md
 
-### Active INPUT repository consolidation (2026-09-15)
+### Current handoff: INPUT repository closed (2026-09-15)
 
-The user approved the repository-cleanup taskbook and all five review amendments.
-This supersedes the historical INPUT STOP/hold instructions below. Continue from
-`461d76713` on `feature/compfrr-input-admission-runtime`: freeze a tracked SER fixture,
-unify public `inputPolicy=eager|deferred|selective` (default eager), preserve the causal
-SER snapshot and neutral runtime contracts, detach maintained accounting tests, then
-remove the dependency-audited offline stack. No algorithm, RNG, scene or formal-run changes.
-Run local staged equivalence gates and one manual phase CI on the final PR commit.
-Merge into n5 with a merge commit, then close #99 and delete the four named feature refs
-only after ancestry checks (JIT unique history first archived in a verified Git bundle).
-Keep main/legacy and historical formal outputs. No Multi-tree implementation.
-Progress and the exact scope are in `docs/n5/reviews/INPUT-final-repository-closeout.md`.
+INPUT consolidation is complete on n5: PR #104 merged as `d095ce845` after the single
+successful phase CI `34930948459` on `fd29f7aca`. Public INPUT is only
+`inputPolicy=eager|deferred|selective` (default eager); selective is frozen SER.
+The tracked causal fixture, neutral dependency/lifecycle and production accounting
+remain maintained; the one-shot offline stack and public calibration switches are retired.
+JIT #99 is CLOSED, not merged. Its five unique commits have a verified/restored Git bundle.
+JIT, CB-Sat, worthiness and INPUT runtime feature refs were deleted after archive/ancestry checks.
+Only main, n5 and legacy/ns-3.33 remain; main/legacy and formal experiment outputs are unchanged.
+See `docs/n5/reviews/INPUT-final-repository-closeout.md` for receipts and archive location.
+Older dated stage plans below are historical context, not instructions to resume those branches.
+STOP after the closeout receipt. Multi-tree is next planned work only after separate approval;
+do not start it, retune INPUT/U, run a new performance matrix or trigger another phase CI.
 
 This file provides guidance to AI agents when working with code in this repository.
 

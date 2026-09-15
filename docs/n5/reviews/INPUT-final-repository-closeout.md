@@ -1,5 +1,7 @@
 # INPUT 仓库收口
 
+最终结论：**INPUT_REPO_CLOSED_AND_MERGED_TO_N5**。
+
 ## 范围与起点
 
 本轮只统一参数、保留生产测试并清理研究工具，不改 SER、Frequency、Placement、
@@ -100,7 +102,7 @@ JIT bundle：`/home/emsky/project/archives/SCP-SatComPlate-input-closeout-202609
 fetch、fsck，恢复 head 为 `2ff3c5c98d58ed68c192f97cf47dff7a7e45cefd`，独有提交数=5。
 其两个 prerequisite 都属于永久 n5 历史，不依赖待删除的分支引用。
 
-最终 PR、CI、merge 与分支清理完成后补充下方收据；当前不得提前声称已合并。
+最终 PR、CI、merge 与分支清理均已完成，收据见下文。
 NEXT PLANNED WORK：Multi-tree baseline integration（需要单独批准）。
 
 ## 最终本地门禁
@@ -120,4 +122,23 @@ Regression 含既有 N4B 100-task 验收，不是新的正式 800-task/1300s INP
 `6a5f15f6e` canonical 文档；后续提交仅补充本收据。
 
 阶段 CI 使用手动 `phase_gate.yml`，phase=`input-final-repository-closeout`，只触发一次。
-CI/merge/分支关闭结果在完成后追加；main 与 legacy/ns-3.33 不参与整合。
+[CI 34930948459](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/34930948459)
+在 `fd29f7aca5200f2ddd10c4cd7d4b84abadc228af` 全部成功，job 耗时 7m24s。
+2026-09-15 05:07:58 UTC，#104 以 merge commit
+`d095ce845ff271674d431bae84f1d9bd2ac8ce1b` 合入 n5；其文件树与 CI head 完全一致。
+本收据及 AGENTS handoff 在合并后仅补充文档，不改已测试代码、不重复阶段 CI。
+
+[#99](https://github.com/forest-rabbit/SCP-SatComPlate/pull/99) 于 05:09:11 UTC 留言关闭，
+`mergedAt=null`，未把 JIT/V7 带入 n5。CB-Sat 原 #98 不重复合并。
+以下引用按顺序在本地与 origin 删除；远端删除均用精确 expected-head lease 防止并发误删：
+
+| 分支 | 删除时 head | 保留依据 |
+|---|---|---|
+| `feature/pre-n5c-compfrr-v7-jit` | `2ff3c5c98` | #99 关闭；5 个独有提交已 bundle 验证与独立恢复 |
+| `feature/pre-n5c-cb-sat` | `9a2f029cf` | 已是 n5 祖先 |
+| `feature/compfrr-input-worthiness` | `34177d0cf` | #104 merge 后确认属于 n5 历史 |
+| `feature/compfrr-input-admission-runtime` | `fd29f7aca` | #104 merge 后确认属于 n5 历史；删除前已切回 n5 |
+
+最终本地与远端分支均为 `main`、`n5`、`legacy/ns-3.33`；open PR 列表为 `[]`。
+main 仍为 `009788ca9c5042160e50a014c6d657e785f225f3`，legacy 仍为
+`f4c7bff6674f9eeaae30e080d52c38c7fb601e21`。没有新 tag、没有 Multi-tree 实现。
