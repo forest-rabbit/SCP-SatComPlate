@@ -149,3 +149,20 @@ task 795、551、352 分别慢 203.366、68.715、57.623 ms，抵消该收益。
 
 开发验收后停在人工审阅点；用户随后授权提交并推送本实现与报告。
 未运行 CI、未创建 PR/合并、未启动正式 independent-run matrix。
+
+## Final INPUT Closeout
+
+用户批准最终收尾任务书及四项补充；从已推送、干净的 `a4315e2b8` 继续同一实现分支。
+旧四组结果与本报告快照保存在 `output/compfrr-input-closeout/` 和原输出目录，不覆盖历史证据。
+
+### G1：尚未建立的预取不伪装为在途流
+
+跨星 `REQUESTED`（包括 flow ID 尚未分配、已经注册但 sender 尚未准入）统一返回 FETCH，
+使用当前 fresh-path 估计；独立诊断为 `PREFETCH_NOT_ESTABLISHED`，不是失败预取 refetch。
+候选查询不改状态；最终 target 接受后才取消 pending request、释放对象，guard 阻止后续复活。
+真正 IN_FLIGHT 仍用当前已建立流估计，真正 compute start 仍等待 receiver；同星 LocalDelivery 不变。
+
+新增未注册取消 owner-port 测试，以及同纳秒注册/准入之间真实故障恢复测试。
+22 个生命周期场景、374 checks 通过；完整 build、18021 contract checks、230 online INPUT checks、
+13 项 INPUT Python tests 通过。日志位于 `output/compfrr-input-closeout/g1-*.log` 与 `pending-gate.log`。
+接下来退役 N 正式入口、完成完整本地 gates，再冻结同一 clean commit 运行 D/S。

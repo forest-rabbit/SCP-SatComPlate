@@ -16,6 +16,7 @@ struct InputDependency
     uint32_t target{};
     std::string refetchReason; ///< WRONG_TARGET_REFETCH / FAILED_PREFETCH_REFETCH or empty.
     int64_t readyNs{-1}; ///< Actual prior receiver/local completion for READY only.
+    std::string diagnostic; ///< Non-refetch explanation, e.g. PREFETCH_NOT_ESTABLISHED.
 };
 
 /** Optional INPUT owner port. Candidate resolution is always read-only.

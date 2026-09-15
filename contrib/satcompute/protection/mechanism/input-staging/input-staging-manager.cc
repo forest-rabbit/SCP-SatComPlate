@@ -151,8 +151,11 @@ InputDependency InputStagingManager::Resolve(const TaskDefinition& task, uint32_
             result.objectId = r.object; result.flowId = r.flow;
             if (r.state == OptionalInputState::READY && !object->reserved)
             { result.mode = InputDependencyMode::READY; result.remainingNs = 0; result.readyNs = r.readyNs; return result; }
-            // Includes pending local delivery, which is an existing dependency, not a new flow.
-            if ((r.state == OptionalInputState::IN_FLIGHT || r.state == OptionalInputState::REQUESTED) &&
+            // A registered ID is not actual first admission. Only local delivery may
+            // have an existing pending dependency without an admitted network sender.
+            const bool pendingLocal = r.state == OptionalInputState::REQUESTED &&
+                                      r.task.sourceNodeId == r.target;
+            if (((r.state == OptionalInputState::IN_FLIGHT && r.flow) || pendingLocal) &&
                 m_tasks->IsSatelliteAvailable(task.sourceNodeId))
             {
                 result.mode = InputDependencyMode::IN_FLIGHT;
@@ -161,6 +164,8 @@ InputDependency InputStagingManager::Resolve(const TaskDefinition& task, uint32_
                 return result;
             }
         }
+        if (!r.closed && r.state == OptionalInputState::REQUESTED && r.task.sourceNodeId != r.target)
+            result.diagnostic = "PREFETCH_NOT_ESTABLISHED";
         if (r.startedNs >= 0)
             result.refetchReason = r.failed ? "FAILED_PREFETCH_REFETCH" :
                 r.target != target ? "WRONG_TARGET_REFETCH" : "FAILED_PREFETCH_REFETCH";
@@ -180,7 +185,8 @@ void InputStagingManager::Accept(uint64_t task, const InputDependency& dependenc
         r.refetchReason = dependency.refetchReason;
         r.wrongTarget = dependency.refetchReason == "WRONG_TARGET_REFETCH";
         if (!r.refetchReason.empty()) Log(r, r.refetchReason);
-        End(r, r.wrongTarget ? "WRONG_TARGET_REFETCH" : "RECOVERY_REFETCH", r.failed);
+        End(r, r.wrongTarget ? "WRONG_TARGET_REFETCH" :
+               dependency.diagnostic.empty() ? "RECOVERY_REFETCH" : dependency.diagnostic, r.failed);
         return;
     }
     const auto current = Resolve(r.task, dependency.target);

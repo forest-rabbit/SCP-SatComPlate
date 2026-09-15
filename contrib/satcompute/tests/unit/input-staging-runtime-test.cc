@@ -30,6 +30,7 @@ struct Options
     uint32_t source{1};
     int64_t faultAfter{400000000}, failFlowAfter{-1}, sourceF3After{-1}, holderF3After{-1};
     bool storageReject{}, pathReject{}, remoteBusy{}, fastPrimary{}, success{true}, lateSourceF3{};
+    bool acceptUnregistered{}, checkRegistered{};
 };
 struct Driver
 {
@@ -72,6 +73,54 @@ struct Driver
             if (options.pathReject) topology.ApplyCommunicationFaultOverlay({options.source}, false);
             input.Request(tasks->GetTaskRuntimes().front().definition, 0);
             if (options.pathReject) topology.ApplyCommunicationFaultOverlay({}, false);
+            const auto& task = tasks->GetTaskRuntimes().front().definition;
+            if (!options.storageReject && !options.pathReject)
+            {
+                const auto& pending = input.Records().at(e.taskId);
+                Check(pending.state == OptionalInputState::REQUESTED && !pending.flow,
+                      "fixture missed unregistered request");
+                const auto before = checkpoints.Pool(0).Reserved();
+                const auto dependency = input.Resolve(task, 0);
+                Check(checkpoints.Pool(0).Reserved() == before && !pending.closed,
+                      "pending candidate query mutated owner");
+                if (options.source == 0)
+                    Check(dependency.mode == InputDependencyMode::IN_FLIGHT &&
+                          !dependency.flowId && dependency.remainingNs == 1,
+                          "pending LocalDelivery lost its real local event");
+                else
+                {
+                    const auto fresh = tasks->GetTransferEngine()->EstimateAdmissiblePath(
+                        task.sourceNodeId, 0).TransferTimeNs(task.inputBytes);
+                    Check(dependency.mode == InputDependencyMode::FETCH &&
+                          dependency.remainingNs == fresh && dependency.remainingNs.value_or(0) > 1 &&
+                          dependency.diagnostic == "PREFETCH_NOT_ESTABLISHED" &&
+                          dependency.refetchReason.empty(), "unregistered INPUT fabricated readiness");
+                    if (options.acceptUnregistered)
+                    {
+                        // Owner-port contract: a final target has accepted FETCH before
+                        // dispatcher registration. The queued guard must not resurrect it.
+                        input.Accept(e.taskId, dependency, [](bool, uint64_t) {
+                            Check(false, "FETCH invoked an adoption callback");
+                        });
+                        Check(pending.closed && !pending.failed && !pending.flow,
+                              "pending request not cancelled at acceptance");
+                    }
+                }
+            }
+            if (options.checkRegistered)
+                Simulator::Schedule(NanoSeconds(1), [this] {
+                    const auto& pending = input.Records().at(1);
+                    Check(pending.state == OptionalInputState::REQUESTED && pending.flow &&
+                          pending.startedNs < 0, "fixture missed registered-before-admission boundary");
+                    const auto& task = tasks->GetTaskRuntimes().front().definition;
+                    const auto dependency = input.Resolve(task, 0);
+                    Check(dependency.mode == InputDependencyMode::FETCH &&
+                          dependency.remainingNs == tasks->GetTransferEngine()->EstimateAdmissiblePath(
+                              task.sourceNodeId, 0).TransferTimeNs(task.inputBytes) &&
+                          dependency.refetchReason.empty() &&
+                          dependency.diagnostic == "PREFETCH_NOT_ESTABLISHED" && !pending.closed,
+                          "registered ID mistaken for admitted flow");
+                });
             AtFault(3, options.faultAfter, false);
             AtFault(options.source, options.sourceF3After, true);
             if (options.holderF3After != options.faultAfter) AtFault(0, options.holderF3After, true);
@@ -95,7 +144,10 @@ struct Driver
                 Check(a.mode == b.mode && a.flowId == b.flowId && a.remainingNs == b.remainingNs,
                       "resolver is not repeatable");
                 Check(before == checkpoints.Pool(0).Used()+checkpoints.Pool(0).Reserved(), "resolver allocated");
-                if (a.mode == InputDependencyMode::IN_FLIGHT) Check(a.remainingNs.has_value(), "active flow self-blocked");
+                if (a.mode == InputDependencyMode::IN_FLIGHT)
+                    Check(a.flowId && a.remainingNs && a.remainingNs ==
+                          tasks->GetTransferEngine()->EstimateRemainingReceiverTimeNs(a.flowId),
+                          "active flow did not use its causal receiver estimate");
             });
         }
         if (e.toState == TASK_RESULT_TRANSFERRING && e.fromState == TASK_RUNNING)
@@ -170,6 +222,17 @@ int64_t Run(const Options& o, const std::filesystem::path& output)
     }
     Check(proactive <= 1 && fetches <= 1, "duplicate INPUT lifecycle");
     if (record.handedOff) Check(fetches == 0, "adopted INPUT was fetched again");
+    if (o.acceptUnregistered || o.checkRegistered)
+    {
+        Check(!record.failed && record.refetchReason.empty() && !record.handedOff &&
+              record.startedNs < 0 && record.reason == "PREFETCH_NOT_ESTABLISHED",
+              "pending request mislabeled as failed refetch/adopted");
+        Check(fetches == 1 && record.usedNs < 0, "pending request bypassed actual recovery fetch");
+        Check(!record.flow || tasks->GetTransferEngine()->GetSentBytes(record.flow) == 0,
+              "cancelled pending flow sent bytes");
+        if (o.acceptUnregistered) Check(proactive == 0 && !record.flow, "guard registered cancelled request");
+        else Check(proactive == 1 && record.flow, "registered pending fixture lost flow identity");
+    }
     const auto capacity = tasks->GetTransferEngine()->CollectCapacityAwareSummary();
     Check(!capacity.activePathCountAtEnd && !capacity.totalReservedRateBpsAtEnd, "capacity leak");
     std::cout << o.name << ": " << ToString(record.state) << " used=" << record.usedNs
@@ -191,6 +254,8 @@ int main(int argc,char** argv)
         Check(quotas.Accounted(0,{{1,120}},1,{{1,80}})==120,"quota replacement duplicated INPUT");
         const auto readyAfter = Run({"ready"},output);
         auto o=Options{"in-flight"}; o.faultAfter=10000000; Run(o,output);
+        o=Options{"pending-unregistered"}; o.acceptUnregistered=true; Run(o,output);
+        o=Options{"pending-registered-same-ns"}; o.checkRegistered=true; o.faultAfter=0; Run(o,output);
         o=Options{"sparse"}; o.profile=TaskProfile::SPARSE_INFERENCE; Run(o,output);
         o=Options{"compression"}; o.profile=TaskProfile::COMPRESSION; Run(o,output);
         o=Options{"llm"}; o.profile=TaskProfile::LLM; Run(o,output);

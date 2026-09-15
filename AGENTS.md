@@ -1,5 +1,18 @@
 # AGENTS.md
 
+### Active INPUT final closeout (2026-09-15)
+
+The user accepted the SER freeze/JIT cleanup taskbook and four reviewed amendments.
+Continue on feature/compfrr-input-admission-runtime from clean a4315e2b8, preserving history.
+Fix cross-node REQUESTED both before registration and registered-before-admission; only
+actual IN_FLIGHT may supply a remaining receiver estimate. Pending diagnostic is not failed refetch.
+Keep only none/SER production admission (default none), retaining historical NET diagnostics/tests.
+After build/unit/contract/small compatibility gates, run only final same-clean-source D/S run11
+(800 tasks, 1300s, unchanged scene). Record actual execution identity; no hardcoded old-parent HEAD.
+Commit fix, cleanup and final report as verified increments. No automatic push, CI, merge,
+independent-run matrix or Multi-tree. JIT PR #99 is open: hold branch, never auto-close the PR.
+Use the existing INPUT runtime review's Final INPUT Closeout section; stop after final evidence.
+
 ### Active INPUT binary admission implementation (2026-09-15)
 
 The user approved production kickoff plus four lifecycle clarifications. Work from
