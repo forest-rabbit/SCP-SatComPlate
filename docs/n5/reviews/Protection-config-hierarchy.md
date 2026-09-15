@@ -1,12 +1,14 @@
 # Protection 配置分层实施与等价门禁
 
-第 1–5 节是已推送的纯重构 `5cf0ac56e` 审阅快照；后续正式默认配置调整单列第 6 节，
+第 1–5 节是已推送的纯重构 `5cf0ac56e` 审阅快照（第 7 节仅澄清其 schema 措辞）；
+后续正式默认配置调整 `44d1b6a53` 单列第 6 节，
 不反向修改纯重构的默认值保留结论，也不把旧实验解释成新组合。
 
 基线：corrected `n5@fd45c5144`；分支：`refactor/protection-config-hierarchy`。
 范围：已批准 revised proposal 的 config/validation/wiring 与小场景验证。
-不改数学模型、资源语义、故障随机流、正式输入、默认 CompFRR 实验身份或外部运行时 schema。
-Multi-tree、正式 1300s 性能矩阵、CI/PR/合并均未开展；完成后停在人工审阅点。
+不改数学模型、资源语义、故障随机流、正式输入和 production output schema；
+public protection CLI 按本轮设计有意重命名和分层。纯重构保留原默认实验身份。
+快照当时未开展 CI/PR/合并；最终审计已授权第 7 节的收尾集成，仍不开展 Multi-tree 或正式长矩阵。
 
 ## 1. 唯一 owner 与依赖边界
 
@@ -182,3 +184,25 @@ off 仅作为显式诊断/历史复现能力，不是正式对比方案；算法
 55 组配置对照（1,685 文件）及 11 组机制对照（1,984 文件）与原参考严格等价。
 完整 smoke 通过（含 16 组 placement）；修改的诊断回归 shell 入口语法检查通过。
 证据目录为 `output/protection-formal-default/`；历史参考未覆盖。
+
+## 7. 最终审计收尾
+
+报告中的 schema 保持仅指 production CSV/JSON 输出，不包含有意重命名的 public CLI。
+纯重构 `5cf0ac56e` 与正式默认调整 `44d1b6a53` 分开提交，不能把后者描述为默认行为不变。
+
+扫描当前 `output/`、`docs/`、`tests/` 中的 JSON/Markdown/Python/text 历史记录：
+`output/n5c-recent-u/run-{11..15}/recent-U/` 的 5 份 `execution.json` 与 5 份 `time.txt`
+全部使用 `--n5cVariant=recent-U`；未发现 two-token 形式。按最终任务书 9.1 不修改 adapter。
+测试锁定历史描述 API 的等号形式、只读归一化不改原 argv、recent-U 不可执行；
+未记录的 `--n5cVariant recent-U` 仍明确拒绝，不假称通用解析器已支持该历史边界。
+production 的 recent-U 拒绝测试继续保留；本轮未开放任何新 capability。
+
+本次只新增上述测试和审计澄清。复用第 6 节 smoke、55/11 strict-equivalence 证据；
+合并前补跑维护中的 Python、C++ unit，且只调度一次既有阶段 CI（含原 regression）。
+CI 不新增 ns-3 examples/tests 或正式 800-task/1300s 性能矩阵。
+通过后按授权 PR -> CI -> merge n5 -> ancestry 检查 -> 清理本分支；不进入 Multi-tree 实施。
+
+本地结果：目标构建通过（无待重编译源码），historical argument tests 14/14；
+维护中的 Python 233 项（232 通过、1 项原 native-slices skip），完整 C++ unit 通过，
+`git diff --check` 通过。两个收尾项均关闭：`PROTECTION_CONFIG_HIERARCHY_FINAL_APPROVED`。
+该结论不替代随后一次阶段 CI 的集成门禁，也不宣称重新验证了正式性能矩阵。

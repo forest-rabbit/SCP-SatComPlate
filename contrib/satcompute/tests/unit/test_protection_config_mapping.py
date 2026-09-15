@@ -109,9 +109,24 @@ class ConfigIdentityTests(unittest.TestCase):
     def test_archived_recent_readable_but_not_executable(self):
         old = SCENE['arguments'](Path('unused'), protection_mode='compfrr',
                                  placement_mode='n5c', n5c_variant='recent-U')
+        # Audited run11-15 execution.json/time.txt all record the equals form.
+        # The historical description API must preserve that exact argv contract.
+        self.assertIn('--n5cVariant=recent-U', old)
+        self.assertNotIn('--n5cVariant', old)
+        original = list(old)
         self.assertIn('--compfrrPressureModel=historical-only:recent-U', normalize(old))
+        self.assertEqual(old, original)
         with self.assertRaises(ValueError):
             execute(old)
+
+    def test_unrecorded_split_recent_form_remains_rejected(self):
+        # No such archived command was found; do not broaden the identity adapter.
+        old = ['satcompute', '--protectionMode=compfrr', '--placementMode=n5c',
+               '--n5cVariant', 'recent-U']
+        for operation in (normalize, execute):
+            with self.subTest(operation=operation.__name__), self.assertRaisesRegex(
+                    ValueError, 'historical-only/unsupported placement variant'):
+                operation(old)
 
     def test_old_input_pair_has_same_identity_and_jit_is_rejected(self):
         base = ['satcompute', '--protectionMode=compfrr']
