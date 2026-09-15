@@ -171,6 +171,22 @@ python contrib/satcompute/tests/integration/regression/analyze-input-causal-boun
 UNKNOWN不补零或经验界；符号集合成员字节不等于计划发送字节。测试为`test_input_causal_bound_audit.py`。
 最终证据在`output/audits/compfrr-input-gi-sign-admission-run11/`，结论追加同一审计报告。
 
+两个固定break-even规则的Stage 1时间口径比较（只读已有run11，不启动仿真）：
+
+```bash
+python contrib/satcompute/tests/integration/regression/analyze-input-break-even-timebase.py \
+  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
+  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
+  --coinitialization-dir output/audits/compfrr-input-coinitialization-value-run11 \
+  --latency-resource-dir output/audits/compfrr-input-latency-resource-run11 \
+  --output-dir output/audits/compfrr-input-break-even-timebase-local
+```
+
+复用上述原生估计器；输出目录必须不存在。`input_break_even_timebase_audit.py` 保留历史浮点旧决定，
+新增独立整数ns对照与端到端潜力/序列化成本比较；数值或覆盖冲突输出诊断并停止（exit 2），不覆盖旧结果。
+`test_input_break_even_timebase_audit.py` 覆盖严格退化/超集、因果隔离、LocalDelivery与完整负样本。
+最终产物在 `output/audits/compfrr-input-break-even-timebase-run11/`；等待覆盖不是实际时延收益，production仍未实现。
+
 ## 历史专项与目录索引
 
 以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，

@@ -451,6 +451,18 @@ same-target F1/F2 observations exceed it. Do not substitute residuals or tune ru
 and prior partial-artifact equivalence pass. Stop for review; no production, new
 simulation, CI, automatic commit/push/merge or further model expansion.
 
+The approved end-to-end-value / serialization-cost Stage 1 audit is complete;
+see the same review and `output/audits/compfrr-input-break-even-timebase-run11/`.
+Historical M>0 remains 68/405; the fixed new candidate selects 115, adding
+113239273 planned bytes and 99.211976 ms of anchor critical wait coverage.
+Verdict CROSS_TRADEOFF, not actual latency reduction or a production promotion.
+All 405 historical/exact/integer serial decisions agree; zero-propagation
+equivalence holds on the common integer timebase and OLD_ONLY is zero.
+Keep both candidates; no A, timing, new score, threshold, budget or simulation.
+29 new / 427 maintained tests pass (one existing skip); stop for user review.
+Optional INPUT lifecycle/flow handoff is NOT already implemented by current
+EAGER/DEFERRED. No Stage 2, CI, automatic commit/push/merge without new approval.
+
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 
 ## Build System

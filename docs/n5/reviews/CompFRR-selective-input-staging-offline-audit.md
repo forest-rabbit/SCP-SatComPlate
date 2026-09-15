@@ -767,3 +767,97 @@ ALL未覆盖72个NEEDED、17,987.768934ms，最大值相同。唯一F3 task120�
 独立从旧CSV核对405项特征、2038个future steps、346个诊断positive与79项观测/33次越界。
 抽取共用只读loader后，旧partial audit的全部7个产物重建逐字节一致；v4特征逐字段相同，
 生产源码及历史证据未变。未运行新仿真/CI、未提交推送、未实现production或选择阈值。
+
+## End-to-End Recovery Value vs. Serialization Service Cost Audit
+
+2026-09-15，Stage 1 完成。依据同名任务书及人工确认的三点修正：保留历史浮点旧规则；
+整数 ns 对照单独验证退化关系；新规则必为旧规则的超集，新增 NO_FAULT 数量本身不决定取舍。
+仅重读上述 Stage B / run11，未启动仿真。产物在
+`output/audits/compfrr-input-break-even-timebase-run11/`，含 `candidate_comparison.csv`、
+`decision_diff.csv`、`profile_comparison.csv`、`formula_audit.csv`、`local_delivery_audit.csv`、`summary.json`。
+
+### 规则与数值口径
+
+旧 `SER_SYMMETRIC_BREAK_EVEN` 仍为原始 `M_pot > 0`，没有改写历史 U、浮点代码或输出。
+唯一新候选 `NET_READY_vs_SER_COST` 比较：
+
+\[
+\sum_k w_k\min(T_{net},[t_k-t_I]^+) > (1-P_F)T_{ser}.
+\]
+
+新候选的 `T_net` 复用原生 `AdmissiblePathEstimate::TransferTimeNs()`；`T_ser` 为其去掉传播后的
+整数序列化 ns。canonical 权重/P_F 不重新抽样、不归一化；以其已序列化十进制表示做精确有理数比较，
+加权期望可小于1ns，不对期望取整，不使用 epsilon 选任务，等号 Deferred。
+1e-12只验证既有浮点概率质量的一致性，不进入判断。最大质量表示差为1.7e-16。
+
+405个跨星候选的历史浮点、精确未取整时间、整数时间旧判断**全部一致**，最大序列化取整差0.8ns；
+统一整数口径下零传播新旧完全等价。若任何候选发生取整/表示导致的旧决定变化，工具会输出诊断并停止，
+不会覆盖68/405。新收益不小于旧收益、成本相同，因此 `OLD_ONLY=0` 是不变量，严格 Pareto 改进在此比较中不可达。
+
+该量是当前路径下的 INPUT 就绪潜力，不是含其他依赖遮挡的实际恢复收益；沿用等价服务时间计价，
+不把传播视为额外带宽占用，也不宣称单流序列化成本等价于全网资源价格。没有 A、JIT、阈值扫描或 profile 规则。
+
+### 直接比较
+
+全系统409个 START：72 NEEDED、11 FAULT_NONCRITICAL、326 NO_FAULT；排除4个同星对象后，
+跨星405个为 **72 / 10 / 323**。LocalDelivery（3 NO_FAULT、1 FAULT_NONCRITICAL）单列，不进入网络比较。
+以下 GB 为十进制计划应用字节，不是实测净增流量；等待为原 Deferred 轨迹的回溯覆盖，不是实测提速。
+
+| 指标（ALL跨星） | 旧规则 | 小修版 |
+| --- | ---: | ---: |
+| 选中任务 | 68/405 | 115/405 |
+| 计划预置 INPUT GB | 19.995838138 | 20.109077411 |
+| NEEDED覆盖 / Recall | 45/72 / 62.50% | 48/72 / 66.67% |
+| 选中 NO_FAULT / FAULT_NONCRITICAL | 15 / 8 | 57 / 10 |
+| 计划 NO_NEED GB | 3.788134040 | 3.788160560 |
+| Precision / BytePrecision | 66.18% / 81.0554% | 41.74% / 81.1619% |
+| 观察关键等待覆盖 ms | 12,459.647815 | 12,558.859791 |
+| 观察等待覆盖率 | 69.2673% | 69.8189% |
+
+交集68、NEW_ONLY47、OLD_ONLY0、均不选290。增量113,239,273 Byte（约113.24 MB，+0.5663%），
+增加99.211976ms观察等待覆盖（+0.5516个百分点）；描述性的边际比为876.1269ms/计划GB，不设置通过阈值。
+F1/F2视图404/71，选中与字节相同，Recall为63.38%→67.61%，等待覆盖71.8456%→72.4176%。
+唯一F3 task120两者均不选，645.504897ms单列，不计为F1/F2预测错误；所有无故障负样本均保留。
+
+| Profile | 旧→新选中 | 旧→新NEEDED | 旧→新计划Byte | 新增观察等待ms |
+| --- | ---: | ---: | ---: | ---: |
+| compression | 24→24 | 19→19 | 9,464,051,528→同左 | 0 |
+| dense-image | 10→10 | 7→7 | 3,300,831,992→同左 | 0 |
+| sparse-inference | 21→22 | 16→17 | 7,230,947,299→7,344,158,778 | 92.207257 |
+| llm | 13→59 | 3→5 | 7,319→35,113 | 7.004719 |
+
+各profile完整 NO_NEED 字节与覆盖均在 `profile_comparison.csv`。新增46个LLM合计27,794 Byte，
+其中42 NO_FAULT、2 FAULT_NONCRITICAL、2 NEEDED（task441：4.002469ms，task187：3.002250ms）。
+新增 NO_NEED 仅26,520 Byte；不能仅因多数新增任务无故障就判定无价值。
+LLM这一层确实变成59/59全选，但无按profile特判；总候选不是ALL_STAGE，总预置量也没有接近106.720700GB端点。
+
+另一个新增为 sparse task457：P_F=0.498216，INPUT=113,211,479 Byte，序列化90.569184ms、
+传播6ms；预期端到端潜力48.112315ms大于序列化成本45.446165ms，旧规则不通过，新规则通过。
+它贡献新增观察覆盖的92.207257ms；这些实际等待只用于评价，不生成任何决定。
+
+**Verdict：B. SMALL_REVISION_CROSS_TRADEOFF。** 小修版以少量计划字节增加覆盖，但整体增益有限，
+不是严格支配，不是已验证的运行时收益；保留原规则与小修版，不自动替换production或另找 operating point。
+
+### 未来执行合同的只读核对
+
+当前主线 `common/input-contract.*` 只有每轮固定的 EAGER/DEFERRED；旧JIT不在此分支，不能宣称已支持完整Selective生命周期。
+
+| 合同 | 当前可复用内容 / Stage 2仍缺少的部分 |
+| --- | --- |
+| START准入后固定actual pair | `compfrr-controller.cc` 的snapshot/Execute/active-inventory顺序已验证；尚无独立optional INPUT启动动作 |
+| 不阻塞checkpoint进入ON | 现有Eager INIT_BASE参与`checkpoint-manager.cc`初始化屏障并进入committed布局，不能直接切Eager；需要独立对象/准入失败隔离 |
+| 同目标READY/IN_FLIGHT复用 | `recovery-controller.cc`当前Deferred接受恢复后直接创建RECOVERY_INPUT；没有预取对象查询或活动流交接，需以后单独实现 |
+| 变更目标与同星交付 | 现有恢复向实际目标取INPUT及LocalDelivery可复用；不能将旧holder的就绪当作新目标就绪 |
+| 失败/取消、字节与存储 | 底座有真实传输/对象清理，但optional一次性状态机、故障前后同生命周期计费及失败不重发合同尚需实现/测试 |
+
+这些是未来Stage 2边界，不是本轮新增功能。保留并行 INPUT/state/tail、Frequency/Placement、故障流和正常关闭的审计输出。
+
+### 验证与停止
+
+新增29项合成测试通过，覆盖零传播、整数取整冲突停止、严格等号、零/满概率、零/部分/完整提前量、
+LocalDelivery、未知路径/诊断写出、历史/因果字段隔离、超集与交叉取舍。全部427项维护Python测试通过（1项既有外部切片skip）；
+原生纯估计器目标构建通过。独立从raw canonical q重建405项/2038步，用Decimal复算全部决定：68→115，OLD_ONLY0。
+旧v2/v3的409项特征逐字段相同，历史旧规则两视图的选择、字节、NEEDED与等待精确一致；生产源码及旧证据未变。
+6个新增产物在临时目录确定性重建后逐字节一致，未覆盖原输出。
+按增量技能先通过公式/原生单测，再生成全群体产物和独立核验。**Stage 1结束，停在人工审阅点**：
+未实施production、未跑新仿真/CI、未挑参数、未提交推送合并，不进入Stage 2。
