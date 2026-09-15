@@ -158,7 +158,7 @@ ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
 }
 
 bool
-ComputeService::CompleteTaskIfDue(uint64_t taskId)
+ComputeService::CompleteTaskIfDue(uint64_t taskId, bool deferDispatch)
 {
     if (!m_isRunning || (!m_computeAvailable && !(m_runningRecovery && m_recoveryImmune)) || !m_hasCurrentTask ||
         m_currentTask.taskId != taskId ||
@@ -168,7 +168,7 @@ ComputeService::CompleteTaskIfDue(uint64_t taskId)
     }
     if (m_completionEvent.IsPending())
         Simulator::Cancel(m_completionEvent);
-    CompleteCurrentTask();
+    CompleteCurrentTaskImpl(deferDispatch);
     return true;
 }
 
@@ -261,6 +261,12 @@ ComputeService::DispatchNextTask()
 void
 ComputeService::CompleteCurrentTask()
 {
+    CompleteCurrentTaskImpl(false);
+}
+
+void
+ComputeService::CompleteCurrentTaskImpl(bool deferDispatch)
+{
     NS_ABORT_MSG_IF(!m_isRunning || (!m_computeAvailable && !(m_runningRecovery && m_recoveryImmune)) ||
                         !m_hasCurrentTask,
                     "ComputeService completion has no running task");
@@ -300,7 +306,10 @@ ComputeService::CompleteCurrentTask()
         recoveryCallback(completedTaskId, recovery->second, m_nodeId, completionTimeNs);
     else
         m_taskCompletedCallback(completedTaskId, m_nodeId, completionTimeNs);
-    DispatchNextTask();
+    if (deferDispatch)
+        RequestDispatch();
+    else
+        DispatchNextTask();
 }
 
 uint32_t

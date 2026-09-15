@@ -62,8 +62,11 @@ class ComputeService : public Application
     /** Disconnect a previously registered observer. */
     void DisconnectStateObserver(Callback<void, uint32_t, bool> callback);
     bool CancelRunningTaskForFailure(uint64_t taskId);
-    /** Resolve inclusive completion before a same-time deadline, independent of UID. */
-    bool CompleteTaskIfDue(uint64_t taskId);
+    /** Resolve inclusive completion before a same-time deadline/fault, independent of UID.
+     * During a fault batch, defer ordinary queue dispatch until its availability changes
+     * have all been applied. Normal completion/deadline dispatch remains synchronous.
+     */
+    bool CompleteTaskIfDue(uint64_t taskId, bool deferDispatch = false);
     bool RemoveQueuedTaskForFailure(uint64_t taskId);
 
     static int64_t CalculateServiceTimeNs(uint64_t computeWorkUnits,
@@ -135,6 +138,7 @@ class ComputeService : public Application
     void RequestDispatch();
     void DispatchNextTask();
     void CompleteCurrentTask();
+    void CompleteCurrentTaskImpl(bool deferDispatch);
     /** Notify observers after a service-state transition, before dependent dispatch. */
     void NotifyComputeState();
     void RecoveryCatchup(uint64_t taskId, uint64_t generation); ///< Guarded service milestone.

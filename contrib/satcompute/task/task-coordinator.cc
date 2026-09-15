@@ -775,12 +775,13 @@ TaskCoordinator::ApplyFaultBatch(
     std::map<uint32_t, TaskFaultImpact> impacts;
     for (const TaskFaultNodeChange& change : startedNodes)
     {
-        // In fixed mode, exact compute completion precedes same-ns primary failure.
+        // Preserve inclusive completion, but do not dispatch queued work inside
+        // the fault batch while service and fault-controller availability differ.
         if (m_recoveryHandler || m_parallelHooks.faultBatch)
         {
             auto service = FindComputeService(change.nodeId);
             if (service && service->HasRunningTask())
-                service->CompleteTaskIfDue(service->GetRunningTaskId());
+                service->CompleteTaskIfDue(service->GetRunningTaskId(), true);
         }
         m_activeFaults[change.nodeId] = change.fault;
         NS_ABORT_MSG_IF(!startedKeys.emplace(change.nodeId, change.kind).second,
