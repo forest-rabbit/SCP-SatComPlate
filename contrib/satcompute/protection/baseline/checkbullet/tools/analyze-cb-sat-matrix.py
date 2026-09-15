@@ -132,7 +132,7 @@ def comparison(root, formal):
             catchup_seconds=s["catchup_seconds"],lost_work_units=s["lost_work_units"],paths=s["recovery_paths"]))
         actual_flags = flags(shlex.split(json.loads((Path(s["directory"])/"execution.json").read_text())["command"][-1]))
         omitted = {"outputDir","faultTrace","protectionMode","placementMode","remoteBusyRecoveryPolicy",
-            "inputStagingPolicy","fixedProtectionDelta","fixedProtectionBatchN"}
+            "inputStagingPolicy","inputPolicy","fixedProtectionDelta","fixedProtectionBatchN"}
         common = lambda f:{k:v for k,v in f.items() if k not in omitted}
         for g in old["groups"].values():
             require(common(actual_flags) == common(flags(shlex.split(g["execution"]["command"][-1]))),

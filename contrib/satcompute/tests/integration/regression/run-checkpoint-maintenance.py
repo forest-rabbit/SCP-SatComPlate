@@ -37,7 +37,8 @@ def identity():
 
 
 def normalized(command):
-    return [x for x in shlex.split(command) if not x.startswith(('--outputDir=', '--faultTrace='))]
+    return [x for x in FINAL['canonical_input_arguments'](shlex.split(command))
+            if not x.startswith(('--outputDir=', '--faultTrace='))]
 
 
 def entries(root):
@@ -49,7 +50,7 @@ def entries(root):
         meta = json.loads((source / 'execution.json').read_text())
         dest = root / f'run-{run}' / group
         args = FINAL['arguments'](dest, protection_mode='compfrr', placement_mode='n5c',
-            input_staging_policy='deferred', remote_busy_recovery_policy='relocate',
+            input_policy='deferred', remote_busy_recovery_policy='relocate',
             n5c_variant=group, random_run=run)
         if normalized(meta['command'][-1]) != normalized(shlex.join(args)):
             raise ValueError('frozen invocation differs')

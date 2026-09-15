@@ -51,7 +51,7 @@ def frozen_scope():
 
 
 def normalized(command):
-    return [part for part in shlex.split(command) if not
+    return [part for part in FINAL['canonical_input_arguments'](shlex.split(command)) if not
             part.startswith(('--outputDir=', '--faultTrace='))]
 
 

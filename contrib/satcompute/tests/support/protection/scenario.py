@@ -11,6 +11,38 @@ ROOT = Path(__file__).resolve().parents[5]
 SCENE = "contrib/satcompute/input/experiments/leo-66"
 
 
+def canonical_input_arguments(argv):
+    """Read historical command evidence; never install legacy aliases in the CLI.
+
+    Only the exact eager/deferred + none and deferred + SER mappings are equivalent.
+    Reject duplicate/conflicting controls rather than hiding them in an audit.
+    """
+    values = {}
+    other = []
+    for token in argv:
+        key, separator, value = token.partition('=')
+        if key in ('--inputPolicy', '--inputStagingPolicy', '--inputAdmissionPolicy'):
+            if not separator or key in values:
+                raise ValueError('duplicate/malformed INPUT evidence option')
+            values[key] = value
+        else:
+            other.append(token)
+    if '--inputPolicy' in values:
+        if len(values) != 1:
+            raise ValueError('conflicting old/new INPUT evidence options')
+        mode = values['--inputPolicy']
+    else:
+        mode = values.get('--inputStagingPolicy', 'eager')
+        admission = values.get('--inputAdmissionPolicy', 'none')
+        if admission != 'none':
+            if (mode, admission) != ('deferred', 'ser-break-even'):
+                raise ValueError('retired or invalid historical INPUT selector')
+            mode = 'selective'
+    if mode not in ('eager', 'deferred', 'selective'):
+        raise ValueError('unknown INPUT evidence policy')
+    return other + [f'--inputPolicy={mode}']
+
+
 # The historical command-description API retains recent-U for old evidence comparisons.
 # Neither this CLI nor the current production binary can execute that archived variant.
 def arguments(output, fault_mode="generate", audit=False, shadow=False,

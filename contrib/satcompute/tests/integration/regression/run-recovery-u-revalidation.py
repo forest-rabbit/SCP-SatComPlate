@@ -39,7 +39,7 @@ def source(run, group):
 
 def arguments(output, run, group):
     return FINAL['arguments'](output, protection_mode='compfrr', placement_mode='n5c',
-        input_staging_policy='deferred', remote_busy_recovery_policy='relocate',
+        input_policy='deferred', remote_busy_recovery_policy='relocate',
         n5c_variant=group, random_run=run)
 
 

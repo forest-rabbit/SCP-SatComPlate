@@ -18,7 +18,7 @@ BASE_HEAD = "a19b722694948bda395cf95b96cd27609daf6c91"
 def arguments(directory, random_run=11):
     require(type(random_run) is int and 11 <= random_run <= 15, "unapproved Rational-U run")
     return FINAL["arguments"](directory, protection_mode="compfrr", placement_mode="n5c",
-        input_staging_policy="deferred", remote_busy_recovery_policy="relocate",
+        input_policy="deferred", remote_busy_recovery_policy="relocate",
         n5c_variant="rational-U", random_run=random_run)
 
 

@@ -41,7 +41,7 @@ def source_scope(head):
 def arguments(directory, variant, run):
     require(variant in ("full", "noU", "recent-U") and run in RUNS, "unapproved variant/run")
     return FINAL["arguments"](directory, protection_mode="compfrr", placement_mode="n5c",
-        input_staging_policy="deferred", remote_busy_recovery_policy="relocate",
+        input_policy="deferred", remote_busy_recovery_policy="relocate",
         n5c_variant=variant, random_run=run)
 
 

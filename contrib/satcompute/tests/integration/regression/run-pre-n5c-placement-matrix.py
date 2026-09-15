@@ -5,12 +5,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
 from itertools import zip_longest
 import json
+import runpy
 from pathlib import Path
 import shlex
 import subprocess
 import sys
 
 HERE = Path(__file__).resolve().parent
+FINAL = runpy.run_path(str(HERE / 'run-final-scenario.py'))
 ROOT = HERE.parents[4]
 MODES = ("ffp", "lrl", "fa-ffp", "fa-lrl")
 SCENARIOS = {
@@ -82,7 +84,7 @@ def verify_gate(old, new):
     require(not a["worktree_dirty"] and not b["worktree_dirty"], "dirty gate run")
     def flags(e):
         result = {}
-        for token in shlex.split(e["command"][-1])[1:]:
+        for token in FINAL['canonical_input_arguments'](shlex.split(e["command"][-1]))[1:]:
             key, value = token.lstrip("-").split("=", 1)
             if key not in ("outputDir", "faultTrace", "placementMode"):
                 result[key] = value

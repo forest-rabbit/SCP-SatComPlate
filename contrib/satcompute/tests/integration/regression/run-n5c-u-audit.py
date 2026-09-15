@@ -30,7 +30,7 @@ def arguments(output, group, run):
     require(group in GROUPS and run in RUNS, "unapproved group/run")
     placement, variant = GROUPS[group]
     return FINAL["arguments"](output, protection_mode="compfrr", placement_mode=placement,
-        input_staging_policy="deferred", remote_busy_recovery_policy="relocate",
+        input_policy="deferred", remote_busy_recovery_policy="relocate",
         n5c_variant=variant, random_run=run)
 
 
@@ -44,7 +44,7 @@ def command(output, group, run):
 
 def flags(argv):
     values = {}
-    for token in argv[1:]:
+    for token in FINAL['canonical_input_arguments'](argv)[1:]:
         key, value = token.removeprefix("--").split("=", 1)
         require(key not in values, "duplicate command option")
         values[key] = value
