@@ -64,20 +64,22 @@ RecoveryController::RecoveryController(Ptr<TaskCoordinator> tasks,
                                        ProtectionPolicy& policy,
                                        RemoteBusyRecoveryPolicy busyPolicy,
                                        PlacementPolicy* recomputePlacement,
-                                       CheckpointRecoveryCapabilities capabilities)
-    : m_tasks(tasks), m_topology(topology), m_manager(manager),
+                                       CheckpointRecoveryCapabilities capabilities,
+                                       bool installTaskFaultHook)
+    : m_tasks(tasks), m_installTaskFaultHook(installTaskFaultHook), m_topology(topology), m_manager(manager),
       m_network(tasks->GetTransferEngine()), m_stopNs(stopNs), m_faultRuntime(policy, {this}),
       m_busyPolicy(busyPolicy), m_capabilities(capabilities), m_recomputePlacement(recomputePlacement)
 {
     m_manager.EnableRecoveryRetention();
-    m_tasks->SetRecoveryHandler(
-        [this](const auto& task, const auto& change) { return Fault(task, change); });
+    if (m_installTaskFaultHook)
+        m_tasks->SetRecoveryHandler(
+            [this](const auto& task, const auto& change) { return Fault(task, change); });
     m_tasks->ConnectTaskObserver(MakeCallback(&RecoveryController::OnTask, this));
 }
 
 RecoveryController::~RecoveryController()
 {
-    m_tasks->SetRecoveryHandler({});
+    if (m_installTaskFaultHook) m_tasks->SetRecoveryHandler({});
     m_tasks->DisconnectTaskObserver(MakeCallback(&RecoveryController::OnTask, this));
     for (auto& [id, state] : m_states)
         for (auto timer : state->timers)

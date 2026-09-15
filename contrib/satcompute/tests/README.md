@@ -226,6 +226,7 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 | `recovery-runtime-test.cc` | G3 受控 FaultController→备份/网络/计算/任务闭环，LocalDelivery、服务锁、F1/F2 免疫、F3、deadline、同纳秒实体快照和旧回调 |
 | `recompute-baseline-test.cc` | 无常态保护、FFP 全量重传、从零执行、planned/actual 与 deadline/F3 截断 |
 | `one-plus-one-baseline-test.cc` | 一次性副本准入、真实并行、正常故障暴露、完整 batch 后接管、首个 RESULT 与 loser 账本 |
+| `multitree-{mapping,runtime}-test.cc` | 冻结 TS/IDDL/CL/FR 与 FT 树；共享 RS/RP owner、真实 INPUT、LocalDelivery、拒绝无 fallback、故障批次完成边界 |
 | `link-window-test.cc` | 10 Gbps、空闲、双向独立、跨窗/尾窗、可用性、队列与预留时间积分 |
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
 | `routing-policy-factory-test.cc` | 五种路由名到 next-hop/path policy 的映射 |

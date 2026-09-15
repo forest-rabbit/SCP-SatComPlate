@@ -18,6 +18,27 @@ no hidden RS fallback; Multi-tree selects RS or RP by the frozen tree.
 Stop for actual mapping/mechanism blockers, otherwise after six-run review evidence.
 Do not auto-push/merge/CI or change main/legacy. Earlier stop notes below are history.
 
+Stage A is committed as b7e248350: 200 mapping checks, deterministic 800-task
+calibration, 18-file passive equivalence; canonical OFF+generate full run11 gives
+584 RS / 216 RP, all eight leaves, complete event-reconstructed queues. Evidence:
+output/multitree/stage-a/canonical-off-run11/mapping-audit.json.
+The user separately approved the shared same-ns boundary correction, committed as
+7067f4bc9: inclusive completion remains, queued dispatch is deferred ONLY inside a
+fault batch until service availability settles. Normal FCFS completion stays
+synchronous. Never substitute q=0 for unavailable current model state.
+Stage B shared hook/ledger/placement ownership and MultiTreeController are complete.
+All seven runtime cases (including completion-tie) pass; old 11-group regression
+is strict PASS after the correction (1984 files / 1723 CSV), evidence
+output/multitree/stage-b/mechanism-boundary-fixed versus stage-a/mechanism-before.
+Full maintained C++/Python/smoke/regression suites pass. Runtime-ready retains the
+new inclusive-completion/next-queued-task assertions. Continue through six small
+platform wiring/audit cases, then six complete runs using run-multitree-comparison.py.
+Audit actual WU/eq-WU, full physical byte lifetimes, and catch with missing separate
+from zero. RP catch can be reconstructed only from actual surviving continuous
+replica service, not the takeover label or planned work. No hidden RS fallback.
+Do not edit execution source while the six formal runs are active; stop after
+the comparison for user review, without push/PR/CI/merge.
+
 ### Current handoff: protection config hierarchy closed (2026-09-15)
 
 PR #105 merged into n5 as `2d601d268` after the single successful phase CI

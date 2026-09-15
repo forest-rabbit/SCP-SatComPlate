@@ -44,12 +44,12 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 | `policy/compfrr/{compfrr-controller,compfrr-placement-adapter,storage-estimator}.*` | F 接线、P 只读适配、新增存储峰值估计 |
 | `policy/compfrr/{frequency,input,placement}/` | F solver、INPUT 成本描述、P 排名及 compute-pressure |
 | `baseline/{checkbullet,recompute,one-plus-one}/*` | 完整对比方案；[CB-Sat](baseline/checkbullet/README.md) 的参数和工具也在此 |
-| `baseline/multitree/README.md` | 未来方案占位，当前未实现，无运行入口 |
+| `baseline/multitree/*` | [Multi-tree Published FT Rule](baseline/multitree/README.md)：冻结特征映射、公开 FT 树和共享 RS/RP 编排 |
 | `../traffic/local-delivery.*` | 同星逻辑交付，不创建 UDP、不计网络字节 |
 
 旧导出头/分析入口保留兼容；旧参数只在测试层显式转换，普通平台 CLI 不保留别名。
 不允许公共 Fixed/Checkpoint/Recovery 反向依赖 Frequency。
-不实现 Multi-tree、JIT、网络 ACK 或第二套网络；生产实现不调用 shadow validator。
+不实现完整 MTGP 训练、JIT、网络 ACK 或第二套网络；生产实现不调用 shadow validator。
 
 ## 参数与当前可运行范围
 
@@ -59,7 +59,7 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 
 | 参数 | 默认 | 说明 |
 |---|---:|---|
-| `protectionScheme` | `compfrr` | 正式默认 CompFRR；另有 recompute / one-plus-one / cb-sat；off 仅诊断/历史复现，Multi-tree 未实现 |
+| `protectionScheme` | `compfrr` | 正式默认 CompFRR；另有 recompute / one-plus-one / cb-sat / multitree；off 仅诊断/历史复现 |
 | `compfrrCheckpointPolicy` | `adaptive` | `fixed / adaptive`；原 Fixed 下沉为策略，不改变一次性 START 与维护合同 |
 | `compfrrPlacementPolicy` | `compfrr` | `ffp / fa-ffp / lrl / fa-lrl / compfrr`；默认使用自己的 CompFRR-P，仅 adaptive 可用 |
 | `compfrrInputPolicy` | `selective` | 唯一 INPUT 开关：`eager / deferred / selective`；Selective 固定 SER，Fixed 仅 Eager |

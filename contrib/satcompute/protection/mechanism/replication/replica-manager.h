@@ -2,7 +2,8 @@
 #ifndef SATCOMPUTE_REPLICA_MANAGER_H
 #define SATCOMPUTE_REPLICA_MANAGER_H
 #include "../../runtime/transfer-only-recovery-ledger.h"
-#include "../../baseline/one-plus-one/one-plus-one-policy.h"
+#include "../../runtime/protection-runtime.h"
+#include "../../policy/placement-policy.h"
 #include "../../../traffic/local-delivery.h"
 #include "../../runtime/placement-load-ledger.h"
 #include <array>
@@ -50,17 +51,21 @@ class ReplicaManager
 {
   public:
     ReplicaManager(Ptr<TaskCoordinator> tasks, SatelliteRuntimeView& topology,
-                   int64_t stopNs, OnePlusOnePolicy& policy);
+                   int64_t stopNs, ProtectionPolicy& policy, PlacementPolicy& placement,
+                   TransferOnlyRecoveryLedger* sharedLedger = nullptr,
+                   PlacementLoadLedger* sharedLoads = nullptr, bool installTaskHooks = true);
     ~ReplicaManager();
     /** One primary TASK_RUNNING: request once, without delaying its service. */
     void Request(uint64_t taskId);
     /** Close every attempt and unused original RESULT at simulation end. */
-    void Finalize();
+    void Finalize(bool finalizeTasks = true);
+    /** Bind through the outer owner when automatic installation is disabled. */
+    ParallelAttemptHooks Hooks();
     std::vector<ReplicaSummary> Summaries() const;
     const std::vector<ReplicaEvent>& Events() const { return m_events; }
     const TransferOnlyRecoveryLedger& Ledger() const { return m_ledger; }
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
-    const PlacementPolicy& Placement() const { return m_policy.Placement(); }
+    const PlacementPolicy& Placement() const { return m_placement; }
     /** Per-attempt, per-task and physical transfer evidence. */
     void WriteMetrics(const std::filesystem::path& directory) const;
 
@@ -96,9 +101,13 @@ class ReplicaManager
     Ptr<TaskCoordinator> m_tasks;
     SatelliteRuntimeView& m_topology;
     Ptr<NetworkTransferEngine> m_network;
-    OnePlusOnePolicy& m_policy;
-    TransferOnlyRecoveryLedger m_ledger; ///< Transport/evidence only; cannot execute checkpoints.
-    PlacementLoadLedger m_loads; ///< Accepted replica assignments and post-batch takeover ownership.
+    ProtectionPolicy& m_policy; ///< Narrow action interface, no baseline-private dependency.
+    PlacementPolicy& m_placement; ///< Same selection owner used by the request policy.
+    std::unique_ptr<TransferOnlyRecoveryLedger> m_ownedLedger; ///< Standalone default owner.
+    TransferOnlyRecoveryLedger& m_ledger; ///< Single mixed-scheme transfer ID/evidence stream.
+    PlacementLoadLedger m_ownedLoads; ///< Standalone default load accounting.
+    PlacementLoadLedger& m_loads; ///< Shared accepted assignment/takeover accounting.
+    bool m_installTaskHooks; ///< Only one owner registers coordinator hooks.
     std::map<uint64_t, std::unique_ptr<State>> m_states;
     struct Flow { uint64_t taskId{}, generation{}; bool input{}; };
     std::map<uint64_t, Flow> m_flows;

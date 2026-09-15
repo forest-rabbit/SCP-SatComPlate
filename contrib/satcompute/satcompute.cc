@@ -18,6 +18,7 @@
 #include "ns3/frequency-protection-controller.h"
 #include "ns3/recompute-controller.h"
 #include "ns3/one-plus-one-controller.h"
+#include "ns3/multitree-controller.h"
 #include "ns3/cb-sat-controller.h"
 #include "ns3/fa-least-recovery-load-placement-policy.h"
 #include "ns3/protection-metrics.h"
@@ -654,7 +655,10 @@ main(int argc, char* argv[])
             std::unique_ptr<protection::FrequencyProtectionController> frequency;
             std::unique_ptr<protection::RecomputeController> recompute;
             std::unique_ptr<protection::OnePlusOneController> replication;
+            std::unique_ptr<protection::multitree::MultiTreeController> multitree;
             std::unique_ptr<protection::checkbullet::CbSatController> checkbullet;
+            for (const auto name : {"multitree-decisions.csv", "multitree-mapping-summary.json", "multitree-summary.json"})
+                std::filesystem::remove(outputDirectory / name);
             protection::checkbullet::CbSatController::RemoveOutputs(outputDirectory);
             for (const auto name : {"input-admission-decisions.csv", "input-prefetch-events.csv",
                                     "input-prefetch-summary.json", "input-start-snapshots.json"})
@@ -718,6 +722,11 @@ main(int argc, char* argv[])
                 replication = std::make_unique<protection::OnePlusOneController>(
                     taskCoordinator, topology, simulationDurationNs, makePlacement());
             }
+            else if (config.protection.scheme == protection::ProtectionScheme::MULTITREE)
+            {
+                multitree = std::make_unique<protection::multitree::MultiTreeController>(
+                    taskCoordinator, topology, faultModelEngine, simulationDurationNs, makePlacement());
+            }
             else
             {
                 RemoveProtectionMetrics(outputDirectory);
@@ -750,6 +759,11 @@ main(int argc, char* argv[])
             if (multitreePreflight) multitreePreflight->Write(outputDirectory);
 #endif
             if (shadow) shadow->Finalize();
+            if (multitree)
+            {
+                multitree->Finalize();
+                multitree->WriteMetrics(outputDirectory);
+            }
             if (checkbullet)
             {
                 checkbullet->Finalize();

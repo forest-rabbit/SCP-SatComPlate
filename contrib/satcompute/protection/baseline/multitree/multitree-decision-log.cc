@@ -33,7 +33,10 @@ RuleResult DecisionLog::Capture(uint64_t id)
             throw std::logic_error("Multi-tree missing current primary service");
         const auto prediction = m_faults->QueryTaskPrediction(service->GetNodeId(),
                                                              running->remainingTimeNs);
-        if (!prediction) throw std::logic_error("Multi-tree current probability unavailable");
+        if (!prediction) throw std::logic_error("Multi-tree current probability unavailable: task=" +
+            std::to_string(id) + " node=" + std::to_string(service->GetNodeId()) +
+            " at_ns=" + std::to_string(Simulator::Now().GetNanoSeconds()) +
+            " compute_available=" + std::to_string(m_tasks->IsComputeAvailable(service->GetNodeId())));
         auto features = MapFeatures(task, service->GetQueuedTaskIds(), m_bytes, m_scale, *prediction);
         const auto rule = Evaluate(features);
         m_rows.emplace(id, Row{std::move(features), rule, Simulator::Now().GetNanoSeconds()});

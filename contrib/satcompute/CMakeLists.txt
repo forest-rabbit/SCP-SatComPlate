@@ -41,6 +41,7 @@ build_lib(
     protection/baseline/multitree/multitree-feature-adapter.cc
     protection/baseline/multitree/multitree-published-rule.cc
     protection/baseline/multitree/multitree-decision-log.cc
+    protection/baseline/multitree/multitree-controller.cc
     common/time-conversion.cc
     protection/common/protection-types.cc
     protection/common/input-contract.cc
@@ -163,6 +164,7 @@ build_lib(
     protection/baseline/multitree/multitree-feature-adapter.h
     protection/baseline/multitree/multitree-published-rule.h
     protection/baseline/multitree/multitree-decision-log.h
+    protection/baseline/multitree/multitree-controller.h
     common/time-conversion.h
     protection/common/protection-types.h
     protection/common/input-contract.h
@@ -340,6 +342,13 @@ build_exec(
   EXECNAME satcompute-multitree-mapping-test
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/unit/multitree-mapping-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+build_exec(
+  EXECNAME satcompute-multitree-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/multitree-runtime-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )

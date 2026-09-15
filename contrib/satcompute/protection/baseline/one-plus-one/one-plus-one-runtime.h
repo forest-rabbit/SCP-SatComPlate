@@ -2,6 +2,7 @@
 #ifndef SATCOMPUTE_ONE_PLUS_ONE_CONTROLLER_H
 #define SATCOMPUTE_ONE_PLUS_ONE_CONTROLLER_H
 #include "../../mechanism/replication/replica-manager.h"
+#include "one-plus-one-policy.h"
 
 namespace ns3::protection
 {

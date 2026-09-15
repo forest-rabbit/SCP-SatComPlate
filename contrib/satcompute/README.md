@@ -93,7 +93,7 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 
 ## 参数边界
 
-`protectionScheme=compfrr` 为正式默认；其他完整方案可选 `recompute / one-plus-one / cb-sat`。
+`protectionScheme=compfrr` 为正式默认；其他完整方案可选 `recompute / one-plus-one / cb-sat / multitree`。
 保护配置集中在 `protection/protection-para.cc`，保持分类注释与 `xx = xx;` 赋值；
 CLI/validation 独立，外层 `para.cc` 只取得默认配置。
 CompFRR 下选 `compfrrCheckpointPolicy=fixed|adaptive`，正式默认 adaptive + CompFRR-P + Selective + relocate。

@@ -61,6 +61,8 @@ deadline 调用现有 `TaskRuntime::ConfigureComputeDeadline`，保留 service/d
 - `multitree-feature-adapter.*`：冻结排名、TS/IDDL/CL/current FR 的纯映射。
 - `multitree-published-rule.*`：原文 FT 树和可审计叶分支名。
 - `multitree-decision-log.*`：一次因果 snapshot 与独立决策 CSV，runtime 与 preflight 共用。
+- `multitree-controller.*`：单一 RS/RP owner，共享 transport ID、placement load 与终结账本；
+  RS 调用公共从零恢复，RP 调用一次性完整副本执行器，不交叉 fallback。
 - 测试仍位于 `tests/unit` 与 `tests/integration/regression`；preflight 只读观察运行，
   不创建 flow/event，不申请 storage/compute，不启用实际保护。
 
@@ -78,3 +80,20 @@ P90 为 10.7935、最大为 21.2816（最大等待队列 10 个）。每条队�
 task 8 的等待任务 302/791，CL=3.13141，选择 RS。
 这是映射开发检查，不是 Multi-tree 实际保护效果。证据位于
 `output/multitree/stage-a/`，原基线 11 组小场景快照保留于 `mechanism-before/`。
+
+Stage B：共享 RS/RP 执行、真实 INPUT、LocalDelivery、一次性拒绝、完整故障批次后
+接管、F3 和最终账本清空均有小场景验证。同纳秒完成测试发现的公共边界问题已获
+单独批准修复（`7067f4bc9`）：到期任务先结算，队列下一项在故障批次结束后才可派发；
+正常 FCFS 不变。修复后旧 11 组的 1984 个文件（含 1723 CSV）仍严格等价。
+
+平台入口为 `--protectionScheme=multitree`，私有 placement 默认 FA-FFP；不继承
+CompFRR INPUT、Frequency、checkpoint/tail 或 relocation。需要 online generate 和
+F1/F2 当前状态；不能把 unavailable prediction 补零。RS/RP 在首次 RUNNING 冻结，
+未到达该状态的任务保持 UNDECIDED，RP 准入失败不重试、不暗中转为 RS。
+
+六组比较使用 `tests/integration/regression/run-multitree-comparison.py`，传入新
+`--output-root`；`--smoke` 为 15s 小门禁，默认完整 1300s，`--audit-only` 不启动仿真。
+须保持干净执行提交，不覆盖已有输出。`comparison.json` 保留每项实际 WU/服务时间、
+payload 与 catch 的来源；RP catch 根据实际连续副本服务追平 W_f 推导，不能把
+接管时间直接当 catch 或将未追平记为 0。结果同时列完成数、流量、执行浪费、
+常态与预留空等等效成本；不把未完成任务少做的工作当优化收益。

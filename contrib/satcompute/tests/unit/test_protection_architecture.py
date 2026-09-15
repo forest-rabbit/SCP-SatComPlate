@@ -26,12 +26,12 @@ ENTRIES = {
 class ProtectionArchitectureTests(unittest.TestCase):
     def test_baseline_and_shared_placement_have_one_canonical_owner(self):
         self.assertFalse((PROTECTION / "policy/baseline").exists())
-        for name in ("checkbullet", "recompute", "one-plus-one"):
+        for name in ("checkbullet", "recompute", "one-plus-one", "multitree"):
             self.assertTrue(list((PROTECTION / "baseline" / name).glob("*.cc")))
         for name in ("first-feasible", "least-recovery-load", "fa-first-feasible", "fa-least-recovery-load"):
             self.assertTrue(list((PROTECTION / "policy/placement" / name).glob("*.h")))
         multitree = PROTECTION / "baseline/multitree"
-        for stem in ("multitree-feature-adapter", "multitree-published-rule", "multitree-decision-log"):
+        for stem in ("multitree-feature-adapter", "multitree-published-rule", "multitree-decision-log", "multitree-controller"):
             self.assertTrue((multitree / (stem + ".cc")).is_file())
             self.assertTrue((multitree / (stem + ".h")).is_file())
         self.assertTrue((multitree / "calibration/published-ft-scale.json").is_file())
@@ -81,6 +81,9 @@ class ProtectionArchitectureTests(unittest.TestCase):
                      PROTECTION / "mechanism/replication/replica-manager.cc"]:
             includes = re.findall(r'^#include "([^"]+)"', path.read_text(), re.M)
             self.assertFalse(any("compfrr" in p or "checkpoint-manager.h" in p for p in includes))
+        for path in (PROTECTION / 'mechanism/replication').glob('*'):
+            if path.suffix in ('.h', '.cc'):
+                self.assertNotIn('one-plus-one-policy.h', path.read_text())
 
     def test_legacy_entries_forward_to_one_helper_implementation(self):
         for old, new in ENTRIES.items():

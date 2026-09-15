@@ -108,7 +108,13 @@ int main()
         Reject([] { Parse({"--protectionScheme=compfrr", "--compfrr-shadow=1"}); });
         Reject([] { Parse({"--compfrr-shadow=1"}, false, "none"); });
         Reject([] { Parse({"--compfrr-shadow-output=unused"}); });
-        Reject([] { Parse({"--protectionScheme=multitree"}); });
+        Check(Parse({"--protectionScheme=multitree"}).scheme == ProtectionScheme::MULTITREE);
+        Check(ActivePlacementPolicy(Parse({"--protectionScheme=multitree"})) == PlacementPolicyKind::FA_FFP);
+        Reject([] { Parse({"--protectionScheme=multitree"}, false, "none"); });
+        Reject([] { Parse({"--protectionScheme=multitree"}, false, "validation-replay"); });
+        Reject([] { Parse({"--protectionScheme=multitree"}, false, "generate", false, false); });
+        Reject([] { Parse({"--protectionScheme=multitree", "--compfrrInputPolicy=selective"}); });
+        Reject([] { Parse({"--protectionScheme=multitree", "--backupStorageBytesPerNode=10"}); });
         Reject([] { Parse({"--protectionScheme=off", "--protectionScheme=off"}); });
         Reject([] { Parse({"--testBaselinePlacement=lrl"}, true); });
         Reject([] { Parse({"--protectionScheme=recompute", "--testCbSatBusyPolicy=relocate"}, true); });

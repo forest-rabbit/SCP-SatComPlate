@@ -29,6 +29,8 @@ ProtectionConfig GetDefaultProtectionConfig()
     // 完整基线的私有 canonical default；历史变体通过专用测试入口显式注入。
     config.recompute.placementPolicy = BaselinePlacementKind::FA_FFP;
     config.onePlusOne.placementPolicy = BaselinePlacementKind::FA_FFP;
+    // Multi-tree owns its canonical placement; no public published-rule tuning controls.
+    config.multitree.placementPolicy = BaselinePlacementKind::FA_FFP;
     config.cbSat.placementPolicy = BaselinePlacementKind::FA_FFP;
     // 主 CB-Sat 忙时重算；旧省略 busy 的命令必须显式映射成历史 RELOCATE。
     config.cbSat.busyPolicy = RecoveryFallbackKind::RECOMPUTE;
