@@ -1,5 +1,7 @@
 # CompFRR INPUT binary admission：实现与开发验收
 
+当前结论见文末 **Final INPUT Closeout**：SER 已冻结，N 已退出 production；下方四组记录保留为历史证据。
+
 人工批准任务书：`CompFRR_INPUT_Binary_Admission_Production_Kickoff_for_Codex.md` 及四项补充。
 基线 `34177d0cf258fb4d58d3a9eb28c5872b1a39af0d`，开始时工作区干净；实现分支
 `feature/compfrr-input-admission-runtime`。不混入 JIT/V7、不改 Frequency/placement/RNG/正式场景，默认 admission=none。
@@ -184,3 +186,67 @@ N5R canonical 1,965 份输出（1,707 CSV）逐项等价，只增加 20 份 SER 
 JSON 仅忽略既有 wall-clock 字段及输出路径，CSV 整表/顺序/字段逐字节比较，不更新 golden。
 完整 build、全部 maintained C++、frequency/16-group placement smoke 及 maintained regression 均通过。
 证据统一在 `output/compfrr-input-closeout/`；只进行已批准的最终 D/S 开发收尾，不做 independent-run 评价。
+
+### G4/G5：最终同版本 D/S closure
+
+实际执行提交：`f098287a4f7dd8ab5c5089cb29df9f8579b223e3`，两组工作区均干净；
+pending 修复提交为 `cae104d1c`。两组使用相同 canonical 800-task/1300s、seed1/run11、
+N5C FULL、Deferred、relocate；仅 admission 不同。未跑 N，Eager 只做既有小场景兼容性 gate。
+执行耗时 D=1001.886 s、S=1013.267 s，退出码均为 0。
+完整 argv、源码归档、小 gates、逐任务及配对证据位于
+`output/compfrr-input-closeout/final-run11/`；用途为 `FINAL_DEVELOPMENT_CLOSURE`，不是正式独立样本结果。
+
+D 的 35 份原始输出（28 CSV）与 S 的 39 份（30 CSV）分别和旧 D/S 完全等价；
+排除执行身份/耗时及派生 analyzer 文件，不排除任何 CSV 业务字段。JSON 仅正规化输出路径和 wall-clock。
+本场景没有触发 `PREFETCH_NOT_ESTABLISHED`，因此 pending 修复不改变旧运行轨迹；其正确性由边界测试验证。
+两组 fault trace 也未改变：84 F1、2 F2、1 F3；83 个直接受影响任务可逐一配对。
+
+| 最终指标 | D：Deferred + none | S：Deferred + SER |
+|---|---:|---:|
+| completed / failed / deadline miss | 800 / 0 / 0 | 800 / 0 / 0 |
+| recovery success / failure | 83 / 0 | 83 / 0 |
+| fault→compute start：mean / P50 / P90 / max，ms | 237.813 / 241.855 / 410.114 / 805.580 | 99.805 / 22.531 / 326.403 / 645.505 |
+| fault→catch：mean / P50 / P90 / max，ms | 314.408 / 279.189 / 492.991 / 2373.995 | 175.073 / 75.914 / 393.600 / 2373.995 |
+| 实际 INPUT critical wait 合计，ms | 17987.769 | 6584.153 |
+| 实际执行浪费，WU | 635735 | 624725 |
+| 常态保护 / 预留空闲，eq-WU | 442750 / 1973849.979 | 443890 / 828382.674 |
+| 总浪费，eq-WU | 3052334.979 | 1896997.674 |
+| PREFETCH_INPUT / RECOVERY_INPUT，GB | 0 / 23.790304 | 19.995838 / 8.544910 |
+| INPUT-related FT，GB | 23.790304 | 28.540748 |
+| 常态 FT / 故障 FT，GB | 83.041906 / 25.585059 | 102.561531 / 10.760337 |
+| 总 FT / 全网络应用层流量，GB | 108.626965 / 402.913004 | 113.321868 / 407.607907 |
+| 平均 / 最高单链路全程利用率，% | 0.413897 / 1.146398 | 0.419997 / 1.199597 |
+| 全局同时 / 最大单节点 storage peak，GB | 1.489452 / 0.890773 | 1.798157 / 1.194257 |
+| 独立 INPUT_STAGING peak，GB | 0 | 1.000000 |
+
+恢复分布样本均为 83，无缺失值填零。GB 为十进制实际应用层字节；eq-WU 不冒充实际 CPU 执行。
+两组路径均 TAIL=73、REMOTE_REDO=8、MIGRATE_TAIL=2；所有 WU、physical flow 字节并集、
+实际服务账本、storage/quota 与最终资源释放检查通过，无非法 duplicate INPUT/result 或活动资源泄漏。
+
+S 的 409 个真实 START snapshots 全部重新通过纯 selector 核对：72 SEND，其中 68 个网络准入、4 个 LocalDelivery。
+68 个网络预取中 53 个任务随后故障，51 个实际 USED（75%）；15 个无故障。
+包括同星后实际 USED=52，无故障预取=18。故障时 READY=51、IN_FLIGHT=3，未请求 ABSENT=29。
+wrong-target refetch 为 task 140、455；failed-prefetch refetch=0、传输失败=0、未准入=0。
+原 wrong-target 字节 962313615 B 全部保留；故障后原流续传 484453938 B 计入同一完整生命周期。
+unused proactive=4.750443 GB，其中 no-fault=3.788130 GB；不把合法目标变化误记为 duplicate bug。
+
+S 相比 D：全网络增加 **1.17%**（FT 增加 4.32%），平均开始恢复等待下降 **58.03%**，
+平均追平时间下降 **44.32%**，总 equivalent waste 下降 **37.85%**。
+这是该开发 run11 的实际对照，不推出独立 runs 上的普遍优势，也不继续据此调参。
+
+### G6/G7：冻结与历史分支保留
+
+`INPUT_ALGORITHM_FROZEN = SER_BREAK_EVEN`：唯一跨星规则仍为
+`sum(w_k * min(T_ser, t_k-t_I)) > (1-P_F)*T_ser`，整数纳秒、严格大于，相等 DEFER；
+同星遵循 LocalDelivery 合同。默认 `none` 不变，最终方案显式使用 Deferred+SER。
+
+JIT 分支当前 **HELD**：[PR #99](https://github.com/forest-rabbit/SCP-SatComPlate/pull/99) 仍开放，
+head=`feature/pre-n5c-compfrr-v7-jit`，base=`feature/pre-n5c-cb-sat`；JIT tip 为
+`2ff3c5c98d58ed68c192f97cf47dff7a7e45cefd`，未进入其他本地/远端分支。
+因此不关闭 PR、不删除两个 refs，不删除 N/JIT 历史报告、源码提交或实验输出。
+仅生产 N 枚举、可选入口和新运行路径已退役，历史测试/分析依赖保留。
+
+最终 verdict：`INPUT_CLOSED_SER_FROZEN_JIT_BRANCH_HELD`。
+三个阶段分开提交，保留 `a4315e2b8` 历史实现；本轮未推送、未运行 CI、未创建/合并 PR，
+未执行正式 independent runs。停在人工审阅点，不实现新的 INPUT 规则。
+`NEXT PLANNED WORK: Multi-tree baseline integration`，须另行批准，本轮不改占位目录。
