@@ -1,5 +1,19 @@
 # AGENTS.md
 
+### Active INPUT repository consolidation (2026-09-15)
+
+The user approved the repository-cleanup taskbook and all five review amendments.
+This supersedes the historical INPUT STOP/hold instructions below. Continue from
+`461d76713` on `feature/compfrr-input-admission-runtime`: freeze a tracked SER fixture,
+unify public `inputPolicy=eager|deferred|selective` (default eager), preserve the causal
+SER snapshot and neutral runtime contracts, detach maintained accounting tests, then
+remove the dependency-audited offline stack. No algorithm, RNG, scene or formal-run changes.
+Run local staged equivalence gates and one manual phase CI on the final PR commit.
+Merge into n5 with a merge commit, then close #99 and delete the four named feature refs
+only after ancestry checks (JIT unique history first archived in a verified Git bundle).
+Keep main/legacy and historical formal outputs. No Multi-tree implementation.
+Progress and the exact scope are in `docs/n5/reviews/INPUT-final-repository-closeout.md`.
+
 ### Active INPUT final closeout (2026-09-15)
 
 The user accepted the SER freeze/JIT cleanup taskbook and four reviewed amendments.

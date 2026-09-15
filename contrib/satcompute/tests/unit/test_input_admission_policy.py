@@ -1,6 +1,4 @@
-"""Production SER anchor plus historical NET math in the test-only native probe."""
-import csv
-from copy import deepcopy
+"""Production SER formula and self-contained causal snapshot anchor."""
 import json
 from pathlib import Path
 import subprocess
@@ -29,14 +27,14 @@ class InputAdmissionPolicyTests(unittest.TestCase):
         rows = [snapshot(q, at) for q, at in [(0,20),(1,0),(1,20),(.5,20),(.5,0)]]
         results = self.evaluate(rows)
         self.assertEqual([r['ser'] for r in results], [False,False,True,False,False])
-        self.assertEqual([r['net'] for r in results], [False,False,True,True,False])
 
-    def test_partial_lead_zero_prop_and_subset(self):
+    def test_partial_lead_and_propagation(self):
         rows = [snapshot(q, at, prop) for q in (0,.01,.25,.5,.75,1)
                 for at in (0,1,5,10,15,20) for prop in (0,10)]
         for src, out in zip(rows, self.evaluate(rows)):
-            self.assertFalse(out['ser'] and not out['net'])
-            if not src['input_path']['propagation_ns']: self.assertEqual(out['ser'],out['net'])
+            q = src['predictor']['P_F']
+            gain = q * min(10, src['predictor']['future_steps'][0]['time_ns'])
+            self.assertEqual(out['ser'], gain > (1-q)*10)
 
     def test_integer_ceil_and_overflow(self):
         r = snapshot(.7, 2, 0); r['input_bytes'] = 3
@@ -59,23 +57,24 @@ class InputAdmissionPolicyTests(unittest.TestCase):
         out = self.evaluate([r])[0]
         self.assertTrue(out['ser']); self.assertEqual(out['serialization_ns'],0)
         r['input_path']['local_delivery'] = False; r['input_path']['admissible'] = False
-        self.assertFalse(self.evaluate([r])[0]['net'])
+        self.assertFalse(self.evaluate([r])[0]['ser'])
 
     def test_fixed_stage_b_selector_anchor(self):
-        trace = ROOT / 'output/compfrr-input-worthiness/20260914-run11-instrumented/input-start-snapshots.json'
-        expected = ROOT / 'output/audits/compfrr-input-break-even-timebase-run11/candidate_comparison.csv'
-        if not trace.exists() or not expected.exists():
-            self.skipTest('local historical evidence not shipped as a unit fixture')
+        trace = ROOT / 'contrib/satcompute/tests/fixtures/protection/selective-input-ser-anchor.json'
         inputs = json.loads(trace.read_text())['candidates']
         results = {r['task_id']:r for r in self.evaluate(inputs)}
-        count = [0,0,0]
-        with expected.open() as stream:
-            for row in csv.DictReader(stream):
-                actual = results[int(row['task_id'])]
-                self.assertEqual(actual['ser'], row['old_decision']=='PROACTIVE')
-                self.assertEqual(actual['net'], row['new_decision']=='PROACTIVE')
-                count[0] += 1; count[1] += actual['ser']; count[2] += actual['net']
-        self.assertEqual(count,[405,68,115])
+        self.assertEqual(len(results), 409)
+        network = local = selected = 0
+        for row in inputs:
+            actual = results[row['task_id']]['ser']
+            self.assertEqual(actual, row['expected_send'], row['task_id'])
+            if row['input_path']['local_delivery']:
+                local += 1
+                self.assertTrue(actual)
+            else:
+                network += 1
+                selected += actual
+        self.assertEqual((network, selected, local), (405,68,4))
 
 
 if __name__ == '__main__': unittest.main()
