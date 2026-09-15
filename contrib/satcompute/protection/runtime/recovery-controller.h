@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef SATCOMPUTE_RECOVERY_CONTROLLER_H
 #define SATCOMPUTE_RECOVERY_CONTROLLER_H
+#include "../common/input-dependency.h"
 #include "../../traffic/local-delivery.h"
 #include "checkpoint-recovery-port.h"
 #include "protection-runtime.h"
@@ -57,6 +58,8 @@ struct RecoveryEvent
 class RecoveryController : public ProtectionMechanism
 {
   public:
+    /** Optional neutral INPUT lifecycle; null preserves the existing Eager/Deferred contract. */
+    void SetInputDependencyResolver(InputDependencyResolver* resolver) { m_input = resolver; }
     /** Bind optional fixed-mode recovery; no global node immunity is introduced. */
     RecoveryController(Ptr<TaskCoordinator> tasks,
                        SatelliteRuntimeView& topology,
@@ -95,6 +98,8 @@ class RecoveryController : public ProtectionMechanism
     void SetPlacementLoads(const PlacementLoadLedger* loads) { m_placementLoads = loads; }
 
   private:
+    InputDependencyResolver* m_input{};
+    InputDependency ResolveInput(const TaskDefinition& task, uint32_t node) const;
     /** Stable heap-owned attempt and asynchronous resources. */
     struct State
     {
@@ -130,7 +135,8 @@ class RecoveryController : public ProtectionMechanism
                  uint64_t bytes,
                  uint64_t object = 0);
     void TransferTerminal(uint64_t transferId, int64_t timeNs);
-    void Received(State& state, ProtectionTransferKind kind, uint64_t bytes, uint64_t transferId);
+    void Received(State& state, ProtectionTransferKind kind, uint64_t bytes, uint64_t transferId,
+                  int64_t actualReceivedNs = -1);
     void StartCompute(State& state);
     /** Immutable input contract from the checkpoint owner, not a second configuration. */
     bool Deferred() const { return InputContract(m_manager.InputPolicy()).RequiresRecoveryInput(); }

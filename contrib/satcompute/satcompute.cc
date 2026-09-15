@@ -221,8 +221,8 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("n5cVariant", "CompFRR-P: full=CUMULATIVE, rational-U=IDLE_AWARE; noR/noU/noM are ablations; hard constraints unchanged", config.n5cVariant);
     commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; busy or direct deadline infeasible (CB: busy only)",
                          config.remoteBusyRecoveryPolicy);
-    commandLine.AddValue("inputStagingPolicy", "eager / deferred; deferred requires compfrr",
-                         config.inputStagingPolicy);
+    commandLine.AddValue("inputPolicy", "eager / deferred / selective; deferred/selective require compfrr",
+                         config.inputPolicy);
     commandLine.AddValue("lrlRecoveryWeight", "Diagnostic active-recovery weight; G3 freezes 1", config.lrlRecoveryWeight);
     commandLine.AddValue("fixedProtectionDelta",
                          "Fixed progress interval (0.05 = 5%), per-mille precision",
@@ -382,9 +382,9 @@ ValidateConfig(const SatComputeConfig& config)
     RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"});
     RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"});
     RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
-    RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred"});
-    if (config.inputStagingPolicy == "deferred" && config.protectionMode != "compfrr")
-        FailConfig("inputStagingPolicy", "deferred requires compfrr protection");
+    RequireChoice(config.inputPolicy, "inputPolicy", {"eager", "deferred", "selective"});
+    if (config.inputPolicy != "eager" && config.protectionMode != "compfrr")
+        FailConfig("inputPolicy", "deferred/selective require compfrr protection");
     if (config.n5cVariant == "recent-U")
         FailConfig("n5cVariant", "recent-U is historical-only; production policies are full (CUMULATIVE) and rational-U (IDLE_AWARE)");
     RequireChoice(config.n5cVariant, "n5cVariant", {"full", "noR", "noU", "noM", "rational-U"});
@@ -698,6 +698,9 @@ main(int argc, char* argv[])
             std::unique_ptr<protection::OnePlusOneController> replication;
             std::unique_ptr<protection::checkbullet::CbSatController> checkbullet;
             protection::checkbullet::CbSatController::RemoveOutputs(outputDirectory);
+            for (const auto name : {"input-admission-decisions.csv", "input-prefetch-events.csv",
+                                    "input-prefetch-summary.json", "input-start-snapshots.json"})
+                std::filesystem::remove(outputDirectory / name);
             for (const auto name : {"replica-summary.csv", "replica-attempts.csv", "replica-events.csv", "replica-transfers.csv"})
                 std::filesystem::remove(outputDirectory / name);
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
@@ -737,9 +740,7 @@ main(int argc, char* argv[])
                     taskCoordinator, topology, faultModelEngine,
                     config.backupStorageBytesPerNode, simulationDurationNs,
                     makePlacement(), busyPolicy,
-                    config.inputStagingPolicy == "deferred" ? protection::InputStagingPolicy::DEFERRED
-                                                             : protection::InputStagingPolicy::EAGER,
-                    true); // Read-only placement resource metrics for comparable baseline/N5C accounting.
+                    protection::ParseInputPolicy(config.inputPolicy), true);
             }
             else if (config.protectionMode == "checkbullet")
             {
@@ -816,6 +817,7 @@ main(int argc, char* argv[])
                 WriteProtectionMetrics(frequency->Manager(), *transferEngine, outputDirectory);
                 frequency->Recovery()->WriteMetrics(outputDirectory);
                 frequency->WriteDecisions(outputDirectory);
+                frequency->WriteInputAdmissionAudit(outputDirectory);
                 frequency->PlacementLoads().WriteMetrics(outputDirectory);
                 frequency->Placement().WriteSelections(outputDirectory);
             }

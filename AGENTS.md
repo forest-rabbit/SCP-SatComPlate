@@ -1,5 +1,19 @@
 # AGENTS.md
 
+### Active INPUT repository consolidation (2026-09-15)
+
+The user approved the repository-cleanup taskbook and all five review amendments.
+This supersedes the historical INPUT STOP/hold instructions below. Continue from
+`461d76713` on `feature/compfrr-input-admission-runtime`: freeze a tracked SER fixture,
+unify public `inputPolicy=eager|deferred|selective` (default eager), preserve the causal
+SER snapshot and neutral runtime contracts, detach maintained accounting tests, then
+remove the dependency-audited offline stack. No algorithm, RNG, scene or formal-run changes.
+Run local staged equivalence gates and one manual phase CI on the final PR commit.
+Merge into n5 with a merge commit, then close #99 and delete the four named feature refs
+only after ancestry checks (JIT unique history first archived in a verified Git bundle).
+Keep main/legacy and historical formal outputs. No Multi-tree implementation.
+Progress and the exact scope are in `docs/n5/reviews/INPUT-final-repository-closeout.md`.
+
 This file provides guidance to AI agents when working with code in this repository.
 
 ## SCP-SatComPlate Project Rules
@@ -315,25 +329,16 @@ Unknown evidence stays unknown. Paired contrasts are not exact counterfactuals.
 Record both stages in docs/n5/reviews/N5R-implementation.md and stop for review
 after the offline report; no V8, optimizer, budget, threshold or new timer.
 
-### INPUT worthiness Phase 1 (user-approved)
+### Frozen INPUT contract
 
-The user accepted `CompFRR_Input_Worthiness_Clarifications_v2.md` and explicitly
-approved merging #103 into n5, then creating `feature/compfrr-input-worthiness`
-from that merged baseline. Finish the N5R status record first; preserve all
-corrected-chain evidence. Delete the merged N5R branch only after verifying
-ancestry and no dependent PRs. Keep main, legacy and production JIT/#99 untouched.
-Phase 1 is offline only: separate historical V6START (primary) and Full-V7
-(discovery) cohorts, audit per-feature causal reconstruction, four exclusive
-task labels, distributions, exploratory separability and joint old-JIT eligibility.
-Use the existing predictor/window and parallel recovery estimator, fixed pairs,
-cadence and deadline. Historical labels are not runtime features. UNKNOWN stays
-unknown; do not renormalize known probability mass or infer zero from missing data.
-Report worthiness, timing eligibility, real admission and receiver READY separately.
-Catch reduction is not net benefit; deadline rescue is separate from finite catch
-difference. No production, timing, Frequency/Placement/Recovery/RNG/routing/scene
-changes, new simulation/calibration, optimizer, budget, arbitrary threshold or
-extra CI. Keep analysis/test helpers in the existing tests tree and stop after
-Markdown plus CSV/JSON evidence for user review. Do not implement Phase 2.
+Only public `inputPolicy=eager|deferred|selective` remains; default eager. Selective
+uses the Deferred checkpoint layout and one frozen SER break-even selector.
+Preserve neutral INPUT dependency/lifecycle, actual receiver completion and full-flow
+byte accounting. No JIT/NET runtime policy, empirical tuning or second Frequency solver.
+Use the tracked 409-candidate SER fixture (68/405 network SEND plus 4 LocalDelivery),
+not an ignored calibration output. The retired public switches and large START JSON
+are not runtime interfaces. Historical metadata readers may normalize old names only
+for exact equivalence checks. See docs/protection/compfrr-f.md and the final INPUT report.
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 

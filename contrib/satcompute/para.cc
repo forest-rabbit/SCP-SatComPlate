@@ -125,9 +125,10 @@ GetDefaultSatComputeConfig()
     // --remoteBusyRecoveryPolicy：remote 忙或 direct 无法按时完成时生效；CB 保持原忙时合同。
     // relocate 迁移状态后继续；recompute 放弃检查点，从原始 INPUT 重算；off 忽略本参数。
     config.remoteBusyRecoveryPolicy = "relocate";
-    // --inputStagingPolicy：eager 保持原始 INPUT 常态预置；deferred 仅用于 CompFRR，
-    // 常态只传递状态，故障后向实际恢复星获取一次完整 INPUT，不改变 WU、状态量和成本档位。
-    config.inputStagingPolicy = "eager";
+    // --inputPolicy：eager 常态预置完整 INPUT；deferred 常态只传状态、故障后获取 INPUT；
+    // selective 在 Deferred 布局上按 SER break-even 决定是否提前发送 INPUT。
+    // deferred/selective 仅用于 CompFRR；不改变 Frequency、节点选择或实际恢复依赖。
+    config.inputPolicy = "eager";
 
     // --lrlRecoveryWeight：L = active backup assignments + weight * active recoveries。
     // G3 在看到 A/B/C 结果之前预先冻结为 1，不扫描、不按结果调整。

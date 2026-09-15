@@ -15,7 +15,8 @@ class PeakQuotaLedger
     void Release(uint64_t task);
     /** Sum max(actual,quota), optionally omitting the replaced task's old quota only. */
     uint64_t Accounted(uint32_t node, const std::map<uint64_t, uint64_t>& actual,
-                       std::optional<uint64_t> replacing = {}) const;
+                       std::optional<uint64_t> replacing = {},
+                       const std::map<uint64_t, uint64_t>& independent = {}) const;
     bool Empty() const { return m_quotas.empty(); }
     /** Existing committed promise for this owner/node, without changing accounting. */
     std::optional<uint64_t> Peak(uint64_t task, uint32_t node) const

@@ -27,12 +27,19 @@ void PeakQuotaLedger::Replace(uint64_t task, uint32_t node, uint64_t bytes)
 }
 void PeakQuotaLedger::Release(uint64_t task) { m_quotas.erase(task); }
 uint64_t PeakQuotaLedger::Accounted(uint32_t node, const std::map<uint64_t, uint64_t>& actual,
-                                 std::optional<uint64_t> replacing) const
+                                 std::optional<uint64_t> replacing,
+                                 const std::map<uint64_t, uint64_t>& independent) const
 {
     auto perTask = actual;
+    for (const auto& [task, bytes] : independent)
+    {
+        Require(perTask.contains(task) && perTask.at(task) >= bytes, "independent storage exceeds actual");
+        perTask[task] -= bytes;
+    }
     for (const auto& [task, quota] : m_quotas)
         if (quota.first == node && replacing != task)
             perTask[task] = std::max(perTask[task], quota.second);
+    for (const auto& [task, bytes] : independent) perTask[task] = Add(perTask[task], bytes);
     uint64_t total = 0;
     for (const auto& [task, bytes] : perTask) total = Add(total, bytes);
     return total;

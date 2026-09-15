@@ -192,14 +192,27 @@ class F3SelectionTests(unittest.TestCase):
 
 
 class FinalRunnerTests(unittest.TestCase):
+    def test_historical_input_metadata_mapping_is_not_a_runtime_alias(self):
+        normalize = RUN['canonical_input_arguments']
+        for policy, old in [('eager', ['--inputStagingPolicy=eager', '--inputAdmissionPolicy=none']),
+                            ('deferred', ['--inputStagingPolicy=deferred']),
+                            ('selective', ['--inputStagingPolicy=deferred', '--inputAdmissionPolicy=ser-break-even'])]:
+            self.assertEqual(normalize(['satcompute']+old), normalize(['satcompute',f'--inputPolicy={policy}']))
+        for old in (['--inputPolicy=selective','--inputStagingPolicy=deferred'],
+                    ['--inputStagingPolicy=eager','--inputAdmissionPolicy=ser-break-even'],
+                    ['--inputPolicy=jit'], ['--inputPolicy=eager','--inputPolicy=eager']):
+            with self.assertRaises(ValueError): normalize(['satcompute']+old)
+
     def test_deferred_is_explicit_compfrr_only(self):
         output = Path("output/controlled-test")
         eager = RUN["arguments"](output, protection_mode="compfrr")
-        deferred = RUN["arguments"](output, protection_mode="compfrr", input_staging_policy="deferred")
-        self.assertEqual(deferred, eager + ["--inputStagingPolicy=deferred"])
+        deferred = RUN["arguments"](output, protection_mode="compfrr", input_policy="deferred")
+        self.assertEqual(deferred, eager + ["--inputPolicy=deferred"])
+        self.assertEqual(RUN["arguments"](output, protection_mode="compfrr", input_policy="selective"),
+                         eager + ["--inputPolicy=selective"])
         for mode in ("off", "recompute", "one-plus-one", "fixed"):
             with self.assertRaisesRegex(ValueError, "CompFRR"):
-                RUN["arguments"](output, protection_mode=mode, input_staging_policy="deferred")
+                RUN["arguments"](output, protection_mode=mode, input_policy="deferred")
 
     def test_complete_baselines_use_frozen_scene_and_four_placements(self):
         for mode in ("recompute", "one-plus-one"):

@@ -543,7 +543,8 @@ std::string Controlled(TaskProfile profile,
         // No generation schedule here: deterministic injection tests only the boundary seam.
         auto engine = CreateObject<FaultModelEngine>();
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
-            nullptr, RemoteBusyRecoveryPolicy::RELOCATE, inputPolicy);
+            nullptr, RemoteBusyRecoveryPolicy::RELOCATE,
+            inputPolicy == InputStagingPolicy::EAGER ? InputPolicy::EAGER : InputPolicy::DEFERRED);
         Driver driver{controller,
                       tasks,
                       executor,
@@ -657,7 +658,8 @@ std::string Controlled(TaskProfile profile,
     return signature;
 }
 
-void Online(const std::filesystem::path& output, const std::string& mode = "normal")
+void Online(const std::filesystem::path& output, const std::string& mode = "normal",
+            bool selective = false)
 {
     RngSeedManager::SetSeed(1);
     RngSeedManager::SetRun(11);
@@ -740,8 +742,9 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
                 mode == "n5c-rational-U" ? N5cVariant::RATIONAL_U : N5cVariant::FULL)) :
             mode == "lrl-two" ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
                                : std::unique_ptr<PlacementPolicy>{}, RemoteBusyRecoveryPolicy::RELOCATE,
+            selective ? InputPolicy::SELECTIVE :
             (mode == "n5c-deferred" || mode == "n5c-recent-U" || mode == "n5c-rational-U") ?
-                InputStagingPolicy::DEFERRED : InputStagingPolicy::EAGER);
+                InputPolicy::DEFERRED : InputPolicy::EAGER);
         if (mode == "f3")
         {
             Simulator::Schedule(NanoSeconds(50000000), [&] {
@@ -885,6 +888,43 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
               [](const auto& r) { return r.recoveryNode.has_value(); })), "actual recovery count mismatch");
         controller.WriteDecisions(output);
         controller.PlacementLoads().WriteMetrics(output);
+        controller.WriteInputAdmissionAudit(output);
+        if (selective)
+        {
+            Check(controller.OptionalInput() && !controller.OptionalInput()->Records().empty(),
+                  "online binary admission never requested INPUT");
+            for (const auto& [id, record] : controller.OptionalInput()->Records())
+            {
+                const auto found = std::find_if(controller.Decisions().begin(), controller.Decisions().end(),
+                    [&](const auto& d) { return d.taskId == id && d.committed &&
+                        d.proposal.action == FrequencyAction::START; });
+                Check(found != controller.Decisions().end() && found->pair->remoteNode == record.target &&
+                    found->input.risk.epochNs == record.requestedNs, "optional flow not from admitted actual START pair");
+            }
+        }
+        if (selective)
+        {
+            std::set<uint64_t> seen;
+            for (const auto& [snapshot, decision] : controller.InputAdmissions())
+            {
+                Check(seen.insert(snapshot.task.taskId).second, "START audit duplicate task");
+                Check(snapshot.prediction && snapshot.finishExclusive && snapshot.remainingNs > 0,
+                      "START audit lost canonical query");
+                if (snapshot.trigger == "FAULT_EPOCH")
+                    Check(snapshot.firstSampleNs > snapshot.timeNs, "START audit repeats survived epoch");
+                for (const auto& step : snapshot.prediction->steps)
+                    Check(step.targetTimeNs >= snapshot.firstSampleNs &&
+                          step.targetTimeNs < snapshot.timeNs + snapshot.remainingNs,
+                          "START audit prediction includes completion or predates first check");
+                const auto row = std::find_if(controller.Decisions().begin(), controller.Decisions().end(),
+                    [&](const auto& d) { return d.taskId == snapshot.task.taskId && d.input.risk.epochNs == snapshot.timeNs; });
+                Check(row != controller.Decisions().end() && row->committed &&
+                      row->pair == std::optional(snapshot.pair), "START audit did not retain actual pair");
+                Check(snapshot.inputPath.local == (snapshot.task.sourceNodeId == snapshot.pair.remoteNode),
+                      "START audit LocalDelivery mismatch");
+            }
+            Check(seen.size() == controller.Manager().Summaries().size(), "START audit admitted population mismatch");
+        }
         WriteProtectionMetrics(controller.Manager(), *tasks->GetTransferEngine(), output);
         controller.Recovery()->WriteMetrics(output);
         Check(controller.Manager().IsQuiescent(), "online generate leaked resources");
@@ -917,7 +957,8 @@ void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging
         engine->Configure(fp, ids, {0,2,3,4}, END, executor, true);
         engine->BindTaskCoordinator(tasks);
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
-            std::make_unique<N5cPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE, staging);
+            std::make_unique<N5cPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE,
+            staging == InputStagingPolicy::EAGER ? InputPolicy::EAGER : InputPolicy::DEFERRED);
         auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
         const auto held = manager.Pool(0).TryReserve(999, StorageKind::INIT_TEMP, 4000000000ULL);
         Check(held.has_value(), "test pressure reservation failed");
@@ -1358,7 +1399,8 @@ void OnCapacityRetry(const std::filesystem::path& output, const std::string& mod
         executor->BindTaskCoordinator(tasks);
         engine->BindTaskCoordinator(tasks);
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
-            nullptr, RemoteBusyRecoveryPolicy::RELOCATE, staging);
+            nullptr, RemoteBusyRecoveryPolicy::RELOCATE,
+            staging == InputStagingPolicy::EAGER ? InputPolicy::EAGER : InputPolicy::DEFERRED);
         OnRetryDriver driver{tasks, engine, executor, controller, mode};
         tasks->GetTransferEngine()->SetCapacityReservationObserver(MakeCallback(&OnRetryDriver::Reserved, &driver));
         Simulator::Stop(NanoSeconds(900000000));
@@ -1383,9 +1425,14 @@ int main(int argc, char** argv)
     std::string output = "/tmp/satcompute-frequency-runtime";
     CommandLine command(__FILE__);
     command.AddValue("outputDir", "Controlled evidence directory", output);
+    bool onlyInputAdmission = false;
+    command.AddValue("onlyInputAdmission", "Run the SER online optional INPUT fixture only", onlyInputAdmission);
     command.Parse(argc, argv);
     try
     {
+        Online(std::filesystem::path(output)/"ser-break-even", "n5c-deferred",
+               true);
+        if (onlyInputAdmission) { std::cout << "input admission online: PASS (" << checks << " checks)\n"; return 0; }
         Storage();
         for (auto staging : {InputStagingPolicy::EAGER, InputStagingPolicy::DEFERRED})
             for (const auto& mode : {"normal", "hit", "race"})

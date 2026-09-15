@@ -30,11 +30,16 @@ def normalized_json(value, directory):
     return value
 
 
-def compare(reference, candidate, *, allow_cb_profile_relocation=False):
+def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_retired_input_snapshot=False):
     def files(directory):
         return {p.relative_to(directory) for p in directory.rglob('*')
                 if p.suffix in ('.csv', '.json')}
     expected, actual = files(reference), files(candidate)
+    audit_files = {p for p in expected - actual if p.name == 'input-start-snapshots.json'}
+    if allow_retired_input_snapshot:
+        if not audit_files:
+            raise AssertionError('reference has no retired development snapshot')
+        expected -= audit_files
     if not expected or expected != actual:
         raise AssertionError(f'output set differs: missing={expected-actual}, extra={actual-expected}')
     relocations = []
@@ -64,6 +69,8 @@ def compare(reference, candidate, *, allow_cb_profile_relocation=False):
         if not equal:
             raise AssertionError(f'SEMANTIC_DIFFERENCE: {path}; stop and audit, do not refresh golden')
     result = {'status': 'PASS', 'files': len(expected), 'csv': sum(p.suffix == '.csv' for p in expected)}
+    if allow_retired_input_snapshot:
+        result['removed_development_snapshot_files'] = len(audit_files)
     if allow_cb_profile_relocation:
         result['authorized_cb_profile_path_relocations'] = relocations
     return result
@@ -107,7 +114,7 @@ def collect(root, jobs):
             '--faultEnableF1=1', '--faultEnableF2=1', '--faultEnableF3=0',
             '--taskCompletionPolicy=report', '--compfrr-shadow=0', '--faultProbabilityAudit=1',
             '--protectionMode=compfrr', f'--placementMode={placement}', f'--n5cVariant={variant}',
-            f'--inputStagingPolicy={staging}', '--remoteBusyRecoveryPolicy=relocate',
+            f'--inputPolicy={staging}', '--remoteBusyRecoveryPolicy=relocate',
             '--routingMode=global-capacity-aware-hrw', '--islBandwidthBps=10000000000',
             '--delayMode=fixed', '--fixedDelay=0.001', f'--outputDir={output}']))
     with ThreadPoolExecutor(max_workers=jobs) as pool:
@@ -120,6 +127,8 @@ def main():
     parser.add_argument('--reference', type=Path)
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--compare-only', action='store_true')
+    parser.add_argument('--allow-retired-input-snapshot', action='store_true',
+                        help='Allow only removal of the retired development JSON; compare all production output')
     parser.add_argument('--allow-cb-profile-relocation', action='store_true',
                         help='Audit only the exact N5R CB profile owner move; verify frozen profile bytes')
     args = parser.parse_args()
@@ -135,7 +144,8 @@ def main():
     if not args.compare_only:
         collect(output, args.jobs)
     result = compare(args.reference.resolve(), output,
-                     allow_cb_profile_relocation=args.allow_cb_profile_relocation) if args.reference else {
+                     allow_cb_profile_relocation=args.allow_cb_profile_relocation,
+                     allow_retired_input_snapshot=args.allow_retired_input_snapshot) if args.reference else {
         'status': 'BASELINE_CAPTURED', 'root': str(output)}
     print(json.dumps(result, sort_keys=True))
 

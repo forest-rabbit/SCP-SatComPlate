@@ -63,6 +63,7 @@ main()
                 "fault probability audit must be opt-in");
         Require(!config.compfrrShadow && config.compfrrShadowOutput.empty(),
                 "shadow evaluation must be opt-in");
+        Require(config.inputPolicy == "eager", "single INPUT policy must preserve eager default");
         Require(!config.topologyOnly && config.topologySliceIntervalSeconds == 1.0 &&
                     config.includeFinalTopologyState,
                 "unexpected topology-only defaults");

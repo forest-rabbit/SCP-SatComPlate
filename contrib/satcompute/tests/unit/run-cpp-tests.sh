@@ -10,6 +10,7 @@ trap 'rm -rf "$test_output"' EXIT
 
 ./ns3 run --no-build "satcompute-para-test"
 ./ns3 run --no-build "satcompute-protection-contract-test"
+./ns3 run --no-build "satcompute-input-staging-runtime-test --outputDir=$test_output/input-staging"
 ./ns3 run --no-build "satcompute-cb-sat-policy-test"
 ./ns3 run --no-build "satcompute-cb-sat-config-test"
 ./ns3 run --no-build "satcompute-cb-sat-runtime-test"

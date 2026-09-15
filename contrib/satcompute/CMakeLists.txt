@@ -43,6 +43,9 @@ build_lib(
     protection/runtime/transfer-only-recovery-ledger.cc
     protection/mechanism/relocation/checkpoint-relocation-executor.cc
     protection/policy/compfrr/input/input-cost-adapter.cc
+    protection/policy/compfrr/input/input-admission-policy.cc
+    protection/mechanism/input-staging/input-staging-manager.cc
+    metrics/core/input-admission-metrics.cc
     traffic/local-delivery.cc
     protection/common/task-state-adapter.cc
     protection/baseline/checkbullet/cb-sat-policy.cc
@@ -69,6 +72,7 @@ build_lib(
     protection/mechanism/checkpoint/checkpoint-manager.cc
     protection/policy/fixed/fixed-controller.cc
     protection/policy/compfrr/compfrr-controller.cc
+    protection/policy/compfrr/input/selective-input-snapshot.cc
     protection/policy/compfrr/compfrr-placement-adapter.cc
     protection/runtime/placement-resource-tracker.cc
     metrics/core/placement-resource-metrics.cc
@@ -192,6 +196,7 @@ build_lib(
     protection/policy/fixed/fixed-controller.h
     protection/runtime/frequency-protection-controller.h
     protection/policy/compfrr/compfrr-controller.h
+    protection/policy/compfrr/input/selective-input-snapshot.h
     protection/policy/compfrr/storage-estimator.h
     protection/runtime/n5c-placement-tracker.h
     protection/runtime/compute-usage-history.h
@@ -317,6 +322,26 @@ build_exec(
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
+)
+
+# Focused optional INPUT lifecycle and shared recovery contract fixtures.
+build_exec(
+  EXECNAME satcompute-input-staging-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/input-staging-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+# Pure production INPUT selector probe; JSON snapshots, no Simulator execution.
+build_exec(
+  EXECNAME satcompute-input-admission-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/input-admission-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )
 
 # Pure-model calibration tool. It does not run the network simulator or create

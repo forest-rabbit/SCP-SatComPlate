@@ -94,8 +94,8 @@ ABSENT 的 66 个任务最后一次故障前 JIT 评估均为 WAIT_NEXT_KNOWN_EV
 
 ## 复核与停止点
 
-实现位于 `tests/support/protection/jit_offline_audit.py`，薄入口与命令见
-[测试 README](../../../contrib/satcompute/tests/README.md#历史-v7-离线诊断)。复用既有 INPUT/baseline helper，
+历史实现曾位于 `tests/support/protection/jit_offline_audit.py`；一次性工具已随 INPUT 收口退役，
+可从 `d0ad381e5` 恢复，当前说明见[仓库收口](INPUT-final-repository-closeout.md)。当时复用既有 INPUT/baseline helper，
 没有复制 solver、生产模型或通用账本。新离线单元测试覆盖严格 READY、IN_FLIGHT 全生命周期、
 实际消费与 adoption 区分、LocalDelivery、守恒/身份损坏、缺失 join、配对拒绝与输出不可覆盖。
 共新增 14 项合成测试；维护 Python 213 项（1 项外部 position-slices 缺失跳过）、C++ 合同、

@@ -18,12 +18,12 @@ CompFrrController::CompFrrController(Ptr<TaskCoordinator> tasks,
     int64_t stopNs,
     std::unique_ptr<PlacementPolicy> placement,
     RemoteBusyRecoveryPolicy busyPolicy,
-    InputStagingPolicy inputPolicy,
+    InputPolicy inputPolicy,
     bool observePlacementResources)
     : m_tasks(tasks),
       m_topology(topology),
       m_faults(faults),
-      m_manager(tasks, topology, capacity, stopNs, inputPolicy),
+      m_manager(tasks, topology, capacity, stopNs, InputLayoutFor(inputPolicy)),
       m_placement(placement ? std::move(placement) : std::make_unique<FaFirstFeasiblePlacementPolicy>())
 {
     if (!faults)
@@ -49,6 +49,12 @@ CompFrrController::CompFrrController(Ptr<TaskCoordinator> tasks,
     tasks->GetTransferEngine()->SetCapacityReleaseObserver([this] { CapacityReleased(); });
     m_recovery = std::make_unique<RecoveryController>(tasks, topology, m_manager, stopNs, *this,
                                                      busyPolicy, nullptr, CheckpointRecoveryCapabilities{true, true, true});
+    if (inputPolicy == InputPolicy::SELECTIVE)
+    {
+        m_optionalInput = std::make_unique<InputStagingManager>(tasks, m_manager, stopNs,
+            [this](uint32_t node) { return m_n5c ? m_n5c->FreeFor(node, 0) : m_manager.Pool(node).Free(); });
+        m_recovery->SetInputDependencyResolver(m_optionalInput.get());
+    }
     m_recovery->SetLoadObserver([this](auto task, auto node, bool active) {
         m_loads.Recovery(task, node, active, Simulator::Now().GetNanoSeconds());
     });
@@ -107,6 +113,8 @@ void CompFrrController::OnTask(const TaskEventRecord& event)
     const bool terminal = IsTerminalTaskState(event.toState);
     const bool recovery = event.toState == TASK_RECOVERING || event.toState == TASK_RUNNING_BACKUP;
     const bool complete = event.toState == TASK_RESULT_TRANSFERRING;
+    if (m_optionalInput && (terminal || (complete && event.fromState == TASK_RUNNING)))
+        m_optionalInput->Release(event.taskId);
     if (complete && event.fromState == TASK_RUNNING)
         m_manager.OnTaskComputeComplete({event.taskId, 0});
     if (terminal)
@@ -573,6 +581,7 @@ void CompFrrController::AfterEpoch(int64_t time,
             row.capacityWaitEndNs = time;
         if (row.committed)
         {
+            std::optional<SelectiveInputSnapshot> admittedInput;
             if (row.proposal.action == FrequencyAction::PAUSE)
             {
                 const auto reason = row.resourceReason.empty() ? row.proposal.reason : row.resourceReason;
@@ -595,12 +604,23 @@ void CompFrrController::AfterEpoch(int64_t time,
                 context.attempt = {row.taskId, 0};
                 context.primaryNode = task.definition.computeNodeId;
                 context.nowNs = time;
+                // Freeze before initialization can allocate, transfer or change inventory.
+                const auto snapshot = m_optionalInput
+                    ? std::optional(CaptureSelectiveInput(row, time)) : std::nullopt;
                 m_manager.Execute(context,
                                   {ActionKind::START_CHECKPOINT,
                                    CheckpointConfiguration{config->deltaPermille,
                                                            config->batchN,
                                                            state.pair->localNode,
                                                            state.pair->remoteNode}});
+                if (snapshot)
+                {
+                    const auto inventory = m_manager.Inventory(row.taskId);
+                    if (inventory && inventory->active)
+                    {
+                        admittedInput = snapshot;
+                    }
+                }
             }
             else if (row.proposal.action == FrequencyAction::UPDATE)
             {
@@ -617,6 +637,15 @@ void CompFrrController::AfterEpoch(int64_t time,
                 const auto inventory = m_manager.Inventory(row.taskId);
                 if (inventory && inventory->active)
                     m_n5c->CommitQuota(row.taskId, row.pair->remoteNode, *row.n5cPeak);
+            }
+            if (admittedInput && m_optionalInput)
+            {
+                const auto& a = *admittedInput;
+                const auto decision = EvaluateSelectiveInputAdmission(
+                    {a.timeNs, a.remainingNs, a.firstSampleNs, a.finishExclusive,
+                     a.task.inputBytes, a.inputPath, a.prediction});
+                m_inputAdmissions.emplace_back(a, decision);
+                if (decision.send) m_optionalInput->Request(a.task, a.pair.remoteNode);
             }
         }
         if (state.stopped)
@@ -658,6 +687,7 @@ void CompFrrController::Finalize()
     if (m_capacityDrain.IsPending()) Simulator::Cancel(m_capacityDrain);
     m_recovery->Finalize();
     m_tasks->FinalizeSimulation();
+    if (m_optionalInput) m_optionalInput->Finalize();
     m_manager.Finalize();
     for (auto& [id, state] : m_states)
     {

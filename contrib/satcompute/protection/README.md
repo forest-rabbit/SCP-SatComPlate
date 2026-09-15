@@ -13,7 +13,7 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 | 专题 | 内容 |
 | --- | --- |
 | [架构与依赖](../../../docs/protection/architecture.md) | canonical 目录、共享与私有能力、旧接口兼容 |
-| [CompFRR-F / INPUT](../../../docs/protection/compfrr-f.md) | 唯一 START / (δ,n) solver、Eager/Deferred、cL/cR、ON maintenance、状态大小 |
+| [CompFRR-F / INPUT](../../../docs/protection/compfrr-f.md) | 唯一 START / (δ,n) solver、Eager/Deferred/Selective、cL/cR、ON maintenance、状态大小 |
 | [CompFRR-P](../../../docs/protection/compfrr-p.md) | R/U/M、两种正式 pressure、reference pair、READY、quota |
 | [Recovery / Relocation](../../../docs/protection/recovery.md) | 严格故障截止、并行依赖、deadline、LocalDelivery、可选迁移 |
 | [Baselines](../../../docs/protection/baselines.md) | Fixed、FFP/LRL/FA、Recompute、1+1 与 CB 边界 |
@@ -34,6 +34,7 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 | `runtime/recovery-controller.*`、`checkpoint-recovery-estimate.h` | checkpoint/重算恢复编排与纯 deadline 估计 |
 | `runtime/{placement-resource-tracker,placement-load-ledger,compute-usage-history}.*` | 实际资源、活动负载及因果计算历史 |
 | `mechanism/checkpoint/{checkpoint-manager,checkpoint-progress}.*` | 捕获/批次、连续序列、对象生命周期 |
+| `common/input-dependency.h`、`mechanism/input-staging/*` | 中性只读 INPUT resolver、独立预取对象/流；接受最终恢复节点后才能 handoff |
 | `mechanism/relocation/checkpoint-relocation-executor.*` | 获准迁移的预留与发送；不自行选择算法 |
 | `mechanism/replication/replica-manager.*` | 真实双 attempt、同批故障后的接管与 RESULT 裁决 |
 | `policy/{placement-policy,recovery-policy}.h` | 候选角色与 scheme 授权能力 |
@@ -60,7 +61,7 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 | `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入；`n5c` 仅用于 CompFRR |
 | `n5cVariant` | `full` | `full`=CUMULATIVE、`rational-U`=IDLE_AWARE；`noR/noU/noM` 仅消融；recent-U 正式入口拒绝 |
 | `remoteBusyRecoveryPolicy` | `relocate` | fixed/compfrr 的 REMOTE_BUSY、DIRECT_DEADLINE_INFEASIBLE 分支：迁移 checkpoint 或从零重算；CB 保持既有忙时合同；off/recompute/one-plus-one 不使用此开关 |
-| `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
+| `inputPolicy` | `eager` | 唯一 INPUT 开关：`eager` 常态完整预置；`deferred` 故障后获取；`selective` 在 Deferred 布局上按 SER 一次性选择预置。后两者仅支持 CompFRR；见 [F/INPUT](../../../docs/protection/compfrr-f.md#input-policy) |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
 测试位置和命令统一见 [tests](../tests/README.md)；平台构建与 uv 环境见[总 README](../../../README.md)。

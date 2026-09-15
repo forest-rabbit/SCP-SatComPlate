@@ -313,6 +313,62 @@ NetworkTransferEngine::RuntimeApplicationsReady(uint64_t transferId)
     m_runtimeStarting.erase(transferId);
     if (m_capacityAwareRouting && !m_finalizationBatchDepth && !m_pendingCapacityTransfers.empty())
         TryActivatePendingCapacityAwareTransfers();
+    if (m_optionalFirstAdmission.contains(transferId) &&
+        GetTransferState(transferId) == TransferRuntimeState::WAITING_ADMISSION)
+        FinalizeTransferIfActive(transferId, TransferTerminalState::CANCELLED,
+                                 TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+}
+
+void NetworkTransferEngine::SetOptionalFirstAdmission(uint64_t id, std::function<void()> started)
+{
+    NS_ABORT_MSG_IF(GetTransferState(id) != TransferRuntimeState::REGISTERED || !started ||
+        m_optionalFirstAdmission.contains(id), "optional first admission must precede start exactly once");
+    m_optionalFirstAdmission.emplace(id, std::move(started));
+    m_observedAdmissionPaths.emplace(id, CapacityAwarePath{});
+}
+
+uint64_t NetworkTransferEngine::GetSentBytes(uint64_t id) const
+{
+    return m_senders.at(GetPlanIndex(id))->GetSentBytes();
+}
+
+std::optional<int64_t> NetworkTransferEngine::EstimateRemainingReceiverTimeNs(uint64_t id) const
+{
+    const auto index = GetPlanIndex(id);
+    if (IsCompleted(id)) return 0;
+    const auto& sender = m_senders[index];
+    const auto found = m_observedAdmissionPaths.find(id);
+    if (IsTerminal(id) || !sender->HasStarted() || sender->IsPausedForRouteUpdate() ||
+        found == m_observedAdmissionPaths.end() || !found->second.admittedRateBps)
+        return std::nullopt;
+    AdmissiblePathEstimate estimate;
+    estimate.admissible = true; estimate.path = found->second;
+    for (const auto& hop : estimate.path.hops)
+    {
+        const auto ipv4 = m_topology->GetNodeBySatelliteId(hop.sourceSatelliteId)->GetObject<Ipv4>();
+        const auto channel = DynamicCast<PointToPointChannel>(
+            ipv4->GetNetDevice(hop.candidate.outputInterface)->GetChannel());
+        if (!channel) return std::nullopt;
+        TimeValue delay; channel->GetAttribute("Delay", delay);
+        const auto ns = delay.Get().GetNanoSeconds();
+        if (ns < 0 || ns > std::numeric_limits<int64_t>::max() - estimate.propagationNs)
+            return std::nullopt;
+        estimate.propagationNs += ns;
+    }
+    const auto& plan = m_plans[index];
+    const auto remaining = plan.sizeBytes - sender->GetSentBytes();
+    // Include pacing overhead and the last in-transit packet. Queues/future route changes
+    // are not known. This estimate is for ranking ONLY; readiness uses the receiver.
+    const auto packets = remaining / plan.payloadBytesPerPacket + (remaining % plan.payloadBytesPerPacket != 0);
+    const auto wire = static_cast<unsigned __int128>(remaining) + 30 * packets +
+        static_cast<unsigned __int128>(plan.payloadBytesPerPacket + 30) * estimate.path.hops.size();
+    if (wire > std::numeric_limits<uint64_t>::max()) return std::nullopt;
+    auto duration = estimate.TransferTimeNs(static_cast<uint64_t>(wire));
+    if (!duration) return std::nullopt;
+    if (!remaining)
+        *duration = std::max<int64_t>(1, *duration -
+            (Simulator::Now().GetNanoSeconds() - sender->GetLastSendTimeNs()));
+    return duration;
 }
 
 bool
@@ -536,6 +592,7 @@ NetworkTransferEngine::ActivateTransfer(uint64_t transferId)
         m_flowRouteRegistry->BeginSending(GetFlowKey(index));
     }
     m_senders[index]->StartTransferNow();
+    if (auto entry = m_optionalFirstAdmission.extract(transferId); !entry.empty()) entry.mapped()();
 }
 
 bool
@@ -588,6 +645,7 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
                                               "CAPACITY_AWARE_PATH");
     }
     m_capacityReservationState->Reserve(transferId, path);
+    if (m_observedAdmissionPaths.contains(transferId)) m_observedAdmissionPaths.at(transferId) = path;
     const int64_t admissionTimeNs = Simulator::Now().GetNanoSeconds();
     NS_ABORT_MSG_IF(m_capacityWaitStartTimesNs[index] < 0 ||
                         admissionTimeNs < m_capacityWaitStartTimesNs[index] ||
@@ -609,6 +667,7 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
         m_topology->InvalidateFlowRouteDecisionCache(flowKey);
         sender->ResumeAfterRouteUpdate(path.admittedRateBps);
     }
+    if (auto entry = m_optionalFirstAdmission.extract(transferId); !entry.empty()) entry.mapped()();
     return true;
 }
 
@@ -853,6 +912,7 @@ NetworkTransferEngine::FinalizeTransferIfActive(uint64_t transferId,
     }
     m_terminalReasons[index] = reason;
     m_terminalTimesNs[index] = terminalTimeNs;
+    m_optionalFirstAdmission.erase(transferId);
 
     const auto observer = m_terminalObservers.find(transferId);
     if (observer != m_terminalObservers.end())

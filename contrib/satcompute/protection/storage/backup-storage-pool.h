@@ -16,7 +16,8 @@ enum class StorageKind
     LOCAL_RECORD,
     REMOTE_STATE,
     REMOTE_BATCH,
-    INIT_TEMP
+    INIT_TEMP,
+    INPUT_STAGING ///< Optional INPUT, not checkpoint state or variable progress.
 };
 
 /** A pool-scoped, non-recycled object identity and its accounting state. */
@@ -40,6 +41,8 @@ class BackupStoragePool
     void SetChangeObserver(std::function<void()> observer) { m_changeObserver = std::move(observer); }
     /** Simultaneous used plus reserved bytes by task, without predicted peak promises. */
     std::map<uint64_t, uint64_t> OccupancyByTask() const;
+    /** Actual/reserved occupancy of one independent role. */
+    std::map<uint64_t, uint64_t> OccupancyByKind(StorageKind kind) const;
     BackupStoragePool(const BackupStoragePool&) = delete;
     BackupStoragePool& operator=(const BackupStoragePool&) = delete;
     /** Reserve bytes for a task; null means capacity exhaustion, not task failure. */
@@ -59,7 +62,8 @@ class BackupStoragePool
     /** Release all used/reserved entries of a terminal task; return object count. */
     uint64_t ReleaseTask(uint64_t taskId);
     /** Release unneeded state after recovery has explicitly retained its backing identities. */
-    uint64_t ReleaseTaskExcept(uint64_t taskId, const std::set<uint64_t>& retained);
+    uint64_t ReleaseTaskExcept(uint64_t taskId, const std::set<uint64_t>& retained,
+                              std::optional<StorageKind> retainedKind = {});
     /** Read an entry without creating it. */
     const StorageEntry* Find(uint64_t id) const;
 

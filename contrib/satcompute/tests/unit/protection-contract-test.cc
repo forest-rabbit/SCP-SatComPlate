@@ -161,6 +161,14 @@ LayoutCheck(const TaskDefinition& task)
 nlohmann::json
 StateChecks()
 {
+    Check(InputLayoutFor(ParseInputPolicy("eager")) == InputStagingPolicy::EAGER,
+          "eager public mode changed layout");
+    Check(InputLayoutFor(ParseInputPolicy("deferred")) == InputStagingPolicy::DEFERRED &&
+          InputLayoutFor(ParseInputPolicy("selective")) == InputStagingPolicy::DEFERRED,
+          "selective/deferred must share neutral state-only layout");
+    Reject([] { ParseInputPolicy("none"); });
+    Reject([] { ParseInputPolicy("jit"); });
+    Reject([] { InputLayoutFor(static_cast<InputPolicy>(99)); });
     nlohmann::json sizes = nlohmann::json::array();
     for (auto profile : {TaskProfile::DENSE_IMAGE,
                          TaskProfile::SPARSE_INFERENCE,

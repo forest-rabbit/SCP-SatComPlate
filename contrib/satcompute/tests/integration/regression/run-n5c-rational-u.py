@@ -18,7 +18,7 @@ BASE_HEAD = "a19b722694948bda395cf95b96cd27609daf6c91"
 def arguments(directory, random_run=11):
     require(type(random_run) is int and 11 <= random_run <= 15, "unapproved Rational-U run")
     return FINAL["arguments"](directory, protection_mode="compfrr", placement_mode="n5c",
-        input_staging_policy="deferred", remote_busy_recovery_policy="relocate",
+        input_policy="deferred", remote_busy_recovery_policy="relocate",
         n5c_variant="rational-U", random_run=random_run)
 
 
@@ -127,7 +127,7 @@ def main():
         directory = root / "run-11/rational-U"
         require(not directory.exists(), "single new formal run only; no overwrite or automatic retry")
         subprocess.run([sys.executable, str(HERE / "run-final-scenario.py"), "--output-dir", str(directory),
-            "--protection-mode", "compfrr", "--placement-mode", "n5c", "--input-staging-policy", "deferred",
+            "--protection-mode", "compfrr", "--placement-mode", "n5c", "--input-policy", "deferred",
             "--remote-busy-recovery-policy", "relocate", "--n5c-variant", "rational-U", "--random-run", "11"],
             cwd=ROOT, check=True)
         require(MATRIX["identity"]() == plan["commit"], "source changed during run")

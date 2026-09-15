@@ -5,7 +5,24 @@ ns-3 上游 examples、全局 tests 或根目录 `test.py`。
 
 ## 当前 N5R：小型语义等价门禁
 
-重构不重复正式 800 任务 / 1300 s 矩阵，也不重新标定故障或 MTBF。从仓库根目录运行：
+### INPUT 三模式与维护测试
+
+`inputPolicy=eager|deferred|selective` 是唯一平台开关，默认 eager；Selective 固定 SER。
+`unit/test_input_admission_policy.py` 调用纯 C++ 选择器，使用 tracked
+`fixtures/protection/selective-input-ser-anchor.json`：405 个网络候选逐任务匹配，
+68 个 SEND，另 4 个 LocalDelivery。fixture 是因果模型测试，不是未来实验流数目标；缺失时必须失败。
+
+- `input-staging-runtime-test.cc`：真实接收/续传、同星交付、pending、两种合法 refetch、
+  F3 与同纳秒边界、实际 compute-start USED、字节守恒和零泄漏。
+- `frequency-runtime-test.cc --onlyInputAdmission=1`：SER 在线 generate 接线，核对实际节点对、
+  pre-START_CHECKPOINT 采集时序、成功准入与 canonical prediction 采样窗口。
+- `test_input_admission_runtime_audit.py`：复用 `support/protection/input_admission_runtime_audit.py`，
+  用真实 START/Frequency committed actual pair 与生产 CSV/JSON 验证全生命周期账目，不需要开发大快照。
+- `test_final_scenario.py`：三模式参数映射及历史证据名称规范化；旧公开 CLI 必须被拒绝。
+
+### 小场景等价验证
+
+不重复正式 800 任务 / 1300 s 矩阵，不重新标定故障或 MTBF。从项目根目录运行：
 
 ```bash
 source .venv/bin/activate
@@ -13,42 +30,22 @@ source .venv/bin/activate
 contrib/satcompute/tests/unit/run-cpp-tests.sh
 python -m unittest discover -s contrib/satcompute/tests/unit -p 'test_*.py'
 python contrib/satcompute/tests/integration/regression/run-protection-equivalence.py \
-  --output-root output/n5r-equivalence/local-check \
-  --reference output/n5r-equivalence/corrected-baseline --jobs 3 \
-  --allow-cb-profile-relocation
+  --output-root output/equivalence/new-check \
+  --reference output/input-repo-closeout/equivalence --jobs 3
 ```
 
-比较命令要求本地已有 corrected baseline；使用新的 output-root，旧输出不覆盖。
-若基线缺失，应取得同一 corrected tree 的独立 fixture 输出，不能从重构后代码自建基线声称等价。
-11 个组合包含已有 C++ fixture 与 4-task/16-node/15s CLI，核对全部 CSV/JSON；
-CSV 逐字节相同，JSON 仅规范化输出目录与 wall-clock 字段。
+比较要求已有独立参考，output-root 必须是新目录。缺少旧基线时不能用修改后的代码
+自建 golden 声称等价。11 个组合包含 C++ fixture 与 4-task/16-node/15s CLI；CSV 整表
+逐字节比较，JSON 只规范化输出路径与 wall-clock。
+对 INPUT 收口前的参考，可显式使用 `--allow-retired-input-snapshot`，只允许旧开发 JSON
+消失，其他生产 schema、数据和生命周期完全一致。旧 CB owner 迁移另有严格的
+`--allow-cb-profile-relocation`，只接受两个指定路径值变化，不忽略其他参数。
 
-最终目录收口另显式批准 CB 冻结 profile 的迁移：上述开关先逐字节核对迁移前 profile，
-仅允许两个 CB CLI 组合的 `cb-sat-parameters.json.profile_path` 从指定旧 owner 变为新 owner，
-并列出这两个元数据差异；不豁免 MTBF/其他字段，不改原始输出或 golden。关闭开关仍保持原严格比较。
-
-长期复用的审计/scenario helper 位于 `support/protection/`，维护测试直接调用；
-旧 `analyze-*.py` / `run-final-scenario.py` 入口继续转发，外部参数/CSV 不变。
-`recent-U` 已从平台及正式场景 CLI 撤出；历史 API/fixture/分析保留，不是第三种 production U。
-阶段证据及提交见 [N5R 记录](../../../docs/n5/reviews/N5R-implementation.md)。
-
-### 历史 V7 离线诊断
-
-只读已有 run11，不启动仿真、不启用 JIT、不写回原始输出，正常运行/CI 不自动调用。
-需要同批历史 V7 与 Deferred 数据（执行提交 `367f23f39`），不能换成 corrected N5R：
-
-```bash
-python contrib/satcompute/tests/integration/regression/analyze-v7-offline.py \
-  --v7 output/v7-cbsat-adjustment/20260913-jit-formal/CompFRR-JIT-V7 \
-  --deferred output/v7-cbsat-adjustment/20260913-jit-formal/reference-R7-deferred-relocate \
-  --output-dir output/audits/n5r-v7-run11-offline-local
-```
-
-使用不存在的新 output-dir。入口转发至 `support/protection/jit_offline_audit.py`，
-复用 INPUT/baseline 的 CSV、分布与物理流账本；输出生命周期、全部故障任务、字节守恒、
-故障状态、严格配对五份 CSV 和完整 JSON。缺失依赖时间保留 null，不能伪造为零；
-缺失原始证据或身份/账本矛盾则失败。模型预测的代表故障时刻可带小数，以原文本保留；
-实际事件时间仍为整数 ns。判据与结论见 [V7 离线报告](../../../docs/n5/reviews/N5R-V7-offline-audit.md)。
+一次性 INPUT/JIT offline 栈与开发矩阵 runner 已删除；设计取舍和原始证据身份见
+[最终 INPUT 报告](../../../docs/n5/reviews/CompFRR-input-binary-admission-runtime.md)，
+完整删除清单见[仓库收口](../../../docs/n5/reviews/INPUT-final-repository-closeout.md)。
+通用 accounting、baseline、placement、risk/scenario helpers 保留，正常运行不自动做离线统计。
+recent-U 不在 production CLI；历史分析/fixture 保留。日常 CI 只运行本目录维护测试。
 
 ## 历史专项与目录索引
 
@@ -342,7 +339,7 @@ START 有收益、F3 前真实 ON、使用有效非零进度检查点且按期�
 
 历史 Pre-N5C v6/ON-resume 审计只运行 R4–R7：当时均为
 `--protection-mode=compfrr --placement-mode=ffp`（该旧 FFP 现名为 `fa-ffp`），
-R4/R5 使用 eager，R6/R7 加 `--input-staging-policy=deferred`；R4/R6 加
+R4/R5 使用 eager，R6/R7 加 `--input-policy=deferred`；R4/R6 加
 `--remote-busy-recovery-policy=recompute`，R5/R7 为 relocate。
 新 workload 为400 WU/token且总WU保持352513119；START使用初始化就绪后的风险加权进度，
 ON评分不变；后续容量修订为路径阻塞的ON增加释放重试（原节点对、无额外抽样）。

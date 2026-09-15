@@ -85,12 +85,14 @@ void PlacementResourceTracker::FillResources(PlacementResourceSnapshot& c, int64
     c.recentExposureNs = recent.exposureNs;
     const auto& pool = *m_manager.Pools().at(c.remoteNode);
     c.capacityBytes = pool.Capacity();
-    c.accountedBytes = m_quotas.Accounted(c.remoteNode, pool.OccupancyByTask());
+    c.accountedBytes = m_quotas.Accounted(c.remoteNode, pool.OccupancyByTask(), {},
+                                         pool.OccupancyByKind(StorageKind::INPUT_STAGING));
 }
 uint64_t PlacementResourceTracker::FreeFor(uint32_t node, uint64_t replacing) const
 {
     const auto& pool = *m_manager.Pools().at(node);
-    const auto account = m_quotas.Accounted(node, pool.OccupancyByTask(), replacing);
+    const auto account = m_quotas.Accounted(node, pool.OccupancyByTask(), replacing,
+                                           pool.OccupancyByKind(StorageKind::INPUT_STAGING));
     return account < pool.Capacity() ? pool.Capacity() - account : 0;
 }
 uint64_t PlacementResourceTracker::MaintenanceFree(uint32_t node, uint64_t task) const
@@ -99,7 +101,9 @@ uint64_t PlacementResourceTracker::MaintenanceFree(uint32_t node, uint64_t task)
     if (const auto peak = m_quotas.Peak(task, node))
     {
         const auto actual = m_manager.Pools().at(node)->OccupancyByTask();
-        const auto own = actual.contains(task) ? actual.at(task) : 0;
+        const auto input = m_manager.Pools().at(node)->OccupancyByKind(StorageKind::INPUT_STAGING);
+        const auto own = (actual.contains(task) ? actual.at(task) : 0) -
+                         (input.contains(task) ? input.at(task) : 0);
         free = std::min(free, *peak > own ? *peak - own : 0);
     }
     return free;
@@ -108,14 +112,18 @@ uint64_t PlacementResourceTracker::PeakFor(uint32_t node, uint64_t task, uint64_
 {
     const auto actual = m_manager.Pools().at(node)->OccupancyByTask();
     const auto found = actual.find(task);
-    return Add(found == actual.end() ? 0 : found->second, additional);
+    const auto input = m_manager.Pools().at(node)->OccupancyByKind(StorageKind::INPUT_STAGING);
+    return Add((found == actual.end() ? 0 : found->second) -
+               (input.contains(task) ? input.at(task) : 0), additional);
 }
 bool PlacementResourceTracker::CanCommit(uint64_t task, uint32_t node, uint64_t peak) const
 {
     const auto& pool = *m_manager.Pools().at(node);
     const auto actual = pool.OccupancyByTask();
-    const auto own = actual.contains(task) ? actual.at(task) : 0;
-    const auto others = m_quotas.Accounted(node, actual, task) - own;
+    const auto input = pool.OccupancyByKind(StorageKind::INPUT_STAGING);
+    const auto own = (actual.contains(task) ? actual.at(task) : 0) -
+                     (input.contains(task) ? input.at(task) : 0);
+    const auto others = m_quotas.Accounted(node, actual, task, input) - own;
     return others <= pool.Capacity() && std::max(own, peak) <= pool.Capacity() - others;
 }
 void PlacementResourceTracker::CommitQuota(uint64_t task, uint32_t node, uint64_t peak)

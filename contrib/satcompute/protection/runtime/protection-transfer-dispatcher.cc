@@ -89,7 +89,8 @@ void ProtectionTransferDispatcher::Discard(uint64_t taskId, bool primaryOnly)
 {
     for (auto& [time, requests] : m_requests)
         std::erase_if(requests, [&](const auto& item) {
-            return item.first.taskId == taskId && (!primaryOnly || item.first.attemptGeneration == 0);
+            return item.first.taskId == taskId && (!primaryOnly ||
+                (item.first.attemptGeneration == 0 && item.first.kind != ProtectionTransferKind::PREFETCH_INPUT));
         });
 }
 

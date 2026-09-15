@@ -9,6 +9,9 @@
 #include "../../runtime/placement-load-ledger.h"
 #include "../../runtime/decision-path-snapshot.h"
 #include "placement/compfrr-placement-tracker.h"
+#include "input/selective-input-snapshot.h"
+#include "input/input-admission-policy.h"
+#include "../../mechanism/input-staging/input-staging-manager.h"
 
 #include <filesystem>
 #include <set>
@@ -56,13 +59,16 @@ class CompFrrController : public ProtectionPolicy
                                   int64_t stopNs,
                                   std::unique_ptr<PlacementPolicy> placement = nullptr,
                                   RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
-                                  InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER,
+                                  InputPolicy inputPolicy = InputPolicy::EAGER,
                                   bool observePlacementResources = false);
     ~CompFrrController() override;
     /** Finish the same actual ledgers as fixed protection. */
     void Finalize();
     /** Write only decision/prediction audit, not actual metrics. */
     void WriteDecisions(const std::filesystem::path& directory) const;
+    void WriteInputAdmissionAudit(const std::filesystem::path& directory) const;
+    const InputStagingManager* OptionalInput() const { return m_optionalInput.get(); }
+    const auto& InputAdmissions() const { return m_inputAdmissions; }
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
     const PlacementPolicy& Placement() const { return *m_placement; }
     const CompFrrPlacementTracker* N5c() const { return m_n5c; }
@@ -160,6 +166,8 @@ class CompFrrController : public ProtectionPolicy
     std::vector<CompFrrForecast> N5cPeers(uint32_t remote, uint64_t excluded,
                                     const std::string& trigger, DecisionPathSnapshot& paths);
     bool RevalidateN5c(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
+    SelectiveInputSnapshot CaptureSelectiveInput(const FrequencyDecisionRecord& row, int64_t timeNs) const;
+    ///< Read-only snapshots immediately before mechanism execution, not initialization completion.
     ///< Adapt actual placement, legal inventory, pools, rates and paths.
     Ptr<TaskCoordinator> m_tasks;                     ///< Business lifecycle owner.
     SatelliteRuntimeView& m_topology;                 ///< Shared network view.
@@ -170,6 +178,8 @@ class CompFrrController : public ProtectionPolicy
     std::unique_ptr<CompFrrPlacementTracker> m_placementObservation; ///< Read-only resource metrics, also usable by FA-FFP.
     CompFrrPlacementTracker* m_n5c{}; ///< Alias enabled only for N5C; legacy policies never use quota promises.
     CompFrrFrequencyPolicy m_policy;                  ///< Pure production solver.
+    std::unique_ptr<InputStagingManager> m_optionalInput;
+    std::vector<std::pair<SelectiveInputSnapshot, InputAdmissionDecision>> m_inputAdmissions;
     std::unique_ptr<RecoveryController> m_recovery;   ///< Reused N5A recovery.
     std::map<uint64_t, State> m_states;               ///< Per-primary frequency lifecycle.
     std::vector<FrequencyDecisionRecord> m_decisions; ///< Proposal/resolution audit.

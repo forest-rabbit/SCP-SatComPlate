@@ -37,7 +37,8 @@ def identity():
 
 
 def normalized(command):
-    return [x for x in shlex.split(command) if not x.startswith(('--outputDir=', '--faultTrace='))]
+    return [x for x in FINAL['canonical_input_arguments'](shlex.split(command))
+            if not x.startswith(('--outputDir=', '--faultTrace='))]
 
 
 def entries(root):
@@ -49,7 +50,7 @@ def entries(root):
         meta = json.loads((source / 'execution.json').read_text())
         dest = root / f'run-{run}' / group
         args = FINAL['arguments'](dest, protection_mode='compfrr', placement_mode='n5c',
-            input_staging_policy='deferred', remote_busy_recovery_policy='relocate',
+            input_policy='deferred', remote_busy_recovery_policy='relocate',
             n5c_variant=group, random_run=run)
         if normalized(meta['command'][-1]) != normalized(shlex.join(args)):
             raise ValueError('frozen invocation differs')
@@ -79,7 +80,7 @@ def execute(root, jobs):
         dest = ROOT / row['directory']
         print('START', row['run'], row['group'], flush=True)
         subprocess.run([sys.executable, str(HERE/'run-final-scenario.py'), '--output-dir', str(dest),
-            '--protection-mode', 'compfrr', '--placement-mode', 'n5c', '--input-staging-policy', 'deferred',
+            '--protection-mode', 'compfrr', '--placement-mode', 'n5c', '--input-policy', 'deferred',
             '--remote-busy-recovery-policy', 'relocate', '--n5c-variant', row['group'],
             '--random-run', str(row['run'])], cwd=ROOT, check=True)
         meta = json.loads((dest/'execution.json').read_text())

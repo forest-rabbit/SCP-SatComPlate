@@ -823,11 +823,12 @@ CheckpointManager::Stop(State& state, const std::string& reason)
     for (auto timer : state.timers)
         Simulator::Cancel(timer);
     state.progress.Stop();
-    m_transfers.Discard(state.summary.taskId);
+    m_transfers.Discard(state.summary.taskId, true);
     std::erase_if(m_heldRequests, [&](const auto& r) { return r.first.taskId == state.summary.taskId; });
     std::vector<uint64_t> transfers;
     for (const auto& flow : m_transfers.Flows())
-        if (flow.key.taskId == state.summary.taskId && flow.key.attemptGeneration == 0)
+        if (flow.key.taskId == state.summary.taskId && flow.key.attemptGeneration == 0 &&
+            flow.key.kind != ProtectionTransferKind::PREFETCH_INPUT)
             transfers.push_back(flow.transferId);
     m_network->FinalizeTransfersIfActive(
         transfers,
@@ -835,7 +836,7 @@ CheckpointManager::Stop(State& state, const std::string& reason)
         reason == "SIMULATION_ENDED" ? TransferTerminalReason::SIMULATION_ENDED
                                      : TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
     for (auto& [node, pool] : m_pools)
-        pool->ReleaseTask(state.summary.taskId);
+        pool->ReleaseTaskExcept(state.summary.taskId, {}, StorageKind::INPUT_STAGING);
     state.records.clear();
     Log(state, "PROTECTION_STOP");
     if (m_assignmentObserver)
@@ -969,7 +970,8 @@ CheckpointManager::FreezeRecoverySnapshot(uint64_t id, int64_t at)
             result.pendingLocalWorks.push_back(work);
         }
     for (const auto& flow : m_transfers.Flows())
-        if (flow.key.taskId == id && !m_network->IsTerminal(flow.transferId))
+        if (flow.key.taskId == id && flow.key.kind != ProtectionTransferKind::PREFETCH_INPUT &&
+            !m_network->IsTerminal(flow.transferId))
         {
             ++result.inFlightFlows;
             if (flow.key.kind == ProtectionTransferKind::L1)
@@ -1001,7 +1003,8 @@ CheckpointManager::QuiesceForRecovery(const RecoverySnapshot& snapshot)
     std::erase_if(m_heldRequests, [&](const auto& r) { return r.first.taskId == snapshot.taskId; });
     std::vector<uint64_t> transfers;
     for (const auto& flow : m_transfers.Flows())
-        if (flow.key.taskId == snapshot.taskId && flow.key.attemptGeneration == 0)
+        if (flow.key.taskId == snapshot.taskId && flow.key.attemptGeneration == 0 &&
+            flow.key.kind != ProtectionTransferKind::PREFETCH_INPUT)
             transfers.push_back(flow.transferId);
     m_network->FinalizeTransfersIfActive(transfers,
                                          TransferTerminalState::CANCELLED,
@@ -1014,7 +1017,7 @@ CheckpointManager::QuiesceForRecovery(const RecoverySnapshot& snapshot)
         if (node == snapshot.localNode)
             for (const auto& [work, object] : snapshot.localObjects)
                 keep.insert(object);
-        pool->ReleaseTaskExcept(snapshot.taskId, keep);
+        pool->ReleaseTaskExcept(snapshot.taskId, keep, StorageKind::INPUT_STAGING);
     }
     Log(state, "QUIESCE_FOR_RECOVERY", snapshot.actualWork, snapshot.tailBytes);
     if (m_assignmentObserver && !snapshot.remoteObject)
@@ -1025,7 +1028,7 @@ void
 CheckpointManager::ReleaseRecoveryState(uint64_t id)
 {
     for (auto& [node, pool] : m_pools)
-        pool->ReleaseTask(id);
+        pool->ReleaseTaskExcept(id, {}, StorageKind::INPUT_STAGING);
     const auto found = m_states.find(id);
     if (found != m_states.end() && m_assignmentObserver)
         m_assignmentObserver(id, found->second->config.remoteNode, false);
