@@ -162,8 +162,8 @@ class UAuditTests(unittest.TestCase):
         for run in RECENT["RUNS"]:
             original = RUN["flags"](RUN["arguments"](Path("unused"), "full", run))
             recent = RUN["flags"](RECENT["arguments"](Path("unused"), "recent-U", run))
-            self.assertEqual(recent.pop("n5cVariant"), "recent-U")
-            original.pop("n5cVariant")
+            self.assertEqual(recent.pop("compfrrPressureModel"), "historical-only:recent-U")
+            original.pop("compfrrPressureModel")
             self.assertEqual(original, recent)
         with self.assertRaises(ValueError):
             RECENT["arguments"](Path("unused"), "recent-U", 16)

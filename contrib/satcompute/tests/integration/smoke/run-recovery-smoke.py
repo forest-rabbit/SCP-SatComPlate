@@ -43,6 +43,7 @@ def run(directory, mode, validation_trace=None, cutoff=False):
         args.remove("--simulationDuration=15")
         args.remove(f"--taskTrace={FIXTURE / 'fixed-four-profiles.json'}")
         args += ["--faultMode=none", "--simulationDuration=0.1", f"--taskTrace={path}"]
+    args = runpy.run_path(str(ROOT / 'contrib/satcompute/tests/support/protection/config_arguments.py'))['execution_arguments'](args)
     result = subprocess.run([str(ROOT / "ns3"), "run", "--no-build", shlex.join(args)],
                             cwd=ROOT, text=True, capture_output=True, timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr

@@ -90,8 +90,10 @@ def execute(directory, arguments, head, identity):
     require(clean_head() == head, "execution HEAD changed")
     require(not directory.exists(), f"refusing to overwrite {directory}")
     directory.mkdir(parents=True)
-    command = [str(ROOT / "ns3"), "run", "--no-build", shlex.join(arguments)]
+    # Preserve the historical metadata schema/identity; only the actual launch is renamed.
     config = flags(arguments)
+    arguments = runpy.run_path(str(ROOT / 'contrib/satcompute/tests/support/protection/config_arguments.py'))['execution_arguments'](arguments)
+    command = [str(ROOT / "ns3"), "run", "--no-build", shlex.join(arguments)]
     record = dict(command=command, commit=head, worktree_dirty=False, started_utc=utc(), status="RUNNING",
                   seed=int(config["randomSeed"]), run=int(config["randomRun"]),
                   simulation_duration_s=float(config["simulationDuration"]),

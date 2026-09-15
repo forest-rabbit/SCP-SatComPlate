@@ -73,6 +73,7 @@ def pilot(output, input_bytes):
     trace.write_text(json.dumps({"tasks": [task]}, indent=2) + "\n")
     command = RUN["arguments"](output, protection_mode="compfrr", placement_mode="fa-ffp")
     command = [f"--taskTrace={trace}" if arg.startswith("--taskTrace=") else arg for arg in command]
+    command = RUN['CONFIG_ARGUMENTS']['execution_arguments'](command)
     started = time.monotonic()
     with (output / "run.log").open("w") as log:
         process = subprocess.run([str(ROOT / "ns3"), "run", "--no-build", shlex.join(command)],

@@ -6,16 +6,16 @@
 
 ## INPUT policy
 
-对外只有 `--inputPolicy=eager|deferred|selective`，默认 `eager`。
+对外只有 `--compfrrInputPolicy=eager|deferred|selective`，正式默认 `selective`。
 Eager 常态预置完整 INPUT；Deferred 常态只保护状态，故障后获取 INPUT；Selective 在
-Deferred 布局上启用独立可选预置。后两者要求 `protectionMode=compfrr`。
+Deferred 布局上启用独立可选预置。后两者要求 `protectionScheme=compfrr` 且 checkpoint policy 为 adaptive。
 内部保留中性 EAGER/DEFERRED layout、optional lifecycle、SER selector 三层，
 公共 Checkpoint/Recovery/Fixed 不依赖私有选择器。
 
 - SER break-even：比较 `sum(w_k * min(T_ser, max(0,t_k-t_I)))` 与 `(1-P_F)*T_ser`。
 
-SER 是唯一 production selective admission；最终 CompFRR 组合显式指定
-`--inputPolicy=selective`，不自动改变全平台默认值。
+SER 是唯一 production selective admission；当前正式默认已由用户指定为 Selective，
+正式 runner 同时显式记录 `--compfrrInputPolicy=selective`，避免日后默认值变化影响实验身份。
 旧 NET-ready 已从正式入口退役；历史比较与 `T_net/G_net` 诊断保留，但不能触发 SEND。
 
 `T_ser` 是实际路径估计器向上取整的序列化纳秒，`T_net=T_ser+传播纳秒`；
@@ -55,7 +55,8 @@ CSV 中 `policy=ser-break-even` 是冻结算法标识，不是第二个配置开
 
 实现与开发 run11 证据见[执行审计](../n5/reviews/CompFRR-input-binary-admission-runtime.md)。
 
-`compfrr` 默认组合 `CompFrrFrequencyPolicy + FA-FFP`；历史 A/B/C 名称按当时报告解释。
+`compfrr` 正式默认组合为自适应 Frequency + CompFRR-P + Selective + Relocate；
+历史 A/B/C 与原 FA-FFP/Eager 默认按当时报告解释，不随当前默认值改变。
 频率求解器独立实现数学公式，不调用验证目录；只有测试将同输入送入旧 shadow 比较。
 `FrequencyInput` 是当前状态的只读数值快照，FFP 先给出节点，F 适配层再提供主/恢复算力、
 输入/备份路径估计和 storage headroom。cL/cR 从唯一 `GetProtectionCosts(Kvar)` 取得。
@@ -106,8 +107,8 @@ ON 无可行新配置时保留状态和最后 committed 配置，不允许 ON→
 
 正式算法比较采用在线 **generate**。固定输入和配对 seed/run 不保证不同策略
 得到同一故障序列：恢复计算改变负载与温度是 F1 闭环的一部分。N5A 的 validation-replay
-仅保留执行验收用途，不增加回放预测器，不覆盖已有 G4 输出。默认仍为 off；
-仅显式 `protectionMode=compfrr` 输出 `frequency-decisions.csv`，不依赖 `faultProbabilityAudit`。
+仅保留执行验收用途，不增加回放预测器，不覆盖已有 G4 输出。off 仅供显式诊断/历史复现；
+仅 `protectionScheme=compfrr` 且 `compfrrCheckpointPolicy=adaptive` 输出 `frequency-decisions.csv`，不依赖 `faultProbabilityAudit`。
 
 ## 运行时边界与存储估计
 

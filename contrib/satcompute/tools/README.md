@@ -2,7 +2,7 @@
 
 `tools/` 只放不属于 ns-3 仿真核心、但会被输入准备或测试流程直接调用的脚本。
 当前没有独立的星座场景生成器或拓扑生成器：卫星坐标和链路状态必须由
-`satcompute --topologyOnly=1` 使用 ns-3.48 的轨道模型生成。
+`satcompute --protectionScheme=off --topologyOnly=1` 使用 ns-3.48 的轨道模型生成。
 
 ```text
 tools/

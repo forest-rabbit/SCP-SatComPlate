@@ -117,6 +117,12 @@ accounting、frequency、baseline、placement、risk-start、INPUT 和 scenario�
 旧 `integration/regression/analyze-*.py` / `run-final-scenario.py` 入口保留兼容转发；
 测试 oracle 不调用 production solver。
 
+配置层重构新增显式 `config_arguments.py`：旧 scheme/placement/INPUT/busy 转换只发生在测试 launch
+边界，ordinary CLI 不接受旧别名。读取旧证据时先按实际 owner 去除已证明 inactive 的选项，
+再展开活跃默认值比较；保留 placement、两种 busy、pressure/ablation、cadence、pool 与 seed/run。
+CB 的旧 omitted busy=relocate 不得与新 canonical recompute 合并。历史 source guard 不放宽，
+旧 execution/schema/fixture 不追写。新增 55 组严格 small gate 见[配置层记录](../n5/reviews/Protection-config-hierarchy.md)。
+
 ## 历史保留与现行证据
 
 - [#102](https://github.com/forest-rabbit/SCP-SatComPlate/pull/102) 已将 #100/#101、

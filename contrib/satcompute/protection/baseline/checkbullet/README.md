@@ -46,7 +46,7 @@ X=0 不能统一解释为紧急压缩：首次分配时的 `NO_REMAINING_LOGS` �
 故障 cutoff 前就绪，空闲 B 才能从 q 直接继续。只有状态而 INPUT 未完成时必须从零重算，
 不能故障后补 INPUT 再利用旧 q。正式主 baseline 使用 `busy=recompute`；relocate 是扩展迁移版。
 仅在 REMOTE_BUSY
-按公共开关选择从零重算或把 B 的完整 INPUT、根和已存日志迁移至 C。迁移不提高 q。
+按 CB 私有 busy policy 选择从零重算或把 B 的完整 INPUT、根和已存日志迁移至 C。迁移不提高 q。
 其他不可用回退沿用公共恢复许可，不把 busy 开关扩大到所有故障。故障决策在完整
 同纳秒 fault batch 后执行；F1/F2 只对已接受的恢复 attempt 免疫，F3 仍中断真实依赖。
 复用原 compute deadline，实际执行 WU 与计划追平 WU 分账；同星交付不创建 UDP。
@@ -66,6 +66,10 @@ cmake --build cmake-cache --target satcompute_test_satcompute-cb-sat-policy-test
 只用于构造边界场景；正式执行使用已提交的独立 pilot 冻结统计值。
 
 ## 接入与执行工具
+
+普通入口 `--protectionScheme=cb-sat` 使用 FA-FFP + busy=recompute。
+旧 `checkbullet` 省略 busy 的真实含义是 relocate，测试层转换会显式保留，不能混用默认值。
+原四种 placement 与扩展 relocate 在专用测试 driver 中保留，不读取 CompFRR 的 INPUT/Frequency/pressure。
 
 `cb-sat-config.*` 只读取独立统计 profile；`cb-sat-controller.*` 接入完整生命周期，
 `cb-sat-metrics.cc` 保存独立 `cb-sat-*.csv`。公共 task/transfer/link 指标继续保留。

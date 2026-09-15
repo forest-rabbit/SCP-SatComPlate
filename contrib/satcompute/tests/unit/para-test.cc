@@ -61,9 +61,12 @@ main()
                 "generate must derive its output path from outputDir");
         Require(!config.faultProbabilityAudit,
                 "fault probability audit must be opt-in");
-        Require(!config.compfrrShadow && config.compfrrShadowOutput.empty(),
+        Require(!config.protection.diagnostics.compfrrShadow && config.protection.diagnostics.compfrrShadowOutput.empty(),
                 "shadow evaluation must be opt-in");
-        Require(config.inputPolicy == "eager", "single INPUT policy must preserve eager default");
+        Require(config.protection.scheme == ns3::protection::ProtectionScheme::COMPFRR &&
+                    config.protection.compfrr.placementPolicy == ns3::protection::PlacementPolicyKind::COMPFRR &&
+                    config.protection.compfrr.inputPolicy == ns3::protection::InputPolicy::SELECTIVE,
+                "formal default must enable CompFRR-P and Selective INPUT");
         Require(!config.topologyOnly && config.topologySliceIntervalSeconds == 1.0 &&
                     config.includeFinalTopologyState,
                 "unexpected topology-only defaults");

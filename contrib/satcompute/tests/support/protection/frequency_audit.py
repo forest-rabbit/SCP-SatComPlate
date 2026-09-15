@@ -10,6 +10,7 @@ import runpy
 import shlex
 
 ACCOUNTING = runpy.run_path(str(Path(__file__).with_name("accounting.py")))
+COMPARISON_ARGUMENTS = runpy.run_path(str(Path(__file__).with_name('scenario.py')))['historical_comparison_arguments']
 rows, require = ACCOUNTING["rows"], ACCOUNTING["require"]
 PROFILES = ACCOUNTING["PROFILES"]
 NS = 10**9
@@ -273,7 +274,7 @@ def fairness(runs):
         require(r["fault_mode"] == "generate" and r["lrl_recovery_weight"] == 1 and
                 not r["worktree_dirty"] and not r["audit"] and not r["shadow"], "formal run identity differs")
         commands.append({arg.split("=", 1)[0][2:]: arg.split("=", 1)[1]
-                         for arg in shlex.split(r["command"][-1])[1:]
+                         for arg in COMPARISON_ARGUMENTS(shlex.split(r["command"][-1]))[1:]
                          if arg.split("=", 1)[0][2:] not in ignored})
     require(all(c == commands[0] for c in commands), "unpaired scenario arguments")
     require(len({r["commit"] for r in identities}) == 1, "formal runs use different code")

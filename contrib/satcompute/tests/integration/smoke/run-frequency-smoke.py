@@ -32,6 +32,7 @@ def run(output, mode="compfrr", audit=False, placement="fa-ffp", input_policy="e
         "--routingMode=global-capacity-aware-hrw", "--islBandwidthBps=10000000000",
         "--delayMode=fixed", "--fixedDelay=0.001", f"--outputDir={output}"]
     arguments += [f"--inputPolicy={input_policy}"]
+    arguments = runpy.run_path(str(ROOT / 'contrib/satcompute/tests/support/protection/config_arguments.py'))['execution_arguments'](arguments)
     process = subprocess.run([str(ROOT / "ns3"), "run", "--no-build", shlex.join(arguments)],
                              cwd=ROOT, text=True, capture_output=True, timeout=120)
     assert process.returncode == 0, process.stdout + process.stderr

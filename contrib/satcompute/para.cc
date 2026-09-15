@@ -113,41 +113,8 @@ GetDefaultSatComputeConfig()
 
     // protection
 
-    // --protectionMode：默认 off 保持 N4 行为；fixed 启用真实检查点与一次故障恢复。
-    // recompute 不做常态保护，故障后通过 FFP 选择可行节点、原始 INPUT 重传、从零重算。
-    // one-plus-one 在首次 TASK_RUNNING 一次申请真实完整副本；无可行资源则不重试。
-    config.protectionMode = "off";
-
-    // --placementMode：fa-ffp 保留历史行为；ffp/lrl 是最小筛选，fa-lrl 是可行性筛选加负载排序。
-    config.placementMode = "fa-ffp";
-    // N5C V4：full 使用三项压力；noR/noU/noM 仅删除一项评分，仍保留全部硬约束。
-    config.n5cVariant = "full";
-    // --remoteBusyRecoveryPolicy：remote 忙或 direct 无法按时完成时生效；CB 保持原忙时合同。
-    // relocate 迁移状态后继续；recompute 放弃检查点，从原始 INPUT 重算；off 忽略本参数。
-    config.remoteBusyRecoveryPolicy = "relocate";
-    // --inputPolicy：eager 常态预置完整 INPUT；deferred 常态只传状态、故障后获取 INPUT；
-    // selective 在 Deferred 布局上按 SER break-even 决定是否提前发送 INPUT。
-    // deferred/selective 仅用于 CompFRR；不改变 Frequency、节点选择或实际恢复依赖。
-    config.inputPolicy = "eager";
-
-    // --lrlRecoveryWeight：L = active backup assignments + weight * active recoveries。
-    // G3 在看到 A/B/C 结果之前预先冻结为 1，不扫描、不按结果调整。
-    config.lrlRecoveryWeight = 1;
-
-    // --backupStorageBytesPerNode：独立额外备份池，10 GB 为实验参数而非实测容量。
-    config.backupStorageBytesPerNode = 10'000'000'000;
-
-    // --fixedProtectionDelta：进度比例，5% 只是执行验证配置，不代表算法最优值。
-    config.fixedProtectionDelta = 0.05;
-
-    // --fixedProtectionBatchN：每 4 个有效 L1 组成一个 remote batch。
-    config.fixedProtectionBatchN = 4;
-
-    // --compfrr-shadow：显式开启 G4 旁路评估，不影响任务、路由与故障抽样。
-    config.compfrrShadow = false;
-
-    // --compfrr-shadow-output：旁路 CSV 目录；空时使用 outputDir/shadow。
-    config.compfrrShadowOutput = "";
+    // --protectionScheme：正式默认 CompFRR；私有参数集中在 protection/protection-para.cc。
+    config.protection = protection::GetDefaultProtectionConfig();
 
     // output
 

@@ -76,8 +76,11 @@ def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_re
     return result
 
 
-def execute(output, arguments):
+def execute(output, arguments, *, translate=True):
     output.mkdir(parents=True, exist_ok=False)
+    if translate:
+        adapter = runpy.run_path(str(ROOT / 'contrib/satcompute/tests/support/protection/config_arguments.py'))
+        arguments = adapter['execution_arguments'](arguments)
     result = subprocess.run([sys.executable, str(ROOT / 'ns3'), 'run', '--no-build',
                              shlex.join(arguments)], cwd=ROOT, text=True, capture_output=True)
     if result.returncode:

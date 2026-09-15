@@ -23,7 +23,7 @@ class RationalMultirunTests(unittest.TestCase):
         for r in RUN["RUNS"]:
             observed = flags(RUN["RAT"]["arguments"](root, r))
             original = flags(RUN["OLD"]["arguments"](root, "full", r))
-            self.assertEqual(dict(observed, n5cVariant="full"), original)
+            self.assertEqual(dict(observed, compfrrPressureModel="cumulative"), original)
         for invalid in (10, 16, True, 12.0):
             with self.assertRaises(ValueError):
                 RUN["RAT"]["arguments"](root, invalid)

@@ -6,9 +6,11 @@ from pathlib import Path
 import shlex
 import subprocess
 import time
+import runpy
 
 ROOT = Path(__file__).resolve().parents[5]
 SCENE = "contrib/satcompute/input/experiments/leo-66"
+CONFIG_ARGUMENTS = runpy.run_path(str(Path(__file__).with_name('config_arguments.py')))
 
 
 def canonical_input_arguments(argv):
@@ -41,6 +43,48 @@ def canonical_input_arguments(argv):
     if mode not in ('eager', 'deferred', 'selective'):
         raise ValueError('unknown INPUT evidence policy')
     return other + [f'--inputPolicy={mode}']
+
+
+def canonical_experiment_arguments(argv):
+    """Normalize old/new command evidence without altering stored historical files."""
+    has_new = any(x.lstrip('-').partition('=')[0] in CONFIG_ARGUMENTS['NEW'] for x in argv[1:])
+    if has_new:
+        if any(x.partition('=')[0] in ('--inputStagingPolicy', '--inputAdmissionPolicy') for x in argv):
+            raise ValueError('conflicting old/new INPUT evidence options')
+    else:
+        argv = canonical_input_arguments(argv)
+    return CONFIG_ARGUMENTS['canonical_protection_arguments'](argv)
+
+
+def historical_comparison_arguments(argv):
+    """Read-only legacy-shaped controls for older cross-scheme paired audits.
+
+    Expand inert legacy descriptors only for comparing those recorded tables;
+    they are not active resource settings and must never be launched as argv.
+    Current experiment identity uses canonical_experiment_arguments instead.
+    """
+    normalized = canonical_experiment_arguments(argv)
+    values = dict(x.removeprefix('--').split('=', 1) for x in normalized[1:])
+    protected = CONFIG_ARGUMENTS['NEW'] | CONFIG_ARGUMENTS['SHARED']
+    other = {k: v for k, v in values.items() if k not in protected}
+    scheme = values['protectionScheme']
+    mode = {'cb-sat': 'checkbullet'}.get(scheme, scheme)
+    if scheme == 'compfrr' and values['compfrrCheckpointPolicy'] == 'fixed':
+        mode = 'fixed'
+    placement = values.get('compfrrPlacementPolicy', values.get('testBaselinePlacement', 'fa-ffp'))
+    pressure = values.get('compfrrPressureModel', 'cumulative')
+    variant = {'idle-aware': 'rational-U', 'historical-only:recent-U': 'recent-U'}.get(pressure)
+    if variant is None:
+        variant = values.get('compfrrPlacementAblation', 'none')
+        variant = 'full' if variant == 'none' else variant
+    other.update(protectionMode=mode, placementMode='n5c' if placement == 'compfrr' else placement,
+        n5cVariant=variant, inputPolicy=values.get('compfrrInputPolicy', 'eager'),
+        remoteBusyRecoveryPolicy=values.get('compfrrRecoveryPolicy', values.get('testCbSatBusyPolicy', 'relocate')),
+        lrlRecoveryWeight=values.get('testLrlRecoveryWeight', '1'),
+        fixedProtectionDelta=values.get('compfrrFixedDelta', '0.05'),
+        fixedProtectionBatchN=values.get('compfrrFixedBatchN', '4'),
+        backupStorageBytesPerNode=values.get('backupStorageBytesPerNode', '10000000000'))
+    return ['satcompute', *[f'--{key}={value}' for key, value in sorted(other.items())]]
 
 
 # The historical command-description API retains recent-U for old evidence comparisons.
@@ -113,28 +157,38 @@ def arguments(output, fault_mode="generate", audit=False, shadow=False,
     return result
 
 
+def execution_profile_options(protection_mode, placement_mode=None, input_policy=None):
+    """Current formal CLI defaults; the historical arguments() API stays frozen."""
+    return (placement_mode if placement_mode is not None else ('n5c' if protection_mode == 'compfrr' else 'fa-ffp'),
+            input_policy if input_policy is not None else ('selective' if protection_mode == 'compfrr' else 'eager'))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--fault-mode", choices=("none", "generate", "validation-replay"), default="generate")
     parser.add_argument("--validation-trace", type=Path)
-    parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"), default="off")
-    parser.add_argument("--placement-mode", choices=("ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"), default="fa-ffp")
+    parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"), default="compfrr")
+    parser.add_argument("--placement-mode", choices=("ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"),
+                        help="Default n5c for formal CompFRR; fa-ffp for baselines")
     parser.add_argument("--n5c-variant", choices=("full", "noR", "noU", "noM", "rational-U"), default="full")
     parser.add_argument("--random-run", type=int, default=11, help="Explicit replicate; frozen default remains 11")
     parser.add_argument("--remote-busy-recovery-policy", choices=("relocate", "recompute"), default="relocate")
-    parser.add_argument("--input-policy", choices=("eager", "deferred", "selective"), default="eager")
+    parser.add_argument("--input-policy", choices=("eager", "deferred", "selective"),
+                        help="Default selective for formal CompFRR; eager for baselines")
     parser.add_argument("--audit", action="store_true")
     parser.add_argument("--shadow", action="store_true", help="Read-only G4 validation, not real backup")
     args = parser.parse_args()
+    args.placement_mode, args.input_policy = execution_profile_options(
+        args.protection_mode, args.placement_mode, args.input_policy)
     output = args.output_dir.resolve()
     try:
         command = [str(ROOT / "ns3"), "run", "--no-build",
-                   shlex.join(arguments(output, args.fault_mode, args.audit, args.shadow,
+                   shlex.join(CONFIG_ARGUMENTS['execution_arguments'](arguments(output, args.fault_mode, args.audit, args.shadow,
                                         args.validation_trace, args.protection_mode, args.placement_mode,
                                         remote_busy_recovery_policy=args.remote_busy_recovery_policy,
                                         input_policy=args.input_policy, n5c_variant=args.n5c_variant,
-                                        random_run=args.random_run))]
+                                        random_run=args.random_run)))]
         if output.exists():
             raise ValueError("refusing to overwrite an existing output directory")
     except (ValueError, OSError, KeyError) as error:

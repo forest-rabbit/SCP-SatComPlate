@@ -84,9 +84,9 @@ def verify_gate(old, new):
     require(not a["worktree_dirty"] and not b["worktree_dirty"], "dirty gate run")
     def flags(e):
         result = {}
-        for token in FINAL['canonical_input_arguments'](shlex.split(e["command"][-1]))[1:]:
+        for token in FINAL['canonical_experiment_arguments'](shlex.split(e["command"][-1]))[1:]:
             key, value = token.lstrip("-").split("=", 1)
-            if key not in ("outputDir", "faultTrace", "placementMode"):
+            if key not in ("outputDir", "faultTrace", "compfrrPlacementPolicy", "testBaselinePlacement"):
                 result[key] = value
         return result
     require(flags(a) == flags(b), "gate command parameters changed")

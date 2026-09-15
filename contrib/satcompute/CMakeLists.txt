@@ -36,6 +36,8 @@ build_lib(
   LIBNAME satcompute
   SOURCE_FILES
     para.cc
+    protection/protection-para.cc
+    protection/protection-config.cc
     common/time-conversion.cc
     protection/common/protection-types.cc
     protection/common/input-contract.cc
@@ -153,6 +155,8 @@ build_lib(
     traffic/network-transfer-records.cc
   HEADER_FILES
     para.h
+    protection/protection-para.h
+    protection/protection-config.h
     common/time-conversion.h
     protection/common/protection-types.h
     protection/common/input-contract.h
@@ -322,6 +326,27 @@ build_exec(
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
+)
+
+# Same platform wiring, with private baseline overrides only in the test executable.
+build_exec(
+  EXECNAME satcompute-protection-config-driver
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES satcompute.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+target_compile_definitions(satcompute_test_satcompute-protection-config-driver
+  PRIVATE SATCOMPUTE_PROTECTION_TEST_DRIVER=1)
+
+build_exec(
+  EXECNAME satcompute-protection-config-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/protection-config-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )
 
 # Focused optional INPUT lifecycle and shared recovery contract fixtures.

@@ -12,7 +12,7 @@ trap 'rm -rf "$acceptance_output"' EXIT
 run_platform() {
   local output_directory="$1"
   shift
-  ./ns3 run --no-build "satcompute --faultF3Mode=fixed_k --linkMetrics=0 --outputDir=$output_directory $*"
+  ./ns3 run --no-build "satcompute --protectionScheme=off --faultF3Mode=fixed_k --linkMetrics=0 --outputDir=$output_directory $*"
 }
 
 example="contrib/satcompute/tests/fixtures/fault/joint"

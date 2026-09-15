@@ -22,7 +22,7 @@ def rows(directory, name):
 
 
 def run(directory, *, metrics=True, tasks=True, extra=(), expected=0):
-    args = ["satcompute", "--faultMode=none", "--faultF3Mode=fixed_k", "--randomRun=1",
+    args = ["satcompute", "--protectionScheme=off", "--faultMode=none", "--faultF3Mode=fixed_k", "--randomRun=1",
             "--taskCompletionPolicy=strict", "--simulationDuration=2.5", "--taskLogMode=silent",
             "--constellationConfig=contrib/satcompute/tests/fixtures/constellation/connected-16.csv",
             "--fixedDelay=0.001", "--networkUpdateInterval=1",
