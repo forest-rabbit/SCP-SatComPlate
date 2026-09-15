@@ -25,6 +25,8 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 
 | 位置 | 主要职责 |
 | --- | --- |
+| `protection-para.h/.cc` | 分层 typed 配置与唯一默认赋值；中文分类注释，无 CLI/校验 |
+| `protection-config.h/.cc` | CLI 注册、显式来源、capability 校验与既有 wiring 的类型适配 |
 | `common/{protection-types,task-state-adapter}.*` | 中性类型、合法进度边界和实际状态字节 |
 | `common/{input-contract,checkpoint-evidence,placement-resources,protection-forecast}.*` | INPUT、恢复证据及预测/资源 DTO；不依赖 Frequency |
 | `storage/{backup-storage-pool,peak-quota-ledger}.*` | 真实 used/reserved 对象与不重复未来峰值承诺 |
@@ -45,23 +47,44 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 | `baseline/multitree/README.md` | 未来方案占位，当前未实现，无运行入口 |
 | `../traffic/local-delivery.*` | 同星逻辑交付，不创建 UDP、不计网络字节 |
 
-旧导出头和历史 CLI/分析入口仅兼容转发；不允许公共 Fixed/Checkpoint/Recovery 反向依赖 Frequency。
+旧导出头/分析入口保留兼容；旧参数只在测试层显式转换，普通平台 CLI 不保留别名。
+不允许公共 Fixed/Checkpoint/Recovery 反向依赖 Frequency。
 不实现 Multi-tree、JIT、网络 ACK 或第二套网络；生产实现不调用 shadow validator。
 
 ## 参数与当前可运行范围
 
-参数在外层 `para.h/.cc`，CLI 注册/校验在 `satcompute.cc`，不增加完整配置 JSON。
+外层 `para.cc` 只调用 `GetDefaultProtectionConfig()`。默认值由本目录 `protection-para.cc`
+以 `xx = xx;` 集中赋值，CLI/validation 在 `protection-config.cc`，`satcompute.cc` 只接线既有 controller。
+层级为 **完整 Scheme → 私有策略 → Variant/Ablation**，不增加完整配置 JSON 或第二套算法。
 
 | 参数 | 默认 | 说明 |
 |---|---:|---|
-| `protectionMode` | `off` | `recompute` 完整从零重算；`one-plus-one` 真实热副本；`fixed` 固定检查点；`compfrr` 动态频率；`checkbullet` 单备份星完整 INPUT/日志；仅 compfrr 要求 generate 且启用 F1/F2 至少一个来源；保护模式均要求网络任务、shadow 关闭 |
-| `backupStorageBytesPerNode` | `10000000000` B | 十进制 10 GB；仅为实验容量，可覆盖，0 可用于存储不足测试 |
-| `fixedProtectionDelta` | `0.05` | 5% 增量；千分之一精度，转换后传入纯策略 |
-| `fixedProtectionBatchN` | `4` | 4 个连续有效 L1 一批，要求 n>0 且 n×delta≤1 |
-| `placementMode` | `fa-ffp` | `ffp/lrl` 最小筛选；`fa-ffp/fa-lrl` 可行性感知筛选，五种保护模式均可注入；`n5c` 仅用于 CompFRR |
-| `n5cVariant` | `full` | `full`=CUMULATIVE、`rational-U`=IDLE_AWARE；`noR/noU/noM` 仅消融；recent-U 正式入口拒绝 |
-| `remoteBusyRecoveryPolicy` | `relocate` | fixed/compfrr 的 REMOTE_BUSY、DIRECT_DEADLINE_INFEASIBLE 分支：迁移 checkpoint 或从零重算；CB 保持既有忙时合同；off/recompute/one-plus-one 不使用此开关 |
-| `inputPolicy` | `eager` | 唯一 INPUT 开关：`eager` 常态完整预置；`deferred` 故障后获取；`selective` 在 Deferred 布局上按 SER 一次性选择预置。后两者仅支持 CompFRR；见 [F/INPUT](../../../docs/protection/compfrr-f.md#input-policy) |
-| `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
+| `protectionScheme` | `off` | `off / compfrr / recompute / one-plus-one / cb-sat`；Multi-tree 未实现 |
+| `compfrrCheckpointPolicy` | `adaptive` | `fixed / adaptive`；原 Fixed 下沉为策略，不改变一次性 START 与维护合同 |
+| `compfrrPlacementPolicy` | `fa-ffp` | `ffp / fa-ffp / lrl / fa-lrl / compfrr`；最后一项为 CompFRR-P，仅 adaptive 可用 |
+| `compfrrInputPolicy` | `eager` | 唯一 INPUT 开关：`eager / deferred / selective`；Selective 固定 SER，Fixed 仅 Eager |
+| `compfrrRecoveryPolicy` | `relocate` | `relocate / recompute`；仅切换既有 REMOTE_BUSY、DIRECT_DEADLINE_INFEASIBLE 分支，不重写其他回退 |
+| `compfrrPressureModel` | `cumulative` | CompFRR-P 私有：`cumulative / idle-aware`；旧 full / rational-U 的明确映射 |
+| `compfrrPlacementAblation` | `none` | `none / noR / noU / noM`；消融仅 cumulative，不是新增 U policy |
+| `compfrrFixedDelta` | `0.05` | 仅 Fixed，5% 增量、千分之一精度 |
+| `compfrrFixedBatchN` | `4` | 仅 Fixed，n>0 且 n×delta≤1 |
+| `backupStorageBytesPerNode` | `10000000000` B | common pool 容量；仅 CompFRR（含 Fixed）/CB 使用，0 允许测试不足；不为 Recompute/1+1 新建池 |
+| `compfrr-shadow` / `compfrr-shadow-output` | `false` / 空 | 独立 off+generate 诊断；不启用真实保护 |
+
+上述 `compfrr*` 私有 CLI 仅属于 `protectionScheme=compfrr`；跨方案显式传参即拒绝，即便等于默认值。
+未选中的子结构不会创建运行时对象。Adaptive 仍要求 generate 且 F1/F2 至少一个开启；
+Fixed 和三个完整 baseline 保留 none/generate/validation-replay 执行能力，不因此开启在线 Frequency。
+
+| 完整 baseline | canonical private placement | INPUT/恢复私有合同 |
+|---|---|---|
+| Recompute | FA-FFP | 故障后获取完整 INPUT，从零重算；无常态 checkpoint |
+| 1+1 | FA-FFP | 首次 TASK_RUNNING 一次副本请求；不自动重算或追加副本 |
+| CB-Sat | FA-FFP | 完整 INPUT/单节点日志，busy 默认 recompute；无 CompFRR tail |
+
+三种 baseline **仍支持原四种 placement**，它们下沉为各自 typed private config；LRL weight=1
+下沉为 commonPlacement 私有值。测试 executable `satcompute-protection-config-driver` 才接受
+`testBaselinePlacement`、`testCbSatBusyPolicy`、`testLrlRecoveryWeight`。普通平台不提供这些实验注入开关。
+特别注意：**旧 CB 命令省略 busy 时实际为 relocate**，历史转换会显式恢复此身份，不能套用新的
+canonical recompute。完整 old→new 对照与小场景证据见[配置层收口](../../../docs/n5/reviews/Protection-config-hierarchy.md)。
 
 测试位置和命令统一见 [tests](../tests/README.md)；平台构建与 uv 环境见[总 README](../../../README.md)。

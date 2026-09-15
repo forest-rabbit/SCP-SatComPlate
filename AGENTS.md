@@ -1,6 +1,21 @@
 # AGENTS.md
 
-### Current handoff: INPUT repository closed (2026-09-15)
+### Current handoff: protection config hierarchy review (2026-09-15)
+
+The approved revised proposal is implemented on `refactor/protection-config-hierarchy`,
+based on corrected `n5@fd45c5144`. Scope is configuration owners/names/wiring only.
+Defaults remain typed `xx = xx;` in `protection/protection-para.cc`, separate from
+CLI/validation in `protection-config.cc`. Ordinary INPUT is now
+`compfrrInputPolicy=eager|deferred|selective`; old names are explicitly mapped in
+test launch/evidence helpers, not accepted as production aliases. Preserve scheme
+capabilities and old/new experiment identities, especially historical CB omitted
+busy=relocate versus the approved canonical CB busy=recompute.
+See `docs/n5/reviews/Protection-config-hierarchy.md` for mapping and small gates.
+STOP at human review. The user subsequently authorized commit/push of this branch
+for review only; no formal 1300s matrix, CI, PR/merge, algorithm change, Multi-tree,
+INPUT timing change or U optimization is authorized by this increment.
+
+### Previous handoff: INPUT repository closed (2026-09-15)
 
 INPUT consolidation is complete on n5: PR #104 merged as `d095ce845` after the single
 successful phase CI `34930948459` on `fd29f7aca`. Public INPUT is only
@@ -56,7 +71,8 @@ The current platform contract is documented next to the implementation:
 `contrib/satcompute/README.md` defines execution and parameters, while each
 module README defines its own behavior and files. Platform execution uses typed
 defaults in `para.h`/`para.cc` with optional CLI overrides registered and
-validated in `satcompute.cc`. The constellation input uses the native ns-3.48
+validated at the platform boundary (`protection/protection-config.*` owns protection
+CLI/validation, with private defaults in `protection-para.*`). The constellation input uses the native ns-3.48
 `LeoOrbitalShell` CSV columns and describes orbital structure only. Compute
 profiles, tasks, topology slices, and future fault events remain independent
 data files. Do not reintroduce a complete scenario JSON, a resolved/effective

@@ -406,9 +406,9 @@ void
 PolicyChecks()
 {
     const auto config = GetDefaultSatComputeConfig();
-    Check(config.protectionMode == "off" && config.backupStorageBytesPerNode == 10000000000 &&
-              config.fixedProtectionDelta == .05 && config.fixedProtectionBatchN == 4 &&
-              config.remoteBusyRecoveryPolicy == "relocate",
+    Check(config.protection.scheme == ProtectionScheme::OFF && config.protection.common.backupStorageBytesPerNode == 10000000000 &&
+              config.protection.compfrr.fixed.delta == .05 && config.protection.compfrr.fixed.batchN == 4 &&
+              config.protection.compfrr.recoveryPolicy == RecoveryFallbackKind::RELOCATE,
           "typed defaults");
     FixedProtectionPolicy policy(50, 4);
     TestMechanism checkpoint(ActionKind::START_CHECKPOINT), recompute(ActionKind::RECOMPUTE);

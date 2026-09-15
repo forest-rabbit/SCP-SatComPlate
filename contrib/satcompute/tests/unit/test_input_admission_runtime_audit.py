@@ -21,7 +21,7 @@ class RuntimeAuditTests(unittest.TestCase):
         result=subprocess.run([str(ROOT/'build/contrib/satcompute/ns3.48-satcompute-default'),'--help'],
                               cwd=ROOT,text=True,capture_output=True,timeout=10)
         self.assertEqual(result.returncode,0)
-        self.assertIn('inputPolicy',result.stdout)
+        self.assertIn('compfrrInputPolicy',result.stdout)
         self.assertIn('eager / deferred / selective',result.stdout)
         self.assertNotIn('inputStagingPolicy',result.stdout)
         self.assertNotIn('inputAdmissionPolicy',result.stdout)
@@ -101,10 +101,12 @@ class RuntimeAuditTests(unittest.TestCase):
         binary=ROOT/'build/contrib/satcompute/ns3.48-satcompute-default'
         for mode,policy in (('fixed','selective'),('compfrr','jit'),('compfrr','net-ready-break-even'),
                             ('recompute','deferred'),('compfrr','invalid')):
-            result=subprocess.run([str(binary),f'--protectionMode={mode}',f'--inputPolicy={policy}'],
+            scheme = 'compfrr' if mode == 'fixed' else mode
+            flags = ['--compfrrCheckpointPolicy=fixed'] if mode == 'fixed' else []
+            result=subprocess.run([str(binary),f'--protectionScheme={scheme}',f'--compfrrInputPolicy={policy}', *flags],
                                   cwd=ROOT,text=True,capture_output=True,timeout=10)
             self.assertNotEqual(result.returncode,0)
-            self.assertIn('inputPolicy',result.stdout+result.stderr)
+            self.assertIn('compfrrInputPolicy',result.stdout+result.stderr)
 
     def test_retired_public_switches_rejected(self):
         binary=ROOT/'build/contrib/satcompute/ns3.48-satcompute-default'

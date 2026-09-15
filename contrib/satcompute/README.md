@@ -91,23 +91,17 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 
 ## 参数边界
 
-`protectionMode=off` 默认保持现有行为；`fixed` 接入真实备份数据流与单次故障恢复，支持无故障与 generate。
-保护模式共用四种 baseline placement：`ffp|lrl|fa-ffp|fa-lrl`，默认 `fa-ffp` 延续历史行为；简化版先选候选再做真实准入。
-`remoteBusyRecoveryPolicy=relocate|recompute`
-仅切换远端计算忙时的恢复方式，默认 relocate。完整 `recompute` 为无常态保护的故障后从零重算，
-`one-plus-one` 为首次主计算启动时一次性申请的真实并行副本。
-`checkbullet` 为单备份星、完整 INPUT、连续日志且无 tail 的 CB-Sat 基线；须先完成
-[独立 MTBF 标定](protection/baseline/checkbullet/README.md)，不使用单测参数。
-`inputPolicy` 是唯一 INPUT 开关，默认 `eager`：常态预置完整输入。
-CompFRR 还支持 `deferred`（故障后获取 INPUT）与 `selective`（Deferred 布局 + SER
-break-even 选择性预置）。正式 CompFRR 组合显式指定 `--inputPolicy=selective`，
-不改变平台默认值；完整合同见[保护模块](protection/README.md)。
-CompFRR 另支持 `placementMode=n5c`：一次参考 Frequency 求解后，按 V4 选择实际 remote；
-`n5cVariant=full|noR|noU|noM` 控制正式评分或单维消融，硬约束不变，ON 不重新选点。
-详见 [保护与恢复模块](protection/README.md)。
-`compfrr` 在在线 generate 的故障检查点进行动态频率决策（需启用 F1/F2 至少一个来源）。
-非 off 模式均要求网络任务且 shadow 关闭。10 GB 备份池与频率参数说明见
-[protection README](protection/README.md)，不修改正式场景输入或故障参数。
+`protectionScheme=off` 默认保持现有行为；完整方案可选 `compfrr / recompute / one-plus-one / cb-sat`。
+保护配置集中在 `protection/protection-para.cc`，保持分类注释与 `xx = xx;` 赋值；
+CLI/validation 独立，外层 `para.cc` 只取得默认配置。
+CompFRR 下选 `compfrrCheckpointPolicy=fixed|adaptive`，默认 adaptive + FA-FFP + Eager + relocate。
+`compfrrPlacementPolicy=compfrr` 才启用 CompFRR-P；pressure 为 `cumulative|idle-aware`，
+`noR/noU/noM` 另作消融。唯一 INPUT 开关为 `compfrrInputPolicy=eager|deferred|selective`，
+后两者只适用于 adaptive；Selective 固定 SER，不改变默认实验身份。
+Recompute、1+1、CB-Sat 的 placement 下沉为各自私有配置，原四种 placement 能力和历史复现入口仍保留。
+CB-Sat 使用已有[独立 MTBF profile](protection/baseline/checkbullet/README.md)，不重新标定。
+非 off 均要求网络任务且 shadow 关闭；仅 adaptive 要求 generate 和至少一个 F1/F2 来源。
+完整参数、默认值、capability 和旧命令转换见[保护模块](protection/README.md)。
 
 G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评估，默认关闭。
 不创建真实备份或修改任务结果，详见 [G4验证工具](tools/validation/compfrr-shadow/README.md)。

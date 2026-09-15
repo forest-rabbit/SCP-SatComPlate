@@ -15,18 +15,23 @@ Routing 是所有方案共用的基础设施，不属于其中任何算法开关
 四种策略均实现两种角色；当前 checkpoint 恢复目标仍统一按既有稳定 ID 与操作可行性选择，
 不会因切换 prefault LRL 而顺带改变恢复排序。
 
-`protectionMode=checkbullet` 接入独立的 [CB-Sat](../../contrib/satcompute/protection/baseline/checkbullet/README.md)：
+`protectionScheme=cb-sat` 接入独立的 [CB-Sat](../../contrib/satcompute/protection/baseline/checkbullet/README.md)：
 单备份星保留完整 INPUT、状态根及连续日志，复用公共服务与四种 placement，但不继承双层 tail。
 内部 H/X 位于 canonical 子目录，独立标定 MTBF 保留原兼容路径；平台 `para.cc` 不增加 CB 专有数值。
 
-`protectionMode=recompute` 是完整 baseline：没有常态保护；首次主计算故障后调用
+`protectionScheme=recompute` 是完整 baseline：没有常态保护；首次主计算故障后调用
 `PlacementPolicy::SelectBackupNode`，默认 FA-FFP 选非主、健康、空闲且可达结果端的节点，
 还需原始 INPUT 当前可准入且 INPUT 估计加完整计算可能满足原 compute deadline。
 复用 RecoveryController 和零容量共享账本，不创建 checkpoint 对象，不产生 cL/cR、L1 或 REMOTE_BATCH。
 `baseline/recompute/recompute-runtime.*` 接线、`baseline/recompute/recompute-policy.h` 只决定故障后重算。
 `recovery-summary.csv` 对此模式增加 planned INPUT 等待及 planned 浪费列，实际值仍取真实执行。
 该严格筛选仅适用于完整 baseline，不改变 checkpoint 方案既有的 RECOMPUTE 后备行为。
-完整 recompute 与 one-plus-one 均支持四种 baseline placement；`placementMode=n5c` 仅允许 CompFRR。
+完整 recompute、one-plus-one、cb-sat 均保留四种 baseline placement，配置属于各自私有 owner；
+普通入口使用 canonical FA-FFP，测试/历史入口显式注入四种变体。
+CompFRR-P（`compfrrPlacementPolicy=compfrr`）仅允许 adaptive CompFRR。
+Fixed 是 `protectionScheme=compfrr + compfrrCheckpointPolicy=fixed`，仅 Eager，默认 delta=0.05/n=4。
+CB canonical busy 为 recompute；旧省略 busy 的 relocate 身份须通过历史转换显式保留，
+详见[配置映射](../n5/reviews/Protection-config-hierarchy.md)。
 
 ### Pre-N5C 可行性筛选消融
 

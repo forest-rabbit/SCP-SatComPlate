@@ -6,6 +6,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import tempfile
+import runpy
 
 ROOT = Path(__file__).resolve().parents[5]
 FIXTURE = ROOT / "contrib/satcompute/tests/fixtures/protection"
@@ -24,6 +25,7 @@ def run(directory, mode, trace):
             f"--protectionMode={mode}", "--placementMode=fa-ffp", "--backupStorageBytesPerNode=10000000000",
             "--routingMode=global-capacity-aware-hrw", "--islBandwidthBps=10000000000",
             "--delayMode=fixed", "--fixedDelay=0.001", f"--outputDir={directory}"]
+    args = runpy.run_path(str(ROOT / 'contrib/satcompute/tests/support/protection/config_arguments.py'))['execution_arguments'](args)
     result = subprocess.run([str(ROOT / "ns3"), "run", "--no-build", shlex.join(args)],
                             cwd=ROOT, text=True, capture_output=True, timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr

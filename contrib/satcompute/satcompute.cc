@@ -24,6 +24,7 @@
 #include "ns3/link-metrics-recorder.h"
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/para.h"
+#include "ns3/protection-config.h"
 #include "ns3/rng-seed-manager.h"
 #include "ns3/metrics.h"
 #include "ns3/satellite-topology.h"
@@ -211,29 +212,6 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("faultProbabilityAudit",
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
-    commandLine.AddValue("protectionMode",
-                         "off / recompute / one-plus-one / fixed / compfrr / checkbullet: protection scheme",
-                         config.protectionMode);
-    commandLine.AddValue("backupStorageBytesPerNode",
-                         "Backup-only storage capacity in decimal bytes",
-                         config.backupStorageBytesPerNode);
-    commandLine.AddValue("placementMode", "ffp/lrl minimal, fa-ffp/fa-lrl feasibility-aware, n5c CompFRR V4", config.placementMode);
-    commandLine.AddValue("n5cVariant", "CompFRR-P: full=CUMULATIVE, rational-U=IDLE_AWARE; noR/noU/noM are ablations; hard constraints unchanged", config.n5cVariant);
-    commandLine.AddValue("remoteBusyRecoveryPolicy", "relocate / recompute; busy or direct deadline infeasible (CB: busy only)",
-                         config.remoteBusyRecoveryPolicy);
-    commandLine.AddValue("inputPolicy", "eager / deferred / selective; deferred/selective require compfrr",
-                         config.inputPolicy);
-    commandLine.AddValue("lrlRecoveryWeight", "Diagnostic active-recovery weight; G3 freezes 1", config.lrlRecoveryWeight);
-    commandLine.AddValue("fixedProtectionDelta",
-                         "Fixed progress interval (0.05 = 5%), per-mille precision",
-                         config.fixedProtectionDelta);
-    commandLine.AddValue("fixedProtectionBatchN",
-                         "Fixed number of L1 records per remote batch",
-                         config.fixedProtectionBatchN);
-    commandLine.AddValue("compfrr-shadow", "Opt-in G4 analytical decision observer (no real backup)",
-                         config.compfrrShadow);
-    commandLine.AddValue("compfrr-shadow-output", "Shadow CSV directory; default outputDir/shadow",
-                         config.compfrrShadowOutput);
     commandLine.AddValue("faultEnableF1",
                          "Enable F1 generation and optional probability audit",
                          faultParameters.f1.enabled);
@@ -353,7 +331,7 @@ ValidateConfig(const SatComputeConfig& config)
     if (config.faultMode == "validation-replay")
     {
         if (config.validationFaultTrace.empty() || !hasComputeProfile ||
-            config.faultProbabilityAudit || config.compfrrShadow)
+            config.faultProbabilityAudit || config.protection.diagnostics.compfrrShadow)
             FailConfig("validationFaultTrace",
                        "validation replay requires frozen input, tasks, audit/shadow off");
     }
@@ -379,50 +357,6 @@ ValidateConfig(const SatComputeConfig& config)
         }
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
-    RequireChoice(config.protectionMode, "protectionMode", {"off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"});
-    RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"});
-    RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
-    RequireChoice(config.inputPolicy, "inputPolicy", {"eager", "deferred", "selective"});
-    if (config.inputPolicy != "eager" && config.protectionMode != "compfrr")
-        FailConfig("inputPolicy", "deferred/selective require compfrr protection");
-    if (config.n5cVariant == "recent-U")
-        FailConfig("n5cVariant", "recent-U is historical-only; production policies are full (CUMULATIVE) and rational-U (IDLE_AWARE)");
-    RequireChoice(config.n5cVariant, "n5cVariant", {"full", "noR", "noU", "noM", "rational-U"});
-    if (config.placementMode == "n5c" && config.protectionMode != "compfrr")
-        FailConfig("placementMode", "n5c requires compfrr protection");
-    if (config.placementMode != "n5c" && config.n5cVariant != "full")
-        FailConfig("n5cVariant", "ablations require placementMode=n5c");
-    if ((config.placementMode == "lrl" || config.placementMode == "fa-lrl") && config.protectionMode == "off")
-        FailConfig("placementMode", "lrl requires an enabled protection scheme");
-    if (config.protectionMode != "off" &&
-        (config.topologyOnly || !hasComputeProfile || config.compfrrShadow))
-    {
-        FailConfig("protectionMode", "protection requires network tasks and shadow off");
-    }
-    if (config.protectionMode == "compfrr" && config.faultMode != "generate")
-        FailConfig("protectionMode", "compfrr requires online faultMode=generate");
-    if (!std::isfinite(config.fixedProtectionDelta) || config.fixedProtectionDelta <= 0 ||
-        config.fixedProtectionDelta > 1 ||
-        std::abs(config.fixedProtectionDelta * 1000 -
-                 std::round(config.fixedProtectionDelta * 1000)) > 1e-9)
-    {
-        FailConfig("fixedProtectionDelta", "must be in (0,1] with per-mille precision");
-    }
-    const auto fixedDeltaPermille =
-        static_cast<uint32_t>(std::round(config.fixedProtectionDelta * 1000));
-    if (!fixedDeltaPermille || !config.fixedProtectionBatchN ||
-        config.fixedProtectionBatchN > 1000 / fixedDeltaPermille)
-    {
-        FailConfig("fixedProtectionBatchN", "requires n>0 and n*delta<=1");
-    }
-    if (config.compfrrShadow && (config.topologyOnly || !hasComputeProfile || config.faultMode != "generate"))
-    {
-        FailConfig("compfrr-shadow", "requires network tasks and faultMode=generate");
-    }
-    if (!config.compfrrShadow && !config.compfrrShadowOutput.empty())
-    {
-        FailConfig("compfrr-shadow-output", "requires compfrr-shadow=1");
-    }
     if (config.topologyOnly && hasComputeProfile)
     {
         FailConfig("topologyOnly", "cannot load task inputs");
@@ -488,15 +422,24 @@ main(int argc, char* argv[])
     FaultParameters faultParameters = GetDefaultFaultParameters();
     CommandLine command(__FILE__);
     AddCommandLineOptions(command, inputConfig, faultParameters);
-    command.Parse(argc, argv);
+    protection::ProtectionCliState protectionCli;
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+    constexpr bool protectionTestInterface = true;
+#else
+    constexpr bool protectionTestInterface = false;
+#endif
+    protection::RegisterProtectionOptions(command, inputConfig.protection, protectionCli,
+                                         protectionTestInterface);
 
     try
     {
+        command.Parse(argc, argv);
+        protection::ApplyProtectionTestOverrides(inputConfig.protection, protectionCli);
         ApplyModeDefaults(inputConfig, argc, argv);
+        protection::ValidateProtectionConfig(inputConfig.protection, protectionCli,
+            {inputConfig.topologyOnly, !inputConfig.computeProfile.empty() && !inputConfig.taskTrace.empty(),
+             faultParameters.f1.enabled, faultParameters.f2.enabled, inputConfig.faultMode});
         ValidateConfig(inputConfig);
-        if (inputConfig.protectionMode == "compfrr" &&
-            !faultParameters.f1.enabled && !faultParameters.f2.enabled)
-            FailConfig("protectionMode", "compfrr requires F1 or F2 fault-check epochs");
         if (inputConfig.faultProbabilityAudit &&
             !faultParameters.f1.enabled && !faultParameters.f2.enabled)
         {
@@ -710,52 +653,51 @@ main(int argc, char* argv[])
             std::filesystem::remove(outputDirectory / "placement-resource-summary.csv");
             std::filesystem::remove(outputDirectory / "f3-compute-risk-snapshots.csv");
             const auto makePlacement = [&]() -> std::unique_ptr<protection::PlacementPolicy> {
-                if (config.placementMode == "n5c")
-                    return std::make_unique<protection::N5cPlacementPolicy>(protection::ParseN5cVariant(config.n5cVariant));
-                if (config.placementMode == "lrl")
-                    return std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.lrlRecoveryWeight);
-                if (config.placementMode == "fa-lrl")
-                    return std::make_unique<protection::FaLeastRecoveryLoadPlacementPolicy>(config.lrlRecoveryWeight);
-                if (config.placementMode == "ffp")
+                const auto placement = protection::ActivePlacementPolicy(config.protection);
+                if (placement == protection::PlacementPolicyKind::COMPFRR)
+                    return std::make_unique<protection::CompFrrPlacementPolicy>(protection::ParseN5cVariant(
+                        protection::LegacyPlacementVariant(config.protection.compfrr)));
+                if (placement == protection::PlacementPolicyKind::LRL)
+                    return std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.protection.commonPlacement.lrlRecoveryWeight);
+                if (placement == protection::PlacementPolicyKind::FA_LRL)
+                    return std::make_unique<protection::FaLeastRecoveryLoadPlacementPolicy>(config.protection.commonPlacement.lrlRecoveryWeight);
+                if (placement == protection::PlacementPolicyKind::FFP)
                     return std::make_unique<protection::FirstFeasiblePlacementPolicy>();
                 return std::make_unique<protection::FaFirstFeasiblePlacementPolicy>();
             };
-            const auto busyPolicy = config.remoteBusyRecoveryPolicy == "recompute"
-                ? protection::RemoteBusyRecoveryPolicy::RECOMPUTE
-                : protection::RemoteBusyRecoveryPolicy::RELOCATE;
-            if (config.protectionMode == "fixed")
+            if (protection::IsFixedProtection(config.protection))
             {
                 protection = std::make_unique<protection::FixedProtectionController>(
                     taskCoordinator,
                     topology,
-                    config.backupStorageBytesPerNode,
+                    config.protection.common.backupStorageBytesPerNode,
                     simulationDurationNs,
-                    static_cast<uint32_t>(std::round(config.fixedProtectionDelta * 1000)),
-                    config.fixedProtectionBatchN,
-                    config.faultMode != "none", makePlacement(), busyPolicy);
+                    protection::FixedDeltaPermille(config.protection.compfrr.fixed),
+                    config.protection.compfrr.fixed.batchN,
+                    config.faultMode != "none", makePlacement(), config.protection.compfrr.recoveryPolicy);
             }
-            else if (config.protectionMode == "compfrr")
+            else if (protection::IsAdaptiveProtection(config.protection))
             {
                 frequency = std::make_unique<protection::FrequencyProtectionController>(
                     taskCoordinator, topology, faultModelEngine,
-                    config.backupStorageBytesPerNode, simulationDurationNs,
-                    makePlacement(), busyPolicy,
-                    protection::ParseInputPolicy(config.inputPolicy), true);
+                    config.protection.common.backupStorageBytesPerNode, simulationDurationNs,
+                    makePlacement(), config.protection.compfrr.recoveryPolicy,
+                    config.protection.compfrr.inputPolicy, true);
             }
-            else if (config.protectionMode == "checkbullet")
+            else if (config.protection.scheme == protection::ProtectionScheme::CB_SAT)
             {
                 RemoveProtectionMetrics(outputDirectory);
                 checkbullet = std::make_unique<protection::checkbullet::CbSatController>(
-                    taskCoordinator, topology, config.backupStorageBytesPerNode,
-                    simulationDurationNs, makePlacement(), busyPolicy);
+                    taskCoordinator, topology, config.protection.common.backupStorageBytesPerNode,
+                    simulationDurationNs, makePlacement(), config.protection.cbSat.busyPolicy);
             }
-            else if (config.protectionMode == "recompute")
+            else if (config.protection.scheme == protection::ProtectionScheme::RECOMPUTE)
             {
                 RemoveProtectionMetrics(outputDirectory);
                 recompute = std::make_unique<protection::RecomputeController>(
                     taskCoordinator, topology, simulationDurationNs, makePlacement());
             }
-            else if (config.protectionMode == "one-plus-one")
+            else if (config.protection.scheme == protection::ProtectionScheme::ONE_PLUS_ONE)
             {
                 RemoveProtectionMetrics(outputDirectory);
                 replication = std::make_unique<protection::OnePlusOneController>(
@@ -765,12 +707,12 @@ main(int argc, char* argv[])
             {
                 RemoveProtectionMetrics(outputDirectory);
             }
-            if (config.compfrrShadow)
+            if (config.protection.diagnostics.compfrrShadow)
             {
                 shadow = std::make_unique<compfrr::ShadowEvaluator>(taskCoordinator, faultModelEngine,
                     *computeProfile, config.islBandwidthBps,
-                    config.compfrrShadowOutput.empty() ? outputDirectory / "shadow" :
-                        std::filesystem::path(config.compfrrShadowOutput));
+                    config.protection.diagnostics.compfrrShadowOutput.empty() ? outputDirectory / "shadow" :
+                        std::filesystem::path(config.protection.diagnostics.compfrrShadowOutput));
             }
 
             std::optional<LinkMetricsRecorder> linkMetrics;

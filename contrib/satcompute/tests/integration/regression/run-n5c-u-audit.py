@@ -44,7 +44,7 @@ def command(output, group, run):
 
 def flags(argv):
     values = {}
-    for token in FINAL['canonical_input_arguments'](argv)[1:]:
+    for token in FINAL['canonical_experiment_arguments'](argv)[1:]:
         key, value = token.removeprefix("--").split("=", 1)
         require(key not in values, "duplicate command option")
         values[key] = value

@@ -24,7 +24,7 @@ class MaintenanceAuditTest(unittest.TestCase):
 
     def test_only_output_paths_are_ignored_in_invocation_comparison(self):
         self.assertEqual(RUN['normalized']('satcompute --outputDir=a --faultTrace=b --randomRun=11'),
-                         ['satcompute', '--randomRun=11', '--inputPolicy=eager'])
+                         ['satcompute', '--protectionScheme=off', '--randomRun=11'])
         self.assertNotEqual(RUN['normalized']('satcompute --randomRun=11'),
                             RUN['normalized']('satcompute --randomRun=12'))
 

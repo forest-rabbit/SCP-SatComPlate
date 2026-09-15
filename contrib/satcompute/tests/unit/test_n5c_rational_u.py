@@ -61,8 +61,8 @@ class RationalUTests(unittest.TestCase):
             root = Path(tmp)
             command = RUN["arguments"](root)
             flags = RUN["OLD"]["flags"](command)
-            self.assertEqual((flags["randomRun"], flags["simulationDuration"], flags["n5cVariant"]),
-                             ("11", "1300", "rational-U"))
+            self.assertEqual((flags["randomRun"], flags["simulationDuration"], flags["compfrrPressureModel"]),
+                             ("11", "1300", "idle-aware"))
             original = RUN["RECENT"]["arguments"](root, "full", 11)
             self.assertEqual([f for f in command if not f.startswith("--n5cVariant=")],
                              [f for f in original if not f.startswith("--n5cVariant=")])

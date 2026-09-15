@@ -6,9 +6,11 @@ from pathlib import Path
 import shlex
 import subprocess
 import time
+import runpy
 
 ROOT = Path(__file__).resolve().parents[5]
 SCENE = "contrib/satcompute/input/experiments/leo-66"
+CONFIG_ARGUMENTS = runpy.run_path(str(Path(__file__).with_name('config_arguments.py')))
 
 
 def canonical_input_arguments(argv):
@@ -41,6 +43,48 @@ def canonical_input_arguments(argv):
     if mode not in ('eager', 'deferred', 'selective'):
         raise ValueError('unknown INPUT evidence policy')
     return other + [f'--inputPolicy={mode}']
+
+
+def canonical_experiment_arguments(argv):
+    """Normalize old/new command evidence without altering stored historical files."""
+    has_new = any(x.lstrip('-').partition('=')[0] in CONFIG_ARGUMENTS['NEW'] for x in argv[1:])
+    if has_new:
+        if any(x.partition('=')[0] in ('--inputStagingPolicy', '--inputAdmissionPolicy') for x in argv):
+            raise ValueError('conflicting old/new INPUT evidence options')
+    else:
+        argv = canonical_input_arguments(argv)
+    return CONFIG_ARGUMENTS['canonical_protection_arguments'](argv)
+
+
+def historical_comparison_arguments(argv):
+    """Read-only legacy-shaped controls for older cross-scheme paired audits.
+
+    Expand inert legacy descriptors only for comparing those recorded tables;
+    they are not active resource settings and must never be launched as argv.
+    Current experiment identity uses canonical_experiment_arguments instead.
+    """
+    normalized = canonical_experiment_arguments(argv)
+    values = dict(x.removeprefix('--').split('=', 1) for x in normalized[1:])
+    protected = CONFIG_ARGUMENTS['NEW'] | CONFIG_ARGUMENTS['SHARED']
+    other = {k: v for k, v in values.items() if k not in protected}
+    scheme = values['protectionScheme']
+    mode = {'cb-sat': 'checkbullet'}.get(scheme, scheme)
+    if scheme == 'compfrr' and values['compfrrCheckpointPolicy'] == 'fixed':
+        mode = 'fixed'
+    placement = values.get('compfrrPlacementPolicy', values.get('testBaselinePlacement', 'fa-ffp'))
+    pressure = values.get('compfrrPressureModel', 'cumulative')
+    variant = {'idle-aware': 'rational-U', 'historical-only:recent-U': 'recent-U'}.get(pressure)
+    if variant is None:
+        variant = values.get('compfrrPlacementAblation', 'none')
+        variant = 'full' if variant == 'none' else variant
+    other.update(protectionMode=mode, placementMode='n5c' if placement == 'compfrr' else placement,
+        n5cVariant=variant, inputPolicy=values.get('compfrrInputPolicy', 'eager'),
+        remoteBusyRecoveryPolicy=values.get('compfrrRecoveryPolicy', values.get('testCbSatBusyPolicy', 'relocate')),
+        lrlRecoveryWeight=values.get('testLrlRecoveryWeight', '1'),
+        fixedProtectionDelta=values.get('compfrrFixedDelta', '0.05'),
+        fixedProtectionBatchN=values.get('compfrrFixedBatchN', '4'),
+        backupStorageBytesPerNode=values.get('backupStorageBytesPerNode', '10000000000'))
+    return ['satcompute', *[f'--{key}={value}' for key, value in sorted(other.items())]]
 
 
 # The historical command-description API retains recent-U for old evidence comparisons.
@@ -130,11 +174,11 @@ def main():
     output = args.output_dir.resolve()
     try:
         command = [str(ROOT / "ns3"), "run", "--no-build",
-                   shlex.join(arguments(output, args.fault_mode, args.audit, args.shadow,
+                   shlex.join(CONFIG_ARGUMENTS['execution_arguments'](arguments(output, args.fault_mode, args.audit, args.shadow,
                                         args.validation_trace, args.protection_mode, args.placement_mode,
                                         remote_busy_recovery_policy=args.remote_busy_recovery_policy,
                                         input_policy=args.input_policy, n5c_variant=args.n5c_variant,
-                                        random_run=args.random_run))]
+                                        random_run=args.random_run)))]
         if output.exists():
             raise ValueError("refusing to overwrite an existing output directory")
     except (ValueError, OSError, KeyError) as error:

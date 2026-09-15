@@ -6,16 +6,16 @@
 
 ## INPUT policy
 
-对外只有 `--inputPolicy=eager|deferred|selective`，默认 `eager`。
+对外只有 `--compfrrInputPolicy=eager|deferred|selective`，默认 `eager`。
 Eager 常态预置完整 INPUT；Deferred 常态只保护状态，故障后获取 INPUT；Selective 在
-Deferred 布局上启用独立可选预置。后两者要求 `protectionMode=compfrr`。
+Deferred 布局上启用独立可选预置。后两者要求 `protectionScheme=compfrr` 且 checkpoint policy 为 adaptive。
 内部保留中性 EAGER/DEFERRED layout、optional lifecycle、SER selector 三层，
 公共 Checkpoint/Recovery/Fixed 不依赖私有选择器。
 
 - SER break-even：比较 `sum(w_k * min(T_ser, max(0,t_k-t_I)))` 与 `(1-P_F)*T_ser`。
 
 SER 是唯一 production selective admission；最终 CompFRR 组合显式指定
-`--inputPolicy=selective`，不自动改变全平台默认值。
+`--compfrrInputPolicy=selective`，不自动改变全平台默认值。
 旧 NET-ready 已从正式入口退役；历史比较与 `T_net/G_net` 诊断保留，但不能触发 SEND。
 
 `T_ser` 是实际路径估计器向上取整的序列化纳秒，`T_net=T_ser+传播纳秒`；
@@ -107,7 +107,7 @@ ON 无可行新配置时保留状态和最后 committed 配置，不允许 ON→
 正式算法比较采用在线 **generate**。固定输入和配对 seed/run 不保证不同策略
 得到同一故障序列：恢复计算改变负载与温度是 F1 闭环的一部分。N5A 的 validation-replay
 仅保留执行验收用途，不增加回放预测器，不覆盖已有 G4 输出。默认仍为 off；
-仅显式 `protectionMode=compfrr` 输出 `frequency-decisions.csv`，不依赖 `faultProbabilityAudit`。
+仅 `protectionScheme=compfrr` 且 `compfrrCheckpointPolicy=adaptive` 输出 `frequency-decisions.csv`，不依赖 `faultProbabilityAudit`。
 
 ## 运行时边界与存储估计
 

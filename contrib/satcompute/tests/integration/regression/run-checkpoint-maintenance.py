@@ -37,7 +37,7 @@ def identity():
 
 
 def normalized(command):
-    return [x for x in FINAL['canonical_input_arguments'](shlex.split(command))
+    return [x for x in FINAL['canonical_experiment_arguments'](shlex.split(command))
             if not x.startswith(('--outputDir=', '--faultTrace='))]
 
 

@@ -9,6 +9,7 @@ import runpy
 import shlex
 
 ACCOUNTING = runpy.run_path(str(Path(__file__).with_name("accounting.py")))
+COMPARISON_ARGUMENTS = runpy.run_path(str(Path(__file__).with_name('scenario.py')))['historical_comparison_arguments']
 rows, require = ACCOUNTING["rows"], ACCOUNTING["require"]
 PROFILES = ACCOUNTING["PROFILES"]
 GROUPS = {
@@ -413,7 +414,7 @@ def fairness(runs):
         require(e["fault_mode"] == "generate" and not e["audit"] and not e["shadow"] and not e["worktree_dirty"], "nonformal identity")
         require((e["seed"], e["run"], e["simulation_duration_s"], result["execution_result"]["returncode"]) == (1, 11, 1300, 0), "formal run incomplete")
         ignored = {"outputDir", "faultTrace", "protectionMode", "remoteBusyRecoveryPolicy"}
-        controls.append({a.split("=", 1)[0]: a.split("=", 1)[1] for a in shlex.split(e["command"][-1])[1:]
+        controls.append({a.split("=", 1)[0]: a.split("=", 1)[1] for a in COMPARISON_ARGUMENTS(shlex.split(e["command"][-1]))[1:]
                          if a.split("=", 1)[0].removeprefix("--") not in ignored})
     require(all(c == controls[0] for c in controls), "unpaired nonpolicy parameters")
     require(len({r["execution"]["commit"] for r in runs.values()}) == 1, "formal execution commits differ")

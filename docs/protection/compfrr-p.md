@@ -1,14 +1,16 @@
 # CompFRR-P：固定配置后的备份节点选择
 
-启用 `--protectionMode=compfrr --placementMode=n5c`，支持 Eager/Deferred，默认参数不替换 FA-FFP。
+启用 `--protectionScheme=compfrr --compfrrPlacementPolicy=compfrr`（默认 adaptive），
+支持 Eager/Deferred/Selective，默认参数不替换 FA-FFP。
 production compute-pressure 仅有两种，默认不变：
 
-| 正式 policy | 保留的 CLI 值 | 用于评分的 U |
+| 正式 policy | CLI 值 | 用于评分的 U |
 | --- | --- | --- |
-| CUMULATIVE：Cumulative Historical Compute Pressure | `--n5cVariant=full` | 全历史实际 compute busy / 存活 exposure |
-| IDLE_AWARE：Idle-Aware Historical Compute Pressure | `--n5cVariant=rational-U` | `U_global * H/(H+I)` |
+| CUMULATIVE：Cumulative Historical Compute Pressure | `--compfrrPressureModel=cumulative` | 全历史实际 compute busy / 存活 exposure |
+| IDLE_AWARE：Idle-Aware Historical Compute Pressure | `--compfrrPressureModel=idle-aware` | `U_global * H/(H+I)` |
 
-`noR/noU/noM` 保留为 ablation capability，只关闭对应评分项，仍记录原值并保留硬约束。
+`compfrrPlacementAblation=noR|noU|noM` 保留为 cumulative 下的 ablation capability，
+默认 none；只关闭对应评分项，仍记录原值并保留硬约束。
 noU 不是第三种 U policy；`recent-U` 已从正式 CLI 移除，历史 API/证据见[归档口径](reproducibility.md)。
 
 | 文件 | 职责 |
@@ -44,7 +46,7 @@ ON 更新替换自身旧 quota，不重复计占用，任务离开主计算后�
 历史利用率的分母从仿真起点到当前观测时刻，整星故障后截止于实际 F3；F1/F2 不扣除恢复免疫执行时间。
 无 exposure 或无预测需求分别记录 `history_unavailable` / `no_predicted_demand`，不靠截断掩盖错误。
 
-IDLE_AWARE（兼容 CLI `rational-U`）使用 `U_global * H/(H+I)` 作为评分中的 U，
+IDLE_AWARE（历史证据名 `rational-U`）使用 `U_global * H/(H+I)` 作为评分中的 U，
 H 为当前主任务精确剩余纯计算时间（整数 ns），不是 deadline 余量，I 为节点自最近一次实际普通/恢复计算结束后的连续空闲时间。
 从未计算的节点从 t=0 累计空闲；当前实际忙则 I=0，但不会因此绕过现有空闲候选硬约束。
 预留等待不算忙，F1/F2 暂时不可用且没有真实计算时继续累计空闲；恢复免疫期间的实际计算仍算忙。

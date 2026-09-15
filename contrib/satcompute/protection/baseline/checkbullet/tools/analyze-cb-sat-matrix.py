@@ -9,7 +9,7 @@ import re
 import runpy
 import shlex
 import subprocess
-from cb_tools import ROOT, GROUPS, flags, require, rows, write_json
+from cb_tools import ROOT, GROUPS, flags, require, rows, write_json, SCENE_HELPER
 
 AUDIT = runpy.run_path(str(Path(__file__).with_name("audit-cb-sat-run.py")))
 distribution, number = AUDIT["distribution"], AUDIT["number"]
@@ -130,12 +130,13 @@ def comparison(root, formal):
         recoveries.append(dict(group=s["group"],attempted=s["recovery_attempted"],accepted=s["recovery_accepted"],
             success=s["recovery_success"],failed=s["recovery_failed"],resume_seconds=s["resume_seconds"],
             catchup_seconds=s["catchup_seconds"],lost_work_units=s["lost_work_units"],paths=s["recovery_paths"]))
-        actual_flags = flags(shlex.split(json.loads((Path(s["directory"])/"execution.json").read_text())["command"][-1]))
+        comparison_flags = lambda command: flags(SCENE_HELPER['historical_comparison_arguments'](shlex.split(command)))
+        actual_flags = comparison_flags(json.loads((Path(s["directory"])/"execution.json").read_text())["command"][-1])
         omitted = {"outputDir","faultTrace","protectionMode","placementMode","remoteBusyRecoveryPolicy",
             "inputStagingPolicy","inputPolicy","fixedProtectionDelta","fixedProtectionBatchN"}
         common = lambda f:{k:v for k,v in f.items() if k not in omitted}
         for g in old["groups"].values():
-            require(common(actual_flags) == common(flags(shlex.split(g["execution"]["command"][-1]))),
+            require(common(actual_flags) == common(comparison_flags(g["execution"]["command"][-1])),
                     "CB and historical common scene/network/fault command differs")
     deltas = []
     for cb in (r for r in public if r["scheme"] == "checkbullet"):

@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include "protection/protection-para.h"
 
 namespace ns3
 {
@@ -61,17 +62,7 @@ struct SatComputeConfig
     bool faultProbabilityAudit;  ///< 是否采集并输出概率一致性审计数据。
 
     // protection
-    std::string protectionMode; ///< off / recompute / one-plus-one / fixed / compfrr；真实保护与恢复。
-    std::string placementMode; ///< ffp/lrl minimal; fa-ffp/fa-lrl feasibility-aware, default fa-ffp.
-    std::string n5cVariant; ///< full=CUMULATIVE / rational-U=IDLE_AWARE; noR/noU/noM ablations only.
-    std::string remoteBusyRecoveryPolicy; ///< relocate / recompute; busy or direct deadline infeasible.
-    std::string inputPolicy; ///< eager / deferred / selective；selective 使用 SER 选择性预置。
-    uint32_t lrlRecoveryWeight; ///< 当前恢复数量的整数权重，正式首轮固定 1，不扫描。
-    uint64_t backupStorageBytesPerNode; ///< 每计算星额外备份存储容量，十进制字节。
-    double fixedProtectionDelta; ///< 固定 checkpoint 进度间隔，0.05 表示 5%。
-    uint32_t fixedProtectionBatchN; ///< 每个 remote batch 包含的 L1 record 数。
-    bool compfrrShadow; ///< G4 只读旁路决策评估，不创建真实备份。
-    std::string compfrrShadowOutput; ///< 空时写入 outputDir/shadow。
+    protection::ProtectionConfig protection; ///< Scheme、私有策略与诊断的唯一配置 owner。
 
     // output
     std::string outputDirectory; ///< 结构化结果输出目录。

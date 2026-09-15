@@ -3,11 +3,36 @@
 本目录只维护 SatCompute 自有测试。配置、脚本和 GitHub Actions 都不会启用或运行
 ns-3 上游 examples、全局 tests 或根目录 `test.py`。
 
-## 当前 N5R：小型语义等价门禁
+## 当前配置层重构：小型语义等价门禁
+
+配置仍是 `xx = xx;`，默认值位于 `protection/protection-para.cc`；ordinary CLI 使用
+`protectionScheme` 和 scheme 私有参数。`unit/protection-config-test.cc` 验证 capability matrix，
+`unit/test_protection_config_mapping.py` 验证 old→new 实验身份、默认值与拒绝合同。
+`satcompute-protection-config-driver` 与平台编译同一入口，只额外开放三个测试注入参数：
+`testBaselinePlacement`、`testCbSatBusyPolicy`、`testLrlRecoveryWeight`；不复制算法或 controller。
+普通 `satcompute` 不接受这些参数，也不接受旧的 `protectionMode/placementMode/n5cVariant/inputPolicy`。
+
+已有历史 runner 的参数描述接口保持兼容，真正 launch 前统一通过
+`support/protection/config_arguments.py` 转换。其只读记录保留原 argv、实验身份与 inactive 字段；
+历史命令对比用 `canonical_experiment_arguments()`，不修改已有 `execution.json`，
+不放宽 source/commit guard。旧 CB 省略 busy 的 relocate 与新 CB canonical recompute 不会归为同一身份。
+RECENT_U 只允许读取历史证据，执行适配器拒绝；JIT 亦未恢复。
+
+55 组 4-task/15s 配置门禁覆盖全部 baseline placement、Fixed、三种 INPUT、五种 P 配置、
+无保护/shadow、零存储、自定义 cadence 和受控 F3。对照必须来自修改前二进制：
+
+```bash
+python contrib/satcompute/tests/integration/regression/run-protection-config-equivalence.py \
+  --output-root output/protection-config-hierarchy/new-check \
+  --reference output/protection-config-hierarchy/config-before --jobs 2
+```
+
+`--legacy` 仅用于旧二进制捕获；不能在新代码上创建参考再声称跨版本等价。
+本次实际证据和人工审阅停止点见[配置层收口](../../../docs/n5/reviews/Protection-config-hierarchy.md)。
 
 ### INPUT 三模式与维护测试
 
-`inputPolicy=eager|deferred|selective` 是唯一平台开关，默认 eager；Selective 固定 SER。
+`compfrrInputPolicy=eager|deferred|selective` 是唯一平台 INPUT 开关，默认 eager；Selective 固定 SER。
 `unit/test_input_admission_policy.py` 调用纯 C++ 选择器，使用 tracked
 `fixtures/protection/selective-input-ser-anchor.json`：405 个网络候选逐任务匹配，
 68 个 SEND，另 4 个 LocalDelivery。fixture 是因果模型测试，不是未来实验流数目标；缺失时必须失败。
