@@ -1,10 +1,38 @@
 # CompFRR INPUT binary admission：实现与开发验收
 
 当前结论见文末 **Final INPUT Closeout**：SER 已冻结，N 已退出 production；下方四组记录保留为历史证据。
+当前唯一配置为 `inputPolicy=eager|deferred|selective`（默认 eager），仓库整合状态见
+[INPUT repository closeout](INPUT-final-repository-closeout.md)。下述 none/SER/NET 双参数称谓均为历史执行身份。
 
 人工批准任务书：`CompFRR_INPUT_Binary_Admission_Production_Kickoff_for_Codex.md` 及四项补充。
 基线 `34177d0cf258fb4d58d3a9eb28c5872b1a39af0d`，开始时工作区干净；实现分支
 `feature/compfrr-input-admission-runtime`。不混入 JIT/V7、不改 Frequency/placement/RNG/正式场景，默认 admission=none。
+
+## Historical INPUT Design Decisions
+
+历史离线过程已压缩到本节，不再维护执行淘汰模型的工具栈。
+
+- **V7/JIT**：历史执行 `367f23f393c45205cf87fbee003bfb668f453d5e`；大量 no-fault
+  预取与故障时仍 ABSENT 并存（330/347 个 no-fault 生命周期，84.339 GB；66/83 故障时 ABSENT）。
+  因而未选为最终方案。保留[联合审计](Pre-N5C-v7-cbsat-joint-audit.md)和
+  [N5R 离线复核](N5R-V7-offline-audit.md)，不把它当 corrected N5R 的在线实验。
+- **point-estimate `G_hat>0`**：最新 Stage B run11 中选择 346/405，106.720665 GB，
+  几乎等于 ALL_STAGE 字节，接近 Eager，不能把正估计直接作为准入条件。
+- **严格 causal `A^U`**：固定 `(delta,n)` 不能保证未来 remote receipt/merge、ON 更新及
+  初始化边界的屏障上界；不能拿经验残差充当证明。严格“不确定则 DEFER”得到 0/405，
+  不是证明真实收益为零，而是符号尚不能保证。没有据此实现第二个预测器或调经验阈值。
+- **最终 SER**：以 `w_k=q_k*prod(j<k,1-q_j)` 比较
+  `sum(w_k*min(T_ser,t_k-t_I)) > (1-P_F)*T_ser`，即
+  `U_ser_pot > 1-P_F`；相等则 DEFER。同星单独走零网络成本的 LocalDelivery。
+  Stage B `e8a90d466` 的因果 fixture 保留 68/405 网络 SEND + 4 LocalDelivery。
+- **NET-ready（历史 N）**：真实四组同源开发 run11 中，相比 S 启动恢复仅快 0.238 ms，
+  但追平慢 2.889 ms、总 FT 多 45.338 MB、总浪费多 22,577.720 eq-WU，闭环反馈抵消局部收益。
+  因而最终保留 S，不按结果再改公式。历史在线实现 `a4315e2b8` 与原始输出/源码归档保留；
+  最终 D/S 同源执行为 clean `f098287a4`。这些是开发证据，不是独立测试集的普遍收益声明。
+
+巨型离线报告及一次性工具可由 `d0ad381e5` 恢复；原本 ignored 的结果本轮未删除。
+当前运行合同见[CompFRR-F](../../protection/compfrr-f.md)，分支整合见
+[仓库收口](INPUT-final-repository-closeout.md)。
 
 ## 增量与边界
 
@@ -41,16 +69,11 @@
 网络总量按业务表与保护表的 transfer ID 并集统计，不把仅业务的 `transfer-summary.csv` 误当全网络。
 执行浪费采用既有守恒 helper：实际执行 WU 减去成功任务的唯一有效 WU；再加常态保护与恢复预留空闲 eq-WU。
 
-## 开发运行复现
+## 历史开发运行证据
 
-在项目根目录使用项目 uv 环境；输出目录必须不存在，入口拒绝覆盖证据：
-
-```bash
-source .venv/bin/activate
-python contrib/satcompute/tests/integration/regression/run-input-admission-development.py \
-  --output-root output/compfrr-input-admission/20260915-development-run11 \
-  --gates output/compfrr-input-admission/small-gates.json
-```
+一次性四组开发 runner 已退役；其实现可从 `d0ad381e5` 恢复。原始输出与源码归档保留，
+本轮不再运行 D/E/S/N 对比。当前普通运行使用 `run-final-scenario.py --input-policy selective`，
+完整性能实验须单独授权，不加入日常测试或 CI。
 
 四组逐项完整 argv 见各自的 `execution.json`；同目录保存运行日志、实际退出码及 wall-clock。
 根目录的 `execution-source.zip` 保存本次实际执行源码，`implementation.patch` 保存 tracked diff；

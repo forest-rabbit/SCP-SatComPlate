@@ -14,45 +14,6 @@ only after ancestry checks (JIT unique history first archived in a verified Git 
 Keep main/legacy and historical formal outputs. No Multi-tree implementation.
 Progress and the exact scope are in `docs/n5/reviews/INPUT-final-repository-closeout.md`.
 
-### Active INPUT final closeout (2026-09-15)
-
-The user accepted the SER freeze/JIT cleanup taskbook and four reviewed amendments.
-Continue on feature/compfrr-input-admission-runtime from clean a4315e2b8, preserving history.
-Fix cross-node REQUESTED both before registration and registered-before-admission; only
-actual IN_FLIGHT may supply a remaining receiver estimate. Pending diagnostic is not failed refetch.
-Keep only none/SER production admission (default none), retaining historical NET diagnostics/tests.
-After build/unit/contract/small compatibility gates, run only final same-clean-source D/S run11
-(800 tasks, 1300s, unchanged scene). Record actual execution identity; no hardcoded old-parent HEAD.
-Commit fix, cleanup and final report as verified increments. No automatic push, CI, merge,
-independent-run matrix or Multi-tree. JIT PR #99 is open: hold branch, never auto-close the PR.
-Use the existing INPUT runtime review's Final INPUT Closeout section; stop after final evidence.
-
-Final closeout is complete. Execution source is clean `f098287a4`; pending fix is `cae104d1c`.
-Only production none/SER remain; default none. Final D/S both complete 800/800 and 83/83 recoveries,
-with 35/39 raw files unchanged from prior D/S. 443 Python tests (one existing skip), full C++,
-smoke/regression and 1,965-file compatibility pass; SER anchor remains 68/405.
-INPUT_ALGORITHM_FROZEN = SER_BREAK_EVEN. JIT/#99 and both branch refs are HELD, not deleted.
-STOP for manual review: no further simulation, tuning, CI, auto-push/PR/merge or Multi-tree work.
-Next planned work is Multi-tree baseline integration only after separate user approval.
-
-### Active INPUT binary admission implementation (2026-09-15)
-
-The user approved production kickoff plus four lifecycle clarifications. Work from
-`34177d0cf` on `feature/compfrr-input-admission-runtime`; this supersedes the offline STOP below.
-Keep default admission none and one Frequency solver. Shared Recovery uses a neutral read-only
-INPUT dependency resolver; adopt only after final target acceptance, actual receiver join and
-actual compute-start USED. Preserve complete proactive byte lifetimes and legal wrong-target/failed
-refetch. Fixed Stage B 68/115 is a pure-selector anchor, not a runtime flow-count target.
-Implementation and the four approved same-source D/E/S/N development run11 executions are complete.
-All four completed 800/800 tasks and 83/83 recoveries; default none remains unchanged.
-Local gates: 440 Python tests (one existing skip), complete C++/smoke/regression,
-1,965-file small compatibility and 35-file full Deferred Stage B compatibility.
-run11 recommends KEEP_SER_BREAK_EVEN; do not tune against these results or promote defaults.
-STOP for manual review: no additional simulation, threshold tuning, JIT/A predictor,
-formal independent runs, auto-commit/push/merge or CI. Actual dirty execution sources are archived;
-only the post-run analyzer and its test changed to handle legacy Eager missing telemetry. See
-`docs/n5/reviews/CompFRR-input-binary-admission-runtime.md` for status and evidence.
-
 This file provides guidance to AI agents when working with code in this repository.
 
 ## SCP-SatComPlate Project Rules
@@ -368,153 +329,16 @@ Unknown evidence stays unknown. Paired contrasts are not exact counterfactuals.
 Record both stages in docs/n5/reviews/N5R-implementation.md and stop for review
 after the offline report; no V8, optimizer, budget, threshold or new timer.
 
-### INPUT worthiness Phase 1 (superseded plan, retained context)
+### Frozen INPUT contract
 
-The user accepted `CompFRR_Input_Worthiness_Clarifications_v2.md` and explicitly
-approved merging #103 into n5, then creating `feature/compfrr-input-worthiness`
-from that merged baseline. Finish the N5R status record first; preserve all
-corrected-chain evidence. Delete the merged N5R branch only after verifying
-ancestry and no dependent PRs. Keep main, legacy and production JIT/#99 untouched.
-Phase 1 is offline only: separate historical V6START (primary) and Full-V7
-(discovery) cohorts, audit per-feature causal reconstruction, four exclusive
-task labels, distributions, exploratory separability and joint old-JIT eligibility.
-Use the existing predictor/window and parallel recovery estimator, fixed pairs,
-cadence and deadline. Historical labels are not runtime features. UNKNOWN stays
-unknown; do not renormalize known probability mass or infer zero from missing data.
-Report worthiness, timing eligibility, real admission and receiver READY separately.
-Catch reduction is not net benefit; deadline rescue is separate from finite catch
-difference. No production, timing, Frequency/Placement/Recovery/RNG/routing/scene
-changes, new simulation/calibration, optimizer, budget, arbitrary threshold or
-extra CI. Keep analysis/test helpers in the existing tests tree and stop after
-Markdown plus CSV/JSON evidence for user review. Do not implement Phase 2.
-
-### Active selective INPUT initialization audit (2026-09-14)
-
-The user approved `CompFRR_Selective_INPUT_PreStaging_Offline_Audit_Taskbook.md`
-and the reviewed causal/metric clarifications. N5R is merged through #103 at
-`aa7a49a1c`; use one `feature/compfrr-input-worthiness` branch from that n5.
-This supersedes rolling ON worthiness/JIT timing in the preceding plan: audit
-one decision per successful START, immediately before initialization, with the
-actual fixed pair, Deferred checkpoint layout and optional independent full
-INPUT from sourceNodeId to designated remote. Do not enable Eager layout.
-First verify historical identity and committed/physical/admitted STARTs, then
-per-field causal reconstruction coverage. V6START is primary; Full-V7 is a
-separate auxiliary cohort and cannot fill primary features. Exclude a survived
-FAULT_EPOCH sample, but preserve pending-grid semantics for non-epoch triggers.
-START is not checkpoint-ready. No actual future fault/checkpoint/path/target
-may supply a feature. Insufficient reconstruction coverage requires a report
-and STOP before score sweeps, not synthetic zeroes or an invented forecast.
-Labels and matched contrasts are offline evidence, not exact counterfactuals.
-Planned staging bytes without anchor critical wait are not actual wasted bytes;
-captured anchor wait is not actual saved time. LocalDelivery is excluded from
-all network-byte sums/densities. Keep production, formal runs, CI, PR #99/JIT,
-main and legacy unchanged. No runtime Phase 2 or automatic integration merge.
-
-This offline audit is complete at its coverage STOP: 409 V6START candidates,
-71 NEEDED / 12 FAULT_NONCRITICAL / 326 NO_FAULT / 0 UNKNOWN labels. P_F is known
-for all 409, but multi-check trajectories and causal checkpoint forecasts are
-incomplete; do not proceed to sweeps or runtime. Read
-`docs/n5/reviews/CompFRR-selective-input-staging-offline-audit.md` before continuing.
-The lack of historical evidence does not prove lack of runtime information.
-
-User-approved continuation: follow the PF Audit / Instrumented Run11 taskbook
-and the accepted three amendments on this same branch. Stage A separates A0
-(source/labels/P_F complete) from A1 (advanced recovery benefits); sweep every
-unique P_F cut without picking a production threshold, retaining all-fault and
-F1/F2-explainable views (exclude only F3 task120, not no-fault negatives).
-Historical FAULT_EPOCH PredictionInput is finish-inclusive; QueryTaskPrediction
-for TASK_RUNNING/CAPACITY_RELEASE and new logging is finish-exclusive. Preserve
-both real source semantics. After A, add default-off passive logging immediately
-before START_CHECKPOINT after committed/revalidated actual pair selection; freeze
-the snapshot there, confirm actual admission afterwards. No RNG/flow/reservation/
-event or algorithm effects. Pass build, maintained unit/contracts, small on/off
-equivalence and 16 placement smoke before ONE 800-task/1300s development run11.
-Use current N5R code with the nonlogging argv of checkpoint-maintenance-fixed/
-run-11/full. Log complete canonical predictor steps and actual source-to-remote
-path, not reference-pair resources; no second checkpoint predictor. Analyze the
-new trace and stop for review. No production Selective INPUT, threshold, formal
-matrix, automatic merge, or new CI. Extend the existing review, not many documents.
-
-Stage A/B are complete. Stage A retains 409/71 historical FA-LRL V6START candidates/NEEDED;
-the new N5C FULL Deferred development run11 at clean `e8a90d466` completes 800/800 over
-1300s, with 409/72 and all 409 canonical trajectories (2056 steps). The latter's 28 CSVs
-and 7 runtime JSONs match corrected canonical execution `c7889de89`; no logger semantics
-changed. Do not pool the different placement/maintenance cohorts or rewrite old labels.
-Read the Stage B section in the existing selective-input review and the final evidence
-`output/audits/compfrr-input-run11-instrumented-verified/`. A0 passes, A1 advanced gains
-remain unknown. All unique P_F cuts are descriptive only. Stop for manual review;
-do not choose a threshold, implement Selective INPUT, launch independent/formal runs,
-push/merge or run CI without a fresh user instruction. Production logging stays off.
-
-The accepted Co-initialization v2 offline extension is complete on this same branch.
-Read the appended Profile/INITIALIZING section of the existing selective-input review;
-evidence is `output/audits/compfrr-input-coinitialization-value-run11/`. All 409 admitted
-initializations share the snapshot ns, verified against executed source and three ledgers.
-Four-score sweeps use network 405/404; LocalDelivery normalized U/M is N/A. Full negative
-M cuts reach full recall; fixed M>0 covers only 45/72 (45/71 without F3). Preserve this
-distinction, zero-lead fault mass and decision-known timing; actual delayed admission is
-not a causal feature without a known schedule. A1 exact recovery values remain UNKNOWN.
-No production code/new simulation changed. Stop for review: no score/threshold choice,
-production Selective INPUT, new runs, CI, push/merge or unrelated implementation.
-
-The accepted Latency-first v3 offline continuation is complete; see the next section
-of that same review and `output/audits/compfrr-input-latency-resource-run11/`.
-Compare attainable same-wait cuts, not task-recall cuts. Separate G_ser vs P_F from
-G_net vs G_ser. The test-only native bridge calls TransferTimeNs without Simulator;
-production behavior and all 13 v2 audit artifacts remain unchanged. Propagation fixes
-small-INPUT time scale but yields only localized ranking gains on this development run.
-Eager/Selective/Deferred/CB performance orders are hypotheses, not required winners.
-A1 remains UNKNOWN; a future binary rule also needs a reviewed benefit target.
-Stop for review: no production score/threshold, future checkpoint predictor, new
-simulation, CI, automatic commit/push/merge or unrelated work is authorized.
-
-The accepted Critical-path v4 offline audit is complete on this same branch.
-Read the appended Average-State Critical-Path section of the existing review and
-`output/audits/compfrr-input-criticalpath-g-run11/`. Preserve V6's total mean, but
-only tail+merge dependency time masks INPUT; serial redo cancels in the difference.
-Use committed cadence and actual-pair resources. Tasks 363/410 have UNKNOWN early
-mass, not zero gain; three-score comparisons explicitly use common 403/402 network
-candidates, with full 405/404 references retained. All 57 known LLM scores are zero,
-including 5 observed NEEDED tasks: mean masking is not proof of no INPUT value.
-G_cp has no stable advantage over G_net/P_F; do not tune formulas to obtain one.
-35 new tests and all 339 maintained Python tests pass (one existing skip), native
-target builds, v2/v3 features and production source remain unchanged. Stop for review;
-no production score/threshold, checkpoint projector, new simulation, CI or automatic
-commit/push/merge. No final performance claim or profile-specific SEND/DEFER rule.
-
-The user-approved partial-predictability follow-up is complete; read the next
-section of the same review and `output/audits/compfrr-input-partial-predictability-run11/`.
-Task coverage is not wait coverage or verified reliability. Scan hypothetical
-absolute A-error envelopes, never treat them as calibrated bounds. Keep full
-405/404 network denominators, no-fault negatives and early UNKNOWN tasks. Only
-80/79 same-target realized faults have observed A; other future A values stay unknown.
-Report barrier-side flips separately from actual policy actions (not yet defined).
-31 new tests and 370 maintained Python tests pass (one existing skip). No production,
-new simulation, CI, chosen threshold, optimizer or automatic commit/push/merge.
-
-The subsequent causal-upper / unknown-means-DEFER audit is complete; see the next
-section and `output/audits/compfrr-input-gi-sign-admission-run11/`. The proposed
-Kvar*(n-1)*delta/B+cR is NOT a general upper bound: in-flight/blocked batches,
-mutable cadence, strict prefixes, headers/alignment and future paths invalidate it.
-Strict future A bounds remain unavailable: all 405/404 network candidates are
-SIGN_UNCERTAIN and the candidate rule sends zero, not proof of zero true gain.
-The unproven formula still selects 346/345 and virtually all INPUT bytes; 33/79
-same-target F1/F2 observations exceed it. Do not substitute residuals or tune rules.
-28 new tests, 398 maintained Python tests (one existing skip), pure native witnesses
-and prior partial-artifact equivalence pass. Stop for review; no production, new
-simulation, CI, automatic commit/push/merge or further model expansion.
-
-The approved end-to-end-value / serialization-cost Stage 1 audit is complete;
-see the same review and `output/audits/compfrr-input-break-even-timebase-run11/`.
-Historical M>0 remains 68/405; the fixed new candidate selects 115, adding
-113239273 planned bytes and 99.211976 ms of anchor critical wait coverage.
-Verdict CROSS_TRADEOFF, not actual latency reduction or a production promotion.
-All 405 historical/exact/integer serial decisions agree; zero-propagation
-equivalence holds on the common integer timebase and OLD_ONLY is zero.
-Keep both candidates; no A, timing, new score, threshold, budget or simulation.
-29 new / 427 maintained tests pass (one existing skip); stop for user review.
-Optional INPUT lifecycle/flow handoff is NOT already implemented by current
-EAGER/DEFERRED. No Stage 2, CI, automatic commit/push/merge without new approval.
+Only public `inputPolicy=eager|deferred|selective` remains; default eager. Selective
+uses the Deferred checkpoint layout and one frozen SER break-even selector.
+Preserve neutral INPUT dependency/lifecycle, actual receiver completion and full-flow
+byte accounting. No JIT/NET runtime policy, empirical tuning or second Frequency solver.
+Use the tracked 409-candidate SER fixture (68/405 network SEND plus 4 LocalDelivery),
+not an ignored calibration output. The retired public switches and large START JSON
+are not runtime interfaces. Historical metadata readers may normalize old names only
+for exact equivalence checks. See docs/protection/compfrr-f.md and the final INPUT report.
 
 ns-3 is a discrete-event network simulator for Internet systems, written in C++ with Python bindings. The project uses CMake for building but provides a custom `ns3` wrapper script for easier command-line usage.
 

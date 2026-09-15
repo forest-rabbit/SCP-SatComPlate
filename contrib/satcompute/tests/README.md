@@ -5,21 +5,24 @@ ns-3 上游 examples、全局 tests 或根目录 `test.py`。
 
 ## 当前 N5R：小型语义等价门禁
 
-### INPUT binary admission
+### INPUT 三模式与维护测试
 
-新测试沿用本目录：`unit/test_input_admission_policy.py` 调用纯 C++ 选择器，
-固定 Stage B snapshot 的 68/115 是 correctness anchor，不是新 run11 的 flow-count gate。
-`satcompute-input-staging-runtime-test` 检查四类任务、真实 INPUT 续传/接收、同星交付、
-拒绝、两种合法 refetch、F3 与同纳秒边界、实际 USED 与零泄漏；已加入 `unit/run-cpp-tests.sh`。
-`satcompute-frequency-runtime-test --onlyInputAdmission=1` 是两规则的 online generate 小接线测试。
-`test_input_admission_runtime_audit.py` 检查全生命周期字节、重复流、接收 barrier 和非法 CLI。
+`inputPolicy=eager|deferred|selective` 是唯一平台开关，默认 eager；Selective 固定 SER。
+`unit/test_input_admission_policy.py` 调用纯 C++ 选择器，使用 tracked
+`fixtures/protection/selective-input-ser-anchor.json`：405 个网络候选逐任务匹配，
+68 个 SEND，另 4 个 LocalDelivery。fixture 是因果模型测试，不是未来实验流数目标；缺失时必须失败。
 
-四组开发 run11 的固定入口为 `integration/regression/run-input-admission-development.py`，
-要求显式 `--gates` 与全新 `--output-root`；仅 D/E/S/N、seed1/run11、800任务、1300s，
-不加入日常测试或 CI，也不自动挑选默认规则。源码归档和逐字节检查用于记录实际执行版本，
-不自动提交、不使用 SHA-256。结果由人工审阅；详见[执行审计](../../../docs/n5/reviews/CompFRR-input-binary-admission-runtime.md)。
+- `input-staging-runtime-test.cc`：真实接收/续传、同星交付、pending、两种合法 refetch、
+  F3 与同纳秒边界、实际 compute-start USED、字节守恒和零泄漏。
+- `frequency-runtime-test.cc --onlyInputAdmission=1`：SER 在线 generate 接线，核对实际节点对、
+  pre-START_CHECKPOINT 采集时序、成功准入与 canonical prediction 采样窗口。
+- `test_input_admission_runtime_audit.py`：复用 `support/protection/input_admission_runtime_audit.py`，
+  用真实 START/Frequency committed actual pair 与生产 CSV/JSON 验证全生命周期账目，不需要开发大快照。
+- `test_final_scenario.py`：三模式参数映射及历史证据名称规范化；旧公开 CLI 必须被拒绝。
 
-重构不重复正式 800 任务 / 1300 s 矩阵，也不重新标定故障或 MTBF。从仓库根目录运行：
+### 小场景等价验证
+
+不重复正式 800 任务 / 1300 s 矩阵，不重新标定故障或 MTBF。从项目根目录运行：
 
 ```bash
 source .venv/bin/activate
@@ -27,179 +30,22 @@ source .venv/bin/activate
 contrib/satcompute/tests/unit/run-cpp-tests.sh
 python -m unittest discover -s contrib/satcompute/tests/unit -p 'test_*.py'
 python contrib/satcompute/tests/integration/regression/run-protection-equivalence.py \
-  --output-root output/n5r-equivalence/local-check \
-  --reference output/n5r-equivalence/corrected-baseline --jobs 3 \
-  --allow-cb-profile-relocation
+  --output-root output/equivalence/new-check \
+  --reference output/input-repo-closeout/equivalence --jobs 3
 ```
 
-比较命令要求本地已有 corrected baseline；使用新的 output-root，旧输出不覆盖。
-若基线缺失，应取得同一 corrected tree 的独立 fixture 输出，不能从重构后代码自建基线声称等价。
-11 个组合包含已有 C++ fixture 与 4-task/16-node/15s CLI，核对全部 CSV/JSON；
-CSV 逐字节相同，JSON 仅规范化输出目录与 wall-clock 字段。
+比较要求已有独立参考，output-root 必须是新目录。缺少旧基线时不能用修改后的代码
+自建 golden 声称等价。11 个组合包含 C++ fixture 与 4-task/16-node/15s CLI；CSV 整表
+逐字节比较，JSON 只规范化输出路径与 wall-clock。
+对 INPUT 收口前的参考，可显式使用 `--allow-retired-input-snapshot`，只允许旧开发 JSON
+消失，其他生产 schema、数据和生命周期完全一致。旧 CB owner 迁移另有严格的
+`--allow-cb-profile-relocation`，只接受两个指定路径值变化，不忽略其他参数。
 
-最终目录收口另显式批准 CB 冻结 profile 的迁移：上述开关先逐字节核对迁移前 profile，
-仅允许两个 CB CLI 组合的 `cb-sat-parameters.json.profile_path` 从指定旧 owner 变为新 owner，
-并列出这两个元数据差异；不豁免 MTBF/其他字段，不改原始输出或 golden。关闭开关仍保持原严格比较。
-
-长期复用的审计/scenario helper 位于 `support/protection/`，维护测试直接调用；
-旧 `analyze-*.py` / `run-final-scenario.py` 入口继续转发，外部参数/CSV 不变。
-`recent-U` 已从平台及正式场景 CLI 撤出；历史 API/fixture/分析保留，不是第三种 production U。
-阶段证据及提交见 [N5R 记录](../../../docs/n5/reviews/N5R-implementation.md)。
-
-### 历史 V7 离线诊断
-
-只读已有 run11，不启动仿真、不启用 JIT、不写回原始输出，正常运行/CI 不自动调用。
-需要同批历史 V7 与 Deferred 数据（执行提交 `367f23f39`），不能换成 corrected N5R：
-
-```bash
-python contrib/satcompute/tests/integration/regression/analyze-v7-offline.py \
-  --v7 output/v7-cbsat-adjustment/20260913-jit-formal/CompFRR-JIT-V7 \
-  --deferred output/v7-cbsat-adjustment/20260913-jit-formal/reference-R7-deferred-relocate \
-  --output-dir output/audits/n5r-v7-run11-offline-local
-```
-
-使用不存在的新 output-dir。入口转发至 `support/protection/jit_offline_audit.py`，
-复用 INPUT/baseline 的 CSV、分布与物理流账本；输出生命周期、全部故障任务、字节守恒、
-故障状态、严格配对五份 CSV 和完整 JSON。缺失依赖时间保留 null，不能伪造为零；
-缺失原始证据或身份/账本矛盾则失败。模型预测的代表故障时刻可带小数，以原文本保留；
-实际事件时间仍为整数 ns。判据与结论见 [V7 离线报告](../../../docs/n5/reviews/N5R-V7-offline-audit.md)。
-
-### Selective INPUT 初始化离线审计
-
-只分析已有三组历史 START，不启用 production pre-staging/JIT，不运行正式仿真或 CI：
-
-```bash
-python contrib/satcompute/tests/integration/regression/analyze-selective-input-staging.py \
-  --history-root output/v7-cbsat-adjustment/20260913-jit-formal \
-  --output-dir output/audits/compfrr-selective-input-local
-```
-
-output-dir 必须不存在。入口复用 `support/protection/selective_input_offline_audit.py`，
-先核验 identity、committed/physical/admitted START，再输出逐字段重建覆盖率与独立 outcome 标签。
-**退出码 2** 表示已完成有效审计，但证据不足，按合同停止；不是仿真失败。
-这时收益/sweep/reference 不生成，缺失量保留空值，summary 写明 SKIPPED；身份/账本矛盾则报错退出。
-主组 V6START 与 Full-V7 分开，后续真实故障/检查点不能成为特征。
-完整范围、覆盖率与下一步需补的证据见 [审计报告](../../../docs/n5/reviews/CompFRR-selective-input-staging-offline-audit.md)。
-
-已批准的 Stage A 在同一命令追加 `--pf-only`，并使用新目录
-`output/audits/compfrr-selective-input-init-run11-reduced-local`。
-此模式拆分 A0/A1：P_F 与标签完整即可输出所有唯一 cut 的两视图 sweep 和 NONE/ALL/ORACLE，
-不被 advanced benefit 缺失阻断；成功退出 0，绝不挑选或写入 production threshold。
-
-Stage B 的 `--inputStartAudit=1` 默认关闭，只在成功 START 前冻结快照、执行后确认准入；
-不采 RNG、不建 flow、不占存储、不加事件。`frequency-runtime-test.cc` 检查实际 pair、准入唯一性
-与 finish-exclusive 网格；`test_input_start_trace_audit.py` 检查轨迹/P_F、缺失量、同星和 no-op 对照。
-`run-protection-equivalence.py --input-start-audit` 可采集 logging-on 小场景并与 off 目录对比，
-只允许新增 `input-start-snapshots.json`，其他所有 CSV/JSON 都必须语义一致。
-
-经人工批准且全部小场景 gate 通过后，`run-input-start-calibration.py --gate-root <off/on父目录>
---output-dir <新目录>` 从最新代码复用 corrected run11 的所有非记录 CLI；要求 clean commit。
-这是 **800任务/1300秒 development/calibration trace**，不进入常规测试或 CI，也不是 final performance。
-完成后仅离线分析：
-
-```bash
-python contrib/satcompute/tests/integration/regression/analyze-input-start-trace.py \
-  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
-  --output-dir output/audits/compfrr-input-run11-instrumented-local
-```
-
-新 trace 使用自身 Deferred outcome 标签，不借旧 JIT 结果；A1 不完整仍保持 UNKNOWN。
-审计复用现有 Frequency/placement/资源账本 helper，并检查与 corrected canonical 的全部 CSV/runtime JSON；
-开发源、非记录参数或原运行语义不符时停止。最终证据为 `output/audits/compfrr-input-run11-instrumented-verified/`。
-不选择 production threshold；若将来用此 run11 设计规则，正式评价应独立使用 runs12–15。
-
-Co-initialization v2 的 profile/INPUT 潜力扩展同样只读，不会启动仿真：
-
-```bash
-python contrib/satcompute/tests/integration/regression/analyze-input-coinitialization.py \
-  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
-  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
-  --output-dir output/audits/compfrr-input-coinitialization-local
-```
-
-输出目录必须不存在。`support/protection/input_coinitialization_audit.py` 检查真实初始化时间来源，
-再计算固定速率 U/G/M 潜力、分层及完整排名；4个 LocalDelivery 单列，M完整排名与M>0固定screen分开。
-`unit/test_input_coinitialization_audit.py` 覆盖因果时刻、概率质量、同分/同群体、UNKNOWN与无阈值合同。
-最终证据为 `output/audits/compfrr-input-coinitialization-value-run11/`；结论追加到原审计报告。
-
-Latency-first v3 继续使用同一批离线证据。下列新 target **不运行仿真**，只把路径快照传给现有
-`AdmissiblePathEstimate::TransferTimeNs()`；没有 Python 网络模型替代实现。在项目 uv 环境、已有定向配置下：
-
-```bash
-cmake -S . -B cmake-cache
-cmake --build cmake-cache --target satcompute_test_satcompute-input-timing-audit -j 4
-python contrib/satcompute/tests/integration/regression/analyze-input-latency-resource.py \
-  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
-  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
-  --coinitialization-dir output/audits/compfrr-input-coinitialization-value-run11 \
-  --output-dir output/audits/compfrr-input-latency-resource-local
-```
-
-输出目录必须不存在；`--engine-probe` 可显式指定这个纯函数入口。完整 cut、实际可达 Pareto 点、
-80/90/95/99/100%等待覆盖及分层统计不会选择 production threshold；ORACLE/M>0仅为独立参考。
-`test_input_latency_resource_audit.py` 包含 native estimator 与离线合成合同；未构建该 target 时原生子组明确 skip，
-正式完成本专项验证必须先构建并通过该子组。最终证据目录为 `output/audits/compfrr-input-latency-resource-run11/`。
-
-Critical-path v4（含人工确认的执行顺序修正）复用同一个 native probe，不运行新仿真：
-
-```bash
-python contrib/satcompute/tests/integration/regression/analyze-input-criticalpath.py \
-  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
-  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
-  --coinitialization-dir output/audits/compfrr-input-coinitialization-value-run11 \
-  --latency-resource-dir output/audits/compfrr-input-latency-resource-run11 \
-  --output-dir output/audits/compfrr-input-criticalpath-local
-```
-
-输出目录必须不存在。`support/protection/input_criticalpath_audit.py` 将原平均恢复量拆为
-并行依赖与串行追赶计算，只有前者参与 INPUT masking；初始化前/同刻概率贡献保持 UNKNOWN。
-完整群体的 P_F/G_net 参考与三分数共同完整群体分开标记，不能静默删除未知负样本。
-`unit/test_input_criticalpath_audit.py` 覆盖公式、因果信息、概率质量、UNKNOWN、分母与整组 ties。
-最终证据为 `output/audits/compfrr-input-criticalpath-g-run11/`，结论仍追加到同一份审计报告。
-
-Partial predictability 同样只读既有run11，不实现可靠性模型或生产阈值：
-
-```bash
-python contrib/satcompute/tests/integration/regression/analyze-input-partial-predictability.py \
-  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
-  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
-  --criticalpath-dir output/audits/compfrr-input-criticalpath-g-run11 \
-  --output-dir output/audits/compfrr-input-partial-local
-```
-
-输出目录必须不存在；复用上述native probe。`input_partial_predictability_audit.py` 输出task覆盖的
-边际范围、假设区间全扫描及真实故障处的屏障判断翻转；区间不是已校准的置信区间，翻转不是完整策略动作错误。
-`test_input_partial_predictability_audit.py` 验证覆盖分母、严格边界、上下界、同分组及回溯/因果隔离。
-
-严格 causal upper-bound 与“不确定则DEFER”审计（同一原生probe，新增纯checkpoint合同见证，不运行仿真）：
-
-```bash
-python contrib/satcompute/tests/integration/regression/analyze-input-causal-bound.py \
-  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
-  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
-  --criticalpath-dir output/audits/compfrr-input-criticalpath-g-run11 \
-  --output-dir output/audits/compfrr-input-causal-bound-local
-```
-
-目录必须不存在。`input_causal_bound_audit.py` 分开输出源码证明义务、未证明公式诊断和严格候选规则，
-UNKNOWN不补零或经验界；符号集合成员字节不等于计划发送字节。测试为`test_input_causal_bound_audit.py`。
-最终证据在`output/audits/compfrr-input-gi-sign-admission-run11/`，结论追加同一审计报告。
-
-两个固定break-even规则的Stage 1时间口径比较（只读已有run11，不启动仿真）：
-
-```bash
-python contrib/satcompute/tests/integration/regression/analyze-input-break-even-timebase.py \
-  --run-dir output/compfrr-input-worthiness/20260914-run11-instrumented \
-  --verified-stage-b-dir output/audits/compfrr-input-run11-instrumented-verified \
-  --coinitialization-dir output/audits/compfrr-input-coinitialization-value-run11 \
-  --latency-resource-dir output/audits/compfrr-input-latency-resource-run11 \
-  --output-dir output/audits/compfrr-input-break-even-timebase-local
-```
-
-复用上述原生估计器；输出目录必须不存在。`input_break_even_timebase_audit.py` 保留历史浮点旧决定，
-新增独立整数ns对照与端到端潜力/序列化成本比较；数值或覆盖冲突输出诊断并停止（exit 2），不覆盖旧结果。
-`test_input_break_even_timebase_audit.py` 覆盖严格退化/超集、因果隔离、LocalDelivery与完整负样本。
-最终产物在 `output/audits/compfrr-input-break-even-timebase-run11/`；等待覆盖不是实际时延收益，production仍未实现。
+一次性 INPUT/JIT offline 栈与开发矩阵 runner 已删除；设计取舍和原始证据身份见
+[最终 INPUT 报告](../../../docs/n5/reviews/CompFRR-input-binary-admission-runtime.md)，
+完整删除清单见[仓库收口](../../../docs/n5/reviews/INPUT-final-repository-closeout.md)。
+通用 accounting、baseline、placement、risk/scenario helpers 保留，正常运行不自动做离线统计。
+recent-U 不在 production CLI；历史分析/fixture 保留。日常 CI 只运行本目录维护测试。
 
 ## 历史专项与目录索引
 
@@ -493,7 +339,7 @@ START 有收益、F3 前真实 ON、使用有效非零进度检查点且按期�
 
 历史 Pre-N5C v6/ON-resume 审计只运行 R4–R7：当时均为
 `--protection-mode=compfrr --placement-mode=ffp`（该旧 FFP 现名为 `fa-ffp`），
-R4/R5 使用 eager，R6/R7 加 `--input-staging-policy=deferred`；R4/R6 加
+R4/R5 使用 eager，R6/R7 加 `--input-policy=deferred`；R4/R6 加
 `--remote-busy-recovery-policy=recompute`，R5/R7 为 relocate。
 新 workload 为400 WU/token且总WU保持352513119；START使用初始化就绪后的风险加权进度，
 ON评分不变；后续容量修订为路径阻塞的ON增加释放重试（原节点对、无额外抽样）。

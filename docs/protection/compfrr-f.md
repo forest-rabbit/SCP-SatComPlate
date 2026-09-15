@@ -4,15 +4,18 @@
 `input/input-cost-adapter.*` 只描述成本，中性 INPUT contract 位于 `common/input-contract.*`。
 两者平行组成 CompFRR-F，公共 Checkpoint/Recovery/Fixed 不依赖 Frequency。目录见[架构](architecture.md)。
 
-## 独立 INPUT binary admission
+## INPUT policy
 
-默认 `inputAdmissionPolicy=none`，Eager/Deferred 原语义不变。显式启用以下规则仅允许
-`protectionMode=compfrr + inputStagingPolicy=deferred`，纯选择器在 `policy/compfrr/input/input-admission-policy.*`。
+对外只有 `--inputPolicy=eager|deferred|selective`，默认 `eager`。
+Eager 常态预置完整 INPUT；Deferred 常态只保护状态，故障后获取 INPUT；Selective 在
+Deferred 布局上启用独立可选预置。后两者要求 `protectionMode=compfrr`。
+内部保留中性 EAGER/DEFERRED layout、optional lifecycle、SER selector 三层，
+公共 Checkpoint/Recovery/Fixed 不依赖私有选择器。
 
-- `ser-break-even`：比较 `sum(w_k * min(T_ser, max(0,t_k-t_I)))` 与 `(1-P_F)*T_ser`。
+- SER break-even：比较 `sum(w_k * min(T_ser, max(0,t_k-t_I)))` 与 `(1-P_F)*T_ser`。
 
-SER 是唯一 production selective admission，默认仍为 `none`。最终 CompFRR 组合需显式指定
-`--inputStagingPolicy=deferred --inputAdmissionPolicy=ser-break-even`，不自动改变全平台默认值。
+SER 是唯一 production selective admission；最终 CompFRR 组合显式指定
+`--inputPolicy=selective`，不自动改变全平台默认值。
 旧 NET-ready 已从正式入口退役；历史比较与 `T_net/G_net` 诊断保留，但不能触发 SEND。
 
 `T_ser` 是实际路径估计器向上取整的序列化纳秒，`T_net=T_ser+传播纳秒`；
@@ -40,8 +43,10 @@ checkpoint 的维护 quota。额外流量/存储会真实影响共享资源，�
 诊断 `PREFETCH_NOT_ESTABLISHED` 不属于失败 refetch。最终接受 FETCH 才取消 pending 请求与对象，
 未注册请求由 guard 阻止后续建立；同星 pending 仍等待已有的 LocalDelivery 事件，不创建网络流。
 
-启用时追加 `input-admission-decisions.csv`、`input-prefetch-events.csv`、
-`input-prefetch-summary.json` 及因果 START snapshots；`none` 不产生这些新增运行记录。
+Selective 追加 `input-admission-decisions.csv`、`input-prefetch-events.csv`、
+`input-prefetch-summary.json`；Eager/Deferred 不产生这些预取专用记录。
+最小因果值对象在 `input/selective-input-snapshot.*`，不再导出开发用大 START JSON。
+CSV 中 `policy=ser-break-even` 是冻结算法标识，不是第二个配置开关；`T_net/G_net` 仅作兼容诊断。
 `B_prefetch_total` 覆盖同一 proactive flow 的完整生命周期，包含故障后续传；used/unused 同口径。
 `PREFETCH_USED` 只在真实恢复计算开始时确认，不在 READY/acceptance 时确认。
 字节分类互斥优先级为 USED、WRONG_TARGET、FAILED_OR_CANCELLED、NO_FAULT、NOT_CONSUMED；

@@ -98,10 +98,10 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 `one-plus-one` 为首次主计算启动时一次性申请的真实并行副本。
 `checkbullet` 为单备份星、完整 INPUT、连续日志且无 tail 的 CB-Sat 基线；须先完成
 [独立 MTBF 标定](protection/baseline/checkbullet/README.md)，不使用单测参数。
-`inputStagingPolicy=eager` 保持旧行为；CompFRR 可显式设 `deferred`，常态只保护状态，
-故障后再向实际恢复星获取一次原始 INPUT，其他冻结参数不变。
-`inputAdmissionPolicy` 默认 `none`；唯一显式 selective 规则为 `ser-break-even`
-仅在 CompFRR + deferred 下选择独立 INPUT 预置，完整合同见[保护模块](protection/README.md)。
+`inputPolicy` 是唯一 INPUT 开关，默认 `eager`：常态预置完整输入。
+CompFRR 还支持 `deferred`（故障后获取 INPUT）与 `selective`（Deferred 布局 + SER
+break-even 选择性预置）。正式 CompFRR 组合显式指定 `--inputPolicy=selective`，
+不改变平台默认值；完整合同见[保护模块](protection/README.md)。
 CompFRR 另支持 `placementMode=n5c`：一次参考 Frequency 求解后，按 V4 选择实际 remote；
 `n5cVariant=full|noR|noU|noM` 控制正式评分或单维消融，硬约束不变，ON 不重新选点。
 详见 [保护与恢复模块](protection/README.md)。
@@ -112,9 +112,8 @@ CompFRR 另支持 `placementMode=n5c`：一次参考 Frequency 求解后，按 V
 G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评估，默认关闭。
 不创建真实备份或修改任务结果，详见 [G4验证工具](tools/validation/compfrr-shadow/README.md)。
 
-`--inputStartAudit=1` 是 CompFRR 专用的默认关闭开发记录开关：输出成功 START 的
-初始化前实际节点对、资源及 canonical predictor 序列到 `input-start-snapshots.json`。
-它不执行 Selective INPUT、不发送 INPUT、不影响决策；采集与对照方法见 [测试说明](tests/README.md#selective-input-初始化离线审计)。
+Selective 运行保留紧凑的准入决策、预取事件与完整生命周期账本；默认 Eager 不产生这些
+预取专用记录。开发用大 START 快照与一次性离线工具已退役，维护测试见[测试说明](tests/README.md)。
 
 人工设置的时长和间隔统一以秒传入，平台在组件边界转换为 ns-3 `Time` 或有符号
 整数纳秒。星座 CSV 只描述轨道结构，算力、任务和 Fault Trace 位于独立数据文件，
