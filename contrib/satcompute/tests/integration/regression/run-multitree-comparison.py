@@ -5,7 +5,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from pathlib import Path
 import runpy
-import sys
+import shlex
+import subprocess
+import time
 
 ROOT = Path(__file__).resolve().parents[5]
 SUPPORT = ROOT / 'contrib/satcompute/tests/support/protection'
@@ -57,6 +59,30 @@ def audit_all(root):
     print((root / 'comparison.md').read_text(), flush=True)
 
 
+def execute_scoped(directory, argv, head, identity):
+    """Launch modern scoped argv verbatim, without historical default translation."""
+    CONTROL['require'](CONTROL['clean_head']() == head, 'execution source changed')
+    directory.mkdir(parents=True, exist_ok=False)
+    flags = dict(x.removeprefix('--').split('=', 1) for x in argv[1:])
+    command = [str(ROOT/'ns3'), 'run', '--no-build', shlex.join(argv)]
+    record = dict(identity, command=command, commit=head, worktree_dirty=False,
+        started_utc=CONTROL['utc'](), status='RUNNING', seed=int(flags['randomSeed']),
+        run=int(flags['randomRun']), simulation_duration_s=float(flags['simulationDuration']),
+        fault_mode=flags['faultMode'])
+    CONTROL['write_json'](directory/'execution.json', record)
+    start = time.monotonic()
+    with (directory/'run.log').open('w') as log:
+        process = subprocess.run(['/usr/bin/time', '-v', '-o', str(directory/'time.txt'), *command],
+                                 cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
+    outcome = dict(returncode=process.returncode, elapsed_wall_s=time.monotonic()-start,
+        ended_utc=CONTROL['utc'](), status='FINISHED' if process.returncode == 0 else 'FAILED')
+    CONTROL['write_json'](directory/'execution-result.json', outcome)
+    CONTROL['require'](process.returncode == 0, f'simulation failed: {directory}/run.log')
+    CONTROL['require'](CONTROL['clean_head']() == head, 'execution source changed during run')
+    print(f"FINISHED {directory.name}: {outcome['elapsed_wall_s']:.1f} s", flush=True)
+    return outcome
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-root', required=True, type=Path)
@@ -87,7 +113,7 @@ def main():
                                         'recompute' if scheme == 'cb-sat' else 'not-applicable'),
             input_policy='selective' if scheme == 'compfrr' else 'scheme-native')
         if scheme == 'cb-sat': identity['mtbf_seconds'] = profile['mtbf_seconds']
-        return CONTROL['execute'](root / group, commands[group], head, identity)
+        return execute_scoped(root / group, commands[group], head, identity)
     save()
     failures = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
