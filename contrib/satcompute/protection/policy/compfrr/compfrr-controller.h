@@ -10,6 +10,8 @@
 #include "../../runtime/decision-path-snapshot.h"
 #include "placement/compfrr-placement-tracker.h"
 #include "input/input-start-audit.h"
+#include "input/input-admission-policy.h"
+#include "../../mechanism/input-staging/input-staging-manager.h"
 
 #include <filesystem>
 #include <set>
@@ -60,7 +62,8 @@ class CompFrrController : public ProtectionPolicy
                                   RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
                                   InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER,
                                   bool observePlacementResources = false,
-                                  bool inputStartAudit = false);
+                                  bool inputStartAudit = false,
+                                  InputAdmissionPolicy inputAdmission = InputAdmissionPolicy::NONE);
     ~CompFrrController() override;
     /** Finish the same actual ledgers as fixed protection. */
     void Finalize();
@@ -68,6 +71,8 @@ class CompFrrController : public ProtectionPolicy
     void WriteDecisions(const std::filesystem::path& directory) const;
     /** Opt-in development output only; no existing metrics/schema are changed. */
     void WriteInputStartAudit(const std::filesystem::path& directory) const;
+    void WriteInputAdmissionAudit(const std::filesystem::path& directory) const;
+    const InputStagingManager* OptionalInput() const { return m_optionalInput.get(); }
     const std::vector<InputStartAuditRecord>& InputStartRecords() const { return m_inputStartRecords; }
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
     const PlacementPolicy& Placement() const { return *m_placement; }
@@ -178,6 +183,9 @@ class CompFrrController : public ProtectionPolicy
     std::unique_ptr<CompFrrPlacementTracker> m_placementObservation; ///< Read-only resource metrics, also usable by FA-FFP.
     CompFrrPlacementTracker* m_n5c{}; ///< Alias enabled only for N5C; legacy policies never use quota promises.
     CompFrrFrequencyPolicy m_policy;                  ///< Pure production solver.
+    InputAdmissionPolicy m_inputAdmission{InputAdmissionPolicy::NONE};
+    std::unique_ptr<InputStagingManager> m_optionalInput;
+    std::vector<std::pair<InputStartAuditRecord, InputAdmissionDecision>> m_inputAdmissions;
     std::unique_ptr<RecoveryController> m_recovery;   ///< Reused N5A recovery.
     std::map<uint64_t, State> m_states;               ///< Per-primary frequency lifecycle.
     std::vector<FrequencyDecisionRecord> m_decisions; ///< Proposal/resolution audit.

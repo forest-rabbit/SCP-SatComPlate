@@ -42,6 +42,8 @@ Kind(protection::ProtectionTransferKind kind)
         return "REPLICA_INPUT";
     case K::REPLICA_RESULT:
         return "REPLICA_RESULT";
+    case K::PREFETCH_INPUT:
+        return "PREFETCH_INPUT";
     case K::RECOVERY_RESULT:
         throw std::logic_error("business RESULT must not enter protection metrics");
     }

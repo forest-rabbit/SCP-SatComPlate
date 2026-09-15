@@ -141,12 +141,14 @@ BackupStoragePool::ReleaseTask(uint64_t taskId)
 }
 
 uint64_t
-BackupStoragePool::ReleaseTaskExcept(uint64_t taskId, const std::set<uint64_t>& retained)
+BackupStoragePool::ReleaseTaskExcept(uint64_t taskId, const std::set<uint64_t>& retained,
+                                    std::optional<StorageKind> retainedKind)
 {
     uint64_t count = 0;
     for (auto it = m_entries.begin(); it != m_entries.end();)
     {
-        if (it->second.taskId != taskId || retained.contains(it->first))
+        if (it->second.taskId != taskId || retained.contains(it->first) ||
+            (retainedKind && it->second.kind == *retainedKind))
         {
             ++it;
             continue;
@@ -157,5 +159,13 @@ BackupStoragePool::ReleaseTaskExcept(uint64_t taskId, const std::set<uint64_t>& 
     }
     if (count && m_changeObserver) m_changeObserver();
     return count;
+}
+
+std::map<uint64_t, uint64_t> BackupStoragePool::OccupancyByKind(StorageKind kind) const
+{
+    std::map<uint64_t, uint64_t> result;
+    for (const auto& [id, entry] : m_entries)
+        if (entry.kind == kind) result[entry.taskId] += entry.bytes;
+    return result;
 }
 } // namespace ns3::protection

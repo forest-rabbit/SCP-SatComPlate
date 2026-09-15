@@ -20,7 +20,7 @@ def rows(directory, name):
     return result
 
 
-def run(output, mode="compfrr", audit=False, placement="fa-ffp", staging="eager"):
+def run(output, mode="compfrr", audit=False, placement="fa-ffp", staging="eager", admission="none"):
     arguments = ["satcompute", "--simulationDuration=15", "--randomSeed=1", "--randomRun=11",
         "--constellationConfig=contrib/satcompute/tests/fixtures/constellation/connected-16.csv",
         f"--taskTrace={FIXTURE / 'fixed-four-profiles.json'}",
@@ -32,6 +32,7 @@ def run(output, mode="compfrr", audit=False, placement="fa-ffp", staging="eager"
         "--routingMode=global-capacity-aware-hrw", "--islBandwidthBps=10000000000",
         "--delayMode=fixed", "--fixedDelay=0.001", f"--outputDir={output}"]
     arguments += [f"--inputStagingPolicy={staging}"]
+    arguments += [f"--inputAdmissionPolicy={admission}"]
     process = subprocess.run([str(ROOT / "ns3"), "run", "--no-build", shlex.join(arguments)],
                              cwd=ROOT, text=True, capture_output=True, timeout=120)
     assert process.returncode == 0, process.stdout + process.stderr

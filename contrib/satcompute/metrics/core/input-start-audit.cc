@@ -25,7 +25,7 @@ Json ResourceInputs(const FrequencyInput& in)
 
 void CompFrrController::WriteInputStartAudit(const std::filesystem::path& directory) const
 {
-    if (!m_inputStartAudit) return;
+    if (!m_inputStartAudit && !m_optionalInput) return;
     Json records = Json::array();
     for (const auto& r : m_inputStartRecords)
     {
@@ -93,7 +93,7 @@ void CompFrrController::WriteInputStartAudit(const std::filesystem::path& direct
     std::filesystem::create_directories(directory);
     std::ofstream stream(directory / "input-start-snapshots.json");
     stream.exceptions(std::ios::badbit | std::ios::failbit);
-    stream << Json({{"purpose", "DEVELOPMENT_CALIBRATION"}, {"selective_input_enabled", false},
+    stream << Json({{"purpose", "DEVELOPMENT_CALIBRATION"}, {"selective_input_enabled", bool(m_optionalInput)},
                     {"unadmitted_snapshot_count", m_inputStartRejected}, {"candidates", records}}).dump(2) << '\n';
 }
 } // namespace ns3::protection

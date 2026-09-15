@@ -120,6 +120,22 @@ RecoveryController::Later(State& state, int64_t delay, std::function<void()> cal
 bool
 RecoveryController::Fault(const TaskRuntime& task, const TaskFaultNodeChange& change)
 {
+    if (m_input)
+    {
+        if (!task.attemptGeneration && task.state == TASK_RUNNING && task.definition.computeNodeId == change.nodeId)
+            m_input->Freeze(task.definition.taskId);
+        const bool terminal = IsTerminalTaskState(task.state);
+        if (task.attemptGeneration && change.kind == TaskFaultKind::SATELLITE)
+        {
+            const auto it = m_states.find(task.definition.taskId);
+            if (it != m_states.end() && it->second->live &&
+                (it->second->summary.recoveryNode == change.nodeId ||
+                 (it->second->summary.inputReceivedNs < 0 && task.definition.sourceNodeId == change.nodeId)))
+                it->second->summary.reason = "RECOVERY_F3_SATELLITE_FAILURE";
+        }
+        m_input->Fault(task.definition.taskId, change);
+        if (!terminal && IsTerminalTaskState(task.state)) return true;
+    }
     if (task.attemptGeneration)
     {
         auto found = m_states.find(task.definition.taskId);
@@ -245,6 +261,14 @@ RecoveryController::Estimate(uint32_t source, uint32_t destination, uint64_t byt
     return m_network->EstimateAdmissiblePath(source, destination).TransferTimeNs(bytes);
 }
 
+InputDependency RecoveryController::ResolveInput(const TaskDefinition& task, uint32_t node) const
+{
+    if (m_input) return m_input->Resolve(task, node);
+    InputDependency dependency; dependency.target = node;
+    dependency.remainingNs = Estimate(task.sourceNodeId, node, task.inputBytes);
+    return dependency;
+}
+
 void
 RecoveryController::Decide(State& state)
 {
@@ -294,8 +318,7 @@ RecoveryController::OnComputeFault(const ProtectionContext& context)
         r.checkpointFallbackReason = "OTHER";
     if (m_capabilities.checkpoint && f.phase == "ON" && base && !base->reserved && Eligible(f.remoteNode, state))
     {
-        const auto input = Deferred() ? Estimate(state.task.definition.sourceNodeId, f.remoteNode,
-                                                 state.task.definition.inputBytes)
+        const auto input = Deferred() ? ResolveInput(state.task.definition, f.remoteNode).remainingNs
                                       : std::optional<int64_t>{0};
         const auto rate = Service(f.remoteNode)->GetComputeRateWorkUnitsPerSecond();
         auto transfer = m_capabilities.localTail && f.localWork > f.remoteWork && f.tailBytes &&
@@ -367,8 +390,7 @@ RecoveryController::TryRelocate(State& state)
     {
         if (candidate == f.remoteNode || !Eligible(candidate, state))
             continue;
-        const auto input = Deferred() ? Estimate(state.task.definition.sourceNodeId, candidate,
-                                                 state.task.definition.inputBytes)
+        const auto input = Deferred() ? ResolveInput(state.task.definition, candidate).remainingNs
                                       : std::optional<int64_t>{0};
         if (!input)
         {
@@ -406,9 +428,7 @@ RecoveryController::TryRelocate(State& state)
                             (!estimate.redoFits || *estimate.tailNs < *estimate.redoNs);
         r.estimatedMigrateRedoNs = estimate.redoNs.value_or(-1);
         r.estimatedMigrateTailNs = estimate.tailNs.value_or(-1);
-        if (const auto input = Estimate(state.task.definition.sourceNodeId,
-                                        candidate,
-                                        state.task.definition.inputBytes))
+        if (const auto input = ResolveInput(state.task.definition, candidate).remainingNs)
             r.estimatedRecomputeNs = *input + Duration(f.actualWork, rate);
         r.path = useTail ? "MIGRATE_TAIL" : "MIGRATE_REDO";
         state.startWork = useTail ? f.localWork : f.remoteWork;
@@ -442,8 +462,7 @@ RecoveryController::Execute(const ProtectionContext& context, const ProtectionAc
                 false, 0, 0, load.activeBackup, load.activeRecovery});
         }
         const auto feasible = [&](uint32_t candidate) {
-            const auto input = Estimate(state.task.definition.sourceNodeId, candidate,
-                                         state.task.definition.inputBytes);
+            const auto input = ResolveInput(state.task.definition, candidate).remainingNs;
             const auto work = Duration(state.layout.Work(), Service(candidate)->GetComputeRateWorkUnitsPerSecond());
             const auto budget = state.summary.snapshot.deadlineNs - Now();
             return input && work <= budget && *input <= budget - work;
@@ -465,7 +484,8 @@ RecoveryController::Execute(const ProtectionContext& context, const ProtectionAc
     for (const auto candidate : Candidates(state))
     {
         if (Eligible(candidate, state) &&
-            Reachable(state.task.definition.sourceNodeId, candidate) &&
+            (m_input ? ResolveInput(state.task.definition, candidate).remainingNs.has_value()
+                     : Reachable(state.task.definition.sourceNodeId, candidate)) &&
             AcceptAndExecute(state, candidate))
             return;
     }
@@ -478,7 +498,9 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
 {
     auto& r = state.summary;
     const auto& f = r.snapshot;
-    if (Deferred() && !Estimate(state.task.definition.sourceNodeId, node, state.task.definition.inputBytes))
+    const auto dependency = m_input ? std::optional(ResolveInput(state.task.definition, node)) : std::nullopt;
+    if (Deferred() && !(dependency ? dependency->remainingNs :
+        Estimate(state.task.definition.sourceNodeId, node, state.task.definition.inputBytes)))
         return false;
     state.service = Service(node);
     if (!state.service->ReserveRecovery(state.task.definition.taskId, 1))
@@ -491,9 +513,8 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
     const auto inputRequirement = InputContract(m_manager.InputPolicy()).DescribeRecoveryInput(
         state.task.definition.sourceNodeId, node, state.task.definition.inputBytes, r.path == "RECOMPUTE");
     if (inputRequirement.required)
-        if (const auto estimate = Estimate(state.task.definition.sourceNodeId,
-                                           node,
-                                           state.task.definition.inputBytes))
+        if (const auto estimate = dependency ? dependency->remainingNs :
+            Estimate(state.task.definition.sourceNodeId, node, state.task.definition.inputBytes))
         {
             r.plannedInputWaitNs = *estimate;
             r.estimatedRecomputeNs =
@@ -513,8 +534,26 @@ RecoveryController::AcceptAndExecute(State& state, uint32_t node)
             r.stateReadyNs = Now();
         // Independent flows are all requested now. Canonical registration and the
         // shared network decide actual admission/contention; no artificial serialization.
-        Deliver(state, ProtectionTransferKind::RECOVERY_INPUT,
-                state.task.definition.sourceNodeId, node, state.task.definition.inputBytes);
+        if (dependency)
+        {
+            if (dependency->mode != InputDependencyMode::FETCH)
+            {
+                r.inputStartedNs = Now();
+                r.inputMode = dependency->mode == InputDependencyMode::READY ? "PREFETCH_READY" : "PREFETCH_IN_FLIGHT";
+                Log(state, "RECOVERY_INPUT_ADOPTED", state.task.definition.inputBytes, dependency->flowId, r.inputMode);
+            }
+            m_input->Accept(state.task.definition.taskId, *dependency,
+                [this, &state, readyNs=dependency->readyNs](bool success, uint64_t flow) {
+                    if (!state.live) return;
+                    if (!success) return Fail(state, state.summary.reason.empty()
+                        ? "RECOVERY_ADOPTED_INPUT_FAILED" : state.summary.reason);
+                    Received(state, ProtectionTransferKind::RECOVERY_INPUT, state.task.definition.inputBytes, flow, readyNs);
+                });
+            if (!dependency->refetchReason.empty()) Log(state, dependency->refetchReason);
+        }
+        if (!dependency || dependency->mode == InputDependencyMode::FETCH)
+            Deliver(state, ProtectionTransferKind::RECOVERY_INPUT,
+                    state.task.definition.sourceNodeId, node, state.task.definition.inputBytes);
         if (!state.live)
             return true;
     }
@@ -663,7 +702,8 @@ void
 RecoveryController::Received(State& state,
                              ProtectionTransferKind kind,
                              uint64_t bytes,
-                             uint64_t transferId)
+                             uint64_t transferId,
+                             int64_t actualReceivedNs)
 {
     if (!state.live || !state.attempt.Owns({state.task.definition.taskId, 1}))
         return;
@@ -686,7 +726,7 @@ RecoveryController::Received(State& state,
     }
     else if (kind == ProtectionTransferKind::RECOVERY_INPUT)
     {
-        r.inputReceivedNs = Now();
+        r.inputReceivedNs = actualReceivedNs >= 0 ? actualReceivedNs : Now();
         Log(state, "RECOVERY_INPUT_RECEIVED", bytes, transferId, r.inputMode);
         StartCompute(state);
     }
@@ -798,6 +838,7 @@ RecoveryController::Started(uint64_t id, uint64_t generation, uint32_t node, int
         return;
     Require(m_tasks->RecoveryStarted(id, generation, node), "recovery dispatch rejected");
     state.summary.computeStartedNs = at;
+    if (m_input) m_input->ComputeStarted(id, node);
     state.summary.reservedIdleNs = at - state.summary.acceptedNs;
     Log(state, "RECOVERY_COMPUTE_STARTED");
 }
@@ -838,6 +879,7 @@ RecoveryController::Cleanup(State& state)
     if (!state.live)
         return;
     state.live = false;
+    if (m_input) m_input->Release(state.task.definition.taskId);
     if (state.summary.recoveryNode && m_loadObserver)
         m_loadObserver(state.task.definition.taskId, *state.summary.recoveryNode, false);
     for (auto event : state.timers)

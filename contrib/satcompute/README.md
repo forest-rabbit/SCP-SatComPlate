@@ -100,6 +100,8 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 [独立 MTBF 标定](protection/baseline/checkbullet/README.md)，不使用单测参数。
 `inputStagingPolicy=eager` 保持旧行为；CompFRR 可显式设 `deferred`，常态只保护状态，
 故障后再向实际恢复星获取一次原始 INPUT，其他冻结参数不变。
+`inputAdmissionPolicy` 默认 `none`；显式的 `ser-break-even` / `net-ready-break-even`
+仅在 CompFRR + deferred 下选择独立 INPUT 预置，完整合同见[保护模块](protection/README.md)。
 CompFRR 另支持 `placementMode=n5c`：一次参考 Frequency 求解后，按 V4 选择实际 remote；
 `n5cVariant=full|noR|noU|noM` 控制正式评分或单维消融，硬约束不变，ON 不重新选点。
 详见 [保护与恢复模块](protection/README.md)。

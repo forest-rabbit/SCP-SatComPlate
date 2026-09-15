@@ -658,7 +658,8 @@ std::string Controlled(TaskProfile profile,
     return signature;
 }
 
-void Online(const std::filesystem::path& output, const std::string& mode = "normal")
+void Online(const std::filesystem::path& output, const std::string& mode = "normal",
+            InputAdmissionPolicy admission = InputAdmissionPolicy::NONE)
 {
     RngSeedManager::SetSeed(1);
     RngSeedManager::SetRun(11);
@@ -742,7 +743,7 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
             mode == "lrl-two" ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
                                : std::unique_ptr<PlacementPolicy>{}, RemoteBusyRecoveryPolicy::RELOCATE,
             (mode == "n5c-deferred" || mode == "n5c-recent-U" || mode == "n5c-rational-U") ?
-                InputStagingPolicy::DEFERRED : InputStagingPolicy::EAGER, false, inputStartAudit);
+                InputStagingPolicy::DEFERRED : InputStagingPolicy::EAGER, false, inputStartAudit, admission);
         if (mode == "f3")
         {
             Simulator::Schedule(NanoSeconds(50000000), [&] {
@@ -887,6 +888,20 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         controller.WriteDecisions(output);
         controller.PlacementLoads().WriteMetrics(output);
         controller.WriteInputStartAudit(output);
+        controller.WriteInputAdmissionAudit(output);
+        if (admission != InputAdmissionPolicy::NONE)
+        {
+            Check(controller.OptionalInput() && !controller.OptionalInput()->Records().empty(),
+                  "online binary admission never requested INPUT");
+            for (const auto& [id, record] : controller.OptionalInput()->Records())
+            {
+                const auto found = std::find_if(controller.Decisions().begin(), controller.Decisions().end(),
+                    [&](const auto& d) { return d.taskId == id && d.committed &&
+                        d.proposal.action == FrequencyAction::START; });
+                Check(found != controller.Decisions().end() && found->pair->remoteNode == record.target &&
+                    found->input.risk.epochNs == record.requestedNs, "optional flow not from admitted actual START pair");
+            }
+        }
         if (inputStartAudit)
         {
             std::set<uint64_t> seen;
@@ -1410,9 +1425,14 @@ int main(int argc, char** argv)
     CommandLine command(__FILE__);
     command.AddValue("outputDir", "Controlled evidence directory", output);
     command.AddValue("inputStartAudit", "Opt-in passive START capture for no-op fixtures", inputStartAudit);
+    bool onlyInputAdmission = false;
+    command.AddValue("onlyInputAdmission", "Run the two new online optional INPUT fixtures only", onlyInputAdmission);
     command.Parse(argc, argv);
     try
     {
+        for (auto admission : {InputAdmissionPolicy::SER_SYMMETRIC_BREAK_EVEN, InputAdmissionPolicy::NET_READY_VS_SER_COST})
+            Online(std::filesystem::path(output)/ToString(admission), "n5c-deferred", admission);
+        if (onlyInputAdmission) { std::cout << "input admission online: PASS (" << checks << " checks)\n"; return 0; }
         Storage();
         for (auto staging : {InputStagingPolicy::EAGER, InputStagingPolicy::DEFERRED})
             for (const auto& mode : {"normal", "hit", "race"})

@@ -128,6 +128,9 @@ GetDefaultSatComputeConfig()
     // --inputStagingPolicy：eager 保持原始 INPUT 常态预置；deferred 仅用于 CompFRR，
     // 常态只传递状态，故障后向实际恢复星获取一次完整 INPUT，不改变 WU、状态量和成本档位。
     config.inputStagingPolicy = "eager";
+    // 可选 INPUT 预置默认关闭；两个 break-even 规则只允许用于 CompFRR + deferred。
+    // 不改变 checkpoint 初始化布局、Frequency 或节点选择；失败退回 Deferred。
+    config.inputAdmissionPolicy = "none";
 
     // --lrlRecoveryWeight：L = active backup assignments + weight * active recoveries。
     // G3 在看到 A/B/C 结果之前预先冻结为 1，不扫描、不按结果调整。

@@ -43,6 +43,9 @@ build_lib(
     protection/runtime/transfer-only-recovery-ledger.cc
     protection/mechanism/relocation/checkpoint-relocation-executor.cc
     protection/policy/compfrr/input/input-cost-adapter.cc
+    protection/policy/compfrr/input/input-admission-policy.cc
+    protection/mechanism/input-staging/input-staging-manager.cc
+    metrics/core/input-admission-metrics.cc
     traffic/local-delivery.cc
     protection/common/task-state-adapter.cc
     protection/baseline/checkbullet/cb-sat-policy.cc
@@ -327,6 +330,26 @@ build_exec(
   EXECNAME satcompute-input-timing-audit
   EXECNAME_PREFIX satcompute_test_
   SOURCE_FILES tests/support/protection/input-transfer-estimate.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+# Focused optional INPUT lifecycle and shared recovery contract fixtures.
+build_exec(
+  EXECNAME satcompute-input-staging-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/input-staging-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+# Pure production INPUT selector probe; JSON snapshots, no Simulator execution.
+build_exec(
+  EXECNAME satcompute-input-admission-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/input-admission-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests

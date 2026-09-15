@@ -4,6 +4,46 @@
 `input/input-cost-adapter.*` 只描述成本，中性 INPUT contract 位于 `common/input-contract.*`。
 两者平行组成 CompFRR-F，公共 Checkpoint/Recovery/Fixed 不依赖 Frequency。目录见[架构](architecture.md)。
 
+## 独立 INPUT binary admission
+
+默认 `inputAdmissionPolicy=none`，Eager/Deferred 原语义不变。显式启用以下规则仅允许
+`protectionMode=compfrr + inputStagingPolicy=deferred`，纯选择器在 `policy/compfrr/input/input-admission-policy.*`。
+
+- `ser-break-even`：比较 `sum(w_k * min(T_ser, max(0,t_k-t_I)))` 与 `(1-P_F)*T_ser`。
+- `net-ready-break-even`：左侧的 `T_ser` 换为 `T_net`，右侧仍为序列化代价。
+
+`T_ser` 是实际路径估计器向上取整的序列化纳秒，`T_net=T_ser+传播纳秒`；
+`w_k=q_k*prod(j<k,1-q_j)`，复用 canonical predictor 的完整采样窗口，保留 first sample/finishExclusive。
+仅严格大于才 SEND，等于则 DEFER，无经验 epsilon、阈值、profile 特判或第二套 Frequency。
+收益是该规则的 INPUT 就绪时间代理量，不保证真实恢复一定加速，也不引入 A/barrier 预测器。
+
+快照在 post-batch revalidation 通过、actual pair 固定后、START_CHECKPOINT 前冻结；
+只有初始化真实准入后才请求预取。一次 START 最多尝试一次，不做 epoch 重试或 JIT。
+同星不套用网络比值，直接尝试零网络成本的 LocalDelivery，仍预留逻辑 INPUT 空间。
+
+执行由中性 `mechanism/input-staging/input-staging-manager.*` 负责。`INPUT_STAGING` 是独立对象，
+不进入 committed checkpoint、Kvar、merge 或 ON barrier。真实池容量必须满足；
+资源账本按 `max(checkpoint actual, checkpoint quota) + INPUT actual/reserved` 计数，INPUT 不消耗
+checkpoint 的维护 quota。额外流量/存储会真实影响共享资源，不人为消除其反馈。
+
+未准入保持 ABSENT；已建立流失败保留已发字节且不自动重发。共享 Recovery 只依赖
+`common/input-dependency.h`：候选检查无副作用，最终 target 接受后才 adopt/handoff。
+同目标 READY 复用对象；IN_FLIGHT 用当前已建立流的路径/速率、实际已发量估计剩余时间，
+仅供可行性与路径选择，绝不据此调度 compute start。计算必须等待真实 receiver completion
+和 state/tail join。READY 复用保留原接收时间，可能早于 recovery acceptance。
+同目标完整 INPUT 不再要求源星存活或新流可准入；holder F3 仍使其失效。
+异目标或失败预取分别记录 `WRONG_TARGET_REFETCH` / `FAILED_PREFETCH_REFETCH`，合法重新获取不是 duplicate bug。
+
+启用时追加 `input-admission-decisions.csv`、`input-prefetch-events.csv`、
+`input-prefetch-summary.json` 及因果 START snapshots；`none` 不产生这些新增运行记录。
+`B_prefetch_total` 覆盖同一 proactive flow 的完整生命周期，包含故障后续传；used/unused 同口径。
+`PREFETCH_USED` 只在真实恢复计算开始时确认，不在 READY/acceptance 时确认。
+字节分类互斥优先级为 USED、WRONG_TARGET、FAILED_OR_CANCELLED、NO_FAULT、NOT_CONSUMED；
+同时保留独立原因标志。正常/故障后发送按实际 fault snapshot 分界，网络总量每条流只算一次。
+每节点/全局 storage peak 为同时占用峰值，结束必须 used/reserved=0。
+
+实现与开发 run11 证据见[执行审计](../n5/reviews/CompFRR-input-binary-admission-runtime.md)。
+
 `compfrr` 默认组合 `CompFrrFrequencyPolicy + FA-FFP`；历史 A/B/C 名称按当时报告解释。
 频率求解器独立实现数学公式，不调用验证目录；只有测试将同输入送入旧 shadow 比较。
 `FrequencyInput` 是当前状态的只读数值快照，FFP 先给出节点，F 适配层再提供主/恢复算力、

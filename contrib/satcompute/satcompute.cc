@@ -223,6 +223,8 @@ AddCommandLineOptions(CommandLine& commandLine,
                          config.remoteBusyRecoveryPolicy);
     commandLine.AddValue("inputStagingPolicy", "eager / deferred; deferred requires compfrr",
                          config.inputStagingPolicy);
+    commandLine.AddValue("inputAdmissionPolicy", "none / ser-break-even / net-ready-break-even; optional CompFRR Deferred INPUT",
+                         config.inputAdmissionPolicy);
     commandLine.AddValue("lrlRecoveryWeight", "Diagnostic active-recovery weight; G3 freezes 1", config.lrlRecoveryWeight);
     commandLine.AddValue("fixedProtectionDelta",
                          "Fixed progress interval (0.05 = 5%), per-mille precision",
@@ -385,6 +387,10 @@ ValidateConfig(const SatComputeConfig& config)
     RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"});
     RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
     RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred"});
+    RequireChoice(config.inputAdmissionPolicy, "inputAdmissionPolicy", {"none", "ser-break-even", "net-ready-break-even"});
+    if (config.inputAdmissionPolicy != "none" &&
+        (config.protectionMode != "compfrr" || config.inputStagingPolicy != "deferred"))
+        FailConfig("inputAdmissionPolicy", "non-none requires compfrr + deferred");
     if (config.inputStagingPolicy == "deferred" && config.protectionMode != "compfrr")
         FailConfig("inputStagingPolicy", "deferred requires compfrr protection");
     if (config.n5cVariant == "recent-U")
@@ -702,6 +708,9 @@ main(int argc, char* argv[])
             std::unique_ptr<protection::OnePlusOneController> replication;
             std::unique_ptr<protection::checkbullet::CbSatController> checkbullet;
             protection::checkbullet::CbSatController::RemoveOutputs(outputDirectory);
+            for (const auto name : {"input-admission-decisions.csv", "input-prefetch-events.csv",
+                                    "input-prefetch-summary.json", "input-start-snapshots.json"})
+                std::filesystem::remove(outputDirectory / name);
             for (const auto name : {"replica-summary.csv", "replica-attempts.csv", "replica-events.csv", "replica-transfers.csv"})
                 std::filesystem::remove(outputDirectory / name);
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
@@ -743,7 +752,8 @@ main(int argc, char* argv[])
                     makePlacement(), busyPolicy,
                     config.inputStagingPolicy == "deferred" ? protection::InputStagingPolicy::DEFERRED
                                                              : protection::InputStagingPolicy::EAGER,
-                    true, config.inputStartAudit); // Read-only placement metrics and opt-in START audit.
+                    true, config.inputStartAudit,
+                    protection::ParseInputAdmissionPolicy(config.inputAdmissionPolicy));
             }
             else if (config.protectionMode == "checkbullet")
             {
@@ -821,6 +831,7 @@ main(int argc, char* argv[])
                 frequency->Recovery()->WriteMetrics(outputDirectory);
                 frequency->WriteDecisions(outputDirectory);
                 frequency->WriteInputStartAudit(outputDirectory);
+                frequency->WriteInputAdmissionAudit(outputDirectory);
                 frequency->PlacementLoads().WriteMetrics(outputDirectory);
                 frequency->Placement().WriteSelections(outputDirectory);
             }

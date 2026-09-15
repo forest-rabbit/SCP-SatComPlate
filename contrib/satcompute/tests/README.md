@@ -5,6 +5,20 @@ ns-3 上游 examples、全局 tests 或根目录 `test.py`。
 
 ## 当前 N5R：小型语义等价门禁
 
+### INPUT binary admission
+
+新测试沿用本目录：`unit/test_input_admission_policy.py` 调用纯 C++ 选择器，
+固定 Stage B snapshot 的 68/115 是 correctness anchor，不是新 run11 的 flow-count gate。
+`satcompute-input-staging-runtime-test` 检查四类任务、真实 INPUT 续传/接收、同星交付、
+拒绝、两种合法 refetch、F3 与同纳秒边界、实际 USED 与零泄漏；已加入 `unit/run-cpp-tests.sh`。
+`satcompute-frequency-runtime-test --onlyInputAdmission=1` 是两规则的 online generate 小接线测试。
+`test_input_admission_runtime_audit.py` 检查全生命周期字节、重复流、接收 barrier 和非法 CLI。
+
+四组开发 run11 的固定入口为 `integration/regression/run-input-admission-development.py`，
+要求显式 `--gates` 与全新 `--output-root`；仅 D/E/S/N、seed1/run11、800任务、1300s，
+不加入日常测试或 CI，也不自动挑选默认规则。源码归档和逐字节检查用于记录实际执行版本，
+不自动提交、不使用 SHA-256。结果由人工审阅；详见[执行审计](../../../docs/n5/reviews/CompFRR-input-binary-admission-runtime.md)。
+
 重构不重复正式 800 任务 / 1300 s 矩阵，也不重新标定故障或 MTBF。从仓库根目录运行：
 
 ```bash

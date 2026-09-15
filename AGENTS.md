@@ -1,5 +1,23 @@
 # AGENTS.md
 
+### Active INPUT binary admission implementation (2026-09-15)
+
+The user approved production kickoff plus four lifecycle clarifications. Work from
+`34177d0cf` on `feature/compfrr-input-admission-runtime`; this supersedes the offline STOP below.
+Keep default admission none and one Frequency solver. Shared Recovery uses a neutral read-only
+INPUT dependency resolver; adopt only after final target acceptance, actual receiver join and
+actual compute-start USED. Preserve complete proactive byte lifetimes and legal wrong-target/failed
+refetch. Fixed Stage B 68/115 is a pure-selector anchor, not a runtime flow-count target.
+Implementation and the four approved same-source D/E/S/N development run11 executions are complete.
+All four completed 800/800 tasks and 83/83 recoveries; default none remains unchanged.
+Local gates: 440 Python tests (one existing skip), complete C++/smoke/regression,
+1,965-file small compatibility and 35-file full Deferred Stage B compatibility.
+run11 recommends KEEP_SER_BREAK_EVEN; do not tune against these results or promote defaults.
+STOP for manual review: no additional simulation, threshold tuning, JIT/A predictor,
+formal independent runs, auto-commit/push/merge or CI. Actual dirty execution sources are archived;
+only the post-run analyzer and its test changed to handle legacy Eager missing telemetry. See
+`docs/n5/reviews/CompFRR-input-binary-admission-runtime.md` for status and evidence.
+
 This file provides guidance to AI agents when working with code in this repository.
 
 ## SCP-SatComPlate Project Rules

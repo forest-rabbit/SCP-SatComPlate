@@ -47,7 +47,8 @@ enum class ProtectionTransferKind
     RECOVERY_RESULT, ///< Business output; shares canonical IDs, never protection byte totals.
     RECOVERY_STATE,  ///< Complete committed checkpoint relocated to a new recovery node.
     REPLICA_INPUT,
-    REPLICA_RESULT
+    REPLICA_RESULT,
+    PREFETCH_INPUT ///< Independent optional INPUT; never part of checkpoint layout.
 };
 
 /** Logical-task attempt role; replicas do not reuse primary identity. */
