@@ -1,8 +1,10 @@
 """Pure comparison identity and actual replica catch reconstruction."""
 from pathlib import Path
 import copy
+import csv
 import runpy
 import shlex
+import tempfile
 import unittest
 
 TESTS = Path(__file__).resolve().parents[1]
@@ -12,6 +14,67 @@ ROUNDS = runpy.run_path(str(TESTS/'integration/regression/summarize-multitree-ro
 
 
 class MultiTreeComparisonTests(unittest.TestCase):
+    def bandwidth_reports(self):
+        return {label: dict(groups={group: dict(execution=dict(seed=1, run=11, commit='fixture',
+            command=[shlex.join(RUNNER['arguments'](Path('/tmp')/label/group, group,
+                                                  isl_bandwidth_bps=bandwidth))]))
+            for group in RUNNER['GROUPS']}) for label, bandwidth in
+            (('1Gbps', 10**9), ('10Gbps', 10**10), ('100Gbps', 10**11))}
+
+    def test_bandwidth_report_rejects_other_parameter_changes(self):
+        reports = self.bandwidth_reports()
+        ROUNDS['verify_bandwidth_identity'](reports)
+        for before, after in (('--randomRun=11', '--randomRun=12'),
+                              ('--randomSeed=1', '--randomSeed=2'),
+                              ('--ecmpHashSeed=1', '--ecmpHashSeed=2'),
+                              ('--compfrrInputPolicy=selective', '--compfrrInputPolicy=eager')):
+            bad = copy.deepcopy(reports)
+            execution = bad['100Gbps']['groups']['compfrr-p']['execution']
+            execution['command'][-1] = execution['command'][-1].replace(before, after)
+            with self.assertRaises((ValueError, RuntimeError, AssertionError)):
+                ROUNDS['verify_bandwidth_identity'](bad)
+
+    def test_only_explicit_100gbps_cb_cancellation_may_be_excluded(self):
+        reports = self.bandwidth_reports()
+        del reports['100Gbps']['groups']['cb-sat']
+        with self.assertRaises((ValueError, RuntimeError, AssertionError)):
+            ROUNDS['verify_bandwidth_identity'](reports)
+        reports['100Gbps']['excluded_groups'] = {'cb-sat': dict(status='CANCELLED_BY_USER')}
+        ROUNDS['verify_bandwidth_identity'](reports)
+        for label, group in (('1Gbps', 'cb-sat'), ('100Gbps', 'recompute')):
+            bad = self.bandwidth_reports()
+            del bad[label]['groups'][group]
+            bad[label]['excluded_groups'] = {group: dict(status='CANCELLED_BY_USER')}
+            with self.assertRaises((ValueError, RuntimeError, AssertionError)):
+                ROUNDS['verify_bandwidth_identity'](bad)
+        bad = self.bandwidth_reports()
+        bad['100Gbps']['excluded_groups'] = {'cb-sat': dict(status='CANCELLED_BY_USER')}
+        with self.assertRaises((ValueError, RuntimeError, AssertionError)):
+            ROUNDS['verify_bandwidth_identity'](bad)
+
+    def test_cases_csv_keeps_missing_catch_blank_and_excludes_cancelled(self):
+        reports = self.bandwidth_reports()
+        del reports['100Gbps']['groups']['cb-sat']
+        reports['100Gbps']['excluded_groups'] = {'cb-sat': dict(status='CANCELLED_BY_USER')}
+        for report in reports.values():
+            for group in report['groups'].values():
+                group['summary'] = {key: 0 for key in (
+                    'tasks', 'completed', 'extra_sent_bytes', 'proactive_lifetime_sent_bytes',
+                    'recovery_sent_bytes', 'total_network_sent_bytes', 'task_execution_waste_wu',
+                    'normal_protection_eq_wu', 'reserved_idle_eq_wu', 'w_waste_actual',
+                    'mean_link_utilization_percent', 'max_link_whole_run_utilization_percent')}
+                group['summary'].update(primary_fault_catch_cohort=3, no_observed_catch=3,
+                    fault_to_catch_ms=dict(count=0, mean=None, p90=None), faults=dict(F1=3, F2=0, F3=0))
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)/'cases.csv'
+            ROUNDS['export_cases'](path, reports)
+            with path.open(newline='') as handle:
+                rows = list(csv.DictReader(handle))
+        self.assertEqual(len(rows), 17)
+        self.assertFalse(any(r['case'] == '100Gbps' and r['scheme'] == 'cb-sat' for r in rows))
+        self.assertTrue(all(r['catch_mean_ms'] == r['catch_p90_ms'] == '' and
+                            r['caught'] == '0' and r['no_observed_catch'] == '3' for r in rows))
+
     def test_bandwidth_contrasts_only_change_link_capacity(self):
         for group in RUNNER['GROUPS']:
             original = RUNNER['arguments'](Path('/tmp/same-output'), group)

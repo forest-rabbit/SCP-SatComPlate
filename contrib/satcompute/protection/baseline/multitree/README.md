@@ -100,7 +100,16 @@ F1/F2 当前状态；不能把 unavailable prediction 补零。RS/RP 在首次 R
 三轮汇总使用同目录的 `summarize-multitree-rounds.py --run-a ... --run-b ...
 --run-c ... --output-root ...`，只读审计原始记录，不启动仿真；不会将不同带宽混成
 三轮随机重复，也不会把未追平样本补零。
+可同时传入 `--bandwidth-1gbps ... --bandwidth-100gbps ...` 汇总带宽对照。
+100 Gbps CB-SAT 由用户明确取消时，须有 cancellation.json 与状态记录；
+只审计已完成五组，取消项不补零、不当作完整执行。其他缺失或失败仍阻断汇总。
 须保持干净执行提交，不覆盖已有输出。`comparison.json` 保留每项实际 WU/服务时间、
 payload 与 catch 的来源；RP catch 根据实际连续副本服务追平 W_f 推导，不能把
 接管时间直接当 catch 或将未追平记为 0。结果同时列完成数、流量、执行浪费、
 常态与预留空等等效成本；不把未完成任务少做的工作当优化收益。
+
+Stage C 已完成：10 Gbps 三轮 18 次、1 Gbps 六次、100 Gbps 五次，共 29 次完整执行；
+另一次 100 Gbps CB-SAT 按用户要求取消。所有完整项通过账本审计，保持原始记录。
+两种 CompFRR 在 10 Gbps 均 2400/2400；1 Gbps 自有方案 730/800，FA-FFP 对照 787/800，
+暴露了单 reference pair 准入的限制，本轮不调参、不修算法。完整表格、分账和边界见
+[整体结果](../../../../../docs/n5/reviews/Multi-tree-published-FT-comparison.md)。
