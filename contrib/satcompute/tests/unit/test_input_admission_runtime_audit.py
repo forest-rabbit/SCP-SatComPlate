@@ -102,7 +102,7 @@ class RuntimeAuditTests(unittest.TestCase):
         for mode,policy in (('fixed','selective'),('compfrr','jit'),('compfrr','net-ready-break-even'),
                             ('recompute','deferred'),('compfrr','invalid')):
             scheme = 'compfrr' if mode == 'fixed' else mode
-            flags = ['--compfrrCheckpointPolicy=fixed'] if mode == 'fixed' else []
+            flags = ['--compfrrCheckpointPolicy=fixed', '--compfrrPlacementPolicy=fa-ffp'] if mode == 'fixed' else []
             result=subprocess.run([str(binary),f'--protectionScheme={scheme}',f'--compfrrInputPolicy={policy}', *flags],
                                   cwd=ROOT,text=True,capture_output=True,timeout=10)
             self.assertNotEqual(result.returncode,0)

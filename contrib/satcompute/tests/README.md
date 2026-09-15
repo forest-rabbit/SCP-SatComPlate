@@ -32,7 +32,10 @@ python contrib/satcompute/tests/integration/regression/run-protection-config-equ
 
 ### INPUT 三模式与维护测试
 
-`compfrrInputPolicy=eager|deferred|selective` 是唯一平台 INPUT 开关，默认 eager；Selective 固定 SER。
+`compfrrInputPolicy=eager|deferred|selective` 是唯一平台 INPUT 开关，正式默认 selective；Selective 固定 SER。
+平台正式默认 CompFRR-F + CompFRR-P（cumulative、无消融）+ Selective + Relocate。
+历史描述 API 和普通运行默认严格分开：前者补齐旧 off/FA-FFP/Eager，当前正式 runner 显式序列化完整组合。
+无保护、网络、轨道及 shadow 测试显式使用 off；Fixed 测试显式指定 Eager/公共 placement。
 `unit/test_input_admission_policy.py` 调用纯 C++ 选择器，使用 tracked
 `fixtures/protection/selective-input-ser-anchor.json`：405 个网络候选逐任务匹配，
 68 个 SEND，另 4 个 LocalDelivery。fixture 是因果模型测试，不是未来实验流数目标；缺失时必须失败。
@@ -195,9 +198,9 @@ N5A-G4 的冻结故障验收仍复用 `integration/regression/run-final-scenario
 
 ```bash
 .venv/bin/python contrib/satcompute/tests/integration/regression/run-final-scenario.py \
-  --output-dir output/n5a-g4/off-replay --fault-mode validation-replay \
+  --output-dir output/n5a-g4/off-replay --protection-mode off --fault-mode validation-replay \
   --validation-trace output/n4-release-validation/fault-trace.json
-# FIXED 使用另一个新目录，并追加 --protection-mode fixed。
+# FIXED 使用另一个新目录，把 --protection-mode 改为 fixed。
 .venv/bin/python contrib/satcompute/tests/integration/regression/analyze-protection-accounting.py \
   --run output/n5a-g4/off-replay --reference output/n4-release-validation
 # FIXED 分析只传 --run；不要求其业务输出等同 OFF。
@@ -349,7 +352,8 @@ SATCOMPUTE_POSITION_SLICES=output/n4c-g3-truncnormal-v3-20260909/orbit/topology 
 ## 手动正式运行与 G4 验证
 
 `integration/regression/run-final-scenario.py`支持当前场景的none、generate、
-generate+shadow，以及仅供 N5A 验收的显式 validation-replay。默认为generate；概率CSV审计和shadow均默认关闭。
+generate+shadow，以及仅供 N5A 验收的显式 validation-replay。默认 generate + 正式 CompFRR 组合；
+none/shadow/无保护 replay 必须显式指定 `--protection-mode=off`，概率 CSV 审计和 shadow 均默认关闭。
 输出必须是新目录，当前1300 s、800任务、66星、10 Gbps、1 ms、seed1/run11。
 
 N5B 最终场景移除前置任务 801，仅增大任务 120 到 800 MB；当时仅授权正式 B 组，

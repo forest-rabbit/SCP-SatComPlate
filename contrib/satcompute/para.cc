@@ -113,7 +113,7 @@ GetDefaultSatComputeConfig()
 
     // protection
 
-    // --protectionScheme：默认 off；保护私有参数集中在 protection/protection-para.cc。
+    // --protectionScheme：正式默认 CompFRR；私有参数集中在 protection/protection-para.cc。
     config.protection = protection::GetDefaultProtectionConfig();
 
     // output

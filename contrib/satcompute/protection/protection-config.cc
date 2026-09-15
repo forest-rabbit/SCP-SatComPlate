@@ -81,7 +81,7 @@ void RegisterProtectionOptions(CommandLine& command, ProtectionConfig& c,
                 return true;
             }));
     };
-    add("protectionScheme", "off / compfrr / recompute / one-plus-one / cb-sat (default off)",
+    add("protectionScheme", "off / compfrr / recompute / one-plus-one / cb-sat (default compfrr)",
         [&](const auto& v) {
             if (v == "multitree") Fail("protectionScheme", "multitree is not implemented");
             c.scheme = Choice<ProtectionScheme>("protectionScheme", v,
@@ -93,11 +93,11 @@ void RegisterProtectionOptions(CommandLine& command, ProtectionConfig& c,
         c.compfrr.checkpointPolicy = Choice<CheckpointPolicyKind>("compfrrCheckpointPolicy", v,
             {{"fixed", CheckpointPolicyKind::FIXED}, {"adaptive", CheckpointPolicyKind::ADAPTIVE}});
     });
-    add("compfrrPlacementPolicy", "ffp / fa-ffp / lrl / fa-lrl / compfrr (default fa-ffp)", [&](const auto& v) {
+    add("compfrrPlacementPolicy", "ffp / fa-ffp / lrl / fa-lrl / compfrr (default compfrr)", [&](const auto& v) {
         c.compfrr.placementPolicy = v == "compfrr" ? PlacementPolicyKind::COMPFRR :
             SharedPlacement(BaselinePlacement("compfrrPlacementPolicy", v));
     });
-    add("compfrrInputPolicy", "eager / deferred / selective (default eager)", [&](const auto& v) {
+    add("compfrrInputPolicy", "eager / deferred / selective (default selective)", [&](const auto& v) {
         c.compfrr.inputPolicy = Choice<InputPolicy>("compfrrInputPolicy", v,
             {{"eager", InputPolicy::EAGER}, {"deferred", InputPolicy::DEFERRED}, {"selective", InputPolicy::SELECTIVE}});
     });

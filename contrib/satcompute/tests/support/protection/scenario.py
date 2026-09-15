@@ -157,20 +157,30 @@ def arguments(output, fault_mode="generate", audit=False, shadow=False,
     return result
 
 
+def execution_profile_options(protection_mode, placement_mode=None, input_policy=None):
+    """Current formal CLI defaults; the historical arguments() API stays frozen."""
+    return (placement_mode if placement_mode is not None else ('n5c' if protection_mode == 'compfrr' else 'fa-ffp'),
+            input_policy if input_policy is not None else ('selective' if protection_mode == 'compfrr' else 'eager'))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--fault-mode", choices=("none", "generate", "validation-replay"), default="generate")
     parser.add_argument("--validation-trace", type=Path)
-    parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"), default="off")
-    parser.add_argument("--placement-mode", choices=("ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"), default="fa-ffp")
+    parser.add_argument("--protection-mode", choices=("off", "fixed", "compfrr", "recompute", "one-plus-one", "checkbullet"), default="compfrr")
+    parser.add_argument("--placement-mode", choices=("ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"),
+                        help="Default n5c for formal CompFRR; fa-ffp for baselines")
     parser.add_argument("--n5c-variant", choices=("full", "noR", "noU", "noM", "rational-U"), default="full")
     parser.add_argument("--random-run", type=int, default=11, help="Explicit replicate; frozen default remains 11")
     parser.add_argument("--remote-busy-recovery-policy", choices=("relocate", "recompute"), default="relocate")
-    parser.add_argument("--input-policy", choices=("eager", "deferred", "selective"), default="eager")
+    parser.add_argument("--input-policy", choices=("eager", "deferred", "selective"),
+                        help="Default selective for formal CompFRR; eager for baselines")
     parser.add_argument("--audit", action="store_true")
     parser.add_argument("--shadow", action="store_true", help="Read-only G4 validation, not real backup")
     args = parser.parse_args()
+    args.placement_mode, args.input_policy = execution_profile_options(
+        args.protection_mode, args.placement_mode, args.input_policy)
     output = args.output_dir.resolve()
     try:
         command = [str(ROOT / "ns3"), "run", "--no-build",

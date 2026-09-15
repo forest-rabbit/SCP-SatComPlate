@@ -14,7 +14,7 @@ task_inputs="contrib/satcompute/tests/fixtures/task"
 
 set +e
 result="$(./ns3 run --no-build \
-"satcompute --faultMode=none --linkMetrics=0 --simulationDuration=1 \
+"satcompute --protectionScheme=off --faultMode=none --linkMetrics=0 --simulationDuration=1 \
 --constellationConfig=$constellation --maxIslDistance=6171353 \
 --delayMode=fixed --fixedDelay=0.001 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 --islQueueBytes=1 \

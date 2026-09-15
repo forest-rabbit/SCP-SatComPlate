@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 #include "ns3/protection-config.h"
 #include "ns3/command-line.h"
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -14,6 +15,15 @@ void Check(bool value) { ++checks; if (!value) throw std::runtime_error("config 
 ProtectionConfig Parse(std::vector<std::string> args, bool test = false,
                        std::string fault = "generate", bool f1 = true, bool f2 = true)
 {
+    // Domain/Fixed tests explicitly use its existing legal private combination.
+    if (std::find(args.begin(), args.end(), "--compfrrCheckpointPolicy=fixed") != args.end())
+    {
+        const auto missing = [&](const std::string& prefix) {
+            return std::none_of(args.begin(), args.end(), [&](const auto& a) { return a.rfind(prefix, 0) == 0; });
+        };
+        if (missing("--compfrrPlacementPolicy=")) args.push_back("--compfrrPlacementPolicy=fa-ffp");
+        if (missing("--compfrrInputPolicy=")) args.push_back("--compfrrInputPolicy=eager");
+    }
     auto c = GetDefaultProtectionConfig();
     ProtectionCliState cli;
     CommandLine command;
@@ -35,8 +45,8 @@ int main()
     try
     {
         const auto d = Parse({});
-        Check(d.scheme == ProtectionScheme::OFF && d.common.backupStorageBytesPerNode == 10000000000ULL);
-        Check(d.compfrr.inputPolicy == InputPolicy::EAGER && d.compfrr.placementPolicy == PlacementPolicyKind::FA_FFP);
+        Check(d.scheme == ProtectionScheme::COMPFRR && d.common.backupStorageBytesPerNode == 10000000000ULL);
+        Check(d.compfrr.inputPolicy == InputPolicy::SELECTIVE && d.compfrr.placementPolicy == PlacementPolicyKind::COMPFRR);
         Check(d.compfrr.recoveryPolicy == RecoveryFallbackKind::RELOCATE && d.commonPlacement.lrlRecoveryWeight == 1);
         Check(d.cbSat.busyPolicy == RecoveryFallbackKind::RECOMPUTE);
         Check(FixedDeltaPermille(d.compfrr.fixed) == 50 && d.compfrr.fixed.batchN == 4);
@@ -81,7 +91,7 @@ int main()
         }
         Check(LegacyPlacementVariant(Parse({"--protectionScheme=compfrr", "--compfrrPlacementPolicy=compfrr",
             "--compfrrPressureModel=idle-aware"}).compfrr) == "rational-U");
-        Check(Parse({"--compfrr-shadow=1"}).diagnostics.compfrrShadow);
+        Check(Parse({"--protectionScheme=off", "--compfrr-shadow=1"}).diagnostics.compfrrShadow);
         for (const auto* scheme : {"off", "recompute", "one-plus-one", "cb-sat"})
             Reject([&] { Parse({std::string("--protectionScheme=")+scheme, "--compfrrInputPolicy=eager"}); });
         for (const auto* input : {"deferred", "selective"})
@@ -91,7 +101,7 @@ int main()
         for (const auto* ablation : {"noR", "noU", "noM"})
             Reject([&] { Parse({"--protectionScheme=compfrr", "--compfrrPlacementPolicy=compfrr",
                 "--compfrrPressureModel=idle-aware", std::string("--compfrrPlacementAblation=")+ablation}); });
-        Reject([] { Parse({"--protectionScheme=compfrr", "--compfrrPressureModel=cumulative"}); });
+        Reject([] { Parse({"--protectionScheme=compfrr", "--compfrrPlacementPolicy=fa-ffp", "--compfrrPressureModel=cumulative"}); });
         Reject([] { Parse({"--protectionScheme=compfrr", "--compfrrFixedDelta=0.05"}); });
         Reject([] { Parse({"--protectionScheme=compfrr"}, false, "none"); });
         Reject([] { Parse({"--protectionScheme=compfrr"}, false, "generate", false, false); });
@@ -102,7 +112,7 @@ int main()
         Reject([] { Parse({"--protectionScheme=off", "--protectionScheme=off"}); });
         Reject([] { Parse({"--testBaselinePlacement=lrl"}, true); });
         Reject([] { Parse({"--protectionScheme=recompute", "--testCbSatBusyPolicy=relocate"}, true); });
-        Reject([] { Parse({"--backupStorageBytesPerNode=10"}); });
+        Reject([] { Parse({"--protectionScheme=off", "--backupStorageBytesPerNode=10"}); });
         for (const auto* delta : {"0", "-0.1", "1.1", "0.0001", "nan", "inf"})
             Reject([&] { Parse({"--protectionScheme=compfrr", "--compfrrCheckpointPolicy=fixed",
                 std::string("--compfrrFixedDelta=")+delta}); });

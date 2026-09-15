@@ -406,7 +406,7 @@ void
 PolicyChecks()
 {
     const auto config = GetDefaultSatComputeConfig();
-    Check(config.protection.scheme == ProtectionScheme::OFF && config.protection.common.backupStorageBytesPerNode == 10000000000 &&
+    Check(config.protection.scheme == ProtectionScheme::COMPFRR && config.protection.common.backupStorageBytesPerNode == 10000000000 &&
               config.protection.compfrr.fixed.delta == .05 && config.protection.compfrr.fixed.batchN == 4 &&
               config.protection.compfrr.recoveryPolicy == RecoveryFallbackKind::RELOCATE,
           "typed defaults");

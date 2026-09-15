@@ -1,7 +1,9 @@
 """Protection entry-point guards; no network simulation or fault-recovery activation."""
 from pathlib import Path
+import runpy
 import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -23,6 +25,11 @@ class ProtectionConfigTests(unittest.TestCase):
             self.assertIn(f'Invalid command-line argument: --{name}', rejected.stdout)
 
     def run_cli(self, options):
+        if '--compfrrCheckpointPolicy=fixed' in options:
+            if '--compfrrPlacementPolicy=' not in options:
+                options += ' --compfrrPlacementPolicy=fa-ffp'
+            if '--compfrrInputPolicy=' not in options:
+                options += ' --compfrrInputPolicy=eager'
         return subprocess.run(
             [sys.executable, str(ROOT / "ns3"), "run", "--no-build", f"satcompute {options}"],
             cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -108,9 +115,26 @@ class ProtectionConfigTests(unittest.TestCase):
                         "--faultMode=generate --validationFaultTrace=unused.json",
                         "--faultMode=validation-replay --validationFaultTrace=unused.json --faultProbabilityAudit=1"):
             with self.subTest(options=options):
-                result = self.run_cli(options)
+                result = self.run_cli('--protectionScheme=off ' + options)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("validationFaultTrace", result.stdout)
+
+    def test_default_formal_profile_matches_explicit_small_run(self):
+        gates = ROOT / 'contrib/satcompute/tests/integration/regression'
+        config_gate = runpy.run_path(str(gates / 'run-protection-config-equivalence.py'))
+        mechanism = config_gate['EQUIVALENCE']
+        adapter = runpy.run_path(str(ROOT / 'contrib/satcompute/tests/support/protection/config_arguments.py'))
+        with tempfile.TemporaryDirectory(prefix='satcompute-formal-default-') as tmp:
+            root = Path(tmp)
+            original = config_gate['cases'](root)['adaptive-n5c-selective']
+            explicit = adapter['execution_arguments'](original)
+            implicit = [x for x in original if x.removeprefix('--').partition('=')[0] not in adapter['OLD']]
+            a, b = root/'explicit', root/'implicit'
+            for directory, command in ((a, explicit), (b, implicit)):
+                command = [x for x in command if not x.startswith('--outputDir=')] + [f'--outputDir={directory}']
+                # Bypass the historical adapter: no flags must really use current production defaults.
+                mechanism['execute'](directory, command, translate=False)
+            self.assertEqual(mechanism['compare'](a, b)['status'], 'PASS')
 
     def test_delta_domain_and_precision(self):
         for value in ("0", "-0.01", "1.1", "0.0001", "nan", "inf"):

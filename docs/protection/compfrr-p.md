@@ -1,7 +1,8 @@
 # CompFRR-P：固定配置后的备份节点选择
 
 启用 `--protectionScheme=compfrr --compfrrPlacementPolicy=compfrr`（默认 adaptive），
-支持 Eager/Deferred/Selective，默认参数不替换 FA-FFP。
+支持 Eager/Deferred/Selective；用户现已将 CompFRR-P + Selective + Relocate 指定为正式默认，
+旧 FA-FFP 默认仅作为历史实验身份保留，不改变任何 placement 算法。
 production compute-pressure 仅有两种，默认不变：
 
 | 正式 policy | CLI 值 | 用于评分的 U |

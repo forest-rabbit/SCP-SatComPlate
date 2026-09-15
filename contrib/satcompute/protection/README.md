@@ -59,10 +59,10 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 
 | 参数 | 默认 | 说明 |
 |---|---:|---|
-| `protectionScheme` | `off` | `off / compfrr / recompute / one-plus-one / cb-sat`；Multi-tree 未实现 |
+| `protectionScheme` | `compfrr` | 正式默认 CompFRR；另有 recompute / one-plus-one / cb-sat；off 仅诊断/历史复现，Multi-tree 未实现 |
 | `compfrrCheckpointPolicy` | `adaptive` | `fixed / adaptive`；原 Fixed 下沉为策略，不改变一次性 START 与维护合同 |
-| `compfrrPlacementPolicy` | `fa-ffp` | `ffp / fa-ffp / lrl / fa-lrl / compfrr`；最后一项为 CompFRR-P，仅 adaptive 可用 |
-| `compfrrInputPolicy` | `eager` | 唯一 INPUT 开关：`eager / deferred / selective`；Selective 固定 SER，Fixed 仅 Eager |
+| `compfrrPlacementPolicy` | `compfrr` | `ffp / fa-ffp / lrl / fa-lrl / compfrr`；默认使用自己的 CompFRR-P，仅 adaptive 可用 |
+| `compfrrInputPolicy` | `selective` | 唯一 INPUT 开关：`eager / deferred / selective`；Selective 固定 SER，Fixed 仅 Eager |
 | `compfrrRecoveryPolicy` | `relocate` | `relocate / recompute`；仅切换既有 REMOTE_BUSY、DIRECT_DEADLINE_INFEASIBLE 分支，不重写其他回退 |
 | `compfrrPressureModel` | `cumulative` | CompFRR-P 私有：`cumulative / idle-aware`；旧 full / rational-U 的明确映射 |
 | `compfrrPlacementAblation` | `none` | `none / noR / noU / noM`；消融仅 cumulative，不是新增 U policy |
@@ -74,6 +74,9 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 上述 `compfrr*` 私有 CLI 仅属于 `protectionScheme=compfrr`；跨方案显式传参即拒绝，即便等于默认值。
 未选中的子结构不会创建运行时对象。Adaptive 仍要求 generate 且 F1/F2 至少一个开启；
 Fixed 和三个完整 baseline 保留 none/generate/validation-replay 执行能力，不因此开启在线 Frequency。
+正式默认变化由用户在纯重构完成后单独确认，不修改算法。Fixed 必须显式选择合法组合，例如
+`--compfrrCheckpointPolicy=fixed --compfrrPlacementPolicy=fa-ffp --compfrrInputPolicy=eager`；
+不能让 Adaptive 的 P/Selective 默认值扩展 Fixed 能力。历史 runner 显式恢复原默认，不重解释旧实验。
 
 | 完整 baseline | canonical private placement | INPUT/恢复私有合同 |
 |---|---|---|

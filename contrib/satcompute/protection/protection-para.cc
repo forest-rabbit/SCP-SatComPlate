@@ -7,17 +7,17 @@ ProtectionConfig GetDefaultProtectionConfig()
 {
     ProtectionConfig config{};
 
-    // 总开关：默认不启用真实保护。
-    config.scheme = ProtectionScheme::OFF;
+    // 正式实验默认启用 CompFRR；OFF 仅供显式诊断和历史复现。
+    config.scheme = ProtectionScheme::COMPFRR;
 
     // 公共资源：十进制 10 GB；LRL 正式实验权重固定 1。
     config.common.backupStorageBytesPerNode = 10'000'000'000;
     config.commonPlacement.lrlRecoveryWeight = 1;
 
-    // CompFRR：保持当前默认身份，不自动启用 CompFRR-P 或 Selective。
+    // 正式组合：自适应频率 + CompFRR-P + Selective + Relocate。
     config.compfrr.checkpointPolicy = CheckpointPolicyKind::ADAPTIVE;
-    config.compfrr.placementPolicy = PlacementPolicyKind::FA_FFP;
-    config.compfrr.inputPolicy = InputPolicy::EAGER;
+    config.compfrr.placementPolicy = PlacementPolicyKind::COMPFRR;
+    config.compfrr.inputPolicy = InputPolicy::SELECTIVE;
     config.compfrr.recoveryPolicy = RecoveryFallbackKind::RELOCATE;
     config.compfrr.pressureModel = ComputePressurePolicy::CUMULATIVE;
     config.compfrr.placementAblation = PlacementAblation::NONE;

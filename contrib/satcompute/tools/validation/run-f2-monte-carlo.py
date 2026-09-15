@@ -57,6 +57,7 @@ def run_platform(ns3_path, random_run, orbit_start_offset, temporary_root):
     trace_path = run_directory / "fault-trace.json"
     arguments = [
         "satcompute",
+        "--protectionScheme=off",
         "--simulationDuration=1000",
         "--randomSeed=1",
         f"--randomRun={random_run}",

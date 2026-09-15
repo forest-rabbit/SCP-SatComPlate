@@ -1,5 +1,8 @@
 # Protection 配置分层实施与等价门禁
 
+第 1–5 节是已推送的纯重构 `5cf0ac56e` 审阅快照；后续正式默认配置调整单列第 6 节，
+不反向修改纯重构的默认值保留结论，也不把旧实验解释成新组合。
+
 基线：corrected `n5@fd45c5144`；分支：`refactor/protection-config-hierarchy`。
 范围：已批准 revised proposal 的 config/validation/wiring 与小场景验证。
 不改数学模型、资源语义、故障随机流、正式输入、默认 CompFRR 实验身份或外部运行时 schema。
@@ -156,3 +159,26 @@ Python 的 native 0..1050s 拓扑切片重生成测试需要显式 `SATCOMPUTE_P
 
 结论范围仅为已覆盖输入下的语义等价，不等于所有未来场景的形式证明或正式性能刷新。
 用户随后授权提交并推送本分支供审阅；CI/PR/合并和后续 Multi-tree 等工作仍等待单独指令。
+
+## 6. 后续授权：正式 CompFRR 默认组合
+
+用户随后明确正式方案不是 off，指定 Adaptive CompFRR-F + CompFRR-P + Selective INPUT + Relocate。
+`protection-para.cc` 的 scheme/placement/INPUT 默认相应改为 COMPFRR/COMPFRR/SELECTIVE；
+CUMULATIVE、无消融、relocate 与全部 baseline private defaults 保持不变。
+off 仅作为显式诊断/历史复现能力，不是正式对比方案；算法、输入、seed/run、恢复合同未修改。
+
+普通平台不带保护参数即使用这套组合。正式 runner 同时写出完整显式 argv，避免默认值再次变化导致漂移。
+历史 `arguments()` API 保留原意；执行/读证据适配器对省略旧 scheme 的调用显式补 off，
+对截至 `5cf0ac56e` 的旧 scoped CompFRR 命令显式补原 FA-FFP/Eager，不能按新默认解释。
+所有新正式 runner 命令已完整序列化，不依赖这套历史补全。
+网络/拓扑/故障诊断显式 off；Fixed 显式 Eager + 公共 placement，未扩大其能力。
+
+这不是对纯重构默认值的“等价改名”，也不是新的性能结论。仅执行 small gate：
+默认启动与显式正式组合的 4-task/15s 全输出比较，以及原 55 组配置/11 组机制对照；
+不重跑正式 1300s 矩阵，不自动提交/推送。
+
+验证：目标构建、123 项配置检查、para/protection contract 测试通过；Python 232 项中
+231 通过、1 项沿用原 native-slices 条件 skip。默认与显式正式组合全输出一致，
+55 组配置对照（1,685 文件）及 11 组机制对照（1,984 文件）与原参考严格等价。
+完整 smoke 通过（含 16 组 placement）；修改的诊断回归 shell 入口语法检查通过。
+证据目录为 `output/protection-formal-default/`；历史参考未覆盖。

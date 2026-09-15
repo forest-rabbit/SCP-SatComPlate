@@ -54,8 +54,16 @@ def translate_protection_arguments(argv):
             raise ValueError(f'duplicate protection option: {key}')
         flags[key] = value
         index += 1
-    if not flags.keys() & OLD:
-        return dict(argv=argv, original=argv, identity=None, inactive={}, inactive_reasons={})
+    if not flags.keys() & OLD and flags.keys() & NEW:
+        # Scoped commands recorded before formal-default promotion also need their
+        # omitted values frozen. This adapter is historical/test-only; new formal
+        # launchers serialize the full profile, ordinary CLI uses current defaults.
+        defaults = {'protectionScheme': 'off'}
+        if flags.get('protectionScheme', 'off') == 'compfrr':
+            defaults.update(compfrrCheckpointPolicy='adaptive', compfrrPlacementPolicy='fa-ffp',
+                            compfrrInputPolicy='eager', compfrrRecoveryPolicy='relocate')
+        explicit = argv + [f'--{k}={v}' for k, v in defaults.items() if k not in flags]
+        return dict(argv=explicit, original=argv, identity=None, inactive={}, inactive_reasons={})
     if flags.keys() & NEW:
         raise ValueError('conflicting old/new protection configuration')
 
@@ -137,14 +145,21 @@ def translate_protection_arguments(argv):
 
 
 def execution_arguments(argv):
-    """Return executable arguments; callers retain their original evidence separately."""
+    """Execute historical descriptors; a missing scheme explicitly stays off.
+
+    Modern commands must carry at least one scoped NEW option. Running the actual
+    binary with no protection flags uses today's formal defaults, not this adapter.
+    """
     return translate_protection_arguments(argv)['argv']
 
 
 def canonical_protection_arguments(argv):
     """Read-only experiment identity, including archived recent-U (never executable).
 
-    Compare active options with defaults expanded. Ignore only the old explicitly
+    Expand defaults from the pre-promotion evidence contract (through 5cf0ac56e).
+    New formal runner commands explicitly serialize their full protection profile;
+    never reinterpret historical omitted values using today's platform defaults.
+    Ignore only the old explicitly
     inactive fields identified by the adapter, not arbitrary command parameters.
     The test driver and ordinary driver share runtime wiring. Their executable
     names normalize, but private placement/busy overrides remain in the identity.

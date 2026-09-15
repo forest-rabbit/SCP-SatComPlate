@@ -17,6 +17,30 @@ normalize = SCENE['canonical_experiment_arguments']
 
 
 class ConfigIdentityTests(unittest.TestCase):
+    def test_omitted_legacy_scheme_is_explicit_off_after_promotion(self):
+        old = ['satcompute', '--randomRun=11', '--faultMode=generate']
+        self.assertIn('--protectionScheme=off', self.assertMapping(old))
+        self.assertIn('--protectionScheme=off', execute(SCENE['arguments'](Path('unused'))))
+        scoped_old = execute(['satcompute', '--protectionScheme=compfrr'])
+        self.assertIn('--compfrrPlacementPolicy=fa-ffp', scoped_old)
+        self.assertIn('--compfrrInputPolicy=eager', scoped_old)
+        self.assertEqual(execute(scoped_old), scoped_old)
+
+    def test_formal_runner_selects_compfrr_profile_but_baselines_stay_private(self):
+        self.assertEqual(SCENE['execution_profile_options']('compfrr'), ('n5c', 'selective'))
+        for scheme in ('recompute', 'one-plus-one', 'checkbullet', 'fixed', 'off'):
+            self.assertEqual(SCENE['execution_profile_options'](scheme), ('fa-ffp', 'eager'))
+        self.assertEqual(SCENE['execution_profile_options']('compfrr', 'lrl', 'deferred'), ('lrl', 'deferred'))
+        # New formal commands serialize all controls; historic omitted values stay FA-FFP/Eager.
+        new = execute(SCENE['arguments'](Path('unused'), protection_mode='compfrr',
+                                       placement_mode='n5c', input_policy='selective'))
+        for flag in ('--protectionScheme=compfrr', '--compfrrCheckpointPolicy=adaptive',
+                     '--compfrrPlacementPolicy=compfrr', '--compfrrInputPolicy=selective',
+                     '--compfrrRecoveryPolicy=relocate', '--compfrrPressureModel=cumulative',
+                     '--compfrrPlacementAblation=none'):
+            self.assertIn(flag, new)
+        self.assertNotEqual(normalize(new), normalize(['satcompute', '--protectionMode=compfrr']))
+
     def assertMapping(self, old):
         new = execute(old)
         self.assertEqual(normalize(old), normalize(new))

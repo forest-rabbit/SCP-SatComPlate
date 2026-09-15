@@ -15,7 +15,7 @@ CHECK = runpy.run_path(str(ROOT / "contrib/satcompute/tools/validation/compfrr-s
 
 
 def run(output, trace, profile, shadow, audit=False, f3_time="63"):
-    arguments = ["satcompute", "--simulationDuration=100", "--randomSeed=1", "--randomRun=11",
+    arguments = ["satcompute", "--protectionScheme=off", "--simulationDuration=100", "--randomSeed=1", "--randomRun=11",
         "--constellationConfig=contrib/satcompute/tests/fixtures/constellation/connected-16.csv",
         f"--taskTrace={trace}", f"--computeProfile={profile}", "--faultMode=generate",
         "--faultEnableF1=1", "--faultEnableF2=0", "--faultEnableF3=1", "--faultF3Mode=controlled",

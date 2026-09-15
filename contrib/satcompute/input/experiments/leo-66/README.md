@@ -50,8 +50,11 @@ manifest 中旧 8 ms none-source 或旧生成路径仅为历史来源，不是�
   --output-dir=output/leo-66-run
 ```
 
-默认执行 generate + F1/F2/F3，概率审计和 shadow 均关闭；显式加 `--audit --shadow`
-开启只读验证，`--fault-mode=none` 可用于另行授权的无故障实验。输出必须是不存在的新目录。
+默认执行 CompFRR-F 自适应频率 + CompFRR-P（cumulative、无消融）+ Selective INPUT + Relocate，
+在线 generate + F1/F2/F3；概率审计和 shadow 均关闭，runner 记录完整显式配置。
+其他 baseline 的私有默认不随之改变。显式加 `--protection-mode=off --audit --shadow`
+可做只读诊断；`--protection-mode=off --fault-mode=none` 仅供另行授权的无保护验证，
+不是正式 CompFRR 对比方案。输出必须是不存在的新目录。
 N4 release validation 只允许运行一次正式 generate+audit+shadow；不能顺带追加 none/多 seed。
 
 [最终任务生成器](../../../tools/generation/README.md)从原生 1 s 位置切片生成同一 workload。

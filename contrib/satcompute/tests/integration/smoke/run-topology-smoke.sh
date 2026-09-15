@@ -10,7 +10,7 @@ smoke_output="$(mktemp -d /tmp/satcompute-topology-smoke.XXXXXX)"
 trap 'rm -rf "$smoke_output"' EXIT
 
 constellation="contrib/satcompute/tests/fixtures/constellation/diamond-4.csv"
-arguments="--simulationDuration=2.5 --constellationConfig=$constellation \
+arguments="--protectionScheme=off --simulationDuration=2.5 --constellationConfig=$constellation \
 --maxIslDistance=1 --delayMode=distance --fixedDelay=0 \
 --networkUpdateInterval=2 --islBandwidthBps=100000000 \
 --topologyOnly=1 --topologySliceInterval=1 --includeFinalTopologyState=1"
@@ -93,7 +93,7 @@ diff -ru "$smoke_output/first/topology" "$smoke_output/second/topology"
 
 # Omit fixedDelay to check the platform default reaches exported link state.
 ./ns3 run --no-build \
-  "satcompute --simulationDuration=1 --constellationConfig=$constellation \
+  "satcompute --protectionScheme=off --simulationDuration=1 --constellationConfig=$constellation \
 --topologyOnly=1 --outputDir=$smoke_output/fixed-default"
 
 python3 - "$smoke_output/fixed-default/topology" <<'PY'

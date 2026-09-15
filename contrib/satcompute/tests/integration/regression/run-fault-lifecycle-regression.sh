@@ -12,7 +12,7 @@ trap 'rm -rf "$regression_output"' EXIT
 run_platform() {
   local output_directory="$1"
   shift
-  ./ns3 run --no-build "satcompute --faultMode=none --computeProfile=none --taskTrace=none --faultEnableF2=0 --faultEnableF3=0 --faultF3Mode=fixed_k --randomRun=1 --linkMetrics=0 --outputDir=$output_directory $*"
+  ./ns3 run --no-build "satcompute --protectionScheme=off --faultMode=none --computeProfile=none --taskTrace=none --faultEnableF2=0 --faultEnableF3=0 --faultF3Mode=fixed_k --randomRun=1 --linkMetrics=0 --outputDir=$output_directory $*"
 }
 
 constellation="contrib/satcompute/tests/fixtures/constellation/connected-16.csv"
@@ -345,7 +345,7 @@ if len(transfers) != 2 or any(
     raise SystemExit("no-fault transfer terminal evidence changed")
 PY
 
-if ./ns3 run --no-build "satcompute --faultMode=replay --outputDir=$regression_output/rejected" >"$regression_output/rejected.log" 2>&1; then
+if ./ns3 run --no-build "satcompute --protectionScheme=off --faultMode=replay --outputDir=$regression_output/rejected" >"$regression_output/rejected.log" 2>&1; then
   echo "removed replay mode was accepted" >&2
   exit 1
 fi
