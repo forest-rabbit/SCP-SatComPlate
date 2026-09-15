@@ -10,7 +10,10 @@
 `protectionMode=compfrr + inputStagingPolicy=deferred`，纯选择器在 `policy/compfrr/input/input-admission-policy.*`。
 
 - `ser-break-even`：比较 `sum(w_k * min(T_ser, max(0,t_k-t_I)))` 与 `(1-P_F)*T_ser`。
-- `net-ready-break-even`：左侧的 `T_ser` 换为 `T_net`，右侧仍为序列化代价。
+
+SER 是唯一 production selective admission，默认仍为 `none`。最终 CompFRR 组合需显式指定
+`--inputStagingPolicy=deferred --inputAdmissionPolicy=ser-break-even`，不自动改变全平台默认值。
+旧 NET-ready 已从正式入口退役；历史比较与 `T_net/G_net` 诊断保留，但不能触发 SEND。
 
 `T_ser` 是实际路径估计器向上取整的序列化纳秒，`T_net=T_ser+传播纳秒`；
 `w_k=q_k*prod(j<k,1-q_j)`，复用 canonical predictor 的完整采样窗口，保留 first sample/finishExclusive。
@@ -33,6 +36,9 @@ checkpoint 的维护 quota。额外流量/存储会真实影响共享资源，�
 和 state/tail join。READY 复用保留原接收时间，可能早于 recovery acceptance。
 同目标完整 INPUT 不再要求源星存活或新流可准入；holder F3 仍使其失效。
 异目标或失败预取分别记录 `WRONG_TARGET_REFETCH` / `FAILED_PREFETCH_REFETCH`，合法重新获取不是 duplicate bug。
+跨星 REQUESTED 即使已有注册 ID，只要尚未真实准入就仍按 FETCH 评估，不能用 1 ns 伪装在途等待；
+诊断 `PREFETCH_NOT_ESTABLISHED` 不属于失败 refetch。最终接受 FETCH 才取消 pending 请求与对象，
+未注册请求由 guard 阻止后续建立；同星 pending 仍等待已有的 LocalDelivery 事件，不创建网络流。
 
 启用时追加 `input-admission-decisions.csv`、`input-prefetch-events.csv`、
 `input-prefetch-summary.json` 及因果 START snapshots；`none` 不产生这些新增运行记录。

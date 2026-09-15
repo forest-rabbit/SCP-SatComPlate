@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exactly four same-source development run11 executions; no promotion or threshold search."""
+"""Final clean-source D/S development closure; no threshold search or formal matrix."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -13,8 +13,25 @@ import zipfile
 ROOT=Path(__file__).resolve().parents[5]
 API=runpy.run_path(str(Path(__file__).parents[2]/'support/protection/input_admission_runtime_audit.py'))
 PREPARE=runpy.run_path(str(Path(__file__).with_name('run-input-start-calibration.py')))['prepare']
-GROUPS={'D':('deferred','none'),'E':('eager','none'),
-        'S':('deferred','ser-break-even'),'N':('deferred','net-ready-break-even')}
+GROUPS={'D':('deferred','none'),'S':('deferred','ser-break-even')}
+APPROVED_ANCESTOR='a4315e2b88ac70b614e457757237cb6307da76dc'
+
+
+def execution_identity(gates):
+    """Require tested clean source, not a hardcoded historical implementation parent."""
+    def git(*args):
+        return subprocess.check_output(['git',*args],cwd=ROOT,text=True).strip()
+    if not gates.get('all_passed'):
+        raise ValueError('small semantic gates must pass before development runs')
+    if git('status','--porcelain'):
+        raise ValueError('final D/S execution requires a clean committed worktree')
+    if subprocess.run(['git','merge-base','--is-ancestor',APPROVED_ANCESTOR,'HEAD'],cwd=ROOT).returncode:
+        raise ValueError('approved INPUT implementation is not an ancestor')
+    head,tree,branch=git('rev-parse','HEAD'),git('rev-parse','HEAD^{tree}'),git('branch','--show-current')
+    if gates.get('tested_tree')!=tree:
+        raise ValueError('small gates do not certify this execution source tree')
+    return dict(commit=head,source_tree=tree,branch=branch,worktree_dirty=False,
+                approved_implementation_ancestor=APPROVED_ANCESTOR)
 
 
 def main():
@@ -24,11 +41,7 @@ def main():
     args=parser.parse_args(); output=args.output_root.resolve()
     if output.exists(): parser.error('refusing to overwrite an existing execution')
     gates=json.loads(args.gates.read_text())
-    if not gates.get('all_passed'): parser.error('small semantic gates must pass before development runs')
-    head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
-    if head!='34177d0cf258fb4d58d3a9eb28c5872b1a39af0d':
-        parser.error('unexpected approved implementation parent; review provenance before running')
-    # Record the actual uncommitted implementation, not a false clean-parent identity.
+    identity=execution_identity(gates)
     # Archive bytes and compare them directly. No SHA-256, crypto seal, or auto-commit.
     files=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','-z',
                                   '--','contrib/satcompute'],cwd=ROOT).split(b'\0')
@@ -39,6 +52,8 @@ def main():
     (output/'implementation.patch').write_bytes(subprocess.check_output(['git','diff','--binary'],cwd=ROOT))
     (output/'small-gates.json').write_text(json.dumps(gates,indent=2)+'\n')
     def unchanged():
+        if execution_identity(gates)!=identity:
+            raise RuntimeError('execution identity changed during final closure')
         if any((ROOT/p).read_bytes()!=data for p,data in sources.items()):
             raise RuntimeError('source changed during frozen development execution')
     def execute(group):
@@ -49,9 +64,9 @@ def main():
               '--inputStartAudit=0' if a.startswith('--inputStartAudit=') else a for a in argv]
         argv.append(f'--inputAdmissionPolicy={admission}'); command[-1]=shlex.join(argv)
         path.mkdir()
-        meta=dict(source,command=command,commit=head,implementation_parent=head,worktree_dirty=True,
+        meta=dict(source,**identity,command=command,
             execution_source_archive=str(output/'execution-source.zip'),source_file_count=len(sources),
-            branch='feature/compfrr-input-admission-runtime',purpose='DEVELOPMENT_CALIBRATION',
+            purpose='FINAL_DEVELOPMENT_CLOSURE',
             final_performance_result=False,input_staging_policy=staging,input_admission_policy=admission,
             input_start_audit=False,selective_input_enabled=admission!='none')
         (path/'execution.json').write_text(json.dumps(meta,indent=2)+'\n')
@@ -67,9 +82,11 @@ def main():
             raise RuntimeError('development run did not execute the full frozen scene')
         (path/'input-admission-audit.json').write_text(json.dumps(audit,indent=2)+'\n')
         return group,audit
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         results=dict(pool.map(execute,GROUPS))
     (output/'comparison.json').write_text(json.dumps(results,indent=2)+'\n')
+    if any('completed' not in r for r in results.values()):
+        raise RuntimeError('final closure execution failed; preserve outputs and audit before retry')
     if all('completed' in r for r in results.values()):
         paired=API['paired_comparison']({g:output/g for g in GROUPS},results)
         (output/'paired-comparison.json').write_text(json.dumps(paired,indent=2)+'\n')

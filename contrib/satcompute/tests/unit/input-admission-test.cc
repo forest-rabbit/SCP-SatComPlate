@@ -28,10 +28,11 @@ int main()
             if (!path.at("admitted_rate_bps").is_null()) in.path.path.admittedRateBps = path.at("admitted_rate_bps");
             if (!path.at("propagation_ns").is_null()) in.path.propagationNs = path.at("propagation_ns");
             const auto s = EvaluateInputAdmission(InputAdmissionPolicy::SER_SYMMETRIC_BREAK_EVEN, in);
-            const auto n = EvaluateInputAdmission(InputAdmissionPolicy::NET_READY_VS_SER_COST, in);
-            results.push_back({{"task_id", r.at("task_id")}, {"ser", s.send}, {"net", n.send},
-                {"serialization_ns", s.serializationNs}, {"network_ns", n.networkReadyNs},
-                {"serial_gain_ns", s.serialGainNs}, {"network_gain_ns", n.networkGainNs}, {"cost_ns", n.costNs}});
+            // Historical NET comparison is test-only; there is no online NET policy.
+            const bool historicalNet = s.reason == "LOCAL_DELIVERY" || s.networkGainNs > s.costNs;
+            results.push_back({{"task_id", r.at("task_id")}, {"ser", s.send}, {"net", historicalNet},
+                {"serialization_ns", s.serializationNs}, {"network_ns", s.networkReadyNs},
+                {"serial_gain_ns", s.serialGainNs}, {"network_gain_ns", s.networkGainNs}, {"cost_ns", s.costNs}});
         }
         std::cout << results.dump() << '\n';
     }

@@ -1,4 +1,4 @@
-"""Execute the pure production C++ selector, including its approved snapshot anchor."""
+"""Production SER anchor plus historical NET math in the test-only native probe."""
 import csv
 from copy import deepcopy
 import json

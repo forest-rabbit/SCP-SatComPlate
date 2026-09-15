@@ -7,7 +7,7 @@
 namespace ns3::protection
 {
 /** Optional INPUT screening, independent of checkpoint EAGER/DEFERRED layout. */
-enum class InputAdmissionPolicy { NONE, SER_SYMMETRIC_BREAK_EVEN, NET_READY_VS_SER_COST };
+enum class InputAdmissionPolicy { NONE, SER_SYMMETRIC_BREAK_EVEN };
 InputAdmissionPolicy ParseInputAdmissionPolicy(const std::string& name);
 const char* ToString(InputAdmissionPolicy policy);
 

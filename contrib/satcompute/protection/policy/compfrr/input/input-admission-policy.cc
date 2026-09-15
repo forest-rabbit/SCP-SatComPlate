@@ -11,7 +11,6 @@ InputAdmissionPolicy ParseInputAdmissionPolicy(const std::string& name)
 {
     if (name == "none") return InputAdmissionPolicy::NONE;
     if (name == "ser-break-even") return InputAdmissionPolicy::SER_SYMMETRIC_BREAK_EVEN;
-    if (name == "net-ready-break-even") return InputAdmissionPolicy::NET_READY_VS_SER_COST;
     throw std::invalid_argument("unknown INPUT admission policy");
 }
 const char* ToString(InputAdmissionPolicy policy)
@@ -20,7 +19,6 @@ const char* ToString(InputAdmissionPolicy policy)
     {
     case InputAdmissionPolicy::NONE: return "none";
     case InputAdmissionPolicy::SER_SYMMETRIC_BREAK_EVEN: return "ser-break-even";
-    case InputAdmissionPolicy::NET_READY_VS_SER_COST: return "net-ready-break-even";
     }
     throw std::invalid_argument("invalid INPUT admission policy");
 }
@@ -64,9 +62,7 @@ InputAdmissionDecision EvaluateInputAdmission(InputAdmissionPolicy policy, const
     if (std::abs(mass - p) > 1e-12L)
         throw std::invalid_argument("INPUT trajectory does not cover canonical P_F");
     out.costNs = (1 - static_cast<long double>(p)) * out.serializationNs;
-    const auto gain = policy == InputAdmissionPolicy::SER_SYMMETRIC_BREAK_EVEN
-        ? out.serialGainNs : out.networkGainNs;
-    out.send = gain > out.costNs;
+    out.send = out.serialGainNs > out.costNs;
     out.reason = out.send ? "POSITIVE_BREAK_EVEN" : "NONPOSITIVE_BREAK_EVEN";
     return out;
 }

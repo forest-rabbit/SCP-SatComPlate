@@ -152,6 +152,8 @@ def paired_comparison(roots, results):
     answer={}
     columns=('protection_sent_bytes','all_network_sent_bytes','total_waste_eq_wu')
     for old,new in (('D','S'),('D','N'),('E','S'),('E','N'),('S','N')):
+        # Retain historical four-group analysis; final closure executes only D/S.
+        if old not in results or new not in results: continue
         a,b=results[old],results[new]
         change={k:dict(before=a[k],after=b[k],delta=b[k]-a[k],
                        percent=100*(b[k]-a[k])/a[k] if a[k] else None) for k in columns}

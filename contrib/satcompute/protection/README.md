@@ -62,7 +62,7 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 | `n5cVariant` | `full` | `full`=CUMULATIVE、`rational-U`=IDLE_AWARE；`noR/noU/noM` 仅消融；recent-U 正式入口拒绝 |
 | `remoteBusyRecoveryPolicy` | `relocate` | fixed/compfrr 的 REMOTE_BUSY、DIRECT_DEADLINE_INFEASIBLE 分支：迁移 checkpoint 或从零重算；CB 保持既有忙时合同；off/recompute/one-plus-one 不使用此开关 |
 | `inputStagingPolicy` | `eager` | `eager` 保持旧预置行为；显式 `deferred` 仅支持 compfrr，常态只保护状态、故障后获取一次完整原始 INPUT |
-| `inputAdmissionPolicy` | `none` | `none` 保持原合同；`ser-break-even` / `net-ready-break-even` 仅用于 CompFRR + deferred，一次性选择独立 INPUT 预置，不改 checkpoint 布局；见 [F/INPUT](../../../docs/protection/compfrr-f.md#独立-input-binary-admission) |
+| `inputAdmissionPolicy` | `none` | `none` 保持原合同；唯一 selective 规则 `ser-break-even` 仅用于 CompFRR + deferred，一次性选择独立 INPUT 预置，不改 checkpoint 布局；见 [F/INPUT](../../../docs/protection/compfrr-f.md#独立-input-binary-admission) |
 | `lrlRecoveryWeight` | `1` | G3 正式运行前冻结，不扫描或事后选择；不影响 FFP |
 
 测试位置和命令统一见 [tests](../tests/README.md)；平台构建与 uv 环境见[总 README](../../../README.md)。

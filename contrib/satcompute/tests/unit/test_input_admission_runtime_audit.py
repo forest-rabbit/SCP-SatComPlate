@@ -10,9 +10,43 @@ from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[4]
 API=runpy.run_path(str(Path(__file__).parents[1]/'support/protection/input_admission_runtime_audit.py'))
+RUNNER=runpy.run_path(str(Path(__file__).parents[1]/'integration/regression/run-input-admission-development.py'))
 
 
 class RuntimeAuditTests(unittest.TestCase):
+    def test_final_runner_uses_only_ds_and_actual_clean_tested_source(self):
+        self.assertEqual(RUNNER['GROUPS'],{'D':('deferred','none'),'S':('deferred','ser-break-even')})
+        def git(command,**kwargs):
+            return {('status','--porcelain'):'',('rev-parse','HEAD'):'actual-commit',
+                    ('rev-parse','HEAD^{tree}'):'tested-tree',
+                    ('branch','--show-current'):'current-branch'}[tuple(command[1:])]
+        with patch.object(subprocess,'check_output',side_effect=git), \
+             patch.object(subprocess,'run',return_value=subprocess.CompletedProcess([],0)):
+            actual=RUNNER['execution_identity'](dict(all_passed=True,tested_tree='tested-tree'))
+            self.assertEqual(actual['commit'],'actual-commit')
+            self.assertEqual(actual['branch'],'current-branch')
+            self.assertFalse(actual['worktree_dirty'])
+            with self.assertRaisesRegex(ValueError,'source tree'):
+                RUNNER['execution_identity'](dict(all_passed=True,tested_tree='old-tree'))
+        with patch.object(subprocess,'check_output',return_value=' M source.cc'):
+            with self.assertRaisesRegex(ValueError,'clean'):
+                RUNNER['execution_identity'](dict(all_passed=True))
+        with patch.object(subprocess,'check_output',return_value=''), \
+             patch.object(subprocess,'run',return_value=subprocess.CompletedProcess([],1)):
+            with self.assertRaisesRegex(ValueError,'ancestor'):
+                RUNNER['execution_identity'](dict(all_passed=True))
+
+    def test_available_comparison_pairs_only(self):
+        self.assertEqual(API['paired_comparison']({},{}),{})
+        self.assertEqual(API['paired_comparison']({},dict(D={})),{})
+
+    def test_net_not_advertised_in_production_help(self):
+        result=subprocess.run([str(ROOT/'build/contrib/satcompute/ns3.48-satcompute-default'),'--help'],
+                              cwd=ROOT,text=True,capture_output=True,timeout=10)
+        self.assertEqual(result.returncode,0)
+        self.assertIn('ser-break-even',result.stdout)
+        self.assertNotIn('net-ready-break-even',result.stdout+result.stderr)
+
     def test_legacy_eager_missing_barrier_is_not_zero_wait(self):
         stats,missing=API['critical_wait_distribution']([dict(input_received_time_ns='10')])
         self.assertEqual(missing,1)
@@ -84,6 +118,7 @@ class RuntimeAuditTests(unittest.TestCase):
     def test_illegal_cli_combinations_rejected_before_running(self):
         binary=ROOT/'build/contrib/satcompute/ns3.48-satcompute-default'
         for mode,staging,admission in (('fixed','eager','ser-break-even'),('compfrr','eager','net-ready-break-even'),
+            ('compfrr','deferred','net-ready-break-even'),
             ('recompute','deferred','ser-break-even'),('compfrr','deferred','invalid')):
             result=subprocess.run([str(binary),f'--protectionMode={mode}',f'--inputStagingPolicy={staging}',
                 f'--inputAdmissionPolicy={admission}'],cwd=ROOT,text=True,capture_output=True,timeout=10)

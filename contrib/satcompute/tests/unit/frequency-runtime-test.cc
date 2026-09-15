@@ -1426,12 +1426,12 @@ int main(int argc, char** argv)
     command.AddValue("outputDir", "Controlled evidence directory", output);
     command.AddValue("inputStartAudit", "Opt-in passive START capture for no-op fixtures", inputStartAudit);
     bool onlyInputAdmission = false;
-    command.AddValue("onlyInputAdmission", "Run the two new online optional INPUT fixtures only", onlyInputAdmission);
+    command.AddValue("onlyInputAdmission", "Run the SER online optional INPUT fixture only", onlyInputAdmission);
     command.Parse(argc, argv);
     try
     {
-        for (auto admission : {InputAdmissionPolicy::SER_SYMMETRIC_BREAK_EVEN, InputAdmissionPolicy::NET_READY_VS_SER_COST})
-            Online(std::filesystem::path(output)/ToString(admission), "n5c-deferred", admission);
+        Online(std::filesystem::path(output)/"ser-break-even", "n5c-deferred",
+               InputAdmissionPolicy::SER_SYMMETRIC_BREAK_EVEN);
         if (onlyInputAdmission) { std::cout << "input admission online: PASS (" << checks << " checks)\n"; return 0; }
         Storage();
         for (auto staging : {InputStagingPolicy::EAGER, InputStagingPolicy::DEFERRED})

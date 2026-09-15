@@ -223,7 +223,7 @@ AddCommandLineOptions(CommandLine& commandLine,
                          config.remoteBusyRecoveryPolicy);
     commandLine.AddValue("inputStagingPolicy", "eager / deferred; deferred requires compfrr",
                          config.inputStagingPolicy);
-    commandLine.AddValue("inputAdmissionPolicy", "none / ser-break-even / net-ready-break-even; optional CompFRR Deferred INPUT",
+    commandLine.AddValue("inputAdmissionPolicy", "none / ser-break-even; optional CompFRR Deferred INPUT",
                          config.inputAdmissionPolicy);
     commandLine.AddValue("lrlRecoveryWeight", "Diagnostic active-recovery weight; G3 freezes 1", config.lrlRecoveryWeight);
     commandLine.AddValue("fixedProtectionDelta",
@@ -387,7 +387,7 @@ ValidateConfig(const SatComputeConfig& config)
     RequireChoice(config.placementMode, "placementMode", {"ffp", "lrl", "fa-ffp", "fa-lrl", "n5c"});
     RequireChoice(config.remoteBusyRecoveryPolicy, "remoteBusyRecoveryPolicy", {"relocate", "recompute"});
     RequireChoice(config.inputStagingPolicy, "inputStagingPolicy", {"eager", "deferred"});
-    RequireChoice(config.inputAdmissionPolicy, "inputAdmissionPolicy", {"none", "ser-break-even", "net-ready-break-even"});
+    RequireChoice(config.inputAdmissionPolicy, "inputAdmissionPolicy", {"none", "ser-break-even"});
     if (config.inputAdmissionPolicy != "none" &&
         (config.protectionMode != "compfrr" || config.inputStagingPolicy != "deferred"))
         FailConfig("inputAdmissionPolicy", "non-none requires compfrr + deferred");

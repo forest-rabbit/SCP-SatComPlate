@@ -166,3 +166,21 @@ task 795、551、352 分别慢 203.366、68.715、57.623 ms，抵消该收益。
 22 个生命周期场景、374 checks 通过；完整 build、18021 contract checks、230 online INPUT checks、
 13 项 INPUT Python tests 通过。日志位于 `output/compfrr-input-closeout/g1-*.log` 与 `pending-gate.log`。
 接下来退役 N 正式入口、完成完整本地 gates，再冻结同一 clean commit 运行 D/S。
+
+### G2/G3：SER 唯一入口与执行身份
+
+生产 enum/parser/CLI 及 online fixture/新执行 runner 已移除 N；CLI 明确拒绝旧 N 值。
+历史 68/115 对照只在测试 native probe 中计算 NET，不暴露第二个 runtime policy；原报告与 N 输出保留。
+`T_net/G_net` 继续作为诊断字段，只有 `G_ser > (1-P_F)*T_ser` 可以决定跨星 SEND。
+默认 none 不变，最终 CompFRR 显式组合 Deferred+SER；Shared Recovery 仍只依赖中性 resolver。
+
+runner 只执行 D/S，验证实际 clean HEAD、已通过 gates 的 Git tree，以及 `a4315e2b8` 的祖先关系；
+不再要求旧 `34177d0cf`，不再标注虚假的 parent/dirty 身份。仍直接保存源码与比较字节，不增加 SHA-256。
+dry-run 检查确认两组除输出路径外的全部参数与原 D/S 一致，场景输入与 canonical 版本字节一致。
+
+最终 lifecycle 旧 20 场景的 200 份输出不变；清理前后 SER online 的 20 份输出不变。
+443 项 Python tests（1 项既有跳过）、16 项 INPUT-focused tests 与 SER 115 checks 通过；
+N5R canonical 1,965 份输出（1,707 CSV）逐项等价，只增加 20 份 SER 专用测试文件。
+JSON 仅忽略既有 wall-clock 字段及输出路径，CSV 整表/顺序/字段逐字节比较，不更新 golden。
+完整 build、全部 maintained C++、frequency/16-group placement smoke 及 maintained regression 均通过。
+证据统一在 `output/compfrr-input-closeout/`；只进行已批准的最终 D/S 开发收尾，不做 independent-run 评价。
