@@ -15,7 +15,11 @@ continue shared RS/RP runtime and small gates, then six full 1300s seed1/run11
 (busy=Recompute where applicable), and CompFRR Selective+Relocate with either
 CompFRR-P CUMULATIVE/no ablation or FA-FFP. Preserve scheme capabilities: 1+1 has
 no hidden RS fallback; Multi-tree selects RS or RP by the frozen tree.
-Stop for actual mapping/mechanism blockers, otherwise after six-run review evidence.
+User clarification extends this to three six-scheme rounds: Run A randomRun=11,
+Run B randomRun=12, Run C randomRun=13. Keep randomSeed=1 and ecmpHashSeed=1;
+only randomRun changes, NOT the seed. Freeze algorithms, tree, calibration and all
+other runtime inputs. Stop for actual mapping/mechanism blockers, otherwise after
+the three-round review evidence.
 Do not auto-push/merge/CI or change main/legacy. Earlier stop notes below are history.
 
 Stage A is committed as b7e248350: 200 mapping checks, deterministic 800-task
@@ -36,8 +40,11 @@ platform wiring/audit cases, then six complete runs using run-multitree-comparis
 Audit actual WU/eq-WU, full physical byte lifetimes, and catch with missing separate
 from zero. RP catch can be reconstructed only from actual surviving continuous
 replica service, not the takeover label or planned work. No hidden RS fallback.
-Do not edit execution source while the six formal runs are active; stop after
-the comparison for user review, without push/PR/CI/merge.
+Run A is complete at clean 1fd8348bd, all six audits PASS. Preserve the original
+execution records at output/multitree/stage-c/run11-1fd8348bd/ without renaming or
+rewriting them. Add B/C with the identical simulation content, only randomRun=12/13.
+Runner/auditor changes may record this identity, but do not edit execution source
+while runs are active. Stop after A/B/C comparison for review, without push/PR/CI/merge.
 
 ### Current handoff: protection config hierarchy closed (2026-09-15)
 

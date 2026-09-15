@@ -69,7 +69,8 @@ deadline 调用现有 `TaskRuntime::ConfigureComputeDeadline`，保留 service/d
 实施顺序：Stage A 映射/队列审计 → Stage B 共享 RS/RP 执行机制 → 六组完整 run11。
 六组为 Recompute、1+1、CB-SAT、Multi-tree（均 FA-FFP，适用时 busy=Recompute），
 以及 CompFRR-P 和 FA-FFP 两种 placement 的 CompFRR Selective+Relocate。
-固定 800 任务、1300s、seed1/run11，其余参数不变；online generate 的实际故障可以因
+三轮均固定 800 任务、1300s、randomSeed=1、ecmpHashSeed=1；Run A/B/C 仅将
+randomRun 设为 11/12/13，树与标定保持不变。online generate 的实际故障可以因
 不同负载改变，不声称各组故障轨迹完全相同。不为分支覆盖或性能调尺度/阈值。
 
 Stage A：`MULTITREE_MAPPING_READY`。200 项 C++ 映射检查通过；校准重建内容一致；
@@ -92,7 +93,8 @@ F1/F2 当前状态；不能把 unavailable prediction 补零。RS/RP 在首次 R
 未到达该状态的任务保持 UNDECIDED，RP 准入失败不重试、不暗中转为 RS。
 
 六组比较使用 `tests/integration/regression/run-multitree-comparison.py`，传入新
-`--output-root`；`--smoke` 为 15s 小门禁，默认完整 1300s，`--audit-only` 不启动仿真。
+`--output-root`；`--random-run=11|12|13` 选择 A/B/C，默认 11；`--smoke` 为 15s
+小门禁，默认完整 1300s，`--audit-only` 不启动仿真。
 须保持干净执行提交，不覆盖已有输出。`comparison.json` 保留每项实际 WU/服务时间、
 payload 与 catch 的来源；RP catch 根据实际连续副本服务追平 W_f 推导，不能把
 接管时间直接当 catch 或将未追平记为 0。结果同时列完成数、流量、执行浪费、

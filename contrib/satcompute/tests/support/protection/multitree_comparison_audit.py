@@ -3,6 +3,7 @@ from collections import Counter
 import json
 from pathlib import Path
 import runpy
+import shlex
 import sys
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -35,6 +36,11 @@ def replica_catch_ns(fault_ns, fault_work, attempt):
     return max(0, start + required_ns - fault_ns)
 
 
+def same_primary_fault(a, b):
+    """Same primary/time/type/cause, not numerical fault IDs or forced replay."""
+    return a['fault_signature'] == b['fault_signature']
+
+
 def audit(root):
     root = Path(root)
     identity = json.loads((root/'execution.json').read_text())
@@ -48,7 +54,7 @@ def audit(root):
     require(len(tasks) == len(ts) and all(t['final_state'] in ('COMPLETED', 'FAILED') for t in ts), 'invalid terminals')
     terminals = Counter(e['task_id'] for e in rows(root, 'task-events.csv') if e['to_state'] in ('COMPLETED', 'FAILED'))
     require(terminals == Counter({k: 1 for k in tasks}), 'logical terminal duplication')
-    if identity['stage'] == 'multitree-comparison-run11':
+    if identity['stage'] in ('multitree-comparison-run11', 'multitree-comparison'):
         require((len(ts), run['total_input_bytes'], run['total_output_bytes'], run['total_compute_work_units'],
                  run['compute_node_count'], run['simulation_duration_ns']) ==
                 (800, 194119753287, 100166291859, 352513119, 66, 1300*NS), 'canonical scene changed')
@@ -130,10 +136,16 @@ def audit(root):
                 all(decisions.get(k) == 'RS' for k in rs), 'mixed RS/RP or hidden fallback')
         require({k for k, v in decisions.items() if v == 'RP'} == set(replicas), 'RP request omitted/retried')
         extra_report['multitree'] = json.loads((root/'multitree-summary.json').read_text())
-        if identity['stage'] == 'multitree-comparison-run11':
+        if identity['stage'] in ('multitree-comparison-run11', 'multitree-comparison'):
             mapping = runpy.run_path(str(ROOT/'contrib/satcompute/tests/integration/regression/audit-multitree-mapping.py'))
             extra_report['mapping'] = mapping['audit'](root)
     faults = json.loads((root/'fault-trace.json').read_text())['faults']
+    physical_faults = {(f['node_id'], f['start_time_ns']): f for f in faults}
+    require(len(physical_faults) == len(faults), 'ambiguous physical fault identity')
+    for c in catches:
+        node = int(tasks[c['task_id']]['compute_node_id'])
+        f = physical_faults[node, c['fault_time_ns']]
+        c['fault_signature'] = [node, c['fault_time_ns'], f['fault_type'], f['f1_occurred'], f['f2_occurred']]
     links = rows(root, 'link-summary.csv')
     totals = {k: sum(e[k] for e in executed) for k in ('normal_protection_eq_wu', 'reserved_idle_eq_wu',
         'task_execution_waste_wu', 'w_waste_actual', 'total_executed_wu', 'useful_work_wu')}
@@ -159,20 +171,30 @@ def comparison(root, groups):
     results = {g: audit(root/g) for g in groups}
     commits = {v['execution']['commit'] for v in results.values()}
     require(len(commits) == 1, 'comparison mixes execution commits')
+    config = runpy.run_path(str(Path(__file__).with_name('config_arguments.py')))
+    omitted = config['NEW'] | config['SHARED'] | {'outputDir', 'faultTrace'}
+    common_scene = None
+    for r in results.values():
+        flags = dict(t.removeprefix('--').split('=', 1) for t in shlex.split(r['execution']['command'][-1])[1:])
+        scene = {k: v for k, v in flags.items() if k not in omitted}
+        if common_scene is None: common_scene = scene
+        require(scene == common_scene, 'comparison mixes non-protection runtime inputs')
     paired = {}
     for other in groups:
         if other == 'compfrr-p': continue
         a, b = results[other], results['compfrr-p']
         fa = {c['task_id']: c for c in a['catches']}
         fb = {c['task_id']: c for c in b['catches']}
-        common = [key for key in fa.keys() & fb.keys() if fa[key]['fault_time_ns'] == fb[key]['fault_time_ns']]
+        common = [key for key in fa.keys() & fb.keys() if same_primary_fault(fa[key], fb[key])]
         valid = [key for key in common if fa[key]['catch_ns'] is not None and fb[key]['catch_ns'] is not None]
-        paired[other] = dict(same_time_primary_faults=len(common), both_caught=len(valid),
+        paired[other] = dict(same_physical_primary_faults=len(common), both_caught=len(valid),
             reference_mean_ms=sum(fa[k]['catch_ns']/1e6 for k in valid)/len(valid) if valid else None,
             compfrr_p_mean_ms=sum(fb[k]['catch_ns']/1e6 for k in valid)/len(valid) if valid else None,
             task_ids=sorted(map(int, valid)))
-    return dict(status='PASS', commit=next(iter(commits)), groups=results, paired_vs_compfrr_p=paired,
-        scope='Same input/model/seed1/run11, online generate; realized faults are endogenous, not forced replay.',
+    return dict(status='PASS', commit=next(iter(commits)), common_runtime_inputs=common_scene,
+        groups=results, paired_vs_compfrr_p=paired,
+        scope=f"Same input/model/seed{common_scene['randomSeed']}/run{common_scene['randomRun']}, "
+              'online generate; realized faults are endogenous, not forced replay.',
         units='Bytes are actual application payload, counted once per physical flow, decimal GB. Resource totals are eq-WU.',
         waste='Executed primary+recovery+replica WU minus W only for logical success; plus normal cost and actual reserved-idle eq-WU.',
         catch='Primary RUNNING faults only. Actual recovery milestone or surviving RP actual continuous service reaches W_f. Missing is not zero.',
@@ -180,7 +202,8 @@ def comparison(root, groups):
 
 
 def markdown(report):
-    lines = ['# 六组 run11 实际执行对比', '',
+    scene = report['common_runtime_inputs']
+    lines = [f"# 六组 seed{scene['randomSeed']}/run{scene['randomRun']} 实际执行对比", '',
         '| 方案 | 完成 | 额外流量 GB | catch 均值 / P90 ms | 已 catch / 故障样本 | 执行浪费 M WU | 常态 M eq-WU | 空等 M eq-WU | 总浪费 M eq-WU |',
         '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
     def num(value): return '—' if value is None else f'{value:.3f}'
@@ -193,5 +216,5 @@ def markdown(report):
     lines += ['', 'catch 从主任务故障到幸存/恢复任务实际追平故障前 WU；缺失不填零。1+1 接管不等于已追平。',
         '总浪费 = 实际任务执行浪费 + 常态保护等效成本 + 实际预留空等等效成本；最后一项不是已执行 CPU。',
         '流量统计整个实际 flow 生命周期的额外应用载荷，不是按跳累加。各组 online generate 负载不同，实际故障不强制相同。',
-        '独立重复试验尚未进行；配对共同故障、逐任务账本与完整单位说明见 comparison.json。', '']
+        '本表为单轮结果；配对共同故障、逐任务账本与完整单位说明见 comparison.json。', '']
     return '\n'.join(lines)

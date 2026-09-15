@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Frozen six-scheme run11 comparison; no tuning, recalibration, or automatic Git/CI."""
+"""Frozen six-scheme comparison; only the requested randomRun varies across rounds."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
@@ -24,8 +24,10 @@ GROUPS = {
 }
 
 
-def arguments(output, group, small=False):
-    argv = SCENE['canonical_experiment_arguments'](SCENE['arguments'](output))
+def arguments(output, group, small=False, random_run=11):
+    if random_run not in (11, 12, 13):
+        raise ValueError('authorized comparison runs are 11, 12, and 13')
+    argv = SCENE['canonical_experiment_arguments'](SCENE['arguments'](output, random_run=random_run))
     argv = [x for x in argv if not x.startswith('--protectionScheme=')]
     scheme = GROUPS[group][1]
     argv += [f'--protectionScheme={scheme}']
@@ -87,12 +89,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-root', required=True, type=Path)
     parser.add_argument('--jobs', type=int, choices=range(1, 7), default=6)
+    parser.add_argument('--random-run', type=int, choices=(11, 12, 13), default=11,
+                        help='Run A/B/C use 11/12/13; randomSeed and ecmpHashSeed stay 1')
     parser.add_argument('--smoke', action='store_true', help='15s four-profile wiring gate, not formal evidence')
     parser.add_argument('--audit-only', action='store_true')
     parser.add_argument('--describe', action='store_true', help='Read-only command/profile preview')
     args = parser.parse_args()
     root = args.output_root.resolve()
-    commands = {g: arguments(root / g, g, args.smoke) for g in GROUPS}
+    commands = {g: arguments(root / g, g, args.smoke, args.random_run) for g in GROUPS}
     if args.describe:
         print(json.dumps(commands, indent=2)); return
     if args.audit_only:
@@ -106,7 +110,8 @@ def main():
         CONTROL['write_json'](root / 'matrix-status.json', dict(commit=head, groups=statuses))
     def execute(group):
         scheme = GROUPS[group][1]
-        identity = dict(stage='multitree-smoke' if args.smoke else 'multitree-comparison-run11',
+        identity = dict(stage='multitree-smoke' if args.smoke else 'multitree-comparison',
+            round_label={11: 'Run A', 12: 'Run B', 13: 'Run C'}[args.random_run],
             scene=scene, label=GROUPS[group][0], protection_mode=scheme,
             placement_mode='compfrr' if group == 'compfrr-p' else 'fa-ffp',
             remote_busy_recovery_policy=('relocate' if scheme == 'compfrr' else

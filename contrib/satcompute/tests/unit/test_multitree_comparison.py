@@ -9,6 +9,19 @@ AUDIT = runpy.run_path(str(TESTS/'support/protection/multitree_comparison_audit.
 
 
 class MultiTreeComparisonTests(unittest.TestCase):
+    def test_rounds_only_change_random_run_not_seeds_or_algorithm(self):
+        for group in RUNNER['GROUPS']:
+            original = RUNNER['arguments'](Path('/tmp/same-output'), group)
+            for run in (11, 12, 13):
+                actual = RUNNER['arguments'](Path('/tmp/same-output'), group, random_run=run)
+                expected = [f'--randomRun={run}' if x == '--randomRun=11' else x for x in original]
+                self.assertEqual(actual, expected)
+                self.assertIn('--randomSeed=1', actual)
+                self.assertIn('--ecmpHashSeed=1', actual)
+        for invalid in (0, 1, 10, 14):
+            with self.assertRaises(ValueError):
+                RUNNER['arguments'](Path('/tmp/same-output'), 'multitree', random_run=invalid)
+
     def test_six_profiles_share_the_same_non_protection_scene(self):
         controls = {'protectionScheme', 'backupStorageBytesPerNode'}
         common = None
@@ -45,6 +58,16 @@ class MultiTreeComparisonTests(unittest.TestCase):
         self.assertIsNone(f(10**9, 100, self.attempt(actual_service_ns='100000000', actual_work_units='10')))
         with self.assertRaises((AssertionError, ValueError, RuntimeError)):
             f(10**9, 100, self.attempt(takeover_time_ns='1'))
+
+    def test_paired_faults_require_primary_time_type_and_cause(self):
+        equal = AUDIT['same_primary_fault']
+        reference = dict(fault_signature=[3, 1000000000, 'compute', True, False])
+        self.assertTrue(equal(reference, dict(reference)))
+        for signature in ([4, 1000000000, 'compute', True, False],
+                          [3, 2000000000, 'compute', True, False],
+                          [3, 1000000000, 'compute', False, True],
+                          [3, 1000000000, 'satellite', False, False]):
+            self.assertFalse(equal(reference, dict(fault_signature=signature)))
 
 
 if __name__ == '__main__':
