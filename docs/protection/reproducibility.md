@@ -49,7 +49,7 @@ planned 不补 actual；catchup/post-catchup 是执行剖面，不再次加到 `
 未追平的任务没有样本，不记为零。比较同时给出样本数、mean/P50/P90/max；
 严格逐任务时延比较使用双方成功且故障时刻一致的样本，并说明选择范围。
 
-LRL/FA-LRL 是 N5C 的强 baseline，必须在同一受控合同下公平比较，不预设结果；
+LRL/FA-LRL 是 CompFRR-P 的强 baseline，必须在同一受控合同下公平比较，不预设结果；
 不为获得优势调整冻结输入。multi-seed 不是本阶段门槛，结论只适用于受控场景。
 
 ### 计划与实际执行
@@ -117,11 +117,17 @@ accounting、frequency、baseline、placement、risk-start、INPUT 和 scenario�
 旧 `integration/regression/analyze-*.py` / `run-final-scenario.py` 入口保留兼容转发；
 测试 oracle 不调用 production solver。
 
-配置层重构新增显式 `config_arguments.py`：旧 scheme/placement/INPUT/busy 转换只发生在测试 launch
+历史适配实现隔离到 `historical_config_arguments.py`（`config_arguments.py` 仅转发导入）：旧 scheme/placement/INPUT/busy 转换只发生在测试 launch
 边界，ordinary CLI 不接受旧别名。读取旧证据时先按实际 owner 去除已证明 inactive 的选项，
 再展开活跃默认值比较；保留 placement、两种 busy、pressure/ablation、cadence、pool 与 seed/run。
 CB 的旧 omitted busy=relocate 不得与新 canonical recompute 合并。历史 source guard 不放宽，
 旧 execution/schema/fixture 不追写。新增 55 组严格 small gate 见[配置层记录](../n5/reviews/Protection-config-hierarchy.md)。
+
+当前 `run-final-scenario.py` 直接生成 canonical argv，不经过旧参数转换。
+命名收口的小门禁使用显式 `--allow-placement-rename`：只映射列出的 placement 文件名、
+identity/reason，不豁免数值、列结构、事件顺序或生命周期差异；历史 CSV 通过
+`historical_placement.py` 只读兼容。验收及旧名称保留清单见
+[N5 canonical closeout](../n5/reviews/N5-final-canonicalization-and-closeout.md)。
 
 ## 历史保留与现行证据
 

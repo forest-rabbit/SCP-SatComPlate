@@ -64,7 +64,8 @@ START、ON maintenance、recovery compute 各自的 availability/idle 合同见 
 
 ## 兼容边界
 
-旧 `frequency-protection-controller.h`、`n5c-placement-*.h`、baseline 导出头保留转发/类型别名；
+旧 `frequency-protection-controller.h` 和 baseline 导出头保留转发/类型别名；
+P 的旧别名头及空实现标记已删除，当前统一使用 `compfrr-placement-*.h`。
 普通 CLI 改为 scheme 私有名字，旧 `placementMode=n5c`、`n5cVariant=full/rational-U`
 仅在测试层显式转换；CSV 和 C++ 兼容名保持原 schema，不是第二套实现。
 typed defaults 位于 `protection/protection-para.*`；接入与 capability 校验在 `protection-config.*`，
