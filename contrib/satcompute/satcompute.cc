@@ -669,13 +669,13 @@ main(int argc, char* argv[])
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
             std::filesystem::remove(outputDirectory / "frequency-pause-intervals.csv");
             std::filesystem::remove(outputDirectory / "frequency-capacity-waits.csv");
-            std::filesystem::remove(outputDirectory / "n5c-placement-decisions.csv");
+            std::filesystem::remove(outputDirectory / "compfrr-placement-decisions.csv");
             std::filesystem::remove(outputDirectory / "placement-resource-summary.csv");
             std::filesystem::remove(outputDirectory / "f3-compute-risk-snapshots.csv");
             const auto makePlacement = [&]() -> std::unique_ptr<protection::PlacementPolicy> {
                 const auto placement = protection::ActivePlacementPolicy(config.protection);
                 if (placement == protection::PlacementPolicyKind::COMPFRR)
-                    return std::make_unique<protection::CompFrrPlacementPolicy>(protection::ParseN5cVariant(
+                    return std::make_unique<protection::CompFrrPlacementPolicy>(protection::ParseCompFrrPlacementVariant(
                         protection::LegacyPlacementVariant(config.protection.compfrr)));
                 if (placement == protection::PlacementPolicyKind::LRL)
                     return std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.protection.commonPlacement.lrlRecoveryWeight);

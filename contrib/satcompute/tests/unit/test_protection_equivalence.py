@@ -49,6 +49,18 @@ class ProtectionEquivalenceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'preserve evidence'):
             API['collect'](self.left, 1)
 
+    def test_historical_placement_rename_is_narrow_and_opt_in(self):
+        old = self.left / 'n5c-placement-decisions.csv'
+        new = self.right / 'compfrr-placement-decisions.csv'
+        old.write_text('placement,reason,bytes\nn5c,N5C_POST_BATCH_QUOTA,123\n')
+        new.write_text('placement,reason,bytes\ncompfrr,COMPFRR_P_POST_BATCH_QUOTA,123\n')
+        with self.assertRaisesRegex(AssertionError, 'output set differs'):
+            API['compare'](self.left, self.right)
+        self.assertTrue(API['compare'](self.left, self.right, allow_placement_rename=True)['placement_rename_only'])
+        new.write_text('placement,reason,bytes\ncompfrr,COMPFRR_P_POST_BATCH_QUOTA,124\n')
+        with self.assertRaisesRegex(AssertionError, 'SEMANTIC_DIFFERENCE'):
+            API['compare'](self.left, self.right, allow_placement_rename=True)
+
 
 
 class CbProfileRelocationTest(unittest.TestCase):

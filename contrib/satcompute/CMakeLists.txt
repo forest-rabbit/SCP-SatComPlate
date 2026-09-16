@@ -83,7 +83,7 @@ build_lib(
     protection/runtime/placement-resource-tracker.cc
     metrics/core/placement-resource-metrics.cc
     protection/runtime/compute-usage-history.cc
-    metrics/core/n5c-placement-metrics.cc
+    metrics/core/compfrr-placement-metrics.cc
     protection/policy/compfrr/storage-estimator.cc
     protection/runtime/placement-load-ledger.cc
     metrics/core/placement-load-metrics.cc
@@ -187,7 +187,6 @@ build_lib(
     protection/policy/fixed/fixed-protection-policy.h
     protection/policy/compfrr/frequency/compfrr-frequency-policy.h
     protection/policy/compfrr/frequency/frequency-decision-gate.h
-    protection/policy/compfrr/placement/n5c-placement-policy.h
     protection/policy/compfrr/placement/compfrr-placement-policy.h
     protection/policy/compfrr/placement/compute-pressure/compute-pressure.h
     protection/policy/compfrr/placement/compfrr-placement-tracker.h
@@ -210,7 +209,6 @@ build_lib(
     protection/policy/compfrr/compfrr-controller.h
     protection/policy/compfrr/input/selective-input-snapshot.h
     protection/policy/compfrr/storage-estimator.h
-    protection/runtime/n5c-placement-tracker.h
     protection/runtime/compute-usage-history.h
     protection/runtime/frequency-storage-estimator.h
     protection/runtime/placement-load-ledger.h
@@ -445,9 +443,9 @@ add_custom_target(
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
 build_exec(
-  EXECNAME satcompute-n5c-placement-test
+  EXECNAME satcompute-compfrr-placement-test
   EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/n5c-placement-test.cc
+  SOURCE_FILES tests/unit/compfrr-placement-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )

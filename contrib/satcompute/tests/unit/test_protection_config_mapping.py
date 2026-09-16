@@ -27,19 +27,37 @@ class ConfigIdentityTests(unittest.TestCase):
         self.assertEqual(execute(scoped_old), scoped_old)
 
     def test_formal_runner_selects_compfrr_profile_but_baselines_stay_private(self):
-        self.assertEqual(SCENE['execution_profile_options']('compfrr'), ('n5c', 'selective'))
+        self.assertEqual(SCENE['execution_profile_options']('compfrr'), ('compfrr', 'selective'))
         for scheme in ('recompute', 'one-plus-one', 'checkbullet', 'fixed', 'off'):
             self.assertEqual(SCENE['execution_profile_options'](scheme), ('fa-ffp', 'eager'))
         self.assertEqual(SCENE['execution_profile_options']('compfrr', 'lrl', 'deferred'), ('lrl', 'deferred'))
         # New formal commands serialize all controls; historic omitted values stay FA-FFP/Eager.
-        new = execute(SCENE['arguments'](Path('unused'), protection_mode='compfrr',
-                                       placement_mode='n5c', input_policy='selective'))
+        new = SCENE['current_arguments'](Path('unused'))
         for flag in ('--protectionScheme=compfrr', '--compfrrCheckpointPolicy=adaptive',
                      '--compfrrPlacementPolicy=compfrr', '--compfrrInputPolicy=selective',
                      '--compfrrRecoveryPolicy=relocate', '--compfrrPressureModel=cumulative',
                      '--compfrrPlacementAblation=none'):
             self.assertIn(flag, new)
         self.assertNotEqual(normalize(new), normalize(['satcompute', '--protectionMode=compfrr']))
+
+    def test_current_runner_preserves_historical_identity_without_legacy_execution(self):
+        for mode, placement, busy in product(
+                ('off', 'fixed', 'compfrr', 'recompute', 'one-plus-one', 'checkbullet'),
+                ('fa-ffp', 'lrl', 'fa-lrl', 'ffp', 'compfrr'), ('relocate', 'recompute')):
+            if (placement == 'compfrr' and mode != 'compfrr') or (mode == 'off' and placement in ('lrl', 'fa-lrl')):
+                continue
+            for policy in ('eager', 'deferred', 'selective') if mode == 'compfrr' else ('eager',):
+                variants = ('full', 'noR', 'noU', 'noM', 'rational-U') if placement == 'compfrr' else ('full',)
+                for variant in variants:
+                    old = SCENE['arguments'](Path('unused'), protection_mode=mode,
+                        placement_mode='n5c' if placement == 'compfrr' else placement,
+                        input_policy=policy, n5c_variant=variant, remote_busy_recovery_policy=busy)
+                    new = SCENE['current_arguments'](Path('unused'), protection_mode=mode,
+                        placement_mode=placement, input_policy=policy, remote_busy_recovery_policy=busy,
+                        pressure_model='idle-aware' if variant == 'rational-U' else 'cumulative',
+                        placement_ablation=variant if variant.startswith('no') else 'none')
+                    self.assertEqual(normalize(old), normalize(new), (mode, placement, policy, busy, variant))
+                    self.assertFalse(any('n5c' in arg.lower() for arg in new))
 
     def assertMapping(self, old):
         new = execute(old)

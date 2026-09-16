@@ -11,9 +11,9 @@
 namespace ns3::protection
 {
 /** Only the ranking dimensions change in ablations; all hard constraints remain. */
-enum class N5cVariant { FULL, NO_R, NO_U, NO_M, RECENT_U, RATIONAL_U };
-N5cVariant ParseN5cVariant(const std::string& name);
-const char* N5cVariantName(N5cVariant variant);
+enum class CompFrrPlacementVariant { FULL, NO_R, NO_U, NO_M, RECENT_U, RATIONAL_U };
+CompFrrPlacementVariant ParseCompFrrPlacementVariant(const std::string& name);
+const char* CompFrrPlacementVariantName(CompFrrPlacementVariant variant);
 
 /** Causal per-task demand on one remote, never an observed recovery or future trace. */
 struct CompFrrForecast
@@ -25,7 +25,7 @@ struct CompFrrForecast
     int64_t readyAfterNs{}; ///< Strict readiness cutoff, actual or explicitly estimated.
     bool dependenciesAvailable{true};
     bool inputLocal{}; ///< LocalDelivery contributes exactly zero INPUT network time.
-    /** Candidate-specific hard-admission term. Empty preserves the legacy layout term. */
+    /** Candidate/peer policy-contract term. Empty preserves the legacy layout term. */
     std::optional<double> recoveryInputSeconds;
 };
 
@@ -72,21 +72,21 @@ struct CompFrrSelection
 double CompFrrCatchSeconds(const CompFrrForecast& forecast);
 double CompFrrBudgetSeconds(const CompFrrForecast& forecast, int64_t atNs);
 std::vector<CompFrrOccupancyWindow> CompFrrRecoveryWindows(const CompFrrForecast& forecast);
-CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& candidate, N5cVariant variant);
+CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& candidate, CompFrrPlacementVariant variant);
 /** FA-FFP ranks the read-only reference pair; V4 alone ranks the actual remote. */
 class CompFrrPlacementPolicy : public FaFirstFeasiblePlacementPolicy
 {
   public:
-    explicit CompFrrPlacementPolicy(N5cVariant variant = N5cVariant::FULL) : m_variant(variant) {}
+    explicit CompFrrPlacementPolicy(CompFrrPlacementVariant variant = CompFrrPlacementVariant::FULL) : m_variant(variant) {}
     /** Formal policies have exactly two values. Legacy variants below preserve ablation/fixture APIs. */
     explicit CompFrrPlacementPolicy(ComputePressurePolicy pressure)
-        : m_variant(pressure == ComputePressurePolicy::IDLE_AWARE ? N5cVariant::RATIONAL_U : N5cVariant::FULL) {}
-    const char* Name() const override { return "n5c"; }
-    N5cVariant Variant() const { return m_variant; }
+        : m_variant(pressure == ComputePressurePolicy::IDLE_AWARE ? CompFrrPlacementVariant::RATIONAL_U : CompFrrPlacementVariant::FULL) {}
+    const char* Name() const override { return "compfrr"; }
+    CompFrrPlacementVariant Variant() const { return m_variant; }
     CompFrrSelection SelectRemote(const std::vector<CompFrrCandidate>& candidates) const;
     void RankBackupNodes(std::vector<uint32_t>&, const PlacementContext&) const override;
   private:
-    N5cVariant m_variant; ///< Preselected ablation, never tuned from outcomes.
+    CompFrrPlacementVariant m_variant; ///< Preselected ablation, never tuned from outcomes.
 };
 } // namespace ns3::protection
 #endif

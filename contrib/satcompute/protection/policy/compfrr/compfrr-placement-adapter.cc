@@ -25,12 +25,12 @@ int64_t ReadyAfter(const FrequencyInput& in)
         in.costs.localNs, in.costs.remoteNs, in.baseTransferSeconds, in.stateTransferSeconds);
     const long double ns = std::ceil(static_cast<long double>(delay) * 1e9L);
     if (!std::isfinite(ns) || ns < 0 || ns > std::numeric_limits<int64_t>::max() - in.risk.epochNs)
-        throw std::logic_error("N5C ready estimate overflow");
+        throw std::logic_error("CompFRR-P ready estimate overflow");
     return in.risk.epochNs + static_cast<int64_t>(ns);
 }
 } // namespace
 
-std::vector<CompFrrForecast> CompFrrController::N5cPeers(
+std::vector<CompFrrForecast> CompFrrController::CompFrrPeers(
     uint32_t remote, uint64_t excluded, const std::string& trigger, DecisionPathSnapshot& paths)
 {
     std::vector<CompFrrForecast> peers;
@@ -72,7 +72,7 @@ std::vector<CompFrrForecast> CompFrrController::N5cPeers(
         if (!BuildResources(row, task, state, paths)) continue;
         // A pending initialization has no promised network-completion timestamp. Use a
         // conservative current full-init estimate, explicitly distinct from actual readiness.
-        const auto ready = m_n5c->ReadyAfter(id).value_or(ReadyAfter(in));
+        const auto ready = m_placementTracker->ReadyAfter(id).value_or(ReadyAfter(in));
         in.storageDemand = {};
         peers.push_back({id, task.definition.computeNodeId, PlacementInput(in),
                         {inventory->config.deltaPermille, inventory->config.batchN}, ready,
@@ -82,7 +82,7 @@ std::vector<CompFrrForecast> CompFrrController::N5cPeers(
         if (m_optionalInput)
         {
             // P models the admitted INPUT contract, not physical receiver readiness.
-            // Runtime recovery still waits on Resolve().remainingNs and the real DAG.
+            // remainingNs stays a runtime estimate; real recovery waits for receiver/DAG.
             const auto mode = m_optionalInput->Resolve(task.definition, remote).mode;
             if (mode == InputDependencyMode::READY || mode == InputDependencyMode::IN_FLIGHT)
                 peers.back().recoveryInputSeconds = 0;
@@ -91,7 +91,7 @@ std::vector<CompFrrForecast> CompFrrController::N5cPeers(
     return peers;
 }
 
-void CompFrrController::SelectN5cRemote(
+void CompFrrController::SelectCompFrrRemote(
     FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
     DecisionPathSnapshot& paths, const std::vector<PlacementDecision>& pairs)
 {
@@ -105,7 +105,7 @@ void CompFrrController::SelectN5cRemote(
     trace.config = row.proposal.selected->config;
     const auto primary = Service(task.definition.computeNodeId)->GetRunningTaskSnapshot();
     if (!primary || primary->taskId != row.taskId || primary->remainingTimeNs < 0)
-        throw std::logic_error("N5C missing current primary remaining compute time");
+        throw std::logic_error("CompFRR-P missing current primary remaining compute time");
     std::map<uint32_t, PolicyAwareInputPlan> selectivePlans;
     uint64_t candidateIndex = 0;
     for (const auto& pair : pairs)
@@ -117,7 +117,7 @@ void CompFrrController::SelectN5cRemote(
         actual.resourceReason.clear();
         CompFrrCandidate candidate;
         candidate.remoteNode = pair.remoteNode;
-        m_n5c->FillResources(candidate, primary->remainingTimeNs);
+        m_placementTracker->FillResources(candidate, primary->remainingTimeNs);
         if (!BuildResources(actual, task, state, paths))
             candidate.rejection = actual.resourceReason;
         else if (!actual.input.nodeAvailable)
@@ -146,7 +146,7 @@ void CompFrrController::SelectN5cRemote(
             if ((candidate.demand.readyAfterNs - trace.timeNs) / 1e9 >= actual.input.remainingSeconds)
                 candidate.rejection = "INITIALIZATION_TOO_LATE";
             candidate.propagationNs = paths.Get(task.definition.computeNodeId, pair.remoteNode).propagationNs;
-            candidate.peers = N5cPeers(pair.remoteNode, row.taskId, row.trigger, paths);
+            candidate.peers = CompFrrPeers(pair.remoteNode, row.taskId, row.trigger, paths);
         }
         if (const auto plan = selectivePlans.find(pair.remoteNode); plan != selectivePlans.end())
         {
@@ -185,7 +185,7 @@ void CompFrrController::SelectN5cRemote(
         row.pair = PlacementDecision{trace.reference.localNode, *trace.selection.remoteNode};
         const auto selected = std::find_if(trace.candidates.begin(), trace.candidates.end(),
             [&](const auto& c) { return c.remoteNode == *trace.selection.remoteNode; });
-        row.n5cPeak = m_n5c->PeakFor(selected->remoteNode, row.taskId, selected->additionalQuotaBytes);
+        row.placementPeak = m_placementTracker->PeakFor(selected->remoteNode, row.taskId, selected->additionalQuotaBytes);
         row.localLoad = m_loads.Get(row.pair->localNode);
         row.remoteLoad = m_loads.Get(row.pair->remoteNode);
         if (const auto plan = selectivePlans.find(*trace.selection.remoteNode);
@@ -203,13 +203,13 @@ void CompFrrController::SelectN5cRemote(
     else
     {
         row.proposal.action = FrequencyAction::NONE;
-        row.resourceReason = "N5C_NO_FEASIBLE_REMOTE";
+        row.resourceReason = "COMPFRR_P_NO_FEASIBLE_REMOTE";
         row.proposal.reason = row.resourceReason;
     }
-    row.n5cTrace = m_n5c->Record(std::move(trace));
+    row.placementTrace = m_placementTracker->Record(std::move(trace));
 }
 
-bool CompFrrController::RevalidateN5c(FrequencyDecisionRecord& row,
+bool CompFrrController::RevalidateCompFrrPlacement(FrequencyDecisionRecord& row,
                                                   const TaskRuntime& task, State& state)
 {
     // Same-ns peers may commit or fail after this proposal. Recheck only the fixed pair
@@ -221,7 +221,7 @@ bool CompFrrController::RevalidateN5c(FrequencyDecisionRecord& row,
     actual.resourceReason.clear();
     if (!BuildResources(actual, task, state, paths) || !actual.input.nodeAvailable)
     {
-        row.resourceReason = actual.resourceReason.empty() ? "N5C_POST_BATCH_NODE_UNAVAILABLE" : actual.resourceReason;
+        row.resourceReason = actual.resourceReason.empty() ? "COMPFRR_P_POST_BATCH_NODE_UNAVAILABLE" : actual.resourceReason;
         return false;
     }
     std::optional<PolicyAwareInputPlan> selective;
@@ -236,13 +236,13 @@ bool CompFrrController::RevalidateN5c(FrequencyDecisionRecord& row,
     const auto storage = actual.input.storageDemand(row.proposal.selected->config);
     if (!storage || storage->localAdditionalBytes > actual.input.localFreeBytes)
     {
-        row.resourceReason = "N5C_POST_BATCH_LOCAL_STORAGE";
+        row.resourceReason = "COMPFRR_P_POST_BATCH_LOCAL_STORAGE";
         return false;
     }
-    const auto peak = m_n5c->PeakFor(row.pair->remoteNode, row.taskId, storage->remoteAdditionalBytes);
-    if (!m_n5c->CanCommit(row.taskId, row.pair->remoteNode, peak))
+    const auto peak = m_placementTracker->PeakFor(row.pair->remoteNode, row.taskId, storage->remoteAdditionalBytes);
+    if (!m_placementTracker->CanCommit(row.taskId, row.pair->remoteNode, peak))
     {
-        row.resourceReason = "N5C_POST_BATCH_QUOTA";
+        row.resourceReason = "COMPFRR_P_POST_BATCH_QUOTA";
         return false;
     }
     CompFrrForecast forecast{row.taskId, task.definition.computeNodeId, PlacementInput(actual.input),
@@ -284,10 +284,10 @@ bool CompFrrController::RevalidateN5c(FrequencyDecisionRecord& row,
         (row.proposal.action == FrequencyAction::START &&
          (ReadyAfter(actual.input) - row.input.risk.epochNs) / 1e9 >= actual.input.remainingSeconds))
     {
-        row.resourceReason = "N5C_POST_BATCH_DEADLINE";
+        row.resourceReason = "COMPFRR_P_POST_BATCH_DEADLINE";
         return false;
     }
-    row.n5cPeak = peak;
+    row.placementPeak = peak;
     return true;
 }
 } // namespace ns3::protection

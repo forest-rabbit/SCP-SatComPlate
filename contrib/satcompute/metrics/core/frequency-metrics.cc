@@ -173,7 +173,7 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
         risks << r.timeNs << ',' << r.nodeId << ',' << r.taskId << ',' << r.pF1 << ',' << r.pF2
               << ',' << r.qCompute << ',' << r.pFinish << ",0,F3\n";
     // Separate additive audit: existing CSV schemas and non-P outputs stay unchanged.
-    if (m_n5c)
+    if (m_placementTracker)
     {
         std::ofstream coverage(directory / "compfrr-candidate-coverage.csv");
         coverage.exceptions(std::ios::badbit | std::ios::failbit);

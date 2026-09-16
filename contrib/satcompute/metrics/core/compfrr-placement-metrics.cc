@@ -11,7 +11,7 @@ void CompFrrPlacementTracker::Write(const std::filesystem::path& directory) cons
     std::filesystem::create_directories(directory);
     if (m_spatialDiagnostics)
     {
-    std::ofstream out(directory / "n5c-placement-decisions.csv");
+    std::ofstream out(directory / "compfrr-placement-decisions.csv");
     out.exceptions(std::ios::failbit | std::ios::badbit);
     out << std::setprecision(17);
     out << "decision_id,task_id,time_ns,trigger,variant,reference_local_node,reference_remote_node,"
@@ -30,7 +30,7 @@ void CompFrrPlacementTracker::Write(const std::filesystem::path& directory) cons
         {
             const auto& c = t.candidates[i]; const auto& s = t.selection.scores.at(i);
             out << index << ',' << t.taskId << ',' << t.timeNs << ',' << t.trigger << ','
-                << N5cVariantName(m_variant) << ',' << t.reference.localNode << ',' << t.reference.remoteNode
+                << CompFrrPlacementVariantName(m_variant) << ',' << t.reference.localNode << ',' << t.reference.remoteNode
                 << ',' << t.config.deltaPermille << ',' << t.config.batchN << ',' << c.remoteNode << ','
                 << (t.selection.remoteNode == c.remoteNode) << ',' << t.committed << ',' << t.resolution
                 << ',' << s.feasible << ',' << s.reason << ',' << t.selection.feasibleCount << ','
@@ -48,9 +48,9 @@ void CompFrrPlacementTracker::Write(const std::filesystem::path& directory) cons
         }
     }
     }
-    if (m_spatialDiagnostics && m_variant == N5cVariant::RECENT_U)
+    if (m_spatialDiagnostics && m_variant == CompFrrPlacementVariant::RECENT_U)
     {
-        std::ofstream recent(directory / "n5c-recent-u-history.csv");
+        std::ofstream recent(directory / "compfrr-recent-u-history.csv");
         recent.exceptions(std::ios::failbit | std::ios::badbit);
         recent << std::setprecision(17);
         recent << "decision_id,task_id,time_ns,candidate_node,horizon_ns,window_begin_ns,window_end_ns,"
@@ -69,9 +69,9 @@ void CompFrrPlacementTracker::Write(const std::filesystem::path& directory) cons
                     << ',' << (c.recentExposureNs == 0) << '\n';
         }
     }
-    if (m_spatialDiagnostics && m_variant == N5cVariant::RATIONAL_U)
+    if (m_spatialDiagnostics && m_variant == CompFrrPlacementVariant::RATIONAL_U)
     {
-        std::ofstream rational(directory / "n5c-rational-u-history.csv");
+        std::ofstream rational(directory / "compfrr-rational-u-history.csv");
         rational.exceptions(std::ios::failbit | std::ios::badbit);
         rational << std::setprecision(17);
         rational << "decision_id,task_id,time_ns,candidate_node,horizon_ns,continuous_idle_ns,"

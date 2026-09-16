@@ -31,10 +31,10 @@ CompFrrController::CompFrrController(Ptr<TaskCoordinator> tasks,
     const auto spatial = dynamic_cast<const CompFrrPlacementPolicy*>(m_placement.get());
     if (spatial || observePlacementResources)
         m_placementObservation = std::make_unique<CompFrrPlacementTracker>(tasks, faults, m_manager, stopNs,
-            spatial ? spatial->Variant() : N5cVariant::FULL, spatial != nullptr);
-    if (spatial) m_n5c = m_placementObservation.get();
-    if (m_n5c) m_manager.SetMaintenanceFree([this](auto node, auto task) {
-        return m_n5c->MaintenanceFree(node, task);
+            spatial ? spatial->Variant() : CompFrrPlacementVariant::FULL, spatial != nullptr);
+    if (spatial) m_placementTracker = m_placementObservation.get();
+    if (m_placementTracker) m_manager.SetMaintenanceFree([this](auto node, auto task) {
+        return m_placementTracker->MaintenanceFree(node, task);
     });
     for (auto service : tasks->GetComputeServices()) m_loads.RegisterNode(service->GetNodeId());
     m_manager.SetAssignmentObserver([this](auto task, auto node, bool active) {
@@ -52,7 +52,7 @@ CompFrrController::CompFrrController(Ptr<TaskCoordinator> tasks,
     if (inputPolicy == InputPolicy::SELECTIVE)
     {
         m_optionalInput = std::make_unique<InputStagingManager>(tasks, m_manager, stopNs,
-            [this](uint32_t node) { return m_n5c ? m_n5c->FreeFor(node, 0) : m_manager.Pool(node).Free(); });
+            [this](uint32_t node) { return m_placementTracker ? m_placementTracker->FreeFor(node, 0) : m_manager.Pool(node).Free(); });
         m_recovery->SetInputDependencyResolver(m_optionalInput.get());
     }
     m_recovery->SetLoadObserver([this](auto task, auto node, bool active) {
@@ -121,7 +121,7 @@ void CompFrrController::OnTask(const TaskEventRecord& event)
         m_manager.OnTaskTerminal(event.taskId);
     if (terminal || recovery || complete)
     {
-        if (m_n5c) m_n5c->ReleaseQuota(event.taskId);
+        if (m_placementTracker) m_placementTracker->ReleaseQuota(event.taskId);
         CloseCapacityWait(event.taskId, state, event.simulationTimeNs, "TASK_LEFT_PRIMARY_COMPUTE");
         ClosePause(event.taskId, state, event.simulationTimeNs);
         const auto phase = recovery ? ProtectionPhase::RECOVERING : ProtectionPhase::DONE;
@@ -201,7 +201,7 @@ void CompFrrController::ClosePause(uint64_t task, State& state, int64_t time)
 
 void CompFrrController::Initialized(uint64_t id)
 {
-    if (m_n5c) m_n5c->Initialized(id);
+    if (m_placementTracker) m_placementTracker->Initialized(id);
     auto& state = m_states.at(id);
     if (state.gate.Phase() == ProtectionPhase::INITIALIZING)
         state.gate.InitializationCommitted();
@@ -280,10 +280,10 @@ bool CompFrrController::BuildResources(FrequencyDecisionRecord& row,
     row.remoteLoad = m_loads.Get(pair.remoteNode);
     input.localFreeBytes = m_manager.Pools().at(pair.localNode)->Free();
     input.remoteFreeBytes = m_manager.Pools().at(pair.remoteNode)->Free();
-    if (m_n5c)
+    if (m_placementTracker)
     {
-        input.localFreeBytes = m_n5c->FreeFor(pair.localNode, row.taskId);
-        input.remoteFreeBytes = m_n5c->FreeFor(pair.remoteNode, row.taskId);
+        input.localFreeBytes = m_placementTracker->FreeFor(pair.localNode, row.taskId);
+        input.remoteFreeBytes = m_placementTracker->FreeFor(pair.remoteNode, row.taskId);
     }
     input.recoveryRate = remote->GetComputeRateWorkUnitsPerSecond();
     const bool maintenance = input.phase == ProtectionPhase::ON;
@@ -362,7 +362,7 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
     auto pairs = std::move(row.pairStats.pairs);
     row.pairPathFeasible = pairs.size();
     m_placement->RankPairs(pairs, context);
-    if (m_n5c)
+    if (m_placementTracker)
     {
         auto& coverage = row.candidateCoverage.emplace();
         coverage.allInfeasible = pairs.empty();
@@ -383,7 +383,7 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
         return;
     }
     // Feasibility before ranking, then first frequency-hard-feasible pair. Never shop by J.
-    if (m_n5c)
+    if (m_placementTracker)
     {
         // Retain the original reference local. Retry only hard-rejected remotes in
         // the existing order; stop at the first feasible anchor, never shop by J.
@@ -394,7 +394,7 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
             row.pair = pair;
             row.resourceReason.clear();
             if (!BuildResources(row, task, state, paths))
-                throw std::logic_error("N5C anchor preview changed within one decision");
+                throw std::logic_error("CompFRR-P anchor preview changed within one decision");
             ++row.pairHardChecked;
             ++coverage.checked;
             std::optional<PolicyAwareInputPlan> selective;
@@ -427,7 +427,7 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
             // unchanged P ranking, using this anchor's frozen Frequency config.
             if (row.proposal.action == FrequencyAction::START)
             {
-                SelectN5cRemote(row, task, state, paths, pairs);
+                SelectCompFrrRemote(row, task, state, paths, pairs);
                 if (row.proposal.action == FrequencyAction::START)
                     coverage.finalRemote = row.pair->remoteNode;
             }
@@ -552,8 +552,8 @@ CompFrrController::Evaluate(const FaultEpochInput& epoch, const std::string& tri
     else if (BuildResources(row, task, state, paths))
     {
         row.proposal = m_policy.Evaluate(in);
-        if (m_n5c && row.proposal.action == FrequencyAction::UPDATE)
-            row.n5cPeak = m_n5c->PeakFor(row.pair->remoteNode, row.taskId,
+        if (m_placementTracker && row.proposal.action == FrequencyAction::UPDATE)
+            row.placementPeak = m_placementTracker->PeakFor(row.pair->remoteNode, row.taskId,
                                        row.proposal.selected->storage.remoteAdditionalBytes);
     }
     else
@@ -608,24 +608,24 @@ void CompFrrController::AfterEpoch(int64_t time,
         for (auto& audit : row.policyAwareInputAudits)
             audit.faultHitSameBatch = outcome.faultHit;
         bool configFeasible = true;
-        if (running && !outcome.faultHit && m_n5c &&
+        if (running && !outcome.faultHit && m_placementTracker &&
             (row.proposal.action == FrequencyAction::START || row.proposal.action == FrequencyAction::UPDATE))
-            configFeasible = RevalidateN5c(row, task, state);
+            configFeasible = RevalidateCompFrrPlacement(row, task, state);
         row.resourceHold = row.input.phase == ProtectionPhase::ON &&
             (row.proposal.action == FrequencyAction::PAUSE || !configFeasible) &&
             (!row.input.pathAvailable || !row.input.nodeAvailable ||
              row.proposal.reason == "STORAGE_INFEASIBLE" ||
-             row.resourceReason == "N5C_POST_BATCH_LOCAL_STORAGE" ||
-             row.resourceReason == "N5C_POST_BATCH_QUOTA" ||
+             row.resourceReason == "COMPFRR_P_POST_BATCH_LOCAL_STORAGE" ||
+             row.resourceReason == "COMPFRR_P_POST_BATCH_QUOTA" ||
              row.resourceReason == "NO_ADMISSIBLE_PATH" || row.resourceReason == "NO_ROUTE" ||
              row.resourceReason == "PLACEMENT_UNAVAILABLE" ||
-             row.resourceReason == "N5C_POST_BATCH_NODE_UNAVAILABLE");
+             row.resourceReason == "COMPFRR_P_POST_BATCH_NODE_UNAVAILABLE");
         row.committed = state.gate.Resolve(time, outcome.faultHit, running, configFeasible, row.resourceHold);
         if (row.committed && !configFeasible)
         {
             row.proposal.action = FrequencyAction::PAUSE;
             row.proposal.reason = row.resourceReason;
-            row.n5cPeak.reset();
+            row.placementPeak.reset();
         }
         state.pending.reset();
         row.reason = outcome.faultHit ? "CURRENT_FAULT_HIT"
@@ -699,11 +699,11 @@ void CompFrrController::AfterEpoch(int64_t time,
             else if (!(row.resourceHold ? m_manager.RetainFutureConfiguration(row.taskId)
                                        : m_manager.PauseFutureProtection(row.taskId)))
                 throw std::logic_error("surviving frequency hold/pause lost live mechanism");
-            if (m_n5c && row.n5cPeak)
+            if (m_placementTracker && row.placementPeak)
             {
                 const auto inventory = m_manager.Inventory(row.taskId);
                 if (inventory && inventory->active)
-                    m_n5c->CommitQuota(row.taskId, row.pair->remoteNode, *row.n5cPeak);
+                    m_placementTracker->CommitQuota(row.taskId, row.pair->remoteNode, *row.placementPeak);
             }
             if (admittedInput && m_optionalInput)
             {
@@ -739,8 +739,8 @@ void CompFrrController::AfterEpoch(int64_t time,
             const auto inventory = m_manager.Inventory(row.taskId);
             const bool admitted = row.committed && row.proposal.action == FrequencyAction::START &&
                                   inventory && inventory->active;
-            if (m_n5c && row.n5cTrace)
-                m_n5c->Resolve(*row.n5cTrace, admitted,
+            if (m_placementTracker && row.placementTrace)
+                m_placementTracker->Resolve(*row.placementTrace, admitted,
                               row.resourceReason.empty() ? row.reason : row.resourceReason);
             m_placement->RecordSelection({row.taskId, time, task.definition.computeNodeId,
                 row.pair, {}, admitted ? "ACCEPTED" : "NOT_ADMITTED",

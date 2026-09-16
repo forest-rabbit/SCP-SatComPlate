@@ -31,7 +31,7 @@ void PlacementResourceTracker::WriteResources(const std::filesystem::path& direc
         const auto service = Service(node);
         const auto busy = service->GetBusyTimeNs(), recovery = service->GetRecoveryBusyTimeNs();
         const auto exposure = m_faults->ObservedSurvivalExposureNs(node);
-        if (busy > exposure || recovery > busy) throw std::logic_error("N5C final history mismatch");
+        if (busy > exposure || recovery > busy) throw std::logic_error("placement final history mismatch");
         nodes << node << ',' << s.assignments << ',' << Exact(s.assignmentNs) << ',' << s.peakActive << ','
               << static_cast<long double>(s.assignmentNs) / m_stopNs << ',' << s.peakStorage << ',' << Exact(s.storageByteNs) << ','
               << static_cast<long double>(s.storageByteNs) / m_stopNs << ',' << busy - recovery << ',' << recovery << ','

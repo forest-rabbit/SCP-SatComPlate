@@ -16,7 +16,7 @@ ENTRIES = {
     "analyze-protection-accounting.py": "accounting.py",
     "analyze-frequency-evaluation.py": "frequency_audit.py",
     "analyze-baseline-evaluation.py": "baseline_audit.py",
-    "analyze-n5c-placement.py": "placement_audit.py",
+    "analyze-compfrr-placement.py": "placement_audit.py",
     "analyze-riskweighted-start.py": "risk_start_audit.py",
     "analyze-input-deferred.py": "input_staging_audit.py",
     "run-final-scenario.py": "scenario.py",
@@ -101,8 +101,8 @@ class ProtectionArchitectureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "must-not-exist"
             result = subprocess.run([sys.executable, str(TESTS / "integration/regression/run-final-scenario.py"),
-                "--output-dir", str(output), "--protection-mode", "compfrr", "--placement-mode", "n5c",
-                "--n5c-variant", "recent-U"], text=True, capture_output=True, timeout=15)
+                "--output-dir", str(output), "--protection-mode", "compfrr", "--placement-mode", "compfrr",
+                "--pressure-model", "recent-U"], text=True, capture_output=True, timeout=15)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("invalid choice", result.stderr)
             self.assertFalse(output.exists())

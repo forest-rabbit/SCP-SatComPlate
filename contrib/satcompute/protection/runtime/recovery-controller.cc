@@ -371,7 +371,7 @@ RecoveryController::Candidates(const State& state) const
                                      Reachable(node, state.task.definition.resultNodeId)});
     auto nodes = BuildFeasibleBackupNodes(context);
     // Recovery targets retain the established stable-ID baseline for BOTH pair policies.
-    // N5C can later replace this ranking without duplicating operation feasibility.
+    // CompFRR-P can later replace this ranking without duplicating operation feasibility.
     FaFirstFeasiblePlacementPolicy{}.RankBackupNodes(nodes, context);
     return nodes;
 }

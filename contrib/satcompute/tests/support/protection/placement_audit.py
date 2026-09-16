@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""N5C V4 causal-placement audit; reuse corrected actual-WU and network accounting."""
+"""CompFRR-P causal-placement audit; corrected actual-WU and network accounting."""
 import argparse
 from collections import Counter, defaultdict
 import csv
@@ -12,8 +12,13 @@ HERE = Path(__file__).resolve().parent
 BASE = runpy.run_path(str(HERE / "baseline_audit.py"))
 FREQ = runpy.run_path(str(HERE / "frequency_audit.py"))
 RISK = runpy.run_path(str(HERE / "risk_start_audit.py"))
-rows, require = BASE["rows"], BASE["require"]
+LEGACY = runpy.run_path(str(HERE / "historical_placement.py"))
+require = BASE["require"]
 NS = 10**9
+
+
+def rows(root, name, optional=False):
+    return BASE['rows'](root, LEGACY['evidence_path'](root, name).name, optional)
 
 
 def distribution(values):
@@ -81,13 +86,13 @@ def resources(root):
 
 
 def spatial(root):
-    decisions = rows(root, "n5c-placement-decisions.csv", True)
-    recent_rows = rows(root, "n5c-recent-u-history.csv", True)
+    decisions = rows(root, "compfrr-placement-decisions.csv", True)
+    recent_rows = rows(root, "compfrr-recent-u-history.csv", True)
     recent = {(r["decision_id"], r["candidate_node"]):r for r in recent_rows}
     require(len(recent) == len(recent_rows), "duplicate recent-U history key")
     expected = {(r["decision_id"], r["candidate_node"]) for r in decisions if r["variant"] == "recent-U"}
     require(set(recent) == expected, "missing or unexpected recent-U companion rows")
-    rational_rows = rows(root, "n5c-rational-u-history.csv", True)
+    rational_rows = rows(root, "compfrr-rational-u-history.csv", True)
     rational = {(r["decision_id"], r["candidate_node"]):r for r in rational_rows}
     expected_rat = {(r["decision_id"], r["candidate_node"]) for r in decisions if r["variant"] == "rational-U"}
     require(len(rational) == len(rational_rows) and set(rational) == expected_rat,
@@ -101,10 +106,10 @@ def spatial(root):
     for items in groups.values():
         first = items[0]
         row = keyed[(first["task_id"],first["time_ns"],first["trigger"])]
-        require(row["phase_before"] == "OFF" and row["pair_hard_checked"] == "1", "N5C reran ON/Frequency")
+        require(row["phase_before"] == "OFF" and row["pair_hard_checked"] == "1", "CompFRR-P reran ON/Frequency")
         require(first["reference_local_node"] == row["local_node"] and
                 first["delta_permille"] == row["proposed_delta_permille"] and
-                first["batch_n"] == row["proposed_n"], "N5C changed local or temporal config")
+                first["batch_n"] == row["proposed_n"], "CompFRR-P changed local or temporal config")
         legal = [r for r in items if r["feasible"] == "1"]
         feasible_sizes.append(len(legal))
         require(all(int(r["feasible_candidate_count"]) == len(legal) for r in items), "candidate count mismatch")
@@ -222,7 +227,7 @@ def analyze(root, include_tasks=False):
     FREQ["verify_pair_retries"](common, rows(root,"frequency-capacity-waits.csv"))
     value["frequency_rows_independently_checked"] = sum(RISK["decision_check"](
         r,tasks[r["task_id"]],value["execution"]["input_staging_policy"] == "deferred") for r in common)
-    value["n5c"] = spatial(root) if value["execution"]["placement_mode"] == "n5c" else None
+    LEGACY['attach_spatial_audit'](value, lambda: spatial(root))
     for key in (("recovery_rows",) if include_tasks else ("task_rows", "recovery_rows")):
         value.pop(key, None)
     return value
@@ -235,11 +240,11 @@ def main():
     choice.add_argument("--fixtures",type=Path,help="Only audit maintained small runtime fixtures")
     args = parser.parse_args()
     if args.fixtures:
-        groups = ["online-n5c","online-n5c-deferred","online-n5c-recent-U","online-n5c-rational-U"] + [f"n5c-boundary-{mode}-{case}"
+        groups = ["online-compfrr-placement","online-compfrr-placement-deferred","online-compfrr-placement-recent-U","online-compfrr-placement-rational-U"] + [f"compfrr-placement-boundary-{mode}-{case}"
                   for mode in ("eager","deferred") for case in ("normal","hit","race")]
         results = {name:spatial(args.fixtures/name) for name in groups}
         require(all(r["proposals"] > 0 for r in results.values()),"vacuous spatial fixture")
-        print(json.dumps({"status":"N5C_FIXTURE_AUDIT_PASS","groups":len(results),
+        print(json.dumps({"status":"COMPFRR_PLACEMENT_FIXTURE_AUDIT_PASS","groups":len(results),
                           "proposals":sum(r["proposals"] for r in results.values())},sort_keys=True))
         return
     results = {p.name:analyze(p) for p in sorted(args.root.iterdir()) if p.is_dir() and (p/"execution-result.json").exists()}

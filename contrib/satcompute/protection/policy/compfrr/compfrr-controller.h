@@ -80,8 +80,8 @@ struct FrequencyDecisionRecord
     uint64_t capacityRetryCount{};
     bool capacityRetrySuccess{};
     int64_t capacityWaitStartNs{-1}, capacityWaitEndNs{-1};
-    std::optional<size_t> n5cTrace; ///< START-only spatial proposal; no solver call per remote.
-    std::optional<uint64_t> n5cPeak; ///< Total replacement quota, captured before physical admission.
+    std::optional<size_t> placementTrace; ///< START-only spatial proposal; no solver call per remote.
+    std::optional<uint64_t> placementPeak; ///< Total replacement quota, captured before physical admission.
     std::optional<CompFrrCandidateCoverage> candidateCoverage; ///< P OFF only; no new policy state.
     int64_t selectiveRemainingNs{};
     int64_t selectiveFirstSampleNs{};
@@ -115,7 +115,7 @@ class CompFrrController : public ProtectionPolicy
     const auto& InputAdmissions() const { return m_inputAdmissions; }
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
     const PlacementPolicy& Placement() const { return *m_placement; }
-    const CompFrrPlacementTracker* N5c() const { return m_n5c; }
+    const CompFrrPlacementTracker* PlacementTracker() const { return m_placementTracker; }
     ///< Live ownership used by LRL and the same diagnostic output for FFP.
 
     const CheckpointManager& Manager() const
@@ -205,11 +205,11 @@ class CompFrrController : public ProtectionPolicy
                         DecisionPathSnapshot& paths);
     void EvaluateOffPairs(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
                           DecisionPathSnapshot& paths);
-    void SelectN5cRemote(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
+    void SelectCompFrrRemote(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
                          DecisionPathSnapshot& paths, const std::vector<PlacementDecision>& pairs);
-    std::vector<CompFrrForecast> N5cPeers(uint32_t remote, uint64_t excluded,
+    std::vector<CompFrrForecast> CompFrrPeers(uint32_t remote, uint64_t excluded,
                                     const std::string& trigger, DecisionPathSnapshot& paths);
-    bool RevalidateN5c(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
+    bool RevalidateCompFrrPlacement(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
     void PrepareSelectivePrediction(FrequencyDecisionRecord& row, uint32_t primary, int64_t remainingNs) const;
     PolicyAwareInputPlan EvaluateSelectiveDryRun(const FrequencyDecisionRecord& row,
                                                  const TaskRuntime& task,
@@ -231,7 +231,7 @@ class CompFrrController : public ProtectionPolicy
     CheckpointManager m_manager;                      ///< Sole actual checkpoint mechanism.
     std::unique_ptr<PlacementPolicy> m_placement;      ///< FFP baseline or explicitly injected LRL.
     std::unique_ptr<CompFrrPlacementTracker> m_placementObservation; ///< Read-only resource metrics, also usable by FA-FFP.
-    CompFrrPlacementTracker* m_n5c{}; ///< Alias enabled only for N5C; legacy policies never use quota promises.
+    CompFrrPlacementTracker* m_placementTracker{}; ///< Alias enabled only for CompFRR-P; legacy policies never use quota promises.
     CompFrrFrequencyPolicy m_policy;                  ///< Pure production solver.
     std::unique_ptr<InputStagingManager> m_optionalInput;
     std::vector<std::pair<SelectiveInputSnapshot, InputAdmissionDecision>> m_inputAdmissions;
