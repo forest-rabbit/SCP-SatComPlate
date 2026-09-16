@@ -775,12 +775,13 @@ TaskCoordinator::ApplyFaultBatch(
     std::map<uint32_t, TaskFaultImpact> impacts;
     for (const TaskFaultNodeChange& change : startedNodes)
     {
-        // In fixed mode, exact compute completion precedes same-ns primary failure.
+        // Preserve inclusive completion, but do not dispatch queued work inside
+        // the fault batch while service and fault-controller availability differ.
         if (m_recoveryHandler || m_parallelHooks.faultBatch)
         {
             auto service = FindComputeService(change.nodeId);
             if (service && service->HasRunningTask())
-                service->CompleteTaskIfDue(service->GetRunningTaskId());
+                service->CompleteTaskIfDue(service->GetRunningTaskId(), true);
         }
         m_activeFaults[change.nodeId] = change.fault;
         NS_ABORT_MSG_IF(!startedKeys.emplace(change.nodeId, change.kind).second,
@@ -811,9 +812,12 @@ TaskCoordinator::ApplyFaultBatch(
             impacts.at(node).affectedTaskCount += impact.affectedTaskCount;
             impacts.at(node).affectedTransferCount += impact.affectedTransferCount;
         }
-    if (m_recoveryHandler)
+    const auto& recoveryHandler = m_recoveryHandler ? m_recoveryHandler : m_parallelHooks.nonParallelFault;
+    if (recoveryHandler)
     {
         for (auto& task : m_tasks)
+        {
+            if (task.parallelExecution) continue;
             for (const auto& change : startedNodes)
             {
                 if (IsTerminalTaskState(task.state))
@@ -825,9 +829,10 @@ TaskCoordinator::ApplyFaultBatch(
                                           change.kind == TaskFaultKind::SATELLITE
                                               ? "RUNNING_INTERRUPTED_PERMANENT"
                                               : "RUNNING_INTERRUPTED");
-                if (m_recoveryHandler(task, change))
+                if (recoveryHandler(task, change))
                     ++impacts.at(change.nodeId).affectedTaskCount;
             }
+        }
     }
     std::set<uint32_t> satelliteStarts;
     for (const TaskFaultNodeChange& change : startedNodes)
@@ -962,6 +967,8 @@ void
 TaskCoordinator::SetParallelAttemptHooks(ParallelAttemptHooks hooks)
 {
     NS_ABORT_MSG_IF(hooks.faultBatch && m_recoveryHandler, "cannot mix parallel and recovery owners");
+    NS_ABORT_MSG_IF(hooks.nonParallelFault && !hooks.faultBatch,
+                    "mixed execution needs one complete fault-batch owner");
     m_parallelHooks = std::move(hooks);
 }
 

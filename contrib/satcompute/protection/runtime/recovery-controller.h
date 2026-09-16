@@ -68,7 +68,8 @@ class RecoveryController : public ProtectionMechanism
                        ProtectionPolicy& policy,
                        RemoteBusyRecoveryPolicy busyPolicy = RemoteBusyRecoveryPolicy::RELOCATE,
                        PlacementPolicy* recomputePlacement = nullptr,
-                       CheckpointRecoveryCapabilities capabilities = {});
+                       CheckpointRecoveryCapabilities capabilities = {},
+                       bool installTaskFaultHook = true);
     ~RecoveryController();
     bool Supports(ActionKind kind) const override;
     void Execute(const ProtectionContext& context, const ProtectionAction& action) override;
@@ -96,6 +97,9 @@ class RecoveryController : public ProtectionMechanism
     void SetLoadObserver(std::function<void(uint64_t, uint32_t, bool)> observer)
     { m_loadObserver = std::move(observer); }
     void SetPlacementLoads(const PlacementLoadLedger* loads) { m_placementLoads = loads; }
+    /** Single outer orchestrator dispatch; caller owns batch ordering and task partition. */
+    bool HandleFault(const TaskRuntime& task, const TaskFaultNodeChange& change)
+    { return Fault(task, change); }
 
   private:
     InputDependencyResolver* m_input{};
@@ -153,6 +157,7 @@ class RecoveryController : public ProtectionMechanism
     void Later(State& state, int64_t delay, std::function<void()> callback);
     Ptr<ComputeService> Service(uint32_t node) const;
     Ptr<TaskCoordinator> m_tasks;         ///< Existing coordinator.
+    bool m_installTaskFaultHook; ///< False when a mixed-scheme owner dispatches faults.
     SatelliteRuntimeView& m_topology;     ///< Current routes only.
     CheckpointRecoveryPort& m_manager;         ///< Shared checkpoint ledgers and ID allocator.
     Ptr<NetworkTransferEngine> m_network; ///< Existing real UDP engine.

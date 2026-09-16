@@ -19,11 +19,13 @@ RequirePlacement(std::unique_ptr<PlacementPolicy> placement)
 RecomputeController::RecomputeController(Ptr<TaskCoordinator> tasks,
                                          SatelliteRuntimeView& topology,
                                          int64_t stopNs,
-                                         std::unique_ptr<PlacementPolicy> placement)
+                                         std::unique_ptr<PlacementPolicy> placement,
+                                         bool installTaskFaultHook)
     : m_tasks(tasks), m_placement(RequirePlacement(std::move(placement))),
       m_manager(tasks, topology, stopNs),
       m_recovery(tasks, topology, m_manager, stopNs, m_policy,
-                 RemoteBusyRecoveryPolicy::RELOCATE, m_placement.get(), {false, false, false})
+                 RemoteBusyRecoveryPolicy::RELOCATE, m_placement.get(), {false, false, false},
+                 installTaskFaultHook)
 {
     for (auto service : tasks->GetComputeServices()) m_loads.RegisterNode(service->GetNodeId());
     m_recovery.SetPlacementLoads(&m_loads);

@@ -3,7 +3,7 @@
 namespace ns3::protection
 {
 CompFrrPlacementTracker::CompFrrPlacementTracker(Ptr<TaskCoordinator> tasks, Ptr<FaultModelEngine> faults,
-    CheckpointManager& manager, int64_t stop, N5cVariant variant, bool spatialDiagnostics)
+    CheckpointManager& manager, int64_t stop, CompFrrPlacementVariant variant, bool spatialDiagnostics)
     : PlacementResourceTracker(tasks, faults, manager, stop), m_variant(variant),
       m_spatialDiagnostics(spatialDiagnostics)
 {

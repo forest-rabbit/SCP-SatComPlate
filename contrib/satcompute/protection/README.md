@@ -5,7 +5,8 @@ CompFRR-F 负责是否保护和频率，CompFRR-P 负责固定配置后的 remot
 计算服务和存储账本，Baseline 按自己的能力合同接入。Routing 不属于保护算法开关。
 
 N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障随机流、数学公式、时序或外部指标。
-正式 compute-pressure 仅 CUMULATIVE 与 IDLE_AWARE；noU 是消融，recent-U 仅保留历史依赖。
+正式 compute-pressure 仅 CUMULATIVE 与 IDLE_AWARE；noU 是消融。recent-U 的运行实现、
+专用输出和执行 fixture 已删除，仅保留旧结果的只读解析与历史证据。
 进展与逐阶段等价 gate 见 [N5R 执行记录](../../../docs/n5/reviews/N5R-implementation.md)。
 
 ## 阅读入口
@@ -44,12 +45,12 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 | `policy/compfrr/{compfrr-controller,compfrr-placement-adapter,storage-estimator}.*` | F 接线、P 只读适配、新增存储峰值估计 |
 | `policy/compfrr/{frequency,input,placement}/` | F solver、INPUT 成本描述、P 排名及 compute-pressure |
 | `baseline/{checkbullet,recompute,one-plus-one}/*` | 完整对比方案；[CB-Sat](baseline/checkbullet/README.md) 的参数和工具也在此 |
-| `baseline/multitree/README.md` | 未来方案占位，当前未实现，无运行入口 |
+| `baseline/multitree/*` | [Multi-tree Published FT Rule](baseline/multitree/README.md)：冻结特征映射、公开 FT 树和共享 RS/RP 编排 |
 | `../traffic/local-delivery.*` | 同星逻辑交付，不创建 UDP、不计网络字节 |
 
 旧导出头/分析入口保留兼容；旧参数只在测试层显式转换，普通平台 CLI 不保留别名。
 不允许公共 Fixed/Checkpoint/Recovery 反向依赖 Frequency。
-不实现 Multi-tree、JIT、网络 ACK 或第二套网络；生产实现不调用 shadow validator。
+不实现完整 MTGP 训练、JIT、网络 ACK 或第二套网络；生产实现不调用 shadow validator。
 
 ## 参数与当前可运行范围
 
@@ -59,7 +60,7 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 
 | 参数 | 默认 | 说明 |
 |---|---:|---|
-| `protectionScheme` | `compfrr` | 正式默认 CompFRR；另有 recompute / one-plus-one / cb-sat；off 仅诊断/历史复现，Multi-tree 未实现 |
+| `protectionScheme` | `compfrr` | 正式默认 CompFRR；另有 recompute / one-plus-one / cb-sat / multitree；off 仅诊断/历史复现 |
 | `compfrrCheckpointPolicy` | `adaptive` | `fixed / adaptive`；原 Fixed 下沉为策略，不改变一次性 START 与维护合同 |
 | `compfrrPlacementPolicy` | `compfrr` | `ffp / fa-ffp / lrl / fa-lrl / compfrr`；默认使用自己的 CompFRR-P，仅 adaptive 可用 |
 | `compfrrInputPolicy` | `selective` | 唯一 INPUT 开关：`eager / deferred / selective`；Selective 固定 SER，Fixed 仅 Eager |
@@ -77,6 +78,12 @@ Fixed 和三个完整 baseline 保留 none/generate/validation-replay 执行能�
 正式默认变化由用户在纯重构完成后单独确认，不修改算法。Fixed 必须显式选择合法组合，例如
 `--compfrrCheckpointPolicy=fixed --compfrrPlacementPolicy=fa-ffp --compfrrInputPolicy=eager`；
 不能让 Adaptive 的 P/Selective 默认值扩展 Fixed 能力。历史 runner 显式恢复原默认，不重解释旧实验。
+
+Selective 的 START 准入顺序为：对当前 candidate 做无副作用的 SER 判定，再将 SEND 映射为
+`fault-time INPUT term = 0`、DEFER 映射为完整 INPUT 重取时间，并执行原 Frequency 硬约束。
+CompFRR-P 选定 actual remote 后必须用该 pair 重新判定和重验；只有 checkpoint 真正准入后才创建
+proactive INPUT。这里的 0 只是 START 的 policy-aware 假设，故障恢复仍以真实 READY / IN_FLIGHT /
+refetch 状态为准，物理预取失败不会回滚 checkpoint。
 
 | 完整 baseline | canonical private placement | INPUT/恢复私有合同 |
 |---|---|---|

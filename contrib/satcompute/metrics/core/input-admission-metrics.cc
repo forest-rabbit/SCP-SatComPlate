@@ -23,6 +23,43 @@ void CompFrrController::WriteInputAdmissionAudit(const std::filesystem::path& di
             << a.firstSampleNs << ',' << a.finishExclusive << ',' << d.serializationNs << ',' << d.networkReadyNs << ','
             << d.serialGainNs << ',' << d.networkGainNs << ',' << d.costNs << ',' << (d.send ? "SEND" : "DEFER")
             << ',' << d.reason << '\n';
+    std::ofstream admission(directory / "compfrr-policy-aware-admission.csv");
+    admission.exceptions(std::ios::badbit | std::ios::failbit);
+    admission << std::setprecision(21)
+              << "task_id,time_ns,decision_trigger,stage,local,remote,candidate_index,"
+                 "selective_dryrun_decision,selective_reason,selective_pf,selective_u_ser_pot,"
+                 "selective_t_ser_s,legacy_fault_input_s,policy_aware_input_admission_s,"
+                 "legacy_frequency_reason,policy_aware_frequency_reason,legacy_deadline_feasible,"
+                 "policy_aware_deadline_feasible,rescued_by_policy_aware_input,anchor_remote,"
+                 "final_remote,is_anchor,is_final_pair,final_pair_revalidated,fault_hit_same_batch,"
+                 "start_committed,runtime_prefetch_admission_success\n";
+    for (const auto& row : m_decisions)
+        for (const auto& record : row.policyAwareInputAudits)
+        {
+            admission << record.taskId << ',' << record.timeNs << ',' << record.trigger << ','
+                      << record.stage << ',' << record.local << ',' << record.remote << ','
+                      << record.candidateIndex << ',' << (record.selective.send ? "SEND" : "DEFER")
+                      << ',' << record.selective.reason << ',' << record.predictedFailureProbability
+                      << ',';
+            if (record.selective.serializationNs > 0)
+                admission << record.selective.serialGainNs / record.selective.serializationNs;
+            admission << ',' << record.selective.serializationNs / 1e9
+                      << ',' << record.legacyFaultInputSeconds << ',' << record.admissionSeconds << ','
+                      << record.legacyFrequencyReason << ',' << record.policyAwareFrequencyReason << ','
+                      << record.legacyDeadlineFeasible << ',' << record.policyAwareDeadlineFeasible
+                      << ',' << record.rescuedByPolicyAwareInput << ',';
+            if (row.candidateCoverage && row.candidateCoverage->anchorRemote)
+                admission << *row.candidateCoverage->anchorRemote;
+            admission << ',';
+            if (row.candidateCoverage && row.candidateCoverage->finalRemote)
+                admission << *row.candidateCoverage->finalRemote;
+            admission << ',' << record.anchor << ',' << record.finalPair << ','
+                      << record.finalPairRevalidated << ',' << record.faultHitSameBatch << ','
+                      << record.startCommitted << ',';
+            if (record.runtimePrefetchAdmissionSuccess)
+                admission << *record.runtimePrefetchAdmissionSuccess;
+            admission << '\n';
+        }
     m_optionalInput->WriteMetrics(directory);
 }
 

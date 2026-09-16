@@ -16,7 +16,7 @@ ENTRIES = {
     "analyze-protection-accounting.py": "accounting.py",
     "analyze-frequency-evaluation.py": "frequency_audit.py",
     "analyze-baseline-evaluation.py": "baseline_audit.py",
-    "analyze-n5c-placement.py": "placement_audit.py",
+    "analyze-compfrr-placement.py": "placement_audit.py",
     "analyze-riskweighted-start.py": "risk_start_audit.py",
     "analyze-input-deferred.py": "input_staging_audit.py",
     "run-final-scenario.py": "scenario.py",
@@ -26,12 +26,15 @@ ENTRIES = {
 class ProtectionArchitectureTests(unittest.TestCase):
     def test_baseline_and_shared_placement_have_one_canonical_owner(self):
         self.assertFalse((PROTECTION / "policy/baseline").exists())
-        for name in ("checkbullet", "recompute", "one-plus-one"):
+        for name in ("checkbullet", "recompute", "one-plus-one", "multitree"):
             self.assertTrue(list((PROTECTION / "baseline" / name).glob("*.cc")))
         for name in ("first-feasible", "least-recovery-load", "fa-first-feasible", "fa-least-recovery-load"):
             self.assertTrue(list((PROTECTION / "policy/placement" / name).glob("*.h")))
         multitree = PROTECTION / "baseline/multitree"
-        self.assertEqual([p.name for p in multitree.iterdir()], ["README.md"])
+        for stem in ("multitree-feature-adapter", "multitree-published-rule", "multitree-decision-log", "multitree-controller"):
+            self.assertTrue((multitree / (stem + ".cc")).is_file())
+            self.assertTrue((multitree / (stem + ".h")).is_file())
+        self.assertTrue((multitree / "calibration/published-ft-scale.json").is_file())
 
     def test_cmake_sources_and_public_headers_are_unique(self):
         cmake = (MODULE / "CMakeLists.txt").read_text().split("  LIBRARIES_TO_LINK", 1)[0]
@@ -39,7 +42,9 @@ class ProtectionArchitectureTests(unittest.TestCase):
         paths = re.findall(r"^    (protection/[^\s]+)", sources, re.M)
         self.assertEqual(len(paths), len(set(paths)))
         self.assertTrue(all((MODULE / p).is_file() for p in paths))
-        self.assertFalse(any("policy/baseline" in p or "multitree" in p for p in paths))
+        self.assertFalse(any("policy/baseline" in p for p in paths))
+        self.assertTrue(all(p.startswith("protection/baseline/multitree/")
+                            for p in paths if "multitree" in p))
         public = re.findall(r"^    (protection/[^\s]+)", headers, re.M)
         self.assertEqual(len(public), len({Path(p).name for p in public}))
         self.assertTrue(all((MODULE / p).is_file() for p in public))
@@ -76,6 +81,9 @@ class ProtectionArchitectureTests(unittest.TestCase):
                      PROTECTION / "mechanism/replication/replica-manager.cc"]:
             includes = re.findall(r'^#include "([^"]+)"', path.read_text(), re.M)
             self.assertFalse(any("compfrr" in p or "checkpoint-manager.h" in p for p in includes))
+        for path in (PROTECTION / 'mechanism/replication').glob('*'):
+            if path.suffix in ('.h', '.cc'):
+                self.assertNotIn('one-plus-one-policy.h', path.read_text())
 
     def test_legacy_entries_forward_to_one_helper_implementation(self):
         for old, new in ENTRIES.items():
@@ -93,8 +101,8 @@ class ProtectionArchitectureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "must-not-exist"
             result = subprocess.run([sys.executable, str(TESTS / "integration/regression/run-final-scenario.py"),
-                "--output-dir", str(output), "--protection-mode", "compfrr", "--placement-mode", "n5c",
-                "--n5c-variant", "recent-U"], text=True, capture_output=True, timeout=15)
+                "--output-dir", str(output), "--protection-mode", "compfrr", "--placement-mode", "compfrr",
+                "--pressure-model", "recent-U"], text=True, capture_output=True, timeout=15)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("invalid choice", result.stderr)
             self.assertFalse(output.exists())

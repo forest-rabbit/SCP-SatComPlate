@@ -14,15 +14,15 @@ void Require(bool value, const char* message)
 uint64_t Add(uint64_t a, uint64_t b)
 {
     if (b > std::numeric_limits<uint64_t>::max() - a)
-        throw std::overflow_error("N5C storage accounting overflow");
+        throw std::overflow_error("placement storage accounting overflow");
     return a + b;
 }
 }
 void PeakQuotaLedger::Replace(uint64_t task, uint32_t node, uint64_t bytes)
 {
-    Require(task != 0, "N5C quota requires a task");
+    Require(task != 0, "placement quota requires a task");
     const auto found = m_quotas.find(task);
-    Require(found == m_quotas.end() || found->second.first == node, "N5C ON cannot replace remote");
+    Require(found == m_quotas.end() || found->second.first == node, "placement ON cannot replace remote");
     m_quotas[task] = {node, bytes};
 }
 void PeakQuotaLedger::Release(uint64_t task) { m_quotas.erase(task); }

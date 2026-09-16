@@ -173,7 +173,7 @@ std::vector<uint32_t> CbSatRecovery::Candidates(const State& state) const
             service->IsIdle(), Reachable(node, state.task.definition.resultNodeId)});
     }
     auto nodes = BuildFeasibleBackupNodes(context);
-    // This is the frozen checkpoint-recovery ranking, not native R0 or future N5C placement.
+    // This is the frozen checkpoint-recovery ranking, not native R0 or future CompFRR-P placement.
     FaFirstFeasiblePlacementPolicy{}.RankBackupNodes(nodes, context);
     return nodes;
 }

@@ -18,7 +18,7 @@ void Require(bool value, const char* message)
 uint64_t Add(uint64_t a, uint64_t b)
 {
     if (b > std::numeric_limits<uint64_t>::max() - a)
-        throw std::overflow_error("N5C storage accounting overflow");
+        throw std::overflow_error("CompFRR-P storage accounting overflow");
     return a + b;
 }
 void Validate(const CompFrrForecast& f)
@@ -26,14 +26,17 @@ void Validate(const CompFrrForecast& f)
     const auto& in = f.input;
     for (auto x : {in.work, in.variableBytes, in.inputBytes, in.progress, in.primaryRate,
                    in.recoveryRate, in.backupBandwidth, in.inputBandwidth})
-        Require(std::isfinite(x) && x >= 0, "invalid N5C resource scalar");
+        Require(std::isfinite(x) && x >= 0, "invalid CompFRR-P resource scalar");
     Require(f.taskId && in.work > 0 && in.primaryRate > 0 && in.recoveryRate > 0 &&
             in.backupBandwidth > 0 && (in.inputPolicy == InputStagingPolicy::EAGER ||
                                       f.inputLocal || in.inputBandwidth > 0) &&
             in.progress <= 1 && in.risk.epochNs >= 0 && in.deadlineNs >= 0 &&
             f.config.deltaPermille >= 10 && f.config.deltaPermille <= 100 &&
             f.config.batchN && f.config.batchN <= 1000 / f.config.deltaPermille &&
-            in.costs.remoteNs >= 0, "invalid N5C forecast domain");
+            in.costs.remoteNs >= 0, "invalid CompFRR-P forecast domain");
+    if (f.recoveryInputSeconds)
+        Require(std::isfinite(*f.recoveryInputSeconds) && *f.recoveryInputSeconds >= 0,
+                "invalid policy-aware CompFRR-P INPUT term");
 }
 double Remaining(const CompFrrForecast& f, int64_t at)
 {
@@ -44,28 +47,26 @@ double Remaining(const CompFrrForecast& f, int64_t at)
 }
 } // namespace
 
-N5cVariant ParseN5cVariant(const std::string& name)
+CompFrrPlacementVariant ParseCompFrrPlacementVariant(const std::string& name)
 {
-    if (name == "full") return N5cVariant::FULL;
-    if (name == "noR") return N5cVariant::NO_R;
-    if (name == "noU") return N5cVariant::NO_U;
-    if (name == "noM") return N5cVariant::NO_M;
-    if (name == "recent-U") return N5cVariant::RECENT_U;
-    if (name == "rational-U") return N5cVariant::RATIONAL_U;
-    throw std::invalid_argument("unknown N5C ablation");
+    if (name == "full") return CompFrrPlacementVariant::FULL;
+    if (name == "noR") return CompFrrPlacementVariant::NO_R;
+    if (name == "noU") return CompFrrPlacementVariant::NO_U;
+    if (name == "noM") return CompFrrPlacementVariant::NO_M;
+    if (name == "rational-U") return CompFrrPlacementVariant::RATIONAL_U;
+    throw std::invalid_argument("unknown CompFRR-P ablation");
 }
-const char* N5cVariantName(N5cVariant v)
+const char* CompFrrPlacementVariantName(CompFrrPlacementVariant v)
 {
     switch (v)
     {
-    case N5cVariant::FULL: return "full";
-    case N5cVariant::NO_R: return "noR";
-    case N5cVariant::NO_U: return "noU";
-    case N5cVariant::NO_M: return "noM";
-    case N5cVariant::RECENT_U: return "recent-U";
-    case N5cVariant::RATIONAL_U: return "rational-U";
+    case CompFrrPlacementVariant::FULL: return "full";
+    case CompFrrPlacementVariant::NO_R: return "noR";
+    case CompFrrPlacementVariant::NO_U: return "noU";
+    case CompFrrPlacementVariant::NO_M: return "noM";
+    case CompFrrPlacementVariant::RATIONAL_U: return "rational-U";
     }
-    throw std::invalid_argument("invalid N5C variant");
+    throw std::invalid_argument("invalid CompFRR-P variant");
 }
 
 double CompFrrCatchSeconds(const CompFrrForecast& f)
@@ -73,15 +74,17 @@ double CompFrrCatchSeconds(const CompFrrForecast& f)
     Validate(f);
     const auto& in = f.input;
     const double d = f.config.deltaPermille / 1000.0, n = f.config.batchN;
-    const double input = in.inputPolicy == InputStagingPolicy::DEFERRED && !f.inputLocal
+    const double legacyInput = in.inputPolicy == InputStagingPolicy::DEFERRED && !f.inputLocal
         ? in.inputBytes / in.inputBandwidth : 0;
+    const double input = f.recoveryInputSeconds.value_or(legacyInput);
+    Require(input <= legacyInput, "policy-aware CompFRR-P INPUT term exceeds legacy replay term");
     return input + in.variableBytes * (n - 1) * d / (2 * in.backupBandwidth) +
         (in.costs.remoteNs / 1e9) * (n - 1) / n + in.work * d / (2 * in.recoveryRate);
 }
 double CompFrrBudgetSeconds(const CompFrrForecast& f, int64_t at)
 {
     Validate(f);
-    Require(at >= f.input.risk.epochNs, "N5C queried a past recovery time");
+    Require(at >= f.input.risk.epochNs, "CompFRR-P queried a past recovery time");
     return (f.input.deadlineNs - at) / 1e9 - Remaining(f, at);
 }
 
@@ -95,7 +98,7 @@ std::vector<CompFrrOccupancyWindow> CompFrrRecoveryWindows(const CompFrrForecast
     {
         const auto q = step.combinedStepFailureProbability;
         Require(std::isfinite(q) && q >= 0 && q <= 1 && step.targetTimeNs > previous &&
-                step.targetTimeNs >= f.input.risk.epochNs, "invalid N5C canonical risk trajectory");
+                step.targetTimeNs >= f.input.risk.epochNs, "invalid CompFRR-P canonical risk trajectory");
         previous = step.targetTimeNs;
         const auto mass = survival * q;
         survival *= 1 - static_cast<long double>(q);
@@ -107,13 +110,13 @@ std::vector<CompFrrOccupancyWindow> CompFrrRecoveryWindows(const CompFrrForecast
         const long double duration = std::ceil((catchup + Remaining(f, step.targetTimeNs)) * 1e9L);
         Require(std::isfinite(duration) && duration > 0 &&
                 duration <= std::numeric_limits<int64_t>::max() - step.targetTimeNs,
-                "N5C recovery occupancy overflow");
+                "CompFRR-P recovery occupancy overflow");
         out.push_back({step.targetTimeNs, step.targetTimeNs + static_cast<int64_t>(duration), mass});
     }
     return out;
 }
 
-CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& c, N5cVariant variant)
+CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& c, CompFrrPlacementVariant variant)
 {
     CompFrrScore out;
     out.remoteNode = c.remoteNode;
@@ -121,7 +124,7 @@ CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& c, N5cVariant variant
     out.reason = c.rejection;
     if (!out.reason.empty()) return out;
     Require(c.propagationNs >= 0 && c.remoteNode != c.demand.primaryNode,
-            "invalid N5C remote or propagation");
+            "invalid CompFRR-P remote or propagation");
     out.catchSeconds = CompFrrCatchSeconds(c.demand);
     out.budgetSeconds = CompFrrBudgetSeconds(c.demand, c.demand.input.risk.epochNs);
     if (!c.demand.dependenciesAvailable) out.reason = "DEPENDENCY_UNAVAILABLE";
@@ -131,14 +134,10 @@ CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& c, N5cVariant variant
         out.reason = "STORAGE_QUOTA_INFEASIBLE";
     if (!out.reason.empty()) return out;
     const auto busy = Add(c.normalBusyNs, c.recoveryBusyNs);
-    Require(busy <= c.exposureNs, "N5C execution exceeds survival exposure");
+    Require(busy <= c.exposureNs, "CompFRR-P execution exceeds survival exposure");
     out.historyUnavailable = c.exposureNs == 0;
     out.historicalUtilization = CumulativeComputePressure(busy, c.exposureNs);
-    const auto recentBusy = Add(c.recentNormalBusyNs, c.recentRecoveryBusyNs);
-    Require(recentBusy <= c.recentExposureNs, "N5C recent execution exceeds live exposure");
-    out.recentUtilization = c.recentExposureNs ? static_cast<double>(recentBusy) / c.recentExposureNs : 0;
-    if (variant == N5cVariant::RECENT_U) out.historyUnavailable = c.recentExposureNs == 0;
-    if (variant == N5cVariant::RATIONAL_U)
+    if (variant == CompFrrPlacementVariant::RATIONAL_U)
         out.rationalPressure = IdleAwareComputePressure(out.historicalUtilization,
                                                   c.historyHorizonNs, c.continuousIdleNs);
     out.storagePressure = static_cast<double>(Add(c.accountedBytes, c.additionalQuotaBytes)) /
@@ -149,7 +148,7 @@ CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& c, N5cVariant variant
     for (const auto& f : c.peers)
     {
         Require(f.input.risk.epochNs == c.demand.input.risk.epochNs &&
-                primaries.insert(f.primaryNode).second, "N5C peers not independent active primaries");
+                primaries.insert(f.primaryNode).second, "CompFRR-P peers not independent active primaries");
         peers.push_back(CompFrrRecoveryWindows(f));
     }
     long double demand = 0, weighted = 0;
@@ -161,7 +160,7 @@ CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& c, N5cVariant variant
             long double g = 0;
             for (const auto& peer : windows)
                 if (peer.startNs <= w.startNs && w.startNs < peer.endNs) g += peer.mass;
-            Require(g >= 0 && g <= 1 + 1e-15L, "invalid N5C peer conflict mass");
+            Require(g >= 0 && g <= 1 + 1e-15L, "invalid CompFRR-P peer conflict mass");
             noConflict *= 1 - std::min(1.L, g); // Floating sum roundoff only.
         }
         demand += w.mass;
@@ -174,11 +173,10 @@ CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& c, N5cVariant variant
     out.peerCount = peers.size();
     out.windowCount = own.size();
     const std::vector<std::pair<const char*, double>> dimensions{
-        {"RECOVERY_CONFLICT", variant == N5cVariant::NO_R ? -1 : out.recoveryConflict},
-        {"COMPUTE_HISTORY", variant == N5cVariant::NO_U ? -1 :
-            (variant == N5cVariant::RECENT_U ? out.recentUtilization :
-             variant == N5cVariant::RATIONAL_U ? out.rationalPressure : out.historicalUtilization)},
-        {"STORAGE", variant == N5cVariant::NO_M ? -1 : out.storagePressure}};
+        {"RECOVERY_CONFLICT", variant == CompFrrPlacementVariant::NO_R ? -1 : out.recoveryConflict},
+        {"COMPUTE_HISTORY", variant == CompFrrPlacementVariant::NO_U ? -1 :
+            (variant == CompFrrPlacementVariant::RATIONAL_U ? out.rationalPressure : out.historicalUtilization)},
+        {"STORAGE", variant == CompFrrPlacementVariant::NO_M ? -1 : out.storagePressure}};
     out.bottleneck = -1;
     for (const auto& [name, value] : dimensions)
         if (value > out.bottleneck) { out.bottleneck = value; out.dominant = name; }
@@ -193,7 +191,7 @@ CompFrrSelection CompFrrPlacementPolicy::SelectRemote(const std::vector<CompFrrC
     std::set<uint32_t> nodes;
     for (const auto& c : candidates)
     {
-        Require(nodes.insert(c.remoteNode).second, "duplicate N5C remote candidate");
+        Require(nodes.insert(c.remoteNode).second, "duplicate CompFRR-P remote candidate");
         out.scores.push_back(ScoreCompFrrCandidate(c, m_variant));
     }
     std::vector<const CompFrrScore*> ranked;
@@ -211,6 +209,6 @@ CompFrrSelection CompFrrPlacementPolicy::SelectRemote(const std::vector<CompFrrC
 }
 void CompFrrPlacementPolicy::RankBackupNodes(std::vector<uint32_t>&, const PlacementContext&) const
 {
-    throw std::logic_error("N5C is CompFRR designated-remote placement, not recovery ranking");
+    throw std::logic_error("CompFRR-P is CompFRR designated-remote placement, not recovery ranking");
 }
 } // namespace ns3::protection

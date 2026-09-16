@@ -106,6 +106,28 @@ class FinalScenarioTests(unittest.TestCase):
         for key, total in (("task_count", 800), ("input_bytes", 194119753287), ("work_units", 352513119)):
             self.assertEqual(sum(r[key] for r in placement["by_region"].values()), total)
 
+    def test_controlled_f3_bandwidth_normalization_changes_only_arrival(self):
+        canonical = json.loads((SCENE / "workload/task-trace.json").read_text())
+        expected = {
+            2_000_000_000: 1022122825747,
+            5_000_000_000: 1024042825747,
+            10_000_000_000: 1024682825747,
+            100_000_000_000: 1025258825747,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            for bandwidth, arrival in expected.items():
+                output = Path(temporary) / f"tasks-{bandwidth}.json"
+                receipt = RUN["bandwidth_normalized_task_trace"](output, bandwidth)
+                derived = json.loads(output.read_text())
+                target = next(task for task in derived["tasks"] if task["task_id"] == 120)
+                self.assertEqual(target["arrival_time_ns"], arrival)
+                self.assertEqual(receipt["normalized_arrival_time_ns"], arrival)
+                restored = deepcopy(derived)
+                restored["tasks"][119]["arrival_time_ns"] = canonical["tasks"][119]["arrival_time_ns"]
+                self.assertEqual(restored, canonical)
+            with self.assertRaisesRegex(ValueError, "overwrite"):
+                RUN["bandwidth_normalized_task_trace"](output, 5_000_000_000)
+
     def test_synthetic_placement_deterministic_and_missing_slices_rejected(self):
         positions = {t*10**9: {n: (40., (-95., 15., 120., 70.)[n % 4]) for n in range(66)}
                      for t in range(1051)}

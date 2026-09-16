@@ -12,7 +12,7 @@ production compute-pressure 仅有两种，默认不变：
 
 `compfrrPlacementAblation=noR|noU|noM` 保留为 cumulative 下的 ablation capability，
 默认 none；只关闭对应评分项，仍记录原值并保留硬约束。
-noU 不是第三种 U policy；`recent-U` 已从正式 CLI 移除，历史 API/证据见[归档口径](reproducibility.md)。
+noU 不是第三种 U policy；`recent-U` 的运行实现已删除，历史证据见[归档口径](reproducibility.md)。
 
 | 文件 | 职责 |
 |---|---|
@@ -23,11 +23,13 @@ noU 不是第三种 U policy；`recent-U` 已从正式 CLI 移除，历史 API/�
 | `runtime/placement-resource-tracker.*` | 中性实际 READY、assignment 积分、storage byte-time 与 quota 接线 |
 | `policy/compfrr/placement/compfrr-placement-tracker.*` | P 提案与 pressure 诊断；不拥有求解器 |
 | `runtime/compute-usage-history.h/.cc` | 通过原有计算状态通知记录实际普通/恢复服务区间；只读前缀查询，不改变调度 |
-| `metrics/core/{n5c-placement,placement-resource}-metrics.cc`（satcompute 目录下） | P 决策与中性资源分别写出；保留原外部 schema |
+| `metrics/core/{compfrr-placement,placement-resource}-metrics.cc`（satcompute 目录下） | P 决策与中性资源分别写出；数值列含义不变 |
 
-START 先用 FA-FFP 公共节点/路径筛选后的首个 reference pair 求解一次启动及 `(δ,n)`；
-不对各 remote 重跑 Frequency，也不在 reference 不可行时另做联合搜索。保留 reference local，
-然后用实际 remote 的算力、带宽、存储验证固定配置，按 V4 排名。未越过完整同纳秒故障批次
+START 保留 FA-FFP 公共节点/路径筛选后的首个 reference pair 的 local。先检查该 remote；
+仅当现有 Frequency 返回 deadline、storage 或 initialization-too-late 硬拒绝时，按原确定性顺序
+检查同一 local 的后续 remote，直到首个硬可行 anchor。硬可行但收益不足时不继续挑选其他 remote。
+冻结 anchor 的启动及 `(δ,n)` 结果，然后用实际 remote 的算力、带宽、存储验证固定配置，按 V4 排名。
+排名阶段仍不重跑 Frequency，不搜索其他 local，不改目标函数或搜索空间。未越过完整同纳秒故障批次
 之前不占用资源；提交前再次检查同一 pair/config，不可行则拒绝 START 或暂停 ON。
 ON 始终使用 committed 实际 pair 的资源更新配置，不重新 placement。
 
@@ -42,6 +44,12 @@ R 是当前活跃任务的竞争风险代理，不是已校准的真实 busy 概
 已初始化任务使用实际 READY 时间；初始化中的任务使用当前完整初始化的保守估计，不能冒称真实就绪。
 V4 的串加时间只作候选估计，实际恢复仍按既有 INPUT/state 并发屏障执行。
 
+Selective 的 candidate 采用实际 pair 的 dry-run 合同：SEND 的 INPUT 模型项为 0，DEFER 为 `S/B_I`。
+existing peer 只读 `InputStagingManager::Resolve(task, remote).mode`：READY/IN_FLIGHT 取 0；
+FETCH（包括未建立流、失败、ABSENT、wrong-target）保留 `S/B_I`。同星仍为 0。
+不把 `remainingNs` 放进 P model；真实恢复仍依赖真实接收完成与 dependency DAG，
+IN_FLIGHT 的模型项为 0 不代表物理 INPUT 已就绪。
+
 quota 按节点逐任务累加 `max(实际 used+reserved, 当前远端 peak quota)`，其余物理对象按实际计入；
 ON 更新替换自身旧 quota，不重复计占用，任务离开主计算后释放未来承诺，实际对象仍由原生命周期释放。
 历史利用率的分母从仿真起点到当前观测时刻，整星故障后截止于实际 F3；F1/F2 不扣除恢复免疫执行时间。
@@ -52,16 +60,20 @@ H 为当前主任务精确剩余纯计算时间（整数 ns），不是 deadline
 从未计算的节点从 t=0 累计空闲；当前实际忙则 I=0，但不会因此绕过现有空闲候选硬约束。
 预留等待不算忙，F1/F2 暂时不可用且没有真实计算时继续累计空闲；恢复免疫期间的实际计算仍算忙。
 H 必须正、I 非负；不新增衰减系数，不读取未来任务或未来故障。
-`n5c-rational-u-history.csv` 单独记录 H、I、freshness、累计 U 与 rational pressure；
+`compfrr-rational-u-history.csv` 单独记录 H、I、freshness、累计 U 与 rational pressure；
 原候选表的 `historical_utilization` 和节点全程统计仍是实际累计利用率，不改含义。
 R/M、min-max、传播时延/稳定 ID tie-break、START/ON、Frequency 和 Recovery 均不变。
 两种正式 policy 并列保留，不据重构更换默认 FULL 或宣称 IDLE_AWARE 更优。
 旧五轮审计与 corrected maintenance 结果见[复现与证据边界](reproducibility.md)。
 
-`n5c-placement-decisions.csv` 只记录 START 后的空间提案，区分 reference/实际资源、候选及最终准入。
-原 `frequency-decisions.csv` 的 OFF 标量和评分仍属于 reference，local/remote 列为实际提案；ON 均为实际 pair。
+`compfrr-placement-decisions.csv` 记录 START 准入过程的空间提案，区分 reference/实际资源、候选及最终准入。
+原 `frequency-decisions.csv` 的 OFF 标量和评分属于可行 anchor（无 fallback 时即原 reference），
+local/remote 列为实际提案；ON 均为实际 pair，原列保持不变。
+新增 `compfrr-candidate-coverage.csv` 仅记录 P 的 OFF 搜索，区分原 reference、首个可行 anchor、
+最终 P remote 和真实提交。anchor index 从 1 起算；fallback depth 为多检查的 remote 数，即 checked−1。
+汇总分开报告 hard-feasible、START、fault-hit 和全体不可行，不能把 anchor 存在等同于已建立保护。
 `placement-resource-summary.csv` 对平台 CompFRR 各 placement 输出相同的只读计数/积分/峰值；
-FA-FFP 等不会因此启用 N5C quota。原场景、故障随机流、Routing、恢复策略和工作量标度不变。
+FA-FFP 等不会因此启用 CompFRR-P quota。原场景、故障随机流、Routing、恢复策略和工作量标度不变。
 正式运行与审计入口见 [测试说明](../../contrib/satcompute/tests/README.md)，结果见
 [N5C 验收记录](../n5/reviews/N5B-closeout-N5C-kickoff.md)。
 离线汇总的 direct/relocate/recompute 比例以恢复尝试数为分母，failed 是可与这些动作重叠的结果；

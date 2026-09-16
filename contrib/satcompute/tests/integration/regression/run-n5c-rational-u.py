@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 HERE = Path(__file__).resolve().parent
-RECENT = runpy.run_path(str(HERE / "run-n5c-recent-u.py"))
+RECENT = runpy.run_path(str(HERE.parents[1] / "support/protection/historical_recent_evidence.py"))
 ROOT, OLD, MATRIX, FINAL = (RECENT[k] for k in ("ROOT", "OLD", "MATRIX", "FINAL"))
 require = MATRIX["require"]
 BASE_HEAD = "a19b722694948bda395cf95b96cd27609daf6c91"

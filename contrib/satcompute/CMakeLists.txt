@@ -38,6 +38,10 @@ build_lib(
     para.cc
     protection/protection-para.cc
     protection/protection-config.cc
+    protection/baseline/multitree/multitree-feature-adapter.cc
+    protection/baseline/multitree/multitree-published-rule.cc
+    protection/baseline/multitree/multitree-decision-log.cc
+    protection/baseline/multitree/multitree-controller.cc
     common/time-conversion.cc
     protection/common/protection-types.cc
     protection/common/input-contract.cc
@@ -79,7 +83,7 @@ build_lib(
     protection/runtime/placement-resource-tracker.cc
     metrics/core/placement-resource-metrics.cc
     protection/runtime/compute-usage-history.cc
-    metrics/core/n5c-placement-metrics.cc
+    metrics/core/compfrr-placement-metrics.cc
     protection/policy/compfrr/storage-estimator.cc
     protection/runtime/placement-load-ledger.cc
     metrics/core/placement-load-metrics.cc
@@ -157,6 +161,10 @@ build_lib(
     para.h
     protection/protection-para.h
     protection/protection-config.h
+    protection/baseline/multitree/multitree-feature-adapter.h
+    protection/baseline/multitree/multitree-published-rule.h
+    protection/baseline/multitree/multitree-decision-log.h
+    protection/baseline/multitree/multitree-controller.h
     common/time-conversion.h
     protection/common/protection-types.h
     protection/common/input-contract.h
@@ -179,7 +187,6 @@ build_lib(
     protection/policy/fixed/fixed-protection-policy.h
     protection/policy/compfrr/frequency/compfrr-frequency-policy.h
     protection/policy/compfrr/frequency/frequency-decision-gate.h
-    protection/policy/compfrr/placement/n5c-placement-policy.h
     protection/policy/compfrr/placement/compfrr-placement-policy.h
     protection/policy/compfrr/placement/compute-pressure/compute-pressure.h
     protection/policy/compfrr/placement/compfrr-placement-tracker.h
@@ -202,7 +209,6 @@ build_lib(
     protection/policy/compfrr/compfrr-controller.h
     protection/policy/compfrr/input/selective-input-snapshot.h
     protection/policy/compfrr/storage-estimator.h
-    protection/runtime/n5c-placement-tracker.h
     protection/runtime/compute-usage-history.h
     protection/runtime/frequency-storage-estimator.h
     protection/runtime/placement-load-ledger.h
@@ -317,6 +323,34 @@ set_source_files_properties(
     "SATCOMPUTE_CB_MTBF_PROFILE=\"${CMAKE_CURRENT_SOURCE_DIR}/protection/baseline/checkbullet/calibration/frozen-mtbf-profile.json\""
 )
 
+# Fixed baseline calibration and project-owned mapping tools.
+set_source_files_properties(
+  protection/baseline/multitree/multitree-feature-adapter.cc
+  PROPERTIES COMPILE_DEFINITIONS
+    "SATCOMPUTE_MULTITREE_SCALE=\"${CMAKE_CURRENT_SOURCE_DIR}/protection/baseline/multitree/calibration/published-ft-scale.json\""
+)
+build_exec(
+  EXECNAME satcompute-multitree-calibration
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/multitree-calibration.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+build_exec(
+  EXECNAME satcompute-multitree-mapping-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/multitree-mapping-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+build_exec(
+  EXECNAME satcompute-multitree-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/multitree-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 # The platform entry point is a project executable, not an ns-3 example.  It is
 # therefore available when the global examples and tests switches are disabled.
 build_exec(
@@ -409,9 +443,9 @@ add_custom_target(
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
 build_exec(
-  EXECNAME satcompute-n5c-placement-test
+  EXECNAME satcompute-compfrr-placement-test
   EXECNAME_PREFIX satcompute_test_
-  SOURCE_FILES tests/unit/n5c-placement-test.cc
+  SOURCE_FILES tests/unit/compfrr-placement-test.cc
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )

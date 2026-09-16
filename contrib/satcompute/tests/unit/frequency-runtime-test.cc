@@ -46,6 +46,17 @@ struct FrequencyRuntimeTestAccess
         return c.m_manager;
     }
     static void Released(FrequencyProtectionController& c) { c.CapacityReleased(); }
+    static CompFrrForecast Peer(FrequencyProtectionController& c, uint32_t remote)
+    {
+        DecisionPathSnapshot paths([&](auto a, auto b) {
+            return c.m_tasks->GetTransferEngine()->EstimateAdmissiblePath(a, b);
+        });
+        const auto peers = c.CompFrrPeers(remote, 999, "TASK_RUNNING", paths);
+        if (peers.size() != 1) throw std::runtime_error("peer contract fixture lost live peer");
+        return peers.front();
+    }
+    static void RequestInput(FrequencyProtectionController& c, uint32_t remote)
+    { c.m_optionalInput->Request(c.Task(1).definition, remote); }
     static bool StartStillRequiresIdle(FrequencyProtectionController& c, const TaskRuntime& task)
     {
         auto& state = c.m_states.at(task.definition.taskId);
@@ -60,6 +71,15 @@ struct FrequencyRuntimeTestAccess
     static bool HasCapacityInterest(FrequencyProtectionController& c)
     {
         return !c.m_pausedCapacity.empty() || !c.m_waitingCapacity.empty();
+    }
+    static bool OtherLocalFeasible(FrequencyProtectionController& c, FrequencyDecisionRecord row)
+    {
+        row.pair = PlacementDecision{4, 0};
+        DecisionPathSnapshot paths([&](auto a, auto b) {
+            return c.m_tasks->GetTransferEngine()->EstimateAdmissiblePath(a, b);
+        });
+        return c.BuildResources(row, c.Task(row.taskId), c.m_states.at(row.taskId), paths) &&
+               c.m_policy.Evaluate(row.input).action == FrequencyAction::START;
     }
     static bool BlockedInput(FrequencyProtectionController& c, TaskRuntime task)
     {
@@ -694,8 +714,8 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         parameters.f3.mode = "controlled";
         parameters.f3.controlledNodeId = 3;
         parameters.f3.controlledStartSeconds = 0.1;
-        const bool n5c = mode.starts_with("n5c");
-        const bool paired = mode == "ffp-two" || mode == "lrl-two" || n5c;
+        const bool spatial = mode.starts_with("compfrr-placement");
+        const bool paired = mode == "ffp-two" || mode == "lrl-two" || spatial;
         const std::vector<uint32_t> computeNodes = paired ? ids : std::vector<uint32_t>{0, 2, 3, 4};
         engine->Configure(parameters, ids, computeNodes, END, executor, true);
         if (mode == "phase-boundary")
@@ -722,8 +742,8 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
             next.taskId = 2;
             next.inputTransferId = 3;
             next.resultTransferId = 4;
-            next.computeNodeId = n5c ? 9 : 5;
-            next.arrivalTimeNs = n5c ? 50000000 : 150000000;
+            next.computeNodeId = spatial ? 9 : 5;
+            next.arrivalTimeNs = spatial ? 50000000 : 150000000;
             workload.tasks.push_back(next);
         }
         tasks->Initialize(compute, workload,
@@ -737,13 +757,12 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         executor->BindTaskCoordinator(tasks);
         engine->BindTaskCoordinator(tasks);
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
-            n5c ? std::unique_ptr<PlacementPolicy>(std::make_unique<N5cPlacementPolicy>(
-                mode == "n5c-recent-U" ? N5cVariant::RECENT_U :
-                mode == "n5c-rational-U" ? N5cVariant::RATIONAL_U : N5cVariant::FULL)) :
+            spatial ? std::unique_ptr<PlacementPolicy>(std::make_unique<CompFrrPlacementPolicy>(
+                mode == "compfrr-placement-rational-U" ? CompFrrPlacementVariant::RATIONAL_U : CompFrrPlacementVariant::FULL)) :
             mode == "lrl-two" ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
                                : std::unique_ptr<PlacementPolicy>{}, RemoteBusyRecoveryPolicy::RELOCATE,
             selective ? InputPolicy::SELECTIVE :
-            (mode == "n5c-deferred" || mode == "n5c-recent-U" || mode == "n5c-rational-U") ?
+            (mode == "compfrr-placement-deferred" || mode == "compfrr-placement-rational-U") ?
                 InputPolicy::DEFERRED : InputPolicy::EAGER);
         if (mode == "f3")
         {
@@ -833,25 +852,25 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
                       snapshot.pFinish >= snapshot.qCompute,
                   "F3 victim causal probability was disabled");
         }
-        if (n5c)
+        if (spatial)
         {
             bool competingPeer = false;
-            Check(controller.N5c() && controller.N5c()->QuotasEmpty() &&
-                  !controller.N5c()->Decisions().empty(), "N5C did not exercise START/release");
+            Check(controller.PlacementTracker() && controller.PlacementTracker()->QuotasEmpty() &&
+                  !controller.PlacementTracker()->Decisions().empty(), "CompFRR-P did not exercise START/release");
             for (const auto& row : controller.Decisions())
             {
                 if (row.input.phase == ProtectionPhase::OFF && row.pairPathFeasible)
-                    Check(row.pairHardChecked == 1, "N5C reran Frequency per remote");
+                    Check(row.pairHardChecked == 1, "CompFRR-P reran Frequency per remote");
                 if (row.input.phase == ProtectionPhase::ON)
-                    Check(!row.n5cTrace, "ON reranked N5C remote");
-                if (row.n5cTrace)
+                    Check(!row.placementTrace, "ON reranked CompFRR-P remote");
+                if (row.placementTrace)
                 {
-                    const auto& spatial = controller.N5c()->Decision(*row.n5cTrace);
+                    const auto& spatial = controller.PlacementTracker()->Decision(*row.placementTrace);
                     Check(spatial.reference.localNode == row.pair->localNode &&
                           spatial.config == row.proposal.selected->config,
-                          "N5C changed reference local or Frequency configuration");
+                          "CompFRR-P changed reference local or Frequency configuration");
                     Check(spatial.committed == (row.committed && row.proposal.action == FrequencyAction::START),
-                          "N5C proposal was confused with actual commitment");
+                          "CompFRR-P proposal was confused with actual commitment");
                     for (const auto& s : spatial.selection.scores)
                         if (s.feasible)
                         {
@@ -859,13 +878,13 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
                             Check(s.recoveryConflict >= 0 && s.recoveryConflict <= 1 &&
                                   s.historicalUtilization >= 0 && s.historicalUtilization <= 1 &&
                                   s.storagePressure >= 0 && s.storagePressure <= 1,
-                                  "N5C normalized pressure outside unit range");
+                                  "CompFRR-P normalized pressure outside unit range");
                         }
                 }
             }
-            Check(competingPeer, "N5C runtime did not exercise a shared-remote competing forecast");
+            Check(competingPeer, "CompFRR-P runtime did not exercise a shared-remote competing forecast");
         }
-        if (paired && !n5c)
+        if (paired && !spatial)
         {
             std::map<uint64_t, uint32_t> selected;
             for (const auto& row : controller.Decisions())
@@ -932,7 +951,9 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
     Reset();
 }
 /** Force a different actual remote, then test readonly proposal, quota race and ON resource use. */
-void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging, const std::string& mode)
+void CompFrrBoundary(const std::filesystem::path& output, InputPolicy inputPolicy,
+                 const std::string& mode, bool reverseSelectivePair = false,
+                 const std::string& peerProbe = "")
 {
     RngSeedManager::SetSeed(1); RngSeedManager::SetRun(11);
     {
@@ -943,7 +964,9 @@ void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging
         topology.Initialize();
         auto tasks = CreateObject<TaskCoordinator>();
         auto definition = Definition(TaskProfile::LLM);
-        definition.sourceNodeId = 4; // Legal LocalDelivery on the selected actual remote.
+        // Normal Selective: anchor network DEFER -> actual LocalDelivery SEND.
+        // Reverse Selective: anchor LocalDelivery SEND -> actual network DEFER.
+        definition.sourceNodeId = reverseSelectivePair ? 0 : 4;
         tasks->Initialize(ComputeProfile{{{0,125000},{2,100000},{3,100000},{4,100000}}},
             TaskTrace{{definition}}, topology, "size-aware", 1024, cfg.parameters.islMtuBytes,
             cfg.parameters.receiverRcvBufBytes, false, END);
@@ -957,48 +980,244 @@ void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging
         engine->Configure(fp, ids, {0,2,3,4}, END, executor, true);
         engine->BindTaskCoordinator(tasks);
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
-            std::make_unique<N5cPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE,
-            staging == InputStagingPolicy::EAGER ? InputPolicy::EAGER : InputPolicy::DEFERRED);
+            std::make_unique<CompFrrPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE,
+            inputPolicy);
         auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
         const auto held = manager.Pool(0).TryReserve(999, StorageKind::INIT_TEMP, 4000000000ULL);
         Check(held.has_value(), "test pressure reservation failed");
         Driver driver{controller, tasks, executor, F1SelfStateFaultModel(GetDefaultFaultParameters().f1), mode};
         std::optional<uint64_t> race;
+        std::optional<uint64_t> inputStorageBlock;
         driver.betweenProposalAndResolution = [&](const auto& row) {
             if (row.input.phase != ProtectionPhase::OFF) return;
-            Check(row.n5cTrace && row.pair->localNode == 2 && row.pair->remoteNode == 4 &&
-                  manager.Summaries().empty(), "N5C did not retain local/select actual remote without allocation");
-            const auto& trace = controller.N5c()->Decision(*row.n5cTrace);
+            Check(row.placementTrace && row.pair->localNode == 2 && row.pair->remoteNode == 4 &&
+                  manager.Summaries().empty(), "CompFRR-P did not retain local/select actual remote without allocation");
+            const auto& trace = controller.PlacementTracker()->Decision(*row.placementTrace);
             Check(trace.reference.remoteNode == 0 && trace.referenceInput.recoveryRate == 125000 &&
                   row.pairHardChecked == 1, "reference resources or one-solve contract changed");
             Check(!trace.committed, "readonly candidate created actual ownership");
             if (mode == "race")
                 race = manager.Pool(4).TryReserve(998, StorageKind::INIT_TEMP, manager.Pool(4).Free());
+            if (mode == "prefetch-reject")
+            {
+                Check(inputPolicy == InputPolicy::SELECTIVE && row.policyAwareInputPlan &&
+                          row.policyAwareInputPlan->decision.send && row.placementPeak && *row.placementPeak > 0,
+                      "prefetch rejection fixture requires a policy-aware SEND and remote quota");
+                auto& pool = manager.Pool(row.pair->remoteNode);
+                Check(pool.Free() > *row.placementPeak,
+                      "prefetch rejection fixture lacks independent storage headroom");
+                inputStorageBlock = pool.TryReserve(
+                    998, StorageKind::INIT_TEMP, pool.Free() - *row.placementPeak);
+                Check(inputStorageBlock.has_value(), "prefetch rejection storage blocker missing");
+            }
         };
         Simulator::Schedule(NanoSeconds(200000000), [&] {
             driver.Epoch(.4, mode == "hit");
             const auto& row = controller.Decisions().back();
-            Check(row.committed == (mode == "normal"), "post-batch hit/quota admission mismatch");
-            if (mode != "normal") Check(manager.Summaries().empty(), "rejected START allocated state");
+            const bool successfulStart = mode == "normal" || mode == "prefetch-reject";
+            Check(row.committed == successfulStart, "post-batch hit/quota admission mismatch");
+            if (!successfulStart) Check(manager.Summaries().empty(), "rejected START allocated state");
+            if (successfulStart && inputPolicy == InputPolicy::SELECTIVE)
+            {
+                const auto anchor = std::find_if(row.policyAwareInputAudits.begin(),
+                    row.policyAwareInputAudits.end(), [](const auto& audit) {
+                        return audit.stage == "ANCHOR_SEARCH" && audit.anchor;
+                    });
+                const auto final = std::find_if(row.policyAwareInputAudits.begin(),
+                    row.policyAwareInputAudits.end(), [](const auto& audit) {
+                        return audit.stage == "FINAL_REVALIDATION" && audit.finalPair;
+                    });
+                Check(anchor != row.policyAwareInputAudits.end() &&
+                          final != row.policyAwareInputAudits.end() &&
+                          anchor->remote == 0 && final->remote == 4 && final->finalPairRevalidated,
+                      "actual pair did not receive its own Selective dry-run/revalidation");
+                Check(anchor->selective.send == reverseSelectivePair &&
+                          final->selective.send != reverseSelectivePair &&
+                          final->admissionSeconds == (reverseSelectivePair
+                              ? final->legacyFaultInputSeconds : 0),
+                      "actual pair inherited the anchor INPUT decision");
+                Check(controller.InputAdmissions().size() == 1 &&
+                          controller.InputAdmissions().front().first.pair.remoteNode == 4 &&
+                          controller.InputAdmissions().front().second.send != reverseSelectivePair,
+                      "committed START did not retain the final actual-pair decision");
+                if (mode == "prefetch-reject")
+                {
+                    const auto inventory = manager.Inventory(1);
+                    const auto& input = controller.OptionalInput()->Records().at(1);
+                    Check(inventory && inventory->active && input.state == OptionalInputState::ABSENT &&
+                              input.reason == "STORAGE_NOT_ADMITTED" && !input.flow &&
+                              final->runtimePrefetchAdmissionSuccess == std::optional(false),
+                          "failed physical prefetch rolled back checkpoint or lost fallback telemetry");
+                }
+                else
+                    Check(controller.OptionalInput()->Records().size() ==
+                              static_cast<size_t>(!reverseSelectivePair),
+                          "DEFER created a flow or SEND omitted LocalDelivery");
+            }
         });
         Simulator::Schedule(NanoSeconds(400000000), [&] {
-            if (mode != "normal") return;
-            const auto count = controller.N5c()->Decisions().size();
-            Check(manager.Inventory(1)->initialized, "N5C initialization never became physically ready");
+            if (mode != "normal" && mode != "prefetch-reject") return;
+            const auto count = controller.PlacementTracker()->Decisions().size();
+            Check(manager.Inventory(1)->initialized, "CompFRR-P initialization never became physically ready");
             driver.Epoch(.5);
             const auto& row = controller.Decisions().back();
             Check(row.input.phase == ProtectionPhase::ON && row.input.recoveryRate == 100000 &&
-                  row.pair->remoteNode == 4 && controller.N5c()->Decisions().size() == count,
+                  row.pair->remoteNode == 4 && controller.PlacementTracker()->Decisions().size() == count,
                   "ON used reference resources or reran spatial ranking");
-            Check(controller.N5c()->ReadyAfter(1).has_value(), "actual ready timestamp absent");
+            Check(controller.PlacementTracker()->ReadyAfter(1).has_value(), "actual ready timestamp absent");
         });
+        auto checkPeer = [&](InputDependencyMode expected) {
+            const auto before = controller.OptionalInput()->Resolve(definition, 4);
+            const auto peer = FrequencyRuntimeTestAccess::Peer(controller, 4);
+            const auto after = controller.OptionalInput()->Resolve(definition, 4);
+            Check(before.mode == expected && before.mode == after.mode &&
+                      before.remainingNs == after.remainingNs && before.flowId == after.flowId,
+                  "peer forecast changed runtime INPUT dependency");
+            auto candidate = peer;
+            candidate.recoveryInputSeconds = expected == InputDependencyMode::FETCH
+                ? std::optional<double>{} : std::optional<double>{0};
+            Check(peer.recoveryInputSeconds == candidate.recoveryInputSeconds &&
+                      CompFrrCatchSeconds(peer) == CompFrrCatchSeconds(candidate),
+                  "candidate/peer INPUT policy contracts differ");
+            auto legacy = peer; legacy.recoveryInputSeconds.reset();
+            if (expected == InputDependencyMode::FETCH)
+                Check(!peer.recoveryInputSeconds &&
+                          CompFrrCatchSeconds(peer) == CompFrrCatchSeconds(legacy),
+                      "FETCH peer lost legacy INPUT term");
+            else if (peer.inputLocal)
+                Check(CompFrrCatchSeconds(peer) == CompFrrCatchSeconds(legacy),
+                      "LocalDelivery acquired nonzero INPUT cost");
+            else
+                Check(CompFrrCatchSeconds(peer) < CompFrrCatchSeconds(legacy),
+                      "valid proactive peer retained full INPUT term");
+            if (expected == InputDependencyMode::IN_FLIGHT)
+                // A transient unavailable estimate also stays UNKNOWN, never fabricated READY.
+                Check((!before.remainingNs || *before.remainingNs > 0) && peer.recoveryInputSeconds == 0,
+                      "P zero INPUT fabricated runtime readiness");
+        };
+        if (!peerProbe.empty())
+        {
+            Simulator::Schedule(NanoSeconds(210000000), [&] {
+                checkPeer(InputDependencyMode::FETCH); // No admitted SEND / ABSENT.
+                FrequencyRuntimeTestAccess::RequestInput(controller, peerProbe == "wrong-target" ? 0 : 4);
+                checkPeer(InputDependencyMode::FETCH); // REQUESTED is not physical admission.
+            });
+            Simulator::Schedule(NanoSeconds(210010000), [&] {
+                if (peerProbe == "wrong-target") { checkPeer(InputDependencyMode::FETCH); return; }
+                checkPeer(InputDependencyMode::IN_FLIGHT);
+                if (peerProbe == "failed")
+                {
+                    const auto flow = controller.OptionalInput()->Records().at(1).flow;
+                    Check(tasks->GetTransferEngine()->FinalizeTransferIfActive(flow,
+                        TransferTerminalState::FAILED, TransferTerminalReason::TASK_FAILED),
+                        "peer failure fixture missed active flow");
+                    checkPeer(InputDependencyMode::FETCH);
+                }
+            });
+            Simulator::Schedule(NanoSeconds(230000000), [&] {
+                checkPeer(peerProbe == "ready" ? InputDependencyMode::READY : InputDependencyMode::FETCH);
+            });
+        }
+        else if (inputPolicy == InputPolicy::SELECTIVE && mode == "normal" && !reverseSelectivePair)
+            Simulator::Schedule(NanoSeconds(230000000), [&] { checkPeer(InputDependencyMode::READY); });
+        else if (mode == "prefetch-reject")
+            Simulator::Schedule(NanoSeconds(230000000), [&] { checkPeer(InputDependencyMode::FETCH); });
         Simulator::Stop(NanoSeconds(800000000));
         Simulator::Run();
         manager.Pool(0).ReleaseReservation(*held);
         if (race) manager.Pool(4).ReleaseReservation(*race);
+        if (inputStorageBlock) manager.Pool(4).ReleaseReservation(*inputStorageBlock);
         controller.Finalize(); engine->Finalize();
-        Check(controller.N5c()->QuotasEmpty() && manager.IsQuiescent(), "N5C quota/storage leaked");
+        Check(controller.PlacementTracker()->QuotasEmpty() && manager.IsQuiescent(), "CompFRR-P quota/storage leaked");
         controller.WriteDecisions(output);
+    }
+    Reset();
+}
+
+/** Real pools, paths and solver: only the fixed-local hard-rejected remote prefix retries. */
+void CandidateCoverage(const std::filesystem::path& output, const std::string& mode)
+{
+    RngSeedManager::SetSeed(1); RngSeedManager::SetRun(11);
+    {
+        const bool deadline = mode == "deadline" || mode == "all-deadline" || mode == "fallback-hit";
+        auto cfg = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        cfg.parameters.fixedDelaySeconds = .001;
+        cfg.parameters.islBandwidthBps = deadline ? 1000000000ULL : 10000000000ULL;
+        OnlineTopologyController topology(cfg.parameters, cfg.constellation);
+        topology.Initialize();
+        auto tasks = CreateObject<TaskCoordinator>();
+        auto definition = Definition(deadline ? TaskProfile::DENSE_IMAGE : TaskProfile::LLM);
+        definition.sourceNodeId = mode == "all-deadline" ? 1 : 4;
+        tasks->Initialize(ComputeProfile{{{0,100000},{2,100000},{3,100000},{4,100000}}},
+            TaskTrace{{definition}}, topology, "size-aware", 1024, cfg.parameters.islMtuBytes,
+            cfg.parameters.receiverRcvBufBytes, false, END, 1.3);
+        const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+        auto executor = CreateObject<FaultController>();
+        executor->ConfigureGeneration(ids, END); executor->BindTopology(topology);
+        executor->BindTaskCoordinator(tasks);
+        auto engine = CreateObject<FaultModelEngine>();
+        auto fp = GetDefaultFaultParameters();
+        fp.checkIntervalSeconds = 10; fp.f2.enabled = fp.f3.enabled = false;
+        engine->Configure(fp, ids, {0,2,3,4}, END, executor, true);
+        engine->BindTaskCoordinator(tasks);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            std::make_unique<CompFrrPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE,
+            deadline ? InputPolicy::SELECTIVE : InputPolicy::EAGER);
+        auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
+        std::vector<std::pair<uint32_t,uint64_t>> held;
+        auto block = [&](uint32_t node) {
+            auto id = manager.Pool(node).TryReserve(999, StorageKind::INIT_TEMP, manager.Pool(node).Free());
+            Check(id.has_value(), "coverage storage blocker missing"); held.emplace_back(node,*id);
+        };
+        if (mode == "storage" || mode == "all-storage") block(0);
+        if (mode == "all-storage") block(4);
+        if (mode == "fixed-local") block(2);
+        Driver driver{controller, tasks, executor, F1SelfStateFaultModel(GetDefaultFaultParameters().f1), mode};
+        driver.betweenProposalAndResolution = [&](const auto& row) {
+            Check(row.candidateCoverage.has_value(), "P OFF candidate audit absent");
+            const auto& c = *row.candidateCoverage;
+            Check(c.reference && c.reference->localNode == 2 && c.reference->remoteNode == 0 &&
+                  c.candidates == 2 && c.checked == row.pairHardChecked && manager.Summaries().empty(),
+                  "fixed local/order or read-only search violated");
+            if (mode == "all-deadline" || mode == "all-storage" || mode == "fixed-local")
+            {
+                Check(c.allInfeasible && c.checked == 2 && !c.anchorIndex && !row.placementTrace &&
+                      row.proposal.action == FrequencyAction::NONE, "infeasible fixed-local set entered ranking");
+                if (mode == "fixed-local")
+                    Check(FrequencyRuntimeTestAccess::OtherLocalFeasible(controller, row),
+                          "test must have a feasible other-local pair that production cannot search");
+                return;
+            }
+            const bool fallback = mode == "storage" || deadline;
+            Check(!c.allInfeasible && c.anchorIndex == (fallback ? 2 : 1) &&
+                  c.checked == (fallback ? 2 : 1) && c.anchorRemote == (fallback ? 4 : 0),
+                  "wrong first feasible anchor or search after hard-feasible candidate");
+            Check(c.referenceRejectReason == (deadline ? "DEADLINE_INFEASIBLE" :
+                  fallback ? "STORAGE_INFEASIBLE" : ""), "reference hard reason lost");
+            if (mode == "no-benefit")
+            {
+                Check(row.proposal.action == FrequencyAction::NONE && !row.placementTrace && !c.finalRemote,
+                      "nonbeneficial reference triggered fallback or ranking");
+                return;
+            }
+            Check(row.placementTrace && c.finalRemote == row.pair->remoteNode && row.pair->localNode == 2,
+                  "anchor failed to enter unchanged fixed-local P ranking");
+            const auto& trace = controller.PlacementTracker()->Decision(*row.placementTrace);
+            Check(trace.reference.remoteNode == *c.anchorRemote && trace.config == row.proposal.selected->config,
+                  "ranking changed anchor configuration");
+        };
+        Simulator::Schedule(NanoSeconds(600000000), [&] {
+            driver.Epoch(mode == "no-benefit" ? 0 : .4, mode == "fallback-hit");
+            const auto& row = controller.Decisions().back();
+            const bool shouldStart = mode == "first" || mode == "deadline" || mode == "storage";
+            Check(row.committed == shouldStart, "coverage START admission/fault-batch contract changed");
+            if (mode == "fallback-hit")
+                Check(manager.Summaries().empty(), "fallback created checkpoint after same-batch fault");
+        });
+        Simulator::Stop(NanoSeconds(800000000)); Simulator::Run();
+        for (const auto& [node,id] : held) manager.Pool(node).ReleaseReservation(id);
+        controller.Finalize(); engine->Finalize(); controller.WriteDecisions(output);
+        Check(controller.PlacementTracker()->QuotasEmpty() && manager.IsQuiescent(), "candidate search leaked resources");
     }
     Reset();
 }
@@ -1430,18 +1649,29 @@ int main(int argc, char** argv)
     command.Parse(argc, argv);
     try
     {
-        Online(std::filesystem::path(output)/"ser-break-even", "n5c-deferred",
+        Online(std::filesystem::path(output)/"ser-break-even", "compfrr-placement-deferred",
                true);
         if (onlyInputAdmission) { std::cout << "input admission online: PASS (" << checks << " checks)\n"; return 0; }
         Storage();
-        for (auto staging : {InputStagingPolicy::EAGER, InputStagingPolicy::DEFERRED})
+        for (const auto& mode : {"first", "deadline", "storage", "all-deadline", "all-storage",
+                                 "fixed-local", "no-benefit", "fallback-hit"})
+            CandidateCoverage(std::filesystem::path(output) / (std::string("candidate-coverage-") + mode), mode);
+        for (auto inputPolicy : {InputPolicy::EAGER, InputPolicy::DEFERRED})
             for (const auto& mode : {"normal", "hit", "race"})
-                N5cBoundary(std::filesystem::path(output) / (std::string("n5c-boundary-") +
-                    (staging == InputStagingPolicy::EAGER ? "eager-" : "deferred-") + mode), staging, mode);
-        Online(std::filesystem::path(output) / "online-n5c", "n5c");
-        Online(std::filesystem::path(output) / "online-n5c-deferred", "n5c-deferred");
-        Online(std::filesystem::path(output) / "online-n5c-recent-U", "n5c-recent-U");
-        Online(std::filesystem::path(output) / "online-n5c-rational-U", "n5c-rational-U");
+                CompFrrBoundary(std::filesystem::path(output) / (std::string("compfrr-placement-boundary-") +
+                    (inputPolicy == InputPolicy::EAGER ? "eager-" : "deferred-") + mode), inputPolicy, mode);
+        CompFrrBoundary(std::filesystem::path(output) / "compfrr-placement-boundary-selective-anchor-defer",
+                    InputPolicy::SELECTIVE, "normal");
+        CompFrrBoundary(std::filesystem::path(output) / "compfrr-placement-boundary-selective-anchor-send",
+                    InputPolicy::SELECTIVE, "normal", true);
+        CompFrrBoundary(std::filesystem::path(output) / "compfrr-placement-boundary-selective-prefetch-reject",
+                    InputPolicy::SELECTIVE, "prefetch-reject");
+        for (const auto& probe : {"ready", "failed", "wrong-target"})
+            CompFrrBoundary(std::filesystem::path(output) / (std::string("peer-contract-") + probe),
+                        InputPolicy::SELECTIVE, "normal", true, probe);
+        Online(std::filesystem::path(output) / "online-compfrr-placement", "compfrr-placement");
+        Online(std::filesystem::path(output) / "online-compfrr-placement-deferred", "compfrr-placement-deferred");
+        Online(std::filesystem::path(output) / "online-compfrr-placement-rational-U", "compfrr-placement-rational-U");
         for (bool minimal : {false, true})
             for (bool lrl : {false, true})
                 PlacementAdmission(std::filesystem::path(output) / (std::string("placement-") +

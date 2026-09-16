@@ -49,6 +49,43 @@ class ProtectionEquivalenceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'preserve evidence'):
             API['collect'](self.left, 1)
 
+    def test_recent_retirement_exception_is_exact_and_opt_in(self):
+        path = self.left / 'frequency/online-compfrr-placement-recent-U/events.csv'
+        path.parent.mkdir(parents=True)
+        path.write_text('task_id,time_ns,bytes\n1,42,123\n')
+        with self.assertRaisesRegex(AssertionError, 'output set differs'):
+            API['compare'](self.left, self.right)
+        result = API['compare'](self.left, self.right, allow_retired_recent_fixture=True)
+        self.assertEqual((result['files'], result['removed_recent_fixture_files']), (2, 1))
+        (self.right / 'events.csv').write_text('task_id,time_ns,bytes\n1,42,124\n')
+        with self.assertRaisesRegex(AssertionError, 'SEMANTIC_DIFFERENCE'):
+            API['compare'](self.left, self.right, allow_retired_recent_fixture=True)
+        (self.right / 'events.csv').unlink()
+        with self.assertRaisesRegex(AssertionError, 'output set differs'):
+            API['compare'](self.left, self.right, allow_retired_recent_fixture=True)
+
+    def test_recent_retirement_cannot_hide_absent_reference_or_retained_fixture(self):
+        with self.assertRaisesRegex(AssertionError, 'reference must have'):
+            API['compare'](self.left, self.right, allow_retired_recent_fixture=True)
+        for root in (self.left, self.right):
+            path = root / 'frequency/online-compfrr-placement-recent-U/events.csv'
+            path.parent.mkdir(parents=True)
+            path.write_text('task_id\n1\n')
+        with self.assertRaisesRegex(AssertionError, 'candidate must omit'):
+            API['compare'](self.left, self.right, allow_retired_recent_fixture=True)
+
+    def test_historical_placement_rename_is_narrow_and_opt_in(self):
+        old = self.left / 'n5c-placement-decisions.csv'
+        new = self.right / 'compfrr-placement-decisions.csv'
+        old.write_text('placement,reason,bytes\nn5c,N5C_POST_BATCH_QUOTA,123\n')
+        new.write_text('placement,reason,bytes\ncompfrr,COMPFRR_P_POST_BATCH_QUOTA,123\n')
+        with self.assertRaisesRegex(AssertionError, 'output set differs'):
+            API['compare'](self.left, self.right)
+        self.assertTrue(API['compare'](self.left, self.right, allow_placement_rename=True)['placement_rename_only'])
+        new.write_text('placement,reason,bytes\ncompfrr,COMPFRR_P_POST_BATCH_QUOTA,124\n')
+        with self.assertRaisesRegex(AssertionError, 'SEMANTIC_DIFFERENCE'):
+            API['compare'](self.left, self.right, allow_placement_rename=True)
+
 
 
 class CbProfileRelocationTest(unittest.TestCase):

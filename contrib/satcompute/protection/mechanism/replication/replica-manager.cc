@@ -32,21 +32,30 @@ const char* ReplicaStageName(ReplicaStage stage)
 }
 
 ReplicaManager::ReplicaManager(Ptr<TaskCoordinator> tasks, SatelliteRuntimeView& topology,
-    int64_t stopNs, OnePlusOnePolicy& policy)
+    int64_t stopNs, ProtectionPolicy& policy, PlacementPolicy& placement,
+    TransferOnlyRecoveryLedger* sharedLedger, PlacementLoadLedger* sharedLoads, bool installTaskHooks)
     : m_tasks(tasks), m_topology(topology), m_network(tasks->GetTransferEngine()),
-      m_policy(policy), m_ledger(tasks, topology, stopNs)
+      m_policy(policy), m_placement(placement),
+      m_ownedLedger(sharedLedger ? nullptr : std::make_unique<TransferOnlyRecoveryLedger>(tasks, topology, stopNs)),
+      m_ledger(sharedLedger ? *sharedLedger : *m_ownedLedger),
+      m_loads(sharedLoads ? *sharedLoads : m_ownedLoads), m_installTaskHooks(installTaskHooks)
 {
     for (auto service : tasks->GetComputeServices()) m_loads.RegisterNode(service->GetNodeId());
-    m_tasks->SetParallelAttemptHooks({
+    if (m_installTaskHooks) m_tasks->SetParallelAttemptHooks(Hooks());
+}
+
+ParallelAttemptHooks ReplicaManager::Hooks()
+{
+    return {
         [this](auto id, auto node, auto at) { PrimaryComputed(id, node, at); },
         [this](auto id) { Deadline(id); },
         [this](const auto& changes) { return FaultBatch(changes); },
-        [this] { BatchComplete(); }});
+        [this] { BatchComplete(); }, {}};
 }
 
 ReplicaManager::~ReplicaManager()
 {
-    m_tasks->SetParallelAttemptHooks({});
+    if (m_installTaskHooks) m_tasks->SetParallelAttemptHooks({});
     for (auto& [id, state] : m_states)
         for (auto event : state->timers) Simulator::Cancel(event);
 }
@@ -137,7 +146,7 @@ void ReplicaManager::Request(uint64_t id)
     auto& replica = r.attempts[1];
     replica.node = *action.replicaNode;
     auto service = Service(replica.node);
-    if (m_policy.Placement().Eligibility() == PlacementEligibility::MINIMAL)
+    if (m_placement.Eligibility() == PlacementEligibility::MINIMAL)
     {
         const auto candidate = std::find_if(context.candidates.begin(), context.candidates.end(),
             [&](const auto& c) { return c.nodeId == replica.node; });
@@ -145,7 +154,7 @@ void ReplicaManager::Request(uint64_t id)
             !context.backupNodeFeasible(replica.node))
         {
             r.admissionReason = "SELECTED_REPLICA_NODE_INPUT_OR_DEADLINE_INFEASIBLE";
-            m_policy.Placement().RecordAdmission(id, Now(), "REJECTED", r.admissionReason);
+            m_placement.RecordAdmission(id, Now(), "REJECTED", r.admissionReason);
             Log(state, 1, "REPLICA_NOT_ADMITTED");
             return;
         }
@@ -153,13 +162,13 @@ void ReplicaManager::Request(uint64_t id)
     if (!service->ReserveRecovery(id, 1))
     {
         r.admissionReason = "REPLICA_RESOURCE_UNAVAILABLE";
-        m_policy.Placement().RecordAdmission(id, Now(), "REJECTED", r.admissionReason);
+        m_placement.RecordAdmission(id, Now(), "REJECTED", r.admissionReason);
         Log(state, 1, "REPLICA_NOT_ADMITTED");
         return;
     }
     r.admitted = true;
     r.admissionReason = "ADMITTED";
-    m_policy.Placement().RecordAdmission(id, Now(), "ACCEPTED", r.admissionReason);
+    m_placement.RecordAdmission(id, Now(), "ACCEPTED", r.admissionReason);
     m_loads.Assignment(id, replica.node, true, Now());
     replica.stage = ReplicaStage::INPUT;
     replica.rate = service->GetComputeRateWorkUnitsPerSecond();
@@ -501,13 +510,16 @@ void ReplicaManager::BatchComplete()
     }
 }
 
-void ReplicaManager::Finalize()
+void ReplicaManager::Finalize(bool finalizeTasks)
 {
     for (auto& [id, state] : m_states)
         if (state->live) Fail(*state, "SIMULATION_ENDED", TaskFailureReason::SIMULATION_ENDED);
-    m_tasks->FinalizeSimulation();
-    m_ledger.Finalize();
-    if (!m_loads.Empty()) throw std::logic_error("replica placement load leaked");
+    if (finalizeTasks)
+    {
+        m_tasks->FinalizeSimulation();
+        m_ledger.Finalize();
+        if (!m_loads.Empty()) throw std::logic_error("replica placement load leaked");
+    }
 }
 
 std::vector<ReplicaSummary> ReplicaManager::Summaries() const

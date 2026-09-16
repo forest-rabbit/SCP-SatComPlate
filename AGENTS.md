@@ -1,5 +1,152 @@
 # AGENTS.md
 
+### N5 release closeout (2026-09-16)
+
+The user approved the canonical closeout and explicitly authorized integration,
+tagging and safe branch cleanup. Integrate the current policy-aware chain into n5,
+then n5 into main through PRs after the stage CI; create annotated n5-complete on
+the final main merge. Never overwrite an existing tag. No new formal simulation
+matrix or N6 work is authorized. Preserve original execution evidence and the dirty
+Stage 2B worktree at SCP-SatComPlate; do not reset or silently fold its edits in.
+RECENT_U runtime/enum/scoring/CSV writer and active fixture are now removed.
+Its launcher is retired; shared historical identity helpers and read-only evidence
+analysis remain, not an executable policy. Only CUMULATIVE and IDLE_AWARE are formal
+compute-pressure policies; noR/noU/noM are ablations. This supersedes older
+instructions to retain the recent-U implementation or stop before publication.
+
+### Active Stage 2A candidate coverage (2026-09-15)
+
+Stage 1 passed human review. The user authorized only fixed-local CompFRR-P
+candidate coverage repair, on fix/compfrr-p-candidate-coverage created by detach
+at ebd8a4748893d538c85f0602ab207b74971c93ac then switch -c. Preconditions passed:
+same HEAD/execution, no dirty production/scene files; retained dirty documentation,
+audit tooling/tests and Stage 1 results without stashing or overwriting.
+Keep the original reference local; retry ordered remotes only on existing Frequency
+hard rejection, stop at first hard-feasible anchor (even if nonbeneficial), freeze
+its config, then use unchanged P ranking/post-batch gate. No new local, score, SER,
+Frequency formula/search-space, fault, INPUT timing/source, recovery or baseline changes.
+Add a separate coverage CSV; existing schemas stay unchanged. Build/unit/focused
+gates precede exactly one 1Gbps seed1/run11 800-task/1300s P development execution.
+Record the uncommitted patch honestly as development-only; no automatic commit,
+push, CI or matrix. Output output/compfrr/candidate-coverage-stage2a/ is separate
+from all old evidence. Stop after mechanism comparison for human review; do not
+continue to START/Selective or 10/100Gbps runs. Older stops below are history.
+
+Stage 2A is COMPLETE, pending human review; do not continue automatically.
+Build, 260 Python tests (one skip), Frequency runtime 12,187 checks and focused
+baseline gates PASS. All 582 preexisting runtime fixture files are byte-identical.
+The single development run finished all 1300s in 1139.33 wall seconds; same argv
+except output paths, recorded tracked-source patch unchanged throughout execution.
+Completion 730→785/800; START 69→367 (298 admitted via fallback). Reference hard
+rejection followed by a feasible alternate: 1590 events/656 tasks. Total fallback
+2235 events/735 tasks, extra-check depth P50/P90/max 38/58/62; all-infeasible
+647 events, including two empty node/path-feasible sets. No P ranking redefinition.
+FT payload 46.459→88.210 GB, total waste 48.939→9.391 million eq-WU; catch mean
+2410.76→524.64 ms with observed sample counts 34→72 (missing is not zero).
+Same-fault, both-observed 33-task paired mean 2372.65→794.58 ms. Physical fault
+event sequence unchanged, but task 8 versus 302 occupies the primary at 105s;
+56 formerly failed tasks now complete and task 302 newly fails. Remaining 15:
+11 exhaustive fixed-local deadline rejects, task 334 same-batch START veto,
+259/548 protected but direct+relocated recovery deadline-infeasible, and task120
+F3 before RUNNING. No follow-on INPUT/Selective/local-search fix is authorized.
+Canonical receipt: docs/n5/reviews/CompFRR-1G-candidate-coverage-stage2a.md;
+comparison and preservation inventory stay in the separate Stage 2A output.
+The subsequent user instruction authorizes committing and pushing this branch,
+including the retained Multi-tree summary and Stage 1 audit as separate evidence
+commits. Preserve original execution metadata (development-only, pre-commit patch),
+and do not upload ignored raw outputs. No CI/PR/merge or further matrix is authorized.
+STOP for review after publication; this is not approval to start Stage 2B.
+
+### Active 1Gbps offline audit (2026-09-15)
+
+The user approved Stage 1 only of
+CompFRR_1Gbps_Candidate_Feasibility_and_Selective_Audit_v2_for_Codex.md.
+This supersedes the completed Multi-tree stop only for offline analysis.
+Stage 1 is complete on feature/multitree-published-ft: canonical report
+docs/n5/reviews/CompFRR-1G-candidate-feasibility-and-selective-audit.md;
+six output files at output/compfrr/1g-candidate-feasibility-audit/.
+3444 hard-reject events / 734 unique tasks; 3442 check one reference while
+other node/path-feasible pairs remain, two have an empty admitted-path set.
+Skipped pair identities/resources are not logged: alternative hard feasibility
+is UNKNOWN, not false. Independent FA execution cannot prove P snapshot feasibility.
+On the original 69 OFF-fault failures, initial unchanged-reference SER bounds
+give 14 SEND / 27 DEFER / 28 selector-unknown, not 14 proven rescues.
+Full counterfactual classifications are 27 conditional DEFER / 42 UNKNOWN.
+Actual IN_FLIGHT and successful recovery cannot be invented from S/B.
+27 focused offline/pure-function checks pass; raw 83-file evidence unchanged.
+No production, defaults, workload, frequency, SER, RNG, routing or recovery change;
+no new simulation, CI, commit or push in this stage. Preserve earlier dirty
+Multi-tree summary/report work. STOP for review; no automatic Stage 2, per-remote
+Frequency solving, candidate-contract change or new instrumentation execution.
+
+### Active Multi-tree implementation (2026-09-15)
+
+The user approved MultiTree_Published_FT_Rule_Mapping_and_Baseline_Kickoff plus
+the original-PDF review amendments. Work on feature/multitree-published-ft from
+n5@8171fce48. Preserve Fig.14's FT tree only (not full MTGP), exact strict thresholds,
+fixed TS/IDDL tied ranks, causal ordinary-queue CL, current-check F1/F2 FR (no F3).
+Document feature/timing/admission adaptations, not exact original-system reproduction.
+Calibration uses exact runtime deadline ns; unseen values interpolate frozen knots.
+No hash-integrity mechanism, no tuning/retraining/routing or queue changes.
+The user explicitly waived the routine Stage A human stop: after its checks pass,
+continue shared RS/RP runtime and small gates, then six full 1300s seed1/run11
+800-task online-generate comparisons: Recompute, 1+1, CB-SAT, Multi-tree all FA-FFP
+(busy=Recompute where applicable), and CompFRR Selective+Relocate with either
+CompFRR-P CUMULATIVE/no ablation or FA-FFP. Preserve scheme capabilities: 1+1 has
+no hidden RS fallback; Multi-tree selects RS or RP by the frozen tree.
+User clarification extends this to three six-scheme rounds: Run A randomRun=11,
+Run B randomRun=12, Run C randomRun=13. Keep randomSeed=1 and ecmpHashSeed=1;
+only randomRun changes, NOT the seed. Freeze algorithms, tree, calibration and all
+other runtime inputs. Stop for actual mapping/mechanism blockers, otherwise after
+the three-round review evidence. A subsequent user extension authorizes twelve
+additional executions AFTER the 10Gbps rounds: six schemes each at 1Gbps and
+100Gbps, both randomRun=11/seed1/ecmpHashSeed1. Only islBandwidthBps changes in
+these contrasts; reuse 10Gbps Run A. Thus 30 complete simulations total, not 54.
+Keep production para.cc defaults unchanged. Stop after all five cases and audits.
+Do not auto-push/merge/CI or change main/legacy. Earlier stop notes below are history.
+
+Stage A is committed as b7e248350: 200 mapping checks, deterministic 800-task
+calibration, 18-file passive equivalence; canonical OFF+generate full run11 gives
+584 RS / 216 RP, all eight leaves, complete event-reconstructed queues. Evidence:
+output/multitree/stage-a/canonical-off-run11/mapping-audit.json.
+The user separately approved the shared same-ns boundary correction, committed as
+7067f4bc9: inclusive completion remains, queued dispatch is deferred ONLY inside a
+fault batch until service availability settles. Normal FCFS completion stays
+synchronous. Never substitute q=0 for unavailable current model state.
+Stage B shared hook/ledger/placement ownership and MultiTreeController are complete.
+All seven runtime cases (including completion-tie) pass; old 11-group regression
+is strict PASS after the correction (1984 files / 1723 CSV), evidence
+output/multitree/stage-b/mechanism-boundary-fixed versus stage-a/mechanism-before.
+Full maintained C++/Python/smoke/regression suites pass. Runtime-ready retains the
+new inclusive-completion/next-queued-task assertions. Continue through six small
+platform wiring/audit cases, then six complete runs using run-multitree-comparison.py.
+Audit actual WU/eq-WU, full physical byte lifetimes, and catch with missing separate
+from zero. RP catch can be reconstructed only from actual surviving continuous
+replica service, not the takeover label or planned work. No hidden RS fallback.
+Run A is complete at clean 1fd8348bd, all six audits PASS. Preserve the original
+execution records at output/multitree/stage-c/run11-1fd8348bd/ without renaming or
+rewriting them. Add B/C with the identical simulation content, only randomRun=12/13.
+Runner/auditor changes may record this identity, but do not edit execution source
+while runs are active. B/C are complete at clean 363c2092f, each full matrix PASS:
+output/multitree/stage-c/run-B-run12/ and run-C-run13/. Both CompFRR profiles are
+2400/2400 across A/B/C; 1+1 is 2399/2400 (run13 task12 loses primary8 and replica1
+to the same 971s F1 batch, correctly NO_SURVIVING_ATTEMPT). No algorithm changes.
+The latest user cancelled unfinished 100Gbps simulations, then asked to wait for
+1Gbps CB-SAT and write the overall results. That execution has now finished.
+Stage C is complete with 29 finished/audited simulations: 18 at 10Gbps, six at
+1Gbps, five at 100Gbps. The sole cancelled 100Gbps CB-SAT stopped around 946s;
+retain cancellation.json, matrix status and raw partial evidence, never restart it
+or count it as a completed result. No simulation processes remain active.
+Final read-only audit: output/multitree/comparison-final/; canonical report and
+29-row CSV: docs/n5/reviews/Multi-tree-published-FT-comparison.*.
+Both CompFRR profiles finish 2400/2400 at 10Gbps, but at 1Gbps P finishes 730 and
+FA-FFP 787: P's single reference Frequency check can reject before actual remote
+ranking, whereas FA-FFP searches hard-feasible pairs, often source=remote. This is
+a frozen-contract limitation for separate review, not authorization to fix/tune it.
+Final audit tooling passes nine focused and 242 Python tests (one skip); C++,
+input, calibration, RNG, algorithms and defaults remain unchanged since Run A.
+STOP for user review. No new simulations, source fixes, CI, push, PR or merge.
+
 ### Current handoff: protection config hierarchy closed (2026-09-15)
 
 PR #105 merged into n5 as `2d601d268` after the single successful phase CI

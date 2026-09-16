@@ -79,6 +79,8 @@ struct ParallelAttemptHooks
     std::function<void(uint64_t)> deadline; ///< Original absolute compute deadline.
     std::function<std::map<uint32_t, TaskFaultImpact>(const std::vector<TaskFaultNodeChange>&)> faultBatch;
     std::function<void()> batchComplete; ///< Called after fault availability AND topology overlay.
+    /** Ordinary-attempt route of the SAME mixed-scheme owner; never called for parallel tasks. */
+    std::function<bool(const TaskRuntime&, const TaskFaultNodeChange&)> nonParallelFault;
 };
 
 /** Coordinate input transfer, FCFS compute, and result transfer lifecycles. */

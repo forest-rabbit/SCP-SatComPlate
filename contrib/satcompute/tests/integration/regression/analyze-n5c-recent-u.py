@@ -11,7 +11,7 @@ from pathlib import Path
 import runpy
 
 HERE = Path(__file__).resolve().parent
-RUN = runpy.run_path(str(HERE / "run-n5c-recent-u.py"))
+RUN = runpy.run_path(str(HERE.parents[1] / "support/protection/historical_recent_evidence.py"))
 OLD = runpy.run_path(str(HERE / "analyze-n5c-u-audit.py"))
 V4 = OLD["V4"]
 rows, require, near = V4["rows"], V4["require"], V4["near"]

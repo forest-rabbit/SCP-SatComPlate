@@ -5,14 +5,13 @@
 
 namespace ns3::protection
 {
-/** Causal resource observation; history window fields remain available to historical diagnostics. */
+/** Causal resource observation shared by cumulative and idle-aware compute pressure. */
 struct PlacementResourceSnapshot
 {
     uint32_t remoteNode{};
     uint64_t normalBusyNs{}, recoveryBusyNs{}, exposureNs{};
-    int64_t historyHorizonNs{}, historyWindowBeginNs{}, historyWindowEndNs{};
+    int64_t historyHorizonNs{};
     int64_t continuousIdleNs{};
-    uint64_t recentNormalBusyNs{}, recentRecoveryBusyNs{}, recentExposureNs{};
     uint64_t capacityBytes{}, accountedBytes{}, additionalQuotaBytes{};
 };
 /** Assignment-time and storage-byte-time observations, not a placement policy. */

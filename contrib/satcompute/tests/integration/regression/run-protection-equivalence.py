@@ -30,11 +30,27 @@ def normalized_json(value, directory):
     return value
 
 
-def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_retired_input_snapshot=False):
+def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_retired_input_snapshot=False,
+            allow_placement_rename=False, allow_retired_recent_fixture=False):
+    legacy = runpy.run_path(str(ROOT / 'contrib/satcompute/tests/support/protection/historical_placement.py'))
+    def key(path):
+        return legacy['canonical_gate_path'](path) if allow_placement_rename else path
     def files(directory):
-        return {p.relative_to(directory) for p in directory.rglob('*')
-                if p.suffix in ('.csv', '.json')}
-    expected, actual = files(reference), files(candidate)
+        result = {}
+        for p in directory.rglob('*'):
+            if p.suffix not in ('.csv', '.json'): continue
+            relative = p.relative_to(directory)
+            if key(relative) in result: raise AssertionError('duplicate normalized evidence path')
+            result[key(relative)] = relative
+        return result
+    left_files, right_files = files(reference), files(candidate)
+    expected, actual = set(left_files), set(right_files)
+    retired_recent = {p for p in expected if p.parts[:2] ==
+                      ('frequency', 'online-compfrr-placement-recent-U')}
+    if allow_retired_recent_fixture:
+        if not retired_recent or retired_recent & actual:
+            raise AssertionError('reference must have the retired fixture and candidate must omit it entirely')
+        expected -= retired_recent
     audit_files = {p for p in expected - actual if p.name == 'input-start-snapshots.json'}
     if allow_retired_input_snapshot:
         if not audit_files:
@@ -44,7 +60,7 @@ def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_re
         raise AssertionError(f'output set differs: missing={expected-actual}, extra={actual-expected}')
     relocations = []
     for path in sorted(expected):
-        left, right = reference / path, candidate / path
+        left, right = reference / left_files[path], candidate / right_files[path]
         if path.suffix == '.csv':
             # Compare all schema, rows, ordering and values, not only selected metrics.
             for source in (left, right):
@@ -52,7 +68,14 @@ def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_re
                     rows = list(csv.reader(stream))
                 if rows and any(len(r) != len(rows[0]) for r in rows):
                     raise AssertionError(f'malformed CSV: {source}')
-            equal = left.read_bytes() == right.read_bytes()
+            if allow_placement_rename:
+                with left.open(newline='') as stream:
+                    before = [[legacy['canonical_gate_scalar'](v) for v in row] for row in csv.reader(stream)]
+                with right.open(newline='') as stream:
+                    after = [[legacy['canonical_gate_scalar'](v) for v in row] for row in csv.reader(stream)]
+                equal = before == after
+            else:
+                equal = left.read_bytes() == right.read_bytes()
         else:
             before = normalized_json(json.loads(left.read_text()), reference)
             after = normalized_json(json.loads(right.read_text()), candidate)
@@ -69,6 +92,10 @@ def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_re
         if not equal:
             raise AssertionError(f'SEMANTIC_DIFFERENCE: {path}; stop and audit, do not refresh golden')
     result = {'status': 'PASS', 'files': len(expected), 'csv': sum(p.suffix == '.csv' for p in expected)}
+    if allow_placement_rename:
+        result['placement_rename_only'] = True
+    if allow_retired_recent_fixture:
+        result['removed_recent_fixture_files'] = len(retired_recent)
     if allow_retired_input_snapshot:
         result['removed_development_snapshot_files'] = len(audit_files)
     if allow_cb_profile_relocation:
@@ -130,6 +157,10 @@ def main():
     parser.add_argument('--reference', type=Path)
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--compare-only', action='store_true')
+    parser.add_argument('--allow-placement-rename', action='store_true',
+                        help='Only exact canonical placement filename/identity/reason substitutions')
+    parser.add_argument('--allow-retired-recent-fixture', action='store_true',
+                        help='Allow only removal of frequency/online-compfrr-placement-recent-U; compare every other output')
     parser.add_argument('--allow-retired-input-snapshot', action='store_true',
                         help='Allow only removal of the retired development JSON; compare all production output')
     parser.add_argument('--allow-cb-profile-relocation', action='store_true',
@@ -148,7 +179,9 @@ def main():
         collect(output, args.jobs)
     result = compare(args.reference.resolve(), output,
                      allow_cb_profile_relocation=args.allow_cb_profile_relocation,
-                     allow_retired_input_snapshot=args.allow_retired_input_snapshot) if args.reference else {
+                     allow_retired_input_snapshot=args.allow_retired_input_snapshot,
+                     allow_placement_rename=args.allow_placement_rename,
+                     allow_retired_recent_fixture=args.allow_retired_recent_fixture) if args.reference else {
         'status': 'BASELINE_CAPTURED', 'root': str(output)}
     print(json.dumps(result, sort_keys=True))
 

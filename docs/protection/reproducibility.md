@@ -49,7 +49,7 @@ planned 不补 actual；catchup/post-catchup 是执行剖面，不再次加到 `
 未追平的任务没有样本，不记为零。比较同时给出样本数、mean/P50/P90/max；
 严格逐任务时延比较使用双方成功且故障时刻一致的样本，并说明选择范围。
 
-LRL/FA-LRL 是 N5C 的强 baseline，必须在同一受控合同下公平比较，不预设结果；
+LRL/FA-LRL 是 CompFRR-P 的强 baseline，必须在同一受控合同下公平比较，不预设结果；
 不为获得优势调整冻结输入。multi-seed 不是本阶段门槛，结论只适用于受控场景。
 
 ### 计划与实际执行
@@ -117,11 +117,17 @@ accounting、frequency、baseline、placement、risk-start、INPUT 和 scenario�
 旧 `integration/regression/analyze-*.py` / `run-final-scenario.py` 入口保留兼容转发；
 测试 oracle 不调用 production solver。
 
-配置层重构新增显式 `config_arguments.py`：旧 scheme/placement/INPUT/busy 转换只发生在测试 launch
+历史适配实现隔离到 `historical_config_arguments.py`（`config_arguments.py` 仅转发导入）：旧 scheme/placement/INPUT/busy 转换只发生在测试 launch
 边界，ordinary CLI 不接受旧别名。读取旧证据时先按实际 owner 去除已证明 inactive 的选项，
 再展开活跃默认值比较；保留 placement、两种 busy、pressure/ablation、cadence、pool 与 seed/run。
 CB 的旧 omitted busy=relocate 不得与新 canonical recompute 合并。历史 source guard 不放宽，
 旧 execution/schema/fixture 不追写。新增 55 组严格 small gate 见[配置层记录](../n5/reviews/Protection-config-hierarchy.md)。
+
+当前 `run-final-scenario.py` 直接生成 canonical argv，不经过旧参数转换。
+命名收口的小门禁使用显式 `--allow-placement-rename`：只映射列出的 placement 文件名、
+identity/reason，不豁免数值、列结构、事件顺序或生命周期差异；历史 CSV 通过
+`historical_placement.py` 只读兼容。验收及旧名称保留清单见
+[N5 canonical closeout](../n5/reviews/N5-final-canonicalization-and-closeout.md)。
 
 ## 历史保留与现行证据
 
@@ -138,7 +144,10 @@ CB 的旧 omitted busy=relocate 不得与新 canonical recompute 合并。历史
   完成 15 组 corrected U 验证。当前比较以该链为基础；旧结果只有维护轨迹与完整资源账本等价才可复用。
   completion 相同或没有 pause 后故障都不构成等价证明。
 - [RECENT_U](../n5/reviews/N5C-recent-U-evaluation.md) 是已停止的历史实验。
-  正式 CLI 拒绝 `recent-U`；历史 enum、fixture、CSV 字段和分析入口存在真实依赖，暂不物理删除。
+  N5 收口已删除其 enum、评分分支、专用资源快照/CSV 写出、执行 fixture 和实验启动脚本。
+  依赖扫描后将旧身份/等价检查抽入 `tests/support/protection/historical_recent_evidence.py`，
+  历史分析器继续只读已有结果，不提供 recent-U 仿真入口。公共计算区间账本仍被
+  cumulative/idle-aware 使用，不能作为 recent-U 私有实现删除。
   部分输出不能作为完成的性能证据。noU 仅为消融，不成为第三种正式 pressure。
 - JIT/V7 保留在原实验分支，不进入 N5R。旧正式 runner 的冻结提交/source guard 仍有效；
   不为方便重跑而放宽它，也不在 N5R 自动启动历史矩阵。正式刷新留待 N6/N7 单独批准。

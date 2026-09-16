@@ -64,12 +64,13 @@ START、ON maintenance、recovery compute 各自的 availability/idle 合同见 
 
 ## 兼容边界
 
-旧 `frequency-protection-controller.h`、`n5c-placement-*.h`、baseline 导出头保留转发/类型别名；
+旧 `frequency-protection-controller.h` 和 baseline 导出头保留转发/类型别名；
+P 的旧别名头及空实现标记已删除，当前统一使用 `compfrr-placement-*.h`。
 普通 CLI 改为 scheme 私有名字，旧 `placementMode=n5c`、`n5cVariant=full/rational-U`
 仅在测试层显式转换；CSV 和 C++ 兼容名保持原 schema，不是第二套实现。
 typed defaults 位于 `protection/protection-para.*`；接入与 capability 校验在 `protection-config.*`，
 baseline 不读取 CompFRR 子配置，见[完整映射与等价门禁](../n5/reviews/Protection-config-hierarchy.md)。
-production U 仅 CUMULATIVE / IDLE_AWARE，noR/noU/noM 是消融，recent-U 正式 CLI 已拒绝；
+production U 仅 CUMULATIVE / IDLE_AWARE，noR/noU/noM 是消融，recent-U 运行实现已删除；
 历史 API/fixtures/分析证据按真实依赖保留，见[复现与归档](reproducibility.md)。
 
 CB 的 C++、参数 profile、来源与工具统一由 `baseline/checkbullet/` 拥有，旧整套目录撤销。

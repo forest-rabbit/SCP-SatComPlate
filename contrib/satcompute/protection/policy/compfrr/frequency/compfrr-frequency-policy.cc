@@ -41,6 +41,9 @@ void Validate(const FrequencyInput& in)
         in.progress > 1 || in.risk.epochNs < 0 || in.risk.intervalNs <= 0 || in.deadlineNs < 0 ||
         in.costs.localNs < 0 || in.costs.remoteNs < 0 || !in.storageDemand)
         throw std::invalid_argument("invalid frequency domain or missing storage estimator");
+    if (in.faultInputAdmissionSeconds &&
+        (!std::isfinite(*in.faultInputAdmissionSeconds) || *in.faultInputAdmissionSeconds < 0))
+        throw std::invalid_argument("invalid policy-aware INPUT admission term");
 }
 
 /** Aggregate existing predictions once per pair, preserving pre-ready survival mass. */
@@ -120,7 +123,13 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
     const bool on = in.phase == ProtectionPhase::ON;
     const InputCostAdapter inputCosts(in.inputPolicy);
     const bool deferred = inputCosts.RecoveryPathRequired();
-    const double faultInput = inputCosts.FaultInputSeconds(in.replayAvailable, in.inputBytes, in.inputBandwidth);
+    const double legacyFaultInput =
+        inputCosts.FaultInputSeconds(in.replayAvailable, in.inputBytes, in.inputBandwidth);
+    const double faultInput = in.faultInputAdmissionSeconds.value_or(legacyFaultInput);
+    if (faultInput > legacyFaultInput)
+        throw std::invalid_argument("policy-aware INPUT term exceeds legacy replay term");
+    out.legacyFaultInputSeconds = legacyFaultInput;
+    out.admittedFaultInputSeconds = faultInput;
     const double cL = in.costs.localNs / 1e9;
     const double cR = in.costs.remoteNs / 1e9;
     const double interval = in.risk.intervalNs / 1e9;
@@ -156,6 +165,10 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
                     cR * (n - 1) / n + in.work * delta / (2 * in.recoveryRate);
                 if (!std::isfinite(recovery))
                     throw std::invalid_argument("frequency recovery estimate overflow");
+                const bool legacyDeadlineFeasible =
+                    legacyFaultInput + recovery <= out.deadlineSlackSeconds;
+                if (!legacyDeadlineFeasible)
+                    ++out.legacyDeadlineRejected;
                 if (faultInput + recovery > out.deadlineSlackSeconds)
                 {
                     ++out.deadlineRejected;
@@ -167,9 +180,13 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
                     demand->remoteAdditionalBytes > in.remoteFreeBytes)
                 {
                     ++out.storageRejected;
+                    if (legacyDeadlineFeasible)
+                        ++out.legacyStorageRejected;
                     continue;
                 }
                 ++out.feasibleCount;
+                if (legacyDeadlineFeasible)
+                    ++out.legacyFeasibleCount;
                 const double maintenance = cL / delta + cR / (n * delta);
                 // Trem * (muP/W) = 1-x in the analytical continuous-work model.
                 const double normal = on ? (interval * in.primaryRate / in.work) * maintenance

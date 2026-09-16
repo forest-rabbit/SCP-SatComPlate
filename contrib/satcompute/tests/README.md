@@ -12,8 +12,10 @@ ns-3 上游 examples、全局 tests 或根目录 `test.py`。
 `testBaselinePlacement`、`testCbSatBusyPolicy`、`testLrlRecoveryWeight`；不复制算法或 controller。
 普通 `satcompute` 不接受这些参数，也不接受旧的 `protectionMode/placementMode/n5cVariant/inputPolicy`。
 
-已有历史 runner 的参数描述接口保持兼容，真正 launch 前统一通过
-`support/protection/config_arguments.py` 转换。其只读记录保留原 argv、实验身份与 inactive 字段；
+已有历史 runner 的参数描述接口保持兼容；历史复现测试的 launch 通过
+`support/protection/historical_config_arguments.py` 转换（旧 import 入口仅转发）。
+当前 `run-final-scenario.py` 直接产生 canonical argv，不调用历史生成器。
+历史只读记录保留原 argv、实验身份与 inactive 字段；
 历史命令对比用 `canonical_experiment_arguments()`，不修改已有 `execution.json`，
 不放宽 source/commit guard。旧 CB 省略 busy 的 relocate 与新 CB canonical recompute 不会归为同一身份。
 RECENT_U 只允许读取历史证据，执行适配器拒绝；JIT 亦未恢复。
@@ -73,9 +75,15 @@ python contrib/satcompute/tests/integration/regression/run-protection-equivalenc
 [最终 INPUT 报告](../../../docs/n5/reviews/CompFRR-input-binary-admission-runtime.md)，
 完整删除清单见[仓库收口](../../../docs/n5/reviews/INPUT-final-repository-closeout.md)。
 通用 accounting、baseline、placement、risk/scenario helpers 保留，正常运行不自动做离线统计。
-recent-U 不在 production CLI；历史分析/fixture 保留。日常 CI 只运行本目录维护测试。
+recent-U 的运行实现与执行 fixture 已删除；历史结果只读分析保留。日常 CI 只运行本目录维护测试。
 
 ## 历史专项与目录索引
+
+当前 P 测试目标为 `satcompute-compfrr-placement-test`，当前输出为
+`compfrr-placement-decisions.csv`，当前只读入口为 `analyze-compfrr-placement.py`。
+下列旧阶段路径仅描述历史证据；不要直接使用其旧命令重新生成正式结果。
+此次更名对照须显式添加 `--allow-placement-rename`，完整验收见
+[N5 收口](../../../docs/n5/reviews/N5-final-canonicalization-and-closeout.md)。
 
 以下 N5C/U/recovery 等阶段命令及“等待/保持 PR 未合并”等描述是当时合同的历史记录，
 不是当前执行计划；#100/#101 及修复链已由 #102 整合。旧 runner 的冻结 source guard 保留，
@@ -226,6 +234,7 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 | `recovery-runtime-test.cc` | G3 受控 FaultController→备份/网络/计算/任务闭环，LocalDelivery、服务锁、F1/F2 免疫、F3、deadline、同纳秒实体快照和旧回调 |
 | `recompute-baseline-test.cc` | 无常态保护、FFP 全量重传、从零执行、planned/actual 与 deadline/F3 截断 |
 | `one-plus-one-baseline-test.cc` | 一次性副本准入、真实并行、正常故障暴露、完整 batch 后接管、首个 RESULT 与 loser 账本 |
+| `multitree-{mapping,runtime}-test.cc` | 冻结 TS/IDDL/CL/FR 与 FT 树；共享 RS/RP owner、真实 INPUT、LocalDelivery、拒绝无 fallback、故障批次完成边界 |
 | `link-window-test.cc` | 10 Gbps、空闲、双向独立、跨窗/尾窗、可用性、队列与预留时间积分 |
 | `constellation-definition-test.cc` | 原生 shell CSV、字段约束和稳定卫星数量 |
 | `routing-policy-factory-test.cc` | 五种路由名到 next-hop/path policy 的映射 |

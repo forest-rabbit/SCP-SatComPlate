@@ -16,7 +16,8 @@ class RecomputeController
     RecomputeController(Ptr<TaskCoordinator> tasks,
                         SatelliteRuntimeView& topology,
                         int64_t stopNs,
-                        std::unique_ptr<PlacementPolicy> placement);
+                        std::unique_ptr<PlacementPolicy> placement,
+                        bool installTaskFaultHook = true);
     /** Finalize logical tasks, recovery and the empty checkpoint inventory. */
     void Finalize();
     /** Shared transfer/fault ledgers; checkpoint summaries and allocated bytes stay empty. */
@@ -25,6 +26,11 @@ class RecomputeController
     const RecoveryController& Recovery() const { return m_recovery; }
     const PlacementPolicy& Placement() const { return *m_placement; }
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
+    /** Shared plumbing for a unique outer orchestrator, never duplicate hook owners. */
+    TransferOnlyRecoveryLedger& Manager() { return m_manager; }
+    RecoveryController& Recovery() { return m_recovery; }
+    PlacementPolicy& Placement() { return *m_placement; }
+    PlacementLoadLedger& PlacementLoads() { return m_loads; }
 
   private:
     Ptr<TaskCoordinator> m_tasks; ///< Shared logical task owner.

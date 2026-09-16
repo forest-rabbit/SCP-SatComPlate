@@ -18,6 +18,7 @@
 #include "ns3/frequency-protection-controller.h"
 #include "ns3/recompute-controller.h"
 #include "ns3/one-plus-one-controller.h"
+#include "ns3/multitree-controller.h"
 #include "ns3/cb-sat-controller.h"
 #include "ns3/fa-least-recovery-load-placement-policy.h"
 #include "ns3/protection-metrics.h"
@@ -33,6 +34,9 @@
 #include "ns3/task-trace.h"
 #include "ns3/time-conversion.h"
 #include "ns3/topology-slice-exporter.h"
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+#include "tests/support/protection/multitree-preflight.h"
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -425,6 +429,8 @@ main(int argc, char* argv[])
     protection::ProtectionCliState protectionCli;
 #ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
     constexpr bool protectionTestInterface = true;
+    bool testMultitreeMapping = false;
+    command.AddValue("testMultitreeMapping", "Passive Multi-tree mapping preflight only", testMultitreeMapping);
 #else
     constexpr bool protectionTestInterface = false;
 #endif
@@ -633,29 +639,43 @@ main(int argc, char* argv[])
             {
                 faultModelEngine->BindTaskCoordinator(taskCoordinator);
             }
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+            std::unique_ptr<MultiTreePreflight> multitreePreflight;
+            if (testMultitreeMapping)
+            {
+                if (config.protection.scheme != protection::ProtectionScheme::OFF ||
+                    config.faultMode != "generate")
+                    FailConfig("testMultitreeMapping", "requires off + generate");
+                multitreePreflight = std::make_unique<MultiTreePreflight>(taskCoordinator, faultModelEngine);
+            }
+#endif
 
             std::unique_ptr<compfrr::ShadowEvaluator> shadow;
             std::unique_ptr<protection::FixedProtectionController> protection;
             std::unique_ptr<protection::FrequencyProtectionController> frequency;
             std::unique_ptr<protection::RecomputeController> recompute;
             std::unique_ptr<protection::OnePlusOneController> replication;
+            std::unique_ptr<protection::multitree::MultiTreeController> multitree;
             std::unique_ptr<protection::checkbullet::CbSatController> checkbullet;
+            for (const auto name : {"multitree-decisions.csv", "multitree-mapping-summary.json", "multitree-summary.json"})
+                std::filesystem::remove(outputDirectory / name);
             protection::checkbullet::CbSatController::RemoveOutputs(outputDirectory);
             for (const auto name : {"input-admission-decisions.csv", "input-prefetch-events.csv",
-                                    "input-prefetch-summary.json", "input-start-snapshots.json"})
+                                    "input-prefetch-summary.json", "input-start-snapshots.json",
+                                    "compfrr-policy-aware-admission.csv"})
                 std::filesystem::remove(outputDirectory / name);
             for (const auto name : {"replica-summary.csv", "replica-attempts.csv", "replica-events.csv", "replica-transfers.csv"})
                 std::filesystem::remove(outputDirectory / name);
             std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
             std::filesystem::remove(outputDirectory / "frequency-pause-intervals.csv");
             std::filesystem::remove(outputDirectory / "frequency-capacity-waits.csv");
-            std::filesystem::remove(outputDirectory / "n5c-placement-decisions.csv");
+            std::filesystem::remove(outputDirectory / "compfrr-placement-decisions.csv");
             std::filesystem::remove(outputDirectory / "placement-resource-summary.csv");
             std::filesystem::remove(outputDirectory / "f3-compute-risk-snapshots.csv");
             const auto makePlacement = [&]() -> std::unique_ptr<protection::PlacementPolicy> {
                 const auto placement = protection::ActivePlacementPolicy(config.protection);
                 if (placement == protection::PlacementPolicyKind::COMPFRR)
-                    return std::make_unique<protection::CompFrrPlacementPolicy>(protection::ParseN5cVariant(
+                    return std::make_unique<protection::CompFrrPlacementPolicy>(protection::ParseCompFrrPlacementVariant(
                         protection::LegacyPlacementVariant(config.protection.compfrr)));
                 if (placement == protection::PlacementPolicyKind::LRL)
                     return std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.protection.commonPlacement.lrlRecoveryWeight);
@@ -703,6 +723,11 @@ main(int argc, char* argv[])
                 replication = std::make_unique<protection::OnePlusOneController>(
                     taskCoordinator, topology, simulationDurationNs, makePlacement());
             }
+            else if (config.protection.scheme == protection::ProtectionScheme::MULTITREE)
+            {
+                multitree = std::make_unique<protection::multitree::MultiTreeController>(
+                    taskCoordinator, topology, faultModelEngine, simulationDurationNs, makePlacement());
+            }
             else
             {
                 RemoveProtectionMetrics(outputDirectory);
@@ -731,7 +756,15 @@ main(int argc, char* argv[])
             const auto wallStart = std::chrono::steady_clock::now();
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+            if (multitreePreflight) multitreePreflight->Write(outputDirectory);
+#endif
             if (shadow) shadow->Finalize();
+            if (multitree)
+            {
+                multitree->Finalize();
+                multitree->WriteMetrics(outputDirectory);
+            }
             if (checkbullet)
             {
                 checkbullet->Finalize();

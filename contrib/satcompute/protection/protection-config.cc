@@ -58,7 +58,7 @@ RecoveryFallbackKind Fallback(const std::string& key, const std::string& value)
 bool BaselineScheme(ProtectionScheme scheme)
 {
     return scheme == ProtectionScheme::RECOMPUTE || scheme == ProtectionScheme::ONE_PLUS_ONE ||
-           scheme == ProtectionScheme::CB_SAT;
+           scheme == ProtectionScheme::CB_SAT || scheme == ProtectionScheme::MULTITREE;
 }
 } // namespace
 
@@ -81,13 +81,12 @@ void RegisterProtectionOptions(CommandLine& command, ProtectionConfig& c,
                 return true;
             }));
     };
-    add("protectionScheme", "off / compfrr / recompute / one-plus-one / cb-sat (default compfrr)",
+    add("protectionScheme", "off / compfrr / recompute / one-plus-one / cb-sat / multitree (default compfrr)",
         [&](const auto& v) {
-            if (v == "multitree") Fail("protectionScheme", "multitree is not implemented");
             c.scheme = Choice<ProtectionScheme>("protectionScheme", v,
                 {{"off", ProtectionScheme::OFF}, {"compfrr", ProtectionScheme::COMPFRR},
                  {"recompute", ProtectionScheme::RECOMPUTE}, {"one-plus-one", ProtectionScheme::ONE_PLUS_ONE},
-                 {"cb-sat", ProtectionScheme::CB_SAT}});
+                 {"cb-sat", ProtectionScheme::CB_SAT}, {"multitree", ProtectionScheme::MULTITREE}});
         });
     add("compfrrCheckpointPolicy", "fixed / adaptive (default adaptive)", [&](const auto& v) {
         c.compfrr.checkpointPolicy = Choice<CheckpointPolicyKind>("compfrrCheckpointPolicy", v,
@@ -150,6 +149,7 @@ void ApplyProtectionTestOverrides(ProtectionConfig& c, const ProtectionCliState&
         if (c.scheme == ProtectionScheme::RECOMPUTE) c.recompute.placementPolicy = value;
         if (c.scheme == ProtectionScheme::ONE_PLUS_ONE) c.onePlusOne.placementPolicy = value;
         if (c.scheme == ProtectionScheme::CB_SAT) c.cbSat.placementPolicy = value;
+        if (c.scheme == ProtectionScheme::MULTITREE) c.multitree.placementPolicy = value;
     }
     if (!cli.testCbSatBusyPolicy.empty())
     {
@@ -165,6 +165,7 @@ PlacementPolicyKind ActivePlacementPolicy(const ProtectionConfig& c)
     if (c.scheme == ProtectionScheme::RECOMPUTE) return SharedPlacement(c.recompute.placementPolicy);
     if (c.scheme == ProtectionScheme::ONE_PLUS_ONE) return SharedPlacement(c.onePlusOne.placementPolicy);
     if (c.scheme == ProtectionScheme::CB_SAT) return SharedPlacement(c.cbSat.placementPolicy);
+    if (c.scheme == ProtectionScheme::MULTITREE) return SharedPlacement(c.multitree.placementPolicy);
     Fail("placement", "off has no placement policy");
 }
 
@@ -244,6 +245,9 @@ void ValidateProtectionConfig(const ProtectionConfig& c, const ProtectionCliStat
     }
     if (IsAdaptiveProtection(c) && (context.faultMode != "generate" || (!context.f1Enabled && !context.f2Enabled)))
         Fail("protectionScheme", "adaptive compfrr requires online faultMode=generate and F1 or F2");
+    if (c.scheme == ProtectionScheme::MULTITREE &&
+        (context.faultMode != "generate" || (!context.f1Enabled && !context.f2Enabled)))
+        Fail("protectionScheme", "multitree requires causal online F1/F2 state, not missing-risk substitution");
     if (c.scheme == ProtectionScheme::CB_SAT && c.cbSat.busyPolicy != RecoveryFallbackKind::RECOMPUTE &&
         c.cbSat.busyPolicy != RecoveryFallbackKind::RELOCATE) Fail("cbSat.busyPolicy", "unsupported enum value");
     if (c.diagnostics.compfrrShadow &&

@@ -18,6 +18,43 @@
 
 namespace ns3::protection
 {
+/** Read-only OFF candidate search evidence; indices are one-based within the fixed local. */
+struct CompFrrCandidateCoverage
+{
+    std::optional<PlacementDecision> reference; ///< Original first node/path-feasible pair.
+    std::string referenceRejectReason; ///< Empty when the first pair is hard-feasible.
+    uint64_t candidates{}, checked{}; ///< Fixed-local eligible remote count and evaluated prefix.
+    std::optional<uint64_t> anchorIndex; ///< First hard-feasible position, not a START guarantee.
+    std::optional<uint32_t> anchorRemote, finalRemote; ///< Frequency anchor versus P selection.
+    bool allInfeasible{}; ///< No hard-feasible remote in the fixed-local set (or empty set).
+};
+
+/** Pure candidate-specific Selective result plus the exact START admission term. */
+struct PolicyAwareInputPlan
+{
+    SelectiveInputSnapshot snapshot;
+    InputAdmissionDecision decision;
+    double legacyFaultInputSeconds{};
+    double admissionSeconds{};
+};
+
+/** Additive audit only; it never participates in selection or runtime accounting. */
+struct PolicyAwareInputAdmissionRecord
+{
+    uint64_t taskId{};
+    int64_t timeNs{};
+    std::string trigger, stage;
+    uint32_t local{}, remote{};
+    uint64_t candidateIndex{};
+    InputAdmissionDecision selective;
+    double predictedFailureProbability{};
+    double legacyFaultInputSeconds{}, admissionSeconds{};
+    std::string legacyFrequencyReason, policyAwareFrequencyReason;
+    bool legacyDeadlineFeasible{}, policyAwareDeadlineFeasible{}, rescuedByPolicyAwareInput{};
+    bool anchor{}, finalPair{}, finalPairRevalidated{}, faultHitSameBatch{}, startCommitted{};
+    std::optional<bool> runtimePrefetchAdmissionSuccess;
+};
+
 /** Proposal and observed resolution; never included in actual cost accounting. */
 struct FrequencyDecisionRecord
 {
@@ -43,8 +80,15 @@ struct FrequencyDecisionRecord
     uint64_t capacityRetryCount{};
     bool capacityRetrySuccess{};
     int64_t capacityWaitStartNs{-1}, capacityWaitEndNs{-1};
-    std::optional<size_t> n5cTrace; ///< START-only spatial proposal; no solver call per remote.
-    std::optional<uint64_t> n5cPeak; ///< Total replacement quota, captured before physical admission.
+    std::optional<size_t> placementTrace; ///< START-only spatial proposal; no solver call per remote.
+    std::optional<uint64_t> placementPeak; ///< Total replacement quota, captured before physical admission.
+    std::optional<CompFrrCandidateCoverage> candidateCoverage; ///< P OFF only; no new policy state.
+    int64_t selectiveRemainingNs{};
+    int64_t selectiveFirstSampleNs{};
+    bool selectiveFinishExclusive{};
+    std::optional<ComputeFailurePrediction> selectivePrediction;
+    std::optional<PolicyAwareInputPlan> policyAwareInputPlan;
+    std::vector<PolicyAwareInputAdmissionRecord> policyAwareInputAudits;
 };
 
 /** Online generate integration. Owns no fault model, RNG, state bytes or second network. */
@@ -71,7 +115,7 @@ class CompFrrController : public ProtectionPolicy
     const auto& InputAdmissions() const { return m_inputAdmissions; }
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
     const PlacementPolicy& Placement() const { return *m_placement; }
-    const CompFrrPlacementTracker* N5c() const { return m_n5c; }
+    const CompFrrPlacementTracker* PlacementTracker() const { return m_placementTracker; }
     ///< Live ownership used by LRL and the same diagnostic output for FFP.
 
     const CheckpointManager& Manager() const
@@ -161,12 +205,23 @@ class CompFrrController : public ProtectionPolicy
                         DecisionPathSnapshot& paths);
     void EvaluateOffPairs(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
                           DecisionPathSnapshot& paths);
-    void SelectN5cRemote(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
+    void SelectCompFrrRemote(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state,
                          DecisionPathSnapshot& paths, const std::vector<PlacementDecision>& pairs);
-    std::vector<CompFrrForecast> N5cPeers(uint32_t remote, uint64_t excluded,
+    std::vector<CompFrrForecast> CompFrrPeers(uint32_t remote, uint64_t excluded,
                                     const std::string& trigger, DecisionPathSnapshot& paths);
-    bool RevalidateN5c(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
-    SelectiveInputSnapshot CaptureSelectiveInput(const FrequencyDecisionRecord& row, int64_t timeNs) const;
+    bool RevalidateCompFrrPlacement(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
+    void PrepareSelectivePrediction(FrequencyDecisionRecord& row, uint32_t primary, int64_t remainingNs) const;
+    PolicyAwareInputPlan EvaluateSelectiveDryRun(const FrequencyDecisionRecord& row,
+                                                 const TaskRuntime& task,
+                                                 PlacementDecision pair,
+                                                 DecisionPathSnapshot& paths) const;
+    static void ApplyPolicyAwareInput(FrequencyInput& input, const PolicyAwareInputPlan& plan);
+    static PolicyAwareInputAdmissionRecord MakePolicyAwareAudit(
+        const FrequencyDecisionRecord& row,
+        const PolicyAwareInputPlan& plan,
+        const FrequencyDecision& decision,
+        const std::string& stage,
+        uint64_t candidateIndex);
     ///< Read-only snapshots immediately before mechanism execution, not initialization completion.
     ///< Adapt actual placement, legal inventory, pools, rates and paths.
     Ptr<TaskCoordinator> m_tasks;                     ///< Business lifecycle owner.
@@ -176,7 +231,7 @@ class CompFrrController : public ProtectionPolicy
     CheckpointManager m_manager;                      ///< Sole actual checkpoint mechanism.
     std::unique_ptr<PlacementPolicy> m_placement;      ///< FFP baseline or explicitly injected LRL.
     std::unique_ptr<CompFrrPlacementTracker> m_placementObservation; ///< Read-only resource metrics, also usable by FA-FFP.
-    CompFrrPlacementTracker* m_n5c{}; ///< Alias enabled only for N5C; legacy policies never use quota promises.
+    CompFrrPlacementTracker* m_placementTracker{}; ///< Alias enabled only for CompFRR-P; legacy policies never use quota promises.
     CompFrrFrequencyPolicy m_policy;                  ///< Pure production solver.
     std::unique_ptr<InputStagingManager> m_optionalInput;
     std::vector<std::pair<SelectiveInputSnapshot, InputAdmissionDecision>> m_inputAdmissions;

@@ -16,7 +16,7 @@ std::unique_ptr<PlacementPolicy> RequirePlacement(std::unique_ptr<PlacementPolic
 OnePlusOneController::OnePlusOneController(Ptr<TaskCoordinator> tasks,
     SatelliteRuntimeView& topology, int64_t stopNs, std::unique_ptr<PlacementPolicy> placement)
     : m_tasks(tasks), m_placement(RequirePlacement(std::move(placement))),
-      m_policy(*m_placement), m_manager(tasks, topology, stopNs, m_policy)
+      m_policy(*m_placement), m_manager(tasks, topology, stopNs, m_policy, *m_placement)
 {
     m_tasks->ConnectTaskObserver(MakeCallback(&OnePlusOneController::OnTask, this));
 }

@@ -9,7 +9,7 @@
 
 namespace ns3::protection
 {
-enum class ProtectionScheme { OFF, COMPFRR, RECOMPUTE, ONE_PLUS_ONE, CB_SAT };
+enum class ProtectionScheme { OFF, COMPFRR, RECOMPUTE, ONE_PLUS_ONE, CB_SAT, MULTITREE };
 enum class CheckpointPolicyKind { FIXED, ADAPTIVE };
 enum class BaselinePlacementKind { FFP, FA_FFP, LRL, FA_LRL };
 enum class PlacementPolicyKind { FFP, FA_FFP, LRL, FA_LRL, COMPFRR };
@@ -41,6 +41,7 @@ struct CompFrrConfig
 };
 struct RecomputeConfig { BaselinePlacementKind placementPolicy; };
 struct OnePlusOneConfig { BaselinePlacementKind placementPolicy; };
+struct MultiTreeConfig { BaselinePlacementKind placementPolicy; };
 struct CbSatConfig
 {
     BaselinePlacementKind placementPolicy;
@@ -61,6 +62,7 @@ struct ProtectionConfig
     RecomputeConfig recompute;
     OnePlusOneConfig onePlusOne;
     CbSatConfig cbSat;
+    MultiTreeConfig multitree;
     ProtectionDiagnosticsConfig diagnostics;
 };
 /** Return the single set of typed defaults, before CLI overrides and validation. */

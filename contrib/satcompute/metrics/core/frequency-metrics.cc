@@ -172,5 +172,32 @@ void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& 
     for (const auto& r : m_faults->GetF3ComputeRiskRecords())
         risks << r.timeNs << ',' << r.nodeId << ',' << r.taskId << ',' << r.pF1 << ',' << r.pF2
               << ',' << r.qCompute << ',' << r.pFinish << ",0,F3\n";
+    // Separate additive audit: existing CSV schemas and non-P outputs stay unchanged.
+    if (m_placementTracker)
+    {
+        std::ofstream coverage(directory / "compfrr-candidate-coverage.csv");
+        coverage.exceptions(std::ios::badbit | std::ios::failbit);
+        coverage << "task_id,time_ns,decision_trigger,reference_local,reference_remote,reference_reject_reason,"
+                    "remote_candidates_total,remote_candidates_checked,first_feasible_anchor_index,"
+                    "feasible_anchor_remote,final_selected_remote,all_candidates_infeasible,"
+                    "proposed_action,proposal_reason,actual_fault_hit,decision_committed,"
+                    "anchor_delta_permille,anchor_n,resolution_reason\n";
+        for (const auto& r : m_decisions)
+        {
+            if (!r.candidateCoverage) continue;
+            const auto& c = *r.candidateCoverage;
+            auto field = [&](const auto& value) { if (value) coverage << *value; coverage << ','; };
+            coverage << r.taskId << ',' << r.input.risk.epochNs << ',' << r.trigger << ',';
+            field(c.reference ? std::optional(c.reference->localNode) : std::nullopt);
+            field(c.reference ? std::optional(c.reference->remoteNode) : std::nullopt);
+            coverage << c.referenceRejectReason << ',' << c.candidates << ',' << c.checked << ',';
+            field(c.anchorIndex); field(c.anchorRemote); field(c.finalRemote);
+            coverage << c.allInfeasible << ',' << Action(r.proposal.action) << ',' << r.proposal.reason
+                     << ',' << r.faultHit << ',' << r.committed << ',';
+            field(r.proposal.selected ? std::optional(r.proposal.selected->config.deltaPermille) : std::nullopt);
+            field(r.proposal.selected ? std::optional(r.proposal.selected->config.batchN) : std::nullopt);
+            coverage << r.reason << '\n';
+        }
+    }
 }
 } // namespace ns3::protection

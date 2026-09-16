@@ -244,6 +244,49 @@ CheckRunningTaskSnapshot()
     Simulator::Destroy();
 }
 
+void
+CheckFaultBatchCompletionBoundary()
+{
+    Recorder recorder;
+    auto node = CreateObject<Node>();
+    auto service = CreateObject<ComputeService>();
+    service->Configure(7, 1000000000,
+                       MakeCallback(&Recorder::OnStart, &recorder),
+                       MakeCallback(&Recorder::OnComplete, &recorder));
+    node->AddApplication(service);
+    service->SetStartTime(NanoSeconds(0));
+    service->SetStopTime(NanoSeconds(50));
+    Simulator::Schedule(NanoSeconds(1), [service] {
+        Submit(service, 10, 9);
+        Submit(service, 20, 3);
+    });
+    // Earlier UID than the dynamically scheduled completion. Completion is
+    // settled inclusively, but the next FCFS item must not start mid-batch.
+    Simulator::Schedule(NanoSeconds(10), [service, &recorder] {
+        Check(service->CompleteTaskIfDue(10, true), "same-ns completion was not settled");
+        Check(recorder.completions.size() == 1 && recorder.completions[0].timeNs == 10,
+              "completed work was lost at fault boundary");
+        Check(recorder.starts.size() == 1 && !service->HasRunningTask() &&
+                  service->GetQueuedTaskIds() == std::vector<uint64_t>{20},
+              "queued task started before the fault batch finished");
+        Check(!service->CompleteTaskIfDue(10, true), "completion settled twice");
+        service->SetComputeAvailable(false);
+    });
+    Simulator::Schedule(NanoSeconds(11), [service, &recorder] {
+        Check(!service->HasRunningTask() && recorder.starts.size() == 1,
+              "deferred dispatch ignored final batch availability");
+    });
+    Simulator::Schedule(NanoSeconds(20), [service] { service->SetComputeAvailable(true); });
+    Simulator::Stop(NanoSeconds(40));
+    Simulator::Run();
+    Check(recorder.starts.size() == 2 && recorder.starts[1].taskId == 20 &&
+              recorder.starts[1].timeNs == 20 && recorder.completions.size() == 2 &&
+              recorder.completions[1].timeNs == 23 && service->GetBusyTimeNs() == 12 &&
+              service->GetCancelledRunningTaskCount() == 0 && service->IsIdle(),
+          "post-batch FCFS recovery or actual service accounting changed");
+    Simulator::Destroy();
+}
+
 } // namespace
 
 int
@@ -255,6 +298,7 @@ main()
         CheckFcfsQueue();
         CheckFaultSafeCancellation();
         CheckRunningTaskSnapshot();
+        CheckFaultBatchCompletionBoundary();
         std::cout << "SatCompute compute service tests passed." << std::endl;
         return 0;
     }

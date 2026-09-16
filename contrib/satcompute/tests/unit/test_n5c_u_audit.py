@@ -10,7 +10,7 @@ from unittest.mock import patch
 HERE = Path(__file__).resolve().parents[1] / "integration/regression"
 RUN = runpy.run_path(str(HERE / "run-n5c-u-audit.py"))
 AUDIT = runpy.run_path(str(HERE / "analyze-n5c-u-audit.py"))
-RECENT = runpy.run_path(str(HERE / "run-n5c-recent-u.py"))
+RECENT = runpy.run_path(str(HERE.parents[1] / "support/protection/historical_recent_evidence.py"))
 WINDOW = runpy.run_path(str(HERE / "analyze-n5c-recent-u.py"))["window"]
 
 

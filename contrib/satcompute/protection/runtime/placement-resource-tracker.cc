@@ -13,7 +13,7 @@ int64_t Now() { return Simulator::Now().GetNanoSeconds(); }
 uint64_t Add(uint64_t a, uint64_t b)
 {
     if (b > std::numeric_limits<uint64_t>::max() - a)
-        throw std::overflow_error("N5C physical peak overflow");
+        throw std::overflow_error("placement physical peak overflow");
     return a + b;
 }
 } // namespace
@@ -21,12 +21,12 @@ PlacementResourceTracker::PlacementResourceTracker(Ptr<TaskCoordinator> tasks, P
     CheckpointManager& manager, int64_t stop)
     : m_tasks(tasks), m_faults(faults), m_manager(manager), m_stopNs(stop)
 {
-    if (Now() != 0) throw std::logic_error("N5C history must observe from simulation start");
+    if (Now() != 0) throw std::logic_error("placement history must observe from simulation start");
     for (auto service : m_tasks->GetComputeServices())
     {
         const auto node = service->GetNodeId();
         if (!m_services.emplace(node, service).second || service->GetBusyTimeNs())
-            throw std::logic_error("N5C history requires unique unstarted services");
+            throw std::logic_error("placement history requires unique unstarted services");
         m_computeHistory.Observe(node, 0, ComputeUsageHistory::Activity::IDLE);
         service->ConnectStateObserver(MakeCallback(&PlacementResourceTracker::ObserveCompute, this));
     }
@@ -47,7 +47,7 @@ Ptr<ComputeService> PlacementResourceTracker::Service(uint32_t node) const
 {
     for (auto service : m_tasks->GetComputeServices())
         if (service->GetNodeId() == node) return service;
-    throw std::logic_error("N5C missing compute service");
+    throw std::logic_error("placement missing compute service");
 }
 void PlacementResourceTracker::ObserveCompute(uint32_t node, bool busy)
 {
@@ -62,27 +62,20 @@ void PlacementResourceTracker::VerifyHistory(uint32_t node) const
                                              m_faults->ObservedSurvivalExposureNs(node));
     if (usage.recoveryNs != service->GetRecoveryBusyTimeNs() ||
         usage.normalNs + usage.recoveryNs != service->GetBusyTimeNs())
-        throw std::logic_error("N5C event history disagrees with actual service counters");
+        throw std::logic_error("placement event history disagrees with actual service counters");
 }
 void PlacementResourceTracker::FillResources(PlacementResourceSnapshot& c, int64_t remainingTimeNs) const
 {
-    if (remainingTimeNs < 0) throw std::logic_error("N5C negative remaining compute time");
+    if (remainingTimeNs < 0) throw std::logic_error("placement negative remaining compute time");
     const auto service = Service(c.remoteNode);
     const auto busy = service->GetBusyTimeNs();
     c.recoveryBusyNs = service->GetRecoveryBusyTimeNs();
-    if (c.recoveryBusyNs > busy) throw std::logic_error("N5C recovery exceeds total actual service");
+    if (c.recoveryBusyNs > busy) throw std::logic_error("placement recovery exceeds total actual service");
     c.normalBusyNs = busy - c.recoveryBusyNs;
     c.exposureNs = m_faults->ObservedSurvivalExposureNs(c.remoteNode);
     VerifyHistory(c.remoteNode);
     c.historyHorizonNs = remainingTimeNs;
     c.continuousIdleNs = m_computeHistory.IdleTimeNs(c.remoteNode, Now());
-    c.historyWindowEndNs = Now();
-    c.historyWindowBeginNs = std::max<int64_t>(0, Now() - remainingTimeNs);
-    const auto recent = m_computeHistory.Query(c.remoteNode, c.historyWindowBeginNs,
-                                               Now(), Now(), c.exposureNs);
-    c.recentNormalBusyNs = recent.normalNs;
-    c.recentRecoveryBusyNs = recent.recoveryNs;
-    c.recentExposureNs = recent.exposureNs;
     const auto& pool = *m_manager.Pools().at(c.remoteNode);
     c.capacityBytes = pool.Capacity();
     c.accountedBytes = m_quotas.Accounted(c.remoteNode, pool.OccupancyByTask(), {},
@@ -128,7 +121,7 @@ bool PlacementResourceTracker::CanCommit(uint64_t task, uint32_t node, uint64_t 
 }
 void PlacementResourceTracker::CommitQuota(uint64_t task, uint32_t node, uint64_t peak)
 {
-    if (!CanCommit(task, node, peak)) throw std::logic_error("N5C quota changed before commit");
+    if (!CanCommit(task, node, peak)) throw std::logic_error("placement quota changed before commit");
     m_quotas.Replace(task, node, peak);
 }
 void PlacementResourceTracker::ReleaseQuota(uint64_t task)
@@ -140,10 +133,10 @@ void PlacementResourceTracker::Assignment(uint64_t task, uint32_t node, bool act
 {
     if (!active && !m_assignments.contains(task)) return;
     if (active && !m_assignments.emplace(task, node).second)
-        throw std::logic_error("N5C duplicate assignment");
+        throw std::logic_error("placement duplicate assignment");
     if (!active)
     {
-        if (m_assignments.at(task) != node) throw std::logic_error("N5C release on wrong remote");
+        if (m_assignments.at(task) != node) throw std::logic_error("placement release on wrong remote");
         m_assignments.erase(task);
     }
     auto& s = m_nodes.at(node);
@@ -156,7 +149,7 @@ void PlacementResourceTracker::Assignment(uint64_t task, uint32_t node, bool act
     }
     else
     {
-        if (!s.active) throw std::logic_error("N5C assignment count underflow");
+        if (!s.active) throw std::logic_error("placement assignment count underflow");
         --s.active;
         ReleaseQuota(task);
     }
@@ -185,9 +178,9 @@ void PlacementResourceTracker::Finalize()
         ObserveStorage(node);
         s.assignmentNs += static_cast<unsigned __int128>(Now() - s.assignmentAtNs) * s.active;
         s.assignmentAtNs = Now();
-        if (s.active || s.storageBytes) throw std::logic_error("N5C final ownership/storage leak");
+        if (s.active || s.storageBytes) throw std::logic_error("placement final ownership/storage leak");
     }
-    if (!m_quotas.Empty() || !m_assignments.empty()) throw std::logic_error("N5C final quota/assignment leak");
+    if (!m_quotas.Empty() || !m_assignments.empty()) throw std::logic_error("placement final quota/assignment leak");
     m_finalized = true;
 }
 } // namespace ns3::protection
