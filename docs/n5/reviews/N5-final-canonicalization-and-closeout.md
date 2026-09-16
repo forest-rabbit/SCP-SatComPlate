@@ -1,7 +1,8 @@
 # N5 canonical closeout：CompFRR-P
 
-状态：**LOCAL_GATES_PASS / RELEASE_IN_PROGRESS**。2026-09-16 人工通过收口审阅，
-授权删除 recent-U 运行实现、阶段 CI、经 n5 合入 main、创建 `n5-complete` 和安全清理分支。
+状态：**N5 COMPLETE**。2026-09-16 人工收口审阅与阶段 CI 通过；
+发布链为 [PR #106](https://github.com/forest-rabbit/SCP-SatComPlate/pull/106) → n5 →
+[PR #107](https://github.com/forest-rabbit/SCP-SatComPlate/pull/107) → main / annotated `n5-complete`。
 
 ## 执行身份与范围
 
@@ -235,7 +236,15 @@ LocalDelivery、FETCH/refetch、IN_FLIGHT unknown remaining 均由 focused test 
 
 ## 发布 gate
 
-人工 STOP 审阅已通过。按当前链 → n5 → main 发布，阶段 CI 通过后创建 annotated
-`n5-complete`；不重跑完整 5/10 Gbps，不进入 N6/N7。
-工作树清理必须先保全 ignored 证据；原 `SCP-SatComPlate` 的 Stage 2B 未提交内容另行保留，
-不能因提交祖先已经合入而一并删除。PR、CI、tag 凭据在实际完成后补记。
+- [阶段 CI #35047984451](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/35047984451)
+  全部通过：configure/build、Python、C++、smoke、regression；仅 SatCompute，不开启上游 examples/tests。
+- CI 提交 `372f7b45303b7fc2cedaea63419efe105bc0e1a0`；PR #106 合并
+  `719bf4f5ae762143d91c4eda92034e77d56bf2f8` 与其 tree 完全相同。
+  后续发布收据只改 Markdown，不改变任何执行文件，不重复触发阶段 CI。
+- `n5-complete` 指向 PR #107 的 main merge，不移动旧 N0–N4 标签。
+  不重跑完整 5/10 Gbps，不进入 N6/N7。
+- 临时工作树的完整 output 已逐文件归档并比较一致，位置为原项目
+  `output/n5-closeout-policy-aware-20260916/`（含 README 路径映射和本地验证日志）。
+  不改写旧 JSON 的绝对路径、执行身份或结果。
+- 原 `SCP-SatComPlate` 的 Stage 2B 未提交内容仍保留，不能因提交祖先已经合入而删除。
+  其本地分支/工作树不在此次清理范围；只清理已安全归档、合入并标记的临时工作树和分支。

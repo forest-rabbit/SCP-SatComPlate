@@ -29,8 +29,8 @@ N0–N2 是 ns-3.33 版本的原始里程碑，相关 PR 位于旧 SatCompute �
 | N5B 后续 / Pre-N5C：基线与可行性消融 | 已验收冻结 | PR #97 / 执行 `b51cc9d63` | 2026-09-12 |
 | Pre-N5C：CB-Sat 基线收口 | 已完成，集成到 `n5`，JIT 留作历史 | PR #98 / `17c4414dc` | 2026-09-13 |
 | N5C：备份节点选择与 corrected chain | 已集成到 `n5`，含 recovery/maintenance 修复 | PR #102 / `d26f7af90` | 2026-09-14 |
-| N5 基线补齐：Multi-tree Published FT | 实现与实验已验收，随 N5 收口集成 | 执行 `1fd8348bd` / `363c2092f` / `ebd8a4748` | 2026-09-15 |
-| N5：保护、备份节点选择与基线 | 技术验收完成，阶段 CI / 合并发布中 | 最终冻结标签 `n5-complete`（合并后创建） | 2026-09-16 |
+| N5 基线补齐：Multi-tree Published FT | 已验收，随 N5 收口集成 | PR #106 / 执行 `1fd8348bd`、`363c2092f`、`ebd8a4748` | 2026-09-15 |
+| N5：保护、备份节点选择与基线 | 已完成 | [PR #107](https://github.com/forest-rabbit/SCP-SatComPlate/pull/107) / `n5-complete` | 2026-09-16 |
 
 N2 的最终发布链固定为 `feature/n2-integration` 合入旧仓库 `main`，并以
 annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移动 N0、N1
@@ -76,6 +76,7 @@ Recompute、1+1、CB-Sat、Multi-tree 基线收口；正式默认为 CompFRR-P +
 统一 CompFRR-P 命名，删除 recent-U 运行实现，仅保留 Cumulative / Idle-Aware 及独立消融。
 小场景验证未改变保留方案的任务、时序与资源账本；本轮不刷新正式性能矩阵。
 合并与验收凭据集中在[收口报告](docs/n5/reviews/N5-final-canonicalization-and-closeout.md)，
+阶段 CI 通过，发布链为 PR #106 → `n5` → PR #107 → `main` / `n5-complete`。
 历史实验仍沿用各自执行身份；N6/N7 需另行授权。
 
 ## N0：初始网络平台
