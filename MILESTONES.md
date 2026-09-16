@@ -1,8 +1,9 @@
 # SatCompute 里程碑
 
 本文件按阶段记录已经完成的主要工作、实验结论和边界，不作为逐日开发日志。
-每个步骤给出完成日期及可追溯的 PR、tag 或代表性提交。阶段压力实验记录在实际
-执行它的阶段；ECMP 专项 fixture 与算法演进统一记录在文末。
+每个步骤给出完成日期及可追溯的 PR、tag 或代表性提交。前置工作归入上一阶段，
+不单列 Pre 阶段；N5 的对比基线统一归入 N5B。归类不改变实际执行日期、提交或
+tag 的冻结范围。ECMP 专项 fixture 与算法演进统一记录在文末。
 
 N0–N2 是 ns-3.33 版本的原始里程碑，相关 PR 位于旧 SatCompute 仓库，完整代码
 与报告保留在只读分支 `legacy/ns-3.33`。迁移到 ns-3.48 的全部工作统一记为 N3，
@@ -23,61 +24,11 @@ N0–N2 是 ns-3.33 版本的原始里程碑，相关 PR 位于旧 SatCompute �
 | N4B：统一故障建模与因果概率预测 | 已完成 | [PR #81](https://github.com/forest-rabbit/SCP-SatComPlate/pull/81) / `n4b-complete` | 2026-08-31 |
 | N4C：最终计算场景与 CompFRR 决策预演 | 已完成 | PR #88–#93 / `n4-complete` | 2026-09-10 |
 | N4：故障建模与保护决策前置阶段 | 已完成 | [PR #93](https://github.com/forest-rabbit/SCP-SatComPlate/pull/93) / `n4-complete` | 2026-09-10 |
-| N5 前置：任务增量与压力基线 | 实验基础已完成，尚未实现备份算法 | 平台 PR #86 / TaskModeling PR #5 | 2026-09-06 |
-| N5A：真实保护与恢复运行时 | 已完成，集成到 `n5` | PR #95 | 2026-09-10 |
-| N5B：CompFRR 动态频率 | 已完成，集成到 `n5` | PR #96 | 2026-09-11 |
-| N5B 后续 / Pre-N5C：基线与可行性消融 | 已验收冻结 | PR #97 / 执行 `b51cc9d63` | 2026-09-12 |
-| Pre-N5C：CB-Sat 基线收口 | 已完成，集成到 `n5`，JIT 留作历史 | PR #98 / `17c4414dc` | 2026-09-13 |
-| N5C：备份节点选择与 corrected chain | 已集成到 `n5`，含 recovery/maintenance 修复 | PR #102 / `d26f7af90` | 2026-09-14 |
-| N5 基线补齐：Multi-tree Published FT | 已验收，随 N5 收口集成 | PR #106 / 执行 `1fd8348bd`、`363c2092f`、`ebd8a4748` | 2026-09-15 |
+| N5A：真实保护与恢复运行时 | 已完成 | PR #95 | 2026-09-10 |
+| N5B：CompFRR-F 与对比基线 | 已完成 | PR #96–#98、#104、#106 | 2026-09-11 至 09-15 |
+| N5C：CompFRR-P 备份节点选择 | 已完成 | PR #102、#106 | 2026-09-13 至 09-16 |
+| N5R：保护架构与配置整理 | 已完成 | PR #103–#105 | 2026-09-14 至 09-15 |
 | N5：保护、备份节点选择与基线 | 已完成 | [PR #107](https://github.com/forest-rabbit/SCP-SatComPlate/pull/107) / `n5-complete` | 2026-09-16 |
-
-N2 的最终发布链固定为 `feature/n2-integration` 合入旧仓库 `main`，并以
-annotated tag `n2-complete` 冻结。N2A 与 N2B 均已完成；该 tag 不移动 N0、N1
-或 N1-ECMP 已有的阶段冻结点。N3 使用新仓库的 ns-3.48 主线，但沿用并保留这些
-历史 tag。
-
-N4C G3/G4 经 PR #90/#91、最终收尾经 PR #92 集成到 n4c，再由 PR #93 普通合入 main。
-正式入口为 [LEO-66](contrib/satcompute/input/experiments/leo-66/README.md)，
-冻结历史由 commit/PR 追溯，不依赖内部标签。
-N4 = COMPLETE，正式标签为 main 集成提交上的 `n4-complete`。
-N5 集成线已由该标签建立；[Pre-N5 审计 PR #94](https://github.com/forest-rabbit/SCP-SatComPlate/pull/94)
-已合入 `n5`，Gate A/B 通过。N5A 经 [PR #95](https://github.com/forest-rabbit/SCP-SatComPlate/pull/95)
-完成真实备份/恢复与资源验收；N5B 经 [PR #96](https://github.com/forest-rabbit/SCP-SatComPlate/pull/96)
-于 2026-09-11 通过阶段 CI 并合入 `n5`，完成动态频率与 busy-remote 恢复策略分离。
-最终受控 B 场景为 800/800 按时完成、83/83 恢复成功；`main` 冻结结果不变。
-
-2026-09-12：Pre-N5C 经 [PR #97](https://github.com/forest-rabbit/SCP-SatComPlate/pull/97)
-收尾，冻结 Frequency v6、InputDeferred、ON容量即时恢复及四种placement的32组正式结果。
-同为66星/800任务/1300 s，R5四模式均800完成，R7两种FFP为799、两种LRL为800。
-计算资源统一区分 active/total eq-WU（equivalent cost），不把预留空闲称为CPU重算。
-LRL/FA-LRL是N5C的强baseline，须公平比较、不预设结果；当时N5C尚未开始，`main`不变。
-细节仅保留在[最终报告](docs/n5/reviews/Pre-N5C-placement-baselines-final.md)，不在里程碑展开实验流水。
-
-2026-09-13：PR #98 合入 `n5` 后，从新基线实施 N5C V4，保留一次 reference Frequency、
-固定 local 和 ON 不重选合同。七组 1300 s 验证通过，FA-FFP 与旧行为严格等价；
-N5C Eager/Deferred 分别完成 800/799，备份热点和 total eq-WU 下降，但 Deferred 非全面占优，
-noU 在该场景完成 800。完整对照、消融与局限仅记录在
-[N5C 验收](docs/n5/reviews/N5B-closeout-N5C-kickoff.md)，不据此改写模型或预设算法排名。
-
-2026-09-14：[PR #102](https://github.com/forest-rabbit/SCP-SatComPlate/pull/102) 将 N5C/U、
-deadline/INPUT-path recovery 与 checkpoint-maintenance 修复整链合入 `n5`。
-修复后 FULL/noU/Idle-Aware 五轮各完成 4000/4000，详细证据保留在
-[维护语义报告](docs/n5/reviews/Checkpoint-maintenance-semantics-audit.md)；不是 N5R 的新性能实验，`main` 未变。
-
-2026-09-15：完成 Multi-tree 公开 FT 树与共享 RS/RP 执行。六方案 10 Gbps 三轮、
-1 Gbps 一轮及 100 Gbps 五项共 29 次完整仿真通过审计，剩余一项按用户要求取消。
-两种 CompFRR 在 10 Gbps 均完成 2400/2400；低带宽暴露 reference-pair 准入限制。
-完整结果见[实验报告](docs/n5/reviews/Multi-tree-published-FT-comparison.md)，不据结果调参；N5 尚未整体收尾。
-
-2026-09-16：N5 完成 CompFRR-F/P、Eager/Deferred/Selective、可选 Relocate 及
-Recompute、1+1、CB-Sat、Multi-tree 基线收口；正式默认为 CompFRR-P + Selective + Relocate。
-补齐 fixed-local candidate coverage、policy-aware START 和 peer INPUT contract 一致性，
-统一 CompFRR-P 命名，删除 recent-U 运行实现，仅保留 Cumulative / Idle-Aware 及独立消融。
-小场景验证未改变保留方案的任务、时序与资源账本；本轮不刷新正式性能矩阵。
-合并与验收凭据集中在[收口报告](docs/n5/reviews/N5-final-canonicalization-and-closeout.md)，
-阶段 CI 通过，发布链为 PR #106 → `n5` → PR #107 → `main` / `n5-complete`。
-历史实验仍沿用各自执行身份；N6/N7 需另行授权。
 
 ## N0：初始网络平台
 
@@ -168,7 +119,7 @@ TaskTrace 和 ComputeProfile 使用 closed-world JSON 合同，明确任务到�
   `99ac19c`、[PR #6](https://github.com/forest-rabbit/SatCompute/pull/6) /
   `fd393bd`
 
-### 2026-07-28：清理 Pre-N2 平台边界
+### 2026-07-28：清理任务闭环平台边界
 
 Legacy CSV/TCP offered-load 正式退出 SatCompute；输入、失败诊断和 metrics
 职责重新整理。未使用的 ns-3 上游内容继续保留，日常构建仍通过
@@ -300,6 +251,9 @@ N2 收尾将 `global-capacity-aware-hrw` 设为默认路由模式；历史模式
 仍可通过 `--routingMode` 显式选择。
 
 - 默认模式证据：`26cda9b`
+
+N2A/N2B 最终通过 `feature/n2-integration` 合入旧仓库 `main`，以 annotated tag
+`n2-complete` 冻结；N3 迁移沿用旧阶段标签，不移动 N0、N1 或 N1-ECMP 的冻结点。
 
 ## N3：迁移到 ns-3.48
 
@@ -456,7 +410,9 @@ compute START、6 个 risk-only episode 和 1 次永久 F3 整星故障。200 �
 - 集成证据：[PR #83](https://github.com/forest-rabbit/SCP-SatComPlate/pull/83) / `65bd39a1f`
 - 阶段 CI：[run 33459723117](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/33459723117)，2 分 4 秒通过
 
-## N5 前置：任务增量与压力基线
+## N4C：最终计算场景与 CompFRR 决策预演
+
+### 2026-09-06：建立任务增量与压力基线
 
 SCP-TaskModeling 已完成三类图像任务的真实增量计量、5% / 10% / 20% checkpoint
 粒度与恢复验证。参考 `rho_variable` 分别约为 1.0000076294（稠密图像）、
@@ -468,12 +424,9 @@ SCP-TaskModeling 已完成三类图像任务的真实增量计量、5% / 10% / 2
 
 - 任务证据：[TaskModeling PR #5](https://github.com/forest-rabbit/SCP-TaskModeling/pull/5) 合入后的 `0dbc0c7` 快照
 - 压力证据：[PR #86](https://github.com/forest-rabbit/SCP-SatComPlate/pull/86) / `a9bf4ad16`；[阶段 CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/34014479346) 通过
-- 参数口径、实验边界及待确定项：[N5 前置基础](docs/n5-prerequisites.md)；详细压力结果：[10 Gbps 基线](docs/pressure-10g-baseline.md)
+- 参数口径与当时实验边界：[任务增量与压力依据](docs/n5-prerequisites.md)；详细压力结果：[10 Gbps 基线](docs/pressure-10g-baseline.md)
 
-以上为当时的前置实验记录；后续WU映射、sigma/H、LLM预算与平台接入已在
-[N4C](docs/n4c/README.md)完成，真实备份执行仍未实现。
-
-## N4C：最终计算场景与 CompFRR 决策预演
+### 2026-09-07 至 2026-09-10：完成工作量映射与决策预演
 
 G1 完成最终 workload/state 映射；G2 接入正式运行、首次计算 deadline 与在线因果风险查询；
 G3 冻结800任务/热点场景、F1/F2生命周期、controlled F3和故障任务影响账本；
@@ -490,7 +443,80 @@ G4 完成 Simplified v4 shadow、动态频率与资源/追赶时间评估，不�
 - 输入重构与release证据见 [closeout PR #92](https://github.com/forest-rabbit/SCP-SatComPlate/pull/92)。
   [完整阶段 CI](https://github.com/forest-rabbit/SCP-SatComPlate/actions/runs/34422773581) 与最终人工审阅通过，
   [PR #93](https://github.com/forest-rabbit/SCP-SatComPlate/pull/93) 完成 main 集成，以 `n4-complete` 发布。
-  N5 starts after n4-complete，真实checkpoint/备份/恢复仍未开始。
+  该冻结点只包含决策预演，不包含后来在 N5 实现的真实 checkpoint、备份与恢复。
+
+### 2026-09-10：完成备份节点可行性准备
+
+基于 N4 冻结轨迹完成逐任务候选存在性审计，Gate A/B 通过；只证明各检查时刻
+存在健康、空闲且可达的候选，不代表已预留资源或能够同时接管所有任务。
+
+- 证据：[PR #94](https://github.com/forest-rabbit/SCP-SatComPlate/pull/94) / [审计报告](docs/n5/reviews/pre-n5-backup-node-feasibility.md)
+- 此项按成果归入 N4 的后续准备，实际提交合入 `n5`，不属于 `n4-complete` tag。
+
+## N5A：真实保护与恢复运行时
+
+### 2026-09-10：完成 checkpoint、恢复与资源账本
+
+实现真实 checkpoint 生成、传输、提交与对象释放，以及 INPUT/state/tail 恢复依赖、
+同星 LocalDelivery、恢复计算和任务终态处理。planned 与 actual 的时间、WU、网络
+字节及存储分账，计算 deadline 沿用首次主计算起点。
+
+- 集成：[PR #95](https://github.com/forest-rabbit/SCP-SatComPlate/pull/95)
+- 验收：[保护运行时与资源账本](docs/n5/reviews/N5A-G4-integration-accounting.md)
+
+## N5B：CompFRR-F 与对比基线
+
+### 2026-09-11 至 2026-09-15：完成频率、INPUT 与基线方案
+
+CompFRR-F 完成在线 START/ON 决策及 checkpoint 间隔、远端批次求解；固定频率保留为
+自身方案的对照配置。INPUT 统一为 Eager、Deferred、Selective，Selective 使用冻结
+SER 规则，并维护真实 INPUT 依赖和完整流生命周期的实际字节账本。
+
+对比基线统一包括 Recompute、1+1、CB-Sat、Multi-tree Published FT；各自保留独立
+准入、checkpoint 与恢复合同，不自动继承 CompFRR 的 tail 或恢复策略。
+FFP/LRL/FA-FFP/FA-LRL 及节点、路径可行性消融属于本阶段的对照能力，不再单列前置阶段。
+
+- 频率集成：[PR #96](https://github.com/forest-rabbit/SCP-SatComPlate/pull/96)；当时受控 B 场景为 800/800 按时完成、83/83 恢复成功，见[验收](docs/n5/reviews/N5B-final-800-task-scene.md)。
+- 基线与可行性对照：[PR #97](https://github.com/forest-rabbit/SCP-SatComPlate/pull/97)、[PR #98](https://github.com/forest-rabbit/SCP-SatComPlate/pull/98)；[32 组历史实验](docs/n5/reviews/Pre-N5C-placement-baselines-final.md)。
+- INPUT 收口：[PR #104](https://github.com/forest-rabbit/SCP-SatComPlate/pull/104) / [生命周期与接口](docs/n5/reviews/INPUT-final-repository-closeout.md)。
+- Multi-tree 随 [PR #106](https://github.com/forest-rabbit/SCP-SatComPlate/pull/106) 集成；[六方案实验](docs/n5/reviews/Multi-tree-published-FT-comparison.md)共 29 次完整运行，两种 CompFRR 在 10 Gbps 三轮均完成 2400/2400。
+
+以上数字属于各自的历史执行版本，不合并为同一最终版本的性能结论；完整模型和边界见
+[CompFRR-F](docs/protection/compfrr-f.md)与[基线说明](docs/protection/baselines.md)。
+
+## N5C：CompFRR-P 备份节点选择
+
+### 2026-09-13 至 2026-09-16：完成节点选择与可行性合同
+
+完成固定 local 下的 remote 可行性筛选和 CompFRR-P 排名，保留 Cumulative 与
+Idle-Aware 两种 compute-pressure policy，以及 noR/noU/noM 消融。
+修正 deadline/INPUT-path 恢复迁移、checkpoint maintenance，以及 reference remote
+硬拒绝后的候选覆盖；统一 policy-aware START 与 existing peer 的 INPUT contract。
+
+- 集成：[PR #102](https://github.com/forest-rabbit/SCP-SatComPlate/pull/102)、[PR #106](https://github.com/forest-rabbit/SCP-SatComPlate/pull/106)
+- corrected-chain 验证：FULL/noU/Idle-Aware 各五轮完成 4000/4000，见[维护语义报告](docs/n5/reviews/Checkpoint-maintenance-semantics-audit.md)。
+- 最终模型与边界：[CompFRR-P](docs/protection/compfrr-p.md)；历史 U 对照不预设任何策略全面占优。
+
+## N5R：保护架构与配置整理
+
+### 2026-09-14 至 2026-09-15：完成模块边界与统一入口
+
+明确 scheme、placement、recovery 与共享 runtime 的职责，Frequency Core 与 INPUT
+策略平行组织且共用一套频率求解器。统一配置 owner 和 CompFRR-F/P 命名，保留历史
+实验的只读身份映射；用小场景任务、时序与资源账本等价门禁验证纯重构。
+
+- 集成：PR #103–#105；[架构整理](docs/n5/reviews/N5R-implementation.md)、[配置层级](docs/n5/reviews/Protection-config-hierarchy.md)。
+
+## N5：阶段收口与发布
+
+### 2026-09-16：完成 N5 验收与发布
+
+正式方案冻结为 CompFRR adaptive + CompFRR-P + Selective + Relocate；recent-U
+运行实现已删除，历史证据保留。阶段 CI 和小场景合同、等价检查通过，收口不重跑
+正式性能矩阵，不把旧实验改写成最终发布版本的结果。
+
+- 发布链：[PR #106](https://github.com/forest-rabbit/SCP-SatComPlate/pull/106) → `n5` → [PR #107](https://github.com/forest-rabbit/SCP-SatComPlate/pull/107) → `main`。
+- 阶段 tag：`n5-complete` / `1870d68d5`；[验收与归档凭据](docs/n5/reviews/N5-final-canonicalization-and-closeout.md)。
 
 ## ECMP 算法演进
 
@@ -512,7 +538,7 @@ ns-3 给出的等价最短下一跳排序；候选不变时保持确定性，候
 1493/1500、lost=54 改善为 1500/1500、lost=0；该结果只证明冻结场景。
 
 - 证据：[PR #6](https://github.com/forest-rabbit/SatCompute/pull/6) / `fd393bd`
-- 报告：[Pre-N2 Size-aware HRW 验证](https://github.com/forest-rabbit/SCP-SatComPlate/blob/legacy/ns-3.33/docs/reviews/pre-n2-size-aware-hrw-validation.md)
+- 报告：[Size-aware HRW 验证](https://github.com/forest-rabbit/SCP-SatComPlate/blob/legacy/ns-3.33/docs/reviews/pre-n2-size-aware-hrw-validation.md)
 
 ### 2026-08-02：Capacity-aware HRW
 

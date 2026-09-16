@@ -246,5 +246,15 @@ LocalDelivery、FETCH/refetch、IN_FLIGHT unknown remaining 均由 focused test 
 - 临时工作树的完整 output 已逐文件归档并比较一致，位置为原项目
   `output/n5-closeout-policy-aware-20260916/`（含 README 路径映射和本地验证日志）。
   不改写旧 JSON 的绝对路径、执行身份或结果。
-- 原 `SCP-SatComPlate` 的 Stage 2B 未提交内容仍保留，不能因提交祖先已经合入而删除。
-  其本地分支/工作树不在此次清理范围；只清理已安全归档、合入并标记的临时工作树和分支。
+- 发布当时暂留的 Stage 2B 未提交诊断，已于同日按用户批准单独归档（见下），
+  未混入 `main` 或 `n5-complete`。
+
+### Stage 2B 归档与旧分支清理（发布后）
+
+- 本地与远端均保留 `archive/n5-stage2b-residual-deadline-audit`，head `ea9c38e56`；
+  原诊断快照 `de728cd4e`，来源 `b69299e6a`。完整文件清单与执行身份见
+  [归档清单](https://github.com/forest-rabbit/SCP-SatComPlate/blob/archive/n5-stage2b-residual-deadline-audit/docs/n5/reviews/N5-stage2b-archive-manifest.md)。
+- 核对旧 `fix/compfrr-p-candidate-coverage` 对 `main` 和归档均无独有提交，且没有工作树或
+  open PR 依赖；验证远端归档 head 后删除旧分支的本地、远端引用。历史提交仍可由两条保留历史恢复。
+- 原始 `output/compfrr/1g-residual-deadline-audit/`（约 73 MiB）保持原位，未删除或改写；
+  archive 不合入主线，N5 标签不移动。本次只整理里程碑和归档凭据，不改 production 或重跑 CI。
