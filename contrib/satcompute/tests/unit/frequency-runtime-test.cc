@@ -46,6 +46,17 @@ struct FrequencyRuntimeTestAccess
         return c.m_manager;
     }
     static void Released(FrequencyProtectionController& c) { c.CapacityReleased(); }
+    static CompFrrForecast Peer(FrequencyProtectionController& c, uint32_t remote)
+    {
+        DecisionPathSnapshot paths([&](auto a, auto b) {
+            return c.m_tasks->GetTransferEngine()->EstimateAdmissiblePath(a, b);
+        });
+        const auto peers = c.N5cPeers(remote, 999, "TASK_RUNNING", paths);
+        if (peers.size() != 1) throw std::runtime_error("peer contract fixture lost live peer");
+        return peers.front();
+    }
+    static void RequestInput(FrequencyProtectionController& c, uint32_t remote)
+    { c.m_optionalInput->Request(c.Task(1).definition, remote); }
     static bool StartStillRequiresIdle(FrequencyProtectionController& c, const TaskRuntime& task)
     {
         auto& state = c.m_states.at(task.definition.taskId);
@@ -942,7 +953,8 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
 }
 /** Force a different actual remote, then test readonly proposal, quota race and ON resource use. */
 void N5cBoundary(const std::filesystem::path& output, InputPolicy inputPolicy,
-                 const std::string& mode, bool reverseSelectivePair = false)
+                 const std::string& mode, bool reverseSelectivePair = false,
+                 const std::string& peerProbe = "")
 {
     RngSeedManager::SetSeed(1); RngSeedManager::SetRun(11);
     {
@@ -1055,6 +1067,62 @@ void N5cBoundary(const std::filesystem::path& output, InputPolicy inputPolicy,
                   "ON used reference resources or reran spatial ranking");
             Check(controller.N5c()->ReadyAfter(1).has_value(), "actual ready timestamp absent");
         });
+        auto checkPeer = [&](InputDependencyMode expected) {
+            const auto before = controller.OptionalInput()->Resolve(definition, 4);
+            const auto peer = FrequencyRuntimeTestAccess::Peer(controller, 4);
+            const auto after = controller.OptionalInput()->Resolve(definition, 4);
+            Check(before.mode == expected && before.mode == after.mode &&
+                      before.remainingNs == after.remainingNs && before.flowId == after.flowId,
+                  "peer forecast changed runtime INPUT dependency");
+            auto candidate = peer;
+            candidate.recoveryInputSeconds = expected == InputDependencyMode::FETCH
+                ? std::optional<double>{} : std::optional<double>{0};
+            Check(peer.recoveryInputSeconds == candidate.recoveryInputSeconds &&
+                      CompFrrCatchSeconds(peer) == CompFrrCatchSeconds(candidate),
+                  "candidate/peer INPUT policy contracts differ");
+            auto legacy = peer; legacy.recoveryInputSeconds.reset();
+            if (expected == InputDependencyMode::FETCH)
+                Check(!peer.recoveryInputSeconds &&
+                          CompFrrCatchSeconds(peer) == CompFrrCatchSeconds(legacy),
+                      "FETCH peer lost legacy INPUT term");
+            else if (peer.inputLocal)
+                Check(CompFrrCatchSeconds(peer) == CompFrrCatchSeconds(legacy),
+                      "LocalDelivery acquired nonzero INPUT cost");
+            else
+                Check(CompFrrCatchSeconds(peer) < CompFrrCatchSeconds(legacy),
+                      "valid proactive peer retained full INPUT term");
+            if (expected == InputDependencyMode::IN_FLIGHT)
+                // A transient unavailable estimate also stays UNKNOWN, never fabricated READY.
+                Check((!before.remainingNs || *before.remainingNs > 0) && peer.recoveryInputSeconds == 0,
+                      "P zero INPUT fabricated runtime readiness");
+        };
+        if (!peerProbe.empty())
+        {
+            Simulator::Schedule(NanoSeconds(210000000), [&] {
+                checkPeer(InputDependencyMode::FETCH); // No admitted SEND / ABSENT.
+                FrequencyRuntimeTestAccess::RequestInput(controller, peerProbe == "wrong-target" ? 0 : 4);
+                checkPeer(InputDependencyMode::FETCH); // REQUESTED is not physical admission.
+            });
+            Simulator::Schedule(NanoSeconds(210010000), [&] {
+                if (peerProbe == "wrong-target") { checkPeer(InputDependencyMode::FETCH); return; }
+                checkPeer(InputDependencyMode::IN_FLIGHT);
+                if (peerProbe == "failed")
+                {
+                    const auto flow = controller.OptionalInput()->Records().at(1).flow;
+                    Check(tasks->GetTransferEngine()->FinalizeTransferIfActive(flow,
+                        TransferTerminalState::FAILED, TransferTerminalReason::TASK_FAILED),
+                        "peer failure fixture missed active flow");
+                    checkPeer(InputDependencyMode::FETCH);
+                }
+            });
+            Simulator::Schedule(NanoSeconds(230000000), [&] {
+                checkPeer(peerProbe == "ready" ? InputDependencyMode::READY : InputDependencyMode::FETCH);
+            });
+        }
+        else if (inputPolicy == InputPolicy::SELECTIVE && mode == "normal" && !reverseSelectivePair)
+            Simulator::Schedule(NanoSeconds(230000000), [&] { checkPeer(InputDependencyMode::READY); });
+        else if (mode == "prefetch-reject")
+            Simulator::Schedule(NanoSeconds(230000000), [&] { checkPeer(InputDependencyMode::FETCH); });
         Simulator::Stop(NanoSeconds(800000000));
         Simulator::Run();
         manager.Pool(0).ReleaseReservation(*held);
@@ -1599,6 +1667,9 @@ int main(int argc, char** argv)
                     InputPolicy::SELECTIVE, "normal", true);
         N5cBoundary(std::filesystem::path(output) / "n5c-boundary-selective-prefetch-reject",
                     InputPolicy::SELECTIVE, "prefetch-reject");
+        for (const auto& probe : {"ready", "failed", "wrong-target"})
+            N5cBoundary(std::filesystem::path(output) / (std::string("peer-contract-") + probe),
+                        InputPolicy::SELECTIVE, "normal", true, probe);
         Online(std::filesystem::path(output) / "online-n5c", "n5c");
         Online(std::filesystem::path(output) / "online-n5c-deferred", "n5c-deferred");
         Online(std::filesystem::path(output) / "online-n5c-recent-U", "n5c-recent-U");

@@ -79,6 +79,14 @@ std::vector<CompFrrForecast> CompFrrController::N5cPeers(
                         m_tasks->IsSatelliteAvailable(state.pair->localNode) &&
                         m_tasks->IsComputeAvailable(state.pair->localNode),
                         task.definition.sourceNodeId == remote});
+        if (m_optionalInput)
+        {
+            // P models the admitted INPUT contract, not physical receiver readiness.
+            // Runtime recovery still waits on Resolve().remainingNs and the real DAG.
+            const auto mode = m_optionalInput->Resolve(task.definition, remote).mode;
+            if (mode == InputDependencyMode::READY || mode == InputDependencyMode::IN_FLIGHT)
+                peers.back().recoveryInputSeconds = 0;
+        }
     }
     return peers;
 }
