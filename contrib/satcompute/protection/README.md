@@ -70,6 +70,7 @@ N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障
 | `compfrrFixedBatchN` | `4` | 仅 Fixed，n>0 且 n×delta≤1 |
 | `backupStorageBytesPerNode` | `10000000000` B | common pool 容量；仅 CompFRR（含 Fixed）/CB 使用，0 允许测试不足；不为 Recompute/1+1 新建池 |
 | `compfrr-shadow` / `compfrr-shadow-output` | `false` / 空 | 独立 off+generate 诊断；不启用真实保护 |
+| `compfrrResidualDeadlineTasks` | 空 | 仅审计：逗号分隔的正整数任务 ID；adaptive CompFRR-P + generate 下采集候选 deadline 分解，无策略副作用，正常运行关闭 |
 
 上述 `compfrr*` 私有 CLI 仅属于 `protectionScheme=compfrr`；跨方案显式传参即拒绝，即便等于默认值。
 未选中的子结构不会创建运行时对象。Adaptive 仍要求 generate 且 F1/F2 至少一个开启；

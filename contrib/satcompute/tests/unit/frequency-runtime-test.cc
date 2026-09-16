@@ -91,6 +91,7 @@ struct FrequencyRuntimeTestAccess
 namespace
 {
 uint64_t checks{};
+bool residualAuditEnabled{};
 constexpr int64_t END = 4000000000LL;
 
 void Check(bool value, const char* message)
@@ -754,6 +755,7 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
             selective ? InputPolicy::SELECTIVE :
             (mode == "n5c-deferred" || mode == "n5c-recent-U" || mode == "n5c-rational-U") ?
                 InputPolicy::DEFERRED : InputPolicy::EAGER);
+        if (residualAuditEnabled && selective) controller.EnableResidualDeadlineAudit({1, 2});
         if (mode == "f3")
         {
             Simulator::Schedule(NanoSeconds(50000000), [&] {
@@ -1012,6 +1014,30 @@ void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging
     Reset();
 }
 
+void ResidualModelMinimum()
+{
+    FrequencyInput in;
+    in.work = 1000000; in.variableBytes = 100000000;
+    in.recoveryRate = 100000; in.backupBandwidth = 125000000;
+    in.costs = GetProtectionCosts(static_cast<uint64_t>(in.variableBytes));
+    in.nodeAvailable = in.pathAvailable = in.replayAvailable = true;
+    in.localFreeBytes = in.remoteFreeBytes = 100;
+    in.storageDemand = [](auto) { return FrequencyStorageDemand{10, 20}; };
+    const auto first = InspectMinimumRecovery(in);
+    Check(first.config == FrequencyConfiguration{10,1} && first.seconds == .05 && first.resourceFeasible > 0,
+          "residual minimum must minimize recovery, not the production objective");
+    in.storageDemand = [](auto config) -> std::optional<FrequencyStorageDemand> {
+        return config.deltaPermille < 20 ? std::nullopt : std::optional(FrequencyStorageDemand{10,20});
+    };
+    const auto limited = InspectMinimumRecovery(in);
+    Check(limited.config == FrequencyConfiguration{20,1} && limited.seconds == .1 && limited.storageRejected > 0,
+          "residual minimum ignored per-config storage");
+    in.remoteFreeBytes = 19;
+    Check(!InspectMinimumRecovery(in).seconds, "empty resource-feasible set invented a recovery minimum");
+    in.pathAvailable = false;
+    Check(!InspectMinimumRecovery(in).config, "unavailable path entered residual configuration search");
+}
+
 /** Real pools, paths and solver: only the fixed-local hard-rejected remote prefix retries. */
 void CandidateCoverage(const std::filesystem::path& output, const std::string& mode)
 {
@@ -1041,6 +1067,7 @@ void CandidateCoverage(const std::filesystem::path& output, const std::string& m
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
             std::make_unique<N5cPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE,
             deadline ? InputPolicy::SELECTIVE : InputPolicy::EAGER);
+        if (residualAuditEnabled) controller.EnableResidualDeadlineAudit({1});
         auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
         std::vector<std::pair<uint32_t,uint64_t>> held;
         auto block = [&](uint32_t node) {
@@ -1524,6 +1551,7 @@ int main(int argc, char** argv)
     command.AddValue("outputDir", "Controlled evidence directory", output);
     bool onlyInputAdmission = false;
     command.AddValue("onlyInputAdmission", "Run the SER online optional INPUT fixture only", onlyInputAdmission);
+    command.AddValue("residualAudit", "Enable passive candidate diagnostics in controlled fixtures", residualAuditEnabled);
     command.Parse(argc, argv);
     try
     {
@@ -1531,6 +1559,7 @@ int main(int argc, char** argv)
                true);
         if (onlyInputAdmission) { std::cout << "input admission online: PASS (" << checks << " checks)\n"; return 0; }
         Storage();
+        ResidualModelMinimum();
         for (const auto& mode : {"first", "deadline", "storage", "all-deadline", "all-storage",
                                  "fixed-local", "no-benefit", "fallback-hit"})
             CandidateCoverage(std::filesystem::path(output) / (std::string("candidate-coverage-") + mode), mode);

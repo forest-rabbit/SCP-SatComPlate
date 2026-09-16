@@ -1,0 +1,78 @@
+{
+  "status": "PASS",
+  "development_only": true,
+  "semantic_equivalence": {
+    "status": "PASS",
+    "identical_files": 38,
+    "run_summary": {
+      "status": "PASS",
+      "ignored_fields": [
+        "wall_clock_ns",
+        "wall_clock_s"
+      ]
+    }
+  },
+  "preserved_historical_files": 10048,
+  "summary": {
+    "label": "Stage 2B passive residual deadline development",
+    "tasks": 800,
+    "completed": 785,
+    "failed_task_ids": [
+      5,
+      12,
+      13,
+      120,
+      193,
+      244,
+      259,
+      300,
+      302,
+      304,
+      334,
+      513,
+      548,
+      584,
+      766
+    ],
+    "failure_reasons": {
+      "COMPUTE_DEADLINE_EXCEEDED": 14,
+      "COMPUTE_SATELLITE_FAILURE": 1
+    },
+    "extra_sent_bytes": 88209594488,
+    "proactive_lifetime_sent_bytes": 83857120946,
+    "recovery_sent_bytes": 4352473542,
+    "total_network_sent_bytes": 378932460551,
+    "fault_to_catch_ms": {
+      "count": 72,
+      "sum": 37774.029675000005,
+      "p50": 161.70715,
+      "p90": 1447.7509242999993,
+      "max": 3999.649138,
+      "mean": 524.6393010416668
+    },
+    "primary_fault_catch_cohort": 80,
+    "no_observed_catch": 8,
+    "paths": {
+      "RECOMPUTE": 14,
+      "TAIL": 62,
+      "REMOTE_REDO": 4
+    },
+    "replica_requests": 0,
+    "replica_admitted": 0,
+    "replica_takeovers": 0,
+    "faults": {
+      "F1": 80,
+      "F2": 2,
+      "F3": 1
+    },
+    "mean_link_utilization_percent": 4.134877058019074,
+    "max_link_whole_run_utilization_percent": 11.793195274461539,
+    "status": "PASS",
+    "normal_protection_eq_wu": 484260.0,
+    "reserved_idle_eq_wu": 3534325.4198000003,
+    "task_execution_waste_wu": 5372000,
+    "w_waste_actual": 9390585.419800004,
+    "total_executed_wu": 351169309,
+    "useful_work_wu": 345797309
+  }
+}

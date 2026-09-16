@@ -37,7 +37,8 @@ metrics/
 │   └── capacity-aware-metrics.h / .cc             路径带宽预留结束状态
 └── diagnostics/
     ├── failure-diagnostics.h / .cc                未完成任务、队列和 socket 诊断
-    └── flow-drop-reason-diagnostics.h / .cc       FlowMonitor 丢包原因归因
+    ├── flow-drop-reason-diagnostics.h / .cc       FlowMonitor 丢包原因归因
+    └── residual-deadline-audit.h / .cc           默认关闭的 CompFRR-P 候选 deadline 因果快照
 ```
 
 `MetricsRecorder::Record()` 是运行结束后常规汇总的入口。它先冻结各运行时数据源，

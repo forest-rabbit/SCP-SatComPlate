@@ -1,5 +1,59 @@
 # AGENTS.md
 
+### Active Stage 2B residual deadline audit (2026-09-15)
+
+The user approved Stage 2A and all five review clarifications in
+CompFRR_Stage2A_Closeout_and_Stage2B_Residual_Deadline_Audit_for_Codex.md.
+Continue on fix/compfrr-p-candidate-coverage from clean pushed b69299e6a.
+Stage 2A execution remains development-only; never relabel its original metadata.
+Scope: 11 tasks 5,12,13,193,244,300,302,304,513,584,766 and their actual fixed-local
+candidate decisions. Diagnose TI, minimum resource-feasible model TR, and original
+slack; the normal objective-minimizing solver is NOT a minimum-TR solver. Preserve
+the Deferred layout and all original constraints, SER, RNG, placement and runtime.
+The old trace has 34 OFF search rows but no P-ranking/Selective rows for these
+tasks; missing candidate resources/trajectories are UNKNOWN. A default-off passive
+task-filtered diagnostic may justify ONE same-parameter online generate run11
+(not validation-replay), after logging on/off semantic-equivalence gates.
+Keep model feasibility, initialization, legal prediction lead time, pure hypothetical
+SER, real admission and observed outcome separate. Same-batch fault-hit proposals
+are not actionable prefetch opportunities. No production START/Selective redesign,
+deadline relaxation, source/local change, formal matrix, CI, commit/push/PR/merge.
+Stop after the Stage 2B report for human review.
+The user also accepted a future shared task120 bandwidth-normalized release-time
+scenario (1G -5.76s, 10G unchanged, 100G +0.576s relative to its existing release).
+Record that agreement, but do NOT mix it into the frozen Stage 2B run or old results;
+it needs a separately identified scenario and identical timing for every algorithm.
+
+Stage 2B is COMPLETE, STOP for human review. One passive online generate run11
+finished 1300s in 1183.40 wall seconds. All 38 original data files byte-identical;
+run-summary differs only in two host wall-clock fields. Completion stays 785/800,
+367 START, FT 88.209594 GB, total 9.390585 M eq-WU. 10,048 historical files retain
+size/mtime. Production source stayed frozen, with new untracked diagnostic sources
+included in the saved execution patch; no new performance claim or clean-run label.
+34 decisions / 1857 candidates all classify A; 619 same-batch-hit candidate rows
+are NOT actionable. All 2315 configurations pass storage, TR minimum (10permille,1).
+Six tasks have a non-veto first-risk model-timely witness (5,13,302,304,584,766);
+all eleven have some later positive-mass model-timely sample. Pure unchanged SER
+says SEND only for 193,244,513, none of which has a first-risk timely witness.
+This is model feasibility, NOT evidence that 3/6/11 tasks would be rescued.
+Build, 12191 runtime checks, 649-file old/passive equivalence, config139,
+policy215029, P8574 and Python272 (one skip) pass. The canonical report is
+docs/n5/reviews/CompFRR-1G-residual-deadline-decomposition-stage2b.md.
+No START/Selective fix, scene/task120 change, formal matrix, CI, commit or push.
+The current additions remain uncommitted for review; do not continue automatically.
+
+The user subsequently authorized one pure offline S-vs-historical-N addendum over
+the same 11 tasks and existing snapshots only. It is COMPLETE and STOPPED. Historical
+N is copied exactly from a4315e2b8: Gnet=sum(w*min(Tnet,lead)) versus the same
+(1-PF)*Tser strict threshold, with native integer TransferTimeNs. The 409 fixture
+reproduces network S=68/N=115 plus 4 LocalDelivery, and all 818 archived S/N runtime
+rows match. Across 1238 non-veto residual candidate snapshots, S=N exactly: 457 SEND
+candidates belonging only to tasks 193,244,513; N adds zero candidate/task. With TI
+diagnostically zeroed, all 457 existing SEND candidates have an unchanged-model
+feasible config, while N-new feasibility is zero because there are no additions.
+For this residual cohort retain S; do not reintroduce N or implement policy-aware
+START without new approval. No ns-3 run or production edit occurred in this addendum.
+
 ### Active Stage 2A candidate coverage (2026-09-15)
 
 Stage 1 passed human review. The user authorized only fixed-local CompFRR-P

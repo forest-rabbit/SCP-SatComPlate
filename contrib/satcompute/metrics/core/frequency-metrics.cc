@@ -47,6 +47,7 @@ const char* Action(FrequencyAction action)
 void FrequencyProtectionController::WriteDecisions(const std::filesystem::path& directory) const
 {
     std::filesystem::create_directories(directory);
+    WriteResidualDeadlineAudit(directory);
     if (m_placementObservation) m_placementObservation->Write(directory);
     std::ofstream out(directory / "frequency-decisions.csv");
     out.exceptions(std::ios::badbit | std::ios::failbit);

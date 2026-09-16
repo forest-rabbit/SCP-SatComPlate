@@ -128,6 +128,21 @@ void RegisterProtectionOptions(CommandLine& command, ProtectionConfig& c,
     });
     add("compfrr-shadow-output", "Shadow directory; empty uses outputDir/shadow",
         [&](const auto& v) { c.diagnostics.compfrrShadowOutput = v; });
+    add("compfrrResidualDeadlineTasks", "DIAGNOSTIC ONLY: comma-separated positive task IDs; empty disables",
+        [&](const auto& v) {
+            c.diagnostics.residualDeadlineTaskIds.clear();
+            if (v.empty()) return;
+            std::size_t begin = 0;
+            while (true)
+            {
+                const auto end = v.find(',', begin);
+                const auto id = Unsigned<uint64_t>("compfrrResidualDeadlineTasks", v.substr(begin, end - begin));
+                if (!id || !c.diagnostics.residualDeadlineTaskIds.insert(id).second)
+                    Fail("compfrrResidualDeadlineTasks", "IDs must be positive and unique");
+                if (end == std::string::npos) break;
+                begin = end + 1;
+            }
+        });
     if (testInterface)
     {
         add("testBaselinePlacement", "TEST ONLY: private ffp / fa-ffp / lrl / fa-lrl",
@@ -255,5 +270,9 @@ void ValidateProtectionConfig(const ProtectionConfig& c, const ProtectionCliStat
         Fail("compfrr-shadow", "requires off, network tasks and faultMode=generate");
     if (!c.diagnostics.compfrrShadow && !c.diagnostics.compfrrShadowOutput.empty())
         Fail("compfrr-shadow-output", "requires compfrr-shadow=1");
+    if (!c.diagnostics.residualDeadlineTaskIds.empty() &&
+        (!IsAdaptiveProtection(c) || c.compfrr.placementPolicy != PlacementPolicyKind::COMPFRR ||
+         context.topologyOnly || !context.hasTasks || context.faultMode != "generate"))
+        Fail("compfrrResidualDeadlineTasks", "requires adaptive CompFRR-P network tasks with online generate");
 }
 } // namespace ns3::protection

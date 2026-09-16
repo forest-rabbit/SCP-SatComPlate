@@ -702,6 +702,7 @@ main(int argc, char* argv[])
                     config.protection.common.backupStorageBytesPerNode, simulationDurationNs,
                     makePlacement(), config.protection.compfrr.recoveryPolicy,
                     config.protection.compfrr.inputPolicy, true);
+                frequency->EnableResidualDeadlineAudit(config.protection.diagnostics.residualDeadlineTaskIds);
             }
             else if (config.protection.scheme == protection::ProtectionScheme::CB_SAT)
             {

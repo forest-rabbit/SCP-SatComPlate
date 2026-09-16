@@ -49,7 +49,8 @@ def audit(root, *, allow_development=False):
     scheme = identity['protection_mode']
     require(outcome['returncode'] == 0 and outcome['status'] == 'FINISHED', 'incomplete execution')
     if identity['worktree_dirty']:
-        require(allow_development and identity['stage'] == 'candidate-coverage-development' and
+        require(allow_development and identity['stage'] in
+                ('candidate-coverage-development', 'residual-deadline-development') and
                 identity.get('development_only') is True and
                 (root/'source-diff.patch').is_file() and (root/'source-diff.patch').stat().st_size > 0,
                 'dirty execution is not an explicitly recorded development audit')
@@ -58,7 +59,8 @@ def audit(root, *, allow_development=False):
     require(len(tasks) == len(ts) and all(t['final_state'] in ('COMPLETED', 'FAILED') for t in ts), 'invalid terminals')
     terminals = Counter(e['task_id'] for e in rows(root, 'task-events.csv') if e['to_state'] in ('COMPLETED', 'FAILED'))
     require(terminals == Counter({k: 1 for k in tasks}), 'logical terminal duplication')
-    if identity['stage'] in ('multitree-comparison-run11', 'multitree-comparison', 'candidate-coverage-development'):
+    if identity['stage'] in ('multitree-comparison-run11', 'multitree-comparison',
+                             'candidate-coverage-development', 'residual-deadline-development'):
         require((len(ts), run['total_input_bytes'], run['total_output_bytes'], run['total_compute_work_units'],
                  run['compute_node_count'], run['simulation_duration_ns']) ==
                 (800, 194119753287, 100166291859, 352513119, 66, 1300*NS), 'canonical scene changed')

@@ -92,6 +92,13 @@ int main()
         Check(LegacyPlacementVariant(Parse({"--protectionScheme=compfrr", "--compfrrPlacementPolicy=compfrr",
             "--compfrrPressureModel=idle-aware"}).compfrr) == "rational-U");
         Check(Parse({"--protectionScheme=off", "--compfrr-shadow=1"}).diagnostics.compfrrShadow);
+        Check(Parse({"--compfrrResidualDeadlineTasks=12,120"}).diagnostics.residualDeadlineTaskIds ==
+              std::set<uint64_t>{12,120});
+        Check(Parse({}).diagnostics.residualDeadlineTaskIds.empty());
+        for (const auto* ids : {"0", "12,12", "12,", ",12", "abc", "-1"})
+            Reject([&] { Parse({std::string("--compfrrResidualDeadlineTasks=") + ids}); });
+        Reject([] { Parse({"--protectionScheme=recompute", "--compfrrResidualDeadlineTasks=12"}); });
+        Reject([] { Parse({"--compfrrPlacementPolicy=fa-ffp", "--compfrrResidualDeadlineTasks=12"}); });
         for (const auto* scheme : {"off", "recompute", "one-plus-one", "cb-sat"})
             Reject([&] { Parse({std::string("--protectionScheme=")+scheme, "--compfrrInputPolicy=eager"}); });
         for (const auto* input : {"deferred", "selective"})

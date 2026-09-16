@@ -397,6 +397,7 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
             ++row.pairHardChecked;
             ++coverage.checked;
             row.proposal = m_policy.Evaluate(row.input);
+            if (m_residualAuditTasks.contains(row.taskId)) RecordResidualDeadlineAudit(row);
             const auto& reason = row.proposal.reason;
             const bool hardRejected = reason == "STORAGE_INFEASIBLE" ||
                 reason == "DEADLINE_INFEASIBLE" || reason == "INITIALIZATION_TOO_LATE";

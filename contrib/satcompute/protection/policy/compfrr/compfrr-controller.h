@@ -12,6 +12,7 @@
 #include "input/selective-input-snapshot.h"
 #include "input/input-admission-policy.h"
 #include "../../mechanism/input-staging/input-staging-manager.h"
+#include "../../../metrics/diagnostics/residual-deadline-audit.h"
 
 #include <filesystem>
 #include <set>
@@ -79,6 +80,9 @@ class CompFrrController : public ProtectionPolicy
     /** Write only decision/prediction audit, not actual metrics. */
     void WriteDecisions(const std::filesystem::path& directory) const;
     void WriteInputAdmissionAudit(const std::filesystem::path& directory) const;
+    /** Default-off passive task filter; never enables any protection action. */
+    void EnableResidualDeadlineAudit(std::set<uint64_t> tasks) { m_residualAuditTasks = std::move(tasks); }
+    void WriteResidualDeadlineAudit(const std::filesystem::path& directory) const;
     const InputStagingManager* OptionalInput() const { return m_optionalInput.get(); }
     const auto& InputAdmissions() const { return m_inputAdmissions; }
     const PlacementLoadLedger& PlacementLoads() const { return m_loads; }
@@ -179,6 +183,7 @@ class CompFrrController : public ProtectionPolicy
                                     const std::string& trigger, DecisionPathSnapshot& paths);
     bool RevalidateN5c(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
     SelectiveInputSnapshot CaptureSelectiveInput(const FrequencyDecisionRecord& row, int64_t timeNs) const;
+    void RecordResidualDeadlineAudit(const FrequencyDecisionRecord& row);
     ///< Read-only snapshots immediately before mechanism execution, not initialization completion.
     ///< Adapt actual placement, legal inventory, pools, rates and paths.
     Ptr<TaskCoordinator> m_tasks;                     ///< Business lifecycle owner.
@@ -195,6 +200,8 @@ class CompFrrController : public ProtectionPolicy
     std::unique_ptr<RecoveryController> m_recovery;   ///< Reused N5A recovery.
     std::map<uint64_t, State> m_states;               ///< Per-primary frequency lifecycle.
     std::vector<FrequencyDecisionRecord> m_decisions; ///< Proposal/resolution audit.
+    std::set<uint64_t> m_residualAuditTasks; ///< Empty in normal runs.
+    std::vector<ResidualDeadlineAuditRecord> m_residualAudit; ///< No flow, quota or event ownership.
     std::vector<PauseInterval> m_pauses;               ///< Actual committed PAUSE intervals.
     std::set<uint64_t> m_waitingCapacity; ///< OFF waiting for first protection admission.
     std::set<uint64_t> m_pausedCapacity; ///< ON paused only for transient path capacity.

@@ -94,6 +94,7 @@ build_lib(
     metrics/core/replica-metrics.cc
     metrics/core/recovery-metrics.cc
     metrics/core/frequency-metrics.cc
+    metrics/diagnostics/residual-deadline-audit.cc
     metrics/core/protection-metrics.cc
     tools/validation/compfrr-shadow/compfrr-shadow-model.cc
     tools/validation/compfrr-shadow/compfrr-shadow-evaluator.cc
@@ -186,6 +187,7 @@ build_lib(
     protection/runtime/protection-runtime.h
     protection/policy/fixed/fixed-protection-policy.h
     protection/policy/compfrr/frequency/compfrr-frequency-policy.h
+    metrics/diagnostics/residual-deadline-audit.h
     protection/policy/compfrr/frequency/frequency-decision-gate.h
     protection/policy/compfrr/placement/n5c-placement-policy.h
     protection/policy/compfrr/placement/compfrr-placement-policy.h

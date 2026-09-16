@@ -214,6 +214,16 @@ recovery smoke 另外比较 generate/验收回放、验证重复结果及 fixed 
 
 ## Unit
 
+Stage 2B 的 `test_residual_deadline_audit.py` 检查 A–D/UNKNOWN、预测窗口、初始化、
+同批次 veto 与提前 INPUT 的模型下界；`satcompute-frequency-runtime-test --residualAudit=1`
+仅增加候选诊断 JSON，用于和默认关闭的运行逐文件比较。正常平台不自动输出该文件。
+离线入口 `integration/regression/audit-residual-deadline.py` 复核旧证据与语义等价后生成
+11 任务分解；`run-residual-deadline-development.py` 是须明确授权的单次 run11 采集，
+不是 CI/默认测试，不覆盖已有目录、不启动矩阵。模型最小恢复代价不等于真实恢复保证。
+纯离线 `audit-residual-selective-s-vs-n.py` 复用历史 N 的 native NET-ready 公式，
+只比较既有 residual 非 veto 快照；`test_residual_selective_sn_audit.py` 用冻结 409 条锚点
+验证网络 S=68/N=115、严格比较、整数传输时间及 task/candidate 汇总，不恢复 N 的生产入口。
+
 `unit/run-cpp-tests.sh` 按固定顺序运行以下普通 executable：
 
 | 文件 | 主要覆盖 |

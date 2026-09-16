@@ -6,6 +6,7 @@
 #include "policy/compfrr/placement/compute-pressure/compute-pressure.h"
 #include <cstdint>
 #include <string>
+#include <set>
 
 namespace ns3::protection
 {
@@ -51,6 +52,7 @@ struct ProtectionDiagnosticsConfig
 {
     bool compfrrShadow; ///< 独立只读观察器，只能在真实保护 off 时启用。
     std::string compfrrShadowOutput; ///< 空时使用 outputDir/shadow。
+    std::set<uint64_t> residualDeadlineTaskIds; ///< 空集合关闭；只读 candidate 诊断，不参与策略。
 };
 /** 唯一配置 owner；不持有任何仿真资源或 controller。 */
 struct ProtectionConfig

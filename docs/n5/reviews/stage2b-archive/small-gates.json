@@ -1,0 +1,12 @@
+{
+  "previous_fixtures": {
+    "status": "PASS",
+    "identical_files": 649
+  },
+  "passive_equivalence": {
+    "status": "PASS",
+    "identical_files": 649
+  },
+  "additional_diagnostic_files": 9,
+  "status": "PASS"
+}

@@ -77,6 +77,9 @@ struct FrequencyCandidate
 /** Exact deterministic lexicographic comparison, with no epsilon objective tie. */
 bool FrequencyCandidateLess(const FrequencyCandidate& a, const FrequencyCandidate& b);
 
+/** Existing analytical recovery term, shared with read-only diagnostics; no INPUT cost. */
+double FrequencyRecoverySeconds(const FrequencyInput& input, FrequencyConfiguration config);
+
 enum class FrequencyAction
 {
     NONE,   ///< Not a decision phase or OFF without a beneficial feasible START.

@@ -106,6 +106,15 @@ bool FrequencyCandidateLess(const FrequencyCandidate& a, const FrequencyCandidat
            std::tie(b.objective, b.config.deltaPermille, b.config.batchN);
 }
 
+double FrequencyRecoverySeconds(const FrequencyInput& in, FrequencyConfiguration config)
+{
+    const auto n = config.batchN;
+    const double delta = config.deltaPermille / 1000.0;
+    const double cR = in.costs.remoteNs / 1e9;
+    return in.variableBytes * (n - 1) * delta / (2 * in.backupBandwidth) +
+           cR * (n - 1) / n + in.work * delta / (2 * in.recoveryRate);
+}
+
 FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) const
 {
     FrequencyDecision out;
@@ -151,9 +160,7 @@ FrequencyDecision CompFrrFrequencyPolicy::Evaluate(const FrequencyInput& in) con
             for (uint32_t n = 1; n <= 100 && n * d <= 1000; ++n)
             {
                 const double delta = d / 1000.0;
-                const double recovery =
-                    in.variableBytes * (n - 1) * delta / (2 * in.backupBandwidth) +
-                    cR * (n - 1) / n + in.work * delta / (2 * in.recoveryRate);
+                const double recovery = FrequencyRecoverySeconds(in, {d, n});
                 if (!std::isfinite(recovery))
                     throw std::invalid_argument("frequency recovery estimate overflow");
                 if (faultInput + recovery > out.deadlineSlackSeconds)

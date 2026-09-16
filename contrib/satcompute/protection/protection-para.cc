@@ -38,6 +38,7 @@ ProtectionConfig GetDefaultProtectionConfig()
     // 独立诊断：默认关闭，不建立真实保护。
     config.diagnostics.compfrrShadow = false;
     config.diagnostics.compfrrShadowOutput = "";
+    config.diagnostics.residualDeadlineTaskIds = {};
     return config;
 }
 } // namespace ns3::protection
