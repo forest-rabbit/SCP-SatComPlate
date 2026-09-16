@@ -31,7 +31,7 @@ def normalized_json(value, directory):
 
 
 def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_retired_input_snapshot=False,
-            allow_placement_rename=False):
+            allow_placement_rename=False, allow_retired_recent_fixture=False):
     legacy = runpy.run_path(str(ROOT / 'contrib/satcompute/tests/support/protection/historical_placement.py'))
     def key(path):
         return legacy['canonical_gate_path'](path) if allow_placement_rename else path
@@ -45,6 +45,12 @@ def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_re
         return result
     left_files, right_files = files(reference), files(candidate)
     expected, actual = set(left_files), set(right_files)
+    retired_recent = {p for p in expected if p.parts[:2] ==
+                      ('frequency', 'online-compfrr-placement-recent-U')}
+    if allow_retired_recent_fixture:
+        if not retired_recent or retired_recent & actual:
+            raise AssertionError('reference must have the retired fixture and candidate must omit it entirely')
+        expected -= retired_recent
     audit_files = {p for p in expected - actual if p.name == 'input-start-snapshots.json'}
     if allow_retired_input_snapshot:
         if not audit_files:
@@ -88,6 +94,8 @@ def compare(reference, candidate, *, allow_cb_profile_relocation=False, allow_re
     result = {'status': 'PASS', 'files': len(expected), 'csv': sum(p.suffix == '.csv' for p in expected)}
     if allow_placement_rename:
         result['placement_rename_only'] = True
+    if allow_retired_recent_fixture:
+        result['removed_recent_fixture_files'] = len(retired_recent)
     if allow_retired_input_snapshot:
         result['removed_development_snapshot_files'] = len(audit_files)
     if allow_cb_profile_relocation:
@@ -151,6 +159,8 @@ def main():
     parser.add_argument('--compare-only', action='store_true')
     parser.add_argument('--allow-placement-rename', action='store_true',
                         help='Only exact canonical placement filename/identity/reason substitutions')
+    parser.add_argument('--allow-retired-recent-fixture', action='store_true',
+                        help='Allow only removal of frequency/online-compfrr-placement-recent-U; compare every other output')
     parser.add_argument('--allow-retired-input-snapshot', action='store_true',
                         help='Allow only removal of the retired development JSON; compare all production output')
     parser.add_argument('--allow-cb-profile-relocation', action='store_true',
@@ -170,7 +180,8 @@ def main():
     result = compare(args.reference.resolve(), output,
                      allow_cb_profile_relocation=args.allow_cb_profile_relocation,
                      allow_retired_input_snapshot=args.allow_retired_input_snapshot,
-                     allow_placement_rename=args.allow_placement_rename) if args.reference else {
+                     allow_placement_rename=args.allow_placement_rename,
+                     allow_retired_recent_fixture=args.allow_retired_recent_fixture) if args.reference else {
         'status': 'BASELINE_CAPTURED', 'root': str(output)}
     print(json.dumps(result, sort_keys=True))
 

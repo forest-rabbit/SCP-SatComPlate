@@ -240,7 +240,7 @@ def main():
     choice.add_argument("--fixtures",type=Path,help="Only audit maintained small runtime fixtures")
     args = parser.parse_args()
     if args.fixtures:
-        groups = ["online-compfrr-placement","online-compfrr-placement-deferred","online-compfrr-placement-recent-U","online-compfrr-placement-rational-U"] + [f"compfrr-placement-boundary-{mode}-{case}"
+        groups = ["online-compfrr-placement","online-compfrr-placement-deferred","online-compfrr-placement-rational-U"] + [f"compfrr-placement-boundary-{mode}-{case}"
                   for mode in ("eager","deferred") for case in ("normal","hit","race")]
         results = {name:spatial(args.fixtures/name) for name in groups}
         require(all(r["proposals"] > 0 for r in results.values()),"vacuous spatial fixture")

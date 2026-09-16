@@ -53,7 +53,6 @@ CompFrrPlacementVariant ParseCompFrrPlacementVariant(const std::string& name)
     if (name == "noR") return CompFrrPlacementVariant::NO_R;
     if (name == "noU") return CompFrrPlacementVariant::NO_U;
     if (name == "noM") return CompFrrPlacementVariant::NO_M;
-    if (name == "recent-U") return CompFrrPlacementVariant::RECENT_U;
     if (name == "rational-U") return CompFrrPlacementVariant::RATIONAL_U;
     throw std::invalid_argument("unknown CompFRR-P ablation");
 }
@@ -65,7 +64,6 @@ const char* CompFrrPlacementVariantName(CompFrrPlacementVariant v)
     case CompFrrPlacementVariant::NO_R: return "noR";
     case CompFrrPlacementVariant::NO_U: return "noU";
     case CompFrrPlacementVariant::NO_M: return "noM";
-    case CompFrrPlacementVariant::RECENT_U: return "recent-U";
     case CompFrrPlacementVariant::RATIONAL_U: return "rational-U";
     }
     throw std::invalid_argument("invalid CompFRR-P variant");
@@ -139,10 +137,6 @@ CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& c, CompFrrPlacementVa
     Require(busy <= c.exposureNs, "CompFRR-P execution exceeds survival exposure");
     out.historyUnavailable = c.exposureNs == 0;
     out.historicalUtilization = CumulativeComputePressure(busy, c.exposureNs);
-    const auto recentBusy = Add(c.recentNormalBusyNs, c.recentRecoveryBusyNs);
-    Require(recentBusy <= c.recentExposureNs, "CompFRR-P recent execution exceeds live exposure");
-    out.recentUtilization = c.recentExposureNs ? static_cast<double>(recentBusy) / c.recentExposureNs : 0;
-    if (variant == CompFrrPlacementVariant::RECENT_U) out.historyUnavailable = c.recentExposureNs == 0;
     if (variant == CompFrrPlacementVariant::RATIONAL_U)
         out.rationalPressure = IdleAwareComputePressure(out.historicalUtilization,
                                                   c.historyHorizonNs, c.continuousIdleNs);
@@ -181,8 +175,7 @@ CompFrrScore ScoreCompFrrCandidate(const CompFrrCandidate& c, CompFrrPlacementVa
     const std::vector<std::pair<const char*, double>> dimensions{
         {"RECOVERY_CONFLICT", variant == CompFrrPlacementVariant::NO_R ? -1 : out.recoveryConflict},
         {"COMPUTE_HISTORY", variant == CompFrrPlacementVariant::NO_U ? -1 :
-            (variant == CompFrrPlacementVariant::RECENT_U ? out.recentUtilization :
-             variant == CompFrrPlacementVariant::RATIONAL_U ? out.rationalPressure : out.historicalUtilization)},
+            (variant == CompFrrPlacementVariant::RATIONAL_U ? out.rationalPressure : out.historicalUtilization)},
         {"STORAGE", variant == CompFrrPlacementVariant::NO_M ? -1 : out.storagePressure}};
     out.bottleneck = -1;
     for (const auto& [name, value] : dimensions)

@@ -1,5 +1,19 @@
 # AGENTS.md
 
+### N5 release closeout (2026-09-16)
+
+The user approved the canonical closeout and explicitly authorized integration,
+tagging and safe branch cleanup. Integrate the current policy-aware chain into n5,
+then n5 into main through PRs after the stage CI; create annotated n5-complete on
+the final main merge. Never overwrite an existing tag. No new formal simulation
+matrix or N6 work is authorized. Preserve original execution evidence and the dirty
+Stage 2B worktree at SCP-SatComPlate; do not reset or silently fold its edits in.
+RECENT_U runtime/enum/scoring/CSV writer and active fixture are now removed.
+Its launcher is retired; shared historical identity helpers and read-only evidence
+analysis remain, not an executable policy. Only CUMULATIVE and IDLE_AWARE are formal
+compute-pressure policies; noR/noU/noM are ablations. This supersedes older
+instructions to retain the recent-U implementation or stop before publication.
+
 ### Active Stage 2A candidate coverage (2026-09-15)
 
 Stage 1 passed human review. The user authorized only fixed-local CompFRR-P

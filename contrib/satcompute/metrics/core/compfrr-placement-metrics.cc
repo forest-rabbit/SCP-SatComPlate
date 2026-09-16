@@ -48,27 +48,6 @@ void CompFrrPlacementTracker::Write(const std::filesystem::path& directory) cons
         }
     }
     }
-    if (m_spatialDiagnostics && m_variant == CompFrrPlacementVariant::RECENT_U)
-    {
-        std::ofstream recent(directory / "compfrr-recent-u-history.csv");
-        recent.exceptions(std::ios::failbit | std::ios::badbit);
-        recent << std::setprecision(17);
-        recent << "decision_id,task_id,time_ns,candidate_node,horizon_ns,window_begin_ns,window_end_ns,"
-                  "normal_busy_ns,recovery_busy_ns,exposure_ns,cumulative_utilization,recent_utilization,"
-                  "history_unavailable\n";
-        for (size_t index = 0; index < m_decisions.size(); ++index)
-        {
-            const auto& t = m_decisions[index];
-            for (const auto& c : t.candidates)
-                recent << index << ',' << t.taskId << ',' << t.timeNs << ',' << c.remoteNode << ','
-                    << c.historyHorizonNs << ',' << c.historyWindowBeginNs << ',' << c.historyWindowEndNs << ','
-                    << c.recentNormalBusyNs << ',' << c.recentRecoveryBusyNs << ',' << c.recentExposureNs << ','
-                    << (c.exposureNs ? static_cast<double>(c.normalBusyNs + c.recoveryBusyNs) / c.exposureNs : 0)
-                    << ',' << (c.recentExposureNs ?
-                        static_cast<double>(c.recentNormalBusyNs + c.recentRecoveryBusyNs) / c.recentExposureNs : 0)
-                    << ',' << (c.recentExposureNs == 0) << '\n';
-        }
-    }
     if (m_spatialDiagnostics && m_variant == CompFrrPlacementVariant::RATIONAL_U)
     {
         std::ofstream rational(directory / "compfrr-rational-u-history.csv");

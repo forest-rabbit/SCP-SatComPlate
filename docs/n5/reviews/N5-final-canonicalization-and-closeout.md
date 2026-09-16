@@ -1,6 +1,7 @@
 # N5 canonical closeout：CompFRR-P
 
-状态：**READY_FOR_MAIN_MERGE / STOP_FOR_HUMAN_REVIEW**（本地技术门禁通过；未执行推送、PR、远端 CI、合并或分支删除）。
+状态：**LOCAL_GATES_PASS / RELEASE_IN_PROGRESS**。2026-09-16 人工通过收口审阅，
+授权删除 recent-U 运行实现、阶段 CI、经 n5 合入 main、创建 `n5-complete` 和安全清理分支。
 
 ## 执行身份与范围
 
@@ -40,7 +41,7 @@ READY / IN_FLIGHT 设置 `recoveryInputSeconds=0`；FETCH 不设置 override，�
 | N5C_POST_BATCH_* / N5C_NO_FEASIBLE_REMOTE | COMPFRR_P_POST_BATCH_* / COMPFRR_P_NO_FEASIBLE_REMOTE |
 | metrics/core/n5c-placement-metrics.cc | metrics/core/compfrr-placement-metrics.cc |
 | n5c-placement-decisions.csv | compfrr-placement-decisions.csv |
-| n5c-{recent,rational}-u-history.csv | compfrr-{recent,rational}-u-history.csv |
+| n5c-{recent,rational}-u-history.csv | compfrr-{recent,rational}-u-history.csv（recent writer 后续已退役） |
 | satcompute-n5c-placement-test | satcompute-compfrr-placement-test |
 | tests/unit/n5c-placement-test.cc | tests/unit/compfrr-placement-test.cc |
 
@@ -62,8 +63,8 @@ READY / IN_FLIGHT 设置 `recoveryInputSeconds=0`；FETCH 不设置 override，�
 
 - 唯一 START / (δ,n) solver、SER `U_ser_pot > 1-P_F`、candidate coverage、fixed-local、
   anchor 后固定配置/P ranking、START/ON 分工未改。
-- CUMULATIVE / IDLE_AWARE 并列正式 policy；noR/noU/noM 为消融，RECENT_U 仅历史，
-  enum 成员、计算公式及默认值不变。
+- CUMULATIVE / IDLE_AWARE 并列正式 policy；noR/noU/noM 为消融，保留方案公式及默认值不变。
+  原 rename 保留的 RECENT_U 已按后续人工决定物理移除，见下方专项 gate。
 - `max(R,U,M)`、传播时延/稳定 ID tie-break、资源/路径硬约束、所有 baseline 能力不变。
 - INPUT runtime、维护、恢复/relocation、同纳秒 fault batch、Storage/WU/bytes 记账不变。
 - 场景和 para 默认未改：800 tasks、194,119,753,287 input bytes、352,513,119 WU。
@@ -97,6 +98,20 @@ READY / IN_FLIGHT 设置 `recoveryInputSeconds=0`；FETCH 不设置 override，�
 consistency 修复前的 smoke 捕获与开发探针保留在同一 gate 目录，失败探针不作为验收结果。
 曾遇到 ccache 临时目录权限限制，以 `CCACHE_DISABLE=1` 绕过；最终 build/test 已完成。
 运行中的 binary 重新链接曾使并行 CLI 检查短暂不可执行；最终 Python 门禁在 build 完成后重跑通过。
+
+### recent-U 退役 gate（2026-09-16）
+
+删除 RECENT_U enum / 解析 / 评分、专用窗口资源字段与采样、CSV writer、Online fixture 和
+`run-n5c-recent-u.py`。依赖扫描确认 Rational-U 历史审计仍使用身份/等价工具，先抽入
+`tests/support/protection/historical_recent_evidence.py` 并迁移调用者；此 helper 无执行入口。
+共享 compute history 仍用于 Cumulative/Idle-Aware 的服务核对和空闲时长，不删除。
+旧结果与只读分析器未修改；所有删除内容可从 Git 历史恢复。
+
+build、完整维护 C++ 链、290 项 Python unit（1 项可选轨道切片跳过）通过；
+P 公式/约束 8,568 checks、小型 placement 审计 9 组 / 12 次 proposal 通过。
+与 `post-rename` 原证据相比，`recent-retired` 小门禁比较 **2,078 文件 / 1,819 CSV** 全部相等，
+只允许原 `frequency/online-compfrr-placement-recent-U/` 的 18 份文件整体消失。
+新增负面测试拒绝其余文件缺失、字节/时刻变化、空 reference 或部分保留的废弃 fixture。
 
 ## 9. Policy-aware / P consistency：CONSISTENT
 
@@ -166,6 +181,7 @@ LocalDelivery、FETCH/refetch、IN_FLIGHT unknown remaining 均由 focused test 
 - `contrib/satcompute/tests/support/protection/historical_config_arguments.py`
 - `contrib/satcompute/tests/support/protection/historical_placement.py`
 - `contrib/satcompute/tests/support/protection/historical_scenario.py`
+- `contrib/satcompute/tests/support/protection/historical_recent_evidence.py`
 
 ### 历史审计/runner：保留既有调用者、source guard 和旧报告结构；不是当前正式入口。
 
@@ -183,7 +199,6 @@ LocalDelivery、FETCH/refetch、IN_FLIGHT unknown remaining 均由 focused test 
 - `contrib/satcompute/tests/integration/regression/run-n5c-placement.py`
 - `contrib/satcompute/tests/integration/regression/run-n5c-rational-multirun.py`
 - `contrib/satcompute/tests/integration/regression/run-n5c-rational-u.py`
-- `contrib/satcompute/tests/integration/regression/run-n5c-recent-u.py`
 - `contrib/satcompute/tests/integration/regression/run-n5c-u-audit.py`
 - `contrib/satcompute/tests/integration/regression/run-pre-n5c-placement-matrix.py`
 - `contrib/satcompute/tests/integration/regression/run-recovery-deadline-reruns.py`
@@ -218,8 +233,9 @@ LocalDelivery、FETCH/refetch、IN_FLIGHT unknown remaining 均由 focused test 
 - `src/lte/doc/source/figures/mac-random-access-contention.pdf`
 - `src/traffic-control/examples/fqcodel-l4s-example.cc`
 
-## STOP gate
+## 发布 gate
 
-已完成独立 fix、canonical rename 和小门禁。没有推送/合并 main、更新 PR、删除分支、
-刷新正式性能矩阵或进入后续算法阶段。保留独立提交供人工审阅；
-`READY_FOR_MAIN_MERGE` 是本地验收结论，不代替远端 CI 或人工合并授权。
+人工 STOP 审阅已通过。按当前链 → n5 → main 发布，阶段 CI 通过后创建 annotated
+`n5-complete`；不重跑完整 5/10 Gbps，不进入 N6/N7。
+工作树清理必须先保全 ignored 证据；原 `SCP-SatComPlate` 的 Stage 2B 未提交内容另行保留，
+不能因提交祖先已经合入而一并删除。PR、CI、tag 凭据在实际完成后补记。

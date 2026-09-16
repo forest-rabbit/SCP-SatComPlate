@@ -75,7 +75,7 @@ python contrib/satcompute/tests/integration/regression/run-protection-equivalenc
 [最终 INPUT 报告](../../../docs/n5/reviews/CompFRR-input-binary-admission-runtime.md)，
 完整删除清单见[仓库收口](../../../docs/n5/reviews/INPUT-final-repository-closeout.md)。
 通用 accounting、baseline、placement、risk/scenario helpers 保留，正常运行不自动做离线统计。
-recent-U 不在 production CLI；历史分析/fixture 保留。日常 CI 只运行本目录维护测试。
+recent-U 的运行实现与执行 fixture 已删除；历史结果只读分析保留。日常 CI 只运行本目录维护测试。
 
 ## 历史专项与目录索引
 

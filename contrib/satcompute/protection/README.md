@@ -5,7 +5,8 @@ CompFRR-F 负责是否保护和频率，CompFRR-P 负责固定配置后的 remot
 计算服务和存储账本，Baseline 按自己的能力合同接入。Routing 不属于保护算法开关。
 
 N5R 基于已修复的 n5（PR #102）整理架构，不改当前场景、故障随机流、数学公式、时序或外部指标。
-正式 compute-pressure 仅 CUMULATIVE 与 IDLE_AWARE；noU 是消融，recent-U 仅保留历史依赖。
+正式 compute-pressure 仅 CUMULATIVE 与 IDLE_AWARE；noU 是消融。recent-U 的运行实现、
+专用输出和执行 fixture 已删除，仅保留旧结果的只读解析与历史证据。
 进展与逐阶段等价 gate 见 [N5R 执行记录](../../../docs/n5/reviews/N5R-implementation.md)。
 
 ## 阅读入口

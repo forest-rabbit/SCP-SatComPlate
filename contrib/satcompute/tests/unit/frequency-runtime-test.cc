@@ -758,12 +758,11 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
         engine->BindTaskCoordinator(tasks);
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
             spatial ? std::unique_ptr<PlacementPolicy>(std::make_unique<CompFrrPlacementPolicy>(
-                mode == "compfrr-placement-recent-U" ? CompFrrPlacementVariant::RECENT_U :
                 mode == "compfrr-placement-rational-U" ? CompFrrPlacementVariant::RATIONAL_U : CompFrrPlacementVariant::FULL)) :
             mode == "lrl-two" ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
                                : std::unique_ptr<PlacementPolicy>{}, RemoteBusyRecoveryPolicy::RELOCATE,
             selective ? InputPolicy::SELECTIVE :
-            (mode == "compfrr-placement-deferred" || mode == "compfrr-placement-recent-U" || mode == "compfrr-placement-rational-U") ?
+            (mode == "compfrr-placement-deferred" || mode == "compfrr-placement-rational-U") ?
                 InputPolicy::DEFERRED : InputPolicy::EAGER);
         if (mode == "f3")
         {
@@ -1672,7 +1671,6 @@ int main(int argc, char** argv)
                         InputPolicy::SELECTIVE, "normal", true, probe);
         Online(std::filesystem::path(output) / "online-compfrr-placement", "compfrr-placement");
         Online(std::filesystem::path(output) / "online-compfrr-placement-deferred", "compfrr-placement-deferred");
-        Online(std::filesystem::path(output) / "online-compfrr-placement-recent-U", "compfrr-placement-recent-U");
         Online(std::filesystem::path(output) / "online-compfrr-placement-rational-U", "compfrr-placement-rational-U");
         for (bool minimal : {false, true})
             for (bool lrl : {false, true})

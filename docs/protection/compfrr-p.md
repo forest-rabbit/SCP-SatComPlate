@@ -12,7 +12,7 @@ production compute-pressure 仅有两种，默认不变：
 
 `compfrrPlacementAblation=noR|noU|noM` 保留为 cumulative 下的 ablation capability，
 默认 none；只关闭对应评分项，仍记录原值并保留硬约束。
-noU 不是第三种 U policy；`recent-U` 已从正式 CLI 移除，历史 API/证据见[归档口径](reproducibility.md)。
+noU 不是第三种 U policy；`recent-U` 的运行实现已删除，历史证据见[归档口径](reproducibility.md)。
 
 | 文件 | 职责 |
 |---|---|

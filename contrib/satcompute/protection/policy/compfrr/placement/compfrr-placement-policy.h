@@ -11,7 +11,7 @@
 namespace ns3::protection
 {
 /** Only the ranking dimensions change in ablations; all hard constraints remain. */
-enum class CompFrrPlacementVariant { FULL, NO_R, NO_U, NO_M, RECENT_U, RATIONAL_U };
+enum class CompFrrPlacementVariant { FULL, NO_R, NO_U, NO_M, RATIONAL_U };
 CompFrrPlacementVariant ParseCompFrrPlacementVariant(const std::string& name);
 const char* CompFrrPlacementVariantName(CompFrrPlacementVariant variant);
 
@@ -51,7 +51,6 @@ struct CompFrrScore
     uint32_t remoteNode{};
     bool feasible{}, historyUnavailable{}, noPredictedDemand{};
     double recoveryConflict{}, historicalUtilization{}, storagePressure{}, bottleneck{};
-    double recentUtilization{}; ///< Used only by RECENT_U; cumulative U keeps its original meaning.
     double rationalPressure{}; ///< RATIONAL_U only; not a replacement for measured utilization.
     double demandProbability{}, weightedConflict{}, catchSeconds{}, budgetSeconds{};
     int64_t propagationNs{};

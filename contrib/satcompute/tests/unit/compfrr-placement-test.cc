@@ -159,9 +159,10 @@ void Quotas()
     Check(ledger.Empty() && ledger.Accounted(10, actual) == 150, "release preserves recovery objects");
     ledger.Replace(1, 10, std::numeric_limits<uint64_t>::max());
     Reject([&] { ledger.Accounted(10, actual); });
-    for (const auto name : {"full", "noR", "noU", "noM", "recent-U", "rational-U"})
+    for (const auto name : {"full", "noR", "noU", "noM", "rational-U"})
         Check(std::string(CompFrrPlacementVariantName(ParseCompFrrPlacementVariant(name))) == name, "variant roundtrip");
     Reject([] { ParseCompFrrPlacementVariant("weighted"); });
+    Reject([] { ParseCompFrrPlacementVariant("recent-U"); });
     Check(CompFrrPlacementPolicy(ComputePressurePolicy::CUMULATIVE).Variant() == CompFrrPlacementVariant::FULL,
           "formal CUMULATIVE must preserve full compatibility entry");
     Check(CompFrrPlacementPolicy(ComputePressurePolicy::IDLE_AWARE).Variant() == CompFrrPlacementVariant::RATIONAL_U,
@@ -268,7 +269,7 @@ void RecoveryObservation()
     service->DisconnectStateObserver(MakeCallback(&Callbacks::State, &callbacks));
     Simulator::Destroy();
 }
-void RecentHistory()
+void ComputeHistory()
 {
     using A = ComputeUsageHistory::Activity;
     ComputeUsageHistory history;
@@ -304,26 +305,10 @@ void RecentHistory()
     Reject([&] { history.Query(10, 0, 80, 80, 20); });
     history.Observe(10, 100, A::IDLE);
     Reject([&] { history.Observe(10, 99, A::IDLE); });
-    auto oldBusy = Candidate(10), recentBusy = Candidate(11);
+    auto oldBusy = Candidate(10), idle = Candidate(11);
     oldBusy.normalBusyNs = 8 * S;
-    oldBusy.recentExposureNs = recentBusy.recentExposureNs = S;
-    recentBusy.recentNormalBusyNs = S / 2;
-    Check(CompFrrPlacementPolicy().SelectRemote({oldBusy, recentBusy}).remoteNode == 11,
+    Check(CompFrrPlacementPolicy().SelectRemote({oldBusy, idle}).remoteNode == 11,
           "FULL cumulative ranking changed");
-    Check(CompFrrPlacementPolicy(CompFrrPlacementVariant::RECENT_U).SelectRemote({oldBusy, recentBusy}).remoteNode == 10,
-          "recent-U did not distinguish old load from recent load");
-    auto score = ScoreCompFrrCandidate(oldBusy, CompFrrPlacementVariant::RECENT_U);
-    Near(score.historicalUtilization, .8, "recent-U overwrote cumulative diagnostic");
-    Near(score.recentUtilization, 0, "recent idle candidate has nonzero recent U");
-    oldBusy.peers = {Forecast(2, 2)};
-    Near(ScoreCompFrrCandidate(oldBusy, CompFrrPlacementVariant::RECENT_U).bottleneck, .5,
-         "recent-U removed the R dimension");
-    oldBusy.additionalQuotaBytes = 1001;
-    Check(!ScoreCompFrrCandidate(oldBusy, CompFrrPlacementVariant::RECENT_U).feasible,
-          "recent-U bypassed hard storage feasibility");
-    oldBusy = Candidate(10);
-    Check(ScoreCompFrrCandidate(oldBusy, CompFrrPlacementVariant::RECENT_U).historyUnavailable,
-          "zero-length window needs explicit unavailable diagnostic");
 }
 void RationalHistory()
 {
@@ -392,7 +377,7 @@ int main()
 {
     try
     {
-        Formula(); Conflict(); Ranking(); Quotas(); ObservationAndGate(); RecoveryObservation(); RecentHistory(); RationalHistory();
+        Formula(); Conflict(); Ranking(); Quotas(); ObservationAndGate(); RecoveryObservation(); ComputeHistory(); RationalHistory();
         std::cout << "CompFRR-P V4: " << checks << " invariant checks passed\n";
     }
     catch (const std::exception& e)

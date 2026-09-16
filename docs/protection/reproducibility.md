@@ -144,7 +144,10 @@ identity/reason，不豁免数值、列结构、事件顺序或生命周期差�
   完成 15 组 corrected U 验证。当前比较以该链为基础；旧结果只有维护轨迹与完整资源账本等价才可复用。
   completion 相同或没有 pause 后故障都不构成等价证明。
 - [RECENT_U](../n5/reviews/N5C-recent-U-evaluation.md) 是已停止的历史实验。
-  正式 CLI 拒绝 `recent-U`；历史 enum、fixture、CSV 字段和分析入口存在真实依赖，暂不物理删除。
+  N5 收口已删除其 enum、评分分支、专用资源快照/CSV 写出、执行 fixture 和实验启动脚本。
+  依赖扫描后将旧身份/等价检查抽入 `tests/support/protection/historical_recent_evidence.py`，
+  历史分析器继续只读已有结果，不提供 recent-U 仿真入口。公共计算区间账本仍被
+  cumulative/idle-aware 使用，不能作为 recent-U 私有实现删除。
   部分输出不能作为完成的性能证据。noU 仅为消融，不成为第三种正式 pressure。
 - JIT/V7 保留在原实验分支，不进入 N5R。旧正式 runner 的冻结提交/source guard 仍有效；
   不为方便重跑而放宽它，也不在 N5R 自动启动历史矩阵。正式刷新留待 N6/N7 单独批准。

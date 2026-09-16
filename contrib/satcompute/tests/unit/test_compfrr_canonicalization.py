@@ -14,6 +14,20 @@ LEGACY = runpy.run_path(str(SUPPORT / 'historical_placement.py'))
 
 
 class CanonicalPlacementTests(unittest.TestCase):
+    def test_recent_policy_has_no_runtime_implementation_or_launcher(self):
+        for directory in ('protection', 'metrics'):
+            for path in (MODULE / directory).rglob('*'):
+                if path.suffix not in ('.h', '.cc'):
+                    continue
+                with self.subTest(path=str(path.relative_to(MODULE))):
+                    for retired in ('RECENT_U', 'recentUtilization', 'recentNormalBusyNs',
+                                    'recentRecoveryBusyNs', 'recentExposureNs', 'recent-u-history.csv'):
+                        self.assertNotIn(retired, path.read_text())
+        self.assertFalse((MODULE / 'tests/integration/regression/run-n5c-recent-u.py').exists())
+        history = runpy.run_path(str(SUPPORT / 'historical_recent_evidence.py'))
+        self.assertTrue({'arguments', 'verify', 'references', 'equivalent'} <= history.keys())
+        self.assertTrue({'execute', 'prepare', 'gates', 'main', 'subprocess'}.isdisjoint(history))
+
     def test_no_stage_identity_in_owned_production_sources(self):
         files = [MODULE / 'satcompute.cc', MODULE / 'CMakeLists.txt']
         for directory in ('protection', 'metrics'):
