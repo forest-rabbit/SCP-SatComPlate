@@ -78,6 +78,12 @@ Fixed 和三个完整 baseline 保留 none/generate/validation-replay 执行能�
 `--compfrrCheckpointPolicy=fixed --compfrrPlacementPolicy=fa-ffp --compfrrInputPolicy=eager`；
 不能让 Adaptive 的 P/Selective 默认值扩展 Fixed 能力。历史 runner 显式恢复原默认，不重解释旧实验。
 
+Selective 的 START 准入顺序为：对当前 candidate 做无副作用的 SER 判定，再将 SEND 映射为
+`fault-time INPUT term = 0`、DEFER 映射为完整 INPUT 重取时间，并执行原 Frequency 硬约束。
+CompFRR-P 选定 actual remote 后必须用该 pair 重新判定和重验；只有 checkpoint 真正准入后才创建
+proactive INPUT。这里的 0 只是 START 的 policy-aware 假设，故障恢复仍以真实 READY / IN_FLIGHT /
+refetch 状态为准，物理预取失败不会回滚 checkpoint。
+
 | 完整 baseline | canonical private placement | INPUT/恢复私有合同 |
 |---|---|---|
 | Recompute | FA-FFP | 故障后获取完整 INPUT，从零重算；无常态 checkpoint |

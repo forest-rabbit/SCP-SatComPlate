@@ -29,6 +29,32 @@ struct CompFrrCandidateCoverage
     bool allInfeasible{}; ///< No hard-feasible remote in the fixed-local set (or empty set).
 };
 
+/** Pure candidate-specific Selective result plus the exact START admission term. */
+struct PolicyAwareInputPlan
+{
+    SelectiveInputSnapshot snapshot;
+    InputAdmissionDecision decision;
+    double legacyFaultInputSeconds{};
+    double admissionSeconds{};
+};
+
+/** Additive audit only; it never participates in selection or runtime accounting. */
+struct PolicyAwareInputAdmissionRecord
+{
+    uint64_t taskId{};
+    int64_t timeNs{};
+    std::string trigger, stage;
+    uint32_t local{}, remote{};
+    uint64_t candidateIndex{};
+    InputAdmissionDecision selective;
+    double predictedFailureProbability{};
+    double legacyFaultInputSeconds{}, admissionSeconds{};
+    std::string legacyFrequencyReason, policyAwareFrequencyReason;
+    bool legacyDeadlineFeasible{}, policyAwareDeadlineFeasible{}, rescuedByPolicyAwareInput{};
+    bool anchor{}, finalPair{}, finalPairRevalidated{}, faultHitSameBatch{}, startCommitted{};
+    std::optional<bool> runtimePrefetchAdmissionSuccess;
+};
+
 /** Proposal and observed resolution; never included in actual cost accounting. */
 struct FrequencyDecisionRecord
 {
@@ -57,6 +83,12 @@ struct FrequencyDecisionRecord
     std::optional<size_t> n5cTrace; ///< START-only spatial proposal; no solver call per remote.
     std::optional<uint64_t> n5cPeak; ///< Total replacement quota, captured before physical admission.
     std::optional<CompFrrCandidateCoverage> candidateCoverage; ///< P OFF only; no new policy state.
+    int64_t selectiveRemainingNs{};
+    int64_t selectiveFirstSampleNs{};
+    bool selectiveFinishExclusive{};
+    std::optional<ComputeFailurePrediction> selectivePrediction;
+    std::optional<PolicyAwareInputPlan> policyAwareInputPlan;
+    std::vector<PolicyAwareInputAdmissionRecord> policyAwareInputAudits;
 };
 
 /** Online generate integration. Owns no fault model, RNG, state bytes or second network. */
@@ -178,7 +210,18 @@ class CompFrrController : public ProtectionPolicy
     std::vector<CompFrrForecast> N5cPeers(uint32_t remote, uint64_t excluded,
                                     const std::string& trigger, DecisionPathSnapshot& paths);
     bool RevalidateN5c(FrequencyDecisionRecord& row, const TaskRuntime& task, State& state);
-    SelectiveInputSnapshot CaptureSelectiveInput(const FrequencyDecisionRecord& row, int64_t timeNs) const;
+    void PrepareSelectivePrediction(FrequencyDecisionRecord& row, uint32_t primary, int64_t remainingNs) const;
+    PolicyAwareInputPlan EvaluateSelectiveDryRun(const FrequencyDecisionRecord& row,
+                                                 const TaskRuntime& task,
+                                                 PlacementDecision pair,
+                                                 DecisionPathSnapshot& paths) const;
+    static void ApplyPolicyAwareInput(FrequencyInput& input, const PolicyAwareInputPlan& plan);
+    static PolicyAwareInputAdmissionRecord MakePolicyAwareAudit(
+        const FrequencyDecisionRecord& row,
+        const PolicyAwareInputPlan& plan,
+        const FrequencyDecision& decision,
+        const std::string& stage,
+        uint64_t candidateIndex);
     ///< Read-only snapshots immediately before mechanism execution, not initialization completion.
     ///< Adapt actual placement, legal inventory, pools, rates and paths.
     Ptr<TaskCoordinator> m_tasks;                     ///< Business lifecycle owner.

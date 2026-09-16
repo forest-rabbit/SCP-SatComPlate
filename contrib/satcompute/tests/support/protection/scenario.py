@@ -11,6 +11,55 @@ import runpy
 ROOT = Path(__file__).resolve().parents[5]
 SCENE = "contrib/satcompute/input/experiments/leo-66"
 CONFIG_ARGUMENTS = runpy.run_path(str(Path(__file__).with_name('config_arguments.py')))
+CONTROLLED_F3_TASK_ID = 120
+REFERENCE_ISL_BANDWIDTH_BPS = 10_000_000_000
+
+
+def _serialization_ns(byte_count, bandwidth_bps):
+    if type(byte_count) is not int or byte_count < 0:
+        raise ValueError("byte count must be a nonnegative integer")
+    if type(bandwidth_bps) is not int or bandwidth_bps <= 0:
+        raise ValueError("ISL bandwidth must be a positive integer")
+    bits_ns = byte_count * 8 * 1_000_000_000
+    return (bits_ns + bandwidth_bps - 1) // bandwidth_bps
+
+
+def bandwidth_normalized_task_trace(destination, bandwidth_bps):
+    """Materialize a derived trace with task 120 aligned to its 10 Gbps phase.
+
+    This explicit experiment-scene transformation never mutates the frozen input.
+    Propagation cancels between bandwidths; nominal serialization uses integer ceil.
+    Every non-controlled task and every non-arrival field remain unchanged.
+    """
+    source = ROOT / SCENE / "workload/task-trace.json"
+    data = json.loads(source.read_text())
+    matches = [task for task in data["tasks"] if task["task_id"] == CONTROLLED_F3_TASK_ID]
+    if len(matches) != 1:
+        raise ValueError("controlled F3 task identity changed")
+    task = matches[0]
+    reference_arrival_ns = task["arrival_time_ns"]
+    reference_serialization_ns = _serialization_ns(task["input_bytes"], REFERENCE_ISL_BANDWIDTH_BPS)
+    target_serialization_ns = _serialization_ns(task["input_bytes"], bandwidth_bps)
+    task["arrival_time_ns"] = reference_arrival_ns - (
+        target_serialization_ns - reference_serialization_ns
+    )
+    if task["arrival_time_ns"] < 0:
+        raise ValueError("bandwidth normalization places task before simulation start")
+    destination = Path(destination)
+    if destination.exists():
+        raise ValueError("refusing to overwrite bandwidth-normalized task trace")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(data, indent=2) + "\n")
+    return {
+        "task_id": CONTROLLED_F3_TASK_ID,
+        "reference_bandwidth_bps": REFERENCE_ISL_BANDWIDTH_BPS,
+        "target_bandwidth_bps": bandwidth_bps,
+        "reference_arrival_time_ns": reference_arrival_ns,
+        "normalized_arrival_time_ns": task["arrival_time_ns"],
+        "reference_serialization_ns": reference_serialization_ns,
+        "target_serialization_ns": target_serialization_ns,
+        "task_trace": str(destination),
+    }
 
 
 def canonical_input_arguments(argv):

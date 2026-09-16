@@ -661,7 +661,8 @@ main(int argc, char* argv[])
                 std::filesystem::remove(outputDirectory / name);
             protection::checkbullet::CbSatController::RemoveOutputs(outputDirectory);
             for (const auto name : {"input-admission-decisions.csv", "input-prefetch-events.csv",
-                                    "input-prefetch-summary.json", "input-start-snapshots.json"})
+                                    "input-prefetch-summary.json", "input-start-snapshots.json",
+                                    "compfrr-policy-aware-admission.csv"})
                 std::filesystem::remove(outputDirectory / name);
             for (const auto name : {"replica-summary.csv", "replica-attempts.csv", "replica-events.csv", "replica-transfers.csv"})
                 std::filesystem::remove(outputDirectory / name);

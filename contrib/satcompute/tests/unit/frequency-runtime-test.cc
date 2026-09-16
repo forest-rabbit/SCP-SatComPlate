@@ -941,7 +941,8 @@ void Online(const std::filesystem::path& output, const std::string& mode = "norm
     Reset();
 }
 /** Force a different actual remote, then test readonly proposal, quota race and ON resource use. */
-void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging, const std::string& mode)
+void N5cBoundary(const std::filesystem::path& output, InputPolicy inputPolicy,
+                 const std::string& mode, bool reverseSelectivePair = false)
 {
     RngSeedManager::SetSeed(1); RngSeedManager::SetRun(11);
     {
@@ -952,7 +953,9 @@ void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging
         topology.Initialize();
         auto tasks = CreateObject<TaskCoordinator>();
         auto definition = Definition(TaskProfile::LLM);
-        definition.sourceNodeId = 4; // Legal LocalDelivery on the selected actual remote.
+        // Normal Selective: anchor network DEFER -> actual LocalDelivery SEND.
+        // Reverse Selective: anchor LocalDelivery SEND -> actual network DEFER.
+        definition.sourceNodeId = reverseSelectivePair ? 0 : 4;
         tasks->Initialize(ComputeProfile{{{0,125000},{2,100000},{3,100000},{4,100000}}},
             TaskTrace{{definition}}, topology, "size-aware", 1024, cfg.parameters.islMtuBytes,
             cfg.parameters.receiverRcvBufBytes, false, END);
@@ -967,12 +970,13 @@ void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging
         engine->BindTaskCoordinator(tasks);
         FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
             std::make_unique<N5cPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE,
-            staging == InputStagingPolicy::EAGER ? InputPolicy::EAGER : InputPolicy::DEFERRED);
+            inputPolicy);
         auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
         const auto held = manager.Pool(0).TryReserve(999, StorageKind::INIT_TEMP, 4000000000ULL);
         Check(held.has_value(), "test pressure reservation failed");
         Driver driver{controller, tasks, executor, F1SelfStateFaultModel(GetDefaultFaultParameters().f1), mode};
         std::optional<uint64_t> race;
+        std::optional<uint64_t> inputStorageBlock;
         driver.betweenProposalAndResolution = [&](const auto& row) {
             if (row.input.phase != ProtectionPhase::OFF) return;
             Check(row.n5cTrace && row.pair->localNode == 2 && row.pair->remoteNode == 4 &&
@@ -983,15 +987,65 @@ void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging
             Check(!trace.committed, "readonly candidate created actual ownership");
             if (mode == "race")
                 race = manager.Pool(4).TryReserve(998, StorageKind::INIT_TEMP, manager.Pool(4).Free());
+            if (mode == "prefetch-reject")
+            {
+                Check(inputPolicy == InputPolicy::SELECTIVE && row.policyAwareInputPlan &&
+                          row.policyAwareInputPlan->decision.send && row.n5cPeak && *row.n5cPeak > 0,
+                      "prefetch rejection fixture requires a policy-aware SEND and remote quota");
+                auto& pool = manager.Pool(row.pair->remoteNode);
+                Check(pool.Free() > *row.n5cPeak,
+                      "prefetch rejection fixture lacks independent storage headroom");
+                inputStorageBlock = pool.TryReserve(
+                    998, StorageKind::INIT_TEMP, pool.Free() - *row.n5cPeak);
+                Check(inputStorageBlock.has_value(), "prefetch rejection storage blocker missing");
+            }
         };
         Simulator::Schedule(NanoSeconds(200000000), [&] {
             driver.Epoch(.4, mode == "hit");
             const auto& row = controller.Decisions().back();
-            Check(row.committed == (mode == "normal"), "post-batch hit/quota admission mismatch");
-            if (mode != "normal") Check(manager.Summaries().empty(), "rejected START allocated state");
+            const bool successfulStart = mode == "normal" || mode == "prefetch-reject";
+            Check(row.committed == successfulStart, "post-batch hit/quota admission mismatch");
+            if (!successfulStart) Check(manager.Summaries().empty(), "rejected START allocated state");
+            if (successfulStart && inputPolicy == InputPolicy::SELECTIVE)
+            {
+                const auto anchor = std::find_if(row.policyAwareInputAudits.begin(),
+                    row.policyAwareInputAudits.end(), [](const auto& audit) {
+                        return audit.stage == "ANCHOR_SEARCH" && audit.anchor;
+                    });
+                const auto final = std::find_if(row.policyAwareInputAudits.begin(),
+                    row.policyAwareInputAudits.end(), [](const auto& audit) {
+                        return audit.stage == "FINAL_REVALIDATION" && audit.finalPair;
+                    });
+                Check(anchor != row.policyAwareInputAudits.end() &&
+                          final != row.policyAwareInputAudits.end() &&
+                          anchor->remote == 0 && final->remote == 4 && final->finalPairRevalidated,
+                      "actual pair did not receive its own Selective dry-run/revalidation");
+                Check(anchor->selective.send == reverseSelectivePair &&
+                          final->selective.send != reverseSelectivePair &&
+                          final->admissionSeconds == (reverseSelectivePair
+                              ? final->legacyFaultInputSeconds : 0),
+                      "actual pair inherited the anchor INPUT decision");
+                Check(controller.InputAdmissions().size() == 1 &&
+                          controller.InputAdmissions().front().first.pair.remoteNode == 4 &&
+                          controller.InputAdmissions().front().second.send != reverseSelectivePair,
+                      "committed START did not retain the final actual-pair decision");
+                if (mode == "prefetch-reject")
+                {
+                    const auto inventory = manager.Inventory(1);
+                    const auto& input = controller.OptionalInput()->Records().at(1);
+                    Check(inventory && inventory->active && input.state == OptionalInputState::ABSENT &&
+                              input.reason == "STORAGE_NOT_ADMITTED" && !input.flow &&
+                              final->runtimePrefetchAdmissionSuccess == std::optional(false),
+                          "failed physical prefetch rolled back checkpoint or lost fallback telemetry");
+                }
+                else
+                    Check(controller.OptionalInput()->Records().size() ==
+                              static_cast<size_t>(!reverseSelectivePair),
+                          "DEFER created a flow or SEND omitted LocalDelivery");
+            }
         });
         Simulator::Schedule(NanoSeconds(400000000), [&] {
-            if (mode != "normal") return;
+            if (mode != "normal" && mode != "prefetch-reject") return;
             const auto count = controller.N5c()->Decisions().size();
             Check(manager.Inventory(1)->initialized, "N5C initialization never became physically ready");
             driver.Epoch(.5);
@@ -1005,6 +1059,7 @@ void N5cBoundary(const std::filesystem::path& output, InputStagingPolicy staging
         Simulator::Run();
         manager.Pool(0).ReleaseReservation(*held);
         if (race) manager.Pool(4).ReleaseReservation(*race);
+        if (inputStorageBlock) manager.Pool(4).ReleaseReservation(*inputStorageBlock);
         controller.Finalize(); engine->Finalize();
         Check(controller.N5c()->QuotasEmpty() && manager.IsQuiescent(), "N5C quota/storage leaked");
         controller.WriteDecisions(output);
@@ -1534,10 +1589,16 @@ int main(int argc, char** argv)
         for (const auto& mode : {"first", "deadline", "storage", "all-deadline", "all-storage",
                                  "fixed-local", "no-benefit", "fallback-hit"})
             CandidateCoverage(std::filesystem::path(output) / (std::string("candidate-coverage-") + mode), mode);
-        for (auto staging : {InputStagingPolicy::EAGER, InputStagingPolicy::DEFERRED})
+        for (auto inputPolicy : {InputPolicy::EAGER, InputPolicy::DEFERRED})
             for (const auto& mode : {"normal", "hit", "race"})
                 N5cBoundary(std::filesystem::path(output) / (std::string("n5c-boundary-") +
-                    (staging == InputStagingPolicy::EAGER ? "eager-" : "deferred-") + mode), staging, mode);
+                    (inputPolicy == InputPolicy::EAGER ? "eager-" : "deferred-") + mode), inputPolicy, mode);
+        N5cBoundary(std::filesystem::path(output) / "n5c-boundary-selective-anchor-defer",
+                    InputPolicy::SELECTIVE, "normal");
+        N5cBoundary(std::filesystem::path(output) / "n5c-boundary-selective-anchor-send",
+                    InputPolicy::SELECTIVE, "normal", true);
+        N5cBoundary(std::filesystem::path(output) / "n5c-boundary-selective-prefetch-reject",
+                    InputPolicy::SELECTIVE, "prefetch-reject");
         Online(std::filesystem::path(output) / "online-n5c", "n5c");
         Online(std::filesystem::path(output) / "online-n5c-deferred", "n5c-deferred");
         Online(std::filesystem::path(output) / "online-n5c-recent-U", "n5c-recent-U");

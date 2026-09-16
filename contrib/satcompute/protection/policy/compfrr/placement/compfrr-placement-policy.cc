@@ -34,6 +34,9 @@ void Validate(const CompFrrForecast& f)
             f.config.deltaPermille >= 10 && f.config.deltaPermille <= 100 &&
             f.config.batchN && f.config.batchN <= 1000 / f.config.deltaPermille &&
             in.costs.remoteNs >= 0, "invalid N5C forecast domain");
+    if (f.recoveryInputSeconds)
+        Require(std::isfinite(*f.recoveryInputSeconds) && *f.recoveryInputSeconds >= 0,
+                "invalid policy-aware N5C INPUT term");
 }
 double Remaining(const CompFrrForecast& f, int64_t at)
 {
@@ -73,8 +76,10 @@ double CompFrrCatchSeconds(const CompFrrForecast& f)
     Validate(f);
     const auto& in = f.input;
     const double d = f.config.deltaPermille / 1000.0, n = f.config.batchN;
-    const double input = in.inputPolicy == InputStagingPolicy::DEFERRED && !f.inputLocal
+    const double legacyInput = in.inputPolicy == InputStagingPolicy::DEFERRED && !f.inputLocal
         ? in.inputBytes / in.inputBandwidth : 0;
+    const double input = f.recoveryInputSeconds.value_or(legacyInput);
+    Require(input <= legacyInput, "policy-aware N5C INPUT term exceeds legacy replay term");
     return input + in.variableBytes * (n - 1) * d / (2 * in.backupBandwidth) +
         (in.costs.remoteNs / 1e9) * (n - 1) / n + in.work * d / (2 * in.recoveryRate);
 }

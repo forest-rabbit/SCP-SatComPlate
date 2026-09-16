@@ -98,9 +98,12 @@ void CompFrrController::SelectN5cRemote(
     const auto primary = Service(task.definition.computeNodeId)->GetRunningTaskSnapshot();
     if (!primary || primary->taskId != row.taskId || primary->remainingTimeNs < 0)
         throw std::logic_error("N5C missing current primary remaining compute time");
+    std::map<uint32_t, PolicyAwareInputPlan> selectivePlans;
+    uint64_t candidateIndex = 0;
     for (const auto& pair : pairs)
     {
         if (pair.localNode != trace.reference.localNode) continue;
+        ++candidateIndex;
         auto actual = row;
         actual.pair = pair;
         actual.resourceReason.clear();
@@ -113,6 +116,12 @@ void CompFrrController::SelectN5cRemote(
             candidate.rejection = "NODE_UNAVAILABLE";
         else
         {
+            if (m_optionalInput)
+            {
+                auto plan = EvaluateSelectiveDryRun(actual, task, pair, paths);
+                ApplyPolicyAwareInput(actual.input, plan);
+                selectivePlans.emplace(pair.remoteNode, std::move(plan));
+            }
             const auto storage = actual.input.storageDemand(trace.config);
             if (!storage || storage->localAdditionalBytes > actual.input.localFreeBytes)
                 candidate.rejection = "LOCAL_STORAGE_INFEASIBLE";
@@ -121,6 +130,8 @@ void CompFrrController::SelectN5cRemote(
         candidate.demand = {row.taskId, task.definition.computeNodeId, PlacementInput(actual.input), trace.config,
                             0, actual.input.pathAvailable,
                             task.definition.sourceNodeId == pair.remoteNode};
+        if (const auto plan = selectivePlans.find(pair.remoteNode); plan != selectivePlans.end())
+            candidate.demand.recoveryInputSeconds = plan->second.admissionSeconds;
         if (candidate.rejection.empty())
         {
             candidate.demand.readyAfterNs = ReadyAfter(actual.input);
@@ -128,6 +139,35 @@ void CompFrrController::SelectN5cRemote(
                 candidate.rejection = "INITIALIZATION_TOO_LATE";
             candidate.propagationNs = paths.Get(task.definition.computeNodeId, pair.remoteNode).propagationNs;
             candidate.peers = N5cPeers(pair.remoteNode, row.taskId, row.trigger, paths);
+        }
+        if (const auto plan = selectivePlans.find(pair.remoteNode); plan != selectivePlans.end())
+        {
+            PolicyAwareInputAdmissionRecord audit;
+            audit.taskId = row.taskId;
+            audit.timeNs = row.input.risk.epochNs;
+            audit.trigger = row.trigger;
+            audit.stage = "P_RANKING";
+            audit.local = pair.localNode;
+            audit.remote = pair.remoteNode;
+            audit.candidateIndex = candidateIndex;
+            audit.selective = plan->second.decision;
+            audit.predictedFailureProbability = plan->second.snapshot.prediction
+                ? plan->second.snapshot.prediction->predictedFailureProbability : 0;
+            audit.legacyFaultInputSeconds = plan->second.legacyFaultInputSeconds;
+            audit.admissionSeconds = plan->second.admissionSeconds;
+            auto legacyDemand = candidate.demand;
+            legacyDemand.recoveryInputSeconds.reset();
+            audit.legacyDeadlineFeasible =
+                CompFrrCatchSeconds(legacyDemand) <= CompFrrBudgetSeconds(legacyDemand, trace.timeNs);
+            audit.policyAwareDeadlineFeasible =
+                CompFrrCatchSeconds(candidate.demand) <= CompFrrBudgetSeconds(candidate.demand, trace.timeNs);
+            audit.rescuedByPolicyAwareInput = !audit.legacyDeadlineFeasible &&
+                                             audit.policyAwareDeadlineFeasible;
+            audit.legacyFrequencyReason = audit.legacyDeadlineFeasible
+                ? "P_HARD_FEASIBLE" : "DEADLINE_INFEASIBLE";
+            audit.policyAwareFrequencyReason = audit.policyAwareDeadlineFeasible
+                ? "P_HARD_FEASIBLE" : "DEADLINE_INFEASIBLE";
+            row.policyAwareInputAudits.push_back(std::move(audit));
         }
         trace.candidates.push_back(std::move(candidate));
     }
@@ -140,6 +180,17 @@ void CompFrrController::SelectN5cRemote(
         row.n5cPeak = m_n5c->PeakFor(selected->remoteNode, row.taskId, selected->additionalQuotaBytes);
         row.localLoad = m_loads.Get(row.pair->localNode);
         row.remoteLoad = m_loads.Get(row.pair->remoteNode);
+        if (const auto plan = selectivePlans.find(*trace.selection.remoteNode);
+            plan != selectivePlans.end())
+        {
+            row.policyAwareInputPlan = plan->second;
+            const auto audit = std::find_if(row.policyAwareInputAudits.rbegin(),
+                row.policyAwareInputAudits.rend(), [&](const auto& record) {
+                    return record.stage == "P_RANKING" &&
+                           record.remote == *trace.selection.remoteNode;
+                });
+            if (audit != row.policyAwareInputAudits.rend()) audit->finalPair = true;
+        }
     }
     else
     {
@@ -165,6 +216,15 @@ bool CompFrrController::RevalidateN5c(FrequencyDecisionRecord& row,
         row.resourceReason = actual.resourceReason.empty() ? "N5C_POST_BATCH_NODE_UNAVAILABLE" : actual.resourceReason;
         return false;
     }
+    std::optional<PolicyAwareInputPlan> selective;
+    // Policy-aware INPUT is a START admission contract. ON keeps the existing
+    // checkpoint cadence and its legacy recovery feasibility unchanged.
+    if (m_optionalInput && row.input.phase == ProtectionPhase::OFF)
+    {
+        selective = EvaluateSelectiveDryRun(actual, task, *row.pair, paths);
+        ApplyPolicyAwareInput(actual.input, *selective);
+        row.policyAwareInputPlan = *selective;
+    }
     const auto storage = actual.input.storageDemand(row.proposal.selected->config);
     if (!storage || storage->localAdditionalBytes > actual.input.localFreeBytes)
     {
@@ -180,7 +240,39 @@ bool CompFrrController::RevalidateN5c(FrequencyDecisionRecord& row,
     CompFrrForecast forecast{row.taskId, task.definition.computeNodeId, PlacementInput(actual.input),
                         row.proposal.selected->config, 0, true,
                         task.definition.sourceNodeId == row.pair->remoteNode};
-    if (CompFrrCatchSeconds(forecast) > CompFrrBudgetSeconds(forecast, row.input.risk.epochNs) ||
+    if (selective) forecast.recoveryInputSeconds = selective->admissionSeconds;
+    const auto policyAwareDeadlineFeasible =
+        CompFrrCatchSeconds(forecast) <= CompFrrBudgetSeconds(forecast, row.input.risk.epochNs);
+    if (selective)
+    {
+        auto legacy = forecast;
+        legacy.recoveryInputSeconds.reset();
+        PolicyAwareInputAdmissionRecord audit;
+        audit.taskId = row.taskId;
+        audit.timeNs = row.input.risk.epochNs;
+        audit.trigger = row.trigger;
+        audit.stage = "FINAL_REVALIDATION";
+        audit.local = row.pair->localNode;
+        audit.remote = row.pair->remoteNode;
+        audit.selective = selective->decision;
+        audit.predictedFailureProbability = selective->snapshot.prediction
+            ? selective->snapshot.prediction->predictedFailureProbability : 0;
+        audit.legacyFaultInputSeconds = selective->legacyFaultInputSeconds;
+        audit.admissionSeconds = selective->admissionSeconds;
+        audit.legacyDeadlineFeasible =
+            CompFrrCatchSeconds(legacy) <= CompFrrBudgetSeconds(legacy, row.input.risk.epochNs);
+        audit.policyAwareDeadlineFeasible = policyAwareDeadlineFeasible;
+        audit.rescuedByPolicyAwareInput = !audit.legacyDeadlineFeasible &&
+                                         audit.policyAwareDeadlineFeasible;
+        audit.legacyFrequencyReason = audit.legacyDeadlineFeasible
+            ? "P_HARD_FEASIBLE" : "DEADLINE_INFEASIBLE";
+        audit.policyAwareFrequencyReason = audit.policyAwareDeadlineFeasible
+            ? "P_HARD_FEASIBLE" : "DEADLINE_INFEASIBLE";
+        audit.finalPair = true;
+        audit.finalPairRevalidated = true;
+        row.policyAwareInputAudits.push_back(std::move(audit));
+    }
+    if (!policyAwareDeadlineFeasible ||
         (row.proposal.action == FrequencyAction::START &&
          (ReadyAfter(actual.input) - row.input.risk.epochNs) / 1e9 >= actual.input.remainingSeconds))
     {

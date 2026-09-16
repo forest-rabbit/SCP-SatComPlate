@@ -7,6 +7,7 @@
 #include "../../../common/protection-forecast.h"
 
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace ns3::protection
@@ -51,6 +52,11 @@ struct FrequencyInput
     double recoveryRate{};        ///< Selected FFP recovery candidate WU/s.
     double inputBandwidth{};      ///< Causal INPUT replay bandwidth, bytes/s.
     double backupBandwidth{};     ///< Causal backup/tail bandwidth, bytes/s.
+    /** START hard-admission INPUT term selected by the side-effect-free INPUT policy.
+     * Empty preserves the layout-derived legacy term. It changes neither runtime
+     * dependency truth nor the Frequency objective.
+     */
+    std::optional<double> faultInputAdmissionSeconds;
     double remainingSeconds{};    ///< Actual scheduled remaining primary computation.
     int64_t deadlineNs{};         ///< Original logical deadline, never reset on recovery.
     ProtectionCosts costs{};      ///< Supplied by GetProtectionCosts(Kvar), not another tier table.
@@ -104,6 +110,11 @@ struct FrequencyDecision
     uint64_t feasibleCount{};
     uint64_t deadlineRejected{};
     uint64_t storageRejected{};
+    double legacyFaultInputSeconds{}; ///< Layout-derived full replay term for audit.
+    double admittedFaultInputSeconds{}; ///< Effective hard-admission term.
+    uint64_t legacyFeasibleCount{}; ///< Same candidates under the legacy INPUT term.
+    uint64_t legacyDeadlineRejected{};
+    uint64_t legacyStorageRejected{};
 };
 
 /** CompFRR whether/how-often policy, independent from the validation implementation. */

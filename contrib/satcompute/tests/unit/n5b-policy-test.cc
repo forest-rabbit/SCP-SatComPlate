@@ -407,6 +407,26 @@ void DeferredChecks()
     in.inputPolicy = InputStagingPolicy::DEFERRED;
     in.deadlineNs = 16800000000; // 0.8 s slack: INPUT alone consumes it.
     Check(!CompFrrFrequencyPolicy{}.Evaluate(in).selected, "deferred deadline omitted INPUT wait");
+    const auto legacy = CompFrrFrequencyPolicy{}.Evaluate(in);
+    in.faultInputAdmissionSeconds = 0;
+    const auto rescued = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Check(!legacy.selected && rescued.selected && rescued.legacyFeasibleCount == 0 &&
+              rescued.legacyFaultInputSeconds > 0 && rescued.admittedFaultInputSeconds == 0,
+          "SEND did not remove only the full Deferred replay admission term");
+    in.deadlineNs = 16050000000; // 50 ms slack is below the minimum non-INPUT recovery.
+    const auto impossible = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Check(!impossible.selected && impossible.deadlineRejected,
+          "SEND rescued a genuinely non-INPUT-infeasible configuration");
+    in = Toy();
+    in.inputPolicy = InputStagingPolicy::DEFERRED;
+    const auto unchanged = CompFrrFrequencyPolicy{}.Evaluate(in);
+    in.faultInputAdmissionSeconds = in.inputBytes / in.inputBandwidth;
+    const auto explicitDefer = CompFrrFrequencyPolicy{}.Evaluate(in);
+    Check(unchanged.selected && explicitDefer.selected &&
+              unchanged.selected->config == explicitDefer.selected->config &&
+              unchanged.feasibleCount == explicitDefer.feasibleCount &&
+              unchanged.deadlineRejected == explicitDefer.deadlineRejected,
+          "explicit DEFER changed the legacy Frequency result");
     in = Toy();
     in.inputPolicy = InputStagingPolicy::DEFERRED;
     in.replayAvailable = false;

@@ -264,6 +264,7 @@ bool CompFrrController::BuildResources(FrequencyDecisionRecord& row,
                                                    State& state, DecisionPathSnapshot& paths)
 {
     auto& input = row.input;
+    input.faultInputAdmissionSeconds.reset();
     input.inputPolicy = m_manager.InputPolicy();
     row.pair = row.pair ? row.pair : state.pair ? state.pair
                           : m_placement->SelectCheckpointPair({task.definition.computeNodeId,
@@ -396,7 +397,17 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
                 throw std::logic_error("N5C anchor preview changed within one decision");
             ++row.pairHardChecked;
             ++coverage.checked;
+            std::optional<PolicyAwareInputPlan> selective;
+            if (m_optionalInput)
+            {
+                selective = EvaluateSelectiveDryRun(row, task, pair, paths);
+                ApplyPolicyAwareInput(row.input, *selective);
+            }
             row.proposal = m_policy.Evaluate(row.input);
+            if (selective)
+                row.policyAwareInputAudits.push_back(
+                    MakePolicyAwareAudit(row, *selective, row.proposal,
+                                         "ANCHOR_SEARCH", coverage.checked));
             const auto& reason = row.proposal.reason;
             const bool hardRejected = reason == "STORAGE_INFEASIBLE" ||
                 reason == "DEADLINE_INFEASIBLE" || reason == "INITIALIZATION_TOO_LATE";
@@ -407,6 +418,11 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
             ++row.pairHardFeasible;
             coverage.anchorIndex = coverage.checked;
             coverage.anchorRemote = pair.remoteNode;
+            if (selective)
+            {
+                row.policyAwareInputPlan = *selective;
+                row.policyAwareInputAudits.back().anchor = true;
+            }
             // Feasible but not beneficial remains OFF. Only START invokes the
             // unchanged P ranking, using this anchor's frozen Frequency config.
             if (row.proposal.action == FrequencyAction::START)
@@ -434,7 +450,17 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
             return; // Selected candidate failed actual checks; never try another pair here.
         }
         ++row.pairHardChecked;
+        std::optional<PolicyAwareInputPlan> selective;
+        if (m_optionalInput)
+        {
+            selective = EvaluateSelectiveDryRun(row, task, pair, paths);
+            ApplyPolicyAwareInput(row.input, *selective);
+        }
         row.proposal = m_policy.Evaluate(row.input);
+        if (selective)
+            row.policyAwareInputAudits.push_back(
+                MakePolicyAwareAudit(row, *selective, row.proposal,
+                                     "PAIR_SEARCH", row.pairHardChecked));
         const auto& reason = row.proposal.reason;
         if (reason == "STORAGE_INFEASIBLE") ++row.pairSkipStorage;
         else if (reason == "DEADLINE_INFEASIBLE" || reason == "INITIALIZATION_TOO_LATE")
@@ -442,6 +468,12 @@ void CompFrrController::EvaluateOffPairs(FrequencyDecisionRecord& row,
         else
         {
             ++row.pairHardFeasible;
+            if (selective)
+            {
+                row.policyAwareInputPlan = *selective;
+                row.policyAwareInputAudits.back().anchor = true;
+                row.policyAwareInputAudits.back().finalPair = true;
+            }
             return;
         }
         row.resourceReason = reason == "INITIALIZATION_TOO_LATE" ? "DEADLINE_INFEASIBLE" : reason;
@@ -510,6 +542,8 @@ CompFrrController::Evaluate(const FaultEpochInput& epoch, const std::string& tri
     in.inputBytes = task.definition.inputBytes;
     in.variableBytes = TaskStateAdapter(task.definition).VariableBytes();
     in.costs = GetProtectionCosts(static_cast<uint64_t>(in.variableBytes));
+    if (phase == ProtectionPhase::OFF)
+        PrepareSelectivePrediction(row, epoch.nodeId, epoch.prediction.remainingComputeTimeNs);
     DecisionPathSnapshot paths([this](auto source, auto destination) {
         return m_tasks->GetTransferEngine()->EstimateAdmissiblePath(source, destination);
     });
@@ -571,6 +605,8 @@ void CompFrrController::AfterEpoch(int64_t time,
         }
         row.sampled = outcome.sampled;
         row.faultHit = outcome.faultHit;
+        for (auto& audit : row.policyAwareInputAudits)
+            audit.faultHitSameBatch = outcome.faultHit;
         bool configFeasible = true;
         if (running && !outcome.faultHit && m_n5c &&
             (row.proposal.action == FrequencyAction::START || row.proposal.action == FrequencyAction::UPDATE))
@@ -613,7 +649,7 @@ void CompFrrController::AfterEpoch(int64_t time,
             row.capacityWaitEndNs = time;
         if (row.committed)
         {
-            std::optional<SelectiveInputSnapshot> admittedInput;
+            std::optional<PolicyAwareInputPlan> admittedInput;
             if (row.proposal.action == FrequencyAction::PAUSE)
             {
                 const auto reason = row.resourceReason.empty() ? row.proposal.reason : row.resourceReason;
@@ -636,21 +672,20 @@ void CompFrrController::AfterEpoch(int64_t time,
                 context.attempt = {row.taskId, 0};
                 context.primaryNode = task.definition.computeNodeId;
                 context.nowNs = time;
-                // Freeze before initialization can allocate, transfer or change inventory.
-                const auto snapshot = m_optionalInput
-                    ? std::optional(CaptureSelectiveInput(row, time)) : std::nullopt;
+                // The final actual-pair dry-run is frozen before any physical allocation.
+                const auto plan = m_optionalInput ? row.policyAwareInputPlan : std::nullopt;
                 m_manager.Execute(context,
                                   {ActionKind::START_CHECKPOINT,
                                    CheckpointConfiguration{config->deltaPermille,
                                                            config->batchN,
                                                            state.pair->localNode,
                                                            state.pair->remoteNode}});
-                if (snapshot)
+                if (plan)
                 {
                     const auto inventory = m_manager.Inventory(row.taskId);
                     if (inventory && inventory->active)
                     {
-                        admittedInput = snapshot;
+                        admittedInput = plan;
                     }
                 }
             }
@@ -672,12 +707,24 @@ void CompFrrController::AfterEpoch(int64_t time,
             }
             if (admittedInput && m_optionalInput)
             {
-                const auto& a = *admittedInput;
-                const auto decision = EvaluateSelectiveInputAdmission(
-                    {a.timeNs, a.remainingNs, a.firstSampleNs, a.finishExclusive,
-                     a.task.inputBytes, a.inputPath, a.prediction});
-                m_inputAdmissions.emplace_back(a, decision);
-                if (decision.send) m_optionalInput->Request(a.task, a.pair.remoteNode);
+                const auto& plan = *admittedInput;
+                const auto& a = plan.snapshot;
+                m_inputAdmissions.emplace_back(a, plan.decision);
+                std::optional<bool> prefetchAdmission;
+                if (plan.decision.send)
+                {
+                    m_optionalInput->Request(a.task, a.pair.remoteNode);
+                    const auto record = m_optionalInput->Records().find(a.task.taskId);
+                    prefetchAdmission = record != m_optionalInput->Records().end() &&
+                        record->second.state != OptionalInputState::ABSENT &&
+                        record->second.state != OptionalInputState::FAILED;
+                }
+                for (auto& audit : row.policyAwareInputAudits)
+                    if (audit.finalPair && audit.remote == a.pair.remoteNode)
+                    {
+                        audit.startCommitted = true;
+                        audit.runtimePrefetchAdmissionSuccess = prefetchAdmission;
+                    }
             }
         }
         if (state.stopped)

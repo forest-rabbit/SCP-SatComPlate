@@ -6,6 +6,7 @@
 #include "../../../common/placement-resources.h"
 #include "compute-pressure/compute-pressure.h"
 #include <map>
+#include <optional>
 
 namespace ns3::protection
 {
@@ -24,6 +25,8 @@ struct CompFrrForecast
     int64_t readyAfterNs{}; ///< Strict readiness cutoff, actual or explicitly estimated.
     bool dependenciesAvailable{true};
     bool inputLocal{}; ///< LocalDelivery contributes exactly zero INPUT network time.
+    /** Candidate-specific hard-admission term. Empty preserves the legacy layout term. */
+    std::optional<double> recoveryInputSeconds;
 };
 
 /** First-failure mass and hypothetical resource occupancy [start,end). */
