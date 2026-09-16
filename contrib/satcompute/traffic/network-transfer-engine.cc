@@ -7,8 +7,10 @@
 #include "network-transfer-engine.h"
 
 #include "../routing/routing-policy-factory.h"
-
 #include "ns3/abort.h"
+#include "ns3/ipv4.h"
+#include "ns3/point-to-point-channel.h"
+#include "ns3/satcompute-ipv4-global-routing-helper.h"
 #include "ns3/simulator.h"
 
 #include <algorithm>
@@ -122,7 +124,6 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
                   return left.transferId < right.transferId;
               });
 
-    std::map<uint32_t, uint32_t> nextSourceOrdinal;
     for (uint32_t index = 0; index < plans.size(); ++index)
     {
         NetworkTransfer& plan = plans[index];
@@ -144,13 +145,13 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
         plan.destinationAddress =
             m_topology->GetServiceAddressBySatelliteId(plan.destinationSatelliteId);
         plan.destinationPort = NETWORK_TRANSFER_DESTINATION_PORT;
-        const uint32_t ordinal = nextSourceOrdinal[plan.sourceSatelliteId];
+        const uint32_t ordinal = m_nextSourceOrdinal[plan.sourceSatelliteId];
         NS_ABORT_MSG_IF(ordinal > std::numeric_limits<uint16_t>::max() -
                                       NETWORK_TRANSFER_FIRST_SOURCE_PORT,
                         "one source satellite exhausted the UDP source-port range");
         plan.sourcePort =
             static_cast<uint16_t>(NETWORK_TRANSFER_FIRST_SOURCE_PORT + ordinal);
-        ++nextSourceOrdinal[plan.sourceSatelliteId];
+        ++m_nextSourceOrdinal[plan.sourceSatelliteId];
 
         plan.payloadBytesPerPacket = ResolveNetworkTransferPayloadBytes(
             m_chunkMode,
@@ -182,11 +183,10 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
     m_senders.reserve(m_plans.size());
     m_transferReceivers.reserve(m_plans.size());
 
-    std::map<uint32_t, Ptr<NetworkTransferReceiver>> receiversBySatellite;
     for (const NetworkTransfer& plan : m_plans)
     {
         Ptr<NetworkTransferReceiver>& receiver =
-            receiversBySatellite[plan.destinationSatelliteId];
+            m_receiversBySatellite[plan.destinationSatelliteId];
         if (receiver == nullptr)
         {
             receiver = CreateObject<NetworkTransferReceiver>();
@@ -220,6 +220,310 @@ NetworkTransferEngine::RegisterPlans(std::vector<NetworkTransfer> plans)
         m_senders.push_back(sender);
     }
     m_registered = true;
+}
+
+void
+NetworkTransferEngine::RegisterRuntimePlan(NetworkTransfer plan, bool businessResult)
+{
+    const int64_t now = Simulator::Now().GetNanoSeconds();
+    if (!m_registered || now < 0 || now >= m_simulationDurationNs ||
+        plan.transferId == 0 || m_planIndexes.count(plan.transferId) || plan.sizeBytes == 0 ||
+        plan.sourceSatelliteId == plan.destinationSatelliteId ||
+        !m_topology->HasSatelliteId(plan.sourceSatelliteId) ||
+        !m_topology->HasSatelliteId(plan.destinationSatelliteId) ||
+        m_plans.size() >= std::numeric_limits<uint32_t>::max())
+    {
+        throw NetworkTransferConfigError("invalid runtime transfer registration");
+    }
+    const auto source = m_nextSourceOrdinal.find(plan.sourceSatelliteId);
+    const uint32_t ordinal = source == m_nextSourceOrdinal.end() ? 0 : source->second;
+    if (ordinal > std::numeric_limits<uint16_t>::max() - NETWORK_TRANSFER_FIRST_SOURCE_PORT)
+    {
+        throw NetworkTransferConfigError("runtime transfer exhausted UDP source-port range");
+    }
+    plan.sourceAddress = m_topology->GetServiceAddressBySatelliteId(plan.sourceSatelliteId);
+    plan.destinationAddress = m_topology->GetServiceAddressBySatelliteId(plan.destinationSatelliteId);
+    plan.sourcePort = static_cast<uint16_t>(NETWORK_TRANSFER_FIRST_SOURCE_PORT + ordinal);
+    plan.destinationPort = NETWORK_TRANSFER_DESTINATION_PORT;
+    plan.arrivalTimeNs = -1;
+    plan.payloadBytesPerPacket = ResolveNetworkTransferPayloadBytes(
+        m_chunkMode, m_fixedPayloadBytes, plan.sizeBytes);
+    plan.packetCount = plan.sizeBytes / plan.payloadBytesPerPacket +
+                       (plan.sizeBytes % plan.payloadBytesPerPacket != 0);
+    plan.finalPacketPayloadBytes = plan.sizeBytes % plan.payloadBytesPerPacket == 0
+                                       ? plan.payloadBytesPerPacket
+                                       : plan.sizeBytes % plan.payloadBytesPerPacket;
+
+    auto& receiver = m_receiversBySatellite[plan.destinationSatelliteId];
+    if (receiver == nullptr)
+    {
+        receiver = CreateObject<NetworkTransferReceiver>();
+        receiver->Configure(plan.destinationSatelliteId, plan.destinationAddress,
+                            plan.destinationPort, m_receiverRcvBufBytes, m_collectUdpSocketDrops);
+        receiver->SetCompletionCallback(
+            MakeCallback(&NetworkTransferEngine::HandleTransferComplete, this));
+        m_topology->GetNodeBySatelliteId(plan.destinationSatelliteId)->AddApplication(receiver);
+        receiver->SetStartTime(NanoSeconds(0));
+        receiver->SetStopTime(NanoSeconds(m_simulationDurationNs - now));
+        receiver->AddExpectedTransfer(plan);
+        receiver->Initialize();
+        m_receivers.push_back(receiver);
+    }
+    else
+    {
+        receiver->AddExpectedTransfer(plan);
+    }
+    auto sender = CreateObject<NetworkTransferApplication>();
+    sender->Configure(plan);
+    sender->SetSendCompleteCallback(
+        MakeCallback(&NetworkTransferEngine::HandleSenderComplete, this));
+    m_topology->GetNodeBySatelliteId(plan.sourceSatelliteId)->AddApplication(sender);
+    sender->SetStartTime(NanoSeconds(0));
+    sender->SetStopTime(NanoSeconds(m_simulationDurationNs - now));
+    // Application::DoInitialize schedules relative start/stop delays. Queue startup before
+    // StartTransferNow queues activation, including newly added destination receivers.
+    sender->Initialize();
+    if (m_flowRouteRegistry != nullptr)
+    {
+        m_flowRouteRegistry->RegisterTransfer(BuildNetworkTransferFlowKey(plan),
+                                             plan.transferId, plan.sizeBytes);
+    }
+    m_planIndexes.emplace(plan.transferId, m_plans.size());
+    m_runtimeTransfers.insert(plan.transferId);
+    if (businessResult)
+        m_businessResults.insert(plan.transferId);
+    ++m_nextSourceOrdinal[plan.sourceSatelliteId];
+    m_plans.push_back(plan);
+    m_senders.push_back(sender);
+    m_transferReceivers.push_back(receiver);
+    m_states.push_back(TransferRuntimeState::REGISTERED);
+    m_terminalReasons.emplace_back();
+    m_terminalTimesNs.push_back(-1);
+    m_capacityWaitStartTimesNs.push_back(-1);
+    m_capacityWaitingTimesNs.push_back(0);
+    m_activationEvents.emplace_back();
+    m_completionCallbacks.emplace_back();
+    m_runtimeStarting.insert(plan.transferId);
+    Simulator::ScheduleNow(&NetworkTransferEngine::RuntimeApplicationsReady, this, plan.transferId);
+}
+
+void
+NetworkTransferEngine::RuntimeApplicationsReady(uint64_t transferId)
+{
+    m_runtimeStarting.erase(transferId);
+    if (m_capacityAwareRouting && !m_finalizationBatchDepth && !m_pendingCapacityTransfers.empty())
+        TryActivatePendingCapacityAwareTransfers();
+    if (m_optionalFirstAdmission.contains(transferId) &&
+        GetTransferState(transferId) == TransferRuntimeState::WAITING_ADMISSION)
+        FinalizeTransferIfActive(transferId, TransferTerminalState::CANCELLED,
+                                 TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+}
+
+void NetworkTransferEngine::SetOptionalFirstAdmission(uint64_t id, std::function<void()> started)
+{
+    NS_ABORT_MSG_IF(GetTransferState(id) != TransferRuntimeState::REGISTERED || !started ||
+        m_optionalFirstAdmission.contains(id), "optional first admission must precede start exactly once");
+    m_optionalFirstAdmission.emplace(id, std::move(started));
+    m_observedAdmissionPaths.emplace(id, CapacityAwarePath{});
+}
+
+uint64_t NetworkTransferEngine::GetSentBytes(uint64_t id) const
+{
+    return m_senders.at(GetPlanIndex(id))->GetSentBytes();
+}
+
+std::optional<int64_t> NetworkTransferEngine::EstimateRemainingReceiverTimeNs(uint64_t id) const
+{
+    const auto index = GetPlanIndex(id);
+    if (IsCompleted(id)) return 0;
+    const auto& sender = m_senders[index];
+    const auto found = m_observedAdmissionPaths.find(id);
+    if (IsTerminal(id) || !sender->HasStarted() || sender->IsPausedForRouteUpdate() ||
+        found == m_observedAdmissionPaths.end() || !found->second.admittedRateBps)
+        return std::nullopt;
+    AdmissiblePathEstimate estimate;
+    estimate.admissible = true; estimate.path = found->second;
+    for (const auto& hop : estimate.path.hops)
+    {
+        const auto ipv4 = m_topology->GetNodeBySatelliteId(hop.sourceSatelliteId)->GetObject<Ipv4>();
+        const auto channel = DynamicCast<PointToPointChannel>(
+            ipv4->GetNetDevice(hop.candidate.outputInterface)->GetChannel());
+        if (!channel) return std::nullopt;
+        TimeValue delay; channel->GetAttribute("Delay", delay);
+        const auto ns = delay.Get().GetNanoSeconds();
+        if (ns < 0 || ns > std::numeric_limits<int64_t>::max() - estimate.propagationNs)
+            return std::nullopt;
+        estimate.propagationNs += ns;
+    }
+    const auto& plan = m_plans[index];
+    const auto remaining = plan.sizeBytes - sender->GetSentBytes();
+    // Include pacing overhead and the last in-transit packet. Queues/future route changes
+    // are not known. This estimate is for ranking ONLY; readiness uses the receiver.
+    const auto packets = remaining / plan.payloadBytesPerPacket + (remaining % plan.payloadBytesPerPacket != 0);
+    const auto wire = static_cast<unsigned __int128>(remaining) + 30 * packets +
+        static_cast<unsigned __int128>(plan.payloadBytesPerPacket + 30) * estimate.path.hops.size();
+    if (wire > std::numeric_limits<uint64_t>::max()) return std::nullopt;
+    auto duration = estimate.TransferTimeNs(static_cast<uint64_t>(wire));
+    if (!duration) return std::nullopt;
+    if (!remaining)
+        *duration = std::max<int64_t>(1, *duration -
+            (Simulator::Now().GetNanoSeconds() - sender->GetLastSendTimeNs()));
+    return duration;
+}
+
+bool
+NetworkTransferEngine::IsRuntimeTransfer(uint64_t transferId) const
+{
+    return m_runtimeTransfers.count(transferId) != 0;
+}
+
+bool
+NetworkTransferEngine::IsProtectionTransfer(uint64_t transferId) const
+{
+    return m_redundantResults.contains(transferId) ||
+           (IsRuntimeTransfer(transferId) && !m_businessResults.contains(transferId));
+}
+
+void
+NetworkTransferEngine::SetBusinessResult(uint64_t id, bool business)
+{
+    GetPlanIndex(id); // Require an existing real flow; classification cannot fabricate traffic.
+    if (business)
+    {
+        m_redundantResults.erase(id);
+        m_businessResults.insert(id);
+    }
+    else
+    {
+        m_businessResults.erase(id);
+        m_redundantResults.insert(id);
+    }
+}
+
+uint64_t
+NetworkTransferEngine::GetResidualRateBps(uint32_t source, const EcmpRouteCandidate& route) const
+{
+    const auto rate = m_topology->GetIslDataRateBps(source, route.outputInterface);
+    return m_capacityReservationState
+               ? m_capacityReservationState->GetResidualRateBps(
+                     {source,
+                      m_topology->GetNextHopSatelliteId(source, route.outputInterface),
+                      route,
+                      rate})
+               : rate;
+}
+
+std::optional<int64_t>
+AdmissiblePathEstimate::TransferTimeNs(uint64_t bytes) const
+{
+    if (!admissible)
+        return std::nullopt;
+    if (!bytes)
+        return 0;
+    if (local)
+        return 1;
+    const auto rate = path.admittedRateBps;
+    if (!rate || propagationNs < 0)
+        return std::nullopt;
+    const auto serialization =
+        (static_cast<unsigned __int128>(bytes) * 8000000000ULL + rate - 1) / rate;
+    if (serialization > static_cast<uint64_t>(std::numeric_limits<int64_t>::max() - propagationNs))
+        return std::nullopt;
+    return static_cast<int64_t>(serialization) + propagationNs;
+}
+
+AdmissiblePathEstimate
+NetworkTransferEngine::EstimateAdmissiblePath(uint32_t source, uint32_t destination) const
+{
+    AdmissiblePathEstimate out;
+    out.failureReason = "NO_ROUTE";
+    NS_ABORT_MSG_IF(!m_configured || !m_topology, "path preview requires configured network");
+    if (!m_topology->HasSatelliteId(source) || !m_topology->HasSatelliteId(destination))
+        return out;
+    if (source == destination)
+    {
+        out.reachable = out.admissible = out.local = true;
+        out.failureReason.clear();
+        return out;
+    }
+    if (m_topology->GetEcmpRouteCandidates(source, destination).empty())
+        return out;
+    out.reachable = true;
+    NetworkTransfer preview;
+    preview.sourceAddress = m_topology->GetServiceAddressBySatelliteId(source);
+    preview.destinationAddress = m_topology->GetServiceAddressBySatelliteId(destination);
+    const auto it = m_nextSourceOrdinal.find(source);
+    const auto ordinal = it == m_nextSourceOrdinal.end() ? 0 : it->second;
+    if (ordinal > std::numeric_limits<uint16_t>::max() - NETWORK_TRANSFER_FIRST_SOURCE_PORT)
+    {
+        out.failureReason = "SOURCE_PORT_EXHAUSTED";
+        return out;
+    }
+    preview.sourcePort = NETWORK_TRANSFER_FIRST_SOURCE_PORT + ordinal;
+    const auto key = BuildNetworkTransferFlowKey(preview);
+    if (m_capacityAwareRouting)
+    {
+        if (!m_capacityPathPolicy->FindPath({key, source, destination, m_topology->GetHashSeed()},
+                                            out.path))
+        {
+            out.failureReason = "NO_ADMISSIBLE_PATH";
+            return out;
+        }
+    }
+    else
+    {
+        std::set<uint32_t> visited;
+        out.path.admittedRateBps = std::numeric_limits<uint64_t>::max();
+        for (auto node = source; node != destination;)
+        {
+            if (!visited.insert(node).second)
+                return out;
+            const auto routes = m_topology->GetEcmpRouteCandidates(node, destination);
+            if (routes.empty())
+                return out;
+            const auto routing = SatComputeIpv4GlobalRoutingHelper::GetRouting(
+                m_topology->GetNodeBySatelliteId(node));
+            const auto route = routes.at(routing->PreviewNextHop(key, routes));
+            const auto next = m_topology->GetNextHopSatelliteId(node, route.outputInterface);
+            const auto rate = m_topology->GetIslDataRateBps(node, route.outputInterface);
+            out.path.hops.push_back({node, next, route, rate});
+            out.path.admittedRateBps = std::min(out.path.admittedRateBps, rate);
+            node = next;
+        }
+    }
+    for (const auto& hop : out.path.hops)
+    {
+        const auto ipv4 =
+            m_topology->GetNodeBySatelliteId(hop.sourceSatelliteId)->GetObject<Ipv4>();
+        const auto channel = DynamicCast<PointToPointChannel>(
+            ipv4->GetNetDevice(hop.candidate.outputInterface)->GetChannel());
+        if (!channel)
+            return out;
+        TimeValue delay;
+        channel->GetAttribute("Delay", delay);
+        NS_ABORT_MSG_IF(delay.Get().GetNanoSeconds() < 0 ||
+                            delay.Get().GetNanoSeconds() >
+                                std::numeric_limits<int64_t>::max() - out.propagationNs,
+                        "path propagation time overflow");
+        out.propagationNs += delay.Get().GetNanoSeconds();
+    }
+    out.admissible = true;
+    out.failureReason.clear();
+    return out;
+}
+
+void
+NetworkTransferEngine::SetTerminalObserver(uint64_t transferId,
+                                          Callback<void, uint64_t, int64_t> observer)
+{
+    NS_ABORT_MSG_IF(IsTerminal(transferId), "cannot observe an already terminal transfer");
+    m_terminalObservers[transferId] = observer;
+}
+
+uint64_t
+NetworkTransferEngine::GetReceivedBytes(uint64_t transferId) const
+{
+    return m_transferReceivers[GetPlanIndex(transferId)]->GetTransferReceivedBytes(transferId);
 }
 
 uint32_t
@@ -288,11 +592,15 @@ NetworkTransferEngine::ActivateTransfer(uint64_t transferId)
         m_flowRouteRegistry->BeginSending(GetFlowKey(index));
     }
     m_senders[index]->StartTransferNow();
+    if (auto entry = m_optionalFirstAdmission.extract(transferId); !entry.empty()) entry.mapped()();
 }
 
 bool
 NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
 {
+    // Capacity admission starts senders synchronously. Newly added applications must
+    // finish their same-ns StartApplication events first, even when another flow finalizes.
+    if (m_runtimeStarting.count(transferId)) return false;
     NS_ABORT_MSG_IF(!m_capacityAwareRouting || m_capacityPathPolicy == nullptr ||
                         m_capacityReservationState == nullptr ||
                         m_flowRouteRegistry == nullptr,
@@ -337,6 +645,7 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
                                               "CAPACITY_AWARE_PATH");
     }
     m_capacityReservationState->Reserve(transferId, path);
+    if (m_observedAdmissionPaths.contains(transferId)) m_observedAdmissionPaths.at(transferId) = path;
     const int64_t admissionTimeNs = Simulator::Now().GetNanoSeconds();
     NS_ABORT_MSG_IF(m_capacityWaitStartTimesNs[index] < 0 ||
                         admissionTimeNs < m_capacityWaitStartTimesNs[index] ||
@@ -358,6 +667,7 @@ NetworkTransferEngine::TryActivateCapacityAwareTransfer(uint64_t transferId)
         m_topology->InvalidateFlowRouteDecisionCache(flowKey);
         sender->ResumeAfterRouteUpdate(path.admittedRateBps);
     }
+    if (auto entry = m_optionalFirstAdmission.extract(transferId); !entry.empty()) entry.mapped()();
     return true;
 }
 
@@ -431,7 +741,7 @@ NetworkTransferEngine::HandleTopologyRouteUpdate()
         m_flowRouteRegistry->ReleaseAssignmentsForRouteUpdate(
             flowKey,
             m_topology->GetRouteEpoch(m_plans[index].sourceSatelliteId));
-        m_capacityReservationState->Release(transferId);
+        ReleaseCapacity(transferId);
     }
 
     if (invalidTransfers.empty())
@@ -470,6 +780,12 @@ NetworkTransferEngine::HandleSenderComplete(uint64_t transferId, int64_t sendTim
         m_flowRouteRegistry->FinishSending(GetFlowKey(index));
     }
     m_states[index] = TransferRuntimeState::SENDER_FINISHED;
+}
+
+void NetworkTransferEngine::ReleaseCapacity(uint64_t transferId)
+{
+    m_capacityReservationState->Release(transferId);
+    if (m_capacityReleaseObserver) m_capacityReleaseObserver();
 }
 
 void
@@ -555,7 +871,7 @@ NetworkTransferEngine::FinalizeTransferIfActive(uint64_t transferId,
     if (m_capacityAwareRouting &&
         m_capacityReservationState->HasActivePath(transferId))
     {
-        m_capacityReservationState->Release(transferId);
+        ReleaseCapacity(transferId);
     }
 
     const EcmpFlowKey flowKey = GetFlowKey(index);
@@ -596,12 +912,47 @@ NetworkTransferEngine::FinalizeTransferIfActive(uint64_t transferId,
     }
     m_terminalReasons[index] = reason;
     m_terminalTimesNs[index] = terminalTimeNs;
+    m_optionalFirstAdmission.erase(transferId);
 
-    if (m_capacityAwareRouting && !m_pendingCapacityTransfers.empty())
+    const auto observer = m_terminalObservers.find(transferId);
+    if (observer != m_terminalObservers.end())
+    {
+        const auto callback = observer->second;
+        m_terminalObservers.erase(observer);
+        if (!callback.IsNull())
+        {
+            callback(transferId, terminalTimeNs);
+        }
+    }
+
+    if (m_capacityAwareRouting && !m_finalizationBatchDepth && !m_pendingCapacityTransfers.empty())
     {
         TryActivatePendingCapacityAwareTransfers();
     }
     return true;
+}
+
+uint64_t
+NetworkTransferEngine::FinalizeTransfersIfActive(const std::vector<uint64_t>& ids,
+                                                 TransferTerminalState state,
+                                                 TransferTerminalReason reason)
+{
+    for (const auto id : ids) GetPlanIndex(id);
+    ++m_finalizationBatchDepth;
+    uint64_t count = 0;
+    try
+    {
+        for (const auto id : ids) count += FinalizeTransferIfActive(id, state, reason);
+    }
+    catch (...)
+    {
+        --m_finalizationBatchDepth;
+        throw;
+    }
+    --m_finalizationBatchDepth;
+    if (m_capacityAwareRouting && !m_finalizationBatchDepth && !m_pendingCapacityTransfers.empty())
+        TryActivatePendingCapacityAwareTransfers();
+    return count;
 }
 
 bool
@@ -659,12 +1010,21 @@ NetworkTransferEngine::GetCapacityWaitingTimeNs(uint64_t transferId) const
 }
 
 bool
-NetworkTransferEngine::AreAllTransfersCompleted() const
+NetworkTransferEngine::AreAllTransfersCompleted(bool includeRuntime) const
 {
-    return m_registered &&
-           std::all_of(m_states.begin(), m_states.end(), [](TransferRuntimeState state) {
-               return state == TransferRuntimeState::COMPLETED;
-           });
+    if (!m_registered)
+    {
+        return false;
+    }
+    for (uint32_t index = 0; index < m_plans.size(); ++index)
+    {
+        if ((includeRuntime || !IsRuntimeTransfer(m_plans[index].transferId)) &&
+            m_states[index] != TransferRuntimeState::COMPLETED)
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 const std::vector<NetworkTransfer>&

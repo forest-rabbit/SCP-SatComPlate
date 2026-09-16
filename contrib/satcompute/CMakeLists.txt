@@ -1,8 +1,100 @@
+# ns-3 does not refresh an existing generated public-header stub on a source move.
+# Update only exact stubs for these moved SatCompute headers; no upstream changes.
+foreach(_scp_header_move IN ITEMS
+    "policy/baseline/checkbullet/cb-sat-policy.h|baseline/checkbullet/cb-sat-policy.h"
+    "policy/baseline/checkbullet/cb-sat-state.h|baseline/checkbullet/cb-sat-state.h"
+    "policy/baseline/checkbullet/cb-sat-manager.h|baseline/checkbullet/cb-sat-manager.h"
+    "policy/baseline/checkbullet/cb-sat-recovery.h|baseline/checkbullet/cb-sat-recovery.h"
+    "policy/baseline/checkbullet/cb-sat-config.h|baseline/checkbullet/cb-sat-config.h"
+    "policy/baseline/checkbullet/cb-sat-controller.h|baseline/checkbullet/cb-sat-controller.h"
+    "policy/baseline/recompute/recompute-policy.h|baseline/recompute/recompute-policy.h"
+    "policy/baseline/recompute/recompute-runtime.h|baseline/recompute/recompute-runtime.h"
+    "policy/baseline/one-plus-one/one-plus-one-policy.h|baseline/one-plus-one/one-plus-one-policy.h"
+    "policy/baseline/one-plus-one/one-plus-one-runtime.h|baseline/one-plus-one/one-plus-one-runtime.h"
+    "policy/baseline/first-feasible-placement/first-feasible-placement-policy.h|policy/placement/first-feasible/first-feasible-placement-policy.h"
+    "policy/baseline/least-recovery-load/least-recovery-load-placement-policy.h|policy/placement/least-recovery-load/least-recovery-load-placement-policy.h"
+    "policy/baseline/fa-first-feasible-placement/fa-first-feasible-placement-policy.h|policy/placement/fa-first-feasible/fa-first-feasible-placement-policy.h"
+    "policy/baseline/fa-least-recovery-load/fa-least-recovery-load-placement-policy.h|policy/placement/fa-least-recovery-load/fa-least-recovery-load-placement-policy.h"
+)
+  string(REPLACE "|" ";" _scp_header_paths "${_scp_header_move}")
+  list(GET _scp_header_paths 0 _scp_old_header)
+  list(GET _scp_header_paths 1 _scp_new_header)
+  get_filename_component(_scp_header_name "${_scp_new_header}" NAME)
+  set(_scp_header_stub "${CMAKE_HEADER_OUTPUT_DIRECTORY}/${_scp_header_name}")
+  if(EXISTS "${_scp_header_stub}")
+    file(READ "${_scp_header_stub}" _scp_header_contents)
+    set(_scp_old_include "#include \"${CMAKE_CURRENT_SOURCE_DIR}/protection/${_scp_old_header}\"\n")
+    if(_scp_header_contents STREQUAL _scp_old_include)
+      file(WRITE "${_scp_header_stub}"
+        "#include \"${CMAKE_CURRENT_SOURCE_DIR}/protection/${_scp_new_header}\"\n")
+    endif()
+  endif()
+endforeach()
+
+
 build_lib(
   LIBNAME satcompute
   SOURCE_FILES
     para.cc
+    protection/protection-para.cc
+    protection/protection-config.cc
+    protection/baseline/multitree/multitree-feature-adapter.cc
+    protection/baseline/multitree/multitree-published-rule.cc
+    protection/baseline/multitree/multitree-decision-log.cc
+    protection/baseline/multitree/multitree-controller.cc
     common/time-conversion.cc
+    protection/common/protection-types.cc
+    protection/common/input-contract.cc
+    protection/runtime/checkpoint-recovery-port.cc
+    protection/runtime/transfer-only-recovery-ledger.cc
+    protection/mechanism/relocation/checkpoint-relocation-executor.cc
+    protection/policy/compfrr/input/input-cost-adapter.cc
+    protection/policy/compfrr/input/input-admission-policy.cc
+    protection/mechanism/input-staging/input-staging-manager.cc
+    metrics/core/input-admission-metrics.cc
+    traffic/local-delivery.cc
+    protection/common/task-state-adapter.cc
+    protection/baseline/checkbullet/cb-sat-policy.cc
+    protection/baseline/checkbullet/cb-sat-state.cc
+    protection/baseline/checkbullet/cb-sat-manager.cc
+    protection/baseline/checkbullet/cb-sat-recovery.cc
+    protection/baseline/checkbullet/cb-sat-config.cc
+    protection/baseline/checkbullet/cb-sat-controller.cc
+    protection/baseline/checkbullet/cb-sat-metrics.cc
+    protection/storage/backup-storage-pool.cc
+    protection/runtime/protection-runtime.cc
+    protection/runtime/protection-transfer-dispatcher.cc
+    protection/policy/fixed/fixed-protection-policy.cc
+    protection/policy/compfrr/frequency/compfrr-frequency-policy.cc
+    protection/policy/compfrr/frequency/frequency-decision-gate.cc
+    protection/policy/compfrr/placement/compfrr-placement-policy.cc
+    protection/policy/compfrr/placement/compute-pressure/compute-pressure.cc
+    protection/policy/compfrr/placement/compfrr-placement-tracker.cc
+    protection/storage/peak-quota-ledger.cc
+    protection/policy/placement/first-feasible/first-feasible-placement-policy.cc
+    protection/policy/feasible-placement-pairs.cc
+    protection/policy/placement/least-recovery-load/least-recovery-load-placement-policy.cc
+    protection/mechanism/checkpoint/checkpoint-progress.cc
+    protection/mechanism/checkpoint/checkpoint-manager.cc
+    protection/policy/fixed/fixed-controller.cc
+    protection/policy/compfrr/compfrr-controller.cc
+    protection/policy/compfrr/input/selective-input-snapshot.cc
+    protection/policy/compfrr/compfrr-placement-adapter.cc
+    protection/runtime/placement-resource-tracker.cc
+    metrics/core/placement-resource-metrics.cc
+    protection/runtime/compute-usage-history.cc
+    metrics/core/compfrr-placement-metrics.cc
+    protection/policy/compfrr/storage-estimator.cc
+    protection/runtime/placement-load-ledger.cc
+    metrics/core/placement-load-metrics.cc
+    protection/runtime/recovery-controller.cc
+    protection/baseline/recompute/recompute-runtime.cc
+    protection/baseline/one-plus-one/one-plus-one-runtime.cc
+    protection/mechanism/replication/replica-manager.cc
+    metrics/core/replica-metrics.cc
+    metrics/core/recovery-metrics.cc
+    metrics/core/frequency-metrics.cc
+    metrics/core/protection-metrics.cc
     tools/validation/compfrr-shadow/compfrr-shadow-model.cc
     tools/validation/compfrr-shadow/compfrr-shadow-evaluator.cc
     tools/validation/compfrr-shadow/compfrr-shadow-recorder.cc
@@ -67,7 +159,71 @@ build_lib(
     traffic/network-transfer-records.cc
   HEADER_FILES
     para.h
+    protection/protection-para.h
+    protection/protection-config.h
+    protection/baseline/multitree/multitree-feature-adapter.h
+    protection/baseline/multitree/multitree-published-rule.h
+    protection/baseline/multitree/multitree-decision-log.h
+    protection/baseline/multitree/multitree-controller.h
     common/time-conversion.h
+    protection/common/protection-types.h
+    protection/common/input-contract.h
+    protection/common/checkpoint-evidence.h
+    protection/runtime/protection-evidence-view.h
+    protection/runtime/checkpoint-recovery-port.h
+    protection/runtime/transfer-only-recovery-ledger.h
+    protection/mechanism/relocation/checkpoint-relocation-executor.h
+    protection/policy/compfrr/input/input-cost-adapter.h
+    traffic/local-delivery.h
+    protection/common/task-state-adapter.h
+    protection/baseline/checkbullet/cb-sat-policy.h
+    protection/baseline/checkbullet/cb-sat-state.h
+    protection/baseline/checkbullet/cb-sat-manager.h
+    protection/baseline/checkbullet/cb-sat-recovery.h
+    protection/baseline/checkbullet/cb-sat-config.h
+    protection/baseline/checkbullet/cb-sat-controller.h
+    protection/storage/backup-storage-pool.h
+    protection/runtime/protection-runtime.h
+    protection/policy/fixed/fixed-protection-policy.h
+    protection/policy/compfrr/frequency/compfrr-frequency-policy.h
+    protection/policy/compfrr/frequency/frequency-decision-gate.h
+    protection/policy/compfrr/placement/compfrr-placement-policy.h
+    protection/policy/compfrr/placement/compute-pressure/compute-pressure.h
+    protection/policy/compfrr/placement/compfrr-placement-tracker.h
+    protection/common/protection-forecast.h
+    protection/common/placement-resources.h
+    protection/storage/peak-quota-ledger.h
+    protection/runtime/placement-resource-tracker.h
+    protection/policy/placement-policy.h
+    protection/policy/recovery-policy.h
+    protection/runtime/decision-path-snapshot.h
+    protection/policy/placement/first-feasible/first-feasible-placement-policy.h
+    protection/policy/placement/least-recovery-load/least-recovery-load-placement-policy.h
+    protection/policy/placement/fa-first-feasible/fa-first-feasible-placement-policy.h
+    protection/policy/placement/fa-least-recovery-load/fa-least-recovery-load-placement-policy.h
+    protection/mechanism/checkpoint/checkpoint-progress.h
+    protection/mechanism/checkpoint/checkpoint-manager.h
+    protection/runtime/fixed-protection-controller.h
+    protection/policy/fixed/fixed-controller.h
+    protection/runtime/frequency-protection-controller.h
+    protection/policy/compfrr/compfrr-controller.h
+    protection/policy/compfrr/input/selective-input-snapshot.h
+    protection/policy/compfrr/storage-estimator.h
+    protection/runtime/compute-usage-history.h
+    protection/runtime/frequency-storage-estimator.h
+    protection/runtime/placement-load-ledger.h
+    protection/runtime/recovery-controller.h
+    protection/runtime/checkpoint-recovery-estimate.h
+    protection/runtime/recompute-controller.h
+    protection/baseline/recompute/recompute-runtime.h
+    protection/runtime/one-plus-one-controller.h
+    protection/baseline/one-plus-one/one-plus-one-runtime.h
+    protection/mechanism/replication/replica-manager.h
+    protection/baseline/one-plus-one/one-plus-one-policy.h
+    protection/baseline/recompute/recompute-policy.h
+    protection/runtime/protection-transfer-key.h
+    protection/runtime/protection-transfer-dispatcher.h
+    metrics/core/protection-metrics.h
     tools/validation/compfrr-shadow/compfrr-shadow-model.h
     tools/validation/compfrr-shadow/compfrr-shadow-task-state.h
     tools/validation/compfrr-shadow/compfrr-shadow-evaluator.h
@@ -161,6 +317,39 @@ target_include_directories(
   satcompute
   PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third-party>
 )
+set_source_files_properties(
+  protection/baseline/checkbullet/cb-sat-config.cc
+  PROPERTIES COMPILE_DEFINITIONS
+    "SATCOMPUTE_CB_MTBF_PROFILE=\"${CMAKE_CURRENT_SOURCE_DIR}/protection/baseline/checkbullet/calibration/frozen-mtbf-profile.json\""
+)
+
+# Fixed baseline calibration and project-owned mapping tools.
+set_source_files_properties(
+  protection/baseline/multitree/multitree-feature-adapter.cc
+  PROPERTIES COMPILE_DEFINITIONS
+    "SATCOMPUTE_MULTITREE_SCALE=\"${CMAKE_CURRENT_SOURCE_DIR}/protection/baseline/multitree/calibration/published-ft-scale.json\""
+)
+build_exec(
+  EXECNAME satcompute-multitree-calibration
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/multitree-calibration.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+build_exec(
+  EXECNAME satcompute-multitree-mapping-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/multitree-mapping-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+build_exec(
+  EXECNAME satcompute-multitree-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/multitree-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
 
 # The platform entry point is a project executable, not an ns-3 example.  It is
 # therefore available when the global examples and tests switches are disabled.
@@ -171,6 +360,47 @@ build_exec(
   LIBRARIES_TO_LINK ${libsatcompute}
   EXECUTABLE_DIRECTORY_PATH
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute
+)
+
+# Same platform wiring, with private baseline overrides only in the test executable.
+build_exec(
+  EXECNAME satcompute-protection-config-driver
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES satcompute.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+target_compile_definitions(satcompute_test_satcompute-protection-config-driver
+  PRIVATE SATCOMPUTE_PROTECTION_TEST_DRIVER=1)
+
+build_exec(
+  EXECNAME satcompute-protection-config-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/protection-config-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+# Focused optional INPUT lifecycle and shared recovery contract fixtures.
+build_exec(
+  EXECNAME satcompute-input-staging-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/input-staging-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+# Pure production INPUT selector probe; JSON snapshots, no Simulator execution.
+build_exec(
+  EXECNAME satcompute-input-admission-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/input-admission-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
 )
 
 # Pure-model calibration tool. It does not run the network simulator or create
@@ -212,6 +442,102 @@ add_custom_target(
 
 # Project-owned C++ checks are normal executables because SCP-SatComPlate does
 # not enable ns-3's global test suite.
+build_exec(
+  EXECNAME satcompute-compfrr-placement-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/compfrr-placement-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-cb-sat-config-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/cb-sat-config-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-cb-sat-recovery-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/cb-sat-recovery-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-cb-sat-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/cb-sat-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-cb-sat-policy-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/cb-sat-policy-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-one-plus-one-baseline-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/one-plus-one-baseline-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-recompute-baseline-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/recompute-baseline-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-frequency-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/frequency-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-n5b-policy-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/n5b-policy-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-protection-contract-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/protection-contract-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-protection-path-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/protection-path-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
+build_exec(
+  EXECNAME satcompute-recovery-runtime-test
+  EXECNAME_PREFIX satcompute_test_
+  SOURCE_FILES tests/unit/recovery-runtime-test.cc
+  LIBRARIES_TO_LINK ${libsatcompute}
+  EXECUTABLE_DIRECTORY_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/contrib/satcompute/tests
+)
+
 build_exec(
   EXECNAME satcompute-compfrr-shadow-model-test
   EXECNAME_PREFIX satcompute_test_

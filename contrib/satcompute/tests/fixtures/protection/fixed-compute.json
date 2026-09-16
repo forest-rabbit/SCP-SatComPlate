@@ -1,0 +1,20 @@
+{
+  "compute_nodes": [
+    {"node_id": 0, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 1, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 2, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 3, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 4, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 5, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 6, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 7, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 8, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 9, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 10, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 11, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 12, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 13, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 14, "compute_rate_work_units_per_second": 100000},
+    {"node_id": 15, "compute_rate_work_units_per_second": 100000}
+  ]
+}

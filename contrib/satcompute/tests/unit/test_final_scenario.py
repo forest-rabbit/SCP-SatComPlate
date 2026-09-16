@@ -1,5 +1,6 @@
 """Frozen scene integrity, deterministic generator and final-only runner contracts."""
 from collections import Counter
+from copy import deepcopy
 import csv
 import contextlib
 import io
@@ -18,7 +19,8 @@ ROOT = MODULE.parents[1]
 GENERATION = MODULE / "tools/generation"
 sys.path.insert(0, str(GENERATION))
 GEN = runpy.run_path(str(GENERATION / "generate-task-workload.py"))
-RUN = runpy.run_path(str(MODULE / "tests/integration/regression/run-final-scenario.py"))
+RUN = runpy.run_path(str(MODULE / "tests/support/protection/scenario.py"))
+F3_CHECK = runpy.run_path(str(MODULE / "tests/integration/regression/run-f3-protection-check.py"))
 SCENE = MODULE / "input/experiments/leo-66"
 
 
@@ -35,7 +37,7 @@ class FinalScenarioTests(unittest.TestCase):
                          {"dense-image": 240, "sparse-inference": 240, "compression": 240, "llm": 80})
         self.assertEqual(tuple(sum(t[k] for t in self.tasks) for k in
                               ("input_bytes", "output_bytes", "compute_work_units")),
-                         (193526895311, 99846517485, 351623833))
+                         (194119753287, 100166291859, 352513119))
         self.assertTrue(all(10**9 <= t["arrival_time_ns"] <= 1050*10**9 for t in self.tasks))
         self.assertEqual(len(self.profile), 66)
         self.assertEqual({p["node_id"] for p in self.profile}, set(range(66)))
@@ -54,6 +56,20 @@ class FinalScenarioTests(unittest.TestCase):
         self.assertEqual((placement["hotspot_weight"], placement["regional_candidate_limit"]), (64, 1))
         self.assertEqual(placement["arrival_window_s"], [1, 1050])
 
+    def test_llm_conserves_total_work_with_only_two_ms_task_rounding(self):
+        llm = [a for a in self.attributes if a["task_profile"] == "llm"]
+        old = {a["task_id"]:100*(5000 + GEN["deterministic_value"](
+            GEN["WORKLOAD_SEED"],a["task_id"],"n4c-total-tokens") % 5001) for a in llm}
+        budgets = {a["task_id"]:GEN["budget_for"](a) for a in llm}
+        self.assertEqual(sum(b.compute_work_units for b in budgets.values()), sum(old.values()))
+        self.assertEqual(sum(old.values()), 61333200)
+        self.assertEqual(sum(b.extent for b in budgets.values()), 153333)
+        self.assertEqual(sum(b.k_variable_bytes for b in budgets.values()), 17585455104)
+        self.assertEqual(max(abs(b.compute_work_units-old[k]) for k,b in budgets.items()),200)
+        self.assertEqual(sum(b.compute_work_units!=old[k] for k,b in budgets.items()),64)
+        for b in budgets.values():
+            self.assertEqual(b.compute_work_units,400*b.extent)
+
     def test_attributes_arrivals_and_anchor_identity_match_frozen(self):
         self.assertEqual(self.attributes, GEN["attributes"]())
         arrivals = GEN["arrivals"](range(1, 801), GEN["WORKLOAD_SEED"])
@@ -64,13 +80,53 @@ class FinalScenarioTests(unittest.TestCase):
             self.assertEqual(actual["task_profile"], attr["task_profile"])
             self.assertEqual(actual["arrival_time_ns"], arrivals[actual["task_id"]])
         anchors = [a for a in self.attributes if a.get("fixed_tail_anchor")]
-        ordinary = [a for a in self.attributes if a["task_profile"] != "llm" and not a.get("fixed_tail_anchor")]
-        self.assertEqual(len(ordinary), 705)
+        ordinary = [a for a in self.attributes if a["task_profile"] != "llm"
+                    and not a.get("fixed_tail_anchor") and not a.get("controlled_f3_size")]
+        self.assertEqual(len(ordinary), 704)
         self.assertTrue(all(50_000_000 <= a["input_bytes"] < 1_000_000_000 for a in ordinary))
         self.assertEqual(Counter(a["input_bytes"] for a in anchors), {500_000_000: 10, 1_000_000_000: 5})
         expected = json.loads((SCENE / "workload/workload-summary.json").read_text())["truncated_normal"]["fixed_tail_task_ids"]
         self.assertEqual({str(s): [a["task_id"] for a in anchors if a["input_bytes"] == s]
                           for s in (500_000_000, 1_000_000_000)}, expected)
+
+    def test_controlled_task_size_only_and_no_predecessor(self):
+        target = self.tasks[119]
+        self.assertEqual(target, dict(task_id=120, task_profile="compression", input_bytes=800_000_000,
+            output_bytes=433_985_046, compute_work_units=1_200_000, source_node_id=54,
+            compute_node_id=62, result_node_id=33, arrival_time_ns=1024682825747))
+        self.assertEqual([t["task_id"] for t in self.tasks if t["compute_node_id"] == 62], [120])
+        overridden = [a for a in self.attributes if a.get("controlled_f3_size")]
+        self.assertEqual(len(overridden), 1)
+        self.assertEqual(overridden[0]["original_input_bytes"], 207142024)
+        summary = json.loads((SCENE / "workload/workload-summary.json").read_text())
+        self.assertNotIn("warmup", summary)
+        self.assertEqual(summary["ordinary_image_count"], 704)
+        placement = json.loads((SCENE / "placement/placement-manifest.json").read_text())
+        self.assertEqual(len(placement["placements"]), 800)
+        for key, total in (("task_count", 800), ("input_bytes", 194119753287), ("work_units", 352513119)):
+            self.assertEqual(sum(r[key] for r in placement["by_region"].values()), total)
+
+    def test_controlled_f3_bandwidth_normalization_changes_only_arrival(self):
+        canonical = json.loads((SCENE / "workload/task-trace.json").read_text())
+        expected = {
+            2_000_000_000: 1022122825747,
+            5_000_000_000: 1024042825747,
+            10_000_000_000: 1024682825747,
+            100_000_000_000: 1025258825747,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            for bandwidth, arrival in expected.items():
+                output = Path(temporary) / f"tasks-{bandwidth}.json"
+                receipt = RUN["bandwidth_normalized_task_trace"](output, bandwidth)
+                derived = json.loads(output.read_text())
+                target = next(task for task in derived["tasks"] if task["task_id"] == 120)
+                self.assertEqual(target["arrival_time_ns"], arrival)
+                self.assertEqual(receipt["normalized_arrival_time_ns"], arrival)
+                restored = deepcopy(derived)
+                restored["tasks"][119]["arrival_time_ns"] = canonical["tasks"][119]["arrival_time_ns"]
+                self.assertEqual(restored, canonical)
+            with self.assertRaisesRegex(ValueError, "overwrite"):
+                RUN["bandwidth_normalized_task_trace"](output, 5_000_000_000)
 
     def test_synthetic_placement_deterministic_and_missing_slices_rejected(self):
         positions = {t*10**9: {n: (40., (-95., 15., 120., 70.)[n % 4]) for n in range(66)}
@@ -123,7 +179,73 @@ class FinalScenarioTests(unittest.TestCase):
                         GEN["main"]()
 
 
+class F3SelectionTests(unittest.TestCase):
+    def test_completion_alone_or_start_without_checkpoint_never_passes(self):
+        tables = {
+            "task-summary.csv": [dict(task_id="120", input_bytes="800000000", compute_work_units="1200000",
+                compute_start_time_ns="1025000000000", final_state="COMPLETED", compute_deadline_met="1")],
+            "recovery-summary.csv": [dict(task_id="120", fault_type="satellite", fault_time_ns=str(F3_CHECK["F3_NS"]),
+                phase_at_fault="ON", chosen_path="REMOTE_REDO", checkpoint_state_exists="1", remote_work_units="100")],
+            "frequency-decisions.csv": [dict(task_id="120", proposed_action="START", decision_committed="1",
+                j_off="0.03", j_start="0.02")],
+            "protection-events.csv": [dict(task_id="120", event="INIT_COST_COMMITTED", attempt_generation="0",
+                time_ns="1026600000000")]}
+        assess = F3_CHECK["assess"]
+        cases = [(None, None, None), ("recovery-summary.csv", "phase_at_fault", "INITIALIZING"),
+                 ("recovery-summary.csv", "chosen_path", "RECOMPUTE"),
+                 ("recovery-summary.csv", "remote_work_units", "0"),
+                 ("frequency-decisions.csv", "j_start", "0.03"),
+                 ("protection-events.csv", "time_ns", str(F3_CHECK["F3_NS"])),
+                 ("task-summary.csv", "compute_deadline_met", "0")]
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            fault_file = directory / "fault-trace.json"
+            fault_file.write_text('{"faults": []}')
+            for name, key, value in cases:
+                data = deepcopy(tables)
+                if name:
+                    data[name][0][key] = value
+                with self.subTest(name=name, key=key), patch.dict(assess.__globals__, rows=lambda d, n: data[n]):
+                    self.assertEqual(assess(directory)["eligible"], name is None)
+            fault_file.write_text(json.dumps({"faults": [dict(node_id=62, fault_type="compute",
+                fault_occurred=True, start_time_ns=1026000000000)]}))
+            with patch.dict(assess.__globals__, rows=lambda d, n: tables[n]):
+                self.assertFalse(assess(directory)["eligible"])
+
+
 class FinalRunnerTests(unittest.TestCase):
+    def test_historical_input_metadata_mapping_is_not_a_runtime_alias(self):
+        normalize = RUN['canonical_input_arguments']
+        for policy, old in [('eager', ['--inputStagingPolicy=eager', '--inputAdmissionPolicy=none']),
+                            ('deferred', ['--inputStagingPolicy=deferred']),
+                            ('selective', ['--inputStagingPolicy=deferred', '--inputAdmissionPolicy=ser-break-even'])]:
+            self.assertEqual(normalize(['satcompute']+old), normalize(['satcompute',f'--inputPolicy={policy}']))
+        for old in (['--inputPolicy=selective','--inputStagingPolicy=deferred'],
+                    ['--inputStagingPolicy=eager','--inputAdmissionPolicy=ser-break-even'],
+                    ['--inputPolicy=jit'], ['--inputPolicy=eager','--inputPolicy=eager']):
+            with self.assertRaises(ValueError): normalize(['satcompute']+old)
+
+    def test_deferred_is_explicit_compfrr_only(self):
+        output = Path("output/controlled-test")
+        eager = RUN["arguments"](output, protection_mode="compfrr")
+        deferred = RUN["arguments"](output, protection_mode="compfrr", input_policy="deferred")
+        self.assertEqual(deferred, eager + ["--inputPolicy=deferred"])
+        self.assertEqual(RUN["arguments"](output, protection_mode="compfrr", input_policy="selective"),
+                         eager + ["--inputPolicy=selective"])
+        for mode in ("off", "recompute", "one-plus-one", "fixed"):
+            with self.assertRaisesRegex(ValueError, "CompFRR"):
+                RUN["arguments"](output, protection_mode=mode, input_policy="deferred")
+
+    def test_complete_baselines_use_frozen_scene_and_four_placements(self):
+        for mode in ("recompute", "one-plus-one"):
+            command = RUN["arguments"](Path("unused"), protection_mode=mode)
+            self.assertIn(f"--protectionMode={mode}", command)
+            self.assertIn("--faultMode=generate", command)
+            self.assertIn("--placementMode=fa-ffp", command)
+            for placement in ("ffp", "lrl", "fa-ffp", "fa-lrl"):
+                self.assertIn(f"--placementMode={placement}", RUN["arguments"](
+                    Path("unused"), protection_mode=mode, placement_mode=placement))
+
     def test_fixed_defaults_and_modes_without_running_simulation(self):
         defaults = RUN["arguments"](Path("unused"))
         for flag in ("--simulationDuration=1300", "--fixedDelay=0.001", "--randomSeed=1", "--randomRun=11",

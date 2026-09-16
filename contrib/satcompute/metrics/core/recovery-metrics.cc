@@ -1,0 +1,153 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#include "../../protection/runtime/recovery-controller.h"
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+
+namespace ns3::protection
+{
+namespace
+{
+std::string
+Time(int64_t ns)
+{
+    return ns < 0 ? "" : std::to_string(ns);
+}
+
+std::string
+Ids(const std::vector<uint64_t>& values)
+{
+    std::string result;
+    for (auto id : values)
+    {
+        if (!result.empty())
+            result += ';';
+        result += std::to_string(id);
+    }
+    return result;
+}
+} // namespace
+
+void
+RecoveryController::WriteMetrics(const std::filesystem::path& directory) const
+{
+    std::filesystem::create_directories(directory);
+    std::ofstream file(directory / "recovery-summary.csv");
+    file.exceptions(std::ios::failbit | std::ios::badbit);
+    file << "task_id,attempt_generation,fault_id,fault_type,fault_time_ns,phase_at_fault,primary_"
+            "node,"
+            "local_node,remote_node,recovery_node,actual_work_units,local_work_units,remote_work_"
+            "units,"
+            "tail_bytes,committed_remote_object_id,committed_remote_bytes,valid_local_objects,"
+            "pending_records,pending_local_work_units,in_flight_flows,in_flight_local_transfer_ids,"
+            "in_flight_remote_transfer_ids,pending_remote_object_id,remote_merge_pending,remaining_"
+            "deadline_ns,"
+            "estimated_tail_ns,estimated_remote_redo_ns,"
+            "chosen_path,recovery_accept_time_ns,input_start_time_ns,input_received_time_ns,input_"
+            "delivery_mode,"
+            "tail_start_time_ns,tail_received_time_ns,tail_commit_time_ns,recovery_compute_start_"
+            "time_ns,"
+            "catchup_time_ns,actual_T_catch_ns,recovery_compute_complete_time_ns,result_start_time_"
+            "ns,"
+            "result_complete_time_ns,result_bytes,result_delivery_mode,result_transfer_id,logical_"
+            "completion,"
+            "original_deadline_ns,deadline_met,reserved_idle_ns,planned_catchup_redo_wu,"
+            "planned_post_catchup_wu,planned_total_recovery_wu,actual_catchup_redo_wu,"
+            "actual_post_catchup_wu,actual_total_recovery_wu,actual_recovery_service_ns,"
+            "primary_rate_wu_per_s,recovery_rate_wu_per_s,normal_protection_eq_wu,"
+            "recovery_reserved_idle_eq_wu,recovery_catchup_actual_wu,w_waste_actual,"
+            "normal_protection_cost_ns,terminal_"
+            "time_ns,"
+            "terminal_state,terminal_reason,checkpoint_state_exists,remote_eligible_at_fault,"
+            "remote_busy_at_fault,checkpoint_fallback_reason,old_remote_node,new_recovery_node,"
+            "checkpoint_state_bytes,checkpoint_relocation_attempted,checkpoint_relocation_bytes,"
+            "estimated_migrate_tail_ns,estimated_migrate_redo_ns,estimated_recompute_ns,"
+            "checkpoint_relocation_failure_reason,checkpoint_relocation_trigger,"
+            "state_start_time_ns,state_received_time_ns";
+    if (m_recomputePlacement)
+        file << ",planned_input_wait_ns,planned_reserved_idle_eq_wu,w_waste_planned";
+    if (Deferred())
+        file << ",input_staging_policy,state_ready_time_ns,planned_fault_input_wait_ns";
+    file << ",direct_post_catchup_ns,direct_deadline_budget_ns,direct_redo_fits,direct_tail_fits,"
+            "direct_fallback_reason";
+    file << '\n';
+    file << std::setprecision(17);
+    for (const auto& r : Summaries())
+    {
+        const double normal = static_cast<double>(r.normalProtectionCostNs) * r.primaryRate / 1e9;
+        const double idle = static_cast<double>(r.reservedIdleNs) * r.recoveryRate / 1e9;
+        const auto& s = r.snapshot;
+        std::ostringstream objects;
+        for (const auto& [work, id] : s.localObjects)
+        {
+            if (objects.tellp() > 0)
+                objects << ';';
+            objects << work << ':' << id;
+        }
+        file << s.taskId << ",1," << r.fault.faultId << ',' << FaultTypeToString(r.fault.faultType)
+             << ',' << s.faultNs << ',' << s.phase << ',' << r.primaryNode << ','
+             << (s.phase == "OFF" ? "" : std::to_string(s.localNode)) << ','
+             << (s.phase == "OFF" ? "" : std::to_string(s.remoteNode)) << ','
+             << (r.recoveryNode ? std::to_string(*r.recoveryNode) : "") << ',' << s.actualWork
+             << ',' << s.localWork << ',' << s.remoteWork << ',' << s.tailBytes << ','
+             << (s.remoteObject ? std::to_string(s.remoteObject) : "") << ','
+             << (s.remoteObject ? std::to_string(s.remoteBytes) : "") << ',' << objects.str() << ','
+             << s.pendingRecords << ',' << Ids(s.pendingLocalWorks) << ',' << s.inFlightFlows << ','
+             << Ids(s.inFlightLocalTransfers) << ',' << Ids(s.inFlightRemoteTransfers) << ','
+             << (s.pendingRemoteObject ? std::to_string(s.pendingRemoteObject) : "") << ','
+             << s.remoteMergePending << ',' << s.deadlineNs - s.faultNs << ','
+             << Time(r.estimatedTailNs) << ',' << Time(r.estimatedRedoNs) << ',' << r.path << ','
+             << Time(r.acceptedNs) << ',' << Time(r.inputStartedNs) << ','
+             << Time(r.inputReceivedNs) << ',' << r.inputMode << ',' << Time(r.tailStartedNs) << ','
+             << Time(r.tailReceivedNs) << ',' << Time(r.tailCommitNs) << ','
+             << Time(r.computeStartedNs) << ',' << Time(r.catchupNs) << ','
+             << Time(r.catchupNs < 0 ? -1 : r.catchupNs - s.faultNs) << ','
+             << Time(r.computeCompleteNs) << ',' << Time(r.resultStartedNs) << ','
+             << Time(r.resultCompleteNs) << ',' << r.resultBytes << ',' << r.resultMode << ','
+             << (r.resultTransferId ? std::to_string(r.resultTransferId) : "") << ','
+             << (r.terminalState == "COMPLETED") << ',' << s.deadlineNs << ','
+             << (r.computeCompleteNs >= 0 && r.computeCompleteNs <= s.deadlineNs) << ','
+             << (r.acceptedNs >= 0 ? std::to_string(r.reservedIdleNs) : "") << ','
+             << r.plannedCatchupRedoWu << ',' << r.plannedPostCatchupWu << ','
+             << r.plannedTotalRecoveryWu << ',' << r.actualCatchupRedoWu << ','
+             << r.actualPostCatchupWu << ',' << r.actualTotalRecoveryWu << ',' << r.actualServiceNs
+             << ',' << r.primaryRate << ',' << r.recoveryRate << ',' << normal << ',' << idle << ','
+             << r.actualCatchupRedoWu << ',' << normal + idle + r.actualCatchupRedoWu << ','
+             << r.normalProtectionCostNs << ',' << Time(r.terminalNs) << ',' << r.terminalState
+             << ',' << r.reason << ',' << r.checkpointStateExists << ',' << r.remoteEligibleAtFault
+             << ',' << r.remoteBusyAtFault << ',' << r.checkpointFallbackReason << ','
+             << (s.phase == "OFF" ? "" : std::to_string(s.remoteNode)) << ','
+             << (r.recoveryNode ? std::to_string(*r.recoveryNode) : "") << ','
+             << r.checkpointStateBytes << ',' << r.relocationAttempted << ',' << r.relocationBytes
+             << ',' << Time(r.estimatedMigrateTailNs) << ',' << Time(r.estimatedMigrateRedoNs)
+             << ',' << Time(r.estimatedRecomputeNs) << ',' << r.relocationFailureReason << ','
+             << r.relocationTrigger << ',' << Time(r.stateStartedNs) << ','
+             << Time(r.stateReceivedNs);
+        if (m_recomputePlacement)
+        {
+            file << ',' << Time(r.plannedInputWaitNs) << ',';
+            if (r.plannedInputWaitNs >= 0)
+                file << static_cast<double>(r.plannedInputWaitNs) * r.recoveryRate / 1e9;
+            file << ',';
+            if (r.plannedInputWaitNs >= 0)
+                file << r.plannedCatchupRedoWu +
+                            static_cast<double>(r.plannedInputWaitNs) * r.recoveryRate / 1e9;
+        }
+        if (Deferred())
+            file << ",deferred," << Time(r.stateReadyNs) << ',' << Time(r.plannedInputWaitNs);
+        file << ',' << (r.directPostNs ? std::to_string(*r.directPostNs) : "")
+             << ',' << (r.directBudgetNs ? std::to_string(*r.directBudgetNs) : "")
+             << ',' << (r.directRedoFits ? std::to_string(*r.directRedoFits) : "")
+             << ',' << (r.directTailFits ? std::to_string(*r.directTailFits) : "")
+             << ',' << r.directFallbackReason;
+        file << '\n';
+    }
+    std::ofstream events(directory / "recovery-events.csv");
+    events.exceptions(std::ios::failbit | std::ios::badbit);
+    events << "task_id,attempt_generation,time_ns,event,bytes,transfer_id,delivery_mode\n";
+    for (const auto& e : Events())
+        events << e.taskId << ',' << e.generation << ',' << e.timeNs << ',' << e.event << ','
+               << e.bytes << ',' << (e.transferId ? std::to_string(e.transferId) : "") << ','
+               << e.mode << '\n';
+}
+} // namespace ns3::protection

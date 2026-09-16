@@ -14,9 +14,18 @@
 #include "ns3/fault-prediction-engine.h"
 #include "ns3/fault-trace.h"
 #include "ns3/flow-metrics.h"
+#include "ns3/fixed-protection-controller.h"
+#include "ns3/frequency-protection-controller.h"
+#include "ns3/recompute-controller.h"
+#include "ns3/one-plus-one-controller.h"
+#include "ns3/multitree-controller.h"
+#include "ns3/cb-sat-controller.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
+#include "ns3/protection-metrics.h"
 #include "ns3/link-metrics-recorder.h"
 #include "ns3/online-orbit-constellation.h"
 #include "ns3/para.h"
+#include "ns3/protection-config.h"
 #include "ns3/rng-seed-manager.h"
 #include "ns3/metrics.h"
 #include "ns3/satellite-topology.h"
@@ -25,6 +34,9 @@
 #include "ns3/task-trace.h"
 #include "ns3/time-conversion.h"
 #include "ns3/topology-slice-exporter.h"
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+#include "tests/support/protection/multitree-preflight.h"
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -194,15 +206,16 @@ AddCommandLineOptions(CommandLine& commandLine,
     commandLine.AddValue("taskCompletionPolicy",
                          "Task completion policy: strict or report",
                          config.taskCompletionPolicy);
-    commandLine.AddValue("faultMode", "Fault mode: none or generate", config.faultMode);
+    commandLine.AddValue("faultMode",
+                         "none/generate; validation-replay for frozen execution tests only",
+                         config.faultMode);
     commandLine.AddValue("faultTrace", "Generated fault trace output path", config.faultTrace);
+    commandLine.AddValue("validationFaultTrace",
+                         "Frozen validation input; never online model input",
+                         config.validationFaultTrace);
     commandLine.AddValue("faultProbabilityAudit",
                          "Collect probability audit records and CSV outputs",
                          config.faultProbabilityAudit);
-    commandLine.AddValue("compfrr-shadow", "Opt-in G4 analytical decision observer (no real backup)",
-                         config.compfrrShadow);
-    commandLine.AddValue("compfrr-shadow-output", "Shadow CSV directory; default outputDir/shadow",
-                         config.compfrrShadowOutput);
     commandLine.AddValue("faultEnableF1",
                          "Enable F1 generation and optional probability audit",
                          faultParameters.f1.enabled);
@@ -318,7 +331,16 @@ ValidateConfig(const SatComputeConfig& config)
         FailConfig("islMtuBytes", "must be at least 64028 for size-aware chunking");
     }
     RequireChoice(config.taskCompletionPolicy, "taskCompletionPolicy", {"strict", "report"});
-    RequireChoice(config.faultMode, "faultMode", {"none", "generate"});
+    RequireChoice(config.faultMode, "faultMode", {"none", "generate", "validation-replay"});
+    if (config.faultMode == "validation-replay")
+    {
+        if (config.validationFaultTrace.empty() || !hasComputeProfile ||
+            config.faultProbabilityAudit || config.protection.diagnostics.compfrrShadow)
+            FailConfig("validationFaultTrace",
+                       "validation replay requires frozen input, tasks, audit/shadow off");
+    }
+    else if (!config.validationFaultTrace.empty())
+        FailConfig("validationFaultTrace", "only accepted for validation-replay");
     if (config.faultMode == "none" && !config.faultTrace.empty())
     {
         FailConfig("faultMode", "none cannot use faultTrace");
@@ -329,7 +351,7 @@ ValidateConfig(const SatComputeConfig& config)
     }
     if (config.faultProbabilityAudit)
     {
-        if (config.faultMode == "none")
+        if (config.faultMode != "generate")
         {
             FailConfig("faultProbabilityAudit", "requires faultMode=generate");
         }
@@ -339,14 +361,6 @@ ValidateConfig(const SatComputeConfig& config)
         }
     }
     RequirePositiveSeconds(config.topologySliceIntervalSeconds, "topologySliceInterval");
-    if (config.compfrrShadow && (config.topologyOnly || !hasComputeProfile || config.faultMode != "generate"))
-    {
-        FailConfig("compfrr-shadow", "requires network tasks and faultMode=generate");
-    }
-    if (!config.compfrrShadow && !config.compfrrShadowOutput.empty())
-    {
-        FailConfig("compfrr-shadow-output", "requires compfrr-shadow=1");
-    }
     if (config.topologyOnly && hasComputeProfile)
     {
         FailConfig("topologyOnly", "cannot load task inputs");
@@ -396,7 +410,7 @@ ApplyModeDefaults(SatComputeConfig& config, int argc, char* argv[])
     // ns-3 CommandLine rejects empty string values; use an explicit sentinel.
     if (config.computeProfile == "none") config.computeProfile.clear();
     if (config.taskTrace == "none") config.taskTrace.clear();
-    if (config.faultMode == "generate" && config.faultTrace.empty())
+    if (config.faultMode != "none" && config.faultTrace.empty())
     {
         config.faultTrace =
             (std::filesystem::path(config.outputDirectory) / "fault-trace.json").string();
@@ -412,11 +426,25 @@ main(int argc, char* argv[])
     FaultParameters faultParameters = GetDefaultFaultParameters();
     CommandLine command(__FILE__);
     AddCommandLineOptions(command, inputConfig, faultParameters);
-    command.Parse(argc, argv);
+    protection::ProtectionCliState protectionCli;
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+    constexpr bool protectionTestInterface = true;
+    bool testMultitreeMapping = false;
+    command.AddValue("testMultitreeMapping", "Passive Multi-tree mapping preflight only", testMultitreeMapping);
+#else
+    constexpr bool protectionTestInterface = false;
+#endif
+    protection::RegisterProtectionOptions(command, inputConfig.protection, protectionCli,
+                                         protectionTestInterface);
 
     try
     {
+        command.Parse(argc, argv);
+        protection::ApplyProtectionTestOverrides(inputConfig.protection, protectionCli);
         ApplyModeDefaults(inputConfig, argc, argv);
+        protection::ValidateProtectionConfig(inputConfig.protection, protectionCli,
+            {inputConfig.topologyOnly, !inputConfig.computeProfile.empty() && !inputConfig.taskTrace.empty(),
+             faultParameters.f1.enabled, faultParameters.f2.enabled, inputConfig.faultMode});
         ValidateConfig(inputConfig);
         if (inputConfig.faultProbabilityAudit &&
             !faultParameters.f1.enabled && !faultParameters.f2.enabled)
@@ -427,10 +455,19 @@ main(int argc, char* argv[])
         config.computeProfile =
             ResolveOptionalInputFile(config.computeProfile, "computeProfile");
         config.taskTrace = ResolveOptionalInputFile(config.taskTrace, "taskTrace");
-        if (config.faultMode == "generate")
+        if (config.faultMode != "none")
         {
             config.faultTrace = ResolveOutputFile(config.faultTrace, "faultTrace");
         }
+        config.validationFaultTrace =
+            ResolveOptionalInputFile(config.validationFaultTrace, "validationFaultTrace");
+        if (!config.validationFaultTrace.empty() &&
+            (std::filesystem::weakly_canonical(config.validationFaultTrace) ==
+                 std::filesystem::weakly_canonical(config.faultTrace) ||
+             std::filesystem::weakly_canonical(config.outputDirectory) ==
+                 std::filesystem::weakly_canonical(config.validationFaultTrace).parent_path()))
+            FailConfig("validationFaultTrace",
+                       "must not overwrite frozen input or its evidence directory");
         const int64_t simulationDurationNs =
             SatComputeSecondsToNanoseconds(config.simulationDurationSeconds,
                                            "simulationDuration");
@@ -566,6 +603,15 @@ main(int argc, char* argv[])
                         topology.GetOnlineConstellation());
                 }
             }
+            if (config.faultMode == "validation-replay")
+            {
+                const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+                const auto trace = ReadValidationFaultTrace(
+                    config.validationFaultTrace, ids, simulationDurationNs);
+                faultController = CreateObject<FaultController>();
+                faultController->ConfigureValidationReplay(trace, ids, simulationDurationNs);
+                faultController->BindTopology(topology);
+            }
             if (computeProfile.has_value() && taskTrace.has_value())
             {
                 taskCoordinator = CreateObject<TaskCoordinator>();
@@ -593,14 +639,105 @@ main(int argc, char* argv[])
             {
                 faultModelEngine->BindTaskCoordinator(taskCoordinator);
             }
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+            std::unique_ptr<MultiTreePreflight> multitreePreflight;
+            if (testMultitreeMapping)
+            {
+                if (config.protection.scheme != protection::ProtectionScheme::OFF ||
+                    config.faultMode != "generate")
+                    FailConfig("testMultitreeMapping", "requires off + generate");
+                multitreePreflight = std::make_unique<MultiTreePreflight>(taskCoordinator, faultModelEngine);
+            }
+#endif
 
             std::unique_ptr<compfrr::ShadowEvaluator> shadow;
-            if (config.compfrrShadow)
+            std::unique_ptr<protection::FixedProtectionController> protection;
+            std::unique_ptr<protection::FrequencyProtectionController> frequency;
+            std::unique_ptr<protection::RecomputeController> recompute;
+            std::unique_ptr<protection::OnePlusOneController> replication;
+            std::unique_ptr<protection::multitree::MultiTreeController> multitree;
+            std::unique_ptr<protection::checkbullet::CbSatController> checkbullet;
+            for (const auto name : {"multitree-decisions.csv", "multitree-mapping-summary.json", "multitree-summary.json"})
+                std::filesystem::remove(outputDirectory / name);
+            protection::checkbullet::CbSatController::RemoveOutputs(outputDirectory);
+            for (const auto name : {"input-admission-decisions.csv", "input-prefetch-events.csv",
+                                    "input-prefetch-summary.json", "input-start-snapshots.json",
+                                    "compfrr-policy-aware-admission.csv"})
+                std::filesystem::remove(outputDirectory / name);
+            for (const auto name : {"replica-summary.csv", "replica-attempts.csv", "replica-events.csv", "replica-transfers.csv"})
+                std::filesystem::remove(outputDirectory / name);
+            std::filesystem::remove(outputDirectory / "frequency-decisions.csv");
+            std::filesystem::remove(outputDirectory / "frequency-pause-intervals.csv");
+            std::filesystem::remove(outputDirectory / "frequency-capacity-waits.csv");
+            std::filesystem::remove(outputDirectory / "compfrr-placement-decisions.csv");
+            std::filesystem::remove(outputDirectory / "placement-resource-summary.csv");
+            std::filesystem::remove(outputDirectory / "f3-compute-risk-snapshots.csv");
+            const auto makePlacement = [&]() -> std::unique_ptr<protection::PlacementPolicy> {
+                const auto placement = protection::ActivePlacementPolicy(config.protection);
+                if (placement == protection::PlacementPolicyKind::COMPFRR)
+                    return std::make_unique<protection::CompFrrPlacementPolicy>(protection::ParseCompFrrPlacementVariant(
+                        protection::LegacyPlacementVariant(config.protection.compfrr)));
+                if (placement == protection::PlacementPolicyKind::LRL)
+                    return std::make_unique<protection::LeastRecoveryLoadPlacementPolicy>(config.protection.commonPlacement.lrlRecoveryWeight);
+                if (placement == protection::PlacementPolicyKind::FA_LRL)
+                    return std::make_unique<protection::FaLeastRecoveryLoadPlacementPolicy>(config.protection.commonPlacement.lrlRecoveryWeight);
+                if (placement == protection::PlacementPolicyKind::FFP)
+                    return std::make_unique<protection::FirstFeasiblePlacementPolicy>();
+                return std::make_unique<protection::FaFirstFeasiblePlacementPolicy>();
+            };
+            if (protection::IsFixedProtection(config.protection))
+            {
+                protection = std::make_unique<protection::FixedProtectionController>(
+                    taskCoordinator,
+                    topology,
+                    config.protection.common.backupStorageBytesPerNode,
+                    simulationDurationNs,
+                    protection::FixedDeltaPermille(config.protection.compfrr.fixed),
+                    config.protection.compfrr.fixed.batchN,
+                    config.faultMode != "none", makePlacement(), config.protection.compfrr.recoveryPolicy);
+            }
+            else if (protection::IsAdaptiveProtection(config.protection))
+            {
+                frequency = std::make_unique<protection::FrequencyProtectionController>(
+                    taskCoordinator, topology, faultModelEngine,
+                    config.protection.common.backupStorageBytesPerNode, simulationDurationNs,
+                    makePlacement(), config.protection.compfrr.recoveryPolicy,
+                    config.protection.compfrr.inputPolicy, true);
+            }
+            else if (config.protection.scheme == protection::ProtectionScheme::CB_SAT)
+            {
+                RemoveProtectionMetrics(outputDirectory);
+                checkbullet = std::make_unique<protection::checkbullet::CbSatController>(
+                    taskCoordinator, topology, config.protection.common.backupStorageBytesPerNode,
+                    simulationDurationNs, makePlacement(), config.protection.cbSat.busyPolicy);
+            }
+            else if (config.protection.scheme == protection::ProtectionScheme::RECOMPUTE)
+            {
+                RemoveProtectionMetrics(outputDirectory);
+                recompute = std::make_unique<protection::RecomputeController>(
+                    taskCoordinator, topology, simulationDurationNs, makePlacement());
+            }
+            else if (config.protection.scheme == protection::ProtectionScheme::ONE_PLUS_ONE)
+            {
+                RemoveProtectionMetrics(outputDirectory);
+                replication = std::make_unique<protection::OnePlusOneController>(
+                    taskCoordinator, topology, simulationDurationNs, makePlacement());
+            }
+            else if (config.protection.scheme == protection::ProtectionScheme::MULTITREE)
+            {
+                multitree = std::make_unique<protection::multitree::MultiTreeController>(
+                    taskCoordinator, topology, faultModelEngine, simulationDurationNs, makePlacement());
+            }
+            else
+            {
+                RemoveProtectionMetrics(outputDirectory);
+            }
+            if (config.protection.diagnostics.compfrrShadow)
             {
                 shadow = std::make_unique<compfrr::ShadowEvaluator>(taskCoordinator, faultModelEngine,
                     *computeProfile, config.islBandwidthBps,
-                    config.compfrrShadowOutput.empty() ? outputDirectory / "shadow" :
-                        std::filesystem::path(config.compfrrShadowOutput));
+                    config.protection.diagnostics.compfrrShadowOutput.empty() ? outputDirectory / "shadow" :
+                        std::filesystem::path(config.protection.diagnostics.compfrrShadowOutput));
             }
 
             std::optional<LinkMetricsRecorder> linkMetrics;
@@ -619,7 +756,58 @@ main(int argc, char* argv[])
             const auto wallStart = std::chrono::steady_clock::now();
             Simulator::Run();
             const auto wallStop = std::chrono::steady_clock::now();
+#ifdef SATCOMPUTE_PROTECTION_TEST_DRIVER
+            if (multitreePreflight) multitreePreflight->Write(outputDirectory);
+#endif
             if (shadow) shadow->Finalize();
+            if (multitree)
+            {
+                multitree->Finalize();
+                multitree->WriteMetrics(outputDirectory);
+            }
+            if (checkbullet)
+            {
+                checkbullet->Finalize();
+                checkbullet->WriteMetrics(outputDirectory);
+            }
+            if (replication)
+            {
+                replication->Finalize();
+                WriteProtectionMetrics(replication->Manager().Ledger(), *transferEngine, outputDirectory);
+                replication->Manager().WriteMetrics(outputDirectory);
+                replication->Manager().Placement().WriteSelections(outputDirectory);
+                replication->Manager().PlacementLoads().WriteMetrics(outputDirectory);
+            }
+            if (recompute)
+            {
+                recompute->Finalize();
+                WriteProtectionMetrics(recompute->Manager(), *transferEngine, outputDirectory);
+                recompute->Recovery().WriteMetrics(outputDirectory);
+                recompute->Placement().WriteSelections(outputDirectory);
+                recompute->PlacementLoads().WriteMetrics(outputDirectory);
+            }
+            if (frequency)
+            {
+                frequency->Finalize();
+                WriteProtectionMetrics(frequency->Manager(), *transferEngine, outputDirectory);
+                frequency->Recovery()->WriteMetrics(outputDirectory);
+                frequency->WriteDecisions(outputDirectory);
+                frequency->WriteInputAdmissionAudit(outputDirectory);
+                frequency->PlacementLoads().WriteMetrics(outputDirectory);
+                frequency->Placement().WriteSelections(outputDirectory);
+            }
+            if (protection)
+            {
+                protection->Finalize();
+                WriteProtectionMetrics(protection->Manager(), *transferEngine, outputDirectory);
+                protection->PlacementLoads().WriteMetrics(outputDirectory);
+                protection->Placement().WriteSelections(outputDirectory);
+                if (protection->Recovery())
+                    protection->Recovery()->WriteMetrics(outputDirectory);
+                else
+                    for (const auto name : {"recovery-summary.csv", "recovery-events.csv"})
+                        std::filesystem::remove(outputDirectory / name);
+            }
             if (linkMetrics)
             {
                 linkMetrics->Finalize();
@@ -629,6 +817,8 @@ main(int argc, char* argv[])
                 const FaultTrace& generatedTrace = faultModelEngine->Finalize();
                 WriteFaultTraceV2(config.faultTrace, generatedTrace);
             }
+            else if (config.faultMode == "validation-replay")
+                WriteFaultTraceV2(config.faultTrace, faultController->GetTrace());
             const int64_t wallClockNs =
                 std::chrono::duration_cast<std::chrono::nanoseconds>(wallStop - wallStart).count();
             std::optional<CapacityAwareRuntimeSummary> capacitySummary;

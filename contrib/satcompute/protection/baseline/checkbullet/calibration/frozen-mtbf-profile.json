@@ -1,0 +1,6603 @@
+{
+  "scope": "healthy_ordinary_running_primary_before_draw",
+  "clock": "eligible_checks_times_check_interval",
+  "protection_mode": "off",
+  "f3_enabled": false,
+  "seed": 1,
+  "runs": [
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    110
+  ],
+  "check_interval_ns": 1000000000,
+  "eligible_check_count": 33430,
+  "eligible_exposure_seconds": 33430.0,
+  "joint_failure_count": 806,
+  "mtbf_seconds": 41.47642679900744,
+  "source_execution": "output/cb-sat-v2/20260912T163425212424Z-calibration",
+  "execution_commit": "a47128a1d8fb4a930a821c24ab6ea23d4c196588",
+  "created_utc": "2026-09-12T16:55:54.891163+00:00",
+  "pilots": [
+    {
+      "eligible_check_count": 3359,
+      "joint_failure_count": 83,
+      "eligible_exposure_seconds": 3359.0,
+      "mtbf_seconds": 40.46987951807229,
+      "outside_scope_fault_count": 3,
+      "duplicate_probability_rows": 0,
+      "duplicate_state_rows": 0,
+      "nodes": {
+        "0": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0006298054294611166
+        },
+        "1": {
+          "eligible_checks": 18,
+          "joint_failures": 0,
+          "q_sum": 0.0022631219455373497
+        },
+        "2": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "3": {
+          "eligible_checks": 19,
+          "joint_failures": 0,
+          "q_sum": 0.0007281910378587053
+        },
+        "4": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "5": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.08070984185230279
+        },
+        "7": {
+          "eligible_checks": 26,
+          "joint_failures": 0,
+          "q_sum": 0.0033232890551033734
+        },
+        "8": {
+          "eligible_checks": 438,
+          "joint_failures": 17,
+          "q_sum": 20.252476724597784
+        },
+        "9": {
+          "eligible_checks": 339,
+          "joint_failures": 11,
+          "q_sum": 10.181819430451132
+        },
+        "10": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0008280690289966808
+        },
+        "11": {
+          "eligible_checks": 419,
+          "joint_failures": 17,
+          "q_sum": 17.820373975061678
+        },
+        "12": {
+          "eligible_checks": 459,
+          "joint_failures": 18,
+          "q_sum": 17.26997070893178
+        },
+        "13": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 6.12042833628701e-05
+        },
+        "14": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "16": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0014667659524355559
+        },
+        "17": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.01658186248062954
+        },
+        "18": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 0.0026484460216286143
+        },
+        "19": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00014562417315222564
+        },
+        "20": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.00017459367500582967
+        },
+        "21": {
+          "eligible_checks": 25,
+          "joint_failures": 0,
+          "q_sum": 0.0009155281622409417
+        },
+        "22": {
+          "eligible_checks": 64,
+          "joint_failures": 1,
+          "q_sum": 0.2747749867198037
+        },
+        "23": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0004397362003323302
+        },
+        "24": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.0003430766265674068
+        },
+        "25": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0015930163746985526
+        },
+        "26": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.003592891197849668
+        },
+        "27": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.002084181238696692
+        },
+        "28": {
+          "eligible_checks": 8,
+          "joint_failures": 0,
+          "q_sum": 0.00106483770851451
+        },
+        "29": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.007505628499007377
+        },
+        "30": {
+          "eligible_checks": 1,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "31": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0005250544462476192
+        },
+        "32": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0011685087999482313
+        },
+        "33": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 7.961871864881065e-05
+        },
+        "34": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0011998924806225775
+        },
+        "35": {
+          "eligible_checks": 24,
+          "joint_failures": 0,
+          "q_sum": 0.0008973478745191166
+        },
+        "36": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.00528114806110469
+        },
+        "37": {
+          "eligible_checks": 29,
+          "joint_failures": 0,
+          "q_sum": 0.0018013325011647652
+        },
+        "38": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.00044517407817212806
+        },
+        "39": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0034506699853729117
+        },
+        "40": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005696807860090525
+        },
+        "41": {
+          "eligible_checks": 218,
+          "joint_failures": 6,
+          "q_sum": 6.608837621486378
+        },
+        "42": {
+          "eligible_checks": 238,
+          "joint_failures": 8,
+          "q_sum": 5.705093881997962
+        },
+        "43": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0006463018767268736
+        },
+        "44": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0004942994884841179
+        },
+        "45": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 3.983655906025785e-05
+        },
+        "46": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "47": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 0.00025979602072467856
+        },
+        "48": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0017120743582851317
+        },
+        "49": {
+          "eligible_checks": 57,
+          "joint_failures": 0,
+          "q_sum": 0.010879406591281393
+        },
+        "50": {
+          "eligible_checks": 6,
+          "joint_failures": 0,
+          "q_sum": 9.952902004894959e-06
+        },
+        "51": {
+          "eligible_checks": 98,
+          "joint_failures": 0,
+          "q_sum": 0.08940541511215017
+        },
+        "52": {
+          "eligible_checks": 151,
+          "joint_failures": 4,
+          "q_sum": 2.14564347488069
+        },
+        "53": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 0.0004067132214059521
+        },
+        "54": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 2.176403348908007e-05
+        },
+        "55": {
+          "eligible_checks": 84,
+          "joint_failures": 1,
+          "q_sum": 1.7143226093972275
+        },
+        "56": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.0009953114388746576
+        },
+        "57": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "58": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0023533564138661367
+        },
+        "59": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 2.7455645597029843e-06
+        },
+        "60": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00021767461252064635
+        },
+        "61": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.00033116544097389067
+        },
+        "62": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.01864572266251241
+        },
+        "63": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005066951723091684
+        },
+        "64": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0003455031592278779
+        },
+        "65": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0028757992592833848
+        }
+      },
+      "eligible_fault_keys": [
+        [
+          33000000000,
+          42
+        ],
+        [
+          48000000000,
+          42
+        ],
+        [
+          55000000000,
+          9
+        ],
+        [
+          62000000000,
+          12
+        ],
+        [
+          66000000000,
+          42
+        ],
+        [
+          95000000000,
+          42
+        ],
+        [
+          109000000000,
+          9
+        ],
+        [
+          109000000000,
+          12
+        ],
+        [
+          129000000000,
+          9
+        ],
+        [
+          133000000000,
+          12
+        ],
+        [
+          155000000000,
+          12
+        ],
+        [
+          157000000000,
+          9
+        ],
+        [
+          170000000000,
+          42
+        ],
+        [
+          177000000000,
+          12
+        ],
+        [
+          179000000000,
+          9
+        ],
+        [
+          200000000000,
+          12
+        ],
+        [
+          201000000000,
+          42
+        ],
+        [
+          209000000000,
+          9
+        ],
+        [
+          226000000000,
+          12
+        ],
+        [
+          226000000000,
+          42
+        ],
+        [
+          248000000000,
+          9
+        ],
+        [
+          272000000000,
+          42
+        ],
+        [
+          300000000000,
+          9
+        ],
+        [
+          312000000000,
+          12
+        ],
+        [
+          334000000000,
+          12
+        ],
+        [
+          340000000000,
+          9
+        ],
+        [
+          364000000000,
+          9
+        ],
+        [
+          364000000000,
+          12
+        ],
+        [
+          389000000000,
+          12
+        ],
+        [
+          412000000000,
+          12
+        ],
+        [
+          413000000000,
+          52
+        ],
+        [
+          430000000000,
+          52
+        ],
+        [
+          442000000000,
+          12
+        ],
+        [
+          456000000000,
+          52
+        ],
+        [
+          465000000000,
+          9
+        ],
+        [
+          472000000000,
+          12
+        ],
+        [
+          499000000000,
+          12
+        ],
+        [
+          505000000000,
+          55
+        ],
+        [
+          518000000000,
+          12
+        ],
+        [
+          543000000000,
+          12
+        ],
+        [
+          548000000000,
+          8
+        ],
+        [
+          568000000000,
+          12
+        ],
+        [
+          574000000000,
+          22
+        ],
+        [
+          579000000000,
+          8
+        ],
+        [
+          588000000000,
+          52
+        ],
+        [
+          607000000000,
+          8
+        ],
+        [
+          631000000000,
+          8
+        ],
+        [
+          631000000000,
+          11
+        ],
+        [
+          658000000000,
+          8
+        ],
+        [
+          658000000000,
+          11
+        ],
+        [
+          686000000000,
+          8
+        ],
+        [
+          688000000000,
+          11
+        ],
+        [
+          711000000000,
+          11
+        ],
+        [
+          715000000000,
+          8
+        ],
+        [
+          732000000000,
+          11
+        ],
+        [
+          747000000000,
+          8
+        ],
+        [
+          749000000000,
+          41
+        ],
+        [
+          759000000000,
+          11
+        ],
+        [
+          772000000000,
+          8
+        ],
+        [
+          772000000000,
+          41
+        ],
+        [
+          785000000000,
+          11
+        ],
+        [
+          789000000000,
+          8
+        ],
+        [
+          802000000000,
+          41
+        ],
+        [
+          809000000000,
+          11
+        ],
+        [
+          825000000000,
+          41
+        ],
+        [
+          830000000000,
+          8
+        ],
+        [
+          842000000000,
+          11
+        ],
+        [
+          853000000000,
+          41
+        ],
+        [
+          869000000000,
+          8
+        ],
+        [
+          878000000000,
+          41
+        ],
+        [
+          892000000000,
+          8
+        ],
+        [
+          896000000000,
+          11
+        ],
+        [
+          913000000000,
+          11
+        ],
+        [
+          915000000000,
+          8
+        ],
+        [
+          934000000000,
+          11
+        ],
+        [
+          941000000000,
+          8
+        ],
+        [
+          959000000000,
+          11
+        ],
+        [
+          968000000000,
+          8
+        ],
+        [
+          982000000000,
+          11
+        ],
+        [
+          990000000000,
+          8
+        ],
+        [
+          1009000000000,
+          11
+        ],
+        [
+          1036000000000,
+          11
+        ],
+        [
+          1058000000000,
+          11
+        ]
+      ],
+      "run": 101,
+      "actual_primary_service_seconds": 3301.292592779
+    },
+    {
+      "eligible_check_count": 3351,
+      "joint_failure_count": 82,
+      "eligible_exposure_seconds": 3351.0,
+      "mtbf_seconds": 40.86585365853659,
+      "outside_scope_fault_count": 3,
+      "duplicate_probability_rows": 0,
+      "duplicate_state_rows": 0,
+      "nodes": {
+        "0": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0006298054294611166
+        },
+        "1": {
+          "eligible_checks": 18,
+          "joint_failures": 0,
+          "q_sum": 0.0022631219455373497
+        },
+        "2": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "3": {
+          "eligible_checks": 19,
+          "joint_failures": 0,
+          "q_sum": 0.0007281910378587053
+        },
+        "4": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "5": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.08070984185230279
+        },
+        "7": {
+          "eligible_checks": 26,
+          "joint_failures": 0,
+          "q_sum": 0.0033232890551033734
+        },
+        "8": {
+          "eligible_checks": 427,
+          "joint_failures": 18,
+          "q_sum": 12.916165306941927
+        },
+        "9": {
+          "eligible_checks": 351,
+          "joint_failures": 11,
+          "q_sum": 11.957947980659767
+        },
+        "10": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0008280690289966808
+        },
+        "11": {
+          "eligible_checks": 417,
+          "joint_failures": 17,
+          "q_sum": 13.144245023969834
+        },
+        "12": {
+          "eligible_checks": 457,
+          "joint_failures": 18,
+          "q_sum": 13.698278079329903
+        },
+        "13": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 6.12042833628701e-05
+        },
+        "14": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "16": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0014667659524355559
+        },
+        "17": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.01658186248062954
+        },
+        "18": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 0.0026484460216286143
+        },
+        "19": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00014562417315222564
+        },
+        "20": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.00017459367500582967
+        },
+        "21": {
+          "eligible_checks": 25,
+          "joint_failures": 0,
+          "q_sum": 0.0009155281622409417
+        },
+        "22": {
+          "eligible_checks": 56,
+          "joint_failures": 1,
+          "q_sum": 1.2561956221976438
+        },
+        "23": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0004397362003323302
+        },
+        "24": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.0003430766265674068
+        },
+        "25": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0015930163746985526
+        },
+        "26": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.003592891197849668
+        },
+        "27": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.002084181238696692
+        },
+        "28": {
+          "eligible_checks": 8,
+          "joint_failures": 0,
+          "q_sum": 0.00106483770851451
+        },
+        "29": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.007505628499007377
+        },
+        "30": {
+          "eligible_checks": 1,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "31": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0005250544462476192
+        },
+        "32": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0011685087999482313
+        },
+        "33": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 7.961871864881065e-05
+        },
+        "34": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0011998924806225775
+        },
+        "35": {
+          "eligible_checks": 24,
+          "joint_failures": 0,
+          "q_sum": 0.0008973478745191166
+        },
+        "36": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.00528114806110469
+        },
+        "37": {
+          "eligible_checks": 29,
+          "joint_failures": 0,
+          "q_sum": 0.0018013325011647652
+        },
+        "38": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.00044517407817212806
+        },
+        "39": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0034506699853729117
+        },
+        "40": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005696807860090525
+        },
+        "41": {
+          "eligible_checks": 220,
+          "joint_failures": 6,
+          "q_sum": 4.466433273755632
+        },
+        "42": {
+          "eligible_checks": 242,
+          "joint_failures": 6,
+          "q_sum": 9.680453920805704
+        },
+        "43": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0006463018767268736
+        },
+        "44": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0004942994884841179
+        },
+        "45": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 3.983655906025785e-05
+        },
+        "46": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "47": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 0.00025979602072467856
+        },
+        "48": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0017120743582851317
+        },
+        "49": {
+          "eligible_checks": 57,
+          "joint_failures": 0,
+          "q_sum": 0.010879406591281393
+        },
+        "50": {
+          "eligible_checks": 6,
+          "joint_failures": 0,
+          "q_sum": 9.952902004894959e-06
+        },
+        "51": {
+          "eligible_checks": 98,
+          "joint_failures": 1,
+          "q_sum": 0.04283197437139308
+        },
+        "52": {
+          "eligible_checks": 149,
+          "joint_failures": 3,
+          "q_sum": 2.9343747611711137
+        },
+        "53": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 0.0004067132214059521
+        },
+        "54": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 2.176403348908007e-05
+        },
+        "55": {
+          "eligible_checks": 83,
+          "joint_failures": 1,
+          "q_sum": 1.4498146064093338
+        },
+        "56": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.0009953114388746576
+        },
+        "57": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "58": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0023533564138661367
+        },
+        "59": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 2.7455645597029843e-06
+        },
+        "60": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00021767461252064635
+        },
+        "61": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.00033116544097389067
+        },
+        "62": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.01864572266251241
+        },
+        "63": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005066951723091684
+        },
+        "64": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0003455031592278779
+        },
+        "65": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0028757992592833848
+        }
+      },
+      "eligible_fault_keys": [
+        [
+          35000000000,
+          42
+        ],
+        [
+          52000000000,
+          9
+        ],
+        [
+          54000000000,
+          42
+        ],
+        [
+          68000000000,
+          12
+        ],
+        [
+          73000000000,
+          9
+        ],
+        [
+          85000000000,
+          42
+        ],
+        [
+          110000000000,
+          12
+        ],
+        [
+          113000000000,
+          9
+        ],
+        [
+          139000000000,
+          12
+        ],
+        [
+          143000000000,
+          9
+        ],
+        [
+          165000000000,
+          12
+        ],
+        [
+          173000000000,
+          9
+        ],
+        [
+          186000000000,
+          12
+        ],
+        [
+          197000000000,
+          9
+        ],
+        [
+          208000000000,
+          12
+        ],
+        [
+          210000000000,
+          42
+        ],
+        [
+          218000000000,
+          9
+        ],
+        [
+          236000000000,
+          42
+        ],
+        [
+          266000000000,
+          42
+        ],
+        [
+          295000000000,
+          9
+        ],
+        [
+          318000000000,
+          12
+        ],
+        [
+          336000000000,
+          12
+        ],
+        [
+          349000000000,
+          9
+        ],
+        [
+          361000000000,
+          12
+        ],
+        [
+          371000000000,
+          9
+        ],
+        [
+          385000000000,
+          12
+        ],
+        [
+          410000000000,
+          12
+        ],
+        [
+          416000000000,
+          52
+        ],
+        [
+          431000000000,
+          12
+        ],
+        [
+          444000000000,
+          52
+        ],
+        [
+          456000000000,
+          12
+        ],
+        [
+          467000000000,
+          9
+        ],
+        [
+          477000000000,
+          12
+        ],
+        [
+          502000000000,
+          12
+        ],
+        [
+          504000000000,
+          55
+        ],
+        [
+          523000000000,
+          12
+        ],
+        [
+          546000000000,
+          8
+        ],
+        [
+          546000000000,
+          12
+        ],
+        [
+          567000000000,
+          8
+        ],
+        [
+          567000000000,
+          12
+        ],
+        [
+          581000000000,
+          22
+        ],
+        [
+          587000000000,
+          52
+        ],
+        [
+          589000000000,
+          8
+        ],
+        [
+          613000000000,
+          8
+        ],
+        [
+          633000000000,
+          8
+        ],
+        [
+          633000000000,
+          11
+        ],
+        [
+          657000000000,
+          11
+        ],
+        [
+          658000000000,
+          8
+        ],
+        [
+          682000000000,
+          8
+        ],
+        [
+          705000000000,
+          11
+        ],
+        [
+          706000000000,
+          8
+        ],
+        [
+          723000000000,
+          8
+        ],
+        [
+          732000000000,
+          11
+        ],
+        [
+          737000000000,
+          8
+        ],
+        [
+          751000000000,
+          11
+        ],
+        [
+          752000000000,
+          41
+        ],
+        [
+          762000000000,
+          8
+        ],
+        [
+          775000000000,
+          11
+        ],
+        [
+          779000000000,
+          41
+        ],
+        [
+          792000000000,
+          8
+        ],
+        [
+          796000000000,
+          11
+        ],
+        [
+          803000000000,
+          41
+        ],
+        [
+          821000000000,
+          11
+        ],
+        [
+          826000000000,
+          41
+        ],
+        [
+          836000000000,
+          8
+        ],
+        [
+          850000000000,
+          11
+        ],
+        [
+          850000000000,
+          41
+        ],
+        [
+          866000000000,
+          8
+        ],
+        [
+          872000000000,
+          41
+        ],
+        [
+          899000000000,
+          11
+        ],
+        [
+          917000000000,
+          8
+        ],
+        [
+          922000000000,
+          51
+        ],
+        [
+          925000000000,
+          11
+        ],
+        [
+          943000000000,
+          8
+        ],
+        [
+          947000000000,
+          11
+        ],
+        [
+          967000000000,
+          8
+        ],
+        [
+          970000000000,
+          11
+        ],
+        [
+          993000000000,
+          11
+        ],
+        [
+          995000000000,
+          8
+        ],
+        [
+          1020000000000,
+          11
+        ],
+        [
+          1046000000000,
+          11
+        ],
+        [
+          1067000000000,
+          11
+        ]
+      ],
+      "run": 102,
+      "actual_primary_service_seconds": 3300.212474122
+    },
+    {
+      "eligible_check_count": 3320,
+      "joint_failure_count": 81,
+      "eligible_exposure_seconds": 3320.0,
+      "mtbf_seconds": 40.98765432098765,
+      "outside_scope_fault_count": 1,
+      "duplicate_probability_rows": 0,
+      "duplicate_state_rows": 0,
+      "nodes": {
+        "0": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0006298054294611166
+        },
+        "1": {
+          "eligible_checks": 18,
+          "joint_failures": 0,
+          "q_sum": 0.0022631219455373497
+        },
+        "2": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "3": {
+          "eligible_checks": 19,
+          "joint_failures": 0,
+          "q_sum": 0.0007281910378587053
+        },
+        "4": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "5": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.08070984185230279
+        },
+        "7": {
+          "eligible_checks": 26,
+          "joint_failures": 0,
+          "q_sum": 0.0033232890551033734
+        },
+        "8": {
+          "eligible_checks": 412,
+          "joint_failures": 16,
+          "q_sum": 11.008628996323507
+        },
+        "9": {
+          "eligible_checks": 360,
+          "joint_failures": 11,
+          "q_sum": 15.22313669090435
+        },
+        "10": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0008280690289966808
+        },
+        "11": {
+          "eligible_checks": 407,
+          "joint_failures": 17,
+          "q_sum": 15.596292326921487
+        },
+        "12": {
+          "eligible_checks": 452,
+          "joint_failures": 18,
+          "q_sum": 16.223507983330677
+        },
+        "13": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 6.12042833628701e-05
+        },
+        "14": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "16": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0014667659524355559
+        },
+        "17": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.01658186248062954
+        },
+        "18": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 0.0026484460216286143
+        },
+        "19": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00014562417315222564
+        },
+        "20": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.00017459367500582967
+        },
+        "21": {
+          "eligible_checks": 25,
+          "joint_failures": 0,
+          "q_sum": 0.0009155281622409417
+        },
+        "22": {
+          "eligible_checks": 54,
+          "joint_failures": 1,
+          "q_sum": 0.7497140107763259
+        },
+        "23": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0004397362003323302
+        },
+        "24": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.0003430766265674068
+        },
+        "25": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0015930163746985526
+        },
+        "26": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.003592891197849668
+        },
+        "27": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.002084181238696692
+        },
+        "28": {
+          "eligible_checks": 8,
+          "joint_failures": 0,
+          "q_sum": 0.00106483770851451
+        },
+        "29": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.007505628499007377
+        },
+        "30": {
+          "eligible_checks": 1,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "31": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0005250544462476192
+        },
+        "32": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0011685087999482313
+        },
+        "33": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 7.961871864881065e-05
+        },
+        "34": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0011998924806225775
+        },
+        "35": {
+          "eligible_checks": 24,
+          "joint_failures": 0,
+          "q_sum": 0.0008973478745191166
+        },
+        "36": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.00528114806110469
+        },
+        "37": {
+          "eligible_checks": 29,
+          "joint_failures": 1,
+          "q_sum": 0.0018013325011647652
+        },
+        "38": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.00044517407817212806
+        },
+        "39": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0034506699853729117
+        },
+        "40": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005696807860090525
+        },
+        "41": {
+          "eligible_checks": 211,
+          "joint_failures": 7,
+          "q_sum": 5.853153672775151
+        },
+        "42": {
+          "eligible_checks": 244,
+          "joint_failures": 6,
+          "q_sum": 5.4512804831218755
+        },
+        "43": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0006463018767268736
+        },
+        "44": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0004942994884841179
+        },
+        "45": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 3.983655906025785e-05
+        },
+        "46": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "47": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 0.00025979602072467856
+        },
+        "48": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0017120743582851317
+        },
+        "49": {
+          "eligible_checks": 57,
+          "joint_failures": 0,
+          "q_sum": 0.010879406591281393
+        },
+        "50": {
+          "eligible_checks": 6,
+          "joint_failures": 0,
+          "q_sum": 9.952902004894959e-06
+        },
+        "51": {
+          "eligible_checks": 98,
+          "joint_failures": 0,
+          "q_sum": 0.08940541511215017
+        },
+        "52": {
+          "eligible_checks": 148,
+          "joint_failures": 3,
+          "q_sum": 1.9100327037157272
+        },
+        "53": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 0.0004067132214059521
+        },
+        "54": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 2.176403348908007e-05
+        },
+        "55": {
+          "eligible_checks": 83,
+          "joint_failures": 1,
+          "q_sum": 1.4498146064093338
+        },
+        "56": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.0009953114388746576
+        },
+        "57": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "58": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0023533564138661367
+        },
+        "59": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 2.7455645597029843e-06
+        },
+        "60": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00021767461252064635
+        },
+        "61": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.00033116544097389067
+        },
+        "62": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.01864572266251241
+        },
+        "63": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005066951723091684
+        },
+        "64": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0003455031592278779
+        },
+        "65": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0028757992592833848
+        }
+      },
+      "eligible_fault_keys": [
+        [
+          33000000000,
+          42
+        ],
+        [
+          49000000000,
+          9
+        ],
+        [
+          59000000000,
+          42
+        ],
+        [
+          65000000000,
+          12
+        ],
+        [
+          76000000000,
+          9
+        ],
+        [
+          84000000000,
+          42
+        ],
+        [
+          105000000000,
+          12
+        ],
+        [
+          111000000000,
+          9
+        ],
+        [
+          130000000000,
+          12
+        ],
+        [
+          135000000000,
+          9
+        ],
+        [
+          155000000000,
+          12
+        ],
+        [
+          163000000000,
+          9
+        ],
+        [
+          181000000000,
+          12
+        ],
+        [
+          192000000000,
+          9
+        ],
+        [
+          205000000000,
+          12
+        ],
+        [
+          207000000000,
+          42
+        ],
+        [
+          217000000000,
+          9
+        ],
+        [
+          232000000000,
+          12
+        ],
+        [
+          232000000000,
+          42
+        ],
+        [
+          263000000000,
+          42
+        ],
+        [
+          302000000000,
+          9
+        ],
+        [
+          311000000000,
+          12
+        ],
+        [
+          328000000000,
+          12
+        ],
+        [
+          344000000000,
+          9
+        ],
+        [
+          354000000000,
+          12
+        ],
+        [
+          373000000000,
+          9
+        ],
+        [
+          382000000000,
+          12
+        ],
+        [
+          404000000000,
+          12
+        ],
+        [
+          416000000000,
+          52
+        ],
+        [
+          432000000000,
+          12
+        ],
+        [
+          442000000000,
+          52
+        ],
+        [
+          455000000000,
+          12
+        ],
+        [
+          468000000000,
+          9
+        ],
+        [
+          484000000000,
+          12
+        ],
+        [
+          504000000000,
+          55
+        ],
+        [
+          509000000000,
+          12
+        ],
+        [
+          534000000000,
+          12
+        ],
+        [
+          540000000000,
+          8
+        ],
+        [
+          562000000000,
+          12
+        ],
+        [
+          569000000000,
+          8
+        ],
+        [
+          579000000000,
+          22
+        ],
+        [
+          583000000000,
+          52
+        ],
+        [
+          593000000000,
+          8
+        ],
+        [
+          593000000000,
+          41
+        ],
+        [
+          615000000000,
+          8
+        ],
+        [
+          628000000000,
+          11
+        ],
+        [
+          641000000000,
+          8
+        ],
+        [
+          648000000000,
+          11
+        ],
+        [
+          667000000000,
+          8
+        ],
+        [
+          689000000000,
+          8
+        ],
+        [
+          706000000000,
+          11
+        ],
+        [
+          712000000000,
+          8
+        ],
+        [
+          727000000000,
+          11
+        ],
+        [
+          728000000000,
+          8
+        ],
+        [
+          748000000000,
+          11
+        ],
+        [
+          752000000000,
+          41
+        ],
+        [
+          753000000000,
+          8
+        ],
+        [
+          765000000000,
+          8
+        ],
+        [
+          774000000000,
+          11
+        ],
+        [
+          774000000000,
+          41
+        ],
+        [
+          798000000000,
+          11
+        ],
+        [
+          800000000000,
+          41
+        ],
+        [
+          826000000000,
+          11
+        ],
+        [
+          826000000000,
+          41
+        ],
+        [
+          834000000000,
+          8
+        ],
+        [
+          850000000000,
+          41
+        ],
+        [
+          866000000000,
+          8
+        ],
+        [
+          878000000000,
+          41
+        ],
+        [
+          893000000000,
+          8
+        ],
+        [
+          900000000000,
+          11
+        ],
+        [
+          925000000000,
+          8
+        ],
+        [
+          930000000000,
+          11
+        ],
+        [
+          947000000000,
+          11
+        ],
+        [
+          969000000000,
+          11
+        ],
+        [
+          977000000000,
+          8
+        ],
+        [
+          988000000000,
+          11
+        ],
+        [
+          1013000000000,
+          11
+        ],
+        [
+          1024000000000,
+          37
+        ],
+        [
+          1026000000000,
+          11
+        ],
+        [
+          1052000000000,
+          11
+        ],
+        [
+          1079000000000,
+          11
+        ]
+      ],
+      "run": 103,
+      "actual_primary_service_seconds": 3271.768583258
+    },
+    {
+      "eligible_check_count": 3359,
+      "joint_failure_count": 82,
+      "eligible_exposure_seconds": 3359.0,
+      "mtbf_seconds": 40.96341463414634,
+      "outside_scope_fault_count": 2,
+      "duplicate_probability_rows": 0,
+      "duplicate_state_rows": 0,
+      "nodes": {
+        "0": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0006298054294611166
+        },
+        "1": {
+          "eligible_checks": 18,
+          "joint_failures": 0,
+          "q_sum": 0.0022631219455373497
+        },
+        "2": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "3": {
+          "eligible_checks": 19,
+          "joint_failures": 0,
+          "q_sum": 0.0007281910378587053
+        },
+        "4": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "5": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.08070984185230279
+        },
+        "7": {
+          "eligible_checks": 26,
+          "joint_failures": 0,
+          "q_sum": 0.0033232890551033734
+        },
+        "8": {
+          "eligible_checks": 426,
+          "joint_failures": 15,
+          "q_sum": 15.069973339007369
+        },
+        "9": {
+          "eligible_checks": 339,
+          "joint_failures": 10,
+          "q_sum": 8.792364954053344
+        },
+        "10": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0008280690289966808
+        },
+        "11": {
+          "eligible_checks": 426,
+          "joint_failures": 18,
+          "q_sum": 13.13466851829219
+        },
+        "12": {
+          "eligible_checks": 451,
+          "joint_failures": 19,
+          "q_sum": 16.26904353803646
+        },
+        "13": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 6.12042833628701e-05
+        },
+        "14": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "16": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0014667659524355559
+        },
+        "17": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.01658186248062954
+        },
+        "18": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 0.0026484460216286143
+        },
+        "19": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00014562417315222564
+        },
+        "20": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.00017459367500582967
+        },
+        "21": {
+          "eligible_checks": 25,
+          "joint_failures": 0,
+          "q_sum": 0.0009155281622409417
+        },
+        "22": {
+          "eligible_checks": 65,
+          "joint_failures": 1,
+          "q_sum": 0.3300976424698385
+        },
+        "23": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0004397362003323302
+        },
+        "24": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.0003430766265674068
+        },
+        "25": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0015930163746985526
+        },
+        "26": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.003592891197849668
+        },
+        "27": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.002084181238696692
+        },
+        "28": {
+          "eligible_checks": 8,
+          "joint_failures": 0,
+          "q_sum": 0.00106483770851451
+        },
+        "29": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.007505628499007377
+        },
+        "30": {
+          "eligible_checks": 1,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "31": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0005250544462476192
+        },
+        "32": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0011685087999482313
+        },
+        "33": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 7.961871864881065e-05
+        },
+        "34": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0011998924806225775
+        },
+        "35": {
+          "eligible_checks": 24,
+          "joint_failures": 0,
+          "q_sum": 0.0008973478745191166
+        },
+        "36": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.00528114806110469
+        },
+        "37": {
+          "eligible_checks": 29,
+          "joint_failures": 0,
+          "q_sum": 0.0018013325011647652
+        },
+        "38": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.00044517407817212806
+        },
+        "39": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0034506699853729117
+        },
+        "40": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005696807860090525
+        },
+        "41": {
+          "eligible_checks": 222,
+          "joint_failures": 6,
+          "q_sum": 6.4627535763064765
+        },
+        "42": {
+          "eligible_checks": 248,
+          "joint_failures": 9,
+          "q_sum": 8.934195350707835
+        },
+        "43": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0006463018767268736
+        },
+        "44": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0004942994884841179
+        },
+        "45": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 3.983655906025785e-05
+        },
+        "46": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "47": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 0.00025979602072467856
+        },
+        "48": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0017120743582851317
+        },
+        "49": {
+          "eligible_checks": 57,
+          "joint_failures": 0,
+          "q_sum": 0.010879406591281393
+        },
+        "50": {
+          "eligible_checks": 6,
+          "joint_failures": 0,
+          "q_sum": 9.952902004894959e-06
+        },
+        "51": {
+          "eligible_checks": 98,
+          "joint_failures": 0,
+          "q_sum": 0.08940541511215017
+        },
+        "52": {
+          "eligible_checks": 150,
+          "joint_failures": 3,
+          "q_sum": 3.478309877088669
+        },
+        "53": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 0.0004067132214059521
+        },
+        "54": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 2.176403348908007e-05
+        },
+        "55": {
+          "eligible_checks": 83,
+          "joint_failures": 1,
+          "q_sum": 3.0929913473208734
+        },
+        "56": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.0009953114388746576
+        },
+        "57": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "58": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0023533564138661367
+        },
+        "59": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 2.7455645597029843e-06
+        },
+        "60": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00021767461252064635
+        },
+        "61": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.00033116544097389067
+        },
+        "62": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.01864572266251241
+        },
+        "63": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005066951723091684
+        },
+        "64": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0003455031592278779
+        },
+        "65": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0028757992592833848
+        }
+      },
+      "eligible_fault_keys": [
+        [
+          34000000000,
+          42
+        ],
+        [
+          56000000000,
+          9
+        ],
+        [
+          58000000000,
+          42
+        ],
+        [
+          68000000000,
+          12
+        ],
+        [
+          85000000000,
+          42
+        ],
+        [
+          105000000000,
+          12
+        ],
+        [
+          108000000000,
+          42
+        ],
+        [
+          114000000000,
+          9
+        ],
+        [
+          131000000000,
+          12
+        ],
+        [
+          140000000000,
+          9
+        ],
+        [
+          151000000000,
+          12
+        ],
+        [
+          160000000000,
+          9
+        ],
+        [
+          172000000000,
+          42
+        ],
+        [
+          173000000000,
+          12
+        ],
+        [
+          186000000000,
+          9
+        ],
+        [
+          196000000000,
+          12
+        ],
+        [
+          215000000000,
+          9
+        ],
+        [
+          216000000000,
+          42
+        ],
+        [
+          220000000000,
+          12
+        ],
+        [
+          236000000000,
+          42
+        ],
+        [
+          264000000000,
+          42
+        ],
+        [
+          281000000000,
+          12
+        ],
+        [
+          287000000000,
+          42
+        ],
+        [
+          292000000000,
+          9
+        ],
+        [
+          317000000000,
+          12
+        ],
+        [
+          335000000000,
+          12
+        ],
+        [
+          342000000000,
+          9
+        ],
+        [
+          352000000000,
+          12
+        ],
+        [
+          359000000000,
+          9
+        ],
+        [
+          384000000000,
+          12
+        ],
+        [
+          413000000000,
+          12
+        ],
+        [
+          414000000000,
+          52
+        ],
+        [
+          438000000000,
+          12
+        ],
+        [
+          455000000000,
+          52
+        ],
+        [
+          464000000000,
+          12
+        ],
+        [
+          466000000000,
+          9
+        ],
+        [
+          490000000000,
+          12
+        ],
+        [
+          498000000000,
+          55
+        ],
+        [
+          514000000000,
+          12
+        ],
+        [
+          539000000000,
+          12
+        ],
+        [
+          545000000000,
+          8
+        ],
+        [
+          559000000000,
+          12
+        ],
+        [
+          566000000000,
+          8
+        ],
+        [
+          575000000000,
+          22
+        ],
+        [
+          586000000000,
+          52
+        ],
+        [
+          595000000000,
+          8
+        ],
+        [
+          618000000000,
+          8
+        ],
+        [
+          636000000000,
+          11
+        ],
+        [
+          639000000000,
+          8
+        ],
+        [
+          658000000000,
+          11
+        ],
+        [
+          661000000000,
+          8
+        ],
+        [
+          678000000000,
+          11
+        ],
+        [
+          684000000000,
+          8
+        ],
+        [
+          703000000000,
+          11
+        ],
+        [
+          712000000000,
+          8
+        ],
+        [
+          729000000000,
+          11
+        ],
+        [
+          735000000000,
+          8
+        ],
+        [
+          750000000000,
+          41
+        ],
+        [
+          751000000000,
+          11
+        ],
+        [
+          773000000000,
+          11
+        ],
+        [
+          774000000000,
+          41
+        ],
+        [
+          798000000000,
+          11
+        ],
+        [
+          800000000000,
+          41
+        ],
+        [
+          823000000000,
+          11
+        ],
+        [
+          827000000000,
+          41
+        ],
+        [
+          835000000000,
+          8
+        ],
+        [
+          849000000000,
+          11
+        ],
+        [
+          855000000000,
+          41
+        ],
+        [
+          867000000000,
+          8
+        ],
+        [
+          882000000000,
+          41
+        ],
+        [
+          900000000000,
+          11
+        ],
+        [
+          924000000000,
+          8
+        ],
+        [
+          926000000000,
+          11
+        ],
+        [
+          950000000000,
+          11
+        ],
+        [
+          951000000000,
+          8
+        ],
+        [
+          976000000000,
+          11
+        ],
+        [
+          981000000000,
+          8
+        ],
+        [
+          994000000000,
+          8
+        ],
+        [
+          996000000000,
+          11
+        ],
+        [
+          1018000000000,
+          11
+        ],
+        [
+          1039000000000,
+          11
+        ],
+        [
+          1065000000000,
+          11
+        ]
+      ],
+      "run": 104,
+      "actual_primary_service_seconds": 3308.674393159
+    },
+    {
+      "eligible_check_count": 3318,
+      "joint_failure_count": 79,
+      "eligible_exposure_seconds": 3318.0,
+      "mtbf_seconds": 42.0,
+      "outside_scope_fault_count": 4,
+      "duplicate_probability_rows": 0,
+      "duplicate_state_rows": 0,
+      "nodes": {
+        "0": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0006298054294611166
+        },
+        "1": {
+          "eligible_checks": 18,
+          "joint_failures": 0,
+          "q_sum": 0.0022631219455373497
+        },
+        "2": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "3": {
+          "eligible_checks": 19,
+          "joint_failures": 0,
+          "q_sum": 0.0007281910378587053
+        },
+        "4": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "5": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.08070984185230279
+        },
+        "7": {
+          "eligible_checks": 26,
+          "joint_failures": 0,
+          "q_sum": 0.0033232890551033734
+        },
+        "8": {
+          "eligible_checks": 429,
+          "joint_failures": 17,
+          "q_sum": 19.217175879055528
+        },
+        "9": {
+          "eligible_checks": 339,
+          "joint_failures": 10,
+          "q_sum": 5.450678391237355
+        },
+        "10": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0008280690289966808
+        },
+        "11": {
+          "eligible_checks": 400,
+          "joint_failures": 16,
+          "q_sum": 18.57037616445778
+        },
+        "12": {
+          "eligible_checks": 445,
+          "joint_failures": 17,
+          "q_sum": 16.96468852599926
+        },
+        "13": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 6.12042833628701e-05
+        },
+        "14": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "16": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0014667659524355559
+        },
+        "17": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.01658186248062954
+        },
+        "18": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 0.0026484460216286143
+        },
+        "19": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00014562417315222564
+        },
+        "20": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.00017459367500582967
+        },
+        "21": {
+          "eligible_checks": 25,
+          "joint_failures": 0,
+          "q_sum": 0.0009155281622409417
+        },
+        "22": {
+          "eligible_checks": 57,
+          "joint_failures": 1,
+          "q_sum": 1.6058682795038333
+        },
+        "23": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0004397362003323302
+        },
+        "24": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.0003430766265674068
+        },
+        "25": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0015930163746985526
+        },
+        "26": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.003592891197849668
+        },
+        "27": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.002084181238696692
+        },
+        "28": {
+          "eligible_checks": 8,
+          "joint_failures": 0,
+          "q_sum": 0.00106483770851451
+        },
+        "29": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.007505628499007377
+        },
+        "30": {
+          "eligible_checks": 1,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "31": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0005250544462476192
+        },
+        "32": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0011685087999482313
+        },
+        "33": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 7.961871864881065e-05
+        },
+        "34": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0011998924806225775
+        },
+        "35": {
+          "eligible_checks": 24,
+          "joint_failures": 0,
+          "q_sum": 0.0008973478745191166
+        },
+        "36": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.00528114806110469
+        },
+        "37": {
+          "eligible_checks": 29,
+          "joint_failures": 0,
+          "q_sum": 0.0018013325011647652
+        },
+        "38": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.00044517407817212806
+        },
+        "39": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0034506699853729117
+        },
+        "40": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005696807860090525
+        },
+        "41": {
+          "eligible_checks": 229,
+          "joint_failures": 6,
+          "q_sum": 7.179983213225756
+        },
+        "42": {
+          "eligible_checks": 248,
+          "joint_failures": 7,
+          "q_sum": 9.076418840922564
+        },
+        "43": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0006463018767268736
+        },
+        "44": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0004942994884841179
+        },
+        "45": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 3.983655906025785e-05
+        },
+        "46": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "47": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 0.00025979602072467856
+        },
+        "48": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0017120743582851317
+        },
+        "49": {
+          "eligible_checks": 57,
+          "joint_failures": 0,
+          "q_sum": 0.010879406591281393
+        },
+        "50": {
+          "eligible_checks": 6,
+          "joint_failures": 0,
+          "q_sum": 9.952902004894959e-06
+        },
+        "51": {
+          "eligible_checks": 98,
+          "joint_failures": 0,
+          "q_sum": 0.08940541511215017
+        },
+        "52": {
+          "eligible_checks": 143,
+          "joint_failures": 3,
+          "q_sum": 4.693561505297005
+        },
+        "53": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 0.0004067132214059521
+        },
+        "54": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 2.176403348908007e-05
+        },
+        "55": {
+          "eligible_checks": 79,
+          "joint_failures": 2,
+          "q_sum": 0.8771227303501401
+        },
+        "56": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.0009953114388746576
+        },
+        "57": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "58": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0023533564138661367
+        },
+        "59": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 2.7455645597029843e-06
+        },
+        "60": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00021767461252064635
+        },
+        "61": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.00033116544097389067
+        },
+        "62": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.01864572266251241
+        },
+        "63": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005066951723091684
+        },
+        "64": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0003455031592278779
+        },
+        "65": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0028757992592833848
+        }
+      },
+      "eligible_fault_keys": [
+        [
+          35000000000,
+          42
+        ],
+        [
+          55000000000,
+          9
+        ],
+        [
+          62000000000,
+          42
+        ],
+        [
+          72000000000,
+          12
+        ],
+        [
+          92000000000,
+          42
+        ],
+        [
+          110000000000,
+          12
+        ],
+        [
+          112000000000,
+          9
+        ],
+        [
+          130000000000,
+          12
+        ],
+        [
+          136000000000,
+          9
+        ],
+        [
+          158000000000,
+          12
+        ],
+        [
+          162000000000,
+          9
+        ],
+        [
+          179000000000,
+          9
+        ],
+        [
+          181000000000,
+          12
+        ],
+        [
+          201000000000,
+          9
+        ],
+        [
+          209000000000,
+          42
+        ],
+        [
+          212000000000,
+          12
+        ],
+        [
+          235000000000,
+          42
+        ],
+        [
+          263000000000,
+          42
+        ],
+        [
+          287000000000,
+          9
+        ],
+        [
+          288000000000,
+          42
+        ],
+        [
+          311000000000,
+          12
+        ],
+        [
+          335000000000,
+          12
+        ],
+        [
+          339000000000,
+          9
+        ],
+        [
+          360000000000,
+          9
+        ],
+        [
+          360000000000,
+          12
+        ],
+        [
+          379000000000,
+          12
+        ],
+        [
+          398000000000,
+          12
+        ],
+        [
+          422000000000,
+          12
+        ],
+        [
+          423000000000,
+          52
+        ],
+        [
+          446000000000,
+          12
+        ],
+        [
+          446000000000,
+          52
+        ],
+        [
+          465000000000,
+          9
+        ],
+        [
+          473000000000,
+          12
+        ],
+        [
+          495000000000,
+          12
+        ],
+        [
+          500000000000,
+          55
+        ],
+        [
+          519000000000,
+          12
+        ],
+        [
+          524000000000,
+          55
+        ],
+        [
+          541000000000,
+          12
+        ],
+        [
+          544000000000,
+          8
+        ],
+        [
+          569000000000,
+          8
+        ],
+        [
+          582000000000,
+          22
+        ],
+        [
+          588000000000,
+          52
+        ],
+        [
+          600000000000,
+          8
+        ],
+        [
+          621000000000,
+          8
+        ],
+        [
+          636000000000,
+          11
+        ],
+        [
+          640000000000,
+          8
+        ],
+        [
+          666000000000,
+          11
+        ],
+        [
+          668000000000,
+          8
+        ],
+        [
+          689000000000,
+          8
+        ],
+        [
+          698000000000,
+          11
+        ],
+        [
+          711000000000,
+          8
+        ],
+        [
+          733000000000,
+          11
+        ],
+        [
+          740000000000,
+          8
+        ],
+        [
+          752000000000,
+          11
+        ],
+        [
+          753000000000,
+          41
+        ],
+        [
+          760000000000,
+          8
+        ],
+        [
+          777000000000,
+          11
+        ],
+        [
+          779000000000,
+          41
+        ],
+        [
+          783000000000,
+          8
+        ],
+        [
+          799000000000,
+          41
+        ],
+        [
+          802000000000,
+          11
+        ],
+        [
+          825000000000,
+          41
+        ],
+        [
+          828000000000,
+          11
+        ],
+        [
+          834000000000,
+          8
+        ],
+        [
+          854000000000,
+          41
+        ],
+        [
+          874000000000,
+          8
+        ],
+        [
+          881000000000,
+          41
+        ],
+        [
+          894000000000,
+          11
+        ],
+        [
+          914000000000,
+          11
+        ],
+        [
+          922000000000,
+          8
+        ],
+        [
+          935000000000,
+          11
+        ],
+        [
+          949000000000,
+          8
+        ],
+        [
+          963000000000,
+          11
+        ],
+        [
+          964000000000,
+          8
+        ],
+        [
+          984000000000,
+          8
+        ],
+        [
+          991000000000,
+          11
+        ],
+        [
+          1022000000000,
+          11
+        ],
+        [
+          1038000000000,
+          11
+        ],
+        [
+          1066000000000,
+          11
+        ]
+      ],
+      "run": 105,
+      "actual_primary_service_seconds": 3267.064987444
+    },
+    {
+      "eligible_check_count": 3329,
+      "joint_failure_count": 80,
+      "eligible_exposure_seconds": 3329.0,
+      "mtbf_seconds": 41.6125,
+      "outside_scope_fault_count": 1,
+      "duplicate_probability_rows": 0,
+      "duplicate_state_rows": 0,
+      "nodes": {
+        "0": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0006298054294611166
+        },
+        "1": {
+          "eligible_checks": 18,
+          "joint_failures": 0,
+          "q_sum": 0.0022631219455373497
+        },
+        "2": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "3": {
+          "eligible_checks": 19,
+          "joint_failures": 0,
+          "q_sum": 0.0007281910378587053
+        },
+        "4": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "5": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.08070984185230279
+        },
+        "7": {
+          "eligible_checks": 26,
+          "joint_failures": 0,
+          "q_sum": 0.0033232890551033734
+        },
+        "8": {
+          "eligible_checks": 434,
+          "joint_failures": 15,
+          "q_sum": 21.900671972376795
+        },
+        "9": {
+          "eligible_checks": 358,
+          "joint_failures": 12,
+          "q_sum": 12.207493184539786
+        },
+        "10": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0008280690289966808
+        },
+        "11": {
+          "eligible_checks": 406,
+          "joint_failures": 16,
+          "q_sum": 15.701109340776668
+        },
+        "12": {
+          "eligible_checks": 440,
+          "joint_failures": 17,
+          "q_sum": 21.06079539091192
+        },
+        "13": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 6.12042833628701e-05
+        },
+        "14": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "16": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0014667659524355559
+        },
+        "17": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.01658186248062954
+        },
+        "18": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 0.0026484460216286143
+        },
+        "19": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00014562417315222564
+        },
+        "20": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.00017459367500582967
+        },
+        "21": {
+          "eligible_checks": 25,
+          "joint_failures": 0,
+          "q_sum": 0.0009155281622409417
+        },
+        "22": {
+          "eligible_checks": 64,
+          "joint_failures": 1,
+          "q_sum": 0.2747749867198037
+        },
+        "23": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0004397362003323302
+        },
+        "24": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.0003430766265674068
+        },
+        "25": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0015930163746985526
+        },
+        "26": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.003592891197849668
+        },
+        "27": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.002084181238696692
+        },
+        "28": {
+          "eligible_checks": 8,
+          "joint_failures": 0,
+          "q_sum": 0.00106483770851451
+        },
+        "29": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.007505628499007377
+        },
+        "30": {
+          "eligible_checks": 1,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "31": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0005250544462476192
+        },
+        "32": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0011685087999482313
+        },
+        "33": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 7.961871864881065e-05
+        },
+        "34": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0011998924806225775
+        },
+        "35": {
+          "eligible_checks": 24,
+          "joint_failures": 0,
+          "q_sum": 0.0008973478745191166
+        },
+        "36": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.00528114806110469
+        },
+        "37": {
+          "eligible_checks": 29,
+          "joint_failures": 0,
+          "q_sum": 0.0018013325011647652
+        },
+        "38": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.00044517407817212806
+        },
+        "39": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0034506699853729117
+        },
+        "40": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005696807860090525
+        },
+        "41": {
+          "eligible_checks": 213,
+          "joint_failures": 6,
+          "q_sum": 4.253918556435503
+        },
+        "42": {
+          "eligible_checks": 243,
+          "joint_failures": 7,
+          "q_sum": 8.315145858988068
+        },
+        "43": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0006463018767268736
+        },
+        "44": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0004942994884841179
+        },
+        "45": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 3.983655906025785e-05
+        },
+        "46": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "47": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 0.00025979602072467856
+        },
+        "48": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0017120743582851317
+        },
+        "49": {
+          "eligible_checks": 57,
+          "joint_failures": 0,
+          "q_sum": 0.010879406591281393
+        },
+        "50": {
+          "eligible_checks": 6,
+          "joint_failures": 0,
+          "q_sum": 9.952902004894959e-06
+        },
+        "51": {
+          "eligible_checks": 98,
+          "joint_failures": 0,
+          "q_sum": 0.08940541511215017
+        },
+        "52": {
+          "eligible_checks": 143,
+          "joint_failures": 4,
+          "q_sum": 1.4812119546683762
+        },
+        "53": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 0.0004067132214059521
+        },
+        "54": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 2.176403348908007e-05
+        },
+        "55": {
+          "eligible_checks": 79,
+          "joint_failures": 2,
+          "q_sum": 1.0240362707473363
+        },
+        "56": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.0009953114388746576
+        },
+        "57": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "58": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0023533564138661367
+        },
+        "59": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 2.7455645597029843e-06
+        },
+        "60": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00021767461252064635
+        },
+        "61": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.00033116544097389067
+        },
+        "62": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.01864572266251241
+        },
+        "63": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005066951723091684
+        },
+        "64": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0003455031592278779
+        },
+        "65": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0028757992592833848
+        }
+      },
+      "eligible_fault_keys": [
+        [
+          38000000000,
+          42
+        ],
+        [
+          54000000000,
+          9
+        ],
+        [
+          64000000000,
+          42
+        ],
+        [
+          65000000000,
+          12
+        ],
+        [
+          77000000000,
+          9
+        ],
+        [
+          90000000000,
+          42
+        ],
+        [
+          112000000000,
+          9
+        ],
+        [
+          112000000000,
+          12
+        ],
+        [
+          135000000000,
+          12
+        ],
+        [
+          138000000000,
+          9
+        ],
+        [
+          161000000000,
+          9
+        ],
+        [
+          172000000000,
+          42
+        ],
+        [
+          181000000000,
+          12
+        ],
+        [
+          191000000000,
+          9
+        ],
+        [
+          210000000000,
+          9
+        ],
+        [
+          213000000000,
+          12
+        ],
+        [
+          214000000000,
+          42
+        ],
+        [
+          235000000000,
+          42
+        ],
+        [
+          246000000000,
+          9
+        ],
+        [
+          264000000000,
+          42
+        ],
+        [
+          279000000000,
+          12
+        ],
+        [
+          301000000000,
+          9
+        ],
+        [
+          313000000000,
+          12
+        ],
+        [
+          338000000000,
+          12
+        ],
+        [
+          345000000000,
+          9
+        ],
+        [
+          369000000000,
+          12
+        ],
+        [
+          373000000000,
+          9
+        ],
+        [
+          399000000000,
+          12
+        ],
+        [
+          418000000000,
+          52
+        ],
+        [
+          419000000000,
+          12
+        ],
+        [
+          440000000000,
+          52
+        ],
+        [
+          445000000000,
+          12
+        ],
+        [
+          456000000000,
+          52
+        ],
+        [
+          460000000000,
+          9
+        ],
+        [
+          462000000000,
+          12
+        ],
+        [
+          482000000000,
+          12
+        ],
+        [
+          499000000000,
+          55
+        ],
+        [
+          504000000000,
+          12
+        ],
+        [
+          524000000000,
+          55
+        ],
+        [
+          533000000000,
+          12
+        ],
+        [
+          546000000000,
+          8
+        ],
+        [
+          560000000000,
+          12
+        ],
+        [
+          574000000000,
+          22
+        ],
+        [
+          577000000000,
+          8
+        ],
+        [
+          580000000000,
+          52
+        ],
+        [
+          605000000000,
+          8
+        ],
+        [
+          628000000000,
+          8
+        ],
+        [
+          634000000000,
+          11
+        ],
+        [
+          652000000000,
+          8
+        ],
+        [
+          664000000000,
+          11
+        ],
+        [
+          681000000000,
+          8
+        ],
+        [
+          698000000000,
+          11
+        ],
+        [
+          712000000000,
+          8
+        ],
+        [
+          735000000000,
+          11
+        ],
+        [
+          741000000000,
+          8
+        ],
+        [
+          749000000000,
+          41
+        ],
+        [
+          755000000000,
+          11
+        ],
+        [
+          766000000000,
+          41
+        ],
+        [
+          771000000000,
+          8
+        ],
+        [
+          783000000000,
+          11
+        ],
+        [
+          790000000000,
+          41
+        ],
+        [
+          799000000000,
+          8
+        ],
+        [
+          810000000000,
+          11
+        ],
+        [
+          819000000000,
+          41
+        ],
+        [
+          832000000000,
+          8
+        ],
+        [
+          838000000000,
+          11
+        ],
+        [
+          841000000000,
+          41
+        ],
+        [
+          864000000000,
+          41
+        ],
+        [
+          869000000000,
+          8
+        ],
+        [
+          886000000000,
+          8
+        ],
+        [
+          894000000000,
+          11
+        ],
+        [
+          916000000000,
+          11
+        ],
+        [
+          925000000000,
+          8
+        ],
+        [
+          944000000000,
+          11
+        ],
+        [
+          973000000000,
+          11
+        ],
+        [
+          976000000000,
+          8
+        ],
+        [
+          999000000000,
+          11
+        ],
+        [
+          1017000000000,
+          11
+        ],
+        [
+          1037000000000,
+          11
+        ],
+        [
+          1056000000000,
+          11
+        ]
+      ],
+      "run": 106,
+      "actual_primary_service_seconds": 3270.094912783
+    },
+    {
+      "eligible_check_count": 3347,
+      "joint_failure_count": 76,
+      "eligible_exposure_seconds": 3347.0,
+      "mtbf_seconds": 44.03947368421053,
+      "outside_scope_fault_count": 5,
+      "duplicate_probability_rows": 0,
+      "duplicate_state_rows": 0,
+      "nodes": {
+        "0": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0006298054294611166
+        },
+        "1": {
+          "eligible_checks": 18,
+          "joint_failures": 0,
+          "q_sum": 0.0022631219455373497
+        },
+        "2": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "3": {
+          "eligible_checks": 19,
+          "joint_failures": 0,
+          "q_sum": 0.0007281910378587053
+        },
+        "4": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "5": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.08070984185230279
+        },
+        "7": {
+          "eligible_checks": 26,
+          "joint_failures": 0,
+          "q_sum": 0.0033232890551033734
+        },
+        "8": {
+          "eligible_checks": 427,
+          "joint_failures": 15,
+          "q_sum": 14.591961616202644
+        },
+        "9": {
+          "eligible_checks": 339,
+          "joint_failures": 10,
+          "q_sum": 11.030072274514445
+        },
+        "10": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0008280690289966808
+        },
+        "11": {
+          "eligible_checks": 427,
+          "joint_failures": 17,
+          "q_sum": 19.749393874273117
+        },
+        "12": {
+          "eligible_checks": 445,
+          "joint_failures": 17,
+          "q_sum": 20.01798415270364
+        },
+        "13": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 6.12042833628701e-05
+        },
+        "14": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "16": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0014667659524355559
+        },
+        "17": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.01658186248062954
+        },
+        "18": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 0.0026484460216286143
+        },
+        "19": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00014562417315222564
+        },
+        "20": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.00017459367500582967
+        },
+        "21": {
+          "eligible_checks": 25,
+          "joint_failures": 0,
+          "q_sum": 0.0009155281622409417
+        },
+        "22": {
+          "eligible_checks": 61,
+          "joint_failures": 1,
+          "q_sum": 3.9302703429806716
+        },
+        "23": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0004397362003323302
+        },
+        "24": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.0003430766265674068
+        },
+        "25": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0015930163746985526
+        },
+        "26": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.003592891197849668
+        },
+        "27": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.002084181238696692
+        },
+        "28": {
+          "eligible_checks": 8,
+          "joint_failures": 0,
+          "q_sum": 0.00106483770851451
+        },
+        "29": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.007505628499007377
+        },
+        "30": {
+          "eligible_checks": 1,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "31": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0005250544462476192
+        },
+        "32": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0011685087999482313
+        },
+        "33": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 7.961871864881065e-05
+        },
+        "34": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0011998924806225775
+        },
+        "35": {
+          "eligible_checks": 24,
+          "joint_failures": 0,
+          "q_sum": 0.0008973478745191166
+        },
+        "36": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.00528114806110469
+        },
+        "37": {
+          "eligible_checks": 29,
+          "joint_failures": 0,
+          "q_sum": 0.0018013325011647652
+        },
+        "38": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.00044517407817212806
+        },
+        "39": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0034506699853729117
+        },
+        "40": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005696807860090525
+        },
+        "41": {
+          "eligible_checks": 220,
+          "joint_failures": 6,
+          "q_sum": 6.614450534626492
+        },
+        "42": {
+          "eligible_checks": 243,
+          "joint_failures": 6,
+          "q_sum": 6.696397468547888
+        },
+        "43": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0006463018767268736
+        },
+        "44": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0004942994884841179
+        },
+        "45": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 3.983655906025785e-05
+        },
+        "46": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "47": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 0.00025979602072467856
+        },
+        "48": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0017120743582851317
+        },
+        "49": {
+          "eligible_checks": 57,
+          "joint_failures": 0,
+          "q_sum": 0.010879406591281393
+        },
+        "50": {
+          "eligible_checks": 6,
+          "joint_failures": 0,
+          "q_sum": 9.952902004894959e-06
+        },
+        "51": {
+          "eligible_checks": 98,
+          "joint_failures": 0,
+          "q_sum": 0.08940541511215017
+        },
+        "52": {
+          "eligible_checks": 153,
+          "joint_failures": 2,
+          "q_sum": 3.871392182303926
+        },
+        "53": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 0.0004067132214059521
+        },
+        "54": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 2.176403348908007e-05
+        },
+        "55": {
+          "eligible_checks": 83,
+          "joint_failures": 2,
+          "q_sum": 1.5711435682785204
+        },
+        "56": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.0009953114388746576
+        },
+        "57": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "58": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0023533564138661367
+        },
+        "59": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 2.7455645597029843e-06
+        },
+        "60": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00021767461252064635
+        },
+        "61": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.00033116544097389067
+        },
+        "62": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.01864572266251241
+        },
+        "63": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005066951723091684
+        },
+        "64": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0003455031592278779
+        },
+        "65": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0028757992592833848
+        }
+      },
+      "eligible_fault_keys": [
+        [
+          38000000000,
+          42
+        ],
+        [
+          50000000000,
+          12
+        ],
+        [
+          54000000000,
+          9
+        ],
+        [
+          64000000000,
+          42
+        ],
+        [
+          71000000000,
+          12
+        ],
+        [
+          73000000000,
+          9
+        ],
+        [
+          89000000000,
+          42
+        ],
+        [
+          113000000000,
+          9
+        ],
+        [
+          113000000000,
+          12
+        ],
+        [
+          141000000000,
+          12
+        ],
+        [
+          144000000000,
+          9
+        ],
+        [
+          157000000000,
+          12
+        ],
+        [
+          172000000000,
+          9
+        ],
+        [
+          180000000000,
+          12
+        ],
+        [
+          198000000000,
+          9
+        ],
+        [
+          200000000000,
+          12
+        ],
+        [
+          210000000000,
+          42
+        ],
+        [
+          237000000000,
+          42
+        ],
+        [
+          240000000000,
+          9
+        ],
+        [
+          260000000000,
+          42
+        ],
+        [
+          292000000000,
+          9
+        ],
+        [
+          317000000000,
+          12
+        ],
+        [
+          344000000000,
+          12
+        ],
+        [
+          347000000000,
+          9
+        ],
+        [
+          375000000000,
+          12
+        ],
+        [
+          396000000000,
+          12
+        ],
+        [
+          413000000000,
+          52
+        ],
+        [
+          426000000000,
+          12
+        ],
+        [
+          441000000000,
+          52
+        ],
+        [
+          454000000000,
+          12
+        ],
+        [
+          465000000000,
+          9
+        ],
+        [
+          478000000000,
+          12
+        ],
+        [
+          505000000000,
+          12
+        ],
+        [
+          505000000000,
+          55
+        ],
+        [
+          528000000000,
+          12
+        ],
+        [
+          528000000000,
+          55
+        ],
+        [
+          544000000000,
+          8
+        ],
+        [
+          552000000000,
+          12
+        ],
+        [
+          574000000000,
+          8
+        ],
+        [
+          586000000000,
+          22
+        ],
+        [
+          602000000000,
+          8
+        ],
+        [
+          625000000000,
+          8
+        ],
+        [
+          639000000000,
+          11
+        ],
+        [
+          647000000000,
+          8
+        ],
+        [
+          663000000000,
+          11
+        ],
+        [
+          673000000000,
+          8
+        ],
+        [
+          690000000000,
+          11
+        ],
+        [
+          699000000000,
+          8
+        ],
+        [
+          717000000000,
+          11
+        ],
+        [
+          727000000000,
+          8
+        ],
+        [
+          743000000000,
+          11
+        ],
+        [
+          751000000000,
+          41
+        ],
+        [
+          755000000000,
+          8
+        ],
+        [
+          770000000000,
+          11
+        ],
+        [
+          777000000000,
+          8
+        ],
+        [
+          778000000000,
+          41
+        ],
+        [
+          797000000000,
+          11
+        ],
+        [
+          799000000000,
+          8
+        ],
+        [
+          805000000000,
+          41
+        ],
+        [
+          821000000000,
+          11
+        ],
+        [
+          829000000000,
+          8
+        ],
+        [
+          834000000000,
+          41
+        ],
+        [
+          848000000000,
+          11
+        ],
+        [
+          855000000000,
+          41
+        ],
+        [
+          861000000000,
+          8
+        ],
+        [
+          880000000000,
+          41
+        ],
+        [
+          895000000000,
+          11
+        ],
+        [
+          919000000000,
+          11
+        ],
+        [
+          926000000000,
+          8
+        ],
+        [
+          941000000000,
+          11
+        ],
+        [
+          973000000000,
+          8
+        ],
+        [
+          973000000000,
+          11
+        ],
+        [
+          998000000000,
+          11
+        ],
+        [
+          1019000000000,
+          11
+        ],
+        [
+          1047000000000,
+          11
+        ],
+        [
+          1069000000000,
+          11
+        ]
+      ],
+      "run": 107,
+      "actual_primary_service_seconds": 3296.556957875
+    },
+    {
+      "eligible_check_count": 3355,
+      "joint_failure_count": 83,
+      "eligible_exposure_seconds": 3355.0,
+      "mtbf_seconds": 40.42168674698795,
+      "outside_scope_fault_count": 6,
+      "duplicate_probability_rows": 0,
+      "duplicate_state_rows": 0,
+      "nodes": {
+        "0": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0006298054294611166
+        },
+        "1": {
+          "eligible_checks": 18,
+          "joint_failures": 0,
+          "q_sum": 0.0022631219455373497
+        },
+        "2": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "3": {
+          "eligible_checks": 19,
+          "joint_failures": 0,
+          "q_sum": 0.0007281910378587053
+        },
+        "4": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "5": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.08070984185230279
+        },
+        "7": {
+          "eligible_checks": 26,
+          "joint_failures": 0,
+          "q_sum": 0.0033232890551033734
+        },
+        "8": {
+          "eligible_checks": 441,
+          "joint_failures": 17,
+          "q_sum": 22.386816060933675
+        },
+        "9": {
+          "eligible_checks": 354,
+          "joint_failures": 11,
+          "q_sum": 9.25710646975244
+        },
+        "10": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0008280690289966808
+        },
+        "11": {
+          "eligible_checks": 410,
+          "joint_failures": 16,
+          "q_sum": 17.557620121229984
+        },
+        "12": {
+          "eligible_checks": 453,
+          "joint_failures": 17,
+          "q_sum": 19.464595883810464
+        },
+        "13": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 6.12042833628701e-05
+        },
+        "14": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "16": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0014667659524355559
+        },
+        "17": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.01658186248062954
+        },
+        "18": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 0.0026484460216286143
+        },
+        "19": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00014562417315222564
+        },
+        "20": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.00017459367500582967
+        },
+        "21": {
+          "eligible_checks": 25,
+          "joint_failures": 0,
+          "q_sum": 0.0009155281622409417
+        },
+        "22": {
+          "eligible_checks": 69,
+          "joint_failures": 1,
+          "q_sum": 1.031951419768003
+        },
+        "23": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0004397362003323302
+        },
+        "24": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.0003430766265674068
+        },
+        "25": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0015930163746985526
+        },
+        "26": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.003592891197849668
+        },
+        "27": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.002084181238696692
+        },
+        "28": {
+          "eligible_checks": 8,
+          "joint_failures": 0,
+          "q_sum": 0.00106483770851451
+        },
+        "29": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.007505628499007377
+        },
+        "30": {
+          "eligible_checks": 1,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "31": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0005250544462476192
+        },
+        "32": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0011685087999482313
+        },
+        "33": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 7.961871864881065e-05
+        },
+        "34": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0011998924806225775
+        },
+        "35": {
+          "eligible_checks": 24,
+          "joint_failures": 0,
+          "q_sum": 0.0008973478745191166
+        },
+        "36": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.00528114806110469
+        },
+        "37": {
+          "eligible_checks": 29,
+          "joint_failures": 0,
+          "q_sum": 0.0018013325011647652
+        },
+        "38": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.00044517407817212806
+        },
+        "39": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0034506699853729117
+        },
+        "40": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005696807860090525
+        },
+        "41": {
+          "eligible_checks": 211,
+          "joint_failures": 6,
+          "q_sum": 3.0294503085752993
+        },
+        "42": {
+          "eligible_checks": 243,
+          "joint_failures": 10,
+          "q_sum": 9.547587001861647
+        },
+        "43": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0006463018767268736
+        },
+        "44": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0004942994884841179
+        },
+        "45": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 3.983655906025785e-05
+        },
+        "46": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "47": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 0.00025979602072467856
+        },
+        "48": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0017120743582851317
+        },
+        "49": {
+          "eligible_checks": 57,
+          "joint_failures": 0,
+          "q_sum": 0.010879406591281393
+        },
+        "50": {
+          "eligible_checks": 6,
+          "joint_failures": 0,
+          "q_sum": 9.952902004894959e-06
+        },
+        "51": {
+          "eligible_checks": 98,
+          "joint_failures": 0,
+          "q_sum": 0.08940541511215017
+        },
+        "52": {
+          "eligible_checks": 144,
+          "joint_failures": 3,
+          "q_sum": 3.0318974874267606
+        },
+        "53": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 0.0004067132214059521
+        },
+        "54": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 2.176403348908007e-05
+        },
+        "55": {
+          "eligible_checks": 81,
+          "joint_failures": 2,
+          "q_sum": 2.003447473511053
+        },
+        "56": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.0009953114388746576
+        },
+        "57": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "58": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0023533564138661367
+        },
+        "59": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 2.7455645597029843e-06
+        },
+        "60": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00021767461252064635
+        },
+        "61": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.00033116544097389067
+        },
+        "62": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.01864572266251241
+        },
+        "63": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005066951723091684
+        },
+        "64": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0003455031592278779
+        },
+        "65": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0028757992592833848
+        }
+      },
+      "eligible_fault_keys": [
+        [
+          35000000000,
+          42
+        ],
+        [
+          49000000000,
+          9
+        ],
+        [
+          50000000000,
+          42
+        ],
+        [
+          69000000000,
+          12
+        ],
+        [
+          71000000000,
+          42
+        ],
+        [
+          73000000000,
+          9
+        ],
+        [
+          98000000000,
+          42
+        ],
+        [
+          103000000000,
+          12
+        ],
+        [
+          109000000000,
+          9
+        ],
+        [
+          125000000000,
+          12
+        ],
+        [
+          133000000000,
+          9
+        ],
+        [
+          147000000000,
+          12
+        ],
+        [
+          150000000000,
+          9
+        ],
+        [
+          169000000000,
+          42
+        ],
+        [
+          173000000000,
+          12
+        ],
+        [
+          176000000000,
+          9
+        ],
+        [
+          192000000000,
+          12
+        ],
+        [
+          194000000000,
+          9
+        ],
+        [
+          212000000000,
+          42
+        ],
+        [
+          215000000000,
+          9
+        ],
+        [
+          221000000000,
+          12
+        ],
+        [
+          242000000000,
+          42
+        ],
+        [
+          273000000000,
+          42
+        ],
+        [
+          295000000000,
+          42
+        ],
+        [
+          301000000000,
+          9
+        ],
+        [
+          315000000000,
+          12
+        ],
+        [
+          316000000000,
+          42
+        ],
+        [
+          344000000000,
+          12
+        ],
+        [
+          345000000000,
+          9
+        ],
+        [
+          365000000000,
+          9
+        ],
+        [
+          370000000000,
+          12
+        ],
+        [
+          394000000000,
+          12
+        ],
+        [
+          415000000000,
+          52
+        ],
+        [
+          420000000000,
+          12
+        ],
+        [
+          447000000000,
+          52
+        ],
+        [
+          448000000000,
+          12
+        ],
+        [
+          477000000000,
+          12
+        ],
+        [
+          497000000000,
+          55
+        ],
+        [
+          503000000000,
+          12
+        ],
+        [
+          525000000000,
+          55
+        ],
+        [
+          534000000000,
+          12
+        ],
+        [
+          549000000000,
+          8
+        ],
+        [
+          557000000000,
+          12
+        ],
+        [
+          571000000000,
+          8
+        ],
+        [
+          571000000000,
+          22
+        ],
+        [
+          588000000000,
+          52
+        ],
+        [
+          603000000000,
+          8
+        ],
+        [
+          633000000000,
+          8
+        ],
+        [
+          634000000000,
+          11
+        ],
+        [
+          650000000000,
+          8
+        ],
+        [
+          660000000000,
+          11
+        ],
+        [
+          671000000000,
+          8
+        ],
+        [
+          692000000000,
+          11
+        ],
+        [
+          698000000000,
+          8
+        ],
+        [
+          712000000000,
+          11
+        ],
+        [
+          725000000000,
+          8
+        ],
+        [
+          740000000000,
+          11
+        ],
+        [
+          750000000000,
+          41
+        ],
+        [
+          756000000000,
+          8
+        ],
+        [
+          771000000000,
+          11
+        ],
+        [
+          776000000000,
+          41
+        ],
+        [
+          781000000000,
+          8
+        ],
+        [
+          797000000000,
+          41
+        ],
+        [
+          799000000000,
+          11
+        ],
+        [
+          810000000000,
+          8
+        ],
+        [
+          815000000000,
+          41
+        ],
+        [
+          827000000000,
+          11
+        ],
+        [
+          835000000000,
+          41
+        ],
+        [
+          854000000000,
+          41
+        ],
+        [
+          870000000000,
+          8
+        ],
+        [
+          890000000000,
+          8
+        ],
+        [
+          899000000000,
+          11
+        ],
+        [
+          921000000000,
+          11
+        ],
+        [
+          924000000000,
+          8
+        ],
+        [
+          942000000000,
+          8
+        ],
+        [
+          950000000000,
+          11
+        ],
+        [
+          963000000000,
+          8
+        ],
+        [
+          967000000000,
+          11
+        ],
+        [
+          986000000000,
+          8
+        ],
+        [
+          994000000000,
+          11
+        ],
+        [
+          1014000000000,
+          11
+        ],
+        [
+          1041000000000,
+          11
+        ],
+        [
+          1064000000000,
+          11
+        ]
+      ],
+      "run": 108,
+      "actual_primary_service_seconds": 3299.13893181
+    },
+    {
+      "eligible_check_count": 3333,
+      "joint_failure_count": 82,
+      "eligible_exposure_seconds": 3333.0,
+      "mtbf_seconds": 40.646341463414636,
+      "outside_scope_fault_count": 3,
+      "duplicate_probability_rows": 0,
+      "duplicate_state_rows": 0,
+      "nodes": {
+        "0": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0006298054294611166
+        },
+        "1": {
+          "eligible_checks": 18,
+          "joint_failures": 0,
+          "q_sum": 0.0022631219455373497
+        },
+        "2": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "3": {
+          "eligible_checks": 19,
+          "joint_failures": 0,
+          "q_sum": 0.0007281910378587053
+        },
+        "4": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "5": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.08070984185230279
+        },
+        "7": {
+          "eligible_checks": 26,
+          "joint_failures": 0,
+          "q_sum": 0.0033232890551033734
+        },
+        "8": {
+          "eligible_checks": 421,
+          "joint_failures": 17,
+          "q_sum": 11.00073653828229
+        },
+        "9": {
+          "eligible_checks": 344,
+          "joint_failures": 12,
+          "q_sum": 9.575219127382947
+        },
+        "10": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0008280690289966808
+        },
+        "11": {
+          "eligible_checks": 425,
+          "joint_failures": 18,
+          "q_sum": 14.060538335409044
+        },
+        "12": {
+          "eligible_checks": 441,
+          "joint_failures": 17,
+          "q_sum": 19.90216160963725
+        },
+        "13": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 6.12042833628701e-05
+        },
+        "14": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "16": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0014667659524355559
+        },
+        "17": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.01658186248062954
+        },
+        "18": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 0.0026484460216286143
+        },
+        "19": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00014562417315222564
+        },
+        "20": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.00017459367500582967
+        },
+        "21": {
+          "eligible_checks": 25,
+          "joint_failures": 0,
+          "q_sum": 0.0009155281622409417
+        },
+        "22": {
+          "eligible_checks": 56,
+          "joint_failures": 1,
+          "q_sum": 1.2561956221976438
+        },
+        "23": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0004397362003323302
+        },
+        "24": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.0003430766265674068
+        },
+        "25": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0015930163746985526
+        },
+        "26": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.003592891197849668
+        },
+        "27": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.002084181238696692
+        },
+        "28": {
+          "eligible_checks": 8,
+          "joint_failures": 0,
+          "q_sum": 0.00106483770851451
+        },
+        "29": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.007505628499007377
+        },
+        "30": {
+          "eligible_checks": 1,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "31": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0005250544462476192
+        },
+        "32": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0011685087999482313
+        },
+        "33": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 7.961871864881065e-05
+        },
+        "34": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0011998924806225775
+        },
+        "35": {
+          "eligible_checks": 24,
+          "joint_failures": 0,
+          "q_sum": 0.0008973478745191166
+        },
+        "36": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.00528114806110469
+        },
+        "37": {
+          "eligible_checks": 29,
+          "joint_failures": 0,
+          "q_sum": 0.0018013325011647652
+        },
+        "38": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.00044517407817212806
+        },
+        "39": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0034506699853729117
+        },
+        "40": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005696807860090525
+        },
+        "41": {
+          "eligible_checks": 215,
+          "joint_failures": 6,
+          "q_sum": 3.6777521479096307
+        },
+        "42": {
+          "eligible_checks": 244,
+          "joint_failures": 7,
+          "q_sum": 11.688771468286436
+        },
+        "43": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0006463018767268736
+        },
+        "44": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0004942994884841179
+        },
+        "45": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 3.983655906025785e-05
+        },
+        "46": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "47": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 0.00025979602072467856
+        },
+        "48": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0017120743582851317
+        },
+        "49": {
+          "eligible_checks": 57,
+          "joint_failures": 0,
+          "q_sum": 0.010879406591281393
+        },
+        "50": {
+          "eligible_checks": 6,
+          "joint_failures": 0,
+          "q_sum": 9.952902004894959e-06
+        },
+        "51": {
+          "eligible_checks": 98,
+          "joint_failures": 0,
+          "q_sum": 0.08940541511215017
+        },
+        "52": {
+          "eligible_checks": 154,
+          "joint_failures": 2,
+          "q_sum": 3.9759730334009022
+        },
+        "53": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 0.0004067132214059521
+        },
+        "54": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 2.176403348908007e-05
+        },
+        "55": {
+          "eligible_checks": 84,
+          "joint_failures": 2,
+          "q_sum": 2.1103652341344277
+        },
+        "56": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.0009953114388746576
+        },
+        "57": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "58": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0023533564138661367
+        },
+        "59": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 2.7455645597029843e-06
+        },
+        "60": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00021767461252064635
+        },
+        "61": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.00033116544097389067
+        },
+        "62": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.01864572266251241
+        },
+        "63": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005066951723091684
+        },
+        "64": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0003455031592278779
+        },
+        "65": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0028757992592833848
+        }
+      },
+      "eligible_fault_keys": [
+        [
+          43000000000,
+          42
+        ],
+        [
+          51000000000,
+          9
+        ],
+        [
+          66000000000,
+          12
+        ],
+        [
+          71000000000,
+          42
+        ],
+        [
+          72000000000,
+          9
+        ],
+        [
+          91000000000,
+          42
+        ],
+        [
+          105000000000,
+          12
+        ],
+        [
+          115000000000,
+          9
+        ],
+        [
+          135000000000,
+          12
+        ],
+        [
+          140000000000,
+          9
+        ],
+        [
+          160000000000,
+          12
+        ],
+        [
+          163000000000,
+          9
+        ],
+        [
+          173000000000,
+          42
+        ],
+        [
+          188000000000,
+          9
+        ],
+        [
+          188000000000,
+          12
+        ],
+        [
+          208000000000,
+          12
+        ],
+        [
+          217000000000,
+          9
+        ],
+        [
+          217000000000,
+          42
+        ],
+        [
+          241000000000,
+          42
+        ],
+        [
+          246000000000,
+          9
+        ],
+        [
+          271000000000,
+          42
+        ],
+        [
+          284000000000,
+          12
+        ],
+        [
+          299000000000,
+          9
+        ],
+        [
+          312000000000,
+          12
+        ],
+        [
+          338000000000,
+          12
+        ],
+        [
+          339000000000,
+          9
+        ],
+        [
+          363000000000,
+          9
+        ],
+        [
+          367000000000,
+          12
+        ],
+        [
+          390000000000,
+          12
+        ],
+        [
+          418000000000,
+          52
+        ],
+        [
+          419000000000,
+          12
+        ],
+        [
+          444000000000,
+          12
+        ],
+        [
+          445000000000,
+          52
+        ],
+        [
+          463000000000,
+          9
+        ],
+        [
+          474000000000,
+          12
+        ],
+        [
+          500000000000,
+          12
+        ],
+        [
+          501000000000,
+          55
+        ],
+        [
+          526000000000,
+          12
+        ],
+        [
+          529000000000,
+          55
+        ],
+        [
+          540000000000,
+          8
+        ],
+        [
+          555000000000,
+          12
+        ],
+        [
+          565000000000,
+          8
+        ],
+        [
+          581000000000,
+          22
+        ],
+        [
+          591000000000,
+          8
+        ],
+        [
+          607000000000,
+          8
+        ],
+        [
+          623000000000,
+          8
+        ],
+        [
+          633000000000,
+          11
+        ],
+        [
+          646000000000,
+          8
+        ],
+        [
+          657000000000,
+          11
+        ],
+        [
+          671000000000,
+          8
+        ],
+        [
+          699000000000,
+          8
+        ],
+        [
+          703000000000,
+          11
+        ],
+        [
+          723000000000,
+          8
+        ],
+        [
+          728000000000,
+          11
+        ],
+        [
+          750000000000,
+          8
+        ],
+        [
+          751000000000,
+          41
+        ],
+        [
+          754000000000,
+          11
+        ],
+        [
+          769000000000,
+          8
+        ],
+        [
+          775000000000,
+          41
+        ],
+        [
+          782000000000,
+          11
+        ],
+        [
+          790000000000,
+          8
+        ],
+        [
+          800000000000,
+          41
+        ],
+        [
+          802000000000,
+          11
+        ],
+        [
+          820000000000,
+          11
+        ],
+        [
+          820000000000,
+          41
+        ],
+        [
+          836000000000,
+          8
+        ],
+        [
+          842000000000,
+          41
+        ],
+        [
+          847000000000,
+          11
+        ],
+        [
+          859000000000,
+          11
+        ],
+        [
+          867000000000,
+          41
+        ],
+        [
+          868000000000,
+          8
+        ],
+        [
+          900000000000,
+          11
+        ],
+        [
+          922000000000,
+          8
+        ],
+        [
+          926000000000,
+          11
+        ],
+        [
+          945000000000,
+          8
+        ],
+        [
+          954000000000,
+          11
+        ],
+        [
+          970000000000,
+          8
+        ],
+        [
+          977000000000,
+          11
+        ],
+        [
+          1004000000000,
+          11
+        ],
+        [
+          1026000000000,
+          11
+        ],
+        [
+          1051000000000,
+          11
+        ],
+        [
+          1071000000000,
+          11
+        ]
+      ],
+      "run": 109,
+      "actual_primary_service_seconds": 3278.230268845
+    },
+    {
+      "eligible_check_count": 3359,
+      "joint_failure_count": 78,
+      "eligible_exposure_seconds": 3359.0,
+      "mtbf_seconds": 43.06410256410256,
+      "outside_scope_fault_count": 4,
+      "duplicate_probability_rows": 0,
+      "duplicate_state_rows": 0,
+      "nodes": {
+        "0": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0006298054294611166
+        },
+        "1": {
+          "eligible_checks": 18,
+          "joint_failures": 0,
+          "q_sum": 0.0022631219455373497
+        },
+        "2": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "3": {
+          "eligible_checks": 19,
+          "joint_failures": 0,
+          "q_sum": 0.0007281910378587053
+        },
+        "4": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "5": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.08070984185230279
+        },
+        "7": {
+          "eligible_checks": 26,
+          "joint_failures": 0,
+          "q_sum": 0.0033232890551033734
+        },
+        "8": {
+          "eligible_checks": 430,
+          "joint_failures": 16,
+          "q_sum": 20.170060822967233
+        },
+        "9": {
+          "eligible_checks": 356,
+          "joint_failures": 10,
+          "q_sum": 12.015044684539799
+        },
+        "10": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0008280690289966808
+        },
+        "11": {
+          "eligible_checks": 419,
+          "joint_failures": 17,
+          "q_sum": 13.459426753548371
+        },
+        "12": {
+          "eligible_checks": 455,
+          "joint_failures": 16,
+          "q_sum": 20.92620213734662
+        },
+        "13": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 6.12042833628701e-05
+        },
+        "14": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "16": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0014667659524355559
+        },
+        "17": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.01658186248062954
+        },
+        "18": {
+          "eligible_checks": 5,
+          "joint_failures": 0,
+          "q_sum": 0.0026484460216286143
+        },
+        "19": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00014562417315222564
+        },
+        "20": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.00017459367500582967
+        },
+        "21": {
+          "eligible_checks": 25,
+          "joint_failures": 0,
+          "q_sum": 0.0009155281622409417
+        },
+        "22": {
+          "eligible_checks": 63,
+          "joint_failures": 2,
+          "q_sum": 0.44713740855061257
+        },
+        "23": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0004397362003323302
+        },
+        "24": {
+          "eligible_checks": 16,
+          "joint_failures": 0,
+          "q_sum": 0.0003430766265674068
+        },
+        "25": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0015930163746985526
+        },
+        "26": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.003592891197849668
+        },
+        "27": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.002084181238696692
+        },
+        "28": {
+          "eligible_checks": 8,
+          "joint_failures": 0,
+          "q_sum": 0.00106483770851451
+        },
+        "29": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.007505628499007377
+        },
+        "30": {
+          "eligible_checks": 1,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "31": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0005250544462476192
+        },
+        "32": {
+          "eligible_checks": 14,
+          "joint_failures": 0,
+          "q_sum": 0.0011685087999482313
+        },
+        "33": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 7.961871864881065e-05
+        },
+        "34": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0011998924806225775
+        },
+        "35": {
+          "eligible_checks": 24,
+          "joint_failures": 0,
+          "q_sum": 0.0008973478745191166
+        },
+        "36": {
+          "eligible_checks": 30,
+          "joint_failures": 0,
+          "q_sum": 0.00528114806110469
+        },
+        "37": {
+          "eligible_checks": 29,
+          "joint_failures": 0,
+          "q_sum": 0.0018013325011647652
+        },
+        "38": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.00044517407817212806
+        },
+        "39": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0034506699853729117
+        },
+        "40": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005696807860090525
+        },
+        "41": {
+          "eligible_checks": 216,
+          "joint_failures": 6,
+          "q_sum": 4.368779500097223
+        },
+        "42": {
+          "eligible_checks": 241,
+          "joint_failures": 6,
+          "q_sum": 5.885110838519886
+        },
+        "43": {
+          "eligible_checks": 13,
+          "joint_failures": 0,
+          "q_sum": 0.0006463018767268736
+        },
+        "44": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0004942994884841179
+        },
+        "45": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 3.983655906025785e-05
+        },
+        "46": {
+          "eligible_checks": 2,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "47": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 0.00025979602072467856
+        },
+        "48": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.0017120743582851317
+        },
+        "49": {
+          "eligible_checks": 57,
+          "joint_failures": 0,
+          "q_sum": 0.010879406591281393
+        },
+        "50": {
+          "eligible_checks": 6,
+          "joint_failures": 0,
+          "q_sum": 9.952902004894959e-06
+        },
+        "51": {
+          "eligible_checks": 98,
+          "joint_failures": 0,
+          "q_sum": 0.08940541511215017
+        },
+        "52": {
+          "eligible_checks": 148,
+          "joint_failures": 4,
+          "q_sum": 1.778812089202921
+        },
+        "53": {
+          "eligible_checks": 15,
+          "joint_failures": 0,
+          "q_sum": 0.0004067132214059521
+        },
+        "54": {
+          "eligible_checks": 10,
+          "joint_failures": 0,
+          "q_sum": 2.176403348908007e-05
+        },
+        "55": {
+          "eligible_checks": 82,
+          "joint_failures": 1,
+          "q_sum": 1.2425198300010418
+        },
+        "56": {
+          "eligible_checks": 23,
+          "joint_failures": 0,
+          "q_sum": 0.0009953114388746576
+        },
+        "57": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0
+        },
+        "58": {
+          "eligible_checks": 17,
+          "joint_failures": 0,
+          "q_sum": 0.0023533564138661367
+        },
+        "59": {
+          "eligible_checks": 4,
+          "joint_failures": 0,
+          "q_sum": 2.7455645597029843e-06
+        },
+        "60": {
+          "eligible_checks": 9,
+          "joint_failures": 0,
+          "q_sum": 0.00021767461252064635
+        },
+        "61": {
+          "eligible_checks": 20,
+          "joint_failures": 0,
+          "q_sum": 0.00033116544097389067
+        },
+        "62": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.01864572266251241
+        },
+        "63": {
+          "eligible_checks": 12,
+          "joint_failures": 0,
+          "q_sum": 0.0005066951723091684
+        },
+        "64": {
+          "eligible_checks": 11,
+          "joint_failures": 0,
+          "q_sum": 0.0003455031592278779
+        },
+        "65": {
+          "eligible_checks": 21,
+          "joint_failures": 0,
+          "q_sum": 0.0028757992592833848
+        }
+      },
+      "eligible_fault_keys": [
+        [
+          38000000000,
+          42
+        ],
+        [
+          58000000000,
+          9
+        ],
+        [
+          61000000000,
+          42
+        ],
+        [
+          68000000000,
+          12
+        ],
+        [
+          80000000000,
+          42
+        ],
+        [
+          111000000000,
+          9
+        ],
+        [
+          112000000000,
+          12
+        ],
+        [
+          137000000000,
+          9
+        ],
+        [
+          143000000000,
+          12
+        ],
+        [
+          163000000000,
+          9
+        ],
+        [
+          173000000000,
+          12
+        ],
+        [
+          189000000000,
+          9
+        ],
+        [
+          197000000000,
+          12
+        ],
+        [
+          213000000000,
+          42
+        ],
+        [
+          215000000000,
+          9
+        ],
+        [
+          238000000000,
+          42
+        ],
+        [
+          269000000000,
+          42
+        ],
+        [
+          299000000000,
+          9
+        ],
+        [
+          317000000000,
+          12
+        ],
+        [
+          343000000000,
+          12
+        ],
+        [
+          350000000000,
+          9
+        ],
+        [
+          373000000000,
+          12
+        ],
+        [
+          375000000000,
+          9
+        ],
+        [
+          392000000000,
+          12
+        ],
+        [
+          413000000000,
+          52
+        ],
+        [
+          416000000000,
+          12
+        ],
+        [
+          434000000000,
+          52
+        ],
+        [
+          444000000000,
+          12
+        ],
+        [
+          459000000000,
+          52
+        ],
+        [
+          465000000000,
+          9
+        ],
+        [
+          472000000000,
+          12
+        ],
+        [
+          498000000000,
+          12
+        ],
+        [
+          503000000000,
+          55
+        ],
+        [
+          526000000000,
+          12
+        ],
+        [
+          545000000000,
+          12
+        ],
+        [
+          551000000000,
+          8
+        ],
+        [
+          557000000000,
+          12
+        ],
+        [
+          577000000000,
+          22
+        ],
+        [
+          578000000000,
+          8
+        ],
+        [
+          587000000000,
+          52
+        ],
+        [
+          591000000000,
+          22
+        ],
+        [
+          605000000000,
+          8
+        ],
+        [
+          627000000000,
+          11
+        ],
+        [
+          635000000000,
+          8
+        ],
+        [
+          650000000000,
+          11
+        ],
+        [
+          662000000000,
+          8
+        ],
+        [
+          675000000000,
+          11
+        ],
+        [
+          687000000000,
+          8
+        ],
+        [
+          704000000000,
+          11
+        ],
+        [
+          713000000000,
+          8
+        ],
+        [
+          725000000000,
+          11
+        ],
+        [
+          728000000000,
+          8
+        ],
+        [
+          745000000000,
+          41
+        ],
+        [
+          746000000000,
+          11
+        ],
+        [
+          752000000000,
+          8
+        ],
+        [
+          770000000000,
+          41
+        ],
+        [
+          777000000000,
+          8
+        ],
+        [
+          788000000000,
+          11
+        ],
+        [
+          793000000000,
+          41
+        ],
+        [
+          804000000000,
+          8
+        ],
+        [
+          817000000000,
+          11
+        ],
+        [
+          818000000000,
+          41
+        ],
+        [
+          829000000000,
+          8
+        ],
+        [
+          839000000000,
+          11
+        ],
+        [
+          840000000000,
+          41
+        ],
+        [
+          868000000000,
+          8
+        ],
+        [
+          868000000000,
+          41
+        ],
+        [
+          891000000000,
+          8
+        ],
+        [
+          897000000000,
+          11
+        ],
+        [
+          921000000000,
+          11
+        ],
+        [
+          928000000000,
+          8
+        ],
+        [
+          947000000000,
+          11
+        ],
+        [
+          970000000000,
+          8
+        ],
+        [
+          971000000000,
+          11
+        ],
+        [
+          989000000000,
+          11
+        ],
+        [
+          1017000000000,
+          11
+        ],
+        [
+          1040000000000,
+          11
+        ],
+        [
+          1066000000000,
+          11
+        ]
+      ],
+      "run": 110,
+      "actual_primary_service_seconds": 3304.818902161
+    }
+  ]
+}

@@ -11,8 +11,11 @@
 #include "ns3/traced-callback.h"
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <set>
+#include <utility>
+#include <vector>
 
 namespace ns3
 {
@@ -26,6 +29,13 @@ struct RunningComputeTaskSnapshot
     int64_t elapsedTimeNs{}; ///< Known elapsed service time at this instant.
     int64_t remainingTimeNs{}; ///< Known time until the scheduled completion.
     double completionRatio{}; ///< elapsed/service in [0, 1].
+};
+
+/** Real recovery service ledger, retained after completion/cancellation. */
+struct RecoveryComputeAccounting
+{
+    uint64_t plannedWork{}, executedWork{}, rate{}; ///< Integer WU and WU/s.
+    int64_t serviceNs{}; ///< Actual occupied compute time, excluding reserved-idle.
 };
 
 /** Deterministic, non-preemptive, single-server FCFS compute queue. */
@@ -52,8 +62,11 @@ class ComputeService : public Application
     /** Disconnect a previously registered observer. */
     void DisconnectStateObserver(Callback<void, uint32_t, bool> callback);
     bool CancelRunningTaskForFailure(uint64_t taskId);
-    /** Resolve inclusive completion before a same-time deadline, independent of UID. */
-    bool CompleteTaskIfDue(uint64_t taskId);
+    /** Resolve inclusive completion before a same-time deadline/fault, independent of UID.
+     * During a fault batch, defer ordinary queue dispatch until its availability changes
+     * have all been applied. Normal completion/deadline dispatch remains synchronous.
+     */
+    bool CompleteTaskIfDue(uint64_t taskId, bool deferDispatch = false);
     bool RemoveQueuedTaskForFailure(uint64_t taskId);
 
     static int64_t CalculateServiceTimeNs(uint64_t computeWorkUnits,
@@ -64,14 +77,45 @@ class ComputeService : public Application
     uint64_t GetEnqueuedTaskCount() const;
     uint64_t GetCompletedTaskCount() const;
     uint64_t GetBusyTimeNs() const;
+    /** Actual external-attempt compute time, including its live prefix; excludes reserved idle. */
+    uint64_t GetRecoveryBusyTimeNs() const;
     uint32_t GetMaxQueueLength() const;
     uint32_t GetQueueSize() const;
+    /** Copy ordinary queued IDs in dispatch order; excludes running/reserved attempts. */
+    std::vector<uint64_t> GetQueuedTaskIds() const;
     bool IsComputeAvailable() const;
     bool HasRunningTask() const;
     uint64_t GetRunningTaskId() const;
     /** @return Current task progress, or null when the service is not running a task. */
     std::optional<RunningComputeTaskSnapshot> GetRunningTaskSnapshot() const;
     bool IsIdle() const;
+    /** Reserve an idle service for one recovery attempt; ordinary arrivals remain queued. */
+    bool ReserveRecovery(uint64_t taskId, uint64_t generation);
+    /** Release a matching non-running reservation; never affects another attempt. */
+    bool ReleaseRecovery(uint64_t taskId, uint64_t generation);
+    /** True while a recovery owns the slot, including reserved-idle wait. */
+    bool HasRecoveryReservation() const;
+    /** Execute real remaining work in this service, retaining F1/F2 attempt immunity.
+     * All callbacks carry task, generation, node and observed ns. Catchup is an actual
+     * service milestone, not a second compute simulation or full task completion.
+     */
+    bool StartRecovery(uint64_t taskId,
+                       uint64_t generation,
+                       uint64_t workUnits,
+                       uint64_t catchupWorkUnits,
+                       Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+                       Callback<void, uint64_t, uint64_t, uint32_t, int64_t> catchup,
+                       Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed);
+    /** Cancel only the matching recovery; F3/deadline cleanup, not F1/F2 availability. */
+    bool CancelRecovery(uint64_t taskId, uint64_t generation);
+    /** Read observed work, never planned work substituted for an interrupted attempt. */
+    RecoveryComputeAccounting GetRecoveryAccounting(uint64_t taskId, uint64_t generation) const;
+    /** Start a normally fault-exposed replica in an already reserved slot. */
+    bool StartReplica(uint64_t taskId, uint64_t generation, uint64_t workUnits,
+                      Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+                      Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed);
+    /** Promote only a healthy reserved/running replica after complete fault-batch arbitration. */
+    bool PromoteReplica(uint64_t taskId, uint64_t generation);
     uint64_t GetCancelledRunningTaskCount() const;
     uint64_t GetRemovedQueuedTaskCount() const;
 
@@ -94,8 +138,17 @@ class ComputeService : public Application
     void RequestDispatch();
     void DispatchNextTask();
     void CompleteCurrentTask();
+    void CompleteCurrentTaskImpl(bool deferDispatch);
     /** Notify observers after a service-state transition, before dependent dispatch. */
     void NotifyComputeState();
+    void RecoveryCatchup(uint64_t taskId, uint64_t generation); ///< Guarded service milestone.
+    void RecordRecoveryAccounting(); ///< Freeze observed prefix before releasing service state.
+    /** Shared reserved-attempt execution; immunity is explicit before any callbacks. */
+    bool StartReservedAttempt(uint64_t taskId, uint64_t generation, uint64_t workUnits,
+        uint64_t catchupWorkUnits,
+        Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+        Callback<void, uint64_t, uint64_t, uint32_t, int64_t> catchup,
+        Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed, bool immune);
 
     uint32_t m_nodeId{};
     uint64_t m_computeRateWorkUnitsPerSecond{};
@@ -110,6 +163,13 @@ class ComputeService : public Application
     std::set<uint64_t> m_knownTaskIds;
     EventId m_dispatchEvent;
     EventId m_completionEvent;
+    std::optional<std::pair<uint64_t, uint64_t>> m_recoveryOwner; ///< Reserved task/generation.
+    bool m_runningRecovery{}; ///< A reserved external attempt (recovery or replica) is running.
+    bool m_recoveryImmune{}; ///< Only accepted recovery/takeover ignores compute availability.
+    std::map<std::pair<uint64_t, uint64_t>, RecoveryComputeAccounting> m_recoveryAccounting;
+    EventId m_catchupEvent;   ///< Cancelled with the owning recovery.
+    Callback<void, uint64_t, uint64_t, uint32_t, int64_t> m_recoveryCatchup;
+    Callback<void, uint64_t, uint64_t, uint32_t, int64_t> m_recoveryCompleted;
     TaskEventCallback m_taskStartedCallback;
     TaskEventCallback m_taskCompletedCallback;
     TracedCallback<uint32_t, bool> m_computeState; ///< Node ID and effective busy state.

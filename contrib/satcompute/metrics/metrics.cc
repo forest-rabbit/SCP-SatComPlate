@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -221,20 +222,39 @@ MetricsRecorder::Record()
         applicationMetrics = transferEngine->CollectApplicationMetrics();
     }
     const FlowAggregate flowAggregate = CollectFlowAggregate(context.flowMonitor);
-    const TransferAggregate transferAggregate = CollectTransferAggregate(transfers);
+    const TransferAggregate allTransferAggregate = CollectTransferAggregate(transfers);
     const TaskAggregate taskAggregate = CollectTaskAggregate(PeekPointer(taskCoordinator));
-    if (transferAggregate.sentBytes != applicationMetrics.sentBytes ||
-        transferAggregate.receivedBytes != applicationMetrics.receivedBytes)
+    if (allTransferAggregate.sentBytes != applicationMetrics.sentBytes ||
+        allTransferAggregate.receivedBytes != applicationMetrics.receivedBytes)
     {
-        throw MetricsError("transfer summaries and application metrics disagree");
+        throw MetricsError("transfer summaries and application metrics disagree: sent " +
+            std::to_string(allTransferAggregate.sentBytes) + "/" +
+            std::to_string(applicationMetrics.sentBytes) + ", received " +
+            std::to_string(allTransferAggregate.receivedBytes) + "/" +
+            std::to_string(applicationMetrics.receivedBytes));
     }
+    if (transferEngine != nullptr)
+    {
+        std::erase_if(transfers, [&](const auto& row) {
+            return transferEngine->IsProtectionTransfer(row.transferId);
+        });
+    }
+    const TransferAggregate transferAggregate = CollectTransferAggregate(transfers);
+    // Application totals in run-summary follow ordinary INPUT/RESULT. FlowMonitor and
+    // link metrics above/below still include every real backup packet on the network.
+    applicationMetrics.sentBytes = transferAggregate.sentBytes;
+    applicationMetrics.receivedBytes = transferAggregate.receivedBytes;
+    std::set<uint32_t> ordinaryDestinations;
+    for (const auto& transfer : transfers) ordinaryDestinations.insert(transfer.destinationSatelliteId);
+    applicationMetrics.sinkApplications = ordinaryDestinations.size();
 
     const bool transfersComplete =
         transferAggregate.completedTransferCount == transferAggregate.transferCount;
     const bool transfersSettled =
-        transferAggregate.terminalTransferCount == transferAggregate.transferCount;
+        allTransferAggregate.terminalTransferCount == allTransferAggregate.transferCount;
     const bool tasksComplete = taskAggregate.completedTaskCount == taskAggregate.taskCount;
-    const bool complete = transfersComplete && tasksComplete;
+    const bool complete =
+        taskCoordinator ? taskCoordinator->IsComplete() : transfersComplete && tasksComplete;
     if (transfersSettled && context.flowRouteRegistry != nullptr &&
         (context.flowRouteRegistry->GetActiveFlowCount() != 0 ||
          context.flowRouteRegistry->GetAssignmentCount() != 0 ||
@@ -288,7 +308,8 @@ MetricsRecorder::Record()
     WriteNetworkFlowDetails(context.flowMonitor,
                             transferFlows,
                             outputDirectory.string(),
-                            complete);
+                            complete && allTransferAggregate.completedTransferCount ==
+                                            allTransferAggregate.transferCount);
     result.files.push_back(outputDirectory / "network-flow-details.csv");
     WriteEcmpRouteEvents(context.routeEvents, outputDirectory.string());
     result.files.push_back(outputDirectory / "ecmp-route-events.csv");

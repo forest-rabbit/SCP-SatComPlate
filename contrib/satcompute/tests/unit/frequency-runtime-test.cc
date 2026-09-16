@@ -1,0 +1,1747 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#include "../support/config-factory.h"
+
+#include "ns3/command-line.h"
+#include "ns3/frequency-protection-controller.h"
+#include "ns3/fa-least-recovery-load-placement-policy.h"
+#include "ns3/fixed-protection-controller.h"
+#include "ns3/ipv4-address-generator.h"
+#include "ns3/mac48-address.h"
+#include "ns3/online-topology-controller.h"
+#include "ns3/protection-metrics.h"
+#include "ns3/rng-seed-manager.h"
+#include "ns3/simulator.h"
+
+#include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+
+using namespace ns3;
+using namespace ns3::protection;
+
+namespace ns3::protection
+{
+struct CheckpointMaintenanceTestAccess
+{
+    static void Path(CheckpointManager& m, std::function<bool(uint32_t, uint32_t)> check)
+    { m.m_testPathAvailable = std::move(check); }
+};
+/** Boundary injection is confined to this test executable; production RNG has no override. */
+struct FrequencyRuntimeTestAccess
+{
+    static void Before(FrequencyProtectionController& c, const FaultEpochInput& e)
+    {
+        c.BeforeEpoch(e);
+    }
+
+    static void After(FrequencyProtectionController& c, int64_t time, uint64_t id, bool hit)
+    {
+        c.AfterEpoch(time, {{3, id, false, hit}});
+    }
+
+    static CheckpointManager& Manager(FrequencyProtectionController& c)
+    {
+        return c.m_manager;
+    }
+    static void Released(FrequencyProtectionController& c) { c.CapacityReleased(); }
+    static CompFrrForecast Peer(FrequencyProtectionController& c, uint32_t remote)
+    {
+        DecisionPathSnapshot paths([&](auto a, auto b) {
+            return c.m_tasks->GetTransferEngine()->EstimateAdmissiblePath(a, b);
+        });
+        const auto peers = c.CompFrrPeers(remote, 999, "TASK_RUNNING", paths);
+        if (peers.size() != 1) throw std::runtime_error("peer contract fixture lost live peer");
+        return peers.front();
+    }
+    static void RequestInput(FrequencyProtectionController& c, uint32_t remote)
+    { c.m_optionalInput->Request(c.Task(1).definition, remote); }
+    static bool StartStillRequiresIdle(FrequencyProtectionController& c, const TaskRuntime& task)
+    {
+        auto& state = c.m_states.at(task.definition.taskId);
+        FrequencyDecisionRecord row;
+        row.taskId = task.definition.taskId;
+        row.pair = state.pair;
+        row.input.phase = ProtectionPhase::OFF;
+        DecisionPathSnapshot paths([&](auto a, auto b) { return c.m_tasks->GetTransferEngine()->EstimateAdmissiblePath(a, b); });
+        c.BuildResources(row, task, state, paths);
+        return !row.input.nodeAvailable && (row.resourceReason == "LOCAL_BUSY" || row.resourceReason == "REMOTE_BUSY");
+    }
+    static bool HasCapacityInterest(FrequencyProtectionController& c)
+    {
+        return !c.m_pausedCapacity.empty() || !c.m_waitingCapacity.empty();
+    }
+    static bool OtherLocalFeasible(FrequencyProtectionController& c, FrequencyDecisionRecord row)
+    {
+        row.pair = PlacementDecision{4, 0};
+        DecisionPathSnapshot paths([&](auto a, auto b) {
+            return c.m_tasks->GetTransferEngine()->EstimateAdmissiblePath(a, b);
+        });
+        return c.BuildResources(row, c.Task(row.taskId), c.m_states.at(row.taskId), paths) &&
+               c.m_policy.Evaluate(row.input).action == FrequencyAction::START;
+    }
+    static bool BlockedInput(FrequencyProtectionController& c, TaskRuntime task)
+    {
+        task.definition.sourceNodeId = 5;
+        DecisionPathSnapshot paths([](auto source, auto) {
+            AdmissiblePathEstimate p;
+            p.reachable = true;
+            p.admissible = source != 5;
+            p.failureReason = p.admissible ? "" : "NO_ADMISSIBLE_PATH";
+            return p;
+        });
+        FrequencyDecisionRecord row;
+        c.EvaluateOffPairs(row, task, c.m_states.at(task.definition.taskId), paths);
+        return row.resourceReason == "NO_CAPACITY_NOW" && row.pairPathFeasible == 0 &&
+               row.pairStats.skipNoCapacity > 0 && row.proposal.action == FrequencyAction::NONE;
+    }
+};
+} // namespace ns3::protection
+
+namespace
+{
+uint64_t checks{};
+constexpr int64_t END = 4000000000LL;
+
+void Check(bool value, const char* message)
+{
+    ++checks;
+    if (!value)
+        throw std::runtime_error(message);
+}
+
+void Reset()
+{
+    Simulator::Destroy();
+    Ipv4AddressGenerator::Reset();
+    Mac48Address::ResetAllocationIndex();
+}
+
+TaskDefinition Definition(TaskProfile profile)
+{
+    const uint64_t bytes = profile == TaskProfile::LLM ? 400 : 52428800;
+    const uint64_t work = profile == TaskProfile::LLM ? 100000 : (bytes * 3 + 1999) / 2000;
+    return {1, 0, 3, 0, bytes, 4, work, 1, 1, 2, profile};
+}
+
+/** Independent exact byte checks, including already allocated and immutable pending bytes. */
+void Storage()
+{
+    for (auto profile : {TaskProfile::DENSE_IMAGE,
+                         TaskProfile::SPARSE_INFERENCE,
+                         TaskProfile::COMPRESSION,
+                         TaskProfile::LLM})
+    {
+        auto task = Definition(profile);
+        TaskStateAdapter layout(task);
+        const auto initial = layout.Floor(layout.Work() / 4);
+        auto off = MakeFrequencyStorageEstimator(task, initial, std::nullopt)({50, 4});
+        auto deferred = MakeFrequencyStorageEstimator(task, initial, std::nullopt,
+                                                       InputStagingPolicy::DEFERRED)({50, 4});
+        Check(deferred && deferred->remoteAdditionalBytes >= layout.StateBytes(initial) + layout.HeaderBytes(),
+              "deferred initialization/merge state omitted");
+        Check(deferred->remoteAdditionalBytes <= off->remoteAdditionalBytes &&
+                  deferred->localAdditionalBytes == off->localAdditionalBytes,
+              "deferred storage changed L1 or increased remote requirement");
+        Check(off.has_value(), "OFF storage missing");
+        Check(off->remoteAdditionalBytes >=
+                  task.inputBytes + layout.StateBytes(initial) + layout.HeaderBytes(),
+              "initialization temporary merge omitted");
+        Check(off->remoteAdditionalBytes >= layout.CommittedStateBytes(initial),
+              "init state omitted");
+        CheckpointInventory inventory;
+        inventory.active = inventory.initialized = true;
+        inventory.config = {50, 4, 2, 0};
+        inventory.progress = {true, initial, initial};
+        inventory.actual = inventory.triggered = initial;
+        inventory.baseBytes = layout.CommittedStateBytes(initial);
+        inventory.nextTarget = layout.Next(initial, initial, 50);
+        auto empty = MakeFrequencyStorageEstimator(task, initial, inventory)({50, 4});
+        const auto work = *inventory.nextTarget;
+        const auto bytes = layout.RecordBytes(initial, work);
+        inventory.records.push_back({initial, work, bytes, false, false});
+        inventory.triggered = work;
+        inventory.nextTarget = layout.Next(work, work, 50);
+        auto captured = MakeFrequencyStorageEstimator(task, work, inventory)({50, 4});
+        inventory.records.front().allocated = true;
+        auto allocated = MakeFrequencyStorageEstimator(task, work, inventory)({50, 4});
+        Check(captured->localAdditionalBytes == allocated->localAdditionalBytes + bytes,
+              "already occupied L1 charged twice or unallocated record omitted");
+        inventory.batchInFlight = true;
+        inventory.batchWork = work;
+        inventory.batchBytes = bytes;
+        auto immutable = MakeFrequencyStorageEstimator(task, work, inventory)({50, 4});
+        inventory.batchBytes += 1234;
+        auto alreadyCharged = MakeFrequencyStorageEstimator(task, work, inventory)({50, 4});
+        Check(alreadyCharged->remoteAdditionalBytes ==
+                  (immutable->remoteAdditionalBytes > 1234 ? immutable->remoteAdditionalBytes - 1234
+                                                           : 0),
+              "existing immutable batch capacity not deducted from additional peak");
+        Check(empty->localAdditionalBytes > 0, "future capture omitted");
+    }
+}
+
+/** Controlled risk epochs and actual fault executor, real network/compute/storage throughout. */
+struct Driver
+{
+    static void IgnoreService(uint64_t, uint64_t, uint32_t, int64_t) {}
+    FrequencyProtectionController& controller;
+    Ptr<TaskCoordinator> tasks;
+    Ptr<FaultController> executor;
+    F1SelfStateFaultModel model{GetDefaultFaultParameters().f1};
+    std::string mode;
+    bool sawBatch{}, paused{}, resumed{}, configured{};
+    std::optional<CheckpointInventory> pausedInventory;
+    uint64_t immutableBytes{}, immutableWork{};
+    int64_t pauseTime{};
+    std::optional<uint64_t> localBlock, remoteBlock;
+    std::function<void(const FrequencyDecisionRecord&)> betweenProposalAndResolution;
+    uint64_t blockedWork{};
+    uint64_t terminalFlow{}, terminalSent{};
+
+    void Epoch(double q, bool hit = false)
+    {
+        // Locate by stable ID, not profile vector order.
+        Ptr<ComputeService> primary;
+        for (auto service : tasks->GetComputeServices())
+            if (service->GetNodeId() == 3)
+                primary = service;
+        auto live = primary->GetRunningTaskSnapshot();
+        Check(live && live->remainingTimeNs > 0, "controlled task not running");
+        const auto now = Simulator::Now().GetNanoSeconds();
+        ComputeFailurePredictionInput input;
+        input.f1Model = &model;
+        input.f1State = model.CreateInitialSnapshot();
+        // A hot synthetic trajectory has post-initialization risk. A lone overridden
+        // current q on a cold state correctly has no protectable START-window mass.
+        if (q > 0)
+            input.f1State.temperatureC = GetDefaultFaultParameters().f1.temperature.criticalC;
+        input.f1State.stepFailureProbability = q;
+        input.predictionTimeNs = now;
+        input.checkIntervalNs = 100000000;
+        input.remainingComputeTimeNs = live->remainingTimeNs;
+        FrequencyRuntimeTestAccess::Before(controller, {3, 1, q, input});
+        const auto proposal = controller.Decisions().back();
+        if (betweenProposalAndResolution) betweenProposalAndResolution(proposal);
+        Check(proposal.input.risk.qCurrentSample == q, "current q changed");
+        Check(proposal.input.risk.pFailBeforeFinish ==
+                  PredictComputeFailureBeforeFinish(input).predictedFailureProbability,
+              "canonical inclusive predictor wiring mismatch");
+        if (hit)
+        {
+            FaultDefinition fault;
+            fault.faultId = 1;
+            fault.nodeId = 3;
+            fault.faultType = FaultType::COMPUTE;
+            fault.startTimeNs = now;
+            fault.durationNs = 100000000;
+            fault.failureProbability = q;
+            fault.f1Occurred = true;
+            executor->SubmitGeneratedBatch({{FaultEventType::START, fault}});
+        }
+        FrequencyRuntimeTestAccess::After(controller, now, 1, hit);
+        const auto& row = controller.Decisions().back();
+        if (hit)
+        {
+            Check(!row.committed && row.faultHit, "same-epoch hit committed proposal");
+            Check(row.previous == row.committedConfig, "hit changed effective config");
+        }
+    }
+
+    void Poll()
+    {
+        auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
+        auto inventory = manager.Inventory(1);
+        if (inventory && inventory->active && inventory->initialized)
+        {
+            if (mode.starts_with("lifecycle-") && !configured)
+            {
+                manager.UpdateFutureConfiguration(1, 20, 2);
+                const auto net = tasks->GetTransferEngine();
+                if (mode == "lifecycle-generated-held")
+                {
+                    for (const auto& record : inventory->records)
+                        if (!record.received && std::none_of(manager.Flows().begin(), manager.Flows().end(),
+                            [&](const auto& f) { return f.key.kind == ProtectionTransferKind::L1 && f.work == record.work; }))
+                        {
+                            blockedWork = record.work;
+                            const auto local = inventory->config.localNode;
+                            CheckpointMaintenanceTestAccess::Path(manager, [=](auto s, auto d) { return !(s == 3 && d == local); });
+                            Check(manager.PauseFutureProtection(1), "generated pause failed");
+                            configured = true;
+                            break;
+                        }
+                }
+                else
+                {
+                    const auto kind = mode == "lifecycle-l1-failed" ? ProtectionTransferKind::L1 : ProtectionTransferKind::REMOTE_BATCH;
+                    for (const auto& f : manager.Flows()) if (f.key.kind == kind && !net->IsTerminal(f.transferId))
+                    {
+                        for (const auto& r : net->CollectSummaries()) if (r.transferId == f.transferId && r.sentApplicationBytes > 0)
+                        {
+                            terminalFlow = f.transferId;
+                            terminalSent = r.sentApplicationBytes;
+                            blockedWork = f.work;
+                            configured = true;
+                            break;
+                        }
+                        if (configured) break;
+                    }
+                    if (configured)
+                        net->FinalizeTransfersIfActive({terminalFlow}, TransferTerminalState::FAILED,
+                                                       TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+                }
+                if (configured)
+                {
+                    pausedInventory = manager.Inventory(1);
+                    pauseTime = Simulator::Now().GetNanoSeconds();
+                }
+            }
+            else if (mode.starts_with("lifecycle-") && configured && !resumed &&
+                     Simulator::Now().GetNanoSeconds() > pauseTime + 50000000)
+            {
+                const auto net = tasks->GetTransferEngine();
+                if (mode == "lifecycle-generated-held")
+                {
+                    Check(manager.Inventory(1)->triggered == blockedWork && manager.Inventory(1)->paused,
+                          "policy pause created new operation");
+                    Check(std::any_of(manager.Events().begin(), manager.Events().end(), [&](const auto& e) {
+                        return e.event == "L1_GENERATED" && e.work == blockedWork;
+                    }), "pause cancelled existing cL generation");
+                    Check(std::none_of(manager.Flows().begin(), manager.Flows().end(), [&](const auto& f) {
+                        return f.key.kind == ProtectionTransferKind::L1 && f.work == blockedWork;
+                    }), "unadmitted generated record created a flow");
+                    CheckpointMaintenanceTestAccess::Path(manager, {});
+                    manager.RetryBlockedMaintenance();
+                    Simulator::Schedule(MilliSeconds(20), [this] {
+                        const auto& m = controller.Manager();
+                        Check(m.Inventory(1)->paused && m.Inventory(1)->progress.localWork >= blockedWork &&
+                              m.Inventory(1)->triggered == blockedWork, "created L1 must finish during policy PAUSE");
+                        Check(std::count_if(m.Flows().begin(), m.Flows().end(), [&](const auto& f) {
+                            return f.key.kind == ProtectionTransferKind::L1 && f.work == blockedWork;
+                        }) == 1, "held L1 registered twice");
+                    });
+                }
+                else
+                {
+                    manager.UpdateFutureConfiguration(1, 20, 2);
+                    manager.RetryBlockedMaintenance();
+                    const auto current = *manager.Inventory(1);
+                    Check(mode == "lifecycle-l1-failed" ? current.captureBlockReason == "TRANSFER_FAILED" :
+                          current.remoteBlockReason == "TRANSFER_FAILED", "UPDATE erased terminal flow guard");
+                    const auto kind = mode == "lifecycle-l1-failed" ? ProtectionTransferKind::L1 : ProtectionTransferKind::REMOTE_BATCH;
+                    Check(std::count_if(manager.Flows().begin(), manager.Flows().end(), [&](const auto& f) {
+                        return f.key.kind == kind && f.work == blockedWork;
+                    }) == 1, "terminal flow automatically replayed");
+                    for (const auto& r : net->CollectSummaries()) if (r.transferId == terminalFlow)
+                        Check(r.sentApplicationBytes == terminalSent && r.sentApplicationBytes > 0, "failed-flow actual bytes disappeared");
+                    if (mode == "lifecycle-l1-failed")
+                        Check(current.triggered == pausedInventory->triggered && current.progress.localWork < blockedWork,
+                              "capture skipped terminal missing receipt");
+                    else Check(current.progress.localWork > pausedInventory->progress.localWork,
+                               "remote terminal failure stopped independent capture");
+                }
+                resumed = true;
+            }
+            if (mode.starts_with("maintenance-") && !configured)
+            {
+                if (mode == "maintenance-local-block-backlog" &&
+                    std::count_if(inventory->records.begin(), inventory->records.end(),
+                                  [](const auto& r) { return r.received; }) < 3)
+                {
+                    manager.UpdateFutureConfiguration(1, 20, 20);
+                    Simulator::Schedule(NanoSeconds(100000), &Driver::Poll, this);
+                    return;
+                }
+                if (mode == "maintenance-local-block-backlog")
+                {
+                    const auto local = inventory->config.localNode;
+                    CheckpointMaintenanceTestAccess::Path(manager, [=](auto s, auto d) { return !(s == 3 && d == local); });
+                }
+                Check(manager.UpdateFutureConfiguration(1, 20, 2), "maintenance cadence rejected");
+                inventory = manager.Inventory(1);
+                pausedInventory = inventory;
+                pauseTime = Simulator::Now().GetNanoSeconds();
+                const auto local = inventory->config.localNode, remote = inventory->config.remoteNode;
+                if (mode == "maintenance-local-busy" || mode == "maintenance-remote-busy")
+                {
+                    const auto node = mode == "maintenance-local-busy" ? local : remote;
+                    for (auto service : tasks->GetComputeServices()) if (service->GetNodeId() == node)
+                    {
+                        Check(service->ReserveRecovery(999, 1) && service->StartRecovery(999, 1, 15000, 0,
+                            MakeCallback(&Driver::IgnoreService), MakeCallback(&Driver::IgnoreService),
+                            MakeCallback(&Driver::IgnoreService)), "real busy service fixture failed");
+                        Check(!service->IsIdle(), "maintenance peer not busy");
+                    }
+                    Epoch(0.4);
+                    Check(FrequencyRuntimeTestAccess::StartStillRequiresIdle(controller, tasks->GetTaskRuntimes().front()),
+                          "maintenance relaxation changed START idle contract");
+                    const auto& row = controller.Decisions().back();
+                    Check(row.input.nodeAvailable && row.resourceReason != "LOCAL_BUSY" &&
+                          row.resourceReason != "REMOTE_BUSY" && !manager.Inventory(1)->paused,
+                          "CPU busy still blocks ON maintenance");
+                    Check(manager.UpdateFutureConfiguration(1, 20, 2), "test cadence restore failed");
+                }
+                if (mode == "maintenance-remote-path" || mode == "maintenance-local-path")
+                    CheckpointMaintenanceTestAccess::Path(manager, [=, this](auto source, auto dest) {
+                        return mode == "maintenance-remote-path" ? !(source == local && dest == remote)
+                                                                  : !(source == 3 && dest == local);
+                    });
+                if (mode == "maintenance-local-storage" || mode == "maintenance-remote-storage")
+                {
+                    auto& pool = manager.Pool(mode == "maintenance-local-storage" ? local : remote);
+                    localBlock = pool.TryReserve(999, StorageKind::LOCAL_RECORD, pool.Free());
+                    Check(localBlock.has_value(), "maintenance storage fixture missing");
+                }
+                if (mode == "maintenance-quota")
+                    manager.SetMaintenanceFree([=](auto node, auto) {
+                        return node == remote ? uint64_t{0} : uint64_t{10000000000ULL};
+                    });
+                configured = true;
+            }
+            else if (mode.starts_with("maintenance-") && configured && !resumed &&
+                     Simulator::Now().GetNanoSeconds() > pauseTime + 180000000)
+            {
+                const auto current = *manager.Inventory(1);
+                const bool localBlocked = mode == "maintenance-local-storage" || mode == "maintenance-local-path" ||
+                                          mode == "maintenance-local-block-backlog";
+                const bool remoteBlocked = mode == "maintenance-remote-storage" || mode == "maintenance-remote-path" ||
+                                           mode == "maintenance-quota";
+                if (localBlocked)
+                    Check(current.triggered == pausedInventory->triggered && !current.nextTarget &&
+                          !current.captureBlockReason.empty(), "rejected local operation advanced sequence");
+                else Check(current.progress.localWork > pausedInventory->progress.localWork,
+                           "remote/CPU blockage stopped independent local progress");
+                if (remoteBlocked)
+                    Check(current.progress.remoteWork == pausedInventory->progress.remoteWork &&
+                          !current.remoteBlockReason.empty(), "remote path/storage gate bypassed");
+                else if (!localBlocked)
+                    Check(current.progress.remoteWork > pausedInventory->progress.remoteWork,
+                          "CPU busy stopped remote merge");
+                if (mode == "maintenance-local-block-backlog")
+                    Check(current.progress.remoteWork > pausedInventory->progress.remoteWork,
+                          "local path block stopped batching already received records");
+                Check(!current.paused, "resource blockage mislabeled as policy PAUSE");
+                blockedWork = current.triggered;
+                CheckpointMaintenanceTestAccess::Path(manager, {});
+                manager.SetMaintenanceFree({});
+                if (localBlock)
+                    Check(manager.Pool(mode == "maintenance-local-storage" ? current.config.localNode :
+                                       current.config.remoteNode).ReleaseReservation(*localBlock), "block release failed");
+                manager.RetryBlockedMaintenance();
+                const auto after = *manager.Inventory(1);
+                Check(after.triggered == blockedWork, "retry invented historical capture");
+                if (localBlocked)
+                    Check(after.nextTarget && *after.nextTarget > after.actual,
+                          "local retry must use a future legal target");
+                if (remoteBlocked) Check(after.batchInFlight, "received contiguous batch did not resume");
+                resumed = true;
+            }
+            if (mode == "gate-pause" && !configured)
+            {
+                auto& local = manager.Pool(inventory->config.localNode);
+                auto& remote = manager.Pool(inventory->config.remoteNode);
+                localBlock = local.TryReserve(999, StorageKind::LOCAL_RECORD, local.Free());
+                remoteBlock = remote.TryReserve(999, StorageKind::REMOTE_BATCH, remote.Free());
+                Check(localBlock && remoteBlock, "controlled pool contention not established");
+                Epoch(0.4);
+                const auto& row = controller.Decisions().back();
+                Check(row.proposal.action == FrequencyAction::PAUSE && row.committed &&
+                          row.phaseAfter == ProtectionPhase::ON && row.resourceHold && !manager.Inventory(1)->paused,
+                      "storage rejection must hold config, not globally pause maintenance");
+                configured = paused = true;
+                pausedInventory = manager.Inventory(1);
+                pauseTime = Simulator::Now().GetNanoSeconds();
+            }
+            else if (mode == "gate-pause" && paused && !resumed &&
+                     Simulator::Now().GetNanoSeconds() > pauseTime + 100000000)
+            {
+                Check(inventory->triggered == pausedInventory->triggered && !inventory->nextTarget &&
+                      inventory->captureBlockReason == "STORAGE", "local storage gate created new captures");
+                manager.Pool(inventory->config.localNode).ReleaseReservation(*localBlock);
+                manager.Pool(inventory->config.remoteNode).ReleaseReservation(*remoteBlock);
+                Epoch(0.8);
+                const auto& row = controller.Decisions().back();
+                Check(row.proposal.action == FrequencyAction::UPDATE && row.committed &&
+                          row.phaseAfter == ProtectionPhase::ON && !manager.Inventory(1)->paused,
+                      "solver resume did not reach actual mechanism");
+                resumed = true;
+            }
+            if (mode == "dynamic" && !configured)
+            {
+                Check(manager.UpdateFutureConfiguration(1, 40, 20),
+                      "initial dynamic cadence rejected");
+                configured = true;
+            }
+            if (mode == "update-hit" && controller.Decisions().size() == 1)
+            {
+                Epoch(1.0, true);
+                Check(controller.Decisions().back().proposal.action == FrequencyAction::UPDATE,
+                      "same-epoch UPDATE not proposed");
+                return;
+            }
+            if (mode == "dynamic" && !sawBatch && !inventory->batchInFlight &&
+                std::count_if(inventory->records.begin(),
+                              inventory->records.end(),
+                              [](const auto& record) { return record.received; }) >= 3)
+            {
+                const auto first = inventory->records.front().bytes;
+                const auto second = inventory->records.at(1).bytes;
+                Check(manager.UpdateFutureConfiguration(1, 40, 2),
+                      "pending records did not adopt new n");
+                inventory = manager.Inventory(1);
+                Check(inventory->batchInFlight && inventory->batchBytes == first + second,
+                      "new n did not form exact batch from existing valid records");
+            }
+            if (mode == "dynamic" && !sawBatch && inventory->batchInFlight)
+            {
+                sawBatch = true;
+                immutableWork = inventory->batchWork;
+                immutableBytes = inventory->batchBytes;
+                const auto before = *inventory;
+                Check(manager.UpdateFutureConfiguration(1, 20, 1), "dynamic update rejected");
+                const auto after = *manager.Inventory(1);
+                Check(after.batchBytes == immutableBytes && after.batchWork == immutableWork,
+                      "existing batch regrouped by n update");
+                Check(after.triggered == before.triggered &&
+                          after.records.size() == before.records.size(),
+                      "delta update rewrote records");
+                Check(after.nextTarget ==
+                          TaskStateAdapter(tasks->GetTaskRuntimes().front().definition)
+                              .Next(after.actual, after.triggered, 20),
+                      "delta ignores actual/legal boundary");
+                Check(manager.PauseFutureProtection(1), "pause rejected");
+                pausedInventory = manager.Inventory(1);
+                pauseTime = Simulator::Now().GetNanoSeconds();
+                paused = true;
+            }
+            else if (mode == "dynamic" && paused && !resumed &&
+                     Simulator::Now().GetNanoSeconds() > pauseTime + 100000000)
+            {
+                const auto current = *manager.Inventory(1);
+                Check(current.triggered == pausedInventory->triggered && !current.nextTarget,
+                      "PAUSE captured a new target");
+                Check(current.initialized &&
+                          current.progress.remoteWork >= immutableWork,
+                      "PAUSE lost state or stopped old batch");
+                Check(manager.UpdateFutureConfiguration(1, 30, 1), "resume rejected");
+                resumed = true;
+            }
+        }
+        if (Simulator::Now().GetNanoSeconds() + 100000 < END)
+            Simulator::Schedule(NanoSeconds(100000), &Driver::Poll, this);
+    }
+};
+
+std::string Controlled(TaskProfile profile,
+                       const std::string& mode,
+                       const std::filesystem::path& output,
+                       InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER)
+{
+    std::string signature;
+    {
+        auto config = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        config.parameters.fixedDelaySeconds = 0.001;
+        config.parameters.islBandwidthBps = 10000000000ULL;
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        auto tasks = CreateObject<TaskCoordinator>();
+        tasks->Initialize(ComputeProfile{{{0, 125000}, {2, 100000}, {3, 100000}, {4, 100000}}},
+                          TaskTrace{{Definition(profile)}},
+                          topology,
+                          "size-aware",
+                          1024,
+                          config.parameters.islMtuBytes,
+                          config.parameters.receiverRcvBufBytes,
+                          false,
+                          END);
+        auto executor = CreateObject<FaultController>();
+        executor->ConfigureGeneration(topology.GetIdMap().GetCanonicalSatelliteIds(), END);
+        executor->BindTopology(topology);
+        executor->BindTaskCoordinator(tasks);
+        // No generation schedule here: deterministic injection tests only the boundary seam.
+        auto engine = CreateObject<FaultModelEngine>();
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            nullptr, RemoteBusyRecoveryPolicy::RELOCATE,
+            inputPolicy == InputStagingPolicy::EAGER ? InputPolicy::EAGER : InputPolicy::DEFERRED);
+        Driver driver{controller,
+                      tasks,
+                      executor,
+                      F1SelfStateFaultModel(GetDefaultFaultParameters().f1),
+                      mode};
+        Simulator::Schedule(NanoSeconds(100000000), [&] {
+            Check(controller.Decisions().empty() && controller.Manager().Summaries().empty(),
+                  "unconfigured synthetic engine invented a production task-start prediction");
+        });
+        Simulator::Schedule(NanoSeconds(200000000), [&] {
+            if (inputPolicy == InputStagingPolicy::DEFERRED)
+                Check(FrequencyRuntimeTestAccess::BlockedInput(controller, tasks->GetTaskRuntimes().front()),
+                      "blocked deferred INPUT was not a hard pair filter/capacity retry reason");
+            driver.Epoch(mode == "none" ? 0.0 : 0.4, mode == "start-hit");
+            const auto& row = controller.Decisions().back();
+            Check(row.pair && row.pair->localNode == 2 && row.pair->remoteNode == 0, "FFP changed");
+            Check(row.input.recoveryRate == 125000, "recovery rate not actual remote profile");
+            Check(row.input.localFreeBytes == 10000000000ULL &&
+                      row.input.remoteFreeBytes == 10000000000ULL,
+                  "pool free snapshot not live");
+            Check(row.input.backupBandwidth > 0 && (inputPolicy == InputStagingPolicy::DEFERRED
+                      ? row.input.baseTransferSeconds == 0 : row.input.baseTransferSeconds > 0),
+                  "path estimate missing");
+            if (mode == "none")
+                Check(row.proposal.action == FrequencyAction::NONE &&
+                          controller.Manager().Summaries().empty(),
+                      "OFF NONE allocated protection");
+            else
+            {
+                Check(row.proposal.action == FrequencyAction::START,
+                      "controlled START not proposed");
+                Check(row.committed == (mode != "start-hit"), "START survival gate wrong");
+                if (mode == "start-hit")
+                    Check(controller.Manager().Summaries().empty(),
+                          "same-epoch hit created initialization");
+                else
+                    Check(row.phaseAfter == ProtectionPhase::INITIALIZING,
+                          "START skipped real init");
+            }
+        });
+        Simulator::Schedule(NanoSeconds(200100000), &Driver::Poll, &driver);
+        Simulator::Stop(NanoSeconds(END));
+        Simulator::Run();
+        controller.Finalize();
+        Check(controller.Manager().IsQuiescent(), "frequency resources leaked");
+        const TaskStateAdapter layout(Definition(profile));
+        if (inputPolicy == InputStagingPolicy::DEFERRED)
+        {
+            Check(std::none_of(controller.Manager().Flows().begin(), controller.Manager().Flows().end(),
+                              [](const auto& f) { return f.key.kind == ProtectionTransferKind::INIT_BASE; }),
+                  "deferred nonzero-progress initialization copied INPUT");
+            for (const auto& flow : controller.Manager().Flows())
+                if (flow.key.kind == ProtectionTransferKind::INIT_STATE)
+                    Check(flow.work > 0 && flow.bytes == layout.StateBytes(flow.work) + layout.HeaderBytes(),
+                          "deferred current state/H initialization mismatch");
+        }
+        uint64_t previousWork = 0;
+        for (const auto& event : controller.Manager().Events())
+        {
+            Check(event.remoteWork <= event.localWork && event.localWork <= event.actualWork,
+                  "r/l/x ordering violated");
+            if (event.event == "START")
+                previousWork = event.work;
+            if (event.event == "L1_CAPTURED")
+            {
+                Check(layout.Floor(event.work) == event.work, "illegal dynamic state boundary");
+                Check(event.bytes == layout.RecordBytes(previousWork, event.work),
+                      "captured increment lost actual endpoints or record H");
+                previousWork = event.work;
+            }
+        }
+        std::map<uint64_t, uint64_t> l1;
+        for (const auto& flow : controller.Manager().Flows())
+        {
+            if (flow.key.kind == ProtectionTransferKind::L1)
+                l1[flow.work] = flow.bytes;
+            if (flow.key.kind == ProtectionTransferKind::REMOTE_BATCH)
+            {
+                uint64_t sum = 0;
+                for (auto it = l1.begin(); it != l1.end() && it->first <= flow.work;)
+                {
+                    sum += it->second;
+                    it = l1.erase(it);
+                }
+                Check(sum == flow.bytes, "batch not exact actual record sum");
+            }
+        }
+        if (mode == "dynamic")
+            Check(driver.sawBatch && driver.paused && driver.resumed,
+                  "dynamic boundary not reached");
+        if (mode == "gate-pause")
+            Check(driver.paused && driver.resumed, "gate PAUSE/resume not reached");
+        if (mode.starts_with("maintenance-") || mode.starts_with("lifecycle-"))
+            Check(driver.configured && driver.resumed, "maintenance test did not reach both boundaries");
+        if (mode == "update-hit")
+        {
+            const auto& r = controller.Decisions().back();
+            Check(r.input.phase == ProtectionPhase::ON && r.previous && r.proposal.selected,
+                  "UPDATE fixture missed ON");
+            Check(*r.previous != r.proposal.selected->config,
+                  "UPDATE fixture did not propose different config");
+            Check(!controller.Recovery()->Summaries().empty(), "actual recovery not driven");
+        }
+        controller.WriteDecisions(output);
+        WriteProtectionMetrics(controller.Manager(), *tasks->GetTransferEngine(), output);
+        controller.Recovery()->WriteMetrics(output);
+        std::ifstream file(output / "frequency-decisions.csv");
+        signature.assign(std::istreambuf_iterator<char>(file), {});
+    }
+    Reset();
+    return signature;
+}
+
+void Online(const std::filesystem::path& output, const std::string& mode = "normal",
+            bool selective = false)
+{
+    RngSeedManager::SetSeed(1);
+    RngSeedManager::SetRun(11);
+    {
+        auto config = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+        auto executor = CreateObject<FaultController>();
+        executor->ConfigureGeneration(ids, END);
+        executor->BindTopology(topology);
+        auto engine = CreateObject<FaultModelEngine>();
+        auto parameters = GetDefaultFaultParameters();
+        std::optional<ComputeFailurePredictionInput> beforeCheck;
+        if (mode == "phase-boundary")
+            Simulator::Schedule(NanoSeconds(100000000), [&] {
+                const auto before = engine->GetNodeSnapshots();
+                beforeCheck = engine->QueryTaskPrediction(3, 200000000);
+                const auto after = engine->GetNodeSnapshots();
+                Check(beforeCheck && beforeCheck->firstSampleTimeNs == 100000000,
+                      "pending coincident sample excluded from task-start query");
+                for (size_t i = 0; i < before.size(); ++i)
+                    Check(before[i].f1SampleCount == after[i].f1SampleCount &&
+                              before[i].f2SampleCount == after[i].f2SampleCount &&
+                              before[i].f1State.temperatureC == after[i].f1State.temperatureC,
+                          "task-start query mutated physical state or sampled RNG");
+            });
+        parameters.checkIntervalSeconds = 0.1;
+        parameters.f1.temperature.heatingToCriticalSeconds = 0.8;
+        parameters.f2.enabled = true;
+        parameters.f3.enabled = mode == "f3";
+        parameters.f3.mode = "controlled";
+        parameters.f3.controlledNodeId = 3;
+        parameters.f3.controlledStartSeconds = 0.1;
+        const bool spatial = mode.starts_with("compfrr-placement");
+        const bool paired = mode == "ffp-two" || mode == "lrl-two" || spatial;
+        const std::vector<uint32_t> computeNodes = paired ? ids : std::vector<uint32_t>{0, 2, 3, 4};
+        engine->Configure(parameters, ids, computeNodes, END, executor, true);
+        if (mode == "phase-boundary")
+            Simulator::Schedule(NanoSeconds(100000000), [&] {
+                const auto afterCheck = engine->QueryTaskPrediction(3, 200000000);
+                Check(beforeCheck && afterCheck && afterCheck->firstSampleTimeNs == 200000000,
+                      "completed coincident sample included a second time");
+            });
+        engine->BindOrbitConstellation(topology.GetConstellation());
+        auto tasks = CreateObject<TaskCoordinator>();
+        auto definition = Definition(mode == "immediate-sparse" ? TaskProfile::SPARSE_INFERENCE
+                                                                : TaskProfile::LLM);
+        if (mode == "immediate-sparse")
+            definition.sourceNodeId =
+                1; // Nonlocal INPUT replay makes protection beneficial at x=0.
+        if (mode == "short")
+            definition.computeWorkUnits = TaskStateAdapter::LLM_WORK_UNITS_PER_TOKEN;
+        ComputeProfile compute;
+        for (auto node : computeNodes) compute.nodes.push_back({node, 100000});
+        TaskTrace workload{{definition}};
+        if (paired)
+        {
+            auto next = definition;
+            next.taskId = 2;
+            next.inputTransferId = 3;
+            next.resultTransferId = 4;
+            next.computeNodeId = spatial ? 9 : 5;
+            next.arrivalTimeNs = spatial ? 50000000 : 150000000;
+            workload.tasks.push_back(next);
+        }
+        tasks->Initialize(compute, workload,
+                          topology,
+                          "size-aware",
+                          1024,
+                          config.parameters.islMtuBytes,
+                          config.parameters.receiverRcvBufBytes,
+                          false,
+                          END);
+        executor->BindTaskCoordinator(tasks);
+        engine->BindTaskCoordinator(tasks);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            spatial ? std::unique_ptr<PlacementPolicy>(std::make_unique<CompFrrPlacementPolicy>(
+                mode == "compfrr-placement-rational-U" ? CompFrrPlacementVariant::RATIONAL_U : CompFrrPlacementVariant::FULL)) :
+            mode == "lrl-two" ? std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1)
+                               : std::unique_ptr<PlacementPolicy>{}, RemoteBusyRecoveryPolicy::RELOCATE,
+            selective ? InputPolicy::SELECTIVE :
+            (mode == "compfrr-placement-deferred" || mode == "compfrr-placement-rational-U") ?
+                InputPolicy::DEFERRED : InputPolicy::EAGER);
+        if (mode == "f3")
+        {
+            Simulator::Schedule(NanoSeconds(50000000), [&] {
+                Check(engine->ObservedSurvivalExposureNs(3) == 50000000,
+                      "exposure read future controlled F3 instead of observed survival");
+            });
+            Simulator::Schedule(NanoSeconds(200000000), [&] {
+                Check(engine->ObservedSurvivalExposureNs(3) == 100000000 &&
+                      engine->ObservedSurvivalExposureNs(0) == 200000000,
+                      "actual permanent fault failed to truncate alive exposure");
+            });
+        }
+        Simulator::Stop(NanoSeconds(END));
+        Simulator::Run();
+        controller.Finalize();
+        auto trace = engine->Finalize();
+        if (mode == "short")
+            Check(controller.Decisions().size() == 1 && controller.Manager().Summaries().empty() &&
+                      controller.Decisions().front().input.risk.pFailBeforeFinish == 0,
+                  "short task missed immediate decision or invented a future check");
+        else
+        {
+            Check(!controller.Decisions().empty(), "online generate decision absent");
+            Check(controller.Decisions().front().trigger == "TASK_RUNNING" &&
+                      controller.Decisions().front().input.risk.epochNs ==
+                          tasks->GetTaskRuntimes().front().computeStartTimeNs,
+                  "first decision did not run immediately at primary dispatch");
+        }
+        bool hit = false, start = false, update = false;
+        if (mode == "immediate-sparse")
+            Check(controller.Decisions().front().committed &&
+                      controller.Decisions().front().proposal.action == FrequencyAction::START &&
+                      controller.Decisions().front().phaseAfter == ProtectionPhase::INITIALIZING,
+                  "beneficial short image task waited for first fault epoch to START");
+        for (const auto& row : controller.Decisions())
+        {
+            start = start || (row.proposal.action == FrequencyAction::START && row.committed);
+            if (row.trigger == "TASK_RUNNING")
+            {
+                Check(!row.sampled && !row.faultHit &&
+                          row.firstSampleNs == 100000000 * (row.input.risk.epochNs / 100000000 + 1),
+                      "task-start decision consumed a draw or used a task-relative grid");
+                if (row.committed)
+                    Check(row.phaseAfter == ProtectionPhase::INITIALIZING,
+                          "immediate START jumped directly to ON");
+                continue;
+            }
+            if (!row.sampled)
+            {
+                Check(mode == "f3" && row.faultHit && !row.committed &&
+                          (row.input.phase == ProtectionPhase::ON
+                              ? row.proposal.action == FrequencyAction::UPDATE ||
+                                    row.proposal.action == FrequencyAction::PAUSE
+                              : row.proposal.action == FrequencyAction::START ||
+                                    row.proposal.action == FrequencyAction::NONE),
+                      "same-time F3 leaked into proposal or committed an action");
+                Check(std::none_of(controller.Manager().Events().begin(), controller.Manager().Events().end(),
+                      [&](const auto& event) { return event.event == "START" &&
+                          event.timeNs >= row.input.risk.epochNs; }),
+                      "F3 created same-epoch initialization (an earlier causal START is legal)");
+                continue;
+            }
+            const auto record = std::find_if(
+                engine->GetProbabilityRecords().begin(),
+                engine->GetProbabilityRecords().end(),
+                [&](const auto& p) {
+                    return p.taskId == row.taskId && p.simulationTimeNs == row.input.risk.epochNs;
+                });
+            Check(record != engine->GetProbabilityRecords().end(), "sampler audit record absent");
+            Check(record->combinedStepFailureProbability == row.input.risk.qCurrentSample,
+                  "online q not bitwise sampler equal");
+            Check(record->failureBeforeFinishProbability == row.input.risk.pFailBeforeFinish,
+                  "online P_finish differs from canonical audit");
+            hit = hit || row.faultHit;
+            start = start || (row.proposal.action == FrequencyAction::START && row.committed);
+            update = update || (row.proposal.action == FrequencyAction::UPDATE && row.committed);
+        }
+        if (mode == "normal")
+            Check(hit && start && update && !trace.faults.empty(),
+                  "online generate missed start/update/actual hit");
+        if (mode == "f3")
+        {
+            Check(engine->GetF3ComputeRiskRecords().size() == 1, "F3 causal risk snapshot missing");
+            const auto& snapshot = engine->GetF3ComputeRiskRecords().front();
+            Check(snapshot.taskId == 1 && snapshot.timeNs == 100000000 && snapshot.pFinish > 0 &&
+                      snapshot.pFinish >= snapshot.qCompute,
+                  "F3 victim causal probability was disabled");
+        }
+        if (spatial)
+        {
+            bool competingPeer = false;
+            Check(controller.PlacementTracker() && controller.PlacementTracker()->QuotasEmpty() &&
+                  !controller.PlacementTracker()->Decisions().empty(), "CompFRR-P did not exercise START/release");
+            for (const auto& row : controller.Decisions())
+            {
+                if (row.input.phase == ProtectionPhase::OFF && row.pairPathFeasible)
+                    Check(row.pairHardChecked == 1, "CompFRR-P reran Frequency per remote");
+                if (row.input.phase == ProtectionPhase::ON)
+                    Check(!row.placementTrace, "ON reranked CompFRR-P remote");
+                if (row.placementTrace)
+                {
+                    const auto& spatial = controller.PlacementTracker()->Decision(*row.placementTrace);
+                    Check(spatial.reference.localNode == row.pair->localNode &&
+                          spatial.config == row.proposal.selected->config,
+                          "CompFRR-P changed reference local or Frequency configuration");
+                    Check(spatial.committed == (row.committed && row.proposal.action == FrequencyAction::START),
+                          "CompFRR-P proposal was confused with actual commitment");
+                    for (const auto& s : spatial.selection.scores)
+                        if (s.feasible)
+                        {
+                            competingPeer = competingPeer || (s.peerCount && s.recoveryConflict > 0);
+                            Check(s.recoveryConflict >= 0 && s.recoveryConflict <= 1 &&
+                                  s.historicalUtilization >= 0 && s.historicalUtilization <= 1 &&
+                                  s.storagePressure >= 0 && s.storagePressure <= 1,
+                                  "CompFRR-P normalized pressure outside unit range");
+                        }
+                }
+            }
+            Check(competingPeer, "CompFRR-P runtime did not exercise a shared-remote competing forecast");
+        }
+        if (paired && !spatial)
+        {
+            std::map<uint64_t, uint32_t> selected;
+            for (const auto& row : controller.Decisions())
+                if (row.proposal.action == FrequencyAction::START && row.committed)
+                {
+                    selected[row.taskId] = row.pair->remoteNode;
+                    if (row.taskId == 2)
+                        Check(row.remoteLoad.activeBackup == (mode == "ffp-two" ? 1 : 0),
+                              "LRL ranking did not use live remote assignments");
+                }
+            Check(selected.size() == 2 && selected.at(1) == 0 &&
+                  selected.at(2) == (mode == "ffp-two" ? 0 : 1),
+                  "paired runtime did not separate stable-ID and least-load ranking");
+        }
+        Check(controller.PlacementLoads().Empty(), "live placement counter leaked");
+        uint64_t accepted = 0;
+        for (const auto& [node, load] : controller.PlacementLoads().Nodes()) accepted += load.totalRecovery;
+        const auto summaries = controller.Recovery()->Summaries();
+        Check(accepted == static_cast<uint64_t>(std::count_if(summaries.begin(), summaries.end(),
+              [](const auto& r) { return r.recoveryNode.has_value(); })), "actual recovery count mismatch");
+        controller.WriteDecisions(output);
+        controller.PlacementLoads().WriteMetrics(output);
+        controller.WriteInputAdmissionAudit(output);
+        if (selective)
+        {
+            Check(controller.OptionalInput() && !controller.OptionalInput()->Records().empty(),
+                  "online binary admission never requested INPUT");
+            for (const auto& [id, record] : controller.OptionalInput()->Records())
+            {
+                const auto found = std::find_if(controller.Decisions().begin(), controller.Decisions().end(),
+                    [&](const auto& d) { return d.taskId == id && d.committed &&
+                        d.proposal.action == FrequencyAction::START; });
+                Check(found != controller.Decisions().end() && found->pair->remoteNode == record.target &&
+                    found->input.risk.epochNs == record.requestedNs, "optional flow not from admitted actual START pair");
+            }
+        }
+        if (selective)
+        {
+            std::set<uint64_t> seen;
+            for (const auto& [snapshot, decision] : controller.InputAdmissions())
+            {
+                Check(seen.insert(snapshot.task.taskId).second, "START audit duplicate task");
+                Check(snapshot.prediction && snapshot.finishExclusive && snapshot.remainingNs > 0,
+                      "START audit lost canonical query");
+                if (snapshot.trigger == "FAULT_EPOCH")
+                    Check(snapshot.firstSampleNs > snapshot.timeNs, "START audit repeats survived epoch");
+                for (const auto& step : snapshot.prediction->steps)
+                    Check(step.targetTimeNs >= snapshot.firstSampleNs &&
+                          step.targetTimeNs < snapshot.timeNs + snapshot.remainingNs,
+                          "START audit prediction includes completion or predates first check");
+                const auto row = std::find_if(controller.Decisions().begin(), controller.Decisions().end(),
+                    [&](const auto& d) { return d.taskId == snapshot.task.taskId && d.input.risk.epochNs == snapshot.timeNs; });
+                Check(row != controller.Decisions().end() && row->committed &&
+                      row->pair == std::optional(snapshot.pair), "START audit did not retain actual pair");
+                Check(snapshot.inputPath.local == (snapshot.task.sourceNodeId == snapshot.pair.remoteNode),
+                      "START audit LocalDelivery mismatch");
+            }
+            Check(seen.size() == controller.Manager().Summaries().size(), "START audit admitted population mismatch");
+        }
+        WriteProtectionMetrics(controller.Manager(), *tasks->GetTransferEngine(), output);
+        controller.Recovery()->WriteMetrics(output);
+        Check(controller.Manager().IsQuiescent(), "online generate leaked resources");
+    }
+    Reset();
+}
+/** Force a different actual remote, then test readonly proposal, quota race and ON resource use. */
+void CompFrrBoundary(const std::filesystem::path& output, InputPolicy inputPolicy,
+                 const std::string& mode, bool reverseSelectivePair = false,
+                 const std::string& peerProbe = "")
+{
+    RngSeedManager::SetSeed(1); RngSeedManager::SetRun(11);
+    {
+        auto cfg = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        cfg.parameters.fixedDelaySeconds = .001;
+        cfg.parameters.islBandwidthBps = 10000000000ULL;
+        OnlineTopologyController topology(cfg.parameters, cfg.constellation);
+        topology.Initialize();
+        auto tasks = CreateObject<TaskCoordinator>();
+        auto definition = Definition(TaskProfile::LLM);
+        // Normal Selective: anchor network DEFER -> actual LocalDelivery SEND.
+        // Reverse Selective: anchor LocalDelivery SEND -> actual network DEFER.
+        definition.sourceNodeId = reverseSelectivePair ? 0 : 4;
+        tasks->Initialize(ComputeProfile{{{0,125000},{2,100000},{3,100000},{4,100000}}},
+            TaskTrace{{definition}}, topology, "size-aware", 1024, cfg.parameters.islMtuBytes,
+            cfg.parameters.receiverRcvBufBytes, false, END);
+        const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+        auto executor = CreateObject<FaultController>();
+        executor->ConfigureGeneration(ids, END); executor->BindTopology(topology);
+        executor->BindTaskCoordinator(tasks);
+        auto engine = CreateObject<FaultModelEngine>();
+        auto fp = GetDefaultFaultParameters();
+        fp.checkIntervalSeconds = 10; fp.f2.enabled = fp.f3.enabled = false;
+        engine->Configure(fp, ids, {0,2,3,4}, END, executor, true);
+        engine->BindTaskCoordinator(tasks);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            std::make_unique<CompFrrPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE,
+            inputPolicy);
+        auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
+        const auto held = manager.Pool(0).TryReserve(999, StorageKind::INIT_TEMP, 4000000000ULL);
+        Check(held.has_value(), "test pressure reservation failed");
+        Driver driver{controller, tasks, executor, F1SelfStateFaultModel(GetDefaultFaultParameters().f1), mode};
+        std::optional<uint64_t> race;
+        std::optional<uint64_t> inputStorageBlock;
+        driver.betweenProposalAndResolution = [&](const auto& row) {
+            if (row.input.phase != ProtectionPhase::OFF) return;
+            Check(row.placementTrace && row.pair->localNode == 2 && row.pair->remoteNode == 4 &&
+                  manager.Summaries().empty(), "CompFRR-P did not retain local/select actual remote without allocation");
+            const auto& trace = controller.PlacementTracker()->Decision(*row.placementTrace);
+            Check(trace.reference.remoteNode == 0 && trace.referenceInput.recoveryRate == 125000 &&
+                  row.pairHardChecked == 1, "reference resources or one-solve contract changed");
+            Check(!trace.committed, "readonly candidate created actual ownership");
+            if (mode == "race")
+                race = manager.Pool(4).TryReserve(998, StorageKind::INIT_TEMP, manager.Pool(4).Free());
+            if (mode == "prefetch-reject")
+            {
+                Check(inputPolicy == InputPolicy::SELECTIVE && row.policyAwareInputPlan &&
+                          row.policyAwareInputPlan->decision.send && row.placementPeak && *row.placementPeak > 0,
+                      "prefetch rejection fixture requires a policy-aware SEND and remote quota");
+                auto& pool = manager.Pool(row.pair->remoteNode);
+                Check(pool.Free() > *row.placementPeak,
+                      "prefetch rejection fixture lacks independent storage headroom");
+                inputStorageBlock = pool.TryReserve(
+                    998, StorageKind::INIT_TEMP, pool.Free() - *row.placementPeak);
+                Check(inputStorageBlock.has_value(), "prefetch rejection storage blocker missing");
+            }
+        };
+        Simulator::Schedule(NanoSeconds(200000000), [&] {
+            driver.Epoch(.4, mode == "hit");
+            const auto& row = controller.Decisions().back();
+            const bool successfulStart = mode == "normal" || mode == "prefetch-reject";
+            Check(row.committed == successfulStart, "post-batch hit/quota admission mismatch");
+            if (!successfulStart) Check(manager.Summaries().empty(), "rejected START allocated state");
+            if (successfulStart && inputPolicy == InputPolicy::SELECTIVE)
+            {
+                const auto anchor = std::find_if(row.policyAwareInputAudits.begin(),
+                    row.policyAwareInputAudits.end(), [](const auto& audit) {
+                        return audit.stage == "ANCHOR_SEARCH" && audit.anchor;
+                    });
+                const auto final = std::find_if(row.policyAwareInputAudits.begin(),
+                    row.policyAwareInputAudits.end(), [](const auto& audit) {
+                        return audit.stage == "FINAL_REVALIDATION" && audit.finalPair;
+                    });
+                Check(anchor != row.policyAwareInputAudits.end() &&
+                          final != row.policyAwareInputAudits.end() &&
+                          anchor->remote == 0 && final->remote == 4 && final->finalPairRevalidated,
+                      "actual pair did not receive its own Selective dry-run/revalidation");
+                Check(anchor->selective.send == reverseSelectivePair &&
+                          final->selective.send != reverseSelectivePair &&
+                          final->admissionSeconds == (reverseSelectivePair
+                              ? final->legacyFaultInputSeconds : 0),
+                      "actual pair inherited the anchor INPUT decision");
+                Check(controller.InputAdmissions().size() == 1 &&
+                          controller.InputAdmissions().front().first.pair.remoteNode == 4 &&
+                          controller.InputAdmissions().front().second.send != reverseSelectivePair,
+                      "committed START did not retain the final actual-pair decision");
+                if (mode == "prefetch-reject")
+                {
+                    const auto inventory = manager.Inventory(1);
+                    const auto& input = controller.OptionalInput()->Records().at(1);
+                    Check(inventory && inventory->active && input.state == OptionalInputState::ABSENT &&
+                              input.reason == "STORAGE_NOT_ADMITTED" && !input.flow &&
+                              final->runtimePrefetchAdmissionSuccess == std::optional(false),
+                          "failed physical prefetch rolled back checkpoint or lost fallback telemetry");
+                }
+                else
+                    Check(controller.OptionalInput()->Records().size() ==
+                              static_cast<size_t>(!reverseSelectivePair),
+                          "DEFER created a flow or SEND omitted LocalDelivery");
+            }
+        });
+        Simulator::Schedule(NanoSeconds(400000000), [&] {
+            if (mode != "normal" && mode != "prefetch-reject") return;
+            const auto count = controller.PlacementTracker()->Decisions().size();
+            Check(manager.Inventory(1)->initialized, "CompFRR-P initialization never became physically ready");
+            driver.Epoch(.5);
+            const auto& row = controller.Decisions().back();
+            Check(row.input.phase == ProtectionPhase::ON && row.input.recoveryRate == 100000 &&
+                  row.pair->remoteNode == 4 && controller.PlacementTracker()->Decisions().size() == count,
+                  "ON used reference resources or reran spatial ranking");
+            Check(controller.PlacementTracker()->ReadyAfter(1).has_value(), "actual ready timestamp absent");
+        });
+        auto checkPeer = [&](InputDependencyMode expected) {
+            const auto before = controller.OptionalInput()->Resolve(definition, 4);
+            const auto peer = FrequencyRuntimeTestAccess::Peer(controller, 4);
+            const auto after = controller.OptionalInput()->Resolve(definition, 4);
+            Check(before.mode == expected && before.mode == after.mode &&
+                      before.remainingNs == after.remainingNs && before.flowId == after.flowId,
+                  "peer forecast changed runtime INPUT dependency");
+            auto candidate = peer;
+            candidate.recoveryInputSeconds = expected == InputDependencyMode::FETCH
+                ? std::optional<double>{} : std::optional<double>{0};
+            Check(peer.recoveryInputSeconds == candidate.recoveryInputSeconds &&
+                      CompFrrCatchSeconds(peer) == CompFrrCatchSeconds(candidate),
+                  "candidate/peer INPUT policy contracts differ");
+            auto legacy = peer; legacy.recoveryInputSeconds.reset();
+            if (expected == InputDependencyMode::FETCH)
+                Check(!peer.recoveryInputSeconds &&
+                          CompFrrCatchSeconds(peer) == CompFrrCatchSeconds(legacy),
+                      "FETCH peer lost legacy INPUT term");
+            else if (peer.inputLocal)
+                Check(CompFrrCatchSeconds(peer) == CompFrrCatchSeconds(legacy),
+                      "LocalDelivery acquired nonzero INPUT cost");
+            else
+                Check(CompFrrCatchSeconds(peer) < CompFrrCatchSeconds(legacy),
+                      "valid proactive peer retained full INPUT term");
+            if (expected == InputDependencyMode::IN_FLIGHT)
+                // A transient unavailable estimate also stays UNKNOWN, never fabricated READY.
+                Check((!before.remainingNs || *before.remainingNs > 0) && peer.recoveryInputSeconds == 0,
+                      "P zero INPUT fabricated runtime readiness");
+        };
+        if (!peerProbe.empty())
+        {
+            Simulator::Schedule(NanoSeconds(210000000), [&] {
+                checkPeer(InputDependencyMode::FETCH); // No admitted SEND / ABSENT.
+                FrequencyRuntimeTestAccess::RequestInput(controller, peerProbe == "wrong-target" ? 0 : 4);
+                checkPeer(InputDependencyMode::FETCH); // REQUESTED is not physical admission.
+            });
+            Simulator::Schedule(NanoSeconds(210010000), [&] {
+                if (peerProbe == "wrong-target") { checkPeer(InputDependencyMode::FETCH); return; }
+                checkPeer(InputDependencyMode::IN_FLIGHT);
+                if (peerProbe == "failed")
+                {
+                    const auto flow = controller.OptionalInput()->Records().at(1).flow;
+                    Check(tasks->GetTransferEngine()->FinalizeTransferIfActive(flow,
+                        TransferTerminalState::FAILED, TransferTerminalReason::TASK_FAILED),
+                        "peer failure fixture missed active flow");
+                    checkPeer(InputDependencyMode::FETCH);
+                }
+            });
+            Simulator::Schedule(NanoSeconds(230000000), [&] {
+                checkPeer(peerProbe == "ready" ? InputDependencyMode::READY : InputDependencyMode::FETCH);
+            });
+        }
+        else if (inputPolicy == InputPolicy::SELECTIVE && mode == "normal" && !reverseSelectivePair)
+            Simulator::Schedule(NanoSeconds(230000000), [&] { checkPeer(InputDependencyMode::READY); });
+        else if (mode == "prefetch-reject")
+            Simulator::Schedule(NanoSeconds(230000000), [&] { checkPeer(InputDependencyMode::FETCH); });
+        Simulator::Stop(NanoSeconds(800000000));
+        Simulator::Run();
+        manager.Pool(0).ReleaseReservation(*held);
+        if (race) manager.Pool(4).ReleaseReservation(*race);
+        if (inputStorageBlock) manager.Pool(4).ReleaseReservation(*inputStorageBlock);
+        controller.Finalize(); engine->Finalize();
+        Check(controller.PlacementTracker()->QuotasEmpty() && manager.IsQuiescent(), "CompFRR-P quota/storage leaked");
+        controller.WriteDecisions(output);
+    }
+    Reset();
+}
+
+/** Real pools, paths and solver: only the fixed-local hard-rejected remote prefix retries. */
+void CandidateCoverage(const std::filesystem::path& output, const std::string& mode)
+{
+    RngSeedManager::SetSeed(1); RngSeedManager::SetRun(11);
+    {
+        const bool deadline = mode == "deadline" || mode == "all-deadline" || mode == "fallback-hit";
+        auto cfg = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        cfg.parameters.fixedDelaySeconds = .001;
+        cfg.parameters.islBandwidthBps = deadline ? 1000000000ULL : 10000000000ULL;
+        OnlineTopologyController topology(cfg.parameters, cfg.constellation);
+        topology.Initialize();
+        auto tasks = CreateObject<TaskCoordinator>();
+        auto definition = Definition(deadline ? TaskProfile::DENSE_IMAGE : TaskProfile::LLM);
+        definition.sourceNodeId = mode == "all-deadline" ? 1 : 4;
+        tasks->Initialize(ComputeProfile{{{0,100000},{2,100000},{3,100000},{4,100000}}},
+            TaskTrace{{definition}}, topology, "size-aware", 1024, cfg.parameters.islMtuBytes,
+            cfg.parameters.receiverRcvBufBytes, false, END, 1.3);
+        const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+        auto executor = CreateObject<FaultController>();
+        executor->ConfigureGeneration(ids, END); executor->BindTopology(topology);
+        executor->BindTaskCoordinator(tasks);
+        auto engine = CreateObject<FaultModelEngine>();
+        auto fp = GetDefaultFaultParameters();
+        fp.checkIntervalSeconds = 10; fp.f2.enabled = fp.f3.enabled = false;
+        engine->Configure(fp, ids, {0,2,3,4}, END, executor, true);
+        engine->BindTaskCoordinator(tasks);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            std::make_unique<CompFrrPlacementPolicy>(), RemoteBusyRecoveryPolicy::RELOCATE,
+            deadline ? InputPolicy::SELECTIVE : InputPolicy::EAGER);
+        auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
+        std::vector<std::pair<uint32_t,uint64_t>> held;
+        auto block = [&](uint32_t node) {
+            auto id = manager.Pool(node).TryReserve(999, StorageKind::INIT_TEMP, manager.Pool(node).Free());
+            Check(id.has_value(), "coverage storage blocker missing"); held.emplace_back(node,*id);
+        };
+        if (mode == "storage" || mode == "all-storage") block(0);
+        if (mode == "all-storage") block(4);
+        if (mode == "fixed-local") block(2);
+        Driver driver{controller, tasks, executor, F1SelfStateFaultModel(GetDefaultFaultParameters().f1), mode};
+        driver.betweenProposalAndResolution = [&](const auto& row) {
+            Check(row.candidateCoverage.has_value(), "P OFF candidate audit absent");
+            const auto& c = *row.candidateCoverage;
+            Check(c.reference && c.reference->localNode == 2 && c.reference->remoteNode == 0 &&
+                  c.candidates == 2 && c.checked == row.pairHardChecked && manager.Summaries().empty(),
+                  "fixed local/order or read-only search violated");
+            if (mode == "all-deadline" || mode == "all-storage" || mode == "fixed-local")
+            {
+                Check(c.allInfeasible && c.checked == 2 && !c.anchorIndex && !row.placementTrace &&
+                      row.proposal.action == FrequencyAction::NONE, "infeasible fixed-local set entered ranking");
+                if (mode == "fixed-local")
+                    Check(FrequencyRuntimeTestAccess::OtherLocalFeasible(controller, row),
+                          "test must have a feasible other-local pair that production cannot search");
+                return;
+            }
+            const bool fallback = mode == "storage" || deadline;
+            Check(!c.allInfeasible && c.anchorIndex == (fallback ? 2 : 1) &&
+                  c.checked == (fallback ? 2 : 1) && c.anchorRemote == (fallback ? 4 : 0),
+                  "wrong first feasible anchor or search after hard-feasible candidate");
+            Check(c.referenceRejectReason == (deadline ? "DEADLINE_INFEASIBLE" :
+                  fallback ? "STORAGE_INFEASIBLE" : ""), "reference hard reason lost");
+            if (mode == "no-benefit")
+            {
+                Check(row.proposal.action == FrequencyAction::NONE && !row.placementTrace && !c.finalRemote,
+                      "nonbeneficial reference triggered fallback or ranking");
+                return;
+            }
+            Check(row.placementTrace && c.finalRemote == row.pair->remoteNode && row.pair->localNode == 2,
+                  "anchor failed to enter unchanged fixed-local P ranking");
+            const auto& trace = controller.PlacementTracker()->Decision(*row.placementTrace);
+            Check(trace.reference.remoteNode == *c.anchorRemote && trace.config == row.proposal.selected->config,
+                  "ranking changed anchor configuration");
+        };
+        Simulator::Schedule(NanoSeconds(600000000), [&] {
+            driver.Epoch(mode == "no-benefit" ? 0 : .4, mode == "fallback-hit");
+            const auto& row = controller.Decisions().back();
+            const bool shouldStart = mode == "first" || mode == "deadline" || mode == "storage";
+            Check(row.committed == shouldStart, "coverage START admission/fault-batch contract changed");
+            if (mode == "fallback-hit")
+                Check(manager.Summaries().empty(), "fallback created checkpoint after same-batch fault");
+        });
+        Simulator::Stop(NanoSeconds(800000000)); Simulator::Run();
+        for (const auto& [node,id] : held) manager.Pool(node).ReleaseReservation(id);
+        controller.Finalize(); engine->Finalize(); controller.WriteDecisions(output);
+        Check(controller.PlacementTracker()->QuotasEmpty() && manager.IsQuiescent(), "candidate search leaked resources");
+    }
+    Reset();
+}
+
+/** Real capacity reservations, sub-epoch releases and fresh online predictions. */
+struct RetryDriver
+{
+    Ptr<TaskCoordinator> tasks;
+    Ptr<FaultModelEngine> engine;
+    FrequencyProtectionController& controller;
+    std::vector<uint64_t> blockers;
+    bool terminal{}, sawStart{};
+    int64_t dispatch{};
+
+    void OnTask(const TaskEventRecord& event)
+    {
+        if (event.taskId != 1 || event.toState != TASK_RUNNING) return;
+        dispatch = event.simulationTimeNs;
+        const auto& row = controller.Decisions().back();
+        Check(row.resourceReason == "NO_CAPACITY_NOW" && row.waitingAfter &&
+              row.phaseAfter == ProtectionPhase::OFF && controller.Manager().Summaries().empty(),
+              "all paths blocked must wait OFF without allocating checkpoint state");
+        if (terminal)
+            Simulator::Schedule(NanoSeconds(2000000), [&] { tasks->FinalizeSimulation(); });
+        Simulator::Schedule(NanoSeconds(3000000), [&] {
+            // An unrelated release leaves every primary egress blocked.
+            tasks->GetTransferEngine()->FinalizeTransfersIfActive({9000},
+                TransferTerminalState::CANCELLED, TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+        });
+        Simulator::Schedule(NanoSeconds(5000000), [&] {
+            const auto before = engine->GetNodeSnapshots();
+            tasks->GetTransferEngine()->FinalizeTransfersIfActive(blockers,
+                TransferTerminalState::CANCELLED, TransferTerminalReason::TASK_NO_LONGER_REQUIRES_TRANSFER);
+            FrequencyRuntimeTestAccess::Released(controller);
+            FrequencyRuntimeTestAccess::Released(controller);
+            Simulator::ScheduleNow([&, before] {
+                const auto after = engine->GetNodeSnapshots();
+                for (size_t i = 0; i < before.size(); ++i)
+                    Check(before[i].f1SampleCount == after[i].f1SampleCount &&
+                          before[i].f2SampleCount == after[i].f2SampleCount &&
+                          before[i].f1State.temperatureC == after[i].f1State.temperatureC,
+                          "capacity retry consumed samples or mutated thermal state");
+                uint64_t count = 0;
+                for (const auto& r : controller.Decisions())
+                    if (r.trigger == "CAPACITY_RELEASE" && r.input.risk.epochNs == dispatch+5000000)
+                    {
+                        ++count;
+                        Check(r.committed && !r.sampled && !r.faultHit && r.capacityRetrySuccess &&
+                              r.phaseAfter == ProtectionPhase::INITIALIZING &&
+                              r.reason == "START_AFTER_CAPACITY_RELEASE" && r.progressWork > 0 &&
+                              r.firstSampleNs == 100000000 && !r.waitingAfter,
+                              "release retry did not perform fresh causal START before next fault epoch");
+                        const auto live = tasks->GetComputeServices();
+                        std::optional<RunningComputeTaskSnapshot> running;
+                        for (auto s : live) if (s->GetNodeId() == 3) running = s->GetRunningTaskSnapshot();
+                        Check(running.has_value(), "retry primary lost running task");
+                        const auto prediction = engine->QueryTaskPrediction(3, running->remainingTimeNs);
+                        Check(prediction && PredictComputeFailureBeforeFinish(*prediction).predictedFailureProbability ==
+                              r.input.risk.pFailBeforeFinish, "retry reused stale prediction");
+                        sawStart = true;
+                    }
+                Check(count == (terminal ? 0u : 1u), "same-ns releases not coalesced or terminal retried");
+            });
+        });
+        Simulator::Schedule(NanoSeconds(20000000), [&] {
+            FrequencyRuntimeTestAccess::Released(controller);
+            Simulator::ScheduleNow([&] {
+                Check(std::none_of(controller.Decisions().begin(), controller.Decisions().end(), [&](const auto& r) {
+                    return r.trigger == "CAPACITY_RELEASE" && r.input.risk.epochNs == dispatch+20000000;
+                }), "INITIALIZING/terminal task received OFF retry");
+            });
+        });
+    }
+};
+
+void CapacityRetry(const std::filesystem::path& output, bool terminal = false, bool lrl = false,
+                   bool minimal = false)
+{
+    RngSeedManager::SetSeed(1);
+    RngSeedManager::SetRun(11);
+    {
+        auto config = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        config.parameters.routingMode = "global-capacity-aware-hrw";
+        config.parameters.fixedDelaySeconds = .001;
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+        auto executor = CreateObject<FaultController>();
+        executor->ConfigureGeneration(ids, END);
+        executor->BindTopology(topology);
+        auto engine = CreateObject<FaultModelEngine>();
+        auto fp = GetDefaultFaultParameters();
+        fp.checkIntervalSeconds = .1;
+        fp.f1.temperature.heatingToCriticalSeconds = .8;
+        fp.f2.enabled = fp.f3.enabled = false;
+        engine->Configure(fp, ids, {0,2,3,4}, END, executor, true);
+        auto task = Definition(TaskProfile::SPARSE_INFERENCE);
+        task.sourceNodeId = 1;
+        task.arrivalTimeNs = 20000000;
+        auto tasks = CreateObject<TaskCoordinator>();
+        tasks->Initialize(ComputeProfile{{{0,100000},{2,100000},{3,100000},{4,100000}}},
+            TaskTrace{{task}}, topology, "size-aware", 1024, config.parameters.islMtuBytes,
+            config.parameters.receiverRcvBufBytes, false, END, 1.3);
+        executor->BindTaskCoordinator(tasks);
+        engine->BindTaskCoordinator(tasks);
+        std::unique_ptr<PlacementPolicy> policy;
+        if (minimal) policy = std::make_unique<FirstFeasiblePlacementPolicy>();
+        else if (lrl) policy = std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END, std::move(policy));
+        // Ranking must skip a path-feasible pair rejected by real storage, not stop at it.
+        auto& pool = FrequencyRuntimeTestAccess::Manager(controller).Pool(0);
+        std::optional<uint64_t> storageBlock;
+        if (lrl)
+        {
+            storageBlock = pool.TryReserve(999, StorageKind::REMOTE_BATCH, pool.Free());
+            Check(storageBlock.has_value(), "hard-rejection storage blocker missing");
+        }
+        RetryDriver driver{tasks, engine, controller, {}, terminal};
+        tasks->ConnectTaskObserver(MakeCallback(&RetryDriver::OnTask, &driver));
+        Simulator::Schedule(NanoSeconds(1000000), [&] {
+            auto block = [&](uint64_t id, uint32_t source, uint32_t destination) {
+                NetworkTransfer transfer;
+                transfer.transferId = id;
+                transfer.sourceSatelliteId = source;
+                transfer.destinationSatelliteId = destination;
+                transfer.sizeBytes = 1000000000;
+                tasks->GetTransferEngine()->RegisterRuntimePlan(transfer);
+                tasks->GetTransferEngine()->StartTransferNow(id);
+            };
+            for (auto node : ids)
+            {
+                if (node == 3) continue;
+                const auto routes = topology.GetEcmpRouteCandidates(3, node);
+                if (std::any_of(routes.begin(), routes.end(), [&](const auto& route) {
+                    return topology.GetNextHopSatelliteId(3, route.outputInterface) == node;
+                }))
+                {
+                    driver.blockers.push_back(9100+node);
+                    block(9100+node,3,node);
+                }
+            }
+            block(9000,6,7);
+        });
+        Simulator::Stop(NanoSeconds(END));
+        Simulator::Run();
+        controller.Finalize();
+        engine->Finalize();
+        Check(driver.dispatch > 0 && driver.sawStart != terminal, "capacity scenario not exercised");
+        if (lrl)
+        {
+            const auto start = std::find_if(controller.Decisions().begin(), controller.Decisions().end(),
+                [](const auto& r) { return r.capacityRetrySuccess; });
+            Check(start != controller.Decisions().end() && start->pairSkipStorage > 0 &&
+                  start->pairHardChecked > 1 && start->pair->remoteNode != 0,
+                  "first storage-infeasible pair prevented selecting a later feasible pair");
+            pool.ReleaseReservation(*storageBlock);
+        }
+        if (!terminal)
+        {
+            auto partial = std::find_if(controller.Decisions().begin(), controller.Decisions().end(), [&](const auto& r) {
+                return r.trigger == "CAPACITY_RELEASE" && r.input.risk.epochNs == driver.dispatch+3000000;
+            });
+            Check(partial != controller.Decisions().end() && partial->waitingAfter && !partial->committed,
+                  "still blocked retry did not retain waiting interest");
+            const auto summaries = controller.Manager().Summaries();
+            Check(std::any_of(summaries.begin(), summaries.end(),
+                [](const auto& r) { return r.initCommitted > 0; }), "retry initialization never physically committed");
+        }
+        controller.WriteDecisions(output);
+        Check(controller.Manager().IsQuiescent(), "capacity retry leaked checkpoint resources");
+        Check(controller.PlacementLoads().Empty(), "capacity retry leaked placement ownership");
+        tasks->DisconnectTaskObserver(MakeCallback(&RetryDriver::OnTask, &driver));
+    }
+    Reset();
+}
+/** Actual reserved link rejects the minimal first pair; FA selects another pair. */
+void PlacementAdmission(const std::filesystem::path& output, bool minimal, bool lrl)
+{
+    {
+        auto config = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        config.parameters.routingMode = "global-capacity-aware-hrw";
+        config.parameters.fixedDelaySeconds = .001;
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        auto tasks = CreateObject<TaskCoordinator>();
+        auto task = Definition(TaskProfile::SPARSE_INFERENCE);
+        task.sourceNodeId = 1; task.arrivalTimeNs = 20000000;
+        ComputeProfile profile;
+        for (uint32_t node = 0; node < 16; ++node) profile.nodes.push_back({node,100000});
+        tasks->Initialize(profile,
+            TaskTrace{{task}}, topology, "size-aware", 1024, config.parameters.islMtuBytes,
+            config.parameters.receiverRcvBufBytes, false, END, 1.3);
+        std::unique_ptr<PlacementPolicy> policy;
+        if (minimal && lrl) policy = std::make_unique<LeastRecoveryLoadPlacementPolicy>(1);
+        else if (minimal) policy = std::make_unique<FirstFeasiblePlacementPolicy>();
+        else if (lrl) policy = std::make_unique<FaLeastRecoveryLoadPlacementPolicy>(1);
+        else policy = std::make_unique<FaFirstFeasiblePlacementPolicy>();
+        FixedProtectionController controller(tasks, topology, 10000000000ULL, END, 50, 4,
+                                             false, std::move(policy));
+        Simulator::Schedule(NanoSeconds(1000000), [&] {
+            NetworkTransfer transfer;
+            transfer.transferId = 9102; transfer.sourceSatelliteId = 3; transfer.destinationSatelliteId = 2;
+            transfer.sizeBytes = 1000000000;
+            tasks->GetTransferEngine()->RegisterRuntimePlan(transfer);
+            tasks->GetTransferEngine()->StartTransferNow(9102);
+        });
+        Simulator::Stop(NanoSeconds(END)); Simulator::Run(); controller.Finalize();
+        const auto& selections = controller.Placement().Selections();
+        Check(selections.size() == 1 && selections.front().pair.has_value(), "controlled selection missing or retried");
+        if (minimal)
+            Check(selections.front().pair == PlacementDecision{2,0} && selections.front().admission == "REJECTED" &&
+                  selections.front().reason == "NO_ADMISSIBLE_PATH" && controller.Manager().Summaries().empty(),
+                  "minimal path admission skipped first pair or secretly searched next");
+        else
+            Check(selections.front().pair->localNode != 2 && !controller.Manager().Summaries().empty(),
+                  "FA failed to bypass blocked first link");
+        Check(controller.PlacementLoads().Empty() && controller.Manager().IsQuiescent(), "ablation resources leaked");
+        std::filesystem::create_directories(output);
+        controller.Placement().WriteSelections(output);
+    }
+    Reset();
+}
+/** Own real L1 reservation crosses a decision; release must resume before the next check. */
+struct OnRetryDriver
+{
+    Ptr<TaskCoordinator> tasks;
+    Ptr<FaultModelEngine> engine;
+    Ptr<FaultController> executor;
+    FrequencyProtectionController& controller;
+    std::string mode;
+    bool armed{}, released{}, checked{};
+    int64_t pauseNs{}, releaseNs{};
+    uint64_t flow{}, triggered{};
+    uint32_t local{}, remote{};
+    std::optional<uint64_t> storageBlock;
+
+    void Reserved(uint32_t node, uint32_t, uint64_t rate)
+    {
+        if (node != 3) return;
+        const auto inv = controller.Manager().Inventory(1);
+        if (!armed && rate && inv && inv->initialized)
+        {
+            armed = true;
+            local = inv->config.localNode;
+            remote = inv->config.remoteNode;
+            Simulator::ScheduleNow(&OnRetryDriver::Pause, this);
+        }
+        else if (armed && !released && !rate && pauseNs)
+        {
+            released = true;
+            releaseNs = Simulator::Now().GetNanoSeconds();
+            // This callback precedes the controller's deferred capacity drain.
+            Simulator::ScheduleNow([this] {
+                if (mode == "fault")
+                {
+                    FaultDefinition fault;
+                    fault.faultId = 900;
+                    fault.nodeId = 3;
+                    fault.faultType = FaultType::COMPUTE;
+                    fault.startTimeNs = releaseNs;
+                    fault.durationNs = 100000000;
+                    fault.failureProbability = .4;
+                    fault.f1Occurred = true;
+                    executor->SubmitGeneratedBatch({{FaultEventType::START, fault}});
+                }
+                else if (mode == "terminal") tasks->FinalizeSimulation();
+                // Fault/terminal execution legitimately advances thermal state; isolate retry.
+                const auto before = engine->GetNodeSnapshots();
+                FrequencyRuntimeTestAccess::Released(controller);
+                FrequencyRuntimeTestAccess::Released(controller);
+                Simulator::ScheduleNow([this, before] { Verify(before); });
+            });
+        }
+    }
+
+    void Pause()
+    {
+        auto& manager = FrequencyRuntimeTestAccess::Manager(controller);
+        auto net = tasks->GetTransferEngine();
+        for (const auto& f : manager.Flows())
+            if (f.key.kind == ProtectionTransferKind::L1 &&
+                net->GetTransferState(f.transferId) == TransferRuntimeState::ACTIVE)
+                flow = f.transferId;
+        Check(flow != 0, "ON test did not find its own active L1 flow");
+        const auto path = net->EstimateAdmissiblePath(3, local);
+        Check(path.reachable && !path.admissible && path.failureReason == "NO_ADMISSIBLE_PATH",
+              "own L1 reservation must still block new-flow admission");
+        if (mode == "storage")
+        {
+            auto& pool = manager.Pool(local);
+            storageBlock = pool.TryReserve(999, StorageKind::LOCAL_RECORD, pool.Free());
+            Check(storageBlock.has_value(), "ON storage blocker missing");
+        }
+        std::optional<RunningComputeTaskSnapshot> live;
+        for (auto s : tasks->GetComputeServices())
+            if (s->GetNodeId() == 3) live = s->GetRunningTaskSnapshot();
+        Check(live.has_value(), "ON primary not running");
+        const auto p = engine->QueryTaskPrediction(3, live->remainingTimeNs);
+        Check(p.has_value(), "ON causal prediction missing");
+        pauseNs = Simulator::Now().GetNanoSeconds();
+        const auto q = CombineComputeFaultProbabilities(p->f1State.stepFailureProbability, 0);
+        FrequencyRuntimeTestAccess::Before(controller, {3, 1, q, *p});
+        FrequencyRuntimeTestAccess::After(controller, pauseNs, 1, false);
+        const auto& row = controller.Decisions().back();
+        Check(row.committed && row.proposal.action == FrequencyAction::PAUSE &&
+              row.resourceReason == "NO_ADMISSIBLE_PATH" && row.resourceHold && !manager.Inventory(1)->paused &&
+              FrequencyRuntimeTestAccess::HasCapacityInterest(controller), "ON did not register release interest");
+        triggered = manager.Inventory(1)->triggered;
+        // Spurious/duplicate notifications cannot bypass the still-active reservation.
+        FrequencyRuntimeTestAccess::Released(controller);
+        FrequencyRuntimeTestAccess::Released(controller);
+        Simulator::ScheduleNow([this] {
+            const auto& r = controller.Decisions().back();
+            Check(r.trigger == "CAPACITY_RELEASE" && r.input.risk.epochNs == pauseNs &&
+                  r.proposal.action == FrequencyAction::PAUSE && !r.capacityRetrySuccess &&
+                  controller.Manager().Inventory(1)->triggered == triggered,
+                  "same-ns ON retry bypassed capacity or generated historical targets");
+        });
+    }
+
+    void Verify(const std::vector<FaultModelNodeSnapshot>& before)
+    {
+        const auto after = engine->GetNodeSnapshots();
+        for (size_t i = 0; i < before.size(); ++i)
+            Check(before[i].f1SampleCount == after[i].f1SampleCount &&
+                  before[i].f2SampleCount == after[i].f2SampleCount &&
+                  before[i].f1State.temperatureC == after[i].f1State.temperatureC,
+                  "ON retry consumed fault samples or changed thermal state");
+        uint64_t count = 0;
+        for (const auto& r : controller.Decisions())
+            if (r.trigger == "CAPACITY_RELEASE" && r.input.risk.epochNs == releaseNs)
+            {
+                ++count;
+                Check(r.input.phase == ProtectionPhase::ON && !r.sampled && !r.faultHit &&
+                      r.pair->localNode == local && r.pair->remoteNode == remote &&
+                      r.capacityWaitStartNs == -1 && r.capacityWaitEndNs == -1,
+                      "ON retry changed pair or mixed OFF waiting/sample accounting");
+                if (mode == "storage")
+                    Check(r.proposal.action == FrequencyAction::PAUSE && !r.capacityRetrySuccess,
+                          "capacity resume bypassed storage");
+                else
+                    Check(r.committed && r.capacityRetrySuccess &&
+                          r.reason == "RESUME_AFTER_CAPACITY_RELEASE" &&
+                          r.proposal.action == FrequencyAction::UPDATE && r.progressWork > 0 &&
+                          r.firstSampleNs == 1000000000,
+                          "ON did not resume with fresh progress/prediction at real release");
+            }
+        Check(count == ((mode == "fault" || mode == "terminal") ? 0u : 1u),
+              "ON retry duplicated or resumed a failed/terminal task");
+        Check(!FrequencyRuntimeTestAccess::HasCapacityInterest(controller),
+              "completed retry retained interest after resume/stop/noncapacity pause");
+        if (mode == "normal")
+        {
+            const auto inv = controller.Manager().Inventory(1);
+            Check(inv && !inv->paused && inv->triggered == triggered && inv->nextTarget &&
+                  *inv->nextTarget > inv->actual && inv->progress.localWork > 0 &&
+                  releaseNs-pauseNs < 10000000 && releaseNs < 1000000000,
+                  "resume lost completed L1, replayed old work or waited until next epoch");
+        }
+        const auto size = controller.Decisions().size();
+        FrequencyRuntimeTestAccess::Released(controller);
+        Simulator::ScheduleNow([this, size] {
+            Check(controller.Decisions().size() == size, "unpaused/noncapacity/terminal ON retried");
+            checked = true;
+        });
+    }
+};
+
+void OnCapacityRetry(const std::filesystem::path& output, const std::string& mode = "normal",
+                     InputStagingPolicy staging = InputStagingPolicy::EAGER)
+{
+    RngSeedManager::SetSeed(1);
+    RngSeedManager::SetRun(11);
+    {
+        auto config = satcompute::test::MakeOnlineTestConfig(2, 8, "fixed", END, END, 6171353);
+        config.parameters.routingMode = "global-capacity-aware-hrw";
+        config.parameters.fixedDelaySeconds = .001;
+        config.parameters.islBandwidthBps = 10000000000ULL;
+        OnlineTopologyController topology(config.parameters, config.constellation);
+        topology.Initialize();
+        const auto ids = topology.GetIdMap().GetCanonicalSatelliteIds();
+        auto executor = CreateObject<FaultController>();
+        executor->ConfigureGeneration(ids, END);
+        executor->BindTopology(topology);
+        auto engine = CreateObject<FaultModelEngine>();
+        auto fp = GetDefaultFaultParameters();
+        fp.checkIntervalSeconds = 1;
+        fp.f1.temperature.heatingToCriticalSeconds = .8;
+        fp.f2.enabled = fp.f3.enabled = false;
+        engine->Configure(fp, ids, {0,2,3,4}, END, executor, true);
+        auto task = Definition(TaskProfile::SPARSE_INFERENCE);
+        task.inputBytes = 200000000;
+        task.computeWorkUnits = 300000;
+        auto tasks = CreateObject<TaskCoordinator>();
+        tasks->Initialize(ComputeProfile{{{0,100000},{2,100000},{3,100000},{4,100000}}},
+            TaskTrace{{task}}, topology, "size-aware", 1024, config.parameters.islMtuBytes,
+            config.parameters.receiverRcvBufBytes, false, END, 1.3);
+        executor->BindTaskCoordinator(tasks);
+        engine->BindTaskCoordinator(tasks);
+        FrequencyProtectionController controller(tasks, topology, engine, 10000000000ULL, END,
+            nullptr, RemoteBusyRecoveryPolicy::RELOCATE,
+            staging == InputStagingPolicy::EAGER ? InputPolicy::EAGER : InputPolicy::DEFERRED);
+        OnRetryDriver driver{tasks, engine, executor, controller, mode};
+        tasks->GetTransferEngine()->SetCapacityReservationObserver(MakeCallback(&OnRetryDriver::Reserved, &driver));
+        Simulator::Stop(NanoSeconds(900000000));
+        Simulator::Run();
+        Check(driver.armed && driver.released && driver.checked, "ON release scenario not fully exercised");
+        tasks->GetTransferEngine()->SetCapacityReservationObserver({});
+        if (driver.storageBlock)
+            FrequencyRuntimeTestAccess::Manager(controller).Pool(driver.local).ReleaseReservation(*driver.storageBlock);
+        controller.Finalize();
+        engine->Finalize();
+        controller.WriteDecisions(output);
+        WriteProtectionMetrics(controller.Manager(), *tasks->GetTransferEngine(), output);
+        Check(controller.Manager().IsQuiescent() && controller.PlacementLoads().Empty() &&
+              !FrequencyRuntimeTestAccess::HasCapacityInterest(controller), "ON retry leaked resources/interest");
+    }
+    Reset();
+}
+} // namespace
+
+int main(int argc, char** argv)
+{
+    std::string output = "/tmp/satcompute-frequency-runtime";
+    CommandLine command(__FILE__);
+    command.AddValue("outputDir", "Controlled evidence directory", output);
+    bool onlyInputAdmission = false;
+    command.AddValue("onlyInputAdmission", "Run the SER online optional INPUT fixture only", onlyInputAdmission);
+    command.Parse(argc, argv);
+    try
+    {
+        Online(std::filesystem::path(output)/"ser-break-even", "compfrr-placement-deferred",
+               true);
+        if (onlyInputAdmission) { std::cout << "input admission online: PASS (" << checks << " checks)\n"; return 0; }
+        Storage();
+        for (const auto& mode : {"first", "deadline", "storage", "all-deadline", "all-storage",
+                                 "fixed-local", "no-benefit", "fallback-hit"})
+            CandidateCoverage(std::filesystem::path(output) / (std::string("candidate-coverage-") + mode), mode);
+        for (auto inputPolicy : {InputPolicy::EAGER, InputPolicy::DEFERRED})
+            for (const auto& mode : {"normal", "hit", "race"})
+                CompFrrBoundary(std::filesystem::path(output) / (std::string("compfrr-placement-boundary-") +
+                    (inputPolicy == InputPolicy::EAGER ? "eager-" : "deferred-") + mode), inputPolicy, mode);
+        CompFrrBoundary(std::filesystem::path(output) / "compfrr-placement-boundary-selective-anchor-defer",
+                    InputPolicy::SELECTIVE, "normal");
+        CompFrrBoundary(std::filesystem::path(output) / "compfrr-placement-boundary-selective-anchor-send",
+                    InputPolicy::SELECTIVE, "normal", true);
+        CompFrrBoundary(std::filesystem::path(output) / "compfrr-placement-boundary-selective-prefetch-reject",
+                    InputPolicy::SELECTIVE, "prefetch-reject");
+        for (const auto& probe : {"ready", "failed", "wrong-target"})
+            CompFrrBoundary(std::filesystem::path(output) / (std::string("peer-contract-") + probe),
+                        InputPolicy::SELECTIVE, "normal", true, probe);
+        Online(std::filesystem::path(output) / "online-compfrr-placement", "compfrr-placement");
+        Online(std::filesystem::path(output) / "online-compfrr-placement-deferred", "compfrr-placement-deferred");
+        Online(std::filesystem::path(output) / "online-compfrr-placement-rational-U", "compfrr-placement-rational-U");
+        for (bool minimal : {false, true})
+            for (bool lrl : {false, true})
+                PlacementAdmission(std::filesystem::path(output) / (std::string("placement-") +
+                    (minimal ? "minimal-" : "fa-") + (lrl ? "lrl" : "ffp")), minimal, lrl);
+        CapacityRetry(std::filesystem::path(output) / "capacity-retry-minimal", false, false, true);
+        for (const auto& mode : {"normal", "fault", "terminal", "storage"})
+            OnCapacityRetry(std::filesystem::path(output) / (std::string("on-capacity-") + mode), mode);
+        OnCapacityRetry(std::filesystem::path(output) / "on-capacity-deferred", "normal", InputStagingPolicy::DEFERRED);
+        OnCapacityRetry(std::filesystem::path(output) / "on-capacity-repeat");
+        for (const auto& name : {"frequency-decisions.csv", "frequency-pause-intervals.csv"})
+        {
+            std::ifstream a(std::filesystem::path(output) / "on-capacity-normal" / name);
+            std::ifstream b(std::filesystem::path(output) / "on-capacity-repeat" / name);
+            Check(a.good() && b.good() && std::string(std::istreambuf_iterator<char>(a), {}) ==
+                  std::string(std::istreambuf_iterator<char>(b), {}), "ON release retry repeat differs");
+        }
+        CapacityRetry(std::filesystem::path(output) / "capacity-retry");
+        CapacityRetry(std::filesystem::path(output) / "capacity-retry-repeat");
+        CapacityRetry(std::filesystem::path(output) / "capacity-retry-lrl", false, true);
+        CapacityRetry(std::filesystem::path(output) / "capacity-retry-terminal", true);
+        for (const auto& name : {"frequency-decisions.csv", "frequency-capacity-waits.csv"})
+        {
+            std::ifstream a(std::filesystem::path(output) / "capacity-retry" / name);
+            std::ifstream b(std::filesystem::path(output) / "capacity-retry-repeat" / name);
+            Check(a.good() && b.good() && std::string(std::istreambuf_iterator<char>(a), {}) ==
+                  std::string(std::istreambuf_iterator<char>(b), {}), "capacity retry repeat differs");
+        }
+        for (auto profile : {TaskProfile::DENSE_IMAGE,
+                             TaskProfile::SPARSE_INFERENCE,
+                             TaskProfile::COMPRESSION,
+                             TaskProfile::LLM})
+            Controlled(profile,
+                       "dynamic",
+                       std::filesystem::path(output) / TaskProfileToString(profile));
+        for (const auto& mode : {"none", "start-hit", "update-hit", "gate-pause",
+                                "maintenance-local-busy", "maintenance-remote-busy",
+                                "maintenance-local-path", "maintenance-remote-path", "maintenance-local-block-backlog",
+                                "maintenance-local-storage", "maintenance-remote-storage", "maintenance-quota",
+                                "lifecycle-generated-held", "lifecycle-l1-failed", "lifecycle-batch-failed"})
+            Controlled(TaskProfile::LLM, mode, std::filesystem::path(output) / mode);
+        const auto first =
+            Controlled(TaskProfile::LLM, "dynamic", std::filesystem::path(output) / "repeat-a");
+        const auto second =
+            Controlled(TaskProfile::LLM, "dynamic", std::filesystem::path(output) / "repeat-b");
+        Check(first == second, "repeated controlled decisions differ");
+        for (auto profile : {TaskProfile::DENSE_IMAGE, TaskProfile::SPARSE_INFERENCE,
+                             TaskProfile::COMPRESSION, TaskProfile::LLM})
+            Controlled(profile, "dynamic", std::filesystem::path(output) / (std::string("deferred-") + TaskProfileToString(profile)),
+                       InputStagingPolicy::DEFERRED);
+        Online(std::filesystem::path(output) / "online-generate");
+        Online(std::filesystem::path(output) / "online-immediate-sparse", "immediate-sparse");
+        Online(std::filesystem::path(output) / "online-phase-boundary", "phase-boundary");
+        Online(std::filesystem::path(output) / "online-short", "short");
+        Online(std::filesystem::path(output) / "online-f3", "f3");
+        Online(std::filesystem::path(output) / "online-ffp-two", "ffp-two");
+        Online(std::filesystem::path(output) / "online-lrl-two", "lrl-two");
+        Online(std::filesystem::path(output) / "online-lrl-repeat", "lrl-two");
+        for (const auto& name : {"frequency-decisions.csv", "placement-load-events.csv", "placement-node-summary.csv"})
+        {
+            std::ifstream a(std::filesystem::path(output) / "online-lrl-two" / name);
+            std::ifstream b(std::filesystem::path(output) / "online-lrl-repeat" / name);
+            Check(std::string(std::istreambuf_iterator<char>(a), {}) ==
+                  std::string(std::istreambuf_iterator<char>(b), {}), "LRL repeated output differs");
+        }
+        std::cout << "frequency-runtime: PASS (" << checks << " checks)\n";
+    }
+    catch (const std::exception& error)
+    {
+        std::cerr << error.what() << '\n';
+        Reset();
+        return 1;
+    }
+}

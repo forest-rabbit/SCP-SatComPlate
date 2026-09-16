@@ -57,6 +57,12 @@ generate
 也可与两个计算来源共同运行。
 
 正式模式不再接受 replay，旧 reader、文件调度入口和文件回放 fixture 已移除。
+N5A-G4 经用户批准增加独立的 `faultMode=validation-replay` 验收入口，需显式指定
+`validationFaultTrace` 冻结 v2 输入；`faultTrace` 仍为另一路径的输出，禁止覆盖输入证据目录。
+该模式不创建在线模型/随机抽样/概率审计/shadow，只把冻结 START 及派生 RECOVERY
+交给同一个 FaultController。正常 none/generate 不允许携带该输入参数。
+这用于保证 OFF/FIXED 接收同一故障序列，不把历史温度/概率称为 FIXED 当前负载的在线预测，
+也不让保护策略读取未来 trace。不是恢复旧的生产 replay 合同。
 测试允许通过 `tests/support/fault-injection.h` 直接安排 ns 事件，覆盖共用执行器的
 故障/恢复和同刻边界；这不是生产运行模式，也不读取故障文件。
 
@@ -279,7 +285,14 @@ P_fail_before_finish = 1 - product(k=0..K-1, 1-q_comp,k)
 k=0 包含当前抽样点，后续点不越过任务预计完成时刻。F1 未来按“任务存活并持续
 计算”推进，F2 复用原生轨道只读外推，F3 不并入该概率。compute START 当刻保留
 最后一条抽样前记录；故障后、任务完成后不再为该任务预测。同刻永久 F3 优先时不
-输出该节点的 compute 预测。没有读取未来故障、未来队列或任何事后风险时长。
+输出该节点的抽样审计记录；不代表关闭 F1/F2 风险模型。没有读取未来故障、未来队列或任何事后风险时长。
+
+N5B 的 `QueryTaskPrediction` 可在任务开始时读取当前状态的副本，按真实全局抽样网格
+预测至完成前，首个物理推进允许不足一个检查间隔；每次 Bernoulli 概率仍使用完整检查间隔。
+它不消耗 RNG、不修改温度、不依赖审计开关，也不读取未来 F3 时间。
+同刻检查尚未执行则包含当前点，已执行则从下一点开始。实际 F3 发生前可记录该瞬间的
+`p_f1/p_f2/q_comp/P_finish` 快照，并明确 `F1F2_sampled=0`；温度低于风险起点且处于
+F2 域外时，模型给出的零概率保留为零，不为 eventual F3 人为抬高概率。
 
 验证器按 `(simulation_time_ns,node_id,task_id)` 比较真实在线状态与独立影子状态的
 q_F1、q_F2、q_comp、P_fail_before_finish 和任务窗口上下文，容差 1e-12。

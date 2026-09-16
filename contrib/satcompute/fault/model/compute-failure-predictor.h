@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <vector>
 
 namespace ns3
@@ -39,6 +40,8 @@ struct ComputeFailurePredictionInput
     int64_t predictionTimeNs{}; ///< Absolute time of the current model check.
     int64_t remainingComputeTimeNs{}; ///< Time until current task completion.
     int64_t checkIntervalNs{}; ///< Positive F1/F2 update and sampling interval.
+    std::optional<int64_t> firstSampleTimeNs; ///< Explicit real grid point for off-epoch queries.
+    bool finishExclusive{};                   ///< Task-start queries exclude a check at completion.
 };
 
 /** One complete task-window prediction and its auditable step trajectory. */

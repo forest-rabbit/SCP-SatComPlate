@@ -46,25 +46,31 @@ PredictComputeFailureBeforeFinish(const ComputeFailurePredictionInput& input)
         static_cast<double>(input.checkIntervalNs) / 1000000000.0;
     F1SelfStateFaultSnapshot f1State = input.f1State;
     F2RadiationFaultSnapshot f2State = input.f2State;
-    const uint64_t futureStepCount =
-        static_cast<uint64_t>(input.remainingComputeTimeNs) /
-        static_cast<uint64_t>(input.checkIntervalNs);
+    const int64_t first = input.firstSampleTimeNs.value_or(input.predictionTimeNs);
+    if (first < input.predictionTimeNs)
+        throw std::invalid_argument("first prediction sample precedes snapshot");
+    const int64_t finish = input.predictionTimeNs + input.remainingComputeTimeNs;
 
     ComputeFailurePrediction prediction;
-    prediction.steps.reserve(static_cast<std::size_t>(futureStepCount + 1));
+    prediction.f1StepFailureProbability = input.f1Model ? f1State.stepFailureProbability : 0;
+    prediction.f2StepFailureProbability = input.f2Model ? f2State.stepFailureProbability : 0;
+    prediction.combinedStepFailureProbability =
+        CombineComputeFaultProbabilities(prediction.f1StepFailureProbability,
+                                         prediction.f2StepFailureProbability);
     double logSurvivalProbability = 0.0;
     bool certainFailure = false;
-    for (uint64_t stepIndex = 0; stepIndex <= futureStepCount; ++stepIndex)
+    int64_t previousTimeNs = input.predictionTimeNs;
+    for (int64_t targetTimeNs = first;
+         targetTimeNs < finish || (!input.finishExclusive && targetTimeNs == finish);)
     {
-        const int64_t targetTimeNs =
-            input.predictionTimeNs +
-            static_cast<int64_t>(stepIndex *
-                                 static_cast<uint64_t>(input.checkIntervalNs));
-        if (stepIndex > 0)
+        if (targetTimeNs > previousTimeNs)
         {
             if (input.f1Model != nullptr)
             {
-                input.f1Model->Update(f1State, true, intervalSeconds, intervalSeconds);
+                input.f1Model->Update(f1State,
+                                      true,
+                                      static_cast<double>(targetTimeNs - previousTimeNs) / 1e9,
+                                      intervalSeconds);
             }
             if (input.f2Model != nullptr)
             {
@@ -89,13 +95,11 @@ PredictComputeFailureBeforeFinish(const ComputeFailurePredictionInput& input)
         {
             logSurvivalProbability += std::log1p(-combinedProbability);
         }
+        previousTimeNs = targetTimeNs;
+        if (input.checkIntervalNs > finish - targetTimeNs)
+            break;
+        targetTimeNs += input.checkIntervalNs;
     }
-    prediction.f1StepFailureProbability =
-        prediction.steps.front().f1StepFailureProbability;
-    prediction.f2StepFailureProbability =
-        prediction.steps.front().f2StepFailureProbability;
-    prediction.combinedStepFailureProbability =
-        prediction.steps.front().combinedStepFailureProbability;
     prediction.horizonStepCount = prediction.steps.size();
     prediction.predictedFailureProbability =
         certainFailure ? 1.0 : -std::expm1(logSurvivalProbability);

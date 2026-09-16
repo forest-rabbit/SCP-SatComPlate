@@ -140,7 +140,13 @@ def audit_virtual(shadow):
             if time < int(event["trigger_time_ns"]) + number(task, "cL_s") * 1e9 - 1e-5:
                 raise ValueError("L1 effective before cL")
             k, w = int(task["K_variable"]), int(task["W"])
-            state_bytes = (lambda x: x // 100 * 114688) if task["task_profile"] == "llm" else (lambda x: k * x // w)
+            if task["task_profile"] == "llm":
+                if k <= 0 or k % 114688 or w % (k // 114688):
+                    raise ValueError("invalid whole-token KV/WU ledger")
+                per_token = w // (k // 114688)
+                state_bytes = lambda x: x // per_token * 114688
+            else:
+                state_bytes = lambda x: k * x // w
             delta_bytes = state_bytes(work) - state_bytes(s["l"])
             if delta_bytes != int(event["delta_state_bytes_actual"]):
                 raise ValueError("L1 incremental bytes differ from G1 state")

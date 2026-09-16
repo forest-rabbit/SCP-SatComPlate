@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
-// Write canonical observed fault events; production has no trace reader.
+// Canonical observed events and an explicit validation-only frozen evidence reader.
 
 #include "fault-trace.h"
 
@@ -135,6 +135,71 @@ OptionalJson(const std::optional<T>& value)
 }
 
 } // namespace
+
+FaultTrace
+ReadValidationFaultTrace(const std::filesystem::path& filename,
+                         const std::vector<uint32_t>& satelliteIds,
+                         int64_t durationNs)
+{
+    std::ifstream input(filename);
+    if (!input || durationNs <= 0)
+        Fail(filename, "file", "validation evidence unavailable or invalid horizon");
+    const auto root = OrderedJson::parse(input);
+    if (!root.is_object() || root.size() != 2 ||
+        root.at("schema_version") != FAULT_TRACE_SCHEMA_VERSION || !root.at("faults").is_array())
+        Fail(filename, "schema_version/faults", "expected canonical v2 evidence");
+    const std::set<uint32_t> nodes(satelliteIds.begin(), satelliteIds.end());
+    std::set<uint64_t> ids;
+    FaultTrace trace;
+    for (const auto& item : root.at("faults"))
+    {
+        if (!item.is_object() || item.size() != 13)
+            Fail(filename, "fault", "expected all 13 canonical fields");
+        const auto integer = [&](const char* key, uint64_t max) {
+            const auto& value = item.at(key);
+            if (!value.is_number_integer() || value < 0 || value > max)
+                Fail(filename, key, "expected an in-range nonnegative integer");
+            return value.get<uint64_t>();
+        };
+        const auto optionalNumber = [&](const char* key) -> std::optional<double> {
+            const auto& value = item.at(key);
+            if (value.is_null())
+                return std::nullopt;
+            if (!value.is_number() || !std::isfinite(value.get<double>()))
+                Fail(filename, key, "expected finite number or null");
+            return value.get<double>();
+        };
+        FaultDefinition f;
+        f.faultId = integer("fault_id", std::numeric_limits<uint64_t>::max());
+        f.nodeId = integer("node_id", std::numeric_limits<uint32_t>::max());
+        const auto type = item.at("fault_type").get<std::string>();
+        if (type != "compute" && type != "satellite")
+            Fail(filename, "fault_type", "expected compute or satellite");
+        f.faultType = type == "compute" ? FaultType::COMPUTE : FaultType::SATELLITE;
+        f.faultOccurred = item.at("fault_occurred").get<bool>();
+        f.startTimeNs = integer("start_time_ns", std::numeric_limits<int64_t>::max());
+        if (!item.at("duration_ns").is_null())
+            f.durationNs = integer("duration_ns", std::numeric_limits<int64_t>::max());
+        f.failureProbability = optionalNumber("failure_probability");
+        f.pF1 = optionalNumber("p_f1");
+        f.pF2 = optionalNumber("p_f2");
+        f.f1Occurred = item.at("f1_occurred").get<bool>();
+        f.f2Occurred = item.at("f2_occurred").get<bool>();
+        f.temperatureC = optionalNumber("temperature_c");
+        f.continuousBusySeconds = optionalNumber("continuous_busy_s");
+        ValidateV2Fault(filename, f, durationNs);
+        if (!nodes.contains(f.nodeId) || !ids.insert(f.faultId).second)
+            Fail(filename, "fault_id/node_id", "duplicate fault or unknown satellite");
+        if (f.faultType == FaultType::COMPUTE &&
+            (!f.pF1 || !f.pF2 || !(f.f1Occurred || f.f2Occurred)))
+            Fail(filename, "compute", "requires source probabilities and occurred source");
+        if (f.faultType == FaultType::SATELLITE && (f.f1Occurred || f.f2Occurred))
+            Fail(filename, "satellite", "cannot carry compute source hits");
+        trace.faults.push_back(f);
+    }
+    RejectOverlappingFaults(filename, trace.faults);
+    return trace;
+}
 
 void
 WriteFaultTraceV2(const std::filesystem::path& filename, const FaultTrace& trace)

@@ -55,6 +55,9 @@ class SatComputeIpv4GlobalRouting : public Ipv4GlobalRouting
     void AdvanceRouteEpoch();
     void InvalidateDecisionCache(const EcmpFlowKey& flowKey);
     uint64_t GetRouteEpoch() const;
+    /** Preview a NEW flow with isolated assignment state and the current shared load view. */
+    uint32_t PreviewNextHop(const EcmpFlowKey& key,
+                            const std::vector<EcmpRouteCandidate>& candidates) const;
     std::vector<EcmpRouteCandidate> GetEffectiveRouteCandidates(Ipv4Address destination);
 
     Ptr<Ipv4Route> RouteOutput(Ptr<Packet> packet,

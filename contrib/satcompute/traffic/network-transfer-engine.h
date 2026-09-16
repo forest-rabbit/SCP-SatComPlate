@@ -19,14 +19,26 @@
 #include "ns3/ptr.h"
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
 namespace ns3
 {
+
+/** Read-only new-flow admission estimate. Never reserves capacity or changes an in-flight path. */
+struct AdmissiblePathEstimate
+{
+    bool reachable{}, admissible{}, local{};
+    CapacityAwarePath path;
+    int64_t propagationNs{};
+    std::string failureReason;
+    std::optional<int64_t> TransferTimeNs(uint64_t bytes) const;
+};
 
 /** Own sender/receiver applications and deterministic transfer lifecycle. */
 class NetworkTransferEngine : public Object
@@ -45,11 +57,40 @@ class NetworkTransferEngine : public Object
                    bool collectUdpSocketDrops,
                    int64_t simulationDurationNs);
     void RegisterPlans(std::vector<NetworkTransfer> plans);
+    /** Append one positive-byte runtime flow; ordinary plan IDs/ports remain unchanged. */
+    void RegisterRuntimePlan(NetworkTransfer plan, bool businessResult = false);
+    bool IsRuntimeTransfer(uint64_t transferId) const;
+    /** Runtime recovery RESULT is business traffic, unlike backup/input replay traffic. */
+    bool IsProtectionTransfer(uint64_t transferId) const;
+    /** Classify RESULT after a parallel logical winner is known; never changes routing/bytes. */
+    void SetBusinessResult(uint64_t transferId, bool business);
+    /** Current directed-link residual capacity for causal recovery estimates; reserves nothing. */
+    uint64_t GetResidualRateBps(uint32_t source, const EcmpRouteCandidate& route) const;
+    /** Preview the next runtime flow's current policy; actual registration rechecks admission. */
+    AdmissiblePathEstimate EstimateAdmissiblePath(uint32_t source, uint32_t destination) const;
+    /** Optional first admission: reject instead of waiting; ordinary flows unchanged.
+     * Callback fires only when the existing sender really starts, not on registration.
+     */
+    void SetOptionalFirstAdmission(uint64_t transferId, std::function<void()> started);
+    /** Read the established flow, not new-flow admission or future network events. */
+    std::optional<int64_t> EstimateRemainingReceiverTimeNs(uint64_t transferId) const;
+    uint64_t GetSentBytes(uint64_t transferId) const;
+    void SetTerminalObserver(uint64_t transferId, Callback<void, uint64_t, int64_t> observer);
+    /** Notification only; subscribers defer decisions until the releasing event completes. */
+    void SetCapacityReleaseObserver(std::function<void()> observer)
+    {
+        m_capacityReleaseObserver = std::move(observer);
+    }
+    uint64_t GetReceivedBytes(uint64_t transferId) const;
     void StartTransferNow(uint64_t transferId,
                           Callback<void, uint64_t, int64_t> completionCallback = {});
     bool FinalizeTransferIfActive(uint64_t transferId,
                                   TransferTerminalState state,
                                   TransferTerminalReason reason);
+    /** Finalize a group before admitting any newly unblocked flows; returns terminalized count. */
+    uint64_t FinalizeTransfersIfActive(const std::vector<uint64_t>& transferIds,
+                                       TransferTerminalState state,
+                                       TransferTerminalReason reason);
 
     bool IsCompleted(uint64_t transferId) const;
     bool IsTerminal(uint64_t transferId) const;
@@ -58,7 +99,7 @@ class NetworkTransferEngine : public Object
     int64_t GetTerminalTimeNs(uint64_t transferId) const;
     uint64_t GetStalePacketCount(uint64_t transferId) const;
     int64_t GetCapacityWaitingTimeNs(uint64_t transferId) const;
-    bool AreAllTransfersCompleted() const;
+    bool AreAllTransfersCompleted(bool includeRuntime = true) const;
     const std::vector<NetworkTransfer>& GetPlans() const;
 
     ApplicationMetrics CollectApplicationMetrics() const;
@@ -72,14 +113,18 @@ class NetworkTransferEngine : public Object
     void SetCapacityReservationObserver(Callback<void, uint32_t, uint32_t, uint64_t> observer);
 
   private:
+    std::map<uint64_t, std::function<void()>> m_optionalFirstAdmission;
+    std::map<uint64_t, CapacityAwarePath> m_observedAdmissionPaths;
     uint32_t GetPlanIndex(uint64_t transferId) const;
     EcmpFlowKey GetFlowKey(uint32_t index) const;
     void ActivateTransfer(uint64_t transferId);
+    void RuntimeApplicationsReady(uint64_t transferId);
     bool TryActivateCapacityAwareTransfer(uint64_t transferId);
     void TryActivatePendingCapacityAwareTransfers();
     void HandleTopologyRouteUpdate();
     void HandleSenderComplete(uint64_t transferId, int64_t sendTimeNs);
     void HandleTransferComplete(uint64_t transferId, int64_t completionTimeNs);
+    void ReleaseCapacity(uint64_t transferId);
 
     SatelliteRuntimeView* m_topology{};
     std::string m_chunkMode;
@@ -91,6 +136,7 @@ class NetworkTransferEngine : public Object
     bool m_configured{};
     bool m_registered{};
     bool m_capacityAwareRouting{};
+    uint32_t m_finalizationBatchDepth{};
     Ptr<FlowRouteRegistry> m_flowRouteRegistry;
     std::unique_ptr<PathPolicy> m_capacityPathPolicy;
     std::unique_ptr<CapacityReservationState> m_capacityReservationState;
@@ -107,6 +153,14 @@ class NetworkTransferEngine : public Object
     std::vector<Callback<void, uint64_t, int64_t>> m_completionCallbacks;
     std::vector<uint64_t> m_pendingCapacityTransfers;
     std::map<uint64_t, uint32_t> m_planIndexes;
+    std::map<uint32_t, uint32_t> m_nextSourceOrdinal;
+    std::map<uint32_t, Ptr<NetworkTransferReceiver>> m_receiversBySatellite;
+    std::set<uint64_t> m_runtimeTransfers;
+    std::set<uint64_t> m_businessResults;
+    std::set<uint64_t> m_redundantResults; ///< Real ordinary RESULTs excluded after losing arbitration.
+    std::set<uint64_t> m_runtimeStarting;
+    std::map<uint64_t, Callback<void, uint64_t, int64_t>> m_terminalObservers;
+    std::function<void()> m_capacityReleaseObserver;
 };
 
 } // namespace ns3

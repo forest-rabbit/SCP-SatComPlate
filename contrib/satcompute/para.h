@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include "protection/protection-para.h"
 
 namespace ns3
 {
@@ -54,13 +55,14 @@ struct SatComputeConfig
     std::string taskCompletionPolicy; ///< 任务完成策略：strict 或 report。
 
     // fault
-    std::string faultMode;       ///< none or generate.
+    std::string faultMode; ///< none/generate; validation-replay is an explicit test-only mode.
     std::string faultTrace;      ///< Generated fault trace output path.
+    std::string
+        validationFaultTrace;    ///< Frozen input, only for validation-replay; never online truth.
     bool faultProbabilityAudit;  ///< 是否采集并输出概率一致性审计数据。
 
     // protection
-    bool compfrrShadow; ///< G4 只读旁路决策评估，不创建真实备份。
-    std::string compfrrShadowOutput; ///< 空时写入 outputDir/shadow。
+    protection::ProtectionConfig protection; ///< Scheme、私有策略与诊断的唯一配置 owner。
 
     // output
     std::string outputDirectory; ///< 结构化结果输出目录。

@@ -136,8 +136,10 @@ ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
     {
         Simulator::Cancel(m_completionEvent);
     }
-    const auto elapsed =
-        static_cast<uint64_t>(Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs);
+    // StopApplication already accounts the active prefix before post-Run recovery cleanup.
+    RecordRecoveryAccounting();
+    const auto elapsed = m_isRunning ?
+        static_cast<uint64_t>(Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs) : 0;
     NS_ABORT_MSG_IF(elapsed > static_cast<uint64_t>(m_currentTaskServiceTimeNs) ||
                         m_busyTimeNs > std::numeric_limits<uint64_t>::max() - elapsed,
                     "cancelled compute busy-time overflow");
@@ -156,9 +158,9 @@ ComputeService::CancelRunningTaskForFailure(uint64_t taskId)
 }
 
 bool
-ComputeService::CompleteTaskIfDue(uint64_t taskId)
+ComputeService::CompleteTaskIfDue(uint64_t taskId, bool deferDispatch)
 {
-    if (!m_isRunning || !m_computeAvailable || !m_hasCurrentTask ||
+    if (!m_isRunning || (!m_computeAvailable && !(m_runningRecovery && m_recoveryImmune)) || !m_hasCurrentTask ||
         m_currentTask.taskId != taskId ||
         Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs != m_currentTaskServiceTimeNs)
     {
@@ -166,7 +168,7 @@ ComputeService::CompleteTaskIfDue(uint64_t taskId)
     }
     if (m_completionEvent.IsPending())
         Simulator::Cancel(m_completionEvent);
-    CompleteCurrentTask();
+    CompleteCurrentTaskImpl(deferDispatch);
     return true;
 }
 
@@ -203,6 +205,8 @@ ComputeService::StartApplication()
 void
 ComputeService::StopApplication()
 {
+    RecordRecoveryAccounting();
+    Simulator::Cancel(m_catchupEvent);
     if (m_isRunning && m_hasCurrentTask)
     {
         m_busyTimeNs = GetBusyTimeNs();
@@ -222,8 +226,8 @@ ComputeService::StopApplication()
 void
 ComputeService::RequestDispatch()
 {
-    if (!m_isRunning || !m_computeAvailable || m_hasCurrentTask || m_queue.empty() ||
-        m_dispatchEvent.IsPending())
+    if (!m_isRunning || !m_computeAvailable || m_recoveryOwner || m_hasCurrentTask ||
+        m_queue.empty() || m_dispatchEvent.IsPending())
     {
         return;
     }
@@ -233,7 +237,8 @@ ComputeService::RequestDispatch()
 void
 ComputeService::DispatchNextTask()
 {
-    if (!m_isRunning || !m_computeAvailable || m_hasCurrentTask || m_queue.empty())
+    if (!m_isRunning || !m_computeAvailable || m_recoveryOwner || m_hasCurrentTask ||
+        m_queue.empty())
     {
         return;
     }
@@ -256,7 +261,14 @@ ComputeService::DispatchNextTask()
 void
 ComputeService::CompleteCurrentTask()
 {
-    NS_ABORT_MSG_IF(!m_isRunning || !m_computeAvailable || !m_hasCurrentTask,
+    CompleteCurrentTaskImpl(false);
+}
+
+void
+ComputeService::CompleteCurrentTaskImpl(bool deferDispatch)
+{
+    NS_ABORT_MSG_IF(!m_isRunning || (!m_computeAvailable && !(m_runningRecovery && m_recoveryImmune)) ||
+                        !m_hasCurrentTask,
                     "ComputeService completion has no running task");
     const int64_t completionTimeNs = Simulator::Now().GetNanoSeconds();
     NS_ABORT_MSG_IF(completionTimeNs - m_currentTaskStartTimeNs !=
@@ -272,13 +284,32 @@ ComputeService::CompleteCurrentTask()
     ++m_completedTaskCount;
 
     const uint64_t completedTaskId = m_currentTask.taskId;
+    RecordRecoveryAccounting();
+    std::optional<std::pair<uint64_t, uint64_t>> recovery;
+    if (m_runningRecovery)
+        recovery = m_recoveryOwner;
+    const auto recoveryCallback = m_recoveryCompleted;
+    if (recovery && m_catchupEvent.IsPending())
+    {
+        Simulator::Cancel(m_catchupEvent);
+        RecoveryCatchup(recovery->first, recovery->second);
+    }
     m_hasCurrentTask = false;
+    m_runningRecovery = false;
+    if (recovery)
+        m_recoveryOwner.reset();
     NotifyComputeState();
     m_currentTask = {};
     m_currentTaskStartTimeNs = -1;
     m_currentTaskServiceTimeNs = 0;
-    m_taskCompletedCallback(completedTaskId, m_nodeId, completionTimeNs);
-    DispatchNextTask();
+    if (recovery)
+        recoveryCallback(completedTaskId, recovery->second, m_nodeId, completionTimeNs);
+    else
+        m_taskCompletedCallback(completedTaskId, m_nodeId, completionTimeNs);
+    if (deferDispatch)
+        RequestDispatch();
+    else
+        DispatchNextTask();
 }
 
 uint32_t
@@ -302,7 +333,8 @@ ComputeService::DisconnectStateObserver(Callback<void, uint32_t, bool> callback)
 void
 ComputeService::NotifyComputeState()
 {
-    m_computeState(m_nodeId, m_isRunning && m_computeAvailable && m_hasCurrentTask);
+    m_computeState(m_nodeId,
+                   m_isRunning && (m_computeAvailable || (m_runningRecovery && m_recoveryImmune)) && m_hasCurrentTask);
 }
 
 uint64_t
@@ -332,6 +364,15 @@ ComputeService::GetBusyTimeNs() const
                                : 0);
 }
 
+uint64_t
+ComputeService::GetRecoveryBusyTimeNs() const
+{
+    uint64_t total = 0;
+    for (const auto& [key, saved] : m_recoveryAccounting)
+        total += static_cast<uint64_t>(GetRecoveryAccounting(key.first, key.second).serviceNs);
+    return total;
+}
+
 uint32_t
 ComputeService::GetMaxQueueLength() const
 {
@@ -342,6 +383,16 @@ uint32_t
 ComputeService::GetQueueSize() const
 {
     return static_cast<uint32_t>(m_queue.size());
+}
+
+std::vector<uint64_t>
+ComputeService::GetQueuedTaskIds() const
+{
+    std::vector<uint64_t> ids;
+    ids.reserve(m_queue.size());
+    for (const auto& item : m_queue)
+        ids.push_back(item.taskId);
+    return ids;
 }
 
 bool
@@ -389,7 +440,152 @@ ComputeService::GetRunningTaskSnapshot() const
 bool
 ComputeService::IsIdle() const
 {
-    return !m_hasCurrentTask && m_queue.empty();
+    return !m_hasCurrentTask && m_queue.empty() && !m_recoveryOwner;
+}
+
+bool
+ComputeService::ReserveRecovery(uint64_t id, uint64_t generation)
+{
+    if (!id || generation != 1 || !m_isRunning || !m_computeAvailable || !IsIdle() ||
+        m_knownTaskIds.contains(id))
+        return false;
+    m_recoveryOwner = std::pair{id, generation};
+    m_recoveryImmune = false;
+    Simulator::Cancel(m_dispatchEvent);
+    return true;
+}
+
+bool
+ComputeService::HasRecoveryReservation() const
+{
+    return m_recoveryOwner.has_value();
+}
+
+bool
+ComputeService::ReleaseRecovery(uint64_t id, uint64_t generation)
+{
+    if (m_recoveryOwner != std::optional{std::pair{id, generation}} || m_runningRecovery)
+        return false;
+    m_recoveryOwner.reset();
+    RequestDispatch();
+    return true;
+}
+
+bool
+ComputeService::StartRecovery(uint64_t id,
+                              uint64_t generation,
+                              uint64_t work,
+                              uint64_t catchupWork,
+                              Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+                              Callback<void, uint64_t, uint64_t, uint32_t, int64_t> catchup,
+                              Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed)
+{
+    return StartReservedAttempt(id, generation, work, catchupWork, started, catchup, completed, true);
+}
+
+bool
+ComputeService::StartReplica(uint64_t id, uint64_t generation, uint64_t work,
+                             Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+                             Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed)
+{
+    return StartReservedAttempt(id, generation, work, 0, started, {}, completed, m_recoveryImmune);
+}
+
+bool
+ComputeService::PromoteReplica(uint64_t id, uint64_t generation)
+{
+    if (m_recoveryOwner != std::optional{std::pair{id, generation}} || !m_computeAvailable)
+        return false;
+    m_recoveryImmune = true;
+    return true;
+}
+
+bool
+ComputeService::StartReservedAttempt(uint64_t id, uint64_t generation, uint64_t work,
+    uint64_t catchupWork, Callback<void, uint64_t, uint64_t, uint32_t, int64_t> started,
+    Callback<void, uint64_t, uint64_t, uint32_t, int64_t> catchup,
+    Callback<void, uint64_t, uint64_t, uint32_t, int64_t> completed, bool immune)
+{
+    if (m_recoveryOwner != std::optional{std::pair{id, generation}} || !m_isRunning ||
+        m_hasCurrentTask || !work || catchupWork > work || started.IsNull() ||
+        (catchupWork && catchup.IsNull()) || completed.IsNull() || (!immune && !m_computeAvailable))
+        return false;
+    m_knownTaskIds.insert(id);
+    ++m_enqueuedTaskCount;
+    m_currentTask = {id, work, Simulator::Now().GetNanoSeconds()};
+    m_currentTaskStartTimeNs = m_currentTask.queueEnterTimeNs;
+    m_currentTaskServiceTimeNs = CalculateServiceTimeNs(work, m_computeRateWorkUnitsPerSecond);
+    m_hasCurrentTask = true;
+    m_runningRecovery = true;
+    m_recoveryImmune = immune;
+    m_recoveryAccounting[{id, generation}] = {work, 0, m_computeRateWorkUnitsPerSecond, 0};
+    m_recoveryCatchup = catchup;
+    m_recoveryCompleted = completed;
+    NotifyComputeState();
+    started(id, generation, m_nodeId, m_currentTaskStartTimeNs);
+    if (!m_runningRecovery || m_recoveryOwner != std::optional{std::pair{id, generation}})
+        return true; // A synchronous terminal observer cancelled this accepted dispatch.
+    const auto catchupNs =
+        catchupWork == 0 ? 0 : CalculateServiceTimeNs(catchupWork, m_computeRateWorkUnitsPerSecond);
+    if (!catchup.IsNull())
+        m_catchupEvent = Simulator::Schedule(
+            NanoSeconds(catchupNs), &ComputeService::RecoveryCatchup, this, id, generation);
+    m_completionEvent = Simulator::Schedule(
+        NanoSeconds(m_currentTaskServiceTimeNs), &ComputeService::CompleteCurrentTask, this);
+    return true;
+}
+
+void
+ComputeService::RecoveryCatchup(uint64_t id, uint64_t generation)
+{
+    if (m_runningRecovery && m_recoveryOwner == std::optional{std::pair{id, generation}})
+        m_recoveryCatchup(id, generation, m_nodeId, Simulator::Now().GetNanoSeconds());
+}
+
+bool
+ComputeService::CancelRecovery(uint64_t id, uint64_t generation)
+{
+    if (m_recoveryOwner != std::optional{std::pair{id, generation}})
+        return false;
+    Simulator::Cancel(m_catchupEvent);
+    if (m_runningRecovery)
+    {
+        CancelRunningTaskForFailure(id);
+        m_runningRecovery = false;
+    }
+    m_recoveryOwner.reset();
+    RequestDispatch();
+    return true;
+}
+
+RecoveryComputeAccounting
+ComputeService::GetRecoveryAccounting(uint64_t id, uint64_t generation) const
+{
+    const auto found = m_recoveryAccounting.find({id, generation});
+    if (found == m_recoveryAccounting.end())
+        return {};
+    auto result = found->second;
+    if (m_isRunning && m_hasCurrentTask && m_runningRecovery &&
+        m_recoveryOwner == std::optional{std::pair{id, generation}})
+    {
+        result.serviceNs = std::clamp(Simulator::Now().GetNanoSeconds() - m_currentTaskStartTimeNs,
+                                      int64_t{0},
+                                      m_currentTaskServiceTimeNs);
+        // Inverse of ceil(work * 1e9 / rate); no fractional WU counted as completed.
+        const auto work =
+            static_cast<unsigned __int128>(result.serviceNs) * result.rate / 1000000000;
+        result.executedWork = static_cast<uint64_t>(
+            std::min(work, static_cast<unsigned __int128>(result.plannedWork)));
+    }
+    return result;
+}
+
+void
+ComputeService::RecordRecoveryAccounting()
+{
+    if (m_runningRecovery && m_recoveryOwner)
+        m_recoveryAccounting[*m_recoveryOwner] =
+            GetRecoveryAccounting(m_recoveryOwner->first, m_recoveryOwner->second);
 }
 
 uint64_t
@@ -409,6 +605,8 @@ ComputeService::DoDispose()
 {
     m_taskStartedCallback = {};
     m_taskCompletedCallback = {};
+    m_recoveryCatchup = {};
+    m_recoveryCompleted = {};
     Application::DoDispose();
 }
 

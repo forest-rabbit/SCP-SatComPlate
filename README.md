@@ -75,7 +75,7 @@ uv 只管理 Python 工具环境，不能替代 C++ 编译器和系统库。SatC
 ```bash
 ./ns3 configure --enable-modules=satcompute -G Ninja
 ./ns3 build
-./ns3 run "satcompute --topologyOnly=1 --simulationDuration=2"
+./ns3 run "satcompute --protectionScheme=off --topologyOnly=1 --simulationDuration=2"
 ./ns3 run "satcompute --help"
 ```
 
@@ -105,6 +105,7 @@ F1/F2/F3、任务、路由和概率审计的最终联合闭环见
 
 ```bash
 ./ns3 run "satcompute \
+  --protectionScheme=off \
   --simulationDuration=20 \
   --topologyOnly=1 \
   --topologySliceInterval=1 \

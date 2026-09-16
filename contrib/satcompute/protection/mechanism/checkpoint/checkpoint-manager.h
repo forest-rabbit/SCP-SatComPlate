@@ -1,0 +1,244 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+#ifndef SATCOMPUTE_CHECKPOINT_MANAGER_H
+#define SATCOMPUTE_CHECKPOINT_MANAGER_H
+#include "../../../task/task-coordinator.h"
+#include "../../runtime/protection-runtime.h"
+#include "../../runtime/checkpoint-recovery-port.h"
+#include "../../runtime/protection-transfer-dispatcher.h"
+#include "../../storage/backup-storage-pool.h"
+#include "checkpoint-progress.h"
+#include <functional>
+#include <memory>
+#include <string>
+
+namespace ns3::protection
+{
+/** Read-only physical inventory for frequency admission, never a recovery prediction. */
+struct CheckpointInventory
+{
+    CheckpointConfiguration config; ///< Last effective future cadence and fixed pair.
+    CheckpointSnapshot progress; ///< Current received/committed prefixes.
+    uint64_t actual{}, triggered{}, baseBytes{}, batchBytes{}, batchWork{}; ///< Exact ledger values.
+    bool active{}, initialized{}, paused{}, batchInFlight{}; ///< Actual mechanism state.
+    std::string captureBlockReason, remoteBlockReason; ///< Independent operation resource gates.
+    int64_t stopNs{-1}; ///< Actual quiescence/stop, for ending diagnostic intervals exactly.
+    std::optional<uint64_t> nextTarget; ///< Already scheduled, not yet captured boundary.
+    struct Record
+    {
+        uint64_t from{}, work{}, bytes{}; ///< Immutable captured endpoints and metadata-inclusive bytes.
+        bool allocated{}, received{}; ///< Whether bytes already count against the pool.
+    };
+    std::vector<Record> records; ///< Includes generated, in-flight and pending records.
+};
+
+/** Real checkpoint data path and retained fault snapshots; never mutates primary compute. */
+class CheckpointManager : public ProtectionMechanism, public CheckpointRecoveryPort
+{
+  public:
+    /** Bind existing services; validate typed tasks before any simulator events.
+     * @param tasks Existing task coordinator, retained for the manager lifetime.
+     * @param topology Existing satellite runtime (no second network).
+     * @param storageBytesPerNode Explicit per-node capacity; zero deliberately rejects all bases.
+     * @param simulationStopNs Absolute simulation endpoint in ns.
+     * @param inputPolicy Explicit eager or deferred original INPUT staging.
+     */
+    CheckpointManager(Ptr<TaskCoordinator> tasks,
+                      SatelliteRuntimeView& topology,
+                      uint64_t storageBytesPerNode,
+                      int64_t simulationStopNs,
+                      InputStagingPolicy inputPolicy = InputStagingPolicy::EAGER);
+    ~CheckpointManager() override;
+    /** Single staging contract shared by storage admission and actual recovery. */
+    InputStagingPolicy InputPolicy() const override { return m_inputPolicy; }
+    /** True simultaneous used+reserved maximum, never the sum of per-node maxima. */
+    uint64_t GlobalStoragePeakBytes() const override { return m_globalStoragePeakBytes; }
+    bool Supports(ActionKind kind) const override;
+    void Execute(const ProtectionContext& context, const ProtectionAction& action) override;
+    bool OnComputeFault(const ProtectionContext&) override;
+    void OnTaskComputeComplete(AttemptKey attempt) override;
+    void OnTaskTerminal(uint64_t taskId) override;
+    /** Idempotently stop all remaining protection after Simulator::Run. */
+    void Finalize();
+
+    /** Change only future targets and not-yet-formed batches; placement stays fixed. */
+    bool UpdateFutureConfiguration(uint64_t taskId, uint32_t deltaPermille, uint32_t batchN);
+    /** Retain all state/operations but suppress new targets and batch formation. */
+    bool PauseFutureProtection(uint64_t taskId);
+    /** Retry resource-blocked operations at a real epoch/capacity/cleanup event, never a new solve. */
+    void RetryBlockedMaintenance();
+    /** Resume the last committed cadence after resource rejection, not after a policy PAUSE. */
+    bool RetainFutureConfiguration(uint64_t taskId);
+    /** Optional existing quota ledger; physical pool checks still apply. */
+    void SetMaintenanceFree(std::function<uint64_t(uint32_t, uint64_t)> free)
+    { m_maintenanceFree = std::move(free); }
+    /** Physical snapshot; missing means no initialization has ever been attempted. */
+    std::optional<CheckpointInventory> Inventory(uint64_t taskId) const;
+    /** Notify only after the real initialization objects have been merged. */
+    void SetInitializationObserver(std::function<void(uint64_t)> observer)
+    {
+        m_initialized = std::move(observer);
+    }
+    /** Observe established/released remote ownership without changing admission or storage. */
+    void SetAssignmentObserver(std::function<void(uint64_t, uint32_t, bool)> observer)
+    { m_assignmentObserver = std::move(observer); }
+
+    /** Enable strict fault-time object retention; no-fault G2 timing stays unchanged. */
+    void EnableRecoveryRetention() override
+    {
+        m_recoveryRetention = true;
+    }
+
+    /** Freeze before stopping any primary/protection operation. */
+    RecoverySnapshot FreezeRecoverySnapshot(uint64_t taskId, int64_t faultNs) override;
+    /** Quiesce generation/flows while retaining only snapshot backing objects. */
+    void QuiesceForRecovery(const RecoverySnapshot& snapshot) override;
+    /** Explicit recovery ownership handoff/terminal cleanup; never evicts other tasks. */
+    void ReleaseRecoveryState(uint64_t taskId) override;
+    /** Append a G3 event with its frozen progress and current pool accounting. */
+    void RecordRecoveryEvent(const RecoverySnapshot& snapshot,
+                             const std::string& event,
+                             uint64_t bytes,
+                             uint64_t transferId) override;
+
+    /** Shared pool for recovery temporary reservations and in-place merges. */
+    BackupStoragePool& Pool(uint32_t node)
+    {
+        return *m_pools.at(node);
+    }
+
+    /** Queue a cross-node recovery flow through the same canonical ID allocator. */
+    void QueueRecovery(ProtectionTransferKey key,
+                       uint32_t source,
+                       uint32_t destination,
+                       uint64_t bytes,
+                       uint64_t work,
+                       uint64_t object,
+                       std::function<bool()> live,
+                       std::function<void(uint64_t)> registered);
+
+    /** @return Causal event history including storage identities and snapshots. */
+    const std::vector<ProtectionEvent>& Events() const override
+    {
+        return m_events;
+    }
+
+    ProtectionTransferDispatcher& Transfers() override { return m_transfers; }
+
+    /** @return All registered real flows, including failed/cancelled history. */
+    const std::vector<ProtectionFlow>& Flows() const override
+    {
+        return m_transfers.Flows();
+    }
+
+    /** @return Stable task-ID ordered summaries. */
+    std::vector<ProtectionTaskSummary> Summaries() const override;
+    /** Verify all asynchronous state has been finalized; no simulation mutation. */
+    bool IsQuiescent() const override;
+
+    /** @return Node-ID ordered extra-storage ledgers. */
+    const std::map<uint32_t, std::unique_ptr<BackupStoragePool>>& Pools() const override
+    {
+        return m_pools;
+    }
+
+  private:
+    friend struct CheckpointMaintenanceTestAccess; ///< Focused test-only resource seam.
+    /** One immutable captured increment, including an explicit missing-receipt gap. */
+    struct Record
+    {
+        uint64_t from{}, work{}, bytes{},
+            object{};    ///< Captured endpoints, byte budget and pool ID.
+        bool received{}; ///< True only after receiver-complete.
+        int64_t receivedNs{-1}; ///< Strict validity boundary for same-ns faults.
+    };
+
+    /** One primary checkpoint lifecycle; address remains stable until manager destruction. */
+    struct State
+    {
+        State(const TaskRuntime& task,
+              CheckpointConfiguration config,
+              uint64_t initial,
+              int64_t now,
+              uint64_t rate);
+        const TaskRuntime& task; ///< Read-only ordinary runtime; coordinator outlives manager.
+        CheckpointConfiguration config; ///< Future cadence, immutable placement.
+        TaskStateAdapter layout;        ///< Exact production layout, no shadow dependency.
+        CheckpointProgress progress;    ///< Valid contiguous progress and internal merge timing.
+        ProtectionTaskSummary summary;  ///< Historical evidence retained after stop.
+        uint64_t rate{}, initial{}, triggered{}, baseObject{}, initObject{},
+            batchObject{};    ///< WU/s and owned IDs.
+        uint64_t batchWork{}; ///< Immutable in-flight batch target.
+        int64_t baseReceivedNs{-1},
+            stateReceivedNs{-1}; ///< Initialization path completion evidence.
+        bool active{true}, batchInFlight{}; ///< Terminal and immutable batch ownership.
+        bool futurePaused{}, initialized{}; ///< New-operation gate and physical init commit.
+        std::string captureBlockReason, remoteBlockReason; ///< Independent resource gates.
+        bool localTransferFailed{}, remoteTransferFailed{}; ///< No automatic replay of terminal flows.
+        EventId captureEvent; ///< Only the unsatisfied future target is replaceable.
+        std::optional<uint64_t> nextTarget; ///< Not yet captured work.
+        std::map<uint64_t, Record> records; ///< Captured records ordered by completed WU.
+        std::vector<EventId> timers;        ///< Task-scoped cancellable generation/merge events.
+        std::optional<std::pair<int64_t, bool>> physicalCommit; ///< Nominal time and init flag.
+    };
+
+    using Request = ProtectionTransferRequest; ///< Neutral transfer request; storage stays here.
+
+    /** Check owning primary service; inclusive compute end takes precedence over callbacks. */
+    bool Live(State& state);
+    /** @return Causal completed WU, bounded by total WU. */
+    uint64_t Actual(const State& state) const;
+    /** Schedule a guarded task-scoped callback strictly before simulation stop. */
+    EventId Later(State& state, int64_t at, std::function<void()> callback);
+    /** Append an invariant-checked event with current whole-pool snapshots. */
+    void Log(State& state,
+             const std::string& event,
+             uint64_t work = 0,
+             uint64_t bytes = 0,
+             uint32_t storageNode = 0,
+             uint64_t object = 0,
+             uint64_t transfer = 0);
+    /** Reserve first; log an explicit capacity failure without changing the ordinary task. */
+    std::optional<uint64_t> Reserve(
+        State& state, uint32_t node, StorageKind kind, uint64_t bytes, uint64_t work);
+    /** Queue only an already reserved positive-byte object. */
+    void Queue(State& state,
+               ProtectionTransferKind kind,
+               uint64_t sequence,
+               uint32_t source,
+               uint32_t destination,
+               uint64_t bytes,
+               uint64_t work,
+               uint64_t object);
+    void RegisterCheckpoint(const Request& request); ///< Mechanism-specific admission after canonical dispatch.
+    void TransferTerminal(uint64_t id, int64_t at); ///< Real finalizer callback, not sender finish.
+    void InitializationReceived(State& state);      ///< Join both init paths and schedule cR.
+    void ScheduleCapture(State& state);             ///< Select the next legal application boundary.
+    void Capture(State& state, uint64_t work);      ///< Freeze bytes and schedule cL completion.
+    void TryBatch(State& state); ///< Reserve/send exactly n contiguous received records.
+    bool PathAvailable(uint32_t source, uint32_t destination) const; ///< Actual read-only admission.
+    uint64_t MaintenanceFree(State& state, uint32_t node) const; ///< Actual plus existing quota.
+    void Block(State& state, bool local, const std::string& reason); ///< Transition-only evidence.
+    void Retry(State& state); ///< Retry uncreated operations without historical capture.
+    void Commit(State& state, bool initialization); ///< Atomic storage/progress commit and cleanup.
+    void FinishPhysicalCommit(State& state, bool initialization); ///< Deferred same-ns retention.
+    void Stop(State& state,
+              const std::string& reason); ///< Cancel and release all task-owned state.
+    Ptr<TaskCoordinator> m_tasks;         ///< Existing ordinary runtime owner.
+    Ptr<NetworkTransferEngine> m_network; ///< Shared real traffic engine.
+    int64_t m_stopNs;                     ///< Absolute simulation endpoint.
+    InputStagingPolicy m_inputPolicy;     ///< Immutable per-run INPUT staging contract.
+    uint64_t m_globalStoragePeakBytes{};  ///< Observed after every potentially increasing mutation.
+    ProtectionTransferDispatcher m_transfers; ///< One neutral canonical queue/ID/evidence owner.
+    std::map<uint64_t, std::unique_ptr<State>> m_states;            ///< Stable task ownership.
+    std::map<uint32_t, std::unique_ptr<BackupStoragePool>> m_pools; ///< Shared per-node capacity.
+    std::map<ProtectionTransferKey, Request> m_heldRequests; ///< Reserved, never registered requests.
+    std::map<uint64_t, size_t> m_flowIndexes; ///< Terminal callback lookup.
+    std::vector<ProtectionEvent> m_events;    ///< Append-only causal evidence.
+    bool m_recoveryRetention{};               ///< Explicit G3 fault-enabled phase ordering.
+    std::function<void(uint64_t)> m_initialized; ///< Optional physical init notification.
+    std::function<void(uint64_t, uint32_t, bool)> m_assignmentObserver; ///< Read-only load ledger.
+    std::function<uint64_t(uint32_t, uint64_t)> m_maintenanceFree; ///< Existing quota projection.
+    std::function<bool(uint32_t, uint32_t)> m_testPathAvailable; ///< Test-only fault/admission seam.
+};
+} // namespace ns3::protection
+#endif

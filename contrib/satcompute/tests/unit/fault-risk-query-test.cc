@@ -98,6 +98,14 @@ Run(bool queryEnabled, bool auditEnabled, bool computeSources = true, bool contr
         model->BindTaskCoordinator(coordinator);
         if (queryEnabled)
         {
+            if (computeSources)
+                model->SetEpochObservers(
+                    [](const FaultEpochInput& epoch) {
+                        Check(epoch.currentSampleProbability ==
+                                  PredictComputeFailureBeforeFinish(epoch.prediction).combinedStepFailureProbability,
+                              "epoch q differs from canonical current step");
+                    },
+                    [](int64_t, const std::vector<FaultEpochOutcome>&) {});
             Check(model->QueryComputeRisk(9999).status == ComputeRiskStatus::NOT_READY,
                   "unknown query must not be ready");
             for (int64_t bad : {int64_t(0), int64_t(-1)})

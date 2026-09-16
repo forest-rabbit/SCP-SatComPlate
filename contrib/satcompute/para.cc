@@ -105,17 +105,16 @@ GetDefaultSatComputeConfig()
 
     // --faultTrace: generated output; empty uses outputDir/fault-trace.json.
     config.faultTrace = "";
+    // 验收专用冻结事件输入；正常 none/generate 运行必须留空。
+    config.validationFaultTrace = "";
 
     // --faultProbabilityAudit：按需采集概率记录；正常运行默认关闭。
     config.faultProbabilityAudit = false;
 
     // protection
 
-    // --compfrr-shadow：显式开启 G4 旁路评估，不影响任务、路由与故障抽样。
-    config.compfrrShadow = false;
-
-    // --compfrr-shadow-output：旁路 CSV 目录；空时使用 outputDir/shadow。
-    config.compfrrShadowOutput = "";
+    // --protectionScheme：正式默认 CompFRR；私有参数集中在 protection/protection-para.cc。
+    config.protection = protection::GetDefaultProtectionConfig();
 
     // output
 

@@ -52,6 +52,7 @@ NetDevice、路由、FlowMonitor 或任务对象。
 | [`task/`](task/README.md) | ComputeProfile、TaskTrace、FCFS 服务和任务协调 |
 | [`traffic/`](traffic/README.md) | 任务内部的 UDP 输入/结果传输 |
 | [`fault/`](fault/README.md) | 故障参数、统一 trace、在线判定、状态覆盖与批处理执行 |
+| [`protection/`](protection/README.md) | N5A 固定备份流、检查点与存储合同、G3 单次故障恢复 |
 | [`metrics/`](metrics/README.md) | 网络、路由、任务和失败诊断输出 |
 | [`input/`](input/README.md) | 星座、算力、任务、故障与组合示例 |
 | [`tools/`](tools/README.md) | 任务生成与输出校验工具 |
@@ -67,16 +68,18 @@ JSON 解析统一使用仓库根目录 `third-party/nlohmann/json.hpp`。Python 
 ```bash
 ./ns3 configure --enable-modules=satcompute -G Ninja
 ./ns3 build
-./ns3 run "satcompute --topologyOnly=1 --simulationDuration=2"
+./ns3 run "satcompute --protectionScheme=off --topologyOnly=1 --simulationDuration=2"
 ./ns3 run "satcompute --help"
 ```
 
 不带参数时，平台运行 [LEO-66 正式实验](input/experiments/leo-66/README.md)：1300 秒、66 星（每星 100,000 WU/s）、800 任务、
 10 Gbps、1 ms、seed=1/run=11，在线生成 F1/F2 和 node62 在 1027.055770726 秒的受控 F3。
 概率审计仍默认关闭，链路吞吐/利用率统计默认开启。请使用独立 `outputDir` 保留实验结果。
+保护默认为 Adaptive CompFRR-F + CompFRR-P（CUMULATIVE、无消融）+ Selective INPUT + Relocate。
 只缩短仿真时间不能截取完整任务文件；日常开发应提供一对小规模任务/算力输入，或使用
-`--topologyOnly=1`。无任务网络运行需显式设置
-`--computeProfile=none --taskTrace=none --faultMode=none`。
+`--protectionScheme=off --topologyOnly=1`。无任务网络运行需显式设置
+`--protectionScheme=off --computeProfile=none --taskTrace=none --faultMode=none`。
+历史无保护任务/故障示例也应显式加 `--protectionScheme=off`；off 是诊断/复现能力，不是正式方案。
 历史小场景需显式指定故障开关、随机轮和完成策略；完整任务运行见
 [100 秒、66 星、20 任务示例](tests/fixtures/task/20tasks/README.md)。
 F1 在线生成验证见
@@ -90,8 +93,23 @@ F1/F2/F3 与任务、路由、概率审计的最终联合闭环见
 
 ## 参数边界
 
-G4 可通过 `--compfrr-shadow=1` 显式开启只读的 CompFRR 旁路决策评估，默认关闭。
+`protectionScheme=compfrr` 为正式默认；其他完整方案可选 `recompute / one-plus-one / cb-sat / multitree`。
+保护配置集中在 `protection/protection-para.cc`，保持分类注释与 `xx = xx;` 赋值；
+CLI/validation 独立，外层 `para.cc` 只取得默认配置。
+CompFRR 下选 `compfrrCheckpointPolicy=fixed|adaptive`，正式默认 adaptive + CompFRR-P + Selective + relocate。
+`compfrrPlacementPolicy=compfrr` 启用 CompFRR-P；pressure 为 `cumulative|idle-aware`，默认 cumulative，
+`noR/noU/noM` 另作消融。唯一 INPUT 开关为 `compfrrInputPolicy=eager|deferred|selective`，
+后两者只适用于 adaptive；Selective 固定 SER。切换 Fixed 时还须显式指定 Eager 与四种公共 placement 之一。
+Recompute、1+1、CB-Sat 的 placement 下沉为各自私有配置，原四种 placement 能力和历史复现入口仍保留。
+CB-Sat 使用已有[独立 MTBF profile](protection/baseline/checkbullet/README.md)，不重新标定。
+非 off 均要求网络任务且 shadow 关闭；仅 adaptive 要求 generate 和至少一个 F1/F2 来源。
+完整参数、默认值、capability 和旧命令转换见[保护模块](protection/README.md)。
+
+G4 可通过 `--protectionScheme=off --compfrr-shadow=1` 显式开启只读旁路决策评估，默认关闭。
 不创建真实备份或修改任务结果，详见 [G4验证工具](tools/validation/compfrr-shadow/README.md)。
+
+Selective 运行保留紧凑的准入决策、预取事件与完整生命周期账本；Eager/Deferred 不产生这些
+预取专用记录。开发用大 START 快照与一次性离线工具已退役，维护测试见[测试说明](tests/README.md)。
 
 人工设置的时长和间隔统一以秒传入，平台在组件边界转换为 ns-3 `Time` 或有符号
 整数纳秒。星座 CSV 只描述轨道结构，算力、任务和 Fault Trace 位于独立数据文件，
